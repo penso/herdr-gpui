@@ -14,13 +14,13 @@ mod smoke;
 mod state;
 mod terminal;
 mod terminal_painter;
+mod terminal_view;
 
 use connection::ConnectionBridge;
 use controls::Command;
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectOptions, ConnectTarget, protocol::*};
 use state::LiveState;
-#[cfg(feature = "integration-test")]
 use std::sync::Arc;
 use std::time::Duration;
 use terminal::*;
@@ -56,6 +56,7 @@ struct HerdrWindow {
     bounds: Bounds<Pixels>,
     cell_width: f32,
     painter: std::rc::Rc<std::cell::RefCell<terminal_painter::TerminalPainter>>,
+    terminal_view: Entity<terminal_view::TerminalView>,
     marked: String,
     local_error: Option<String>,
     menu: menu::MenuState,
@@ -94,6 +95,7 @@ impl HerdrWindow {
                             {
                                 this.marked.clear();
                             }
+                            this.set_surface(next.surface.clone(), cx);
                             this.live = next;
                             cx.notify();
                         }
@@ -106,6 +108,9 @@ impl HerdrWindow {
                 }
             }
         });
+        let painter = Default::default();
+        let terminal_view =
+            cx.new(|_| terminal_view::TerminalView::new(std::rc::Rc::clone(&painter)));
         let mut this = Self {
             connection: ConnectionBridge::new(target),
             live: LiveState::default(),
@@ -116,7 +121,8 @@ impl HerdrWindow {
             sent_focus: None,
             bounds: Bounds::default(),
             cell_width: 9.,
-            painter: Default::default(),
+            painter,
+            terminal_view,
             marked: String::new(),
             local_error: None,
             menu: menu::MenuState::new(cx),
@@ -139,11 +145,18 @@ impl HerdrWindow {
             this.live.snapshot = Some(Arc::new(sidebar::layout_tests::snapshot(40)));
             return this;
         }
-        this.reconnect();
+        this.reconnect(cx);
         this
     }
 
-    fn reconnect(&mut self) {
+    fn set_surface(&mut self, surface: Option<Arc<PaneSurfaceFrame>>, cx: &mut Context<Self>) {
+        // Invalidate before drawing, not during the parent's render/layout phase.
+        self.terminal_view
+            .update(cx, |view, cx| view.set_surface(surface.clone(), cx));
+        self.live.surface = surface;
+    }
+
+    fn reconnect(&mut self, cx: &mut Context<Self>) {
         self.local_error = None;
         self.marked.clear();
         self.last_queued_options = None;
@@ -151,6 +164,7 @@ impl HerdrWindow {
         self.sent_focus = None;
         self.connection.reconnect(self.options, self.active);
         self.live = self.connection.take_update().unwrap_or_default();
+        self.set_surface(self.live.surface.clone(), cx);
     }
 
     fn resize(&mut self) {
@@ -380,7 +394,20 @@ impl Render for HerdrWindow {
         let paint_entity = entity.clone();
         let focus = self.focus.clone();
         let cell_width = self.cell_width;
-        let painter = self.painter.clone();
+        let mut pixels = AnyView::from(self.terminal_view.clone());
+        #[cfg(feature = "integration-test")]
+        let retained = std::env::var_os("HERDR_PERF_NO_RETAIN").is_none();
+        #[cfg(not(feature = "integration-test"))]
+        let retained = true;
+        if retained {
+            pixels = pixels.cached(StyleRefinement {
+                size: SizeRefinement {
+                    width: Some(relative(1.).into()),
+                    height: Some(relative(1.).into()),
+                },
+                ..Default::default()
+            });
+        }
         let terminal = div()
             .id("terminal")
             .relative()
@@ -421,6 +448,8 @@ impl Render for HerdrWindow {
                     }
                 }),
             )
+            // Retain pixels only; input, geometry and acknowledgements must stay live.
+            .child(pixels)
             .child(
                 canvas(
                     move |bounds, _, cx| {
@@ -444,48 +473,29 @@ impl Render for HerdrWindow {
                             ElementInputHandler::new(bounds, paint_entity.clone()),
                             cx,
                         );
-                        if let Some(surface) = &surface {
-                            painter.borrow_mut().paint_frame(
-                                &surface.frame,
-                                bounds.origin,
-                                cell_width,
-                                &font,
-                                window,
-                                cx,
-                            );
-                            if let Some(popup) = &surface.popup {
-                                let offset = popup_origin(&surface.frame, &popup.frame, cell_width);
-                                painter.borrow_mut().paint_frame(
-                                    &popup.frame,
-                                    bounds.origin + offset,
-                                    cell_width,
-                                    &font,
-                                    window,
-                                    cx,
-                                );
-                            }
-                            if window.is_window_active()
-                                && let Some(snapshot) = &snapshot
-                            {
-                                let snapshot = snapshot.clone();
-                                let surface = surface.clone();
-                                // Defer projection/COW work until after paint. On contention,
-                                // retry via another draw, never by acknowledging inbox cells.
-                                cx.defer(move |cx| match inbox.try_lock() {
-                                    Ok(mut state) => {
-                                        state.acknowledge_presented_surface(
-                                            &snapshot, &surface, true,
-                                        );
-                                    }
-                                    Err(std::sync::TryLockError::WouldBlock) => {
-                                        paint_entity.update(cx, |_, cx| cx.notify());
-                                    }
-                                    Err(std::sync::TryLockError::Poisoned(_)) => {}
-                                });
-                            }
+                        if let Some(surface) = &surface
+                            && window.is_window_active()
+                            && let Some(snapshot) = &snapshot
+                        {
+                            let snapshot = snapshot.clone();
+                            let surface = surface.clone();
+                            // Defer projection/COW work until after paint. On contention,
+                            // retry via another draw, never by acknowledging inbox cells.
+                            cx.defer(move |cx| match inbox.try_lock() {
+                                Ok(mut state) => {
+                                    state.acknowledge_presented_surface(&snapshot, &surface, true);
+                                }
+                                Err(std::sync::TryLockError::WouldBlock) => {
+                                    paint_entity.update(cx, |_, cx| cx.notify());
+                                }
+                                Err(std::sync::TryLockError::Poisoned(_)) => {}
+                            });
                         }
                     },
                 )
+                .absolute()
+                .top_0()
+                .left_0()
                 .size_full(),
             );
         let status = self.live.status_text(self.local_error.as_deref());
@@ -494,7 +504,7 @@ impl Render for HerdrWindow {
                 if this.menu.page.is_some() {
                     return;
                 }
-                this.reconnect();
+                this.reconnect(cx);
                 window.focus(&this.focus);
                 cx.notify();
             }))

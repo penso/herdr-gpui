@@ -1,4 +1,151 @@
-# Native Sidebar Performance
+# Native Terminal Performance
+
+## Main Merge Integration
+
+The merge of `5300d39` retains upstream's separate decoration pass, including
+spaces and wide-character continuation cells. Current deterministic budgets are
+1,921 decoration/cursor quads per dense paint and 1,922 with the popup. Cached
+popup painting now uses the same `popup_origin` helper as input and IME geometry,
+and retained acknowledgements use `ConnectionBridge`'s authoritative inbox.
+
+The measurements and 1,677/1,678 decoration counts below describe `ca2929b`
+before this merge, not the updated rendering workload. Re-run `just compare-perf`
+on an active desktop to measure the merged code; both comparison modes now include
+the upstream decoration fix.
+
+## Retained Scenes And Verified Runs (2026-09-20)
+
+This iteration changes only the GUI and its tests/tooling. The protocol, daemon,
+client event ordering, socket scheduling, and 16 ms update polling are unchanged.
+
+- Terminal pixels live in a persistent `TerminalView`, rendered through GPUI's
+  `AnyView::cached`. A new surface allocation (including cursor/popup changes) or
+  removal invalidates it. GPUI also checks bounds, content mask and text style.
+- The uncached sibling canvas still reports geometry, registers input/IME and
+  acknowledges the coherent presented snapshot/surface. Scene reuse must not
+  suppress activity acknowledgements or resize handling.
+- Contiguous, undecorated, non-space ASCII cells of one resolved style can share
+  a paint call. Native glyph IDs, fonts, metrics, widths, indexes and positions
+  must exactly match independent cell shaping. Actual-origin floating-point
+  accumulation is checked before painting; there is no position tolerance.
+- Other text, decorations, emoji and wide/combining cells retain the existing
+  per-cell path. Background and cursor ordering is unchanged. Row-local staging
+  prevents a single eligible pair from cloning shapes for the entire grid.
+- Cell shaping remains bounded at 4,096 entries. A separate 512-entry run cache
+  stores accepted layouts and rejected candidates, with at most 256 ASCII cells
+  per key. Both caches invalidate on font changes. Overflow uses the fallback
+  path; this is not a byte-precise bound on all native layout storage.
+- Successful responses, incoherent surfaces, identical surface Arcs and repeated
+  identical errors no longer dirty otherwise unchanged UI state. Snapshot updates,
+  including same-revision activity changes, are not suppressed.
+
+### Reproduce And Gate
+
+Run on a quiet, logged-in macOS desktop. The native fixture activates its own
+window for the acknowledgement check; do not switch applications during a run.
+
+```sh
+# Builds standalone release, then checks both forced and retained sidebar draws.
+just test-perf
+
+# Five interleaved reference/candidate pairs, alternating execution order.
+just compare-perf
+
+# Preserve raw samples, logs, binary hashes and checkout metadata.
+python3 -B scripts/compare-terminal-performance.py --pairs 5 --output comparison.json
+```
+
+The comparator requires at least 20% median per-run p95 improvement for hover
+and single-cell updates. It rejects >15% p50 or p95 regression for every category
+with at least 12 samples per run, including full-screen and mixed-fallback output.
+These are dedicated-desktop gates, not universal CI timing guarantees. Failed
+runs are not discarded or silently retried. Tune thresholds explicitly if needed.
+
+The default reference uses the **same executable**, disabling retained views and
+run batching while retaining the previously shipped glyph/background caches.
+It is a previous-algorithm control, not an actual historical executable.
+`--baseline-binary` accepts another binary with the same extended JSON harness.
+The script does not build or infer an executable's revision from the checkout.
+
+Integration-test-only switches (presence enables each, even `=0`):
+
+| Variable | Effect |
+| --- | --- |
+| `HERDR_PERF_RETAINED` | Do not force refresh during warm sidebar samples |
+| `HERDR_PERF_NO_RETAIN` | Disable the terminal view cache for comparison |
+| `HERDR_PERF_NO_BATCH` | Use the previous per-cell glyph painter |
+| `HERDR_PERF_UNCACHED` | Older reference: disable cell caching, background spans and run batching |
+| `HERDR_PERF_SAMPLES` | Emit raw JSON sample arrays and a final JSON PASS record |
+| `HERDR_PERF_P95_MS` | Absolute sidebar p95 gate; `inf` disables only this timing gate |
+
+`HERDR_PERF_RETAINED` selects the benchmark, not product behavior: ordinary builds
+always enable retention and eligible run batching. The subprocess regression
+test cleans inherited switches and checks an explicit PASS marker for both modes.
+
+### Results
+
+Apple M4 Max, macOS 27.0 (26A428), GPUI 0.2.2, Rust 1.96.1, Menlo 14 px. These
+are standalone optimized builds, not Cargo test-support builds. The final
+comparison used five process pairs. Each steady sidebar category has 60 samples
+per process; each update category has 12. Numbers are medians of per-process
+nearest-rank percentiles, not percentiles of pooled correlated frames.
+
+| Workload | Previous Algorithm p50 / p95 (ms) | New p50 / p95 (ms) | p95 Change |
+| --- | --- | --- | --- |
+| Warm hover | 12.367 / 12.670 | 5.646 / 5.757 | -54.6% |
+| Warm sidebar scroll | 12.380 / 13.575 | 5.599 / 8.537 | -37.1% |
+| Cursor updates | 11.660 / 11.934 | 6.745 / 7.032 | -41.1% |
+| Single-cell edits | 11.769 / 12.140 | 6.793 / 7.086 | -41.6% |
+| Erasure | 11.901 / 12.231 | 6.558 / 6.785 | -44.5% |
+| Streaming row scroll | 11.944 / 12.445 | 6.757 / 7.222 | -42.0% |
+| Full-screen alternating colors | 16.873 / 23.359 | 16.906 / 23.503 | +0.6% |
+| Decorated output with one ASCII pair | 23.785 / 24.404 | 23.798 / 24.352 | -0.2% |
+
+All comparative gates passed. A separate build of the actual starting revision
+`449d45b` measured forced hover/scroll p95 of 13.729/15.737 ms; the final candidate
+measured 7.493/10.644 ms using the same original forced-sidebar fixture. Those are
+individual historical runs, not paired medians. `449d45b`, rather than `7a26c2b`,
+was HEAD when implementation began. Historical 2026-09-19 results remain below.
+
+The dense fixture still submits 6,981 glyphs, 50 background spans and 1,677
+decoration/cursor quads per forced paint. It now uses 686 verified multi-cell
+runs, with zero warm cell, metric **or run** shaping. Retained sidebar draws make
+zero terminal painter calls. GPUI still replays primitives and sorts its scene;
+retention is not a retained GPU texture or a zero-cost draw.
+
+### Coverage And Limits
+
+Terminal update inputs are prepared outside timing. Timed work includes setting
+the surface, invalidation, native scene construction and arena clearing, but not
+daemon/transport work or generating/cloning test inputs. Updates never call
+`refresh()` before their measured draw: doing so would conceal missed invalidation.
+Untimed forced draws compare work counts, and native caches are checked against
+fresh independent glyph layouts. Popup show/hide, clear/restore, root-only status
+changes, warm native resize and `Working -> Done -> Idle` acknowledgement with an
+unchanged retained surface are explicitly checked.
+
+Unit tests cover no-op state updates, same-revision snapshots, cache capacity and
+font reset, batching eligibility, exact layout mismatch rejection and row-local
+fallback. Native subprocess tests run both modes with a timeout. No fixture
+connects to a daemon. Existing live-daemon input tests remain opt-in and were not
+run for this iteration.
+
+These are CPU benchmarks, **not** presentation/frame-deadline or pixel-diff tests.
+The window remains clipped on this display, as in the original workload. The
+12-sample update p95 is effectively the maximum; do not interpret it as a precise
+tail-latency estimate. Glyph/layout and count checks do not independently prove
+framebuffer equivalence. Device-scale transitions and sustained socket throughput
+are not exercised. Full-screen decorated/alternating-color output remains slower
+than sparse transcript updates; row damage tracking, custom glyph submission,
+decoration reordering, cache eviction and event-driven polling are deliberately
+not introduced without further profiling and correctness coverage.
+
+## Original Cached-Cell Baseline (2026-09-19)
+
+The following results and implementation notes describe the previous iteration,
+before retained views and verified ASCII-run batching. The forced-refresh fixture
+and old uncached reference remain available for continuity; current benchmark
+runs also execute the update and acknowledgement checks described above.
 
 ## Recipes
 

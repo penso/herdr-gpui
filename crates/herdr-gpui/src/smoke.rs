@@ -471,7 +471,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     10 if options.surface_size != old_size && last_queued_options == Some(options)
                         && surface.frame.width == options.surface_size.cols && surface.frame.height == options.surface_size.rows => {
                         eprintln!("GUI native resize verified: {:?} -> {:?}", old_size, options.surface_size);
-                        view.update(cx, |view, cx| { view.reconnect(); window.focus(&view.focus); cx.notify(); });
+                        view.update(cx, |view, cx| { view.reconnect(cx); window.focus(&view.focus); cx.notify(); });
                     }
                     11 if snapshot.boot_id == boot && snapshot.workspaces.len() == 2 && snapshot.tabs.len() == 3
                         && focused_workspace == workspace && focused_tab == first_tab && has_output(&surface.frame, &marker) => {

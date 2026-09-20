@@ -4,20 +4,28 @@ use herdr_client::protocol::{CellData, FrameData};
 use std::collections::HashMap;
 
 const CACHE_LIMIT: usize = 4096;
+const RUN_CACHE_LIMIT: usize = 512;
+const RUN_LENGTH_LIMIT: usize = 256;
+
+type CellStyle = (u32, u16);
+type RunKey = (String, CellStyle, u32);
 
 #[derive(Default)]
 pub(crate) struct TerminalPainter {
     config: Option<Font>,
     // Resolved foreground includes reverse, dim and hidden; only bold/italic
     // affect shaping. Decorations remain at exact cell-grid coordinates.
-    lines: HashMap<(u32, u16), HashMap<String, ShapedLine>>,
+    lines: HashMap<CellStyle, HashMap<String, ShapedLine>>,
     entries: usize,
     cell_width: Option<f32>,
+    runs: HashMap<RunKey, Option<ShapedLine>>,
+    #[cfg(feature = "integration-test")]
+    no_batch: Option<bool>,
     #[cfg(feature = "integration-test")]
     pub uncached: bool,
 }
 
-fn style(cell: &CellData) -> (u32, u16) {
+fn style(cell: &CellData) -> CellStyle {
     (cell_colors(cell).0, cell.modifier & (BOLD | ITALIC))
 }
 
@@ -28,6 +36,94 @@ fn decoration_offsets(cell: &CellData) -> impl Iterator<Item = f32> + '_ {
     ]
     .into_iter()
     .filter_map(|(modifier, y)| (cell.modifier & modifier != 0).then_some(y))
+}
+
+fn batchable(cell: &CellData) -> bool {
+    !cell.skip
+        && cell.modifier & (UNDERLINE | STRIKETHROUGH) == 0
+        && cell.symbol.len() == 1
+        && cell.symbol.as_bytes()[0].is_ascii_graphic()
+}
+
+fn row_has_batch_pair(row: &[CellData]) -> bool {
+    let mut previous = None;
+    for cell in row {
+        let current = batchable(cell).then(|| style(cell));
+        if current.is_some() && current == previous {
+            return true;
+        }
+        previous = current;
+    }
+    false
+}
+
+fn paint_glyphs(
+    shaped: &ShapedLine,
+    position: Point<Pixels>,
+    window: &mut Window,
+    cx: &mut App,
+    #[cfg(feature = "integration-test")] counts: &mut crate::performance::Counts,
+) {
+    let result = shaped.paint(position, px(CELL_HEIGHT), window, cx);
+    #[cfg(not(feature = "integration-test"))]
+    let _ = result;
+    #[cfg(feature = "integration-test")]
+    {
+        counts.glyphs += shaped.runs.iter().map(|r| r.glyphs.len()).sum::<usize>();
+        counts.paint_errors += usize::from(result.is_err());
+    }
+}
+
+// Compare native layouts, not advances inferred from text. In particular, a
+// fallback font, ligature or changed baseline must retain the per-cell path.
+fn equivalent_run<'a>(
+    run: &LineLayout,
+    cells: impl IntoIterator<Item = &'a LineLayout>,
+    width: f32,
+    column: usize,
+    origin_x: Pixels,
+) -> bool {
+    if run.runs.len() != 1 {
+        return false;
+    }
+    let native = &run.runs[0];
+    let mut count = 0;
+    let mut painted_x = origin_x + px(column as f32 * width);
+    let mut previous_x = px(0.);
+    for (i, cell) in cells.into_iter().enumerate() {
+        if cell.font_size != run.font_size
+            || cell.width != px(width)
+            || cell.ascent != run.ascent
+            || cell.descent != run.descent
+            || cell.runs.len() != 1
+        {
+            return false;
+        }
+        let single = &cell.runs[0];
+        let Some(glyph) = native.glyphs.get(i) else {
+            return false;
+        };
+        if single.font_id != native.font_id || single.glyphs.len() != 1 {
+            return false;
+        }
+        let original = &single.glyphs[0];
+        painted_x += glyph.position.x - previous_x;
+        previous_x = glyph.position.x;
+        if original.is_emoji
+            || glyph.is_emoji
+            || original.id != glyph.id
+            || original.index != 0
+            || glyph.index != i
+            || glyph.position.y != original.position.y
+            || glyph.position.x != px(i as f32 * width) + original.position.x
+            || painted_x != (origin_x + px((column + i) as f32 * width)) + original.position.x
+        {
+            return false;
+        }
+        count += 1;
+    }
+    // GPUI uses layout width for paint_layer bounds, not just glyph placement.
+    count >= 2 && count == native.glyphs.len() && run.width == px(count as f32 * width)
 }
 
 fn background_spans(row: &[CellData]) -> impl Iterator<Item = (usize, usize, u32)> + '_ {
@@ -49,6 +145,7 @@ impl TerminalPainter {
     pub fn reset_cache(&mut self) {
         self.config = None;
         self.lines.clear();
+        self.runs.clear();
         self.entries = 0;
         self.cell_width = None;
     }
@@ -86,11 +183,33 @@ impl TerminalPainter {
                 }
             }
         }
+        for ((text, key, width), cached) in &self.runs {
+            let Some(run) = cached else { continue };
+            let cells = text
+                .bytes()
+                .map(|byte| {
+                    self.lines
+                        .get(key)
+                        .and_then(|lines| lines.get(&(byte as char).to_string()))
+                })
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| format!("missing batch cells: {text:?}"))?;
+            if !equivalent_run(
+                run,
+                cells.iter().map(|line| -> &LineLayout { line }),
+                f32::from_bits(*width),
+                0,
+                px(0.),
+            ) {
+                return Err(format!("cached batch/native cell mismatch: {text:?}"));
+            }
+        }
         Ok(self.entries)
     }
     fn configure(&mut self, font: &Font) {
         if self.config.as_ref() != Some(font) {
             self.lines.clear();
+            self.runs.clear();
             self.entries = 0;
             self.cell_width = None;
             self.config = Some(font.clone());
@@ -147,6 +266,12 @@ impl TerminalPainter {
         let cached = true;
         #[cfg(feature = "integration-test")]
         let cached = cached && !self.uncached;
+        let batching = cached;
+        #[cfg(feature = "integration-test")]
+        let batching = batching
+            && !*self
+                .no_batch
+                .get_or_insert_with(|| std::env::var_os("HERDR_PERF_NO_BATCH").is_some());
         #[cfg(feature = "integration-test")]
         let mut counts = crate::performance::Counts::default();
         // Backgrounds precede all glyphs, including wide graphemes' skip cells.
@@ -174,65 +299,177 @@ impl TerminalPainter {
                 }
             }
         }
-        for (index, cell) in frame.cells.iter().enumerate() {
-            if cell.skip || cell.symbol.is_empty() || cell.symbol == " " {
-                continue;
-            }
-            let key = style(cell);
-            let mut overflow = HashMap::new();
-            let lines = if self.entries < CACHE_LIMIT || self.lines.contains_key(&key) {
-                self.lines.entry(key).or_default()
+        for (y, row) in frame.cells.chunks(usize::from(frame.width)).enumerate() {
+            let batching = batching && row_has_batch_pair(row);
+            // Stage only eligible rows; other rows retain the borrowed-glyph path.
+            let mut shaped_cells = if batching {
+                vec![None; row.len()]
             } else {
-                &mut overflow
+                Vec::new()
             };
-            let existing = cached.then(|| lines.get(cell.symbol.as_str())).flatten();
-            let newly_shaped;
-            let shaped = if let Some(line) = existing {
-                line
-            } else {
-                let mut font = font.clone();
-                if key.1 & BOLD != 0 {
-                    font.weight = FontWeight::BOLD;
+            for (index, cell) in row.iter().enumerate() {
+                if cell.skip || cell.symbol.is_empty() || cell.symbol == " " {
+                    continue;
                 }
-                if key.1 & ITALIC != 0 {
-                    font.style = FontStyle::Italic;
+                let key = style(cell);
+                let mut overflow = HashMap::new();
+                let lines = if self.entries < CACHE_LIMIT || self.lines.contains_key(&key) {
+                    self.lines.entry(key).or_default()
+                } else {
+                    &mut overflow
+                };
+                let existing = cached.then(|| lines.get(cell.symbol.as_str())).flatten();
+                let newly_shaped;
+                let shaped = if let Some(line) = existing {
+                    line
+                } else {
+                    let mut font = font.clone();
+                    if key.1 & BOLD != 0 {
+                        font.weight = FontWeight::BOLD;
+                    }
+                    if key.1 & ITALIC != 0 {
+                        font.style = FontStyle::Italic;
+                    }
+                    #[cfg(feature = "integration-test")]
+                    {
+                        counts.shapes += 1;
+                    }
+                    newly_shaped = window.text_system().shape_line(
+                        cell.symbol.clone().into(),
+                        px(FONT_SIZE),
+                        &[TextRun {
+                            len: cell.symbol.len(),
+                            font,
+                            color: rgb(key.0).into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        }],
+                        None,
+                    );
+                    if cached && self.entries < CACHE_LIMIT {
+                        self.entries += 1;
+                        lines.entry(cell.symbol.clone()).or_insert(newly_shaped)
+                    } else {
+                        &newly_shaped
+                    }
+                };
+                if batching {
+                    shaped_cells[index] = Some(shaped.clone());
+                } else {
+                    let position =
+                        origin + point(px(index as f32 * cell_width), px(y as f32 * CELL_HEIGHT));
+                    paint_glyphs(
+                        shaped,
+                        position,
+                        window,
+                        cx,
+                        #[cfg(feature = "integration-test")]
+                        &mut counts,
+                    );
                 }
+            }
+            let mut index = 0;
+            let mut next_candidate = 0;
+            while index < shaped_cells.len() {
+                let cell = &row[index];
+                let Some(shaped) = shaped_cells[index].as_ref() else {
+                    index += 1;
+                    continue;
+                };
+                let key = style(cell);
+                let position =
+                    origin + point(px(index as f32 * cell_width), px(y as f32 * CELL_HEIGHT));
+                let mut end = index + 1;
+                if batching && index >= next_candidate && batchable(cell) {
+                    while end < row.len()
+                        && end - index < RUN_LENGTH_LIMIT
+                        && batchable(&row[end])
+                        && style(&row[end]) == key
+                    {
+                        end += 1;
+                    }
+                }
+                let mut batch = None;
+                if end - index >= 2 && shaped_cells[index..end].iter().all(Option::is_some) {
+                    next_candidate = end;
+                    let text: String = row[index..end].iter().map(|c| c.symbol.as_str()).collect();
+                    let run_key = (text, key, cell_width.to_bits());
+                    if !self.runs.contains_key(&run_key) && self.runs.len() < RUN_CACHE_LIMIT {
+                        // Only retain candidates whose original cells remain available
+                        // for native verification (the cell cache may be full).
+                        let retained = self.lines.get(&key).is_some_and(|lines| {
+                            row[index..end]
+                                .iter()
+                                .all(|c| lines.contains_key(&c.symbol))
+                        });
+                        if retained {
+                            let mut run_font = font.clone();
+                            if key.1 & BOLD != 0 {
+                                run_font.weight = FontWeight::BOLD;
+                            }
+                            if key.1 & ITALIC != 0 {
+                                run_font.style = FontStyle::Italic;
+                            }
+                            let line = window.text_system().shape_line(
+                                run_key.0.clone().into(),
+                                px(FONT_SIZE),
+                                &[TextRun {
+                                    len: run_key.0.len(),
+                                    font: run_font,
+                                    color: rgb(key.0).into(),
+                                    background_color: None,
+                                    underline: None,
+                                    strikethrough: None,
+                                }],
+                                None,
+                            );
+                            #[cfg(feature = "integration-test")]
+                            {
+                                counts.run_shapes += 1;
+                            }
+                            let verified = equivalent_run(
+                                &line,
+                                shaped_cells[index..end]
+                                    .iter()
+                                    .filter_map(|c| c.as_ref().map(|line| -> &LineLayout { line })),
+                                cell_width,
+                                0,
+                                px(0.),
+                            );
+                            self.runs.insert(run_key.clone(), verified.then_some(line));
+                        }
+                    }
+                    batch = self
+                        .runs
+                        .get(&run_key)
+                        .and_then(|line| line.as_ref())
+                        .filter(|line| {
+                            equivalent_run(
+                                line,
+                                shaped_cells[index..end]
+                                    .iter()
+                                    .filter_map(|c| c.as_ref().map(|line| -> &LineLayout { line })),
+                                cell_width,
+                                index,
+                                origin.x,
+                            )
+                        });
+                }
+                let painted = batch.unwrap_or(shaped);
+                paint_glyphs(
+                    painted,
+                    position,
+                    window,
+                    cx,
+                    #[cfg(feature = "integration-test")]
+                    &mut counts,
+                );
                 #[cfg(feature = "integration-test")]
                 {
-                    counts.shapes += 1;
+                    counts.runs += usize::from(batch.is_some());
                 }
-                newly_shaped = window.text_system().shape_line(
-                    cell.symbol.clone().into(),
-                    px(FONT_SIZE),
-                    &[TextRun {
-                        len: cell.symbol.len(),
-                        font,
-                        color: rgb(key.0).into(),
-                        background_color: None,
-                        underline: None,
-                        strikethrough: None,
-                    }],
-                    None,
-                );
-                if cached && self.entries < CACHE_LIMIT {
-                    self.entries += 1;
-                    lines.entry(cell.symbol.clone()).or_insert(newly_shaped)
-                } else {
-                    &newly_shaped
-                }
-            };
-            let position = origin
-                + point(
-                    px((index % usize::from(frame.width)) as f32 * cell_width),
-                    px((index / usize::from(frame.width)) as f32 * CELL_HEIGHT),
-                );
-            let result = shaped.paint(position, px(CELL_HEIGHT), window, cx);
-            #[cfg(not(feature = "integration-test"))]
-            let _ = result;
-            #[cfg(feature = "integration-test")]
-            {
-                counts.glyphs += shaped.runs.iter().map(|r| r.glyphs.len()).sum::<usize>();
-                counts.paint_errors += usize::from(result.is_err());
+                index = if batch.is_some() { end } else { index + 1 };
             }
         }
         // Decorations cover the grid, including spaces and wide-glyph continuation cells.
@@ -283,6 +520,8 @@ impl TerminalPainter {
         {
             let total = cx.default_global::<crate::performance::Counts>();
             total.shapes += counts.shapes;
+            total.run_shapes += counts.run_shapes;
+            total.runs += counts.runs;
             total.quads += counts.quads;
             total.glyphs += counts.glyphs;
             total.decorations += counts.decorations;
@@ -293,9 +532,18 @@ impl TerminalPainter {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use core::prelude::v1::test;
+
+    fn has_batch_pair(frame: &FrameData) -> bool {
+        frame.width != 0
+            && frame
+                .cells
+                .chunks(usize::from(frame.width))
+                .any(row_has_batch_pair)
+    }
 
     fn cell(symbol: &str) -> CellData {
         CellData {
@@ -306,6 +554,305 @@ mod tests {
             skip: false,
             hyperlink: None,
         }
+    }
+
+    #[test]
+    fn batches_only_undecorated_printable_ascii() {
+        assert!(batchable(&cell("x")));
+        for symbol in ["", " ", "\t", "\n", "\u{7f}", "\u{754c}", "ab", "e\u{301}"] {
+            assert!(!batchable(&cell(symbol)));
+        }
+        for modifier in [8, 256, 8 | 256] {
+            assert!(!batchable(&CellData {
+                modifier,
+                ..cell("x")
+            }));
+        }
+        assert!(!batchable(&CellData {
+            skip: true,
+            ..cell("x")
+        }));
+    }
+
+    #[test]
+    fn sparse_ascii_pair_only_stages_its_own_row() {
+        let mut cells = vec![cell("\u{754c}"); 12];
+        cells[5] = cell("x");
+        cells[6] = cell("y");
+        cells[8..].fill(CellData {
+            modifier: 8,
+            ..cell("x")
+        });
+        assert_eq!(
+            cells.chunks(4).map(row_has_batch_pair).collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+        assert!(!row_has_batch_pair(&[]));
+        assert!(!row_has_batch_pair(&[cell("x")]));
+    }
+
+    #[test]
+    fn batch_pair_gate_respects_rows_eligibility_and_resolved_style() {
+        let mut frame = FrameData {
+            width: 2,
+            height: 2,
+            cells: vec![cell("x"); 4],
+            cursor: None,
+            hyperlinks: vec![],
+            graphics: vec![],
+        };
+        assert!(has_batch_pair(&frame));
+        frame.cells[0].fg = 0x02123456;
+        frame.cells[3].fg = 0x02123456;
+        assert!(!has_batch_pair(&frame), "matching cells straddle rows");
+        frame.width = 4;
+        assert!(has_batch_pair(&frame));
+        for blocked in [
+            cell(" "),
+            cell("\u{754c}"),
+            CellData {
+                skip: true,
+                ..cell("x")
+            },
+            CellData {
+                modifier: 8,
+                ..cell("x")
+            },
+            CellData {
+                modifier: 256,
+                ..cell("x")
+            },
+        ] {
+            frame.cells[1] = blocked;
+            assert!(!has_batch_pair(&frame));
+        }
+        frame.cells = (0..100)
+            .map(|i| CellData {
+                fg: 0x02000000 | (i % 2),
+                ..cell("x")
+            })
+            .collect();
+        assert!(
+            !has_batch_pair(&frame),
+            "alternating foregrounds use single-pass painting"
+        );
+        frame.cells = vec![cell("x"); 2];
+        frame.cells[1].bg = 0x02123456;
+        assert!(
+            has_batch_pair(&frame),
+            "background does not change glyph style"
+        );
+        frame.width = 1;
+        assert!(!has_batch_pair(&frame));
+        frame.width = 0;
+        assert!(!has_batch_pair(&frame));
+    }
+
+    #[gpui::test]
+    fn native_run_equivalence_is_exact_and_rejects_layout_changes(cx: &mut TestAppContext) {
+        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        cx.draw(Point::default(), size(px(800.), px(600.)), |_, _| {
+            canvas(
+                |_, _, _| (),
+                |_, _, window, _| {
+                    let single = window.text_system().shape_line(
+                        "x".into(),
+                        px(FONT_SIZE),
+                        &[TextRun {
+                            len: 1,
+                            font: font("Menlo"),
+                            color: rgb(FOREGROUND).into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        }],
+                        None,
+                    );
+                    // Use a native glyph but explicit nondegenerate metrics/positions:
+                    // NoopTextSystem cannot exercise real kerning and fallback changes.
+                    let original = LineLayout {
+                        font_size: px(14.),
+                        width: px(8.),
+                        ascent: px(11.),
+                        descent: px(3.),
+                        runs: single.runs.clone(),
+                        len: 1,
+                    };
+                    let make_run = || {
+                        let mut runs = original.runs.clone();
+                        let mut second = runs[0].glyphs[0].clone();
+                        second.index = 1;
+                        second.position.x += px(8.);
+                        runs[0].glyphs.push(second);
+                        LineLayout {
+                            font_size: original.font_size,
+                            width: px(16.),
+                            ascent: original.ascent,
+                            descent: original.descent,
+                            runs,
+                            len: 2,
+                        }
+                    };
+                    let accepted = make_run();
+                    assert!(equivalent_run(
+                        &accepted,
+                        [&original, &original],
+                        8.,
+                        7,
+                        px(0.5)
+                    ));
+                    let other = window.text_system().shape_line(
+                        "\u{1f600}".into(),
+                        px(FONT_SIZE),
+                        &[TextRun {
+                            len: 4,
+                            font: font("Menlo"),
+                            color: rgb(FOREGROUND).into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        }],
+                        None,
+                    );
+                    let mut wrong_id = make_run();
+                    wrong_id.runs[0].glyphs[1].id = other.runs[0].glyphs[0].id;
+                    assert_ne!(wrong_id.runs[0].glyphs[1].id, original.runs[0].glyphs[0].id);
+                    assert!(!equivalent_run(
+                        &wrong_id,
+                        [&original, &original],
+                        8.,
+                        0,
+                        px(0.)
+                    ));
+                    let mut multiple = LineLayout {
+                        width: original.width,
+                        runs: original.runs.clone(),
+                        ..LineLayout::default()
+                    };
+                    multiple.font_size = original.font_size;
+                    multiple.ascent = original.ascent;
+                    multiple.descent = original.descent;
+                    multiple.runs[0]
+                        .glyphs
+                        .push(original.runs[0].glyphs[0].clone());
+                    assert!(!equivalent_run(
+                        &accepted,
+                        [&original, &multiple],
+                        8.,
+                        0,
+                        px(0.)
+                    ));
+                    let wrong_cell_width = LineLayout {
+                        width: px(f32::from_bits(8f32.to_bits() + 1)),
+                        font_size: original.font_size,
+                        ascent: original.ascent,
+                        descent: original.descent,
+                        runs: original.runs.clone(),
+                        len: original.len,
+                    };
+                    assert!(!equivalent_run(
+                        &accepted,
+                        [&original, &wrong_cell_width],
+                        8.,
+                        0,
+                        px(0.)
+                    ));
+                    for change in 0..11 {
+                        let mut changed = make_run();
+                        match change {
+                            0 => changed.ascent += px(1.),
+                            1 => changed.descent += px(1.),
+                            2 => changed.font_size += px(1.),
+                            3 => changed.runs[0].font_id = FontId(usize::MAX),
+                            4 => changed.runs[0].glyphs[1].is_emoji = true,
+                            5 => changed.runs[0].glyphs[1].index = 0,
+                            6 => changed.runs[0].glyphs[1].position.y += px(1.),
+                            7 => {
+                                changed.runs[0].glyphs[1].position.x =
+                                    px(f32::from_bits(8f32.to_bits() + 1))
+                            }
+                            8 => {
+                                changed.runs[0].glyphs.pop();
+                            }
+                            9 => {
+                                changed.runs.push(changed.runs[0].clone());
+                            }
+                            _ => changed.width = px(f32::from_bits(16f32.to_bits() + 1)),
+                        }
+                        assert!(
+                            !equivalent_run(&changed, [&original, &original], 8., 0, px(0.)),
+                            "change {change}"
+                        );
+                    }
+                },
+            )
+            .size_full()
+        });
+    }
+
+    #[gpui::test]
+    fn candidate_cache_retains_acceptance_and_rejection_and_is_bounded(cx: &mut TestAppContext) {
+        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        cx.draw(Point::default(), size(px(800.), px(600.)), |_, _| {
+            canvas(
+                |_, _, _| (),
+                |bounds, _, window, cx| {
+                    let mut painter = TerminalPainter::default();
+                    #[cfg(feature = "integration-test")]
+                    {
+                        painter.no_batch = Some(false);
+                    }
+                    let base = font("Menlo");
+                    let width = painter.cell_width(&base, window, cx);
+                    let frame = FrameData {
+                        width: 2,
+                        height: 1,
+                        cells: vec![cell("x"), cell("x")],
+                        cursor: None,
+                        hyperlinks: vec![],
+                        graphics: vec![],
+                    };
+                    painter.paint_frame(&frame, bounds.origin, width, &base, window, cx);
+                    let key = ("xx".to_owned(), style(&frame.cells[0]), width.to_bits());
+                    assert!(painter.runs[&key].is_some());
+                    painter.paint_frame(&frame, bounds.origin, width, &base, window, cx);
+                    assert_eq!(painter.runs.len(), 1);
+                    assert_eq!(painter.entries, 1);
+                    let wrong_width = width + 1.;
+                    painter.paint_frame(&frame, bounds.origin, wrong_width, &base, window, cx);
+                    let rejected = (
+                        "xx".to_owned(),
+                        style(&frame.cells[0]),
+                        wrong_width.to_bits(),
+                    );
+                    assert!(painter.runs[&rejected].is_none());
+                    painter.paint_frame(&frame, bounds.origin, wrong_width, &base, window, cx);
+                    assert_eq!(painter.runs.len(), 2);
+                    for i in 0..RUN_CACHE_LIMIT {
+                        painter.paint_frame(
+                            &frame,
+                            bounds.origin,
+                            wrong_width + i as f32,
+                            &base,
+                            window,
+                            cx,
+                        );
+                    }
+                    assert_eq!(painter.runs.len(), RUN_CACHE_LIMIT);
+                    assert!(painter.runs[&key].is_some());
+                    painter.configure(&font("Courier"));
+                    assert!(painter.runs.is_empty());
+                    #[cfg(feature = "integration-test")]
+                    {
+                        painter.paint_frame(&frame, bounds.origin, width, &base, window, cx);
+                        painter.verify_native_cache(window).unwrap();
+                        painter.reset_cache();
+                        assert!(painter.runs.is_empty());
+                    }
+                },
+            )
+            .size_full()
+        });
     }
 
     #[test]

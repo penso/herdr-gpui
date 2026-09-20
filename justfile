@@ -36,6 +36,12 @@ test-sidebar:
 test-perf budget="30":
     cargo build --locked --release -p herdr-gpui --features integration-test
     HERDR_PERF_P95_MS="{{budget}}" target/release/herdr-gpui --performance-test
+    HERDR_PERF_RETAINED=1 HERDR_PERF_P95_MS="{{budget}}" target/release/herdr-gpui --performance-test
+
+# Interleaved native comparisons against the previous per-cell algorithm.
+compare-perf pairs="5":
+    cargo build --locked --release -p herdr-gpui --features integration-test
+    python3 -B scripts/compare-terminal-performance.py --pairs {{pairs}}
 
 build-release:
     cargo build --locked --release -p herdr-gpui

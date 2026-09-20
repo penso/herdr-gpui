@@ -168,15 +168,19 @@ valid and 1024x1024; a normal unit test checks the embedded PNG header/dimension
 
 `just test-perf` opens a daemon-free native fixture with a dense 160x50 terminal,
 40 workspaces, and 40 agents. It dispatches real window-local mouse/scroll events
-and measures cold frames, warm hover, and both sidebar lists' scrolling. It also
-asserts that unchanged terminal cells need zero new text-shaping calls, validates
-batched background counts, and compares cached glyphs with freshly shaped ones.
+and measures cold frames, warm hover, both sidebar lists' scrolling, and terminal
+updates. It checks forced redraws and retained scenes, verifies zero terminal
+paint calls during warm sidebar interactions, and checks native glyph layouts,
+popup removal, resize invalidation, and activity acknowledgement on retained draws.
 
-On the development M4 Max, caching and background batching reduced release hover
-p95 from about 51 ms to 12 ms, and scrolling from 56 ms to 14 ms. The benchmark
-measures CPU event-to-scene construction, not GPU completion or pointer-to-screen
-latency. Use `just test-perf 50` to set a different calibrated budget; native tests
-remain opt-in rather than imposing machine-dependent timings on hosted CI.
+Before the upstream blank-cell decoration fix was merged, retained scenes and
+verified ASCII-run batching on the development M4 Max reduced
+release hover p95 from 12.67 ms to 5.76 ms and single-cell updates from 12.14 ms to
+7.09 ms in five interleaved comparisons against the previous per-cell algorithm.
+Full-screen alternating-color output remained essentially unchanged. Run
+`just compare-perf` for relative improvement/regression gates, or `just test-perf 50`
+for a different absolute sidebar budget. These measure CPU scene construction,
+not GPU completion or pointer-to-screen latency. Native tests remain opt-in.
 
 See [PERFORMANCE.md](crates/herdr-gpui/PERFORMANCE.md) for the before/after results,
 reference mode, workload, deterministic checks, and remaining limitations.

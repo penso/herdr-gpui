@@ -86,12 +86,13 @@ impl HerdrWindow {
             "detach" => {
                 self.connection.detach(self.active);
                 self.live = self.connection.take_update().unwrap_or_default();
+                self.set_surface(self.live.surface.clone(), cx);
                 self.local_error = None;
                 self.marked.clear();
                 self.dismiss_menu(window, cx);
             }
             "reconnect" => {
-                self.reconnect();
+                self.reconnect(cx);
                 self.dismiss_menu(window, cx);
             }
             _ => {}

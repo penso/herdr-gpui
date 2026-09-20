@@ -132,13 +132,18 @@ impl LiveState {
                 self.snapshot = Some(snapshot);
             }
             ClientEvent::Surface(surface) => {
-                if self
+                if !self
                     .snapshot
                     .as_ref()
                     .is_some_and(|s| coherent(s, &surface))
+                    || self
+                        .surface
+                        .as_ref()
+                        .is_some_and(|s| Arc::ptr_eq(s, &surface))
                 {
-                    self.surface = Some(surface);
+                    return;
                 }
+                self.surface = Some(surface);
             }
             ClientEvent::Disconnected { reason } => {
                 self.status = ConnectionStatus::Disconnected;
@@ -147,14 +152,22 @@ impl LiveState {
                 self.surface = None;
                 self.agent_presentation = AgentPresentation::default();
             }
-            ClientEvent::CommandRejected { reason, .. } => self.error = Some(reason),
-            ClientEvent::Response { response, .. } => {
-                if let Some(error) = response.get("error") {
-                    self.error = Some(error.to_string());
+            ClientEvent::CommandRejected { reason, .. }
+            | ClientEvent::Message(ServerMessage::ClientShellError { message: reason }) => {
+                if self.error.as_ref() == Some(&reason) {
+                    return;
                 }
+                self.error = Some(reason);
             }
-            ClientEvent::Message(ServerMessage::ClientShellError { message }) => {
-                self.error = Some(message)
+            ClientEvent::Response { response, .. } => {
+                let Some(error) = response.get("error") else {
+                    return;
+                };
+                let error = error.to_string();
+                if self.error.as_ref() == Some(&error) {
+                    return;
+                }
+                self.error = Some(error);
             }
             _ => return,
         }
@@ -455,6 +468,133 @@ mod tests {
             popup: None,
             graphics: Default::default(),
         })
+    }
+
+    #[test]
+    fn same_surface_arc_preserves_dirty_but_distinct_arc_marks_dirty() {
+        let mut state = LiveState::default();
+        let snapshot = snapshot();
+        let frame = surface(&snapshot);
+        state.apply(ClientEvent::Snapshot(snapshot));
+        state.dirty = false;
+        state.apply(ClientEvent::Surface(frame.clone()));
+        assert!(state.dirty);
+        for dirty in [false, true] {
+            state.dirty = dirty;
+            state.apply(ClientEvent::Surface(frame.clone()));
+            assert_eq!(state.dirty, dirty);
+            assert!(Arc::ptr_eq(state.surface.as_ref().unwrap(), &frame));
+        }
+        let replacement = Arc::new((*frame).clone());
+        state.dirty = false;
+        state.apply(ClientEvent::Surface(replacement.clone()));
+        assert!(state.dirty);
+        assert!(Arc::ptr_eq(state.surface.as_ref().unwrap(), &replacement));
+    }
+
+    #[test]
+    fn rejected_surfaces_preserve_dirty_and_current_surface() {
+        let snapshot = snapshot();
+        let frame = surface(&snapshot);
+        let mut stale = surface(&snapshot);
+        Arc::make_mut(&mut stale).projection_revision += 1;
+        let mut wrong_boot = surface(&snapshot);
+        Arc::make_mut(&mut wrong_boot).boot_id = "wrong-boot".into();
+        for dirty in [false, true] {
+            let mut state = LiveState {
+                dirty,
+                ..LiveState::default()
+            };
+            state.apply(ClientEvent::Surface(frame.clone()));
+            assert_eq!(state.dirty, dirty);
+            assert!(state.surface.is_none());
+
+            state.apply(ClientEvent::Snapshot(snapshot.clone()));
+            state.apply(ClientEvent::Surface(frame.clone()));
+            for rejected in [&stale, &wrong_boot] {
+                state.dirty = dirty;
+                state.apply(ClientEvent::Surface(rejected.clone()));
+                assert_eq!(state.dirty, dirty);
+                assert!(Arc::ptr_eq(state.surface.as_ref().unwrap(), &frame));
+            }
+        }
+    }
+
+    #[test]
+    fn successful_response_preserves_dirty_and_existing_error() {
+        for dirty in [false, true] {
+            for error in [None, Some("existing error".to_owned())] {
+                let mut state = LiveState {
+                    dirty,
+                    error: error.clone(),
+                    ..LiveState::default()
+                };
+                state.apply(ClientEvent::Response {
+                    request_id: "test".into(),
+                    response: serde_json::json!({"result": {}}),
+                });
+                assert_eq!(state.dirty, dirty);
+                assert_eq!(state.error, error);
+            }
+        }
+    }
+
+    #[test]
+    fn error_events_dirty_only_when_displayed_error_changes() {
+        for kind in 0..3 {
+            let event = |message: &str| match kind {
+                0 => ClientEvent::CommandRejected {
+                    request_id: Some("test".into()),
+                    reason: message.into(),
+                },
+                1 => ClientEvent::Message(ServerMessage::ClientShellError {
+                    message: message.into(),
+                }),
+                _ => ClientEvent::Response {
+                    request_id: "test".into(),
+                    response: serde_json::json!({"error": message}),
+                },
+            };
+            let mut state = LiveState {
+                dirty: false,
+                ..LiveState::default()
+            };
+            state.apply(event("first"));
+            assert!(state.dirty);
+            let first = state.error.clone();
+            assert!(first.is_some());
+            for dirty in [false, true] {
+                state.dirty = dirty;
+                state.apply(event("first"));
+                assert_eq!(state.dirty, dirty);
+                assert_eq!(state.error, first);
+            }
+            state.dirty = false;
+            state.apply(event("second"));
+            assert!(state.dirty);
+            assert_ne!(state.error, first);
+        }
+    }
+
+    #[test]
+    fn same_revision_snapshots_still_project_updates_and_mark_dirty() {
+        let mut state = LiveState::default();
+        let initial = agent_snapshot(AgentStatus::Working, 9);
+        state.apply(ClientEvent::Snapshot(initial.clone()));
+        state.dirty = false;
+        state.apply(ClientEvent::Snapshot(initial.clone()));
+        assert!(state.dirty);
+
+        let mut next = agent_snapshot(AgentStatus::Idle, 10);
+        Arc::make_mut(&mut next).revision = initial.revision;
+        state.dirty = false;
+        state.apply(ClientEvent::Snapshot(next));
+        assert!(state.dirty);
+        assert_status(&state, AgentStatus::Done);
+        assert_eq!(
+            state.snapshot.as_ref().unwrap().agents[0].state_change_seq,
+            10
+        );
     }
 
     #[test]

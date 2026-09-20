@@ -254,6 +254,7 @@ fn sidebar_allocates_text_width(cx: &mut gpui::TestAppContext) {
             bounds: Bounds::default(),
             cell_width: 9.,
             painter: Default::default(),
+            terminal_view: cx.new(|_| crate::terminal_view::TerminalView::new(Default::default())),
             marked: String::new(),
             local_error: None,
             menu: crate::menu::MenuState::new(cx),

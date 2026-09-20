@@ -9,9 +9,21 @@ use objc::{class, msg_send, sel, sel_impl};
 
 pub(crate) fn click(x: f64, y: f64) -> Result<(), String> {
     unsafe {
-        let window: id = msg_send![NSApp(), keyWindow];
+        // Match the performance adapter: a fixture can render without being key.
+        let windows: id = msg_send![NSApp(), windows];
+        let count: usize = msg_send![windows, count];
+        let mut window = nil;
+        for index in 0..count {
+            let candidate: id = msg_send![windows, objectAtIndex: index];
+            let title: id = msg_send![candidate, title];
+            let text: *const std::ffi::c_char = msg_send![title, UTF8String];
+            if !text.is_null() && std::ffi::CStr::from_ptr(text).to_bytes() == b"Herdr" {
+                window = candidate;
+                break;
+            }
+        }
         if window == nil {
-            return Err("fixture has no key window".into());
+            return Err("fixture window not found".into());
         }
         let children: id = msg_send![window.contentView(), subviews];
         let count: usize = msg_send![children, count];
