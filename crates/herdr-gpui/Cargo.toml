@@ -3,6 +3,7 @@ name = "herdr-gpui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 rust-version.workspace = true
 
 [lints]
@@ -11,13 +12,18 @@ workspace = true
 [dependencies]
 gpui = { workspace = true, features = ["runtime_shaders"] }
 herdr-client.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+unicode-segmentation.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+ureq.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
 
 [features]
-integration-test = ["dep:cocoa", "dep:objc", "dep:core-graphics", "dep:foreign-types"]
+integration-test = ["dep:cocoa", "dep:objc", "dep:core-graphics", "dep:foreign-types", "dep:raw-window-handle"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
@@ -27,6 +33,7 @@ cocoa = { workspace = true, optional = true }
 objc = { workspace = true, optional = true }
 core-graphics = { workspace = true, optional = true }
 foreign-types = { workspace = true, optional = true }
+raw-window-handle = { workspace = true, optional = true }
 
 [[test]]
 name = "live_gui"
@@ -34,4 +41,8 @@ required-features = ["integration-test"]
 
 [[test]]
 name = "performance_gui"
+required-features = ["integration-test"]
+
+[[test]]
+name = "agent_gui"
 required-features = ["integration-test"]

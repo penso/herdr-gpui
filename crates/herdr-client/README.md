@@ -1,6 +1,6 @@
 # Native Client API
 
-Unix/macOS local client for Herdr's stable generation 1 endpoint. This crate
+Unix/macOS local and SSH client for Herdr's stable generation 1 endpoint. This crate
 does not link Herdr, GPUI, ratatui, crossterm, Tokio, or a PTY implementation.
 The workspace centralizes `gpui = "=0.2.2"` for the forthcoming GUI member.
 
@@ -31,10 +31,16 @@ while let Ok(event) = client.events.recv() {
 
 ```text
 connect(ConnectTarget, ConnectOptions) -> io::Result<Client>
+connect_with_surface_active(ConnectTarget, ConnectOptions, bool) -> io::Result<Client>
+load_saved_hosts(development: bool) -> io::Result<Vec<SavedHost>>
+load_saved_host_selection(development: bool) -> io::Result<(Vec<SavedHost>, Option<String>)>
+store_saved_host_selection(development: bool, selected: Option<&str>) -> io::Result<()>
+SavedHost { pub id: String, pub label: String, pub target: String, pub session: String, pub enabled: bool }
 Client { pub handle: ClientHandle, pub events: Receiver<ClientEvent> }
 ConnectTarget::Local
 ConnectTarget::Session { name: String, development: bool }
 ConnectTarget::Socket(PathBuf)
+ConnectTarget::Ssh { target: String, session: String }
 ConnectTarget::socket_path(&self) -> io::Result<PathBuf>
 session_socket(config_dir: &Path, name: &str) -> io::Result<PathBuf>
 ConnectOptions { surface_size: ClientSurfaceSize, cell_width_px: u32, cell_height_px: u32 }
@@ -43,10 +49,11 @@ ConnectOptions { surface_size: ClientSurfaceSize, cell_width_px: u32, cell_heigh
 `ClientHandle` is cloneable. Its exact methods are:
 
 ```text
-send_input(&self, boot_id: &str, pane_id: &str, events: Vec<ClientPaneInputEvent>) -> Result<(), SendError>
-send_popup_input(&self, boot_id: &str, terminal_id: &str, events: Vec<ClientPaneInputEvent>) -> Result<(), SendError>
+send_input(&self, boot_id: &str, pane_id: &str, events: impl IntoIterator<Item = ClientPaneInputEvent>) -> Result<(), SendError>
+send_popup_input(&self, boot_id: &str, terminal_id: &str, events: impl IntoIterator<Item = ClientPaneInputEvent>) -> Result<(), SendError>
 resize(&self, boot_id: &str, options: ConnectOptions) -> Result<(), SendError>
 set_focus(&self, boot_id: &str, focused: bool) -> Result<(), SendError>
+set_surface_active(&self, boot_id: &str, active: bool) -> Result<String, SendError>
 request(&self, boot_id: &str, method: &str, params: serde_json::Value) -> Result<String, SendError>
 focus_pane(&self, boot_id: &str, pane_id: &str) -> Result<String, SendError>
 focus_tab(&self, boot_id: &str, tab_id: &str) -> Result<String, SendError>
@@ -141,9 +148,65 @@ focus changes. Full surfaces can skip surface revisions; patches cannot.
 
 This is a complete **text** baseline. Images retain their wire scene semantics:
 assets contain newly required bytes, not necessarily every live image's bytes.
-Rendering/caching images, optional delta codecs, SSH, server spawning, discovery
+Rendering/caching images, optional delta codecs, local server spawning, discovery
 of all running sessions, automatic reconnect, and Windows transport are out of
 scope. No existing Herdr server or session is modified or started by discovery.
+
+## Saved SSH Hosts
+
+`load_saved_hosts(false)` reads `$XDG_STATE_HOME/herdr/client/endpoints.json`,
+falling back to `$HOME/.local/state/herdr/client/endpoints.json` (or the upstream
+temporary `herdr-state` directory without HOME). `true` explicitly chooses
+`herdr-dev`; build mode and socket overrides do not affect this selection.
+The version-1 catalog uses upstream's strict fields, IDs, validation, 64-profile
+and 64-KiB limits. Disabled profiles remain in the result. Missing files return
+an empty list; malformed catalogs return an error, not a partial list. Selection
+files are ignored by this profiles-only API, as in upstream's live-client
+`load_profiles`. At startup, `load_saved_host_selection` additionally reads the
+adjacent version-1 `endpoint-selection.json`: `None` means Local, otherwise the
+value is an enabled profile's opaque ID. Missing, invalid or stale selection
+retains the validated legacy catalog selection (normally Local). Refresh only
+profiles thereafter so another client's selection cannot hijack the active UI.
+`store_saved_host_selection` validates against the current catalog and writes
+only selection using a create-new 0600 temporary file, file sync, atomic rename,
+and parent-directory sync. Non-file/symlink destinations are refused; failures
+are returned without modifying profiles. A directory-sync error can occur after
+the new selection has become visible. Call all these APIs on background workers
+and serialize a client's writes. Explicit-socket clients should call none of them.
+
+`connect` remains active by default; `connect_with_surface_active(..., false)`
+starts with an inactive hello. Inactive local connections and all SSH connections
+require `surface_interest`, `presentation_effects_fence`, and the advertised
+`client_shell.surface.set` method. SSH additionally requires `health_check`.
+`set_surface_active` queues that API with `{"active": bool}` and returns its
+request ID. Await the matching response and check its API error before treating
+activation as complete. Unsupported or stale requests produce `CommandRejected`.
+
+SSH runs entirely on the connection worker using the system `ssh`, existing
+OpenSSH configuration/agent credentials, strict known-host verification, and no
+password prompts, agent/X11 forwarding, port forwards, or persistent control
+master. It discovers a POSIX remote binary on PATH (excluding mise shims), then
+the upstream local-bin, Homebrew, and Nix roots. Each candidate is checked with
+`status client --json` for generation and required capabilities before executing
+`--session <session> remote-client-bridge`; advertised bridge idle timeouts are
+enabled. Welcome negotiation validates the actual running daemon again.
+Discovery has a 15-second deadline and bounded output; startup banners are
+removed with upstream's output-ready marker. SSH stderr is discarded rather than
+retained or exposed as potentially secret-bearing diagnostics. Disconnect reasons
+are sanitized and capped at 1024 characters.
+
+The worker owns and kills/reaps its SSH child on every exit, including cancellation
+and handshake failure; no GUI-thread join occurs. Quiet SSH connections send
+`endpoint.health.ping.v1` after five seconds and expire ten seconds after an
+unanswered probe. Any complete inbound message satisfies a probe, independently
+of the initial-snapshot deadline. As with local connections, continuously drain
+events: event backpressure pauses transport processing, including health checks.
+
+Limitations: POSIX remote hosts only; no Windows remote discovery, interactive
+bootstrap/install/upgrade, version-specific mise install scanning, or retry/replay.
+Shell-initialized PATH entries unavailable to `/bin/sh` are not discovered unless
+covered by the known roots. The remote bridge itself can start the named daemon,
+as upstream does; disconnect only detaches and never stops the remote daemon.
 
 ## Local Discovery
 

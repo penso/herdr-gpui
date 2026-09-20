@@ -1,8 +1,13 @@
-//! A Unix local gen1 client. All socket I/O runs on one dedicated blocking thread.
+//! A Unix local/SSH gen1 client. All transport I/O runs on a dedicated worker.
 //! No reconnect/replay: commands carry the boot ID of the snapshot they act on.
 //! Drain `Client::events` on a GUI background task, never block the UI thread.
 #![doc = include_str!("../README.md")]
+mod catalog;
 mod discovery;
+mod ssh;
+pub use catalog::{
+    SavedHost, load_saved_host_selection, load_saved_hosts, store_saved_host_selection,
+};
 pub mod presentation;
 pub use crossbeam_channel::Receiver;
 use crossbeam_channel::{SendTimeoutError, Sender, TrySendError, bounded};
@@ -110,7 +115,36 @@ impl std::error::Error for SendError {}
 
 /// Returns immediately after spawning. Connection/handshake errors arrive as events.
 pub fn connect(target: ConnectTarget, options: ConnectOptions) -> io::Result<Client> {
+    connect_with_surface_active(target, options, true)
+}
+
+/// Connect without changing `ConnectOptions` literals. Inactive connections require
+/// negotiated surface interest and presentation-effect fencing. SSH additionally
+/// requires endpoint health checks. All transport work runs off the caller thread.
+pub fn connect_with_surface_active(
+    target: ConnectTarget,
+    options: ConnectOptions,
+    surface_active: bool,
+) -> io::Result<Client> {
+    connect_with_connector(target, options, surface_active, |target, _| {
+        target.socket_path().and_then(UnixStream::connect)
+    })
+}
+
+/// Connect using application-specific local socket setup on the I/O worker.
+/// SSH targets always use the remote bridge, never the local connector.
+/// The connector should observe `stop` during waits so detach cancels setup.
+pub fn connect_with_connector(
+    target: ConnectTarget,
+    options: ConnectOptions,
+    surface_active: bool,
+    connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<UnixStream> + Send + 'static,
+) -> io::Result<Client> {
     validate_options(options)?;
+    if let ConnectTarget::Ssh { target, session } = &target {
+        catalog::validate_target(target)?;
+        session_socket(std::path::Path::new(""), session)?;
+    }
     let (commands, rx) = bounded(COMMAND_CAPACITY);
     let (tx, events) = bounded(EVENT_CAPACITY);
     let stop = Arc::new(AtomicBool::new(false));
@@ -118,14 +152,35 @@ pub fn connect(target: ConnectTarget, options: ConnectOptions) -> io::Result<Cli
     thread::Builder::new()
         .name("herdr-client-io".into())
         .spawn(move || {
-            let result = target
-                .socket_path()
-                .and_then(UnixStream::connect)
-                .and_then(|stream| run(stream, options, rx, &tx, &worker_stop));
+            let result = (|| {
+                let (stream, child) = match &target {
+                    ConnectTarget::Ssh { target, session } => {
+                        let (stream, child) = ssh::connect(target, session, &worker_stop)?;
+                        (stream, Some(child))
+                    }
+                    _ => (connector(&target, &worker_stop)?, None),
+                };
+                run_connection(
+                    stream,
+                    options,
+                    surface_active,
+                    child.is_some(),
+                    rx,
+                    &tx,
+                    &worker_stop,
+                )
+                // The child guard is dropped before delivering a disconnect event.
+            })();
             if !worker_stop.load(Ordering::Acquire) {
                 let reason = result
                     .err()
-                    .map(|e| e.to_string())
+                    .map(|e| {
+                        e.to_string()
+                            .chars()
+                            .filter(|c| !c.is_control())
+                            .take(1024)
+                            .collect()
+                    })
                     .unwrap_or_else(|| "server disconnected".into());
                 let _ = deliver(&tx, ClientEvent::Disconnected { reason }, &worker_stop);
             }
@@ -222,6 +277,15 @@ impl ClientHandle {
     }
     pub fn set_focus(&self, boot_id: &str, focused: bool) -> Result<(), SendError> {
         self.enqueue(boot_id, ClientMessage::ClientShellFocus { focused }, None)
+    }
+    /// Queue upstream's surface-interest API, not window focus. Wait for the
+    /// matching Response before considering a host activation/deactivation complete.
+    pub fn set_surface_active(&self, boot_id: &str, active: bool) -> Result<String, SendError> {
+        self.request(
+            boot_id,
+            "client_shell.surface.set",
+            json!({"active": active}),
+        )
     }
     /// Serialize the API envelope, generate an ID, and queue on the ordered writer.
     /// Only methods advertised in Connected are sent. Responses retain API errors.
@@ -369,9 +433,50 @@ struct Pending {
     bytes: Vec<u8>,
     started: Instant,
 }
+fn supports_surface_interest(welcome: &EndpointServerWelcome) -> bool {
+    ["surface_interest", "presentation_effects_fence"]
+        .iter()
+        .all(|cap| welcome.capabilities.iter().any(|c| c == cap))
+        && welcome
+            .methods
+            .iter()
+            .any(|m| m == "client_shell.surface.set")
+}
+
+struct Health {
+    received: Instant,
+    ping: Option<Instant>,
+}
+impl Health {
+    fn received(&mut self, now: Instant) {
+        self.received = now;
+        self.ping = None;
+    }
+    fn tick(&mut self, now: Instant) -> io::Result<bool> {
+        if self
+            .ping
+            .is_some_and(|sent| now.saturating_duration_since(sent) >= Duration::from_secs(10))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "endpoint health check timed out",
+            ));
+        }
+        if self.ping.is_none()
+            && now.saturating_duration_since(self.received) >= Duration::from_secs(5)
+        {
+            self.ping = Some(now);
+            return Ok(true);
+        }
+        Ok(false)
+    }
+}
 
 struct Session {
     started: Instant,
+    surface_active: bool,
+    remote: bool,
+    health: Option<Health>,
     welcome: Option<EndpointServerWelcome>,
     snapshot: Option<Arc<ClientShellSnapshot>>,
     surface: Option<Arc<PaneSurfaceFrame>>,
@@ -379,9 +484,12 @@ struct Session {
 }
 
 impl Session {
-    fn new() -> Self {
+    fn new(surface_active: bool, remote: bool) -> Self {
         Self {
             started: Instant::now(),
+            surface_active,
+            remote,
+            health: None,
             welcome: None,
             snapshot: None,
             surface: None,
@@ -417,15 +525,25 @@ impl Session {
                 .is_none_or(|w| !w.methods.contains(method))
         {
             Some("method not advertised by endpoint")
+        } else if let Some((_, method)) = &command.request
+            && method == "client_shell.surface.set"
+            && self
+                .welcome
+                .as_ref()
+                .is_none_or(|w| !supports_surface_interest(w))
+        {
+            Some("surface interest capabilities not advertised by endpoint")
         } else {
             None
         }
     }
 }
 
-fn run(
+fn run_connection(
     mut stream: UnixStream,
     options: ConnectOptions,
+    surface_active: bool,
+    remote: bool,
     commands: Receiver<Command>,
     tx: &Sender<ClientEvent>,
     stop: &AtomicBool,
@@ -441,7 +559,7 @@ fn run(
         direct_graphics: false,
         endpoint_keybindings: false,
         mouse_capture: false,
-        surface_active: true,
+        surface_active,
         surface_reuse: false,
         surface_delta: false,
         snapshot_codecs: vec![SNAPSHOT_CODEC_V1.into()],
@@ -458,10 +576,22 @@ fn run(
         MAX_FRAME_SIZE,
     )?;
     let mut reader = FrameReader::new();
-    let mut session = Session::new();
+    let mut session = Session::new(surface_active, remote);
     let mut queued: Option<Command> = None;
     while !stop.load(Ordering::Acquire) {
         session.check_timeouts()?;
+        if let Some(health) = &mut session.health
+            && health.tick(Instant::now())?
+        {
+            write_message(
+                &mut stream,
+                &ClientMessage::EndpointControl {
+                    kind: "endpoint.health.ping.v1".into(),
+                    data: String::new(),
+                },
+                MAX_FRAME_SIZE,
+            )?;
+        }
         // Bound the batch so continuous input cannot starve reads.
         for _ in 0..16 {
             // Finish an inbound frame before dispatching against its old snapshot.
@@ -515,7 +645,13 @@ impl Session {
         message: ServerMessage,
         mut emit: impl FnMut(ClientEvent) -> io::Result<()>,
     ) -> io::Result<()> {
+        if let Some(health) = &mut self.health {
+            health.received(Instant::now());
+        }
         let Self {
+            surface_active,
+            remote,
+            health,
             welcome,
             snapshot,
             surface,
@@ -540,6 +676,18 @@ impl Session {
                 || w.blob_codec != BLOB_CODEC_V1
             {
                 return Err(invalid("incompatible endpoint generation/codecs"));
+            }
+            if (*remote || !*surface_active) && !supports_surface_interest(&w) {
+                return Err(invalid("endpoint lacks safe surface interest support"));
+            }
+            if *remote {
+                if !w.capabilities.iter().any(|c| c == "health_check") {
+                    return Err(invalid("SSH endpoint lacks health_check capability"));
+                }
+                *health = Some(Health {
+                    received: Instant::now(),
+                    ping: None,
+                });
             }
             emit(ClientEvent::Connected(w.clone()))?;
             *welcome = Some(w);

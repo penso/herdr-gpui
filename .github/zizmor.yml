@@ -1,0 +1,14 @@
+# zizmor workflow-security audit configuration.
+# Run locally with: zizmor .github/workflows/
+#
+# Exceptions are listed here with their reason rather than dropping the audit
+# from CI. Everything not listed is enforced.
+
+rules:
+  self-repository:
+    ignore:
+      # zizmor suggests the `$/...` shorthand for a same-repository action.
+      # `./.github/actions/...` is the long-standing documented form and is
+      # what this repository uses; there is no security difference, both
+      # resolve to an action from this commit.
+      - release.yml

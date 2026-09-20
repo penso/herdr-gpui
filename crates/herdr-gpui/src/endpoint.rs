@@ -1,0 +1,932 @@
+//! GUI-owned endpoint catalog and connection lifetimes. Each attempt has its own
+//! inbox, so retired workers can never publish into a replacement connection.
+use super::{
+    HerdrWindow, LiveState, NavigationTarget, WheelAccumulator, connection::ConnectionBridge,
+    state::ConnectionStatus,
+};
+use gpui::Context;
+use herdr_client::{ClientHandle, ConnectOptions, ConnectTarget, SavedHost};
+use std::{
+    collections::HashSet,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    time::{Duration, Instant},
+};
+
+pub(super) const LOCAL: &str = "local";
+const ACTIVATION_TIMEOUT: Duration = Duration::from_secs(5);
+const STABLE_CONNECTION_PERIOD: Duration = Duration::from_secs(60);
+
+pub(super) struct Release {
+    inbox: Arc<Mutex<LiveState>>,
+    drained: Arc<AtomicBool>,
+    request: String,
+    boot: String,
+}
+
+impl Release {
+    fn resolved(&self) -> bool {
+        // Disconnect() requests shutdown; only the event receiver closing proves
+        // that this generation's transport is gone. Catalog removal alone is not
+        // sufficient evidence to let another surface take ownership.
+        if self.drained.load(Ordering::Acquire) {
+            return true;
+        }
+        self.inbox.try_lock().is_ok_and(|state| {
+            state.activation.as_ref().is_some_and(|a| {
+                a.request == self.request
+                    && a.boot == self.boot
+                    && !a.active
+                    && !a.failed
+                    && a.revision.is_some()
+            })
+        })
+    }
+}
+
+pub(super) struct Endpoint {
+    pub id: String,
+    pub label: String,
+    pub connection: ConnectionBridge,
+    pub enabled: bool,
+    pub collapsed: bool,
+    pub collapsed_repos: HashSet<String>,
+    pub live: LiveState,
+    pub generation: u64,
+    retry_at: Instant,
+    attempts: u32,
+    online_since: Option<Instant>,
+    detached: bool,
+    initial_surface: bool,
+}
+
+impl Endpoint {
+    #[cfg(feature = "integration-test")]
+    pub(super) fn set_fixture_surface_active(&mut self) {
+        self.initial_surface = true;
+    }
+    pub fn surface_requested(&self) -> bool {
+        self.initial_surface
+    }
+    pub fn new(id: String, label: String, target: ConnectTarget, enabled: bool) -> Self {
+        Self {
+            id,
+            label,
+            connection: ConnectionBridge::new(target),
+            enabled,
+            collapsed: false,
+            collapsed_repos: HashSet::new(),
+            live: LiveState::default(),
+            generation: 0,
+            retry_at: Instant::now(),
+            attempts: 0,
+            online_since: None,
+            detached: false,
+            initial_surface: false,
+        }
+    }
+
+    fn stop(&mut self) {
+        self.connection.detach(false);
+        self.initial_surface = false;
+        self.online_since = None;
+        self.generation += 1;
+        self.live = self.connection.take_update().unwrap_or_default();
+    }
+
+    fn connect(&mut self, options: ConnectOptions, active: bool) {
+        self.stop();
+        self.detached = false;
+        self.initial_surface = active;
+        self.attempts = self.attempts.saturating_add(1);
+        self.connection.reconnect(options, false, active);
+        self.live = self.connection.take_update().unwrap_or_default();
+        self.retry_at = Instant::now() + self.retry_delay();
+    }
+
+    fn poll(&mut self, now: Instant) -> bool {
+        let mut changed = false;
+        if let Some(state) = self.connection.take_update() {
+            self.live = state;
+            changed = true;
+        }
+        if self
+            .connection
+            .handle
+            .as_ref()
+            .is_some_and(ClientHandle::is_disconnected)
+        {
+            self.connection.handle = None;
+            self.retry_at = now + self.retry_delay();
+            changed = true;
+        }
+        if self.connection.handle.is_some()
+            && self.live.status.is_connected()
+            && self.live.snapshot.is_some()
+        {
+            let since = self.online_since.get_or_insert(now);
+            if now.duration_since(*since) >= STABLE_CONNECTION_PERIOD {
+                self.attempts = 0;
+            }
+        } else {
+            self.online_since = None;
+        }
+        changed
+    }
+
+    fn retry_delay(&self) -> Duration {
+        Duration::from_millis((500u64 << self.attempts.min(8)).min(120_000))
+    }
+
+    pub fn status(&self) -> &'static str {
+        if !self.enabled {
+            "disabled"
+        } else if self.detached {
+            "detached"
+        } else if self.live.status.is_connected() {
+            "online"
+        } else if self.live.error.is_some() {
+            "reconnecting"
+        } else {
+            "connecting"
+        }
+    }
+}
+
+impl Drop for Endpoint {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+pub(super) struct Catalog {
+    development: Option<bool>,
+    pending: Option<mpsc::Receiver<Result<CatalogUpdate, String>>>,
+    next_poll: Instant,
+    desired: Option<String>,
+    initialized: bool,
+    restore_pending: bool,
+    queued_write: Option<Option<String>>,
+    writing: Option<mpsc::Receiver<Result<(), String>>>,
+}
+
+struct CatalogUpdate {
+    hosts: Vec<SavedHost>,
+    selection: Option<Option<String>>,
+}
+
+impl Catalog {
+    pub fn new(target: &ConnectTarget) -> Self {
+        Self {
+            development: match target {
+                ConnectTarget::Socket(_) => None,
+                ConnectTarget::Session { development, .. } => Some(*development),
+                _ => Some(false),
+            },
+            pending: None,
+            next_poll: Instant::now(),
+            desired: None,
+            initialized: false,
+            restore_pending: false,
+            queued_write: None,
+            writing: None,
+        }
+    }
+
+    fn poll(&mut self) -> Option<Result<CatalogUpdate, String>> {
+        let development = self.development?;
+        if let Some(result) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.pending = None;
+            self.next_poll = Instant::now() + Duration::from_secs(2);
+            return Some(result);
+        }
+        if self.pending.is_none() && Instant::now() >= self.next_poll {
+            let (tx, rx) = mpsc::sync_channel(1);
+            self.pending = Some(rx);
+            let startup = !self.initialized;
+            if let Err(error) = std::thread::Builder::new()
+                .name("herdr-gui-catalog".into())
+                .spawn(move || {
+                    let result = if startup {
+                        herdr_client::load_saved_host_selection(development).map(
+                            |(hosts, selection)| CatalogUpdate {
+                                hosts,
+                                selection: Some(selection),
+                            },
+                        )
+                    } else {
+                        herdr_client::load_saved_hosts(development).map(|hosts| CatalogUpdate {
+                            hosts,
+                            selection: None,
+                        })
+                    };
+                    let _ = tx.send(result.map_err(|e| e.to_string()));
+                })
+            {
+                self.pending = None;
+                self.next_poll = Instant::now() + Duration::from_secs(2);
+                return Some(Err(error.to_string()));
+            }
+        }
+        None
+    }
+
+    fn accept(&mut self, update: &CatalogUpdate) {
+        if !self.initialized {
+            self.desired = update.selection.clone().flatten();
+            self.restore_pending = self.desired.is_some();
+            self.initialized = true;
+        }
+        if self.desired.as_ref().is_some_and(|id| {
+            !update
+                .hosts
+                .iter()
+                .any(|host| host.enabled && &host.id == id)
+        }) {
+            self.desired = None;
+            self.restore_pending = false;
+        }
+    }
+
+    fn choose(&mut self, id: &str) {
+        // Also cancels an in-flight startup restore when Local is clicked.
+        self.initialized = true;
+        self.restore_pending = false;
+        self.desired = id.strip_prefix("ssh:").map(str::to_owned);
+        if self.development.is_some() {
+            self.queued_write = Some(self.desired.clone());
+        }
+    }
+
+    fn poll_write(&mut self) -> Option<String> {
+        let development = self.development?;
+        let mut error = None;
+        if let Some(result) = self.writing.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.writing = None;
+            error = result.err();
+        }
+        // Serialize this client's writes so rapid choices cannot finish backwards.
+        if self.writing.is_none()
+            && let Some(selected) = self.queued_write.take()
+        {
+            let (tx, rx) = mpsc::sync_channel(1);
+            match std::thread::Builder::new()
+                .name("herdr-gui-selection".into())
+                .spawn(move || {
+                    let _ = tx.send(
+                        herdr_client::store_saved_host_selection(development, selected.as_deref())
+                            .map_err(|e| e.to_string()),
+                    );
+                }) {
+                Ok(_) => self.writing = Some(rx),
+                Err(e) => error = Some(e.to_string()),
+            }
+        }
+        error
+    }
+}
+
+impl HerdrWindow {
+    pub(super) fn owns_paint(
+        &self,
+        epoch: u64,
+        generation: u64,
+        inbox: &Arc<Mutex<LiveState>>,
+    ) -> bool {
+        self.active
+            && self.selection_epoch == epoch
+            && self.endpoints[self.selected_endpoint].generation == generation
+            && Arc::ptr_eq(
+                &self.endpoints[self.selected_endpoint].connection.inbox,
+                inbox,
+            )
+    }
+
+    pub(super) fn reconnect(&mut self, cx: &mut Context<Self>) {
+        let index = self.selected_endpoint;
+        if !self.endpoints[index].enabled {
+            return;
+        }
+        self.install_warning_shown = false;
+        self.endpoints[index].attempts = 0;
+        self.endpoints[index].connect(self.options, index == 0);
+        self.reset_selected(cx);
+    }
+
+    pub(super) fn detach_endpoint(&mut self, cx: &mut Context<Self>) {
+        let endpoint = &mut self.endpoints[self.selected_endpoint];
+        endpoint.stop();
+        endpoint.detached = true;
+        endpoint.live.status = ConnectionStatus::Detached;
+        if let Ok(mut state) = endpoint.connection.inbox.lock() {
+            *state = endpoint.live.clone();
+        }
+        self.reset_selected(cx);
+    }
+
+    fn reset_selected(&mut self, cx: &mut Context<Self>) {
+        self.selection_epoch += 1;
+        let endpoint = &self.endpoints[self.selected_endpoint];
+        self.selected_generation = endpoint.generation;
+        self.live = endpoint.live.clone();
+        if !endpoint.initial_surface {
+            self.live.surface = None;
+        }
+        self.local_error = None;
+        self.marked.clear();
+        self.last_queued_options = None;
+        self.sent_focus = None;
+        self.wheel = WheelAccumulator::default();
+        self.activation_deadline = (self.selected_endpoint != 0 && !endpoint.detached)
+            .then(|| Instant::now() + ACTIVATION_TIMEOUT);
+        self.pending_navigation = None;
+        self.navigation_fence = None;
+        self.invalidate_terminal_input();
+        self.composer
+            .update(cx, |editor, cx| editor.invalidate_input_session(cx));
+        self.sync_terminal(cx);
+        self.sync_composer(cx);
+    }
+
+    pub(super) fn select_endpoint(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        if !self.switch_endpoint(id, cx) {
+            return false;
+        }
+        self.catalog.choose(id);
+        if let Some(error) = self.catalog.poll_write() {
+            self.local_error = Some(format!("Save host selection: {error}"));
+            cx.notify();
+        }
+        true
+    }
+
+    fn switch_endpoint(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        let Some(index) = self.endpoints.iter().position(|e| e.id == id && e.enabled) else {
+            return false;
+        };
+        if index == self.selected_endpoint {
+            return true;
+        }
+        if index != 0
+            && self.endpoints[self.selected_endpoint]
+                .live
+                .status
+                .is_connected()
+            && !self.endpoints[self.selected_endpoint].live.supports_surface
+        {
+            self.local_error = Some("Current endpoint does not support surface switching".into());
+            cx.notify();
+            return false;
+        }
+        self.release_selected();
+        if index == 0 {
+            self.pending_releases.clear();
+        }
+        self.selected_endpoint = index;
+        self.reset_selected(cx);
+        self.activation_deadline =
+            (!self.endpoints[index].detached).then(|| Instant::now() + ACTIVATION_TIMEOUT);
+        cx.notify();
+        true
+    }
+
+    fn release_selected(&mut self) {
+        let endpoint = &mut self.endpoints[self.selected_endpoint];
+        // A handshake started with an active surface cannot be demoted without
+        // its boot ID. Retire that attempt rather than let it finish in background.
+        if endpoint.initial_surface
+            && (endpoint.connection.handle.is_none() || endpoint.live.snapshot.is_none())
+        {
+            endpoint.stop();
+            endpoint.retry_at = Instant::now();
+            return;
+        }
+        if let Ok(mut state) = endpoint.connection.inbox.lock() {
+            state.set_outer_focus(false);
+            state.surface = None;
+            if endpoint.initial_surface
+                && let (Some(handle), Some(snapshot)) =
+                    (&endpoint.connection.handle, &endpoint.live.snapshot)
+            {
+                // Focus loss must precede deactivation on older servers.
+                let result = handle
+                    .set_focus(&snapshot.boot_id, false)
+                    .and_then(|()| handle.set_surface_active(&snapshot.boot_id, false));
+                match result {
+                    Ok(request) => {
+                        state.activation = Some(super::state::SurfaceActivation {
+                            request: request.clone(),
+                            boot: snapshot.boot_id.clone(),
+                            revision: None,
+                            failed: false,
+                            focus: None,
+                            active: false,
+                        });
+                        self.pending_releases.push(Release {
+                            inbox: endpoint.connection.inbox.clone(),
+                            drained: endpoint.connection.drained.clone(),
+                            request,
+                            boot: snapshot.boot_id.clone(),
+                        });
+                    }
+                    Err(_) => handle.disconnect(),
+                }
+            }
+        }
+        endpoint.initial_surface = false;
+        endpoint.live.surface = None;
+    }
+
+    pub(super) fn navigate_endpoint(
+        &mut self,
+        endpoint: &str,
+        target: NavigationTarget<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.select_endpoint(endpoint, cx) {
+            return;
+        }
+        if self.input_ready() {
+            self.navigate(target, cx);
+        } else {
+            self.pending_navigation = Some(target.to_owned());
+        }
+    }
+
+    pub(super) fn input_ready(&self) -> bool {
+        self.endpoints[self.selected_endpoint]
+            .connection
+            .handle
+            .is_some()
+            && self.endpoints[self.selected_endpoint].surface_requested()
+            && self.pending_releases.is_empty()
+            && self.live.surface_ready()
+            && self.live.surface.as_ref().is_some_and(|surface| {
+                surface.frame.width == self.options.surface_size.cols
+                    && surface.frame.height == self.options.surface_size.rows
+            })
+    }
+
+    pub(super) fn poll_endpoints(&mut self, cx: &mut Context<Self>) {
+        if let Some(error) = self.catalog.poll_write() {
+            self.local_error = Some(format!("Save host selection: {error}"));
+            cx.notify();
+        }
+        if let Some(result) = self.catalog.poll() {
+            match result {
+                Ok(update) => {
+                    self.catalog.accept(&update);
+                    self.reconcile_catalog(update.hosts, cx);
+                }
+                Err(error) => {
+                    self.local_error = Some(format!("Host catalog: {error}"));
+                    cx.notify();
+                }
+            }
+        }
+        let mut changed = false;
+        for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+            let updated = endpoint.poll(Instant::now());
+            changed |= updated;
+            // Remote cwd strings must never be resolved against this machine's Git repos.
+            if updated
+                && index == 0
+                && let (Some(avatars), Some(snapshot)) =
+                    (&mut self.avatars, &endpoint.live.snapshot)
+            {
+                for workspace in &snapshot.workspaces {
+                    avatars.request(&workspace.new_workspace_cwd);
+                }
+            }
+            if endpoint.enabled
+                && !endpoint.detached
+                && endpoint.connection.handle.is_none()
+                && Instant::now() >= endpoint.retry_at
+            {
+                endpoint.connect(self.options, index == 0 && self.selected_endpoint == 0);
+                changed = true;
+            }
+        }
+        self.restore_selection(cx);
+        let endpoint = &mut self.endpoints[self.selected_endpoint];
+        if self.selected_generation != endpoint.generation {
+            self.reset_selected(cx);
+        }
+        let endpoint = &mut self.endpoints[self.selected_endpoint];
+        if changed {
+            self.live = endpoint.live.clone();
+            if !self.live.status.is_connected() {
+                self.local_error = None;
+            }
+        }
+        self.pending_releases.retain(|release| !release.resolved());
+        if !endpoint.initial_surface
+            && self.pending_releases.is_empty()
+            && let (Some(handle), Some(snapshot)) =
+                (&endpoint.connection.handle, &endpoint.live.snapshot)
+            && let Ok(mut state) = endpoint.connection.inbox.try_lock()
+        {
+            let result = handle
+                .resize(&snapshot.boot_id, self.options)
+                .and_then(|()| handle.set_surface_active(&snapshot.boot_id, true));
+            match result {
+                Ok(request) => {
+                    state.surface = None;
+                    state.activation = Some(super::state::SurfaceActivation {
+                        request,
+                        boot: snapshot.boot_id.clone(),
+                        revision: None,
+                        failed: false,
+                        focus: None,
+                        active: true,
+                    });
+                    state.dirty = true;
+                    endpoint.initial_surface = true;
+                    self.live = state.clone();
+                    self.activation_deadline = Some(Instant::now() + ACTIVATION_TIMEOUT);
+                    self.last_queued_options = Some(self.options);
+                    self.sent_focus = None;
+                }
+                Err(error) => {
+                    self.local_error = Some(format!("Activate: {error}"));
+                    self.activation_deadline = Some(Instant::now());
+                }
+            }
+            changed = true;
+        }
+        if self.input_ready() {
+            self.activation_deadline = None;
+            if let Some(target) = self.pending_navigation.take() {
+                self.navigate(target.as_ref(), cx);
+            }
+        } else if self
+            .activation_deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+            || self.live.activation.as_ref().is_some_and(|a| a.failed)
+            || (self.selected_endpoint != 0 && self.live.status == ConnectionStatus::Disconnected)
+        {
+            let mut error = format!(
+                "{}: surface activation failed or timed out",
+                self.endpoints[self.selected_endpoint].label
+            );
+            if let Some(reason) = &self.live.error {
+                error.push_str(&format!(": {reason}"));
+            }
+            if self.selected_endpoint != 0 {
+                self.switch_endpoint(LOCAL, cx);
+            } else {
+                // Recover Local with a fresh active handshake, even if the
+                // previous surface lane or its acknowledgement was unavailable.
+                self.reconnect(cx);
+            }
+            self.local_error = Some(error);
+            changed = true;
+        }
+        self.sync_terminal(cx);
+        self.sync_composer(cx);
+        if changed {
+            cx.notify();
+        }
+    }
+
+    fn restore_selection(&mut self, cx: &mut Context<Self>) {
+        if !self.catalog.restore_pending {
+            return;
+        }
+        let Some(id) = self.catalog.desired.as_ref().map(|id| format!("ssh:{id}")) else {
+            return;
+        };
+        if self.endpoints.iter().any(|endpoint| {
+            endpoint.id == id
+                && endpoint.enabled
+                && endpoint.connection.handle.is_some()
+                && endpoint.live.status.is_connected()
+                && endpoint.live.snapshot.is_some()
+        }) {
+            // One handoff attempt: activation failure may fall back to Local,
+            // but must neither overwrite the preference nor loop on every tick.
+            self.catalog.restore_pending = false;
+            self.switch_endpoint(&id, cx);
+        }
+    }
+
+    fn reconcile_catalog(&mut self, hosts: Vec<SavedHost>, cx: &mut Context<Self>) {
+        let selected = &self.endpoints[self.selected_endpoint];
+        let selected_id = selected.id.clone();
+        let selected_retired = self.selected_endpoint != 0
+            && !hosts.iter().any(|host| {
+                format!("ssh:{}", host.id) == selected_id
+                    && host.enabled
+                    && same_target(&selected.connection.target, host)
+            });
+        if selected_retired {
+            self.switch_endpoint(LOCAL, cx);
+        }
+        let selected_id = self.endpoints[self.selected_endpoint].id.clone();
+        let mut previous = std::mem::take(&mut self.endpoints);
+        let mut next = vec![previous.remove(0)];
+        for host in hosts {
+            let id = format!("ssh:{}", host.id);
+            let mut endpoint = if let Some(index) = previous.iter().position(|e| e.id == id) {
+                previous.remove(index)
+            } else {
+                Endpoint::new(
+                    id,
+                    host.label.clone(),
+                    ConnectTarget::Ssh {
+                        target: host.target.clone(),
+                        session: host.session.clone(),
+                    },
+                    host.enabled,
+                )
+            };
+            if endpoint.enabled != host.enabled || !same_target(&endpoint.connection.target, &host)
+            {
+                endpoint.stop();
+                endpoint.attempts = 0;
+                endpoint.connection.target = ConnectTarget::Ssh {
+                    target: host.target,
+                    session: host.session,
+                };
+                endpoint.enabled = host.enabled;
+                endpoint.detached = false;
+                endpoint.retry_at = Instant::now();
+            }
+            endpoint.label = host.label;
+            next.push(endpoint);
+        }
+        self.endpoints = next;
+        self.selected_endpoint = self
+            .endpoints
+            .iter()
+            .position(|e| e.id == selected_id)
+            .unwrap_or(0);
+        self.sync_composer(cx);
+        cx.notify();
+    }
+}
+
+fn same_target(target: &ConnectTarget, host: &SavedHost) -> bool {
+    matches!(target, ConnectTarget::Ssh { target, session } if target == &host.target && session == &host.session)
+}
+
+#[cfg(test)]
+mod lifecycle_tests;
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use herdr_client::ClientEvent;
+
+    fn host(id: &str, enabled: bool) -> SavedHost {
+        SavedHost {
+            id: id.into(),
+            label: id.into(),
+            target: format!("user@{id}"),
+            session: "default".into(),
+            enabled,
+        }
+    }
+
+    #[test]
+    fn retired_generation_cannot_publish_into_replacement() {
+        let mut endpoint = Endpoint::new(LOCAL.into(), "Local".into(), ConnectTarget::Local, true);
+        let old = endpoint.connection.inbox.clone();
+        let generation = endpoint.generation;
+        endpoint.stop();
+        assert!(endpoint.generation > generation);
+        old.lock().unwrap().apply(ClientEvent::Snapshot(Arc::new(
+            crate::sidebar::layout_tests::snapshot(1),
+        )));
+        endpoint.poll(Instant::now());
+        assert!(endpoint.live.snapshot.is_none());
+        assert!(!Arc::ptr_eq(&old, &endpoint.connection.inbox));
+    }
+
+    #[test]
+    fn explicit_socket_never_reads_shared_catalog() {
+        let mut catalog = Catalog::new(&ConnectTarget::Socket("/unused.sock".into()));
+        assert!(catalog.poll().is_none());
+        assert!(catalog.pending.is_none());
+        catalog.choose(LOCAL);
+        assert!(catalog.queued_write.is_none());
+        assert!(catalog.poll_write().is_none());
+        assert!(catalog.writing.is_none());
+        assert!(
+            Catalog::new(&ConnectTarget::Session {
+                name: "test".into(),
+                development: true
+            })
+            .development
+                == Some(true)
+        );
+    }
+
+    #[test]
+    fn selection_writes_are_serialized_and_failure_keeps_the_ui_choice() {
+        let mut catalog = Catalog::new(&ConnectTarget::Local);
+        let (tx, rx) = mpsc::sync_channel(1);
+        catalog.writing = Some(rx);
+        catalog.choose("ssh:first");
+        catalog.choose(LOCAL);
+        catalog.choose("ssh:last");
+        assert!(catalog.poll_write().is_none());
+        assert!(catalog.writing.is_some());
+        assert_eq!(catalog.queued_write, Some(Some("last".into())));
+        // Simulate a failed worker without accessing the real user's state root.
+        catalog.queued_write = None;
+        tx.send(Err("disk unavailable".into())).unwrap();
+        assert_eq!(catalog.poll_write().as_deref(), Some("disk unavailable"));
+        assert!(catalog.writing.is_none());
+        assert_eq!(catalog.desired.as_deref(), Some("last"));
+        assert!(!catalog.restore_pending);
+    }
+
+    #[test]
+    fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() {
+        let update = |enabled, selection| CatalogUpdate {
+            hosts: vec![host("a", enabled)],
+            selection,
+        };
+        let mut first = Catalog::new(&ConnectTarget::Local);
+        let mut second = Catalog::new(&ConnectTarget::Local);
+        first.accept(&update(true, Some(Some("a".into()))));
+        second.accept(&update(true, Some(Some("a".into()))));
+        second.choose(LOCAL);
+        first.accept(&update(true, Some(None)));
+        assert_eq!(first.desired.as_deref(), Some("a"));
+        assert!(first.restore_pending);
+        assert_eq!(second.desired, None);
+        first.accept(&update(false, None));
+        assert_eq!(first.desired, None);
+        assert!(!first.restore_pending);
+        first.accept(&update(true, None));
+        assert!(!first.restore_pending);
+        let mut clicked = Catalog::new(&ConnectTarget::Local);
+        clicked.choose(LOCAL);
+        clicked.accept(&update(true, Some(Some("a".into()))));
+        assert_eq!(
+            clicked.desired, None,
+            "late startup read cannot undo a click"
+        );
+        assert_eq!(clicked.queued_write, Some(None));
+        second.choose("ssh:a");
+        second.accept(&CatalogUpdate {
+            hosts: vec![],
+            selection: None,
+        });
+        assert_eq!(second.desired, None);
+    }
+
+    #[test]
+    fn release_waits_for_its_own_successful_inactive_acknowledgement() {
+        let inbox = Arc::new(Mutex::new(LiveState::default()));
+        inbox.lock().unwrap().activation = Some(crate::state::SurfaceActivation {
+            request: "off".into(),
+            boot: "boot".into(),
+            revision: None,
+            failed: false,
+            focus: None,
+            active: false,
+        });
+        let release = Release {
+            inbox: inbox.clone(),
+            drained: Arc::new(AtomicBool::new(false)),
+            request: "off".into(),
+            boot: "boot".into(),
+        };
+        assert!(!release.resolved());
+        let response = serde_json::json!({"result": {
+            "type": "client_shell_surface_set", "active": false, "projection_revision": 7
+        }});
+        inbox.lock().unwrap().apply(ClientEvent::Response {
+            request_id: "old".into(),
+            response: response.clone(),
+        });
+        assert!(!release.resolved());
+        inbox.lock().unwrap().apply(ClientEvent::Response {
+            request_id: "off".into(),
+            response,
+        });
+        assert!(release.resolved());
+        inbox.lock().unwrap().activation.as_mut().unwrap().failed = true;
+        assert!(!release.resolved());
+        inbox.lock().unwrap().activation = None;
+        assert!(
+            !release.resolved(),
+            "discarding the acknowledgement is not retirement"
+        );
+        release.drained.store(true, Ordering::Release);
+        assert!(
+            release.resolved(),
+            "confirmed transport termination releases ownership"
+        );
+    }
+
+    #[gpui::test]
+    fn catalog_preserves_order_labels_and_scoped_collapse_but_retires_changed_targets(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        view.update(cx, |view, cx| {
+            view.reconcile_catalog(vec![host("b", true), host("a", false)], cx);
+            assert_eq!(
+                view.endpoints
+                    .iter()
+                    .map(|e| e.id.as_str())
+                    .collect::<Vec<_>>(),
+                [LOCAL, "ssh:b", "ssh:a"]
+            );
+            assert_eq!(view.endpoints[2].status(), "disabled");
+            assert!(!view.select_endpoint("ssh:a", cx));
+            view.endpoints[1]
+                .collapsed_repos
+                .insert("/same/repo".into());
+            view.endpoints[1].collapsed = true;
+            let inbox = view.endpoints[1].connection.inbox.clone();
+            let mut renamed = host("b", true);
+            renamed.label = "renamed".into();
+            view.reconcile_catalog(vec![renamed.clone(), host("a", true)], cx);
+            assert!(Arc::ptr_eq(&inbox, &view.endpoints[1].connection.inbox));
+            assert_eq!(view.endpoints[1].label, "renamed");
+            assert!(view.endpoints[1].collapsed);
+            assert!(view.endpoints[2].collapsed_repos.is_empty());
+            assert!(view.select_endpoint("ssh:b", cx));
+            let epoch = view.selection_epoch;
+            renamed.session = "changed".into();
+            view.reconcile_catalog(vec![host("a", true), renamed], cx);
+            assert_eq!(view.selected_endpoint, 0);
+            assert!(view.selection_epoch > epoch);
+            assert!(!Arc::ptr_eq(&inbox, &view.endpoints[2].connection.inbox));
+            view.select_endpoint("ssh:a", cx);
+            view.reconcile_catalog(vec![], cx);
+            assert_eq!(view.selected_endpoint, 0);
+            assert_eq!(view.endpoints.len(), 1);
+        });
+    }
+
+    #[gpui::test]
+    fn switching_away_retires_an_active_handshake_without_a_boot_id(cx: &mut gpui::TestAppContext) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        view.update(cx, |view, cx| {
+            view.reconcile_catalog(vec![host("remote", true)], cx);
+            view.endpoints[0].initial_surface = true;
+            let inbox = view.endpoints[0].connection.inbox.clone();
+            assert!(view.select_endpoint("ssh:remote", cx));
+            assert!(!view.endpoints[0].initial_surface);
+            assert!(!Arc::ptr_eq(&inbox, &view.endpoints[0].connection.inbox));
+            assert!(view.pending_releases.is_empty());
+        });
+    }
+
+    #[gpui::test]
+    fn timeout_and_return_to_local_do_not_wait_for_remote_release(cx: &mut gpui::TestAppContext) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        view.update(cx, |view, cx| {
+            view.active = true;
+            let painted = view.endpoints[view.selected_endpoint]
+                .connection
+                .inbox
+                .clone();
+            let epoch = view.selection_epoch;
+            let generation = view.endpoints[0].generation;
+            assert!(view.owns_paint(epoch, generation, &painted));
+            view.reconcile_catalog(vec![host("remote", true)], cx);
+            for endpoint in &mut view.endpoints {
+                endpoint.detached = true;
+            }
+            view.select_endpoint("ssh:remote", cx);
+            assert!(!view.owns_paint(epoch, generation, &painted));
+            view.pending_releases.push(Release {
+                inbox: view.endpoints[view.selected_endpoint]
+                    .connection
+                    .inbox
+                    .clone(),
+                drained: Arc::new(AtomicBool::new(false)),
+                request: "never-acked".into(),
+                boot: "boot".into(),
+            });
+            view.activation_deadline = Some(Instant::now());
+            view.poll_endpoints(cx);
+            assert_eq!(view.selected_endpoint, 0);
+            assert!(!view.owns_paint(epoch, generation, &painted));
+            assert!(view.pending_releases.is_empty());
+            assert!(view.local_error.as_ref().unwrap().contains("timed out"));
+            view.select_endpoint("ssh:remote", cx);
+            let remote = view.endpoints[view.selected_endpoint]
+                .connection
+                .inbox
+                .clone();
+            view.select_endpoint(LOCAL, cx);
+            assert!(!Arc::ptr_eq(
+                &remote,
+                &view.endpoints[view.selected_endpoint].connection.inbox
+            ));
+            assert!(view.pending_navigation.is_none());
+        });
+    }
+}

@@ -100,6 +100,7 @@ fn explicit_socket_conflicts_with_session_and_development() {
 #[cfg(not(feature = "integration-test"))]
 #[test]
 fn native_test_flag_is_rejected_in_normal_builds() {
+    usage_error(&["--agent-test"], "Unknown option: --agent-test");
     usage_error(
         &["--integration-test"],
         "Unknown option: --integration-test",
@@ -108,6 +109,36 @@ fn native_test_flag_is_rejected_in_normal_builds() {
         &["--socket", "/unused.sock", "--integration-test"],
         "Unknown option: --integration-test",
     );
+}
+
+#[cfg(feature = "integration-test")]
+#[test]
+fn agent_fixture_rejects_connection_options_and_other_modes() {
+    for args in [
+        vec!["--agent-test", "--socket", "/unused.sock"],
+        vec!["--session", "test", "--agent-test"],
+        vec!["--agent-test", "--dev"],
+    ] {
+        usage_error(
+            &args,
+            "fixture tests cannot be combined with connection options",
+        );
+    }
+    for flag in [
+        "--agent-test",
+        "--sidebar-test",
+        "--performance-test",
+        "--integration-test",
+    ] {
+        usage_error(
+            &["--agent-test", flag],
+            "native test modes are mutually exclusive",
+        );
+        usage_error(
+            &[flag, "--agent-test"],
+            "native test modes are mutually exclusive",
+        );
+    }
 }
 
 #[cfg(feature = "integration-test")]

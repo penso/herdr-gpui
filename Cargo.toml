@@ -7,6 +7,8 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.96"
 license = "Apache-2.0"
+# Workspace crates are not published to crates.io; they build this application.
+publish = false
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -22,12 +24,17 @@ herdr-client = { path = "crates/herdr-client" }
 gpui = "=0.2.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+unicode-segmentation = "1.13.3"
+toml = "0.8"
+toml_edit = "0.22"
+ureq = "3"
 bincode = { version = "2", default-features = false, features = ["std", "serde"] }
 crossbeam-channel = "0.5"
 cocoa = "0.26"
 objc = "0.2"
 core-graphics = "0.24"
 foreign-types = "0.5"
+raw-window-handle = "0.6"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSImage"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData", "NSBundle", "NSProcessInfo", "NSString"] }

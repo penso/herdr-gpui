@@ -15,6 +15,8 @@ pub enum ConnectTarget {
     Session { name: String, development: bool },
     /// Exact client protocol socket, not the JSON API socket.
     Socket(PathBuf),
+    /// Noninteractive SSH attachment to an installed remote Herdr (POSIX hosts).
+    Ssh { target: String, session: String },
 }
 
 pub fn session_socket(config_dir: &Path, name: &str) -> io::Result<PathBuf> {
@@ -40,6 +42,12 @@ pub fn session_socket(config_dir: &Path, name: &str) -> io::Result<PathBuf> {
 
 impl ConnectTarget {
     pub fn socket_path(&self) -> io::Result<PathBuf> {
+        if matches!(self, Self::Ssh { .. }) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "SSH has no local socket path",
+            ));
+        }
         if let Self::Socket(path) = self {
             return Ok(path.clone());
         }

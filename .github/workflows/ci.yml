@@ -6,18 +6,39 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
+# Deny by default; every job below declares the scopes it actually needs.
+permissions: {}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Audits the workflows themselves for injection, over-broad permissions,
+  # unpinned actions, and credential persistence. Gates the expensive macOS
+  # jobs so a compromised workflow change is caught before anything builds.
+  zizmor:
+    name: Workflow Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@135698455da5c3b3e55f73f4419e481ab68cdd95 # v0.4.1
+        with:
+          advanced-security: false
+          online-audits: false
+
   checks:
     name: Format, lint, and test
+    needs: zizmor
     runs-on: macos-15
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,6 +60,7 @@ jobs:
 
   build:
     name: Release (${{ matrix.arch }})
+    needs: zizmor
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +71,8 @@ jobs:
             arch: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

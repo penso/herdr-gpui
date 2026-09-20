@@ -12,6 +12,8 @@ pub enum LaunchMode {
     Sidebar,
     #[cfg(feature = "integration-test")]
     Performance,
+    #[cfg(feature = "integration-test")]
+    Agent,
 }
 
 #[derive(Debug)]
@@ -77,10 +79,14 @@ impl LaunchOptions {
                 }
                 Some("--dev") => development = true,
                 #[cfg(feature = "integration-test")]
-                Some(flag @ ("--integration-test" | "--sidebar-test" | "--performance-test")) => {
+                Some(
+                    flag @ ("--integration-test" | "--sidebar-test" | "--performance-test"
+                    | "--agent-test"),
+                ) => {
                     let next = match flag {
                         "--integration-test" => LaunchMode::Integration,
                         "--sidebar-test" => LaunchMode::Sidebar,
+                        "--agent-test" => LaunchMode::Agent,
                         _ => LaunchMode::Performance,
                     };
                     if mode != LaunchMode::Normal {
@@ -103,8 +109,10 @@ impl LaunchOptions {
         }
         #[cfg(feature = "integration-test")]
         {
-            if matches!(mode, LaunchMode::Sidebar | LaunchMode::Performance)
-                && (socket.is_some() || session.is_some() || development)
+            if matches!(
+                mode,
+                LaunchMode::Sidebar | LaunchMode::Performance | LaunchMode::Agent
+            ) && (socket.is_some() || session.is_some() || development)
             {
                 return Err(CliError("fixture tests cannot be combined with connection options or --integration-test".into()));
             }
@@ -117,6 +125,12 @@ impl LaunchOptions {
             if mode == LaunchMode::Performance {
                 return Err(CliError(
                     "--performance-test currently requires macOS native event delivery".into(),
+                ));
+            }
+            #[cfg(not(target_os = "macos"))]
+            if mode == LaunchMode::Agent {
+                return Err(CliError(
+                    "--agent-test currently requires macOS native event delivery".into(),
                 ));
             }
         }
@@ -181,10 +195,36 @@ mod tests {
     #[cfg(feature = "integration-test")]
     #[test]
     fn test_modes_are_exclusive() {
-        for first in ["--integration-test", "--sidebar-test", "--performance-test"] {
-            for second in ["--integration-test", "--sidebar-test", "--performance-test"] {
+        for first in [
+            "--integration-test",
+            "--sidebar-test",
+            "--performance-test",
+            "--agent-test",
+        ] {
+            for second in [
+                "--integration-test",
+                "--sidebar-test",
+                "--performance-test",
+                "--agent-test",
+            ] {
                 assert!(LaunchOptions::parse([first, second]).is_err());
             }
+        }
+    }
+
+    #[cfg(all(feature = "integration-test", target_os = "macos"))]
+    #[test]
+    fn agent_fixture_needs_no_connection() {
+        assert_eq!(
+            LaunchOptions::parse(["--agent-test"]).unwrap().mode,
+            LaunchMode::Agent
+        );
+        for args in [
+            vec!["--agent-test", "--socket", "/unused.sock"],
+            vec!["--session", "test", "--agent-test"],
+            vec!["--agent-test", "--dev"],
+        ] {
+            assert!(LaunchOptions::parse(args).is_err());
         }
     }
 }

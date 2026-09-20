@@ -6,7 +6,7 @@ mod sandbox;
 use sandbox::{Sandbox, daemon_binary, stop_children};
 use std::{
     fs,
-    process::{Child, Command, Stdio},
+    process::Child,
     thread,
     time::{Duration, Instant},
 };
@@ -20,12 +20,21 @@ struct Isolated {
 #[test]
 #[ignore = "requires active native desktop; GUI-only fixtures, no daemon"]
 fn native_sidebar() {
-    let mut gui = Command::new(env!("CARGO_BIN_EXE_herdr-gpui"))
-        .arg("--sidebar-test")
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut isolated = Isolated {
+        sandbox: Sandbox::new(),
+        daemon: None,
+        gui: None,
+    };
+    let mut command = isolated
+        .sandbox
+        .command(env!("CARGO_BIN_EXE_herdr-gpui"), "gui.log");
+    for name in ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    isolated.gui = Some(command.arg("--sidebar-test").spawn().unwrap());
+    let gui = isolated.gui.as_mut().unwrap();
     let deadline = Instant::now() + Duration::from_secs(20);
     while gui.try_wait().unwrap().is_none() {
         if Instant::now() >= deadline {
@@ -35,10 +44,10 @@ fn native_sidebar() {
         }
         thread::sleep(Duration::from_millis(50));
     }
-    let output = gui.wait_with_output().unwrap();
-    let log = String::from_utf8_lossy(&output.stderr);
+    let status = gui.wait().unwrap();
+    let log = fs::read_to_string(isolated.sandbox.dir.join("gui.log")).unwrap();
     eprintln!("{log}");
-    assert!(output.status.success(), "native sidebar failed");
+    assert!(status.success(), "native sidebar failed");
     assert!(log.contains("SIDEBAR native PASS:"));
 }
 

@@ -1,0 +1,396 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[0-9][0-9]"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and package without signing, notarizing, or publishing"
+        required: false
+        default: true
+        type: boolean
+
+# Deny by default; every job below declares the scopes it actually needs.
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+
+jobs:
+  # Gates everything: a workflow change that leaks the Apple certificate or the
+  # release token is caught before any secret is loaded into a runner.
+  zizmor:
+    name: Workflow Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@135698455da5c3b3e55f73f4419e481ab68cdd95 # v0.4.1
+        with:
+          advanced-security: false
+          online-audits: false
+
+  validate-tag:
+    name: Validate Tag
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check tag matches YYYYMMDD.NN
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^[0-9]{8}\.[0-9]{2}$ ]]; then
+            echo "::error::Tag '$TAG' must match YYYYMMDD.NN"
+            exit 1
+          fi
+          # Reject an impossible date early rather than shipping it in a bundle version.
+          if ! date -d "${TAG%%.*}" >/dev/null 2>&1; then
+            echo "::error::Tag '$TAG' does not start with a real YYYYMMDD date"
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: [zizmor]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            arch: x86_64
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+
+      # No dependency cache here on purpose. A published binary should be built
+      # from source every time: a poisoned cache entry restored into a release
+      # build would be signed and notarized along with everything else.
+      - name: Build optimized native executable
+        run: cargo build --locked --release -p herdr-gpui
+
+      - name: Exercise release executable without opening a window
+        run: cargo test --locked --release -p herdr-gpui --test cli
+
+      - name: Stage executable
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          cp target/release/herdr-gpui "staging/herdr-gpui-${TARGET}"
+          # Fail loudly if the runner produced the wrong architecture.
+          file "staging/herdr-gpui-${TARGET}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: executable-${{ matrix.arch }}
+          path: staging/herdr-gpui-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package, Sign, and Notarize
+    needs: [build, validate-tag]
+    # validate-tag is skipped on workflow_dispatch; don't let that skip packaging.
+    if: ${{ always() && needs.build.result == 'success' && needs.validate-tag.result != 'failure' }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # Sigstore keyless signing
+      attestations: write # Build provenance
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: artifacts
+          pattern: executable-*
+          merge-multiple: true
+
+      - name: Determine version
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="$REF_NAME"
+          else
+            VERSION="00000000.00"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Packaging version $VERSION"
+
+      - name: Build universal executable and app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ARM="artifacts/herdr-gpui-aarch64-apple-darwin"
+          X86="artifacts/herdr-gpui-x86_64-apple-darwin"
+          for f in "$ARM" "$X86"; do
+            [ -f "$f" ] || { echo "::error::missing built executable $f"; exit 1; }
+            chmod +x "$f"
+          done
+
+          APP="dist/Herdr.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+          # One bundle that runs natively on both architectures.
+          lipo -create -output "$APP/Contents/MacOS/Herdr" "$ARM" "$X86"
+          lipo -info "$APP/Contents/MacOS/Herdr"
+          chmod +x "$APP/Contents/MacOS/Herdr"
+
+          cp assets/macos/Info.plist "$APP/Contents/Info.plist"
+          cp assets/icons/Herdr.icns "$APP/Contents/Resources/Herdr.icns"
+
+          # The checked-in plist carries the Cargo version; stamp the release tag
+          # so a downloaded build reports what it actually is.
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+          plutil -lint "$APP/Contents/Info.plist"
+
+          # Per-architecture tarballs for people who only want the executable.
+          mkdir -p dist
+          cp "$ARM" "dist/herdr-gpui-${VERSION}-aarch64-apple-darwin"
+          cp "$X86" "dist/herdr-gpui-${VERSION}-x86_64-apple-darwin"
+          ( cd dist && tar -czf "herdr-gpui-${VERSION}-aarch64-apple-darwin.tar.gz" "herdr-gpui-${VERSION}-aarch64-apple-darwin" )
+          ( cd dist && tar -czf "herdr-gpui-${VERSION}-x86_64-apple-darwin.tar.gz" "herdr-gpui-${VERSION}-x86_64-apple-darwin" )
+          rm -f "dist/herdr-gpui-${VERSION}-aarch64-apple-darwin" "dist/herdr-gpui-${VERSION}-x86_64-apple-darwin"
+
+      - name: Import Apple Developer ID certificate
+        if: ${{ env.RELEASE_DRY_RUN != 'true' }}
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          printf '%s' "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERTIFICATE_PATH"
+
+      - name: Code-sign app bundle
+        if: ${{ env.RELEASE_DRY_RUN != 'true' }}
+        run: |
+          set -euo pipefail
+          # Identity is matched by prefix against the freshly created keychain,
+          # which holds exactly the one certificate imported above.
+          #
+          # Hardened runtime with no entitlements: the client opens a Unix socket
+          # and draws with Metal, and needs no relaxed-security exception.
+          /usr/bin/codesign --force --timestamp --options runtime \
+            --sign "Developer ID Application" \
+            dist/Herdr.app
+
+          /usr/bin/codesign --verify --strict --verbose=2 dist/Herdr.app
+
+      - name: Package app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # ditto, not zip: preserves the signature and bundle metadata.
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/Herdr.app "dist/herdr-gpui-${VERSION}-macos-universal.app.zip"
+
+      # An App Store Connect API key, not an Apple ID and app-specific password.
+      # An app-specific password is not scoped to notarization: it bypasses its
+      # owner's two-factor auth and grants IMAP/CalDAV access to their iCloud
+      # mail, contacts and calendar. An API key is team-owned, carries only the
+      # role it was granted, and is revoked on its own. Apple says the same in
+      # TN3147; so does docs/guide/02-running-it.md in seneschal.
+      - name: Notarize and staple
+        if: ${{ env.RELEASE_DRY_RUN != 'true' }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          ZIP="dist/herdr-gpui-${VERSION}-macos-universal.app.zip"
+
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          trap 'rm -f "$KEY_PATH"' EXIT
+          (umask 077 && printf '%s' "$APPLE_API_KEY_P8" > "$KEY_PATH")
+
+          NOTARY_AUTH=(--key "$KEY_PATH" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID")
+
+          SUBMIT_OUT="$(xcrun notarytool submit "$ZIP" "${NOTARY_AUTH[@]}" --wait 2>&1)" || true
+          echo "$SUBMIT_OUT"
+
+          SUBMISSION_ID="$(echo "$SUBMIT_OUT" | awk '/^ *id: /{print $2; exit}')"
+          if ! echo "$SUBMIT_OUT" | grep -q 'status: Accepted'; then
+            echo "::error::Notarization did not succeed"
+            [ -n "$SUBMISSION_ID" ] && xcrun notarytool log "$SUBMISSION_ID" \
+              "${NOTARY_AUTH[@]}" || true
+            exit 1
+          fi
+
+          # Staple the ticket so the app validates without a network round trip,
+          # then re-package: the stapled bundle differs from the submitted one.
+          xcrun stapler staple dist/Herdr.app
+          xcrun stapler validate dist/Herdr.app
+          rm -f "$ZIP"
+          ditto -c -k --sequesterRsrc --keepParent dist/Herdr.app "$ZIP"
+
+          # Prove Gatekeeper actually accepts what we are about to publish.
+          spctl --assess --type execute --verbose=4 dist/Herdr.app
+
+      - name: Generate SBOM
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo install cargo-cyclonedx --locked --version 0.5.9
+          # Emits one SBOM per workspace member next to its Cargo.toml; the
+          # application crate's is the one that describes a shipped artifact.
+          cargo cyclonedx --format json --spec-version 1.5 --all \
+            --target aarch64-apple-darwin \
+            --override-filename sbom
+          cp crates/herdr-gpui/sbom.json "dist/herdr-gpui-${VERSION}.cdx.json"
+          python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(len(d['components']), 'components')" \
+            "dist/herdr-gpui-${VERSION}.cdx.json"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Generate checksums and Sigstore signatures
+        uses: ./.github/actions/sign-artifacts
+        with:
+          working-directory: dist
+          files: "*.app.zip *.tar.gz *.cdx.json"
+
+      - name: Attest build provenance
+        if: ${{ env.RELEASE_DRY_RUN != 'true' }}
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            dist/*.app.zip
+            dist/*.tar.gz
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: |
+            dist/*.app.zip
+            dist/*.tar.gz
+            dist/*.cdx.json
+            dist/*.sha256
+            dist/*.sha512
+            dist/*.sig
+            dist/*.crt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Clean up signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH"
+          fi
+
+  publish:
+    name: Publish Release
+    needs: [package]
+    if: ${{ startsWith(github.ref, 'refs/tags/') && needs.package.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Create the release and upload assets
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+          DRY_RUN: ${{ env.RELEASE_DRY_RUN }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run: skipping release creation"
+            ls -la dist
+            exit 0
+          fi
+
+          {
+            echo "Native macOS client for Herdr. Requires a running Herdr daemon."
+            echo
+            echo "## Install"
+            echo
+            echo "Download \`herdr-gpui-${VERSION}-macos-universal.app.zip\`, unzip, and move"
+            echo "\`Herdr.app\` to /Applications. The bundle is a universal binary, signed with a"
+            echo "Developer ID certificate and notarized by Apple, so Gatekeeper opens it directly."
+            echo
+            echo "## Verify"
+            echo
+            echo "Every asset ships \`.sha256\`, \`.sha512\`, and a Sigstore keyless signature"
+            echo "(\`.sig\` + \`.crt\`). Builds also carry GitHub provenance attestation:"
+            echo
+            echo '```sh'
+            echo "shasum -a 256 -c herdr-gpui-${VERSION}-macos-universal.app.zip.sha256"
+            echo "gh attestation verify herdr-gpui-${VERSION}-macos-universal.app.zip --repo ${REPO}"
+            echo '```'
+            echo
+            echo "Detached GPG signatures (\`.asc\`) from the maintainer's key are added shortly"
+            echo "after publication; the key is not held by CI. Verify them with"
+            echo "\`./scripts/verify-release.sh --version ${VERSION} --checksums\`."
+            echo
+            echo "A CycloneDX SBOM of the dependency graph is attached as \`.cdx.json\`."
+          } > notes.md
+
+          gh release create "$VERSION" \
+            --repo "$REPO" \
+            --title "$VERSION" \
+            --notes-file notes.md \
+            dist/*

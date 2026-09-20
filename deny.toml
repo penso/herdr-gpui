@@ -1,0 +1,63 @@
+# cargo-deny configuration. Run locally with `cargo deny check`.
+#
+# This is a macOS-only application, so the dependency graph is evaluated for
+# macOS targets only. Without this, Windows- and Linux-only transitive
+# dependencies of GPUI show up and are judged on licenses that never reach a
+# shipped binary.
+
+[graph]
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Security vulnerabilities always fail. "Unmaintained" is scoped to crates this
+# workspace depends on directly: GPUI's own tree carries several discontinued
+# crates (async-std, rustybuzz, ttf-parser, paste) that we cannot act on
+# without changing the pinned GPUI version.
+unmaintained = "workspace"
+ignore = [
+    # bincode 2 is unmaintained but is the wire format the Herdr daemon speaks.
+    # Field and variant order is part of protocol compatibility, so this is not
+    # a swappable dependency. Revisit if an actual vulnerability is filed.
+    { id = "RUSTSEC-2025-0141", reason = "bincode 2 is the daemon wire format; unmaintained, not vulnerable" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    # Mozilla's CA root certificate set, via webpki-roots <- ureq. CDLA-Permissive
+    # is a data licence covering the certificate list rather than code; it imposes
+    # no obligation on a binary that embeds it.
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The workspace pins GPUI to an exact version on purpose.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

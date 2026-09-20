@@ -184,6 +184,8 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                             .downcast::<HerdrWindow>()
                             .map_err(|_| "unexpected root")?
                             .update(cx, |view, cx| {
+                                view.config = config::Config::default();
+                                view.theme = config::Theme::default();
                                 view.live.snapshot = Some(Arc::new(snapshot));
                                 view.set_surface(Some(Arc::new(surface())), cx);
                                 view.painter.borrow_mut().uncached = uncached;
@@ -486,7 +488,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     // A status-only root notification must not invalidate the terminal child.
                     *cx.default_global::<Counts>() = Counts::default();
                     view.update(cx, |view, cx| {
-                        view.live.status = state::ConnectionStatus::Connected;
+                        view.live.status = ConnectionStatus::Connected;
                         view.local_error = Some(format!("Performance {category}"));
                         cx.notify();
                     });
@@ -616,7 +618,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         state.set_outer_focus(true);
                         state.apply(ClientEvent::Snapshot(Arc::new(snapshot)));
                         state.apply(ClientEvent::Surface(frame.clone()));
-                        *view.connection.inbox.lock().map_err(|_| "poisoned fixture inbox")? = state.clone();
+                        *view.endpoints[view.selected_endpoint].connection.inbox.lock().map_err(|_| "poisoned fixture inbox")? = state.clone();
                         view.live = state;
                         view.set_surface(Some(frame), cx);
                         cx.notify();
@@ -631,7 +633,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                 } else if phase == 1 {
                     view.update(cx, |view, cx| -> Result<(), String> {
                         let surface = view.live.surface.clone().ok_or("missing primed surface")?;
-                        let mut state = view.connection.inbox.lock().map_err(|_| "poisoned fixture inbox")?;
+                        let mut state = view.endpoints[view.selected_endpoint].connection.inbox.lock().map_err(|_| "poisoned fixture inbox")?;
                         let mut snapshot = (**state.snapshot.as_ref().ok_or("missing primed snapshot")?).clone();
                         snapshot.agents[0].agent_status = AgentStatus::Idle;
                         snapshot.agents[0].state_change_seq += 1;
@@ -661,7 +663,8 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     // Leaving the preceding window update flushes cx.defer; do not
                     // draw again or manually acknowledge before inspecting the inbox.
                     let live = &view.read(cx).live;
-                    let state = view.read(cx).connection.inbox.lock().map_err(|_| "poisoned fixture inbox")?;
+                    let selected = view.read(cx);
+                    let state = selected.endpoints[selected.selected_endpoint].connection.inbox.lock().map_err(|_| "poisoned fixture inbox")?;
                     if live.snapshot.as_ref().ok_or("missing presented snapshot")?.agents[0].agent_status != AgentStatus::Done
                         || state.snapshot.as_ref().ok_or("missing acknowledged snapshot")?.agents[0].agent_status != AgentStatus::Idle
                         || !Arc::ptr_eq(live.surface.as_ref().ok_or("missing presented surface")?, state.surface.as_ref().ok_or("missing acknowledged surface")?)

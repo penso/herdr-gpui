@@ -1,6 +1,5 @@
 //! Native opt-in smoke driver. No test platform or blocking waits on the UI thread.
 use super::*;
-use herdr_client::connect;
 use std::{
     sync::atomic::{AtomicU8, Ordering},
     time::Instant,
@@ -41,6 +40,9 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         .update(cx, |_, cx| cx.notify());
                     window.refresh();
                     window.draw(cx).clear();
+                    if frame > 0 && sidebar::GITHUB_ICON.clone().use_render_image(window, cx).is_none() {
+                        return Err("embedded GitHub SVG did not render".into());
+                    }
                     let probes = &cx.global::<PaintedProbes>().0;
                     let mut failed = false;
                     for input in [
@@ -61,13 +63,15 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                             eprintln!("SIDEBAR frame={frame} input={input:?} {p:?}");
                         }
                         let expected_short = input.len() < 20;
+                        let title_icon = matches!(input, "herdr" | "herdr-gpui-sidebar-rendering-regression-investigation");
+                        let expected_width = px(sidebar::LABEL_WIDTH - if title_icon { sidebar::ICON_RESERVE } else { 0. });
                         if p.glyph_text != p.cached
                             || (expected_short && p.glyph_text != input)
                             || (!expected_short
                                 && (p.width < px(150.) || !p.glyph_text.ends_with('\u{2026}')))
                             || p.clipped
-                            || p.bounds.size.width != px(sidebar::LABEL_WIDTH)
-                            || p.mask.size.width != px(sidebar::LABEL_WIDTH)
+                            || p.bounds.size.width != expected_width
+                            || p.mask.size.width != expected_width
                             || p.width > p.bounds.size.width
                             || p.bounds.size.height != px(16.)
                         {
@@ -115,23 +119,29 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     .clear();
                 window.draw(cx).clear();
                 let label = match step {
-                    0 => "v",
-                    1 => ">",
+                    0 => "\u{25be}",
+                    1 => "\u{25b8}",
                     _ => "menu",
                 };
                 cx.global::<sidebar::layout_tests::PaintedProbes>()
                     .0
                     .get(label)
                     .map(|probe| probe.bounds.center())
-                    .ok_or("missing native click target")
+                    .ok_or_else(|| "missing native click target".to_owned())
+                    .and_then(|point| Ok((sidebar::native_tests::Target::acquire(window)?, point)))
             });
             let result = match point {
-                Ok(Ok(point)) => sidebar::native_tests::click(point.x.to_f64(), point.y.to_f64()),
+                Ok(Ok((target, point))) => target.click(point.x.to_f64(), point.y.to_f64()),
                 error => Err(format!("native target: {error:?}")),
             };
             timer.timer(Duration::from_millis(50)).await;
             let result = if step == 3 {
-                result.and_then(|()| sidebar::native_tests::click(700., 500.))
+                result.and_then(|()| {
+                    let target = AnyWindowHandle::from(handle)
+                        .update(cx, |_, window, _| sidebar::native_tests::Target::acquire(window))
+                        .map_err(|e| e.to_string())??;
+                    target.click(700., 500.)
+                })
             } else {
                 result
             };
@@ -163,7 +173,7 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                             return Err("native footer click did not open menu".into());
                         }
                         let before = state.input_probe;
-                        window.dispatch_action(Box::new(NewTab), cx);
+                        window.dispatch_action(Box::new(RunCommand { command: Command::Tab }), cx);
                         for key in ["down", "enter", "x", "escape"] {
                             window.dispatch_keystroke(
                                 Keystroke {
@@ -193,11 +203,387 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                 return;
             }
         }
-        eprintln!("SIDEBAR native PASS: 12 Menlo draws, 4 sizes, collapse/expand, menu keyboard isolation and outside dismissal");
+        #[cfg(target_os = "macos")]
+        if let Err(error) = sidebar_hosts(handle, cx).await {
+            eprintln!("SIDEBAR native hosts FAIL: {error}");
+            let _ = cx.update(|cx| cx.quit());
+            return;
+        }
+        eprintln!("SIDEBAR native PASS: 12 Menlo draws, 4 sizes, collapse/expand, menu keyboard isolation and outside dismissal; host routing, disabled selection, scoped repositories, resized host/agent glyphs, independent scroll and decoy key window");
         EXIT_CODE.store(0, Ordering::SeqCst);
         let _ = cx.update(|cx| cx.quit());
     })
     .detach();
+}
+
+#[cfg(target_os = "macos")]
+async fn sidebar_hosts(handle: WindowHandle<HerdrWindow>, cx: &mut AsyncApp) -> Result<(), String> {
+    use sidebar::{layout_tests::PaintedProbes, native_tests::Target};
+    const REMOTE: &str = "Synthetic host with a deliberately long label";
+    let decoy = cx
+        .update(|cx| {
+            cx.open_window(WindowOptions::default(), |window, cx| {
+                cx.new(|cx| {
+                    HerdrWindow::new(
+                        ConnectTarget::Socket("/unused-decoy.sock".into()),
+                        window,
+                        cx,
+                        true,
+                    )
+                })
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    handle
+        .update(cx, |view, window, cx| {
+            view.endpoints.clear();
+            for (index, label) in ["Local", REMOTE, "Disabled"].into_iter().enumerate() {
+                let mut endpoint = endpoint::Endpoint::new(
+                    if index == 0 {
+                        endpoint::LOCAL.into()
+                    } else {
+                        format!("fixture-{index}")
+                    },
+                    label.into(),
+                    ConnectTarget::Socket(format!("/unused-sidebar-{index}.sock").into()),
+                    index != 2,
+                );
+                let mut snapshot = sidebar::layout_tests::snapshot(6);
+                snapshot.workspaces.drain(0..3);
+                snapshot.workspaces[0].label = format!("repository-{index}");
+                snapshot.workspaces[1].custom_label = true;
+                snapshot.workspaces[1].label = format!("child-{index}");
+                snapshot.workspaces.truncate(2);
+                snapshot.agents.truncate(1);
+                snapshot.agents[0].name =
+                    Some(format!("agent-{index}-with-a-deliberately-long-label"));
+                endpoint.live.snapshot = Some(Arc::new(snapshot));
+                if let Ok(mut inbox) = endpoint.connection.inbox.lock() {
+                    *inbox = endpoint.live.clone();
+                }
+                view.endpoints.push(endpoint);
+            }
+            view.selected_endpoint = 0;
+            view.live = view.endpoints[0].live.clone();
+            view.collapsed_repos.clear();
+            view.marked = "preserve collapse composition".into();
+            window.resize(size(px(480.), px(780.)));
+            cx.notify();
+        })
+        .map_err(|e| e.to_string())?;
+    cx.update(|cx| cx.activate(true))
+        .map_err(|e| e.to_string())?;
+    cx.background_executor()
+        .timer(Duration::from_millis(100))
+        .await;
+    // The decoy is deliberately key. Neither acquisition nor delivery may use it.
+    let target = decoy
+        .update(cx, |_, window, _| Target::acquire(window))
+        .map_err(|e| e.to_string())??;
+    target.make_key();
+    if !target.is_key() {
+        return Err("decoy did not become key".into());
+    }
+    drop(target);
+    let viewport = handle
+        .update(cx, |_, window, _| window.viewport_size())
+        .map_err(|e| e.to_string())?;
+    if viewport != size(px(480.), px(780.)) {
+        return Err(format!("narrow resize not settled: {viewport:?}"));
+    }
+    for (step, label, expected) in [
+        (0, REMOTE, 0), // collapse unselected host
+        (1, REMOTE, 0), // expand
+        (2, REMOTE, 1),
+        (3, "Local", 0),
+        (4, "Disabled", 0),
+        (5, "child-1", 1),
+        (6, "child-0", 0),
+        (7, "agent-1-with-a-deliberately-long-label", 1),
+        (8, "agent-0-with-a-deliberately-long-label", 0),
+        (9, "repository-1", 0),
+    ] {
+        let decoy_target = decoy
+            .update(cx, |_, window, _| Target::acquire(window))
+            .map_err(|e| e.to_string())??;
+        if !decoy_target.is_key() {
+            return Err(format!("decoy lost key status at step {step}"));
+        }
+        drop(decoy_target);
+        let (target, point) = AnyWindowHandle::from(handle)
+            .update(cx, |_, window, cx| -> Result<_, String> {
+                cx.default_global::<PaintedProbes>().0.clear();
+                window.refresh();
+                window.draw(cx).clear();
+                let probes = &cx.global::<PaintedProbes>().0;
+                for (name, prefix) in [
+                    (REMOTE, "Synthetic host"),
+                    ("agent-1-with-a-deliberately-long-label", "agent-1-with-a"),
+                ] {
+                    let p = probes.get(name).ok_or_else(|| format!("missing {name}"))?;
+                    if p.clipped
+                        || p.glyph_text != p.cached
+                        || !p.glyph_text.ends_with('\u{2026}')
+                        || !p.glyph_text.starts_with(prefix)
+                        || p.bounds.size.width < px(110.)
+                        || p.width > p.bounds.size.width
+                    {
+                        return Err(format!("narrow native label: {name}: {p:?}"));
+                    }
+                }
+                let p = probes
+                    .get(label)
+                    .ok_or_else(|| format!("missing target {label}"))?;
+                let mut point = p.bounds.center();
+                if step < 2 {
+                    point.x =
+                        p.bounds.left() - px(sidebar::HOST_GAP + sidebar::HOST_ARROW_WIDTH / 2.);
+                }
+                if step == 9 {
+                    // The title ends at the label column's edge, even with an avatar.
+                    point.x =
+                        p.bounds.right() + px((sidebar::LABEL_GAP + sidebar::ARROW_RESERVE) / 2.);
+                }
+                Ok((Target::acquire(window)?, point))
+            })
+            .map_err(|e| e.to_string())??;
+        target.click(point.x.to_f64(), point.y.to_f64())?;
+        drop(target);
+        AnyWindowHandle::from(handle)
+            .update(cx, |root, window, cx| -> Result<(), String> {
+                cx.default_global::<PaintedProbes>().0.clear();
+                window.refresh();
+                window.draw(cx).clear();
+                let entity = root
+                    .downcast::<HerdrWindow>()
+                    .map_err(|_| "unexpected root")?;
+                let view = entity.read(cx);
+                if view.selected_endpoint != expected {
+                    return Err(format!(
+                        "step {step}: selected {} expected {expected}",
+                        view.selected_endpoint
+                    ));
+                }
+                if step < 2
+                    && (view.endpoints[1].collapsed != (step == 0)
+                        || view.marked != "preserve collapse composition")
+                {
+                    return Err("host collapse changed selection/composition".into());
+                }
+                if (5..=8).contains(&step) {
+                    let expected = if step < 7 {
+                        NavigationTarget::Workspace("w4".to_owned())
+                    } else {
+                        NavigationTarget::Pane("p0".to_owned())
+                    };
+                    if view.pending_navigation.as_ref() != Some(&expected) {
+                        return Err(format!("wrong duplicate-ID route at step {step}"));
+                    }
+                }
+                if step == 9
+                    && (!view.endpoints[1]
+                        .collapsed_repos
+                        .contains("/fixture/agent-launcher/.git")
+                        || !view.collapsed_repos.is_empty())
+                {
+                    return Err("repository collapse escaped endpoint scope".into());
+                }
+                let probes = &cx.global::<PaintedProbes>().0;
+                if step == 0
+                    && (probes.contains_key("child-1")
+                        || !probes.contains_key("agent-1-with-a-deliberately-long-label"))
+                {
+                    return Err("host collapse hid agents or left workspace visible".into());
+                }
+                if step == 9 && (probes.contains_key("child-1") || !probes.contains_key("child-0"))
+                {
+                    return Err("repository visibility not scoped".into());
+                }
+                Ok(())
+            })
+            .map_err(|e| e.to_string())??;
+        eprintln!("SIDEBAR native host step={step} verified");
+    }
+    // Exercise wider, narrower, then restored native allocations. This catches
+    // stale truncated font runs as well as host labels left at the old 116px.
+    for (window_width, preferred, host_width, agent_width, host_prefix, agent_prefix) in [
+        (
+            800.,
+            Some(400.),
+            284.,
+            362.,
+            "Synthetic host",
+            "agent-1-with-a",
+        ),
+        (360., None, 77., 82., "Synthetic", "agent-1"),
+        (
+            800.,
+            Some(160.),
+            117.,
+            122.,
+            "Synthetic host",
+            "agent-1-with-a",
+        ),
+        (
+            800.,
+            Some(480.),
+            364.,
+            442.,
+            REMOTE,
+            "agent-1-with-a-deliberately-long-label",
+        ),
+        (480., None, 116., 194., "Synthetic host", "agent-1-with-a"),
+    ] {
+        handle
+            .update(cx, |view, window, cx| {
+                view.sidebar_width = preferred;
+                window.resize(size(px(window_width), px(780.)));
+                cx.notify();
+            })
+            .map_err(|e| e.to_string())?;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let settled = AnyWindowHandle::from(handle)
+            .update(cx, |_, window, cx| -> Result<bool, String> {
+                if window.viewport_size() != size(px(window_width), px(780.)) {
+                    return Ok(false);
+                }
+                cx.default_global::<PaintedProbes>().0.clear();
+                window.refresh();
+                window.draw(cx).clear();
+                for (name, prefix, expected_width) in [
+                    (REMOTE, host_prefix, host_width),
+                    ("agent-1-with-a-deliberately-long-label", agent_prefix, agent_width),
+                ] {
+                    let p = cx
+                        .global::<PaintedProbes>()
+                        .0
+                        .get(name)
+                        .ok_or("missing narrow label")?;
+                    if p.clipped
+                        || p.glyph_text != p.cached
+                        || (p.glyph_text != name && !p.glyph_text.ends_with('\u{2026}'))
+                        || !p.glyph_text.starts_with(prefix)
+                        || p.bounds.size.width != px(expected_width)
+                        || p.mask.size.width != px(expected_width)
+                        || p.width > p.bounds.size.width
+                    {
+                        return Err(format!("resized native label window={window_width} preferred={preferred:?}: {p:?}"));
+                    }
+                }
+                Ok(true)
+            })
+            .map_err(|e| e.to_string())??;
+            if settled {
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!("{window_width}px resize timed out"));
+            }
+            cx.background_executor()
+                .timer(Duration::from_millis(16))
+                .await;
+        }
+        eprintln!(
+            "SIDEBAR native resized labels verified: window={window_width} preferred={preferred:?} host={host_width} agent={agent_width}"
+        );
+    }
+    for font_size in [16., 20., 12.] {
+        AnyWindowHandle::from(handle)
+            .update(cx, |root, window, cx| -> Result<(), String> {
+                let entity = root
+                    .downcast::<HerdrWindow>()
+                    .map_err(|_| "unexpected root")?;
+                entity.update(cx, |view, _| -> Result<(), String> {
+                    view.config.sidebar.size = font_size;
+                    view.config.theme = if font_size == 12. { "Default" } else { "Nord" }.into();
+                    view.theme = view.config.theme()?;
+                    Ok(())
+                })?;
+                cx.default_global::<PaintedProbes>().0.clear();
+                window.refresh();
+                window.draw(cx).clear();
+                for name in [REMOTE, "agent-1-with-a-deliberately-long-label"] {
+                    let probe = cx
+                        .global::<PaintedProbes>()
+                        .0
+                        .get(name)
+                        .ok_or("missing scaled label")?;
+                    if probe.clipped
+                        || probe.glyph_text != probe.cached
+                        || !probe.glyph_text.ends_with('\u{2026}')
+                        || probe.width > probe.bounds.size.width
+                        // Native layout snaps fractional line heights to device pixels.
+                        || (probe.bounds.size.height - px(font_size * 4. / 3.)).abs()
+                            > px(1. / window.scale_factor())
+                    {
+                        return Err(format!("scaled native label size={font_size}: {probe:?}"));
+                    }
+                }
+                eprintln!("SIDEBAR native themed font labels verified: size={font_size}");
+                Ok(())
+            })
+            .map_err(|e| e.to_string())??;
+    }
+    handle
+        .update(cx, |view, _, cx| -> Result<(), String> {
+            let snapshot = Arc::make_mut(
+                view.live
+                    .snapshot
+                    .as_mut()
+                    .ok_or("missing scroll snapshot")?,
+            );
+            let agent = snapshot.agents[0].clone();
+            let workspace = snapshot.workspaces[0].clone();
+            for index in 0..40 {
+                let mut agent = agent.clone();
+                agent.pane_id = format!("scroll-p{index}");
+                snapshot.agents.push(agent);
+                let mut workspace = workspace.clone();
+                workspace.workspace_id = format!("scroll-w{index}");
+                workspace.worktree = None;
+                snapshot.workspaces.push(workspace);
+            }
+            cx.notify();
+            Ok(())
+        })
+        .map_err(|e| e.to_string())??;
+    for list in 0..2 {
+        AnyWindowHandle::from(handle)
+            .update(cx, |root, window, cx| -> Result<(), String> {
+                window.refresh();
+                window.draw(cx).clear();
+                let entity = root
+                    .downcast::<HerdrWindow>()
+                    .map_err(|_| "unexpected root")?;
+                let scroll = entity.read(cx).sidebar_scroll.clone();
+                let other = scroll[1 - list].offset();
+                scroll[list].set_offset(point(px(0.), px(-80.)));
+                window.refresh();
+                window.draw(cx).clear();
+                if scroll[list].offset().y != px(-80.) || scroll[1 - list].offset() != other {
+                    return Err(format!("scroll handles are not independent: list={list}"));
+                }
+                Ok(())
+            })
+            .map_err(|e| e.to_string())??;
+    }
+    decoy
+        .update(cx, |view, window, _| -> Result<(), String> {
+            if view.selected_endpoint != 0
+                || !view.collapsed_repos.is_empty()
+                || view.menu.page.is_some()
+                || view.pending_navigation.is_some()
+                || view.selection_epoch != 0
+            {
+                return Err("fixture click affected decoy".into());
+            }
+            window.remove_window();
+            Ok(())
+        })
+        .map_err(|e| e.to_string())??;
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -240,7 +626,7 @@ fn create_external_workspace(
     boot: String,
 ) -> Result<ExternalWorkspace, String> {
     use herdr_client::ClientEvent;
-    let client = connect(target, options).map_err(|e| e.to_string())?;
+    let client = herdr_client::connect(target, options).map_err(|e| e.to_string())?;
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut request = None;
     loop {
@@ -324,8 +710,8 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                 if step == 13 {
                     let view = view.read(cx);
                     let (before, inbox) = baseline.as_ref().ok_or("missing external baseline")?;
-                    if !Arc::ptr_eq(inbox, &view.connection.inbox) || !view.live.status.is_connected()
-                        || view.connection.handle.as_ref().is_none_or(|h| h.is_disconnected())
+                    if !Arc::ptr_eq(inbox, &view.endpoints[view.selected_endpoint].connection.inbox) || !view.live.status.is_connected()
+                        || view.endpoints[view.selected_endpoint].connection.handle.as_ref().is_none_or(|h| h.is_disconnected())
                         || view.local_error.is_some() || view.live.error.is_some() {
                         return Err("GUI connection changed or failed during external creation".into());
                     }
@@ -377,7 +763,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                 frames += 1;
                 let focused = view.read(cx).focus.is_focused(window);
                 let active = window.is_window_active();
-                let actions_ready = window.is_action_available(&NewTab, cx);
+                let actions_ready = window.is_action_available(&RunCommand { command: Command::Tab }, cx);
                 let probe = view.read(cx).input_probe;
                 let (live, local_error, options, last_queued_options, bounds) = {
                     let view = view.read(cx);
@@ -443,10 +829,10 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         let old = surface.panes.iter().find(|p| p.pane_id == split_pane).ok_or("original split pane missing")?;
                         let new = surface.panes.iter().find(|p| Some(&p.pane_id) == snapshot.focused_pane_id.as_ref()).ok_or("focused split missing")?;
                         if new.rect.y <= old.rect.y || new.rect.x != old.rect.x { return Err(format!("down split geometry: {}", diagnostic())); }
-                        window.dispatch_action(Box::new(PreviousTab), cx);
+                        window.dispatch_action(Box::new(RunCommand { command: Command::PreviousTab }), cx);
                     }
                     4 if focused_tab == first_tab && surface.panes.len() == 1 => {
-                        window.dispatch_action(Box::new(NextTab), cx);
+                        window.dispatch_action(Box::new(RunCommand { command: Command::NextTab }), cx);
                     }
                     5 if focused_tab == second_tab && surface.panes.len() == 3 => {
                         key("cmd-n", window, cx)?;
@@ -456,7 +842,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     }
                     7 if focused_workspace == workspace && focused_tab == second_tab && surface.panes.len() == 3 => {
                         // Use the full-width tab so the exact output row cannot wrap in a split.
-                        window.dispatch_action(Box::new(PreviousTab), cx);
+                        window.dispatch_action(Box::new(RunCommand { command: Command::PreviousTab }), cx);
                     }
                     8 if focused_tab == first_tab && surface.panes.len() == 1 => {
                         let command = format!("echo HERDR_GUI_{}\"_OK\"", std::process::id());
@@ -481,11 +867,11 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     12 if has_output(&surface.frame, &reconnected_marker) => {
                         eprintln!("GUI input pipeline verified: frames={frames} focus={focused} active={active} probe={probe:?}");
                         eprintln!("GUI fresh input after reconnect verified: {reconnected_marker}");
-                        let target = view.read(cx).connection.target.clone();
+                        let target = view.read(cx).endpoints[view.read(cx).selected_endpoint].connection.target.clone();
                         if !matches!(&target, ConnectTarget::Socket(_)) {
                             return Err("external smoke requires an explicit isolated socket".into());
                         }
-                        baseline = Some((snapshot.clone(), view.read(cx).connection.inbox.clone()));
+                        baseline = Some((snapshot.clone(), view.read(cx).endpoints[view.read(cx).selected_endpoint].connection.inbox.clone()));
                         let boot = boot.clone();
                         let (tx, rx) = std::sync::mpsc::channel();
                         std::thread::Builder::new().name("external-workspace-smoke".into()).spawn(move || {

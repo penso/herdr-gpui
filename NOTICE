@@ -1,0 +1,12 @@
+Herdr GPUI
+Copyright 2026 Fabien Penso
+
+This product includes software developed as part of the Herdr GPUI project,
+licensed under the Apache License, Version 2.0. The full license text is in
+LICENSE at the root of this repository.
+
+Portions of crates/herdr-protocol are adapted from Herdr
+(https://github.com/herdrdev/herdr), also licensed under Apache-2.0. The
+adapted files, the upstream revision they came from, and the modifications
+made to them are recorded in crates/herdr-protocol/NOTICE.md. No upstream
+NOTICE file was present at the revision used.
