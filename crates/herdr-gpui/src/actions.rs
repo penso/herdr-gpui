@@ -1,6 +1,8 @@
 //! GPUI actions the app registers and the keystrokes bound to them. Every
 //! shortcut comes from the config's resolved `Keymap`, so the palette, the
-//! menu bar, and the keymap cannot drift apart.
+//! menu bar, and the keymap cannot drift apart. The macOS Hide and Minimize
+//! items are the exception: macOS reserves those keystrokes for every app,
+//! so they stay fixed rather than user-rebindable.
 
 use crate::controls::Command;
 use gpui::{Action, App, KeyBinding, KeyDownEvent, Keystroke, Modifiers, actions};
@@ -9,6 +11,10 @@ actions!(
     herdr,
     [
         Quit,
+        Hide,
+        HideOthers,
+        ShowAll,
+        Minimize,
         PlaySound,
         ShowHerdrNotDetected,
         ShowLogs,
@@ -92,6 +98,14 @@ pub(crate) fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-c", Copy, Some(EDIT_MENU_LABELS)),
         KeyBinding::new("cmd-v", Paste, Some(EDIT_MENU_LABELS)),
         KeyBinding::new("cmd-a", SelectAll, Some(EDIT_MENU_LABELS)),
+    ]);
+    // Bound last so a config keystroke can never steal a reserved macOS
+    // shortcut: later bindings take precedence at the same context depth.
+    #[cfg(target_os = "macos")]
+    cx.bind_keys([
+        KeyBinding::new("cmd-h", Hide, None),
+        KeyBinding::new("cmd-alt-h", HideOthers, None),
+        KeyBinding::new("cmd-m", Minimize, None),
     ]);
 }
 

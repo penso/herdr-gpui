@@ -4,10 +4,10 @@
 
 use super::HerdrWindow;
 use crate::{
-    APP_VERSION, CheckForUpdates, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
-    TAB_HEIGHT, TAB_WIDTH, actions::ShowToastPreview, config::ClipboardToastPosition,
-    controls::Command, fonts::StyledFont, navigation::NavigationTarget, state::ConnectionStatus,
-    terminal::*, worktree_banner,
+    APP_VERSION, CheckForUpdates, Minimize, PlaySound, RunCommand, ShowHerdrNotDetected,
+    ShowUpdatePreview, TAB_HEIGHT, TAB_WIDTH, actions::ShowToastPreview,
+    config::ClipboardToastPosition, controls::Command, fonts::StyledFont,
+    navigation::NavigationTarget, state::ConnectionStatus, terminal::*, worktree_banner,
 };
 use gpui::{prelude::*, *};
 use herdr_client::ConnectOptions;
@@ -463,6 +463,9 @@ impl Render for HerdrWindow {
             }))
             .on_action(cx.listener(|this, action: &RunCommand, window, cx| {
                 this.command(action.command, window, cx);
+            }))
+            .on_action(cx.listener(|_, _: &Minimize, window, _| {
+                window.minimize_window();
             }))
             .on_action(cx.listener(|this, _: &ShowHerdrNotDetected, window, cx| {
                 this.show_install_modal(window, cx);
