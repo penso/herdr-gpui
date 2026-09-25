@@ -16,6 +16,23 @@ use std::time::Duration;
 impl Render for HerdrWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.restore_menu_focus(window, cx);
+        let opacity = self.paint_opacity();
+        let muted = self.theme.readable_chrome(opacity).muted;
+        let appearance = crate::config::window_background(opacity);
+        if self.last_window_background != Some(appearance) {
+            window.set_background_appearance(appearance);
+            self.last_window_background = Some(appearance);
+        }
+        #[cfg(target_os = "macos")]
+        super::blur::NativeBlur::update(
+            &mut self.native_blur,
+            window,
+            if opacity < 100 {
+                self.config.background_blur_radius
+            } else {
+                0
+            },
+        );
         let font = self.config.terminal.font();
         let cell_height = self.config.terminal.line_height();
         self.painter.borrow_mut().set_appearance(
@@ -23,6 +40,7 @@ impl Render for HerdrWindow {
             cell_height,
             self.theme.clone(),
         );
+        self.painter.borrow_mut().background_opacity = opacity;
         self.cell_width = self.painter.borrow_mut().cell_width(&font, window, cx);
         // Registers the window for surface-only redraws; see `redraw_terminal`.
         self.surface_signal.read(cx);
@@ -41,7 +59,7 @@ impl Render for HerdrWindow {
             .text_font(&self.config.tabs)
             .text_size(px(self.config.tabs.size))
             .overflow_x_scroll()
-            .bg(rgb(self.theme.surface))
+            .bg(crate::config::background(self.theme.surface, opacity))
             .text_color(rgb(self.theme.foreground))
             .items_center();
         if let Some(snapshot) = &self.live.snapshot {
@@ -60,7 +78,7 @@ impl Render for HerdrWindow {
                     let background = self.theme.primary_wash();
                     (background, self.theme.text_on(background))
                 } else {
-                    (self.theme.surface, self.theme.muted)
+                    (self.theme.surface, muted)
                 };
                 tabs = tabs.child(
                     div()
@@ -83,7 +101,7 @@ impl Render for HerdrWindow {
                         .items_center()
                         .gap(px(10.))
                         .cursor_pointer()
-                        .bg(rgb(background))
+                        .bg(crate::config::background(background, opacity))
                         .text_color(rgb(text))
                         .child(tab.label.clone())
                         .child(
@@ -201,7 +219,7 @@ impl Render for HerdrWindow {
             .min_h_0()
             .min_w_0()
             .overflow_hidden()
-            .bg(rgb(self.theme.background))
+            .bg(crate::config::background(self.theme.background, opacity))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
             // A selection is copied when it is released, so the terminal has
@@ -440,7 +458,7 @@ impl Render for HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .border_1()
                                 .border_color(rgb(flash.accent(&self.theme)))
-                                .bg(rgb(self.theme.surface))
+                                .bg(crate::config::background(self.theme.surface, opacity))
                                 .text_color(rgb(self.theme.foreground))
                                 .child(
                                     div()
@@ -498,7 +516,8 @@ impl Render for HerdrWindow {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgb(self.theme.background))
+            // Child regions each paint their own readable background. A full-
+            // window fill would compound their alpha and hide the desktop.
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
@@ -526,7 +545,7 @@ impl Render for HerdrWindow {
                                 div()
                                     .flex()
                                     .flex_none()
-                                    .bg(rgb(self.theme.surface))
+                                    .bg(crate::config::background(self.theme.surface, opacity))
                                     .text_color(rgb(self.theme.foreground))
                                     // Tabs size to their content and shrink when the
                                     // row is full, so the button sits after the last
@@ -552,7 +571,7 @@ impl Render for HerdrWindow {
                                                     .debug_selector(|| "new-tab-icon".into())
                                                     .size(px(14.))
                                                     // Quiet like the unselected tabs beside it.
-                                                    .text_color(rgb(self.theme.muted)),
+                                                    .text_color(rgb(muted)),
                                             )
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.command(Command::Tab, window, cx)
@@ -571,7 +590,7 @@ impl Render for HerdrWindow {
                     .items_center()
                     .gap(px(6.))
                     .px_3()
-                    .bg(rgb(self.theme.surface))
+                    .bg(crate::config::background(self.theme.surface, opacity))
                     .text_color(rgb(self.theme.foreground))
                     .children(self.render_usage(cx))
                     .when(!self.live.status.is_connected(), |bar| bar.child(
@@ -719,7 +738,7 @@ impl Render for HerdrWindow {
                             .text_color(rgb(if self.updater.update_available() {
                                 self.theme.primary()
                             } else {
-                                self.theme.muted
+                                muted
                             }))
                             .child(if self.updater.update_available() {
                                 "Update available"

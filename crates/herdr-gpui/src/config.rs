@@ -32,6 +32,76 @@ pub const FONT_SIZE_RANGE: RangeInclusive<f32> = 8.0..=48.0;
 /// One logical pixel: the smallest step that can move the terminal cell grid.
 pub const FONT_SIZE_STEP: f32 = 1.0;
 
+const TEXT_CONTRAST: f32 = 4.5;
+static LINEAR: std::sync::LazyLock<[f32; 256]> = std::sync::LazyLock::new(|| {
+    std::array::from_fn(|index| {
+        let channel = index as f32 / 255.;
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    })
+});
+
+fn luminance(color: u32) -> f32 {
+    0.2126 * LINEAR[((color >> 16) & 255) as usize]
+        + 0.7152 * LINEAR[((color >> 8) & 255) as usize]
+        + 0.0722 * LINEAR[(color & 255) as usize]
+}
+
+fn contrast_over(foreground: u32, base: u32, alpha: u8, backdrop: u8) -> f32 {
+    let channel = |shift: u32| {
+        let color = (base >> shift) & 255;
+        (color * u32::from(alpha) + u32::from(backdrop) * u32::from(100 - alpha) + 50) / 100
+    };
+    let background = (channel(16) << 16) | (channel(8) << 8) | channel(0);
+    let (foreground, background) = (luminance(foreground), luminance(background));
+    (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
+}
+
+fn worst_chrome_contrast(foreground: u32, theme: &Theme, opacity: u8) -> f32 {
+    [theme.background, theme.surface]
+        .into_iter()
+        .flat_map(|base| {
+            [0, 255].map(move |backdrop| contrast_over(foreground, base, opacity, backdrop))
+        })
+        .fold(f32::INFINITY, f32::min)
+}
+
+/// Blend no farther than foreground contrast allows over either black or white
+/// behind the window. The slider still traverses the entire safe interval.
+pub(crate) fn readable_opacity(theme: &Theme, setting: u8) -> u8 {
+    if setting >= 100 {
+        return 100;
+    }
+    // Keep at least 22% of the desktop visible for high-contrast palettes.
+    const MINIMUM: u8 = 78;
+    let mut floor = 100;
+    for alpha in (MINIMUM..100).rev() {
+        if worst_chrome_contrast(theme.foreground, theme, alpha) < TEXT_CONTRAST {
+            break;
+        }
+        floor = alpha;
+    }
+    floor + ((u16::from(100 - floor) * u16::from(setting.min(100)) + 50) / 100) as u8
+}
+
+/// Opacity applies only to painted backgrounds, never text or terminal glyphs.
+pub(crate) fn background(color: u32, opacity: u8) -> gpui::Rgba {
+    gpui::rgba((color << 8) | u32::from((f32::from(opacity) * 255. / 100.).round() as u8))
+}
+
+pub(crate) fn window_background(opacity: u8) -> gpui::WindowBackgroundAppearance {
+    if opacity == 100 {
+        gpui::WindowBackgroundAppearance::Opaque
+    } else {
+        // GPUI's Blurred appearance adds its own tint. The macOS window blur
+        // radius is set separately without a visual-effect view.
+        gpui::WindowBackgroundAppearance::Transparent
+    }
+}
+
 /// Shared logical-pixel radii for native-style chrome, independent of the
 /// terminal grid. Small badges/keycaps retain a tighter curve than controls.
 pub(crate) mod corners {
@@ -43,6 +113,9 @@ pub(crate) mod corners {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub theme: String,
+    pub background_opacity: u8,
+    /// macOS background blur strength, from off (0) to maximum (100).
+    pub background_blur_radius: u8,
     pub confirm_close_tab: bool,
     pub show_agents: bool,
     /// Plan usage of the selected host's AI services in the status bar.
@@ -527,6 +600,8 @@ impl Default for Config {
         };
         Self {
             theme: "Default".into(),
+            background_opacity: 100,
+            background_blur_radius: 0,
             github: GitHubConfig::default(),
             confirm_close_tab: true,
             show_agents: true,
@@ -551,6 +626,9 @@ impl Default for Config {
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     theme: Option<String>,
+    background_opacity: Option<u8>,
+    background_blur: bool,
+    background_blur_radius: Option<u8>,
     confirm_close_tab: Option<bool>,
     show_agents: Option<bool>,
     usage: crate::usage::UsageConfig,
@@ -905,6 +983,11 @@ impl Config {
             }
             config.theme = theme;
         }
+        config.background_opacity = settings.background_opacity.unwrap_or(100).min(100);
+        config.background_blur_radius = settings
+            .background_blur_radius
+            .map(|radius| radius.min(100))
+            .unwrap_or(if settings.background_blur { 40 } else { 0 });
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
         settings.usage.validate()?;
@@ -1012,6 +1095,37 @@ impl Config {
             document["theme"] = toml_edit::Item::Value(value);
             write_config(path, &document.to_string())?;
             Ok(())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Save background settings without replacing any other overrides or comments.
+    pub(crate) fn save_background(opacity: u8, blur_radius: u8) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_background_path(opacity, blur_radius, &local)
+    }
+
+    fn save_background_path(opacity: u8, blur_radius: u8, path: &Path) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = fs::read_to_string(path)?;
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            for (key, value) in [
+                (
+                    "background_opacity",
+                    toml_edit::Value::from(opacity.min(100) as i64),
+                ),
+                (
+                    "background_blur_radius",
+                    toml_edit::Value::from(blur_radius.min(100) as i64),
+                ),
+            ] {
+                let mut value = value;
+                if let Some(previous) = document.get(key).and_then(toml_edit::Item::as_value) {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                document[key] = toml_edit::Item::Value(value);
+            }
+            write_config(path, &document.to_string())
         })();
         result.map_err(|error| error.at_path(path))
     }
@@ -1187,7 +1301,25 @@ impl Theme {
     /// Dimmed foreground for rows that are not the current one: upstream's
     /// subtext sits between its text and its muted overlay.
     pub fn subtext(&self) -> u32 {
-        mix(self.background, self.foreground, 78)
+        mix(self.muted, self.foreground, 50)
+    }
+
+    /// Only secondary chrome text is brightened, just enough to stay legible
+    /// on the lightest/darkest desktop behind a translucent theme surface.
+    /// Terminal palette cells and the theme itself remain untouched.
+    pub(crate) fn readable_chrome(&self, opacity: u8) -> Self {
+        let mut theme = self.clone();
+        for percent in 0..=100 {
+            let candidate = mix(self.muted, self.foreground, percent);
+            if worst_chrome_contrast(candidate, self, opacity) >= TEXT_CONTRAST {
+                theme.muted = candidate;
+                break;
+            }
+            if percent == 100 {
+                theme.muted = self.foreground;
+            }
+        }
+        theme
     }
 
     /// A wash of [`Self::primary`] over the chrome, for filled selections such
@@ -1929,6 +2061,168 @@ mod tests {
         // A second setting for rows no longer exists.
         assert!(Config::parse("[layout]\nrows = 'orca'").is_err());
         assert!(Config::parse("layout = 'herdr'").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn window_background_and_paint_alpha_follow_opacity() {
+        use gpui::WindowBackgroundAppearance;
+        assert_eq!(window_background(100), WindowBackgroundAppearance::Opaque);
+        assert_eq!(
+            window_background(0),
+            WindowBackgroundAppearance::Transparent
+        );
+        assert_eq!(
+            window_background(80),
+            WindowBackgroundAppearance::Transparent
+        );
+        assert_eq!(background(0x123456, 0), gpui::rgba(0x12345600));
+        assert_eq!(background(0x123456, 100), gpui::rgba(0x123456ff));
+    }
+
+    #[test]
+    fn theme_backgrounds_preserve_foreground_contrast_over_light_and_dark_desktops()
+    -> anyhow::Result<()> {
+        let luminance = |color: u32| {
+            let channel = |shift: u32| {
+                let srgb = ((color >> shift) & 255) as f32 / 255.;
+                if srgb <= 0.04045 {
+                    srgb / 12.92
+                } else {
+                    ((srgb + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        };
+        for name in [
+            "Default",
+            "Nord",
+            "Dracula",
+            "Catppuccin Mocha",
+            "Catppuccin Latte",
+        ] {
+            let theme =
+                Theme::builtin(name).ok_or_else(|| anyhow::anyhow!("Missing builtin {name}"))?;
+            let minimum = readable_opacity(&theme, 0);
+            assert!(
+                (78..100).contains(&minimum),
+                "{name} lost translucency: {minimum}"
+            );
+            assert!(minimum < readable_opacity(&theme, 50));
+            assert_eq!(readable_opacity(&theme, 100), 100);
+            for setting in 0..=100 {
+                let opacity = readable_opacity(&theme, setting);
+                for backdrop in [0_u32, 255] {
+                    let composite = [16, 8, 0].into_iter().fold(0_u32, |color, shift| {
+                        let base = (theme.background >> shift) & 255;
+                        let value =
+                            (base * u32::from(opacity) + backdrop * u32::from(100 - opacity) + 50)
+                                / 100;
+                        color | (value << shift)
+                    });
+                    let fg = luminance(theme.foreground);
+                    let bg = luminance(composite);
+                    let ratio = (fg.max(bg) + 0.05) / (fg.min(bg) + 0.05);
+                    assert!(
+                        ratio >= 4.5,
+                        "{name} at {setting}% over {backdrop}: {ratio}"
+                    );
+                }
+            }
+        }
+        // If an imported theme is already lower contrast than the target,
+        // transparency must never worsen it.
+        let mut low_contrast =
+            Theme::builtin("Catppuccin Latte").ok_or_else(|| anyhow::anyhow!("Missing Latte"))?;
+        low_contrast.foreground = low_contrast.background;
+        assert_eq!(readable_opacity(&low_contrast, 0), 100);
+        Ok(())
+    }
+
+    #[test]
+    fn muted_chrome_text_remains_readable_on_both_desktops() -> anyhow::Result<()> {
+        for name in Theme::BUILTIN_NAMES {
+            let theme =
+                Theme::builtin(name).ok_or_else(|| anyhow::anyhow!("Missing builtin {name}"))?;
+            for setting in 0..=100 {
+                let alpha = readable_opacity(&theme, setting);
+                let chrome = theme.readable_chrome(alpha);
+                assert_eq!(
+                    chrome.palette, theme.palette,
+                    "{name}: terminal palette changed"
+                );
+                assert_eq!(chrome.foreground, theme.foreground);
+                assert!(
+                    worst_chrome_contrast(chrome.muted, &theme, alpha) >= TEXT_CONTRAST,
+                    "{name} at {setting}%: muted contrast too low"
+                );
+                assert!(
+                    worst_chrome_contrast(chrome.subtext(), &theme, alpha) >= TEXT_CONTRAST,
+                    "{name} at {setting}%: subtext contrast too low"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn background_opacity_parses_clamps_and_preserves_overrides() -> anyhow::Result<()> {
+        assert_eq!(Config::parse("")?.background_opacity, 100);
+        assert_eq!(
+            Config::parse("background_opacity = 0")?.background_opacity,
+            0
+        );
+        assert_eq!(
+            Config::parse("background_opacity = 80\nbackground_blur = true")?.background_opacity,
+            80
+        );
+        assert!(Config::parse("background_opacity = -1").is_err());
+        assert_eq!(
+            Config::parse("background_opacity = 255")?.background_opacity,
+            100
+        );
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        fs::write(
+            &path,
+            "# mine\ntheme = 'Nord' # keep\nbackground_opacity = 90 # opacity\nbackground_blur = true # legacy\n[terminal]\nsize = 18\n",
+        )?;
+        Config::save_background_path(75, 60, &path)?;
+        let text = fs::read_to_string(&path)?;
+        assert!(
+            text.contains("# mine")
+                && text.contains("# keep")
+                && text.contains("# opacity")
+                && text.contains("# legacy"),
+            "{text}"
+        );
+        let parsed = Config::parse(&text)?;
+        assert_eq!(parsed.background_opacity, 75);
+        assert_eq!(parsed.background_blur_radius, 60);
+        assert_eq!(parsed.terminal.size, 18.);
+        assert_eq!(parsed.theme, "Nord");
+        Config::save_background_path(250, 250, &path)?;
+        assert_eq!(
+            Config::parse(&fs::read_to_string(&path)?)?.background_opacity,
+            100
+        );
+        assert_eq!(
+            Config::parse(&fs::read_to_string(&path)?)?.background_blur_radius,
+            100
+        );
+        assert_eq!(
+            Config::parse("background_blur = true")?.background_blur_radius,
+            40
+        );
+        assert_eq!(
+            Config::parse("background_blur = false")?.background_blur_radius,
+            0
+        );
+        assert_eq!(
+            Config::parse("background_blur = true\nbackground_blur_radius = 0")?
+                .background_blur_radius,
+            0
+        );
         Ok(())
     }
 

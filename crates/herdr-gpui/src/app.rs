@@ -58,8 +58,18 @@ pub(crate) fn open_window(
     let mut bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
     bounds.origin += point(step, step);
     let (bounds, display_id) = crate::window_state::WindowState::placement(bounds, cx);
+    let window_background = cx
+        .try_global::<InitialAppearance>()
+        .map(|appearance| {
+            crate::config::window_background(crate::config::readable_opacity(
+                &appearance.theme,
+                appearance.config.background_opacity,
+            ))
+        })
+        .unwrap_or_default();
     cx.open_window(
         WindowOptions {
+            window_background,
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id,
             window_min_size: Some(size(px(640.), px(400.))),

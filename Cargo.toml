@@ -41,6 +41,7 @@ herdr-client         = { path = "crates/herdr-client" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 interprocess         = "2.4.2"
 image                = { default-features = false, features = ["gif", "jpeg", "png", "webp"], version = "0.25.10" }
+libloading           = "0.8.9"
 nix                  = { default-features = false, features = ["socket", "user"], version = "=0.31.3" }
 objc                 = "0.2"
 objc2                = "0.6.4"
