@@ -77,6 +77,10 @@ allow = [
     "Unlicense",
     "Zlib",
 ]
+# libbz2-rs-sys, a pure-Rust bzip2 port reached through gpui-pre's HTTP client
+# (async-compression). Its bzip2-1.0.6 licence is BSD-style and permissive; the
+# exception stays scoped to this crate rather than allowing the licence broadly.
+exceptions = [{ allow = ["bzip2-1.0.6"], crate = "libbz2-rs-sys" }]
 
 [bans]
 multiple-versions = "warn"

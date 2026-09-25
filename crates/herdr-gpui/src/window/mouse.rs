@@ -5,15 +5,15 @@ use super::HerdrWindow;
 use crate::{
     connection::ConnectionBridge,
     navigation::NavigationTarget,
-    terminal::{InputTarget, Scrollbar, WheelTarget, wheel_target},
+    terminal::{InputTarget, Scrollbar, WheelTarget, splits, wheel_target},
 };
 use gpui_kit::{
-    Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
-    Window,
+    Context, CursorStyle, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, Point, Window,
 };
 use herdr_client::{
     Method,
-    protocol::{ClientMouseButton, ClientMouseKind},
+    protocol::{ClientMouseButton, ClientMouseKind, PaneSurfaceSplit},
 };
 use serde_json::json;
 
@@ -33,6 +33,21 @@ pub(crate) struct ScrollbarDrag {
     grab: f32,
     held: bool,
     want: Option<u64>,
+}
+
+/// A drag of the border between panes. The split is kept as pressed: its
+/// area, which the ratio divides, does not move with its own border. `grab`
+/// keeps the pointer's place on the border; `want` is the latest ratio not yet
+/// sent to the daemon.
+pub(crate) struct SplitDrag {
+    split: PaneSurfaceSplit,
+    boot: String,
+    tab: String,
+    topology: u64,
+    grab: f32,
+    held: bool,
+    want: Option<f32>,
+    sent: Option<f32>,
 }
 
 fn button(button: MouseButton) -> Option<ClientMouseButton> {
@@ -140,10 +155,9 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> bool {
         self.cancel_terminal_mouse(cx);
-        let Some(hit) = self
-            .terminal_mouse_at(event.position)
-            .filter(|hit| hit.mouse_reporting && !event.modifiers.shift)
-        else {
+        let Some(hit) = self.terminal_mouse_at(event.position).filter(|hit| {
+            hit.mouse_reporting && !self.link_modifier_held(event.position, event.modifiers)
+        }) else {
             return false;
         };
         self.pressed_terminal_link = None;
@@ -400,7 +414,7 @@ impl HerdrWindow {
         let Some(drag) = &mut self.scrollbar_drag else {
             return;
         };
-        if self.live.scroll_request.is_some() {
+        if self.live.drag_request.is_some() {
             return;
         }
         let Some(offset) = drag.want.take() else {
@@ -431,12 +445,187 @@ impl HerdrWindow {
             json!({"pane_id": drag.pane, "offset_from_bottom": offset}),
         ) {
             Ok(request) => {
-                state.scroll_request = Some(request.clone());
-                self.live.scroll_request = Some(request);
+                state.drag_request = Some(request.clone());
+                self.live.drag_request = Some(request);
             }
             Err(error) => {
                 drop(state);
                 self.local_error = Some(format!("Scroll not sent: {error}"));
+                cx.notify();
+            }
+        }
+    }
+
+    /// The resize cursor for a held split drag, or for the border under the
+    /// pointer that a press would pick up.
+    pub(crate) fn split_cursor_at(&self, position: Point<Pixels>) -> Option<CursorStyle> {
+        if let Some(drag) = self.split_drag.as_ref().filter(|drag| drag.held) {
+            return Some(splits::cursor(drag.split.direction));
+        }
+        self.split_at(position)
+            .map(|split| splits::cursor(split.direction))
+    }
+
+    fn split_at(&self, position: Point<Pixels>) -> Option<&PaneSurfaceSplit> {
+        if self.menu.page.is_some()
+            || !self.input_ready()
+            || !self.live.surface_ready()
+            || !self.bounds.contains(&position)
+        {
+            return None;
+        }
+        let local = position - self.bounds.origin;
+        splits::split_at(
+            self.live.surface.as_deref()?,
+            f32::from(local.x),
+            f32::from(local.y),
+            self.cell_width,
+            self.config.terminal.line_height(),
+        )
+    }
+
+    /// Picks up the border under the pointer. Nothing is sent until it moves,
+    /// so a click on a border leaves the layout as it was.
+    pub(crate) fn split_mouse_down(
+        &mut self,
+        event: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(split) = self.split_at(event.position).cloned() else {
+            return false;
+        };
+        let (Some(snapshot), Some(surface)) = (&self.live.snapshot, self.live.surface.as_deref())
+        else {
+            return false;
+        };
+        let Some(tab) = snapshot.focused_tab_id.clone() else {
+            return false;
+        };
+        let local = event.position - self.bounds.origin;
+        let pointer = splits::along(split.direction, f32::from(local.x), f32::from(local.y));
+        let grab =
+            splits::edge(&split, self.cell_width, self.config.terminal.line_height()) - pointer;
+        self.split_drag = Some(SplitDrag {
+            boot: snapshot.boot_id.clone(),
+            tab,
+            topology: splits::topology(surface),
+            split,
+            grab,
+            held: true,
+            want: None,
+            sent: None,
+        });
+        self.cancel_terminal_mouse(cx);
+        self.selection = None;
+        self.pressed_terminal_link = None;
+        cx.stop_propagation();
+        cx.notify();
+        true
+    }
+
+    pub(crate) fn split_mouse_move(
+        &mut self,
+        event: &MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let cell_height = self.config.terminal.line_height();
+        let Some(drag) = self.split_drag.as_mut().filter(|drag| drag.held) else {
+            return false;
+        };
+        if event.pressed_button != Some(MouseButton::Left) {
+            drag.held = false;
+            cx.notify();
+            return false;
+        }
+        let local = event.position - self.bounds.origin;
+        let pointer = splits::along(drag.split.direction, f32::from(local.x), f32::from(local.y));
+        let ratio = splits::ratio(
+            &drag.split,
+            pointer + drag.grab,
+            self.cell_width,
+            cell_height,
+        );
+        if let Some(ratio) = ratio.filter(|ratio| drag.sent != Some(*ratio)) {
+            drag.want = Some(ratio);
+        }
+        self.flush_split(cx);
+        true
+    }
+
+    pub(crate) fn split_mouse_up(&mut self, event: &MouseUpEvent, cx: &mut Context<Self>) -> bool {
+        let Some(drag) = self
+            .split_drag
+            .as_mut()
+            .filter(|drag| drag.held && event.button == MouseButton::Left)
+        else {
+            return false;
+        };
+        drag.held = false;
+        self.flush_split(cx);
+        cx.notify();
+        true
+    }
+
+    /// Sends the latest wanted ratio once the previous drag request has
+    /// answered, and retires a released drag when nothing is left to send.
+    /// The drag ends once its tab or panes change: its path could then name a
+    /// different border.
+    pub(crate) fn flush_split(&mut self, cx: &mut Context<Self>) {
+        let Some(drag) = &mut self.split_drag else {
+            return;
+        };
+        if self.live.drag_request.is_some() {
+            return;
+        }
+        let Some(ratio) = drag.want else {
+            if !drag.held {
+                self.split_drag = None;
+            }
+            return;
+        };
+        let connection = &self.endpoints[self.selected_endpoint].connection;
+        let (Some(handle), Some(snapshot)) = (&connection.handle, &self.live.snapshot) else {
+            self.split_drag = None;
+            return;
+        };
+        if snapshot.boot_id != drag.boot {
+            self.split_drag = None;
+            return;
+        }
+        // A snapshot ahead of its surface is waited out, not taken as a change.
+        let Some(surface) = self
+            .live
+            .surface
+            .as_deref()
+            .filter(|_| self.live.surface_ready())
+        else {
+            return;
+        };
+        if snapshot.focused_tab_id.as_deref() != Some(drag.tab.as_str())
+            || splits::topology(surface) != drag.topology
+        {
+            self.split_drag = None;
+            return;
+        }
+        // Registered under the inbox lock for the same reason as the scrollbar.
+        let Ok(mut state) = connection.inbox.try_lock() else {
+            return;
+        };
+        match handle.request(
+            &drag.boot,
+            Method::LayoutSetSplitRatio,
+            json!({"tab_id": drag.tab, "path": drag.split.path, "ratio": ratio}),
+        ) {
+            Ok(request) => {
+                drag.want = None;
+                drag.sent = Some(ratio);
+                state.drag_request = Some(request.clone());
+                self.live.drag_request = Some(request);
+            }
+            Err(error) => {
+                drop(state);
+                self.split_drag = None;
+                self.local_error = Some(format!("Pane resize not sent: {error}"));
                 cx.notify();
             }
         }

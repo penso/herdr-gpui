@@ -13,7 +13,7 @@ pub(crate) struct HoverRest {
     pub(crate) workspace: String,
     pub(crate) position: Point<Pixels>,
     /// Where the list stood when the row was entered. Scrolling slides other
-    /// rows under a still pointer, which reports no hover change of its own.
+    /// rows under a still pointer, so a changed offset voids this dwell.
     pub(crate) scroll: Point<Pixels>,
     pub(crate) since: Instant,
     /// The pointer has moved since it entered the row. Dismissing a menu leaves
@@ -59,6 +59,14 @@ impl HerdrWindow {
             {
                 self.hover = None;
             }
+            return;
+        }
+        // A pointer carrying a row is not resting on the rows it passes.
+        if self
+            .workspace_drag
+            .as_ref()
+            .is_some_and(super::WorkspaceDrag::floating)
+        {
             return;
         }
         self.hover = Some(HoverRest {

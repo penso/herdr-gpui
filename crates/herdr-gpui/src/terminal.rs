@@ -1,5 +1,6 @@
 mod links;
 mod selection;
+pub(crate) mod splits;
 pub(crate) use links::link_at;
 pub(crate) use selection::Selection;
 
@@ -332,8 +333,10 @@ pub fn viewport(width: f32, height: f32, cell_width: f32, cell_height: f32) -> C
 
 // Printable text belongs to EntityInputHandler, not key-down: this preserves
 // keyboard layouts, dead keys and IME commits without double-sending characters.
-pub fn key_input(event: &KeyDownEvent) -> Option<ClientPaneInputEvent> {
-    key_code(&event.keystroke).map(|code| ClientPaneInputEvent::Key {
+// `alt_keys` claims Alt-modified characters as shortcuts instead; without it
+// macOS Option-P commits `π` and the shortcut never reaches the pane.
+pub fn key_input(event: &KeyDownEvent, alt_keys: bool) -> Option<ClientPaneInputEvent> {
+    key_code(&event.keystroke, alt_keys).map(|code| ClientPaneInputEvent::Key {
         code,
         modifiers: u8::from(event.keystroke.modifiers.shift)
             | (u8::from(event.keystroke.modifiers.control) << 1)
@@ -352,7 +355,7 @@ pub fn key_input(event: &KeyDownEvent) -> Option<ClientPaneInputEvent> {
     })
 }
 
-fn key_code(key: &Keystroke) -> Option<ClientKeyCode> {
+fn key_code(key: &Keystroke, alt_keys: bool) -> Option<ClientKeyCode> {
     use ClientKeyCode::*;
     if key.modifiers.platform {
         return None;
@@ -380,6 +383,17 @@ fn key_code(key: &Keystroke) -> Option<ClientKeyCode> {
         }
         "space" if key.modifiers.control => Char(' '),
         name if key.modifiers.control && name.chars().count() == 1 => Char(name.chars().next()?),
+        "space" if key.modifiers.alt && alt_keys => Char(' '),
+        // GPUI reports Shift-letter as the lowercase key plus Shift; a shifted
+        // symbol arrives as the symbol itself. Herdr expects the typed letter.
+        name if key.modifiers.alt && alt_keys && name.chars().count() == 1 => {
+            let ch = name.chars().next()?;
+            Char(if key.modifiers.shift {
+                ch.to_ascii_uppercase()
+            } else {
+                ch
+            })
+        }
         _ => return None,
     })
 }
@@ -920,13 +934,68 @@ mod tests {
     #[test]
     fn special_keys_and_text_are_separate() {
         let key = |s| Keystroke::parse(s).unwrap();
-        assert_eq!(key_code(&key("ctrl-c")), Some(ClientKeyCode::Char('c')));
-        assert_eq!(key_code(&key("shift-tab")), Some(ClientKeyCode::BackTab));
-        assert_eq!(key_code(&key("alt-left")), Some(ClientKeyCode::Left));
-        assert_eq!(key_code(&key("f12")), Some(ClientKeyCode::F(12)));
-        assert_eq!(key_code(&key("a")), None);
-        assert_eq!(key_code(&key("alt-e")), None);
-        assert_eq!(key_code(&key("cmd-q")), None);
+        for alt_keys in [false, true] {
+            let code = |s| key_code(&key(s), alt_keys);
+            assert_eq!(code("ctrl-c"), Some(ClientKeyCode::Char('c')));
+            assert_eq!(code("shift-tab"), Some(ClientKeyCode::BackTab));
+            assert_eq!(code("alt-left"), Some(ClientKeyCode::Left));
+            assert_eq!(code("f12"), Some(ClientKeyCode::F(12)));
+            assert_eq!(code("a"), None);
+            assert_eq!(code("shift-a"), None);
+            assert_eq!(code("cmd-q"), None);
+            assert_eq!(code("cmd-alt-p"), None);
+        }
+        assert_eq!(key_code(&key("alt-e"), false), None);
+        assert_eq!(key_code(&key("alt-space"), false), None);
+    }
+
+    #[test]
+    fn alt_characters_reach_the_pane_as_shortcuts() {
+        let alt = |s| {
+            key_input(
+                &KeyDownEvent {
+                    keystroke: Keystroke::parse(s).unwrap(),
+                    is_held: false,
+                    prefer_character_input: false,
+                },
+                true,
+            )
+        };
+        for (keystroke, ch, modifiers) in [
+            ("alt-p", 'p', 4),
+            ("alt-shift-p", 'P', 5),
+            ("alt-1", '1', 4),
+            ("alt-.", '.', 4),
+            ("alt-space", ' ', 4),
+            ("ctrl-alt-p", 'p', 6),
+        ] {
+            let Some(ClientPaneInputEvent::Key {
+                code,
+                modifiers: sent,
+                ..
+            }) = alt(keystroke)
+            else {
+                panic!("{keystroke} should be a key");
+            };
+            assert_eq!(
+                (code, sent),
+                (ClientKeyCode::Char(ch), modifiers),
+                "{keystroke}"
+            );
+        }
+    }
+
+    #[test]
+    fn option_as_alt_follows_the_layout_only_on_macos() {
+        use crate::config::OptionAsAlt;
+        let us = "com.apple.keylayout.US";
+        let german = "com.apple.keylayout.German";
+        let macos = cfg!(target_os = "macos");
+        assert!(OptionAsAlt::Auto.sends_alt(us));
+        assert!(OptionAsAlt::Auto.sends_alt("com.apple.keylayout.ABC"));
+        assert_eq!(OptionAsAlt::Auto.sends_alt(german), !macos);
+        assert!(OptionAsAlt::Always.sends_alt(german));
+        assert_eq!(OptionAsAlt::Never.sends_alt(us), !macos);
     }
 
     #[test]

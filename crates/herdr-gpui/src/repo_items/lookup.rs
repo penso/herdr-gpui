@@ -104,7 +104,14 @@ impl Lookup {
                                 self.ready = Some(branch);
                                 self.message = None;
                             }
-                            Err(error) => self.message = Some(error.to_string()),
+                            Err(error) => {
+                                tracing::warn!(
+                                    category = "github_repo_items",
+                                    detail = %error,
+                                    "Listing pull requests and issues failed"
+                                );
+                                self.message = Some(error.to_string());
+                            }
                         }
                     }
                 }

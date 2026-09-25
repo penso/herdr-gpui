@@ -54,6 +54,7 @@ pub(super) fn fetch_with_backoff(
         .checked_duration_since(Instant::now())
         .ok_or(Error::PrTimeout)?;
     let response = crate::github::graphql(
+        "pull_request",
         token,
         QUERY,
         serde_json::json!({"owner":owner,"repo":repo,"branch":input.branch}),
@@ -85,7 +86,27 @@ pub(crate) fn origin_repository(
         deadline,
         cancelled,
     )?;
-    crate::avatars::github_repo(&remote).ok_or(Error::PrOrigin)
+    crate::avatars::github_repo(&remote).ok_or_else(|| {
+        // An SSH host alias for a second account (`github-work:owner/repo`)
+        // is the usual reason; only the host is logged, never credentials.
+        tracing::debug!(
+            category = "github_origin",
+            host = remote_host(&remote),
+            "Origin remote is not a GitHub.com repository"
+        );
+        Error::PrOrigin
+    })
+}
+
+/// The host of a Git remote, without the user, credentials, or path.
+pub(super) fn remote_host(remote: &str) -> &str {
+    let authority = match remote.split_once("://") {
+        Some((_, rest)) => rest.split('/').next().unwrap_or_default(),
+        None => remote.split(':').next().unwrap_or_default(),
+    };
+    authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host)
 }
 
 /// Resolve the checkout a daemon workspace names and verify it still is that

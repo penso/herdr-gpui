@@ -44,11 +44,9 @@ impl Render for HerdrWindow {
         // The highlight is grid coordinates, so it paints with the frame that
         // owns the cells rather than being recomputed from the pointer here.
         let selection = self.selection.clone();
-        self.hovered_terminal_link = self.terminal_link_at(window.mouse_position()).is_some()
-            && (window.modifiers().shift
-                || self
-                    .terminal_mouse_at(window.mouse_position())
-                    .is_none_or(|hit| !hit.mouse_reporting));
+        self.hovered_terminal_link =
+            self.terminal_link_hovered(window.mouse_position(), window.modifiers());
+        self.split_cursor = self.split_cursor_at(window.mouse_position());
         // Pad the terminal itself: the canvas bounds that painting, hit testing,
         // and IME placement all read then already exclude the gap.
         let sidebar_gap = if self.sidebar_visible {
@@ -63,18 +61,37 @@ impl Render for HerdrWindow {
             .when(self.hovered_terminal_link, |terminal| {
                 terminal.cursor_pointer()
             })
+            .when_some(self.split_cursor, |terminal, cursor| {
+                terminal.cursor(cursor)
+            })
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                this.terminal_mouse_hover(event, cx);
-                let hovered = this.terminal_link_at(event.position).is_some()
-                    && (event.modifiers.shift
-                        || this
-                            .terminal_mouse_at(event.position)
-                            .is_none_or(|hit| !hit.mouse_reporting));
+                let split_cursor = this.split_cursor_at(event.position);
+                if split_cursor != this.split_cursor {
+                    this.split_cursor = split_cursor;
+                    cx.notify();
+                }
+                // A border is not the application's to hover.
+                if split_cursor.is_none() {
+                    this.terminal_mouse_hover(event, cx);
+                }
+                let hovered = this.terminal_link_hovered(event.position, event.modifiers);
                 if hovered != this.hovered_terminal_link {
                     this.hovered_terminal_link = hovered;
                     cx.notify();
                 }
             }))
+            // Holding the link modifier over a link in a mouse-reporting
+            // application changes what a click does, so the pointer follows.
+            .on_modifiers_changed(
+                cx.listener(|this, event: &ModifiersChangedEvent, window, cx| {
+                    let hovered =
+                        this.terminal_link_hovered(window.mouse_position(), event.modifiers);
+                    if hovered != this.hovered_terminal_link {
+                        this.hovered_terminal_link = hovered;
+                        cx.notify();
+                    }
+                }),
+            )
             .on_click(cx.listener(Self::open_terminal_link))
             .relative()
             .flex_1()
@@ -109,6 +126,7 @@ impl Render for HerdrWindow {
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
                     if this.scrollbar_mouse_down(event, cx)
+                        || this.split_mouse_down(event, cx)
                         || this.terminal_mouse_down(event, window, cx)
                     {
                         return;
@@ -171,6 +189,7 @@ impl Render for HerdrWindow {
                             if phase == DispatchPhase::Capture {
                                 entity.update(cx, |this, cx| {
                                     if this.scrollbar_mouse_move(event, cx)
+                                        || this.split_mouse_move(event, cx)
                                         || this.terminal_mouse_move(event, cx)
                                     {
                                         cx.stop_propagation();
@@ -198,6 +217,7 @@ impl Render for HerdrWindow {
                             if phase == DispatchPhase::Capture {
                                 released.update(cx, |this, cx| {
                                     if this.scrollbar_mouse_up(event, cx)
+                                        || this.split_mouse_up(event, cx)
                                         || this.terminal_mouse_up(event, cx)
                                         || (event.button == MouseButton::Left
                                             && !cx.has_active_drag()

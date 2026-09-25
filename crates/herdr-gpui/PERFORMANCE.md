@@ -56,8 +56,9 @@ fixture's `GPUIView` native handlers on the main thread. This traverses GPUI's r
 event dispatch and hit testing, not direct sidebar callbacks. It neither posts
 global input nor requires Accessibility permission. Mouse coordinates and actual
 scroll offsets of **both** lists are asserted. This small macOS adapter is needed
-because GPUI 0.2.2's public `Window::dispatch_event` returns an inaccessible private
-type. Its unsafe Objective-C bridge is restricted to the opt-in test feature.
+because GPUI 0.2.2's public `Window::dispatch_event` returned an inaccessible private
+type; 0.3.6 returns a public `DispatchEventResult`, so the adapter could now be
+revisited. Its unsafe Objective-C bridge is restricted to the opt-in test feature.
 
 Each timed sample includes event construction/delivery plus forced full native
 `Window::draw` scene construction and arena clearing. Samples run across event-loop

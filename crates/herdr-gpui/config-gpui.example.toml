@@ -22,6 +22,12 @@ theme = "Default"
 confirm_close_tab = true
 # Show the Agents section below Spaces in the sidebar.
 show_agents = true
+# macOS only: whether Option-letter reaches a pane as an Alt shortcut (Alt-P
+# for Option-P) or types the character the keyboard layout puts there. "auto"
+# sends Alt on the U.S. and ABC layouts and types elsewhere, so layouts that
+# keep @, [, or letters on Option still type them. true always sends Alt,
+# false always types. Alt always reaches the pane on Linux and Windows.
+option_as_alt = "auto"
 # "normal" (TUI-like), "comfortable" (the previous roomy Normal), or "compact".
 # Compact hides workspace branch lines and PR change
 # counts, and tightens Spaces and Agents spacing without changing font sizes.

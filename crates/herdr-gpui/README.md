@@ -1,7 +1,7 @@
 # Herdr Native Shell
 
-A GPUI 0.2.2 client for a Local daemon and saved SSH hosts, with macOS support,
-experimental Linux x86_64/ARM64 builds, and an experimental Windows build with
+A GPUI 0.3.6 (`gpui-pre`) client for a Local daemon and saved SSH hosts, with macOS
+support, experimental Linux x86_64/ARM64 builds, and an experimental Windows build with
 headless CI coverage. See [Windows](#windows) for what is unavailable there.
 It starts an installed local `herdr server` when absent; explicit socket and
 development targets remain attach-only. It does not link or install Herdr, stop
@@ -417,10 +417,11 @@ Build identity and icon selection are described in the
 
 The reference is Zed's `crates/platform_title_bar/src/platform_title_bar.rs` and
 window options in `crates/zed/src/zed.rs`, not a build dependency. Double-click calls
-`Window::titlebar_double_click()` to honor the OS preference. Unlike newer Zed,
-registry GPUI 0.2.2 has no macOS `start_window_move` implementation and ignores
-`WindowControlArea::Drag`. We leave `is_movable` unchanged and rely on native AppKit
-dragging, rather than adding ineffective custom drag handlers or platform patches.
+`Window::titlebar_double_click()` to honor the OS preference. We leave `is_movable`
+unchanged and rely on native AppKit dragging, with no custom drag handlers or platform
+patches. That choice predates GPUI 0.3.6: 0.2.2 had no macOS `start_window_move`
+implementation and ignored `WindowControlArea::Drag`, while 0.3.6 implements
+`start_window_move`.
 
 Headless tests check the actual root header/center/account-slot bounds at wide,
 minimum, and narrow sizes, including mock fullscreen entry/exit, and that the
@@ -851,7 +852,9 @@ Windows setup) nothing is saved and the window says so.
   Both icons use the current theme's foreground tint.
 - Cmd-T creates and focuses a tab; Cmd-Shift-N creates and focuses
   a workspace. Cmd-N opens the New worktree dialog for the focused workspace
-  (for a linked worktree, its repository's main checkout). When there is none,
+  (for a linked worktree, its repository's main checkout). The dialog opens on
+  its Name field: left empty, the daemon picks the workspace name; anything
+  typed is sent as the new workspace's label. When there is none,
   because the workspace is not a Git repository, the main checkout is not open,
   nothing is focused, or the window is disconnected, a two-second flash in the
   clipboard toast's position says why.

@@ -612,6 +612,7 @@ fn create_pull_request(
     )?;
     let mut cooldown = None;
     let repository = crate::github::graphql(
+        "create_pr_repository",
         token,
         REPOSITORY_QUERY,
         serde_json::json!({"owner": owner, "repo": repo}),
@@ -633,6 +634,7 @@ fn create_pull_request(
         return Err(Error::GitPullRequestBase);
     }
     let created = crate::github::graphql(
+        "create_pr",
         token,
         CREATE_MUTATION,
         serde_json::json!({

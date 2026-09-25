@@ -184,6 +184,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         pressed_terminal_link: None,
         terminal_mouse: None,
         scrollbar_drag: None,
+        split_drag: None,
+        split_cursor: None,
         pending_images: Vec::new(),
         file_transfer: None,
         presentation: Default::default(),
@@ -197,6 +199,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         collapsed_repos: Default::default(),
         wheel: WheelAccumulator::default(),
         sidebar_width: None,
+        workspace_drag: None,
         sidebar_panels: crate::sidebar::Panels::new(cx),
         sidebar_split: None,
         sidebar_split_modified: false,
@@ -490,10 +493,10 @@ fn scrolling_the_spaces_list_abandons_a_rest(cx: &mut gpui_kit::TestAppContext) 
     let row = cx.debug_bounds("row-herdr").unwrap().center();
     cx.simulate_mouse_move(row, None, Modifiers::default());
     cx.simulate_mouse_move(row + point(px(4.), px(4.)), None, Modifiers::default());
-    assert!(
-        view.read_with(cx, |view, _| view.hover.is_some()),
-        "row armed"
-    );
+    let armed = view.read_with(cx, |view, _| {
+        view.hover.as_ref().map(|hover| hover.workspace.clone())
+    });
+    assert!(armed.is_some(), "row armed");
     cx.update(|window, cx| {
         view.read(cx).sidebar_scroll[0].set_offset(point(px(0.), px(-40.)));
         view.update(cx, |view, cx| {
@@ -506,7 +509,11 @@ fn scrolling_the_spaces_list_abandons_a_rest(cx: &mut gpui_kit::TestAppContext) 
     });
     view.read_with(cx, |view, _| {
         assert!(view.menu.page.is_none());
-        assert!(view.hover.is_none());
+        assert!(
+            view.hover
+                .as_ref()
+                .is_none_or(|hover| Some(&hover.workspace) != armed.as_ref() && !hover.moved)
+        );
     });
 }
 
@@ -741,4 +748,121 @@ fn the_settings_button_opens_preferences(cx: &mut gpui_kit::TestAppContext) {
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(crate::menu::Page::Preferences));
     });
+}
+
+#[gpui_kit::test]
+fn holding_a_workspace_row_lifts_it_and_a_release_picks_the_gap(cx: &mut gpui_kit::TestAppContext) {
+    use gpui_kit::{MouseButton, point};
+
+    let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.status = crate::state::ConnectionStatus::Connected;
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(900.)));
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    let target = |view: &Entity<HerdrWindow>, cx: &mut gpui_kit::VisualTestContext| {
+        view.read_with(cx, |view, _| {
+            let drag = view.workspace_drag.as_ref()?;
+            assert!(drag.lifted);
+            Some(drag.target.as_ref()?.params())
+        })
+    };
+
+    // A quick click stays a click.
+    let first = cx.debug_bounds("row-herdr").unwrap();
+    cx.simulate_mouse_down(first.center(), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(first.center(), MouseButton::Left, Modifiers::default());
+    cx.executor().advance_clock(super::reorder::LIFT_DELAY * 2);
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert!(view.workspace_drag.is_none());
+        // Without a surface the click's navigation waits, which shows it ran.
+        assert!(view.pending_navigation.take().is_some());
+    });
+
+    // Held in place, the row lifts without moving.
+    cx.simulate_mouse_down(first.center(), MouseButton::Left, Modifiers::default());
+    view.read_with(cx, |view, _| {
+        assert!(!view.workspace_drag.as_ref().unwrap().lifted)
+    });
+    cx.executor().advance_clock(super::reorder::LIFT_DELAY);
+    cx.run_until_parked();
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    view.read_with(cx, |view, _| {
+        assert!(view.workspace_drag.as_ref().unwrap().lifted)
+    });
+    // Over its own place it would move nothing, so nothing shifts.
+    assert_eq!(target(&view, cx), None);
+    let second = cx
+        .debug_bounds("row-herdr-gpui-sidebar-rendering-regression-investigation")
+        .unwrap();
+    assert_eq!(second.top(), first.bottom());
+
+    // Past the second row's middle, it lands before the third.
+    let below = point(first.center().x, second.bottom() - px(2.));
+    cx.simulate_mouse_move(below, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert_eq!(
+        target(&view, cx),
+        Some(serde_json::json!({"workspace_ids": ["w0"], "before_workspace_id": "w2"}))
+    );
+    // The lifted row follows the pointer.
+    let lifted = cx.debug_bounds("row-herdr").unwrap();
+    assert_eq!(lifted.top() - first.top(), below.y - first.center().y);
+    assert_eq!(lifted.left(), first.left());
+    // The second row closes the lifted one's place, opening the gap it
+    // would land in, and the gaps are still measured where rows rest.
+    let passed = "row-herdr-gpui-sidebar-rendering-regression-investigation";
+    assert_eq!(cx.debug_bounds(passed).unwrap().top(), first.top());
+    cx.simulate_mouse_move(below, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert_eq!(
+        target(&view, cx),
+        Some(serde_json::json!({"workspace_ids": ["w0"], "before_workspace_id": "w2"}))
+    );
+    assert_eq!(cx.debug_bounds(passed).unwrap().top(), first.top());
+    // The card's bottom edge passing the second row's resting middle is
+    // enough, though that row now paints higher.
+    let past = point(below.x, first.center().y + second.size.height / 2. + px(2.));
+    cx.simulate_mouse_move(past, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert_eq!(
+        target(&view, cx),
+        Some(serde_json::json!({"workspace_ids": ["w0"], "before_workspace_id": "w2"}))
+    );
+    cx.simulate_mouse_move(below, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+
+    // The release is the drop, not a click on the row under it.
+    cx.simulate_mouse_up(below, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    view.read_with(cx, |view, _| {
+        assert!(view.workspace_drag.is_none());
+        assert!(view.pending_navigation.is_none());
+    });
+    // Nothing was sent without a daemon, so every row is back in place.
+    assert_eq!(cx.debug_bounds("row-herdr").unwrap(), first);
+    assert_eq!(cx.debug_bounds(passed).unwrap(), second);
+
+    // A linked worktree moves among its siblings only, and a drag lifts it
+    // without waiting. The gap resolves against the lifted frame's layout.
+    let child = cx.debug_bounds("row-sidebar-child").unwrap();
+    cx.simulate_mouse_down(child.center(), MouseButton::Left, Modifiers::default());
+    for rows in [1., 5.] {
+        cx.simulate_mouse_move(
+            point(child.center().x, child.bottom() + child.size.height * rows),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    }
+    assert_eq!(
+        target(&view, cx),
+        Some(serde_json::json!({"workspace_ids": ["w4"], "before_workspace_id": "w6"}))
+    );
+    cx.simulate_keystrokes("escape");
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    view.read_with(cx, |view, _| assert!(view.workspace_drag.is_none()));
+    assert_eq!(cx.debug_bounds("row-sidebar-child").unwrap(), child);
 }

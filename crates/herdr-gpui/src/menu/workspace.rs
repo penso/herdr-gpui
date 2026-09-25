@@ -13,6 +13,7 @@ use gpui_kit::{
         alert::Alert,
         button::{Button, ButtonVariants as _},
         dialog::Dialog,
+        form::{field as form_field, v_form},
         input::Input,
         menu::PopupMenuItem,
         v_flex,
@@ -474,7 +475,13 @@ impl HerdrWindow {
             WorkspaceAction::OpenWorktree => self.open_existing_worktrees(window, cx),
             WorkspaceAction::NewWorktree => {
                 self.open_worktree_source(window, cx);
+                // The branch proposal stays selected for when it gets focus,
+                // but the name is what most people change, so the form opens on it.
                 self.focus_menu_input(window, cx);
+                if let Some(source) = &self.menu.worktree {
+                    let name = source.name.clone();
+                    name.update(cx, |name, cx| name.focus(window, cx));
+                }
             }
             _ => self.focus_menu_input(window, cx),
         }
@@ -732,6 +739,7 @@ impl HerdrWindow {
             return;
         };
         let text = self.menu.input_text(cx);
+        let name = self.worktree_name(cx);
         let result = (|| {
             if !self.menu_target_current() {
                 return Err(crate::Error::StaleConnection);
@@ -761,6 +769,12 @@ impl HerdrWindow {
                 text.as_str()
             };
             let (method, mut params) = target.request(snapshot, action, text)?;
+            // The daemon names the workspace as it creates it, so no rename follows.
+            if action == WorkspaceAction::NewWorktree
+                && let Some(name) = name
+            {
+                params["label"] = name.into();
+            }
             if action == WorkspaceAction::Close {
                 let Some(check) = &self.menu.close_check else {
                     return Ok(Submission::Awaiting {
@@ -934,11 +948,19 @@ impl HerdrWindow {
             WorkspaceAction::NewWorktree => {
                 let form = v_flex()
                     .gap_3()
-                    .child(div().text_color(muted).child(
-                        "Branch for the new checkout. Base: HEAD. Repository trust is not granted.",
-                    ))
-                    .children(field())
-                    .child("This creates the checkout folder:")
+                    .child(
+                        v_form()
+                            .label_layout(Axis::Horizontal)
+                            .children(self.menu.worktree.as_ref().map(|source| {
+                                form_field().label("Name").child(
+                                    div()
+                                        .debug_selector(|| "worktree-name".into())
+                                        .child(Input::new(&source.name).disabled(creating)),
+                                )
+                            }))
+                            .children(field().map(|input| form_field().label("Branch").child(input))),
+                    )
+                    .child("Creates this folder from HEAD, without granting repository trust:")
                     .child(
                         div()
                             .debug_selector(|| "dialog-checkout".into())

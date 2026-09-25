@@ -6,6 +6,7 @@ mod hover;
 mod metrics;
 mod panels;
 mod render;
+mod reorder;
 mod row;
 mod view;
 mod workspaces;
@@ -23,6 +24,7 @@ pub(crate) use {
     agents::agent_name,
     hover::{HoverMenu, HoverRest},
     panels::Panels,
+    reorder::WorkspaceDrag,
     row::compact,
     view::SidebarView,
     workspaces::workspace_label,

@@ -3,7 +3,7 @@
 Local and SSH client for Herdr's stable generation 1 endpoint. Local connections
 work on Unix and on Windows; SSH endpoints are Unix-only. This crate
 does not link Herdr, GPUI, ratatui, crossterm, Tokio, or a PTY implementation.
-The workspace centralizes `gpui = "=0.2.2"` for the forthcoming GUI member.
+The workspace centralizes the pinned GPUI dependency (`gpui-pre` 0.3.6) for the GUI member.
 
 ```rust,no_run
 use herdr_client::{connect, ClientEvent, ConnectOptions, ConnectTarget};

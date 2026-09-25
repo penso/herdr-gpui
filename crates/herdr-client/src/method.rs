@@ -12,6 +12,7 @@
 pub enum Method {
     ClientShellSurfaceSet,
     CommandInvoke,
+    LayoutSetSplitRatio,
     PaneClear,
     PaneClose,
     PaneFocus,
@@ -29,6 +30,7 @@ pub enum Method {
     WorkspaceCreate,
     WorkspaceFocus,
     WorkspaceGet,
+    WorkspaceMoveBlock,
     WorkspaceRename,
     WorktreeCreate,
     WorktreeList,
@@ -41,6 +43,7 @@ impl Method {
         match self {
             Self::ClientShellSurfaceSet => "client_shell.surface.set",
             Self::CommandInvoke => "command.invoke",
+            Self::LayoutSetSplitRatio => "layout.set_split_ratio",
             Self::PaneClear => "pane.clear",
             Self::PaneClose => "pane.close",
             Self::PaneFocus => "pane.focus",
@@ -58,6 +61,7 @@ impl Method {
             Self::WorkspaceCreate => "workspace.create",
             Self::WorkspaceFocus => "workspace.focus",
             Self::WorkspaceGet => "workspace.get",
+            Self::WorkspaceMoveBlock => "workspace.move_block",
             Self::WorkspaceRename => "workspace.rename",
             Self::WorktreeCreate => "worktree.create",
             Self::WorktreeList => "worktree.list",
@@ -97,5 +101,13 @@ mod tests {
         assert!(Method::PaneClear.advertised_in(&["pane.close".into(), "pane.clear".into()]));
         // Advertisement is an exact match: a method sharing the prefix is not clearing.
         assert!(!Method::PaneClear.advertised_in(&["pane.clear_agent_authority".into()]));
+    }
+
+    #[test]
+    fn split_ratio_wire_name() {
+        assert_eq!(
+            Method::LayoutSetSplitRatio.as_str(),
+            "layout.set_split_ratio"
+        );
     }
 }

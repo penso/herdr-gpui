@@ -65,9 +65,10 @@ pub struct LiveState {
     // worktree operation whose dialog has already closed.
     pub tab_rename: Option<RenameResult>,
     pub pane_rename: Option<RenameResult>,
-    /// The one scrollbar drag request in flight; the next waits for it so a
-    /// slow link coalesces to the latest offset instead of queueing a backlog.
-    pub scroll_request: Option<String>,
+    /// The one scrollbar or split drag request in flight; the next waits for
+    /// it so a slow link coalesces to the latest position instead of queueing
+    /// a backlog.
+    pub drag_request: Option<String>,
 }
 
 #[derive(Clone)]
@@ -110,7 +111,7 @@ impl Default for LiveState {
             supports_surface: false,
             tab_rename: None,
             pane_rename: None,
-            scroll_request: None,
+            drag_request: None,
         }
     }
 }
@@ -142,7 +143,7 @@ impl LiveState {
             supports_surface,
             tab_rename,
             pane_rename,
-            scroll_request,
+            drag_request,
         } = next;
         let same_arc = |a: &Option<Arc<_>>, b: &Option<Arc<_>>| match (a, b) {
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),
@@ -186,7 +187,7 @@ impl LiveState {
             && *supports_surface == self.supports_surface
             && pending_rename(tab_rename, &self.tab_rename)
             && pending_rename(pane_rename, &self.pane_rename)
-            && *scroll_request == self.scroll_request
+            && *drag_request == self.drag_request
     }
 
     fn has_operation_result(&self, request_id: &str) -> bool {
@@ -321,8 +322,8 @@ impl LiveState {
                 self.surface = None;
             }
             ClientEvent::CommandRejected { request_id, reason } => {
-                if request_id.is_some() && request_id == self.scroll_request {
-                    self.scroll_request = None;
+                if request_id.is_some() && request_id == self.drag_request {
+                    self.drag_request = None;
                 }
                 if !request_id
                     .as_deref()
@@ -354,8 +355,8 @@ impl LiveState {
                 request_id,
                 response,
             } => {
-                if self.scroll_request.as_ref() == Some(&request_id) {
-                    self.scroll_request = None;
+                if self.drag_request.as_ref() == Some(&request_id) {
+                    self.drag_request = None;
                 }
                 for rename in [&mut self.tab_rename, &mut self.pane_rename]
                     .into_iter()
@@ -530,9 +531,9 @@ mod tests {
     }
 
     #[test]
-    fn scroll_request_clears_only_on_its_own_answer() {
+    fn drag_request_clears_only_on_its_own_answer() {
         let mut state = LiveState {
-            scroll_request: Some("scroll".into()),
+            drag_request: Some("scroll".into()),
             ..LiveState::default()
         };
         state.apply(ClientEvent::Response {
@@ -543,19 +544,19 @@ mod tests {
             request_id: None,
             reason: herdr_client::Error::Disconnected,
         });
-        assert_eq!(state.scroll_request.as_deref(), Some("scroll"));
+        assert_eq!(state.drag_request.as_deref(), Some("scroll"));
         state.apply(ClientEvent::Response {
             request_id: "scroll".into(),
             response: serde_json::json!({"result": {}}),
         });
-        assert_eq!(state.scroll_request, None);
+        assert_eq!(state.drag_request, None);
 
-        state.scroll_request = Some("scroll".into());
+        state.drag_request = Some("scroll".into());
         state.apply(ClientEvent::CommandRejected {
             request_id: Some("scroll".into()),
             reason: herdr_client::Error::CommandBoot,
         });
-        assert_eq!(state.scroll_request, None);
+        assert_eq!(state.drag_request, None);
     }
 
     #[test]
@@ -1096,9 +1097,7 @@ mod tests {
                     result: Some(Ok(())),
                 });
             }),
-            ("scroll answer", |s| {
-                s.scroll_request = Some("scroll".into())
-            }),
+            ("drag answer", |s| s.drag_request = Some("scroll".into())),
             ("outer focus", |s| s.outer_focused = Some(true)),
         ];
         for (what, change) in changes {

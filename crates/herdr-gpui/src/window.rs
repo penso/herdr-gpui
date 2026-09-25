@@ -84,6 +84,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) pressed_terminal_link: Option<(String, Point<Pixels>)>,
     pub(crate) terminal_mouse: Option<mouse::Gesture>,
     pub(crate) scrollbar_drag: Option<mouse::ScrollbarDrag>,
+    pub(crate) split_drag: Option<mouse::SplitDrag>,
+    /// The resize cursor of the pane border under the pointer, if any.
+    pub(crate) split_cursor: Option<CursorStyle>,
     pub(crate) pending_images: Vec<images::PendingImage>,
     pub(crate) file_transfer: Option<transfers::FileTransfer>,
     /// The terminal cells the pointer is choosing. A release copies them and
@@ -112,6 +115,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) sidebar_width: Option<f32>,
     /// The kit panel groups sizing the sidebar and splitting its lists.
     pub(crate) sidebar_panels: sidebar::Panels,
+    /// A press on a workspace row that may lift it for reordering.
+    pub(crate) workspace_drag: Option<sidebar::WorkspaceDrag>,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
     pub(crate) sidebar_preferences: Option<preferences::Preferences>,
@@ -207,6 +212,7 @@ impl HerdrWindow {
             .and_then(|s| s.focused_pane_id.clone());
         self.poll_endpoints(cx);
         self.flush_scrollbar(cx);
+        self.flush_split(cx);
         #[cfg(target_os = "macos")]
         crate::app_badge::sync(window.window_handle().window_id(), &self.endpoints, cx);
         self.cancel_stale_image();
@@ -323,6 +329,8 @@ impl HerdrWindow {
             pressed_terminal_link: None,
             terminal_mouse: None,
             scrollbar_drag: None,
+            split_drag: None,
+            split_cursor: None,
             pending_images: Vec::new(),
             file_transfer: None,
             selection: None,
@@ -343,6 +351,7 @@ impl HerdrWindow {
             wheel: WheelAccumulator::default(),
             sidebar_width: None,
             sidebar_panels: sidebar::Panels::new(cx),
+            workspace_drag: None,
             sidebar_split: None,
             sidebar_split_modified: false,
             sidebar_preferences: None,

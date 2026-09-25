@@ -9,6 +9,7 @@
 use super::{
     agents::{agent_labels, agent_row_label, agents_sort},
     panels,
+    reorder::{self, Plan, WorkspaceDrag},
     row::{Fold, FoldTarget, RowSuffix, item, status_icon},
     sorted_agents, visible_workspace_entries,
     workspaces::{workspace_badge, workspace_label},
@@ -33,10 +34,21 @@ impl HerdrWindow {
         let multi = self.endpoints.len() > 1;
         let size = self.config.sidebar.size;
         let border = cx.theme().sidebar_border;
+        // A carried row is a raised card: opaque, so the rows it passes stay
+        // hidden under it, and shadowed where the theme draws shadows.
+        let card = (cx.theme().popover, cx.theme().radius, cx.theme().shadow);
         let mut spaces: Vec<AnyElement> = Vec::new();
         let mut agents: Vec<AnyElement> = Vec::new();
         // Child positions of the highlighted rows, for the one-time reveal below.
         let mut highlighted = [None; 2];
+        // A lifted workspace row: each drop unit's rows in the spaces list, as
+        // child positions with the shift they paint at, and the move every gap
+        // makes, for the pointer handlers below.
+        let mut drop_rows: Vec<(usize, usize, Pixels)> = Vec::new();
+        let mut drop_requests = Vec::new();
+        let mut drop_dragged = 0;
+        let now = std::time::Instant::now();
+        let mut sliding = false;
         for (endpoint_index, endpoint) in self.endpoints.iter().enumerate() {
             if !self.device_visible(&endpoint.id) {
                 continue;
@@ -109,12 +121,60 @@ impl HerdrWindow {
             } else {
                 visible_workspace_entries(&snapshot.workspaces, collapsed_repos)
             };
+            let drag = self
+                .workspace_drag
+                .as_ref()
+                .filter(|drag| selected && drag.previewing(&snapshot.workspaces));
+            let floating = drag.is_some_and(WorkspaceDrag::floating);
+            let plan = drag.and_then(|drag| Plan::new(&snapshot.workspaces, &drag.workspace));
+            // Each unit's shift for the drop in preview, from the heights the
+            // last frame laid out: shifting moves rows, never resizes them.
+            let base = spaces.len();
+            let shifts = plan.as_ref().map_or_else(Vec::new, |plan| {
+                drop_requests = (0..=plan.len())
+                    .map(|slot| plan.request(&snapshot.workspaces, slot))
+                    .collect();
+                drop_dragged = plan.dragged();
+                let mut heights = vec![0.; plan.len()];
+                for (position, &(index, _, _)) in entries.iter().enumerate() {
+                    if let (Some(unit), Some(bounds)) = (
+                        plan.unit_of(index),
+                        self.sidebar_scroll[0].bounds_for_item(base + position),
+                    ) {
+                        heights[unit] += f32::from(bounds.size.height);
+                    }
+                }
+                let slot = drag
+                    .and_then(|drag| drag.target.as_ref())
+                    .map_or(plan.dragged(), |target| target.slot);
+                reorder::preview(&heights, plan.dragged(), slot)
+            });
             for (index, indented, group) in entries {
                 let workspace = &snapshot.workspaces[index];
                 if selected && workspace.focused {
                     highlighted[0] = Some(spaces.len());
                 }
+                let unit = plan.as_ref().and_then(|plan| plan.unit_of(index));
+                // The lifted row and the rows it carries, such as its group's
+                // children, follow the pointer together while it floats.
+                let carried = floating && unit == Some(drop_dragged);
+                let shift = match (drag, unit) {
+                    (Some(drag), Some(_)) if carried => {
+                        drag.pin(&workspace.workspace_id, f32::from(drag.offset()), now);
+                        drag.offset()
+                    }
+                    (Some(drag), Some(unit)) => {
+                        let (at, moving) = drag.slide(&workspace.workspace_id, shifts[unit], now);
+                        sliding |= moving;
+                        px(at)
+                    }
+                    _ => px(0.),
+                };
+                if let Some(unit) = unit {
+                    drop_rows.push((unit, spaces.len(), shift));
+                }
                 let id = workspace.workspace_id.clone();
+                let press_id = id.clone();
                 let context_id = id.clone();
                 let hover_id = id.clone();
                 let context_endpoint = endpoint_id.clone();
@@ -165,68 +225,90 @@ impl HerdrWindow {
                     },
                     size,
                 );
-                spaces.push(
-                    div()
-                        .id(SharedString::from(format!("workspace-{endpoint_id}-{id}")))
-                        .debug_selector({
-                            let key = if multi {
-                                format!("workspace-{endpoint_id}-{id}")
-                            } else {
-                                format!("row-{label}")
-                            };
-                            move || key
-                        })
-                        .w_full()
-                        .py_0p5()
-                        // Worktrees hang off their repository the way the kit
-                        // draws a submenu: indented behind a guide line.
-                        .when(indented, |row| {
-                            row.ml_3p5().pl_2p5().border_l_1().border_color(border)
-                        })
-                        .child(SidebarItem::render(
-                            row,
-                            SharedString::from(format!("workspace-item-{endpoint_id}-{id}")),
-                            window,
+                let row = div()
+                    .id(SharedString::from(format!("workspace-{endpoint_id}-{id}")))
+                    .debug_selector({
+                        let key = if multi {
+                            format!("workspace-{endpoint_id}-{id}")
+                        } else {
+                            format!("row-{label}")
+                        };
+                        move || key
+                    })
+                    .w_full()
+                    .py_0p5()
+                    // Worktrees hang off their repository the way the kit
+                    // draws a submenu: indented behind a guide line.
+                    .when(indented, |row| {
+                        row.ml_3p5().pl_2p5().border_l_1().border_color(border)
+                    })
+                    .child(SidebarItem::render(
+                        row,
+                        SharedString::from(format!("workspace-item-{endpoint_id}-{id}")),
+                        window,
+                        cx,
+                    ))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            if this.navigate_endpoint(
+                                &context_endpoint,
+                                NavigationTarget::Workspace(&context_id),
+                                cx,
+                            ) {
+                                this.open_workspace_menu(&context_id, event.position, window, cx);
+                            }
+                        }),
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.navigate_endpoint(
+                            &navigate_endpoint,
+                            NavigationTarget::Workspace(&id),
                             cx,
-                        ))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                if this.navigate_endpoint(
-                                    &context_endpoint,
-                                    NavigationTarget::Workspace(&context_id),
-                                    cx,
-                                ) {
-                                    this.open_workspace_menu(
-                                        &context_id,
-                                        event.position,
-                                        window,
-                                        cx,
-                                    );
+                        );
+                        window.focus(&this.focus, cx);
+                    }))
+                    // Only the selected endpoint's rows arm the hover menu:
+                    // another endpoint's menu would have to select it first,
+                    // and resting the pointer must not switch which daemon is
+                    // shown. The feature is opt-in, so rows stay unarmed
+                    // without it.
+                    .when(selected && self.config.features.sidebar_hover_menu, |row| {
+                        row.on_hover(cx.listener(move |this, hovered: &bool, window, _| {
+                            this.hover_workspace(&hover_id, *hovered, window);
+                        }))
+                    })
+                    // Holding a press lifts the row for reordering. Another
+                    // endpoint's rows would have to select it first.
+                    .when(selected, |row| {
+                        row.on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                                if event.click_count == 1 {
+                                    this.press_workspace(&press_id, event.position, cx);
                                 }
                             }),
                         )
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.navigate_endpoint(
-                                &navigate_endpoint,
-                                NavigationTarget::Workspace(&id),
-                                cx,
-                            );
-                            window.focus(&this.focus, cx);
-                        }))
-                        // Only the selected endpoint's rows arm the hover menu:
-                        // another endpoint's menu would have to select it first,
-                        // and resting the pointer must not switch which daemon is
-                        // shown. The feature is opt-in, so rows stay unarmed
-                        // without it.
-                        .when(selected && self.config.features.sidebar_hover_menu, |row| {
-                            row.on_hover(cx.listener(move |this, hovered: &bool, window, _| {
-                                this.hover_workspace(&hover_id, *hovered, window);
-                            }))
-                        })
-                        .into_any_element(),
-                );
+                    })
+                    .when(shift != px(0.), |row| row.top(shift))
+                    // The card occludes the rows it passes, so they stop
+                    // answering hover while it is carried over them.
+                    .when(carried, |row| {
+                        let (background, radius, shadow) = card;
+                        row.occlude()
+                            .cursor_grabbing()
+                            .rounded(radius)
+                            .bg(background)
+                            .when(shadow, |row| row.shadow_lg())
+                    });
+                spaces.push(if carried {
+                    // Painted last so it floats over the rows it passes, while
+                    // its layout slot keeps the others' positions stable.
+                    deferred(row).with_priority(1).into_any_element()
+                } else {
+                    row.into_any_element()
+                });
             }
             if !self.config.show_agents {
                 continue;
@@ -284,7 +366,11 @@ impl HerdrWindow {
                 );
             }
         }
+        if sliding {
+            window.request_animation_frame();
+        }
         self.reveal(highlighted);
+        let tracking = self.track_workspace_drag(drop_rows, drop_requests, drop_dragged, cx);
         if agents.is_empty() {
             agents.push(
                 div()
@@ -330,6 +416,56 @@ impl HerdrWindow {
             .child(self.render_sidebar_header(cx))
             .child(div().flex_1().min_h_0().child(content))
             .child(self.render_device_footer(cx))
+            .child(tracking)
+    }
+
+    /// Follows a workspace drag through the whole window: capture-phase
+    /// listeners keep tracking once the pointer leaves the list, and a lifted
+    /// row's release is its drop, never a click on whatever lies under it.
+    /// They read the gaps this frame laid out; every drag change notifies, so
+    /// a moving drag always resolves against its own preview's frame.
+    fn track_workspace_drag(
+        &self,
+        rows: Vec<(usize, usize, Pixels)>,
+        requests: Vec<Option<reorder::MoveBlock>>,
+        dragged: usize,
+        cx: &mut Context<Self>,
+    ) -> Canvas<()> {
+        let view = cx.entity().downgrade();
+        let scroll = self.sidebar_scroll[0].clone();
+        canvas(
+            |_, _, _| (),
+            move |_, _, window, _| {
+                let moving = view.clone();
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
+                    if phase != DispatchPhase::Capture {
+                        return;
+                    }
+                    let _ = moving.update(cx, |this, cx| {
+                        if this.move_workspace_drag(
+                            event.position,
+                            event.pressed_button == Some(MouseButton::Left),
+                            |lift| reorder::resolve(&rows, &requests, dragged, &scroll, lift),
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                        }
+                    });
+                });
+                window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                    if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
+                        return;
+                    }
+                    let _ = view.update(cx, |this, cx| {
+                        if this.release_workspace_drag(cx) {
+                            cx.stop_propagation();
+                        }
+                    });
+                });
+            },
+        )
+        .absolute()
+        .size_0()
     }
 
     fn render_sidebar_header(&self, cx: &mut Context<Self>) -> impl IntoElement {

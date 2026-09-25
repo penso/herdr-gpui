@@ -70,6 +70,7 @@ pub(super) fn response<T: DeserializeOwned>(
 }
 
 pub(crate) fn graphql(
+    context: &'static str,
     token: &SecretString,
     query: &str,
     variables: Value,
@@ -101,19 +102,15 @@ pub(crate) fn graphql(
         reply.headers(),
         std::time::SystemTime::now(),
     );
+    // GraphQL reports failures with a 200, so the headers that explain them are
+    // captured before the body consumes the response.
+    let exchange = log::Exchange::new(reply.headers());
     let result: Value = response("graphql", reply)?;
     if cancelled() {
         return Err(Error::PrCancelled);
     }
-    if result.get("errors").is_some() {
-        // GitHub explains SAML/SSO and org policy denials only in this text.
-        tracing::warn!(
-            category = "github_graphql",
-            detail = result["errors"][0]["message"].as_str().unwrap_or_default(),
-            error_type = result["errors"][0]["type"].as_str().unwrap_or_default(),
-            count = result["errors"].as_array().map_or(0, Vec::len) as u64,
-            "GitHub GraphQL query returned errors"
-        );
+    if let Some(errors) = result.get("errors") {
+        log::graphql(context, log::token_kind(token), &exchange, errors);
         if result["errors"].as_array().is_some_and(|errors| {
             errors.iter().any(|error| {
                 matches!(

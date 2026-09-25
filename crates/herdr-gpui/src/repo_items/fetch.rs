@@ -42,6 +42,7 @@ pub(super) fn list(
         .checked_duration_since(Instant::now())
         .ok_or(Error::PrTimeout)?;
     let response = crate::github::graphql(
+        "repo_items",
         token,
         QUERY,
         serde_json::json!({"owner": origin.owner, "repo": origin.repo, "count": LIMIT}),

@@ -4,7 +4,7 @@ use super::{
     Cache, Input, Lookup, Result,
     cache::{CACHE_LIMIT, ERROR_BACKOFF, REFRESH},
     clean,
-    fetch::{OUTPUT_LIMIT, TIMEOUT, fetch, local_repository, worktree_checkout},
+    fetch::{OUTPUT_LIMIT, TIMEOUT, fetch, local_repository, remote_host, worktree_checkout},
     fixture,
     lookup::Worker,
     model::{MergeState, State},
@@ -726,4 +726,19 @@ fn local_git_verification_rejects_wrong_checkout_branch_and_remote_before_gh() {
             .to_string()
             .contains("absolute checkout")
     );
+}
+
+#[test]
+fn remote_host_drops_credentials_and_path() {
+    for (remote, host) in [
+        ("git@github.com:owner/repo.git", "github.com"),
+        ("github-work:owner_shortcode/repo", "github-work"),
+        (
+            "https://user:secret@github.example.com/owner/repo",
+            "github.example.com",
+        ),
+        ("ssh://git@gitlab.com:22/owner/repo", "gitlab.com:22"),
+    ] {
+        assert_eq!(remote_host(remote), host, "{remote}");
+    }
 }

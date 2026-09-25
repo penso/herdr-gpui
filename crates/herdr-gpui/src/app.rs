@@ -321,11 +321,9 @@ pub(crate) fn run() -> std::process::ExitCode {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "integration-test"))]
 mod tests {
-    use super::{Config, InitialAppearance, Theme};
-    #[cfg(feature = "integration-test")]
-    use super::{ConnectTarget, HerdrWindow};
+    use super::{Config, ConnectTarget, HerdrWindow, InitialAppearance, Theme};
     use crate::config::LayoutMode;
     #[cfg(feature = "integration-test")]
     #[test]

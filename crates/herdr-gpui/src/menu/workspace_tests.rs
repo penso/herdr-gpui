@@ -340,6 +340,9 @@ fn new_worktree_dialog_proposes_a_branch_and_previews_its_checkout(
                 view.menu.input.as_ref().unwrap().read(cx).selected_range(),
                 0..branch.len()
             );
+            // The form opens on the workspace name, above the branch.
+            let name = view.menu.worktree.as_ref().unwrap().name.read(cx);
+            assert!(gpui_kit::Focusable::focus_handle(name, cx).is_focused(window));
             assert_eq!(
                 view.checkout_preview(cx),
                 format!(

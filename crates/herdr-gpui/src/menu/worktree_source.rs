@@ -121,6 +121,9 @@ pub(super) struct Branches {
 pub(crate) struct WorktreeSource {
     pub(super) tab: Tab,
     pub(super) search: Entity<InputState>,
+    /// The workspace name for a typed branch. Left empty, the daemon keeps its
+    /// own default label.
+    pub(super) name: Entity<InputState>,
     /// Indices into the open tab's listing, in listed order.
     pub(super) filtered: Vec<usize>,
     /// How many rows the search keeps in each tab, in `Tab::ALL` order.
@@ -311,6 +314,14 @@ impl HerdrWindow {
             })
     }
 
+    /// The trimmed name typed for the new workspace, when there is one.
+    pub(super) fn worktree_name(&self, cx: &gpui_kit::App) -> Option<String> {
+        let source = self.menu.worktree.as_ref()?;
+        let name = source.name.read(cx).value();
+        let name = name.trim();
+        (!name.is_empty()).then(|| name.to_owned())
+    }
+
     pub(super) fn open_worktree_source(
         &mut self,
         window: &mut gpui_kit::Window,
@@ -330,9 +341,11 @@ impl HerdrWindow {
                 }
             },
         );
+        let name = cx.new(|cx| InputState::new(window, cx).placeholder("Default name"));
         self.menu.worktree = Some(WorktreeSource {
             tab: Tab::New,
             search,
+            name,
             filtered: Vec::new(),
             hits: Default::default(),
             selected: 0,
@@ -406,10 +419,11 @@ impl HerdrWindow {
         source.tab = tab;
         source.refresh();
         let search = source.search.clone();
+        let name = source.name.clone();
         let retry_branches = !source.branches.listed && !source.branches.loading;
         let list_checkouts = !source.checkouts.listed && source.checkouts.request.is_none();
         match tab {
-            Tab::New => self.focus_menu_input(window, cx),
+            Tab::New => name.update(cx, |name, cx| name.focus(window, cx)),
             Tab::Existing | Tab::Branches | Tab::Items(_) => {
                 match tab {
                     Tab::Existing if list_checkouts => self.list_checkouts(),

@@ -44,6 +44,7 @@ pub struct Config {
     pub theme: String,
     pub confirm_close_tab: bool,
     pub show_agents: bool,
+    pub option_as_alt: OptionAsAlt,
     pub sidebar: FontConfig,
     pub tabs: FontConfig,
     pub terminal: FontConfig,
@@ -54,6 +55,56 @@ pub struct Config {
     pub clipboard_toast: ClipboardToast,
     pub layout: Layout,
     pub keybindings: Keymap,
+}
+
+/// Whether macOS Option sends Alt shortcuts to a pane or types the character
+/// the keyboard layout puts on it. Other platforms have no Option layer, so
+/// Alt always reaches the pane there.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OptionAsAlt {
+    /// Alt on the U.S. and ABC layouts, whose Option layer only holds symbols
+    /// like `π`; typing elsewhere, where it holds `@`, `[`, or letters.
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+impl OptionAsAlt {
+    /// macOS layouts whose Option characters a terminal user rarely types.
+    const ALT_LAYOUTS: [&'static str; 2] = ["com.apple.keylayout.US", "com.apple.keylayout.ABC"];
+
+    /// Whether Option-modified keys go to the pane as Alt under `layout`, the
+    /// platform keyboard layout ID.
+    pub fn sends_alt(self, layout: &str) -> bool {
+        if !cfg!(target_os = "macos") {
+            return true;
+        }
+        match self {
+            Self::Auto => Self::ALT_LAYOUTS.contains(&layout),
+            Self::Always => true,
+            Self::Never => false,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for OptionAsAlt {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Value {
+            Bool(bool),
+            Name(String),
+        }
+        match Value::deserialize(deserializer)? {
+            Value::Bool(true) => Ok(Self::Always),
+            Value::Bool(false) => Ok(Self::Never),
+            Value::Name(name) if name == "auto" => Ok(Self::Auto),
+            Value::Name(name) => Err(serde::de::Error::unknown_variant(&name, &["auto"])),
+        }
+    }
 }
 
 /// Where the "copied to clipboard" flash sits, and whether it appears at all.
@@ -408,6 +459,7 @@ impl Default for Config {
             github: GitHubConfig::default(),
             confirm_close_tab: true,
             show_agents: true,
+            option_as_alt: OptionAsAlt::default(),
             features: Features::default(),
             notifications: NotificationConfig::default(),
             clipboard_toast: ClipboardToast::default(),
@@ -429,6 +481,7 @@ struct Settings {
     theme: Option<String>,
     confirm_close_tab: Option<bool>,
     show_agents: Option<bool>,
+    option_as_alt: OptionAsAlt,
     sidebar: FontSettings,
     tabs: FontSettings,
     terminal: FontSettings,
@@ -781,6 +834,7 @@ impl Config {
         }
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
+        config.option_as_alt = settings.option_as_alt;
         for (name, font, settings) in [
             ("sidebar", &mut config.sidebar, settings.sidebar),
             ("tabs", &mut config.tabs, settings.tabs),
@@ -1716,6 +1770,27 @@ mod tests {
         assert!(!config.show_agents);
         assert!(Config::parse("confirm_close_tab = 'false'").is_err());
         assert!(Config::parse("show_agents = 0").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn option_as_alt_accepts_auto_or_a_bool() -> anyhow::Result<()> {
+        assert_eq!(Config::parse("")?.option_as_alt, OptionAsAlt::Auto);
+        assert_eq!(
+            Config::parse(DEFAULT_CONFIG)?.option_as_alt,
+            OptionAsAlt::Auto
+        );
+        for (value, expected) in [
+            ("'auto'", OptionAsAlt::Auto),
+            ("true", OptionAsAlt::Always),
+            ("false", OptionAsAlt::Never),
+        ] {
+            let config = Config::parse(&format!("option_as_alt = {value}"))?;
+            assert_eq!(config.option_as_alt, expected);
+        }
+        for value in ["'left'", "'true'", "1"] {
+            assert!(Config::parse(&format!("option_as_alt = {value}")).is_err());
+        }
         Ok(())
     }
 
