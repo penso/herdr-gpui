@@ -159,12 +159,10 @@ fn background_spans<'a>(
 }
 
 /// Where an IME composition sits: at the input cursor, shifted left only as
-/// far as it takes to keep the text inside the grid.
+/// far as it takes to end inside the grid. Text wider than the grid loses its
+/// start rather than its end, where the IME is editing.
 fn composition_origin(cursor: Point<Pixels>, width: Pixels, grid: Bounds<Pixels>) -> Point<Pixels> {
-    point(
-        cursor.x.min(grid.right() - width).max(grid.left()),
-        cursor.y,
-    )
+    point(cursor.x.min(grid.right() - width), cursor.y)
 }
 
 /// The byte index of a UTF-16 offset, as the platform input handler counts.
@@ -610,10 +608,13 @@ impl TerminalPainter {
         let origin = composition_origin(cursor.origin, line.width, grid);
         let start = line.x_for_index(byte_index(text, range.start));
         let end = line.x_for_index(byte_index(text, range.end));
-        Bounds::new(
-            origin + point(start, px(0.)),
-            size((end - start).max(cursor.size.width), cursor.size.height),
-        )
+        let width = (end - start).max(cursor.size.width);
+        // A caret after the text, or a clause scrolled off the left, still
+        // anchors the candidate window inside the grid.
+        let x = (origin.x + start)
+            .min(grid.right() - width)
+            .max(grid.left());
+        Bounds::new(point(x, origin.y), size(width, cursor.size.height))
     }
 }
 
@@ -1063,8 +1064,8 @@ mod tests {
         );
         assert_eq!(
             composition_origin(cursor, px(200.), grid),
-            point(px(10.), px(40.)),
-            "wider than the grid, it starts at the grid's left edge"
+            point(px(-90.), px(40.)),
+            "wider than the grid, it keeps its end, where the IME edits"
         );
     }
 
@@ -1092,7 +1093,10 @@ mod tests {
                         bounds.origin + point(px(cell_width * 4.), px(CELL_HEIGHT)),
                         size(px(cell_width), px(CELL_HEIGHT)),
                     );
-                    let text = "\u{304b}\u{3093}\u{3058}";
+                    // Romaji mid-composition: the headless text system gives
+                    // CJK glyphs next to no advance, which would hide the
+                    // right-edge geometry. UTF-16 mapping is tested separately.
+                    let text = "kan";
                     let bounds_of = |range, cursor| {
                         painter.composition_bounds(text, range, cursor, bounds, &font, window)
                     };
@@ -1115,8 +1119,17 @@ mod tests {
                         cursor.size,
                     );
                     let end = bounds_of(3..3, edge);
-                    assert!(end.origin.x <= bounds.right());
+                    assert_eq!(end.right(), bounds.right(), "the caret stays inside");
+                    assert_eq!(end.size, cursor.size);
                     assert!(bounds_of(0..1, edge).origin.x < edge.origin.x);
+                    // Wider than the grid, the start scrolls off the left while
+                    // every clause still anchors inside the grid.
+                    let long = "k".repeat(200);
+                    let long_bounds = |range| {
+                        painter.composition_bounds(&long, range, cursor, bounds, &font, window)
+                    };
+                    assert_eq!(long_bounds(0..1).origin.x, bounds.left());
+                    assert_eq!(long_bounds(200..200).right(), bounds.right());
                 },
             )
             .size_full()
