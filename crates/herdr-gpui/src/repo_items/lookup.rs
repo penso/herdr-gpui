@@ -15,12 +15,12 @@ use std::{
 };
 
 /// What the worker was asked to do. Listing and preparing are both bounded,
-/// read-only Git and GitHub work; neither writes to the checkout it reads.
+/// Git and GitHub work; fetching updates refs but never checkout files.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Task {
     List,
-    /// Update `origin/<branch>` before a checkout is asked for.
-    Fetch(String),
+    /// Make the PR head reachable before a checkout is asked for.
+    Fetch(Item),
 }
 
 /// What the worker finished. `Fetched` carries the branch back so a stale reply
@@ -71,8 +71,8 @@ impl Lookup {
         self.origin = None;
     }
 
-    pub fn fetch_branch(&mut self, input: Input, token: Arc<secrecy::SecretString>, branch: &str) {
-        self.request(input, token, Task::Fetch(branch.to_owned()));
+    pub fn fetch_branch(&mut self, input: Input, token: Arc<secrecy::SecretString>, item: &Item) {
+        self.request(input, token, Task::Fetch(item.clone()));
     }
 
     fn request(&mut self, input: Input, token: Arc<secrecy::SecretString>, task: Task) {
@@ -157,8 +157,8 @@ impl Lookup {
                     let result = match &task {
                         Task::List => fetch::list(&input, &token, cancelled, &mut cooldown)
                             .map(|(origin, items)| Done::Listed(origin, items)),
-                        Task::Fetch(branch) => fetch::fetch_branch(&input, branch, &cancelled)
-                            .map(|()| Done::Fetched(branch.clone())),
+                        Task::Fetch(item) => fetch::fetch_branch(&input, item, &cancelled)
+                            .map(|()| Done::Fetched(item.branch())),
                     };
                     if outgoing.send((generation, result)).is_err() {
                         break;

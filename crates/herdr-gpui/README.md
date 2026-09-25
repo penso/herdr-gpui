@@ -769,13 +769,16 @@ Windows setup) nothing is saved and the window says so.
   the workspaces open. New
   worktree proposes the branch name the daemon would generate, previews the
   checkout path derived from it, rejects invalid Git branch names before submission,
-  reports the daemon's own failures in the dialog rather than the connection status, and selects
+  reports failures in the active dialog tab rather than the connection status, and selects
   and reveals the created checkout once the daemon reports it. Rename and branch
   dialogs support Unicode/IME, grapheme
   editing, Shift-arrow selection, Home/End, and Cmd-A/C/X/V. Escape/outside click
   cancels; dialog input never reaches terminals or native creation actions.
   Context menus and dialogs anchor to the pointer and clamp to the viewport.
   Rename trims surrounding whitespace and rejects blank labels inline.
+  The PR tab supports fork pull requests: it fetches GitHub's PR head ref from
+  the repository's origin and creates a local `pr/<number>` branch. Existing
+  local branches are preserved; repository trust is not granted.
 - Open worktree... asynchronously lists the clicked parent's existing checkouts
   through `worktree.list`, including already-open and detached checkouts but
   excluding bare/prunable entries. Use Up/Down and Enter, the Open button, or
