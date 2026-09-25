@@ -3,7 +3,10 @@
 //! thread, and a superseded load cannot overwrite a newer one.
 
 use super::{Page, accent};
-use crate::{HerdrWindow, config::Config};
+use crate::{
+    HerdrWindow,
+    config::{Config, FONT_SIZE_RANGE, FONT_SIZE_STEP, FontFace},
+};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -72,6 +75,34 @@ impl HerdrWindow {
         }
         self.menu.page = Some(Page::Preferences);
         self.menu.preferences_scroll.set_offset(Point::default());
+    }
+
+    pub(crate) fn change_font_size(
+        &mut self,
+        face: FontFace,
+        direction: f32,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_load.is_some() {
+            return;
+        }
+        let current = face.size(&self.config);
+        let size = (current + direction * FONT_SIZE_STEP)
+            .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
+        if size == current {
+            return;
+        }
+        let text_system = cx.text_system().clone();
+        self.load_gui_config_with(
+            move || {
+                Config::save_font_size(face, size)?;
+                let mut config = Config::load()?;
+                config.resolve_font_fallbacks(|| text_system.all_font_names());
+                let theme = config.theme()?;
+                Ok((config, theme))
+            },
+            cx,
+        );
     }
 
     pub(crate) fn reload_gui_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {

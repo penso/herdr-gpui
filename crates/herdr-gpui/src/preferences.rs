@@ -1,6 +1,6 @@
 use crate::{
     HerdrWindow,
-    config::{Config, Features},
+    config::{Config, FONT_SIZE_RANGE, Features, FontFace},
     fonts::StyledFont,
 };
 use gpui::{prelude::*, *};
@@ -124,21 +124,91 @@ impl HerdrWindow {
                 )),
             ))
             .child(section("FONTS"));
-        for (id, label, value) in [
-            ("preferences-font-sidebar", "Sidebar", &self.config.sidebar),
-            ("preferences-font-tabs", "Tabs", &self.config.tabs),
+        for (face, id, label, value) in [
             (
+                FontFace::Sidebar,
+                "preferences-font-sidebar",
+                "Sidebar",
+                &self.config.sidebar,
+            ),
+            (
+                FontFace::Tabs,
+                "preferences-font-tabs",
+                "Tabs",
+                &self.config.tabs,
+            ),
+            (
+                FontFace::Terminal,
                 "preferences-font-terminal",
                 "Terminal",
                 &self.config.terminal,
             ),
-            ("preferences-font-ui", "UI", &self.config.ui),
+            (FontFace::Ui, "preferences-font-ui", "UI", &self.config.ui),
         ] {
-            body = body.child(row(
-                id,
-                label,
-                format!("{}, {} px", value.family, value.size),
-            ));
+            let control =
+                |suffix: &'static str, symbol: &'static str, direction: f32, enabled: bool| {
+                    div()
+                        .id(format!("{id}-{suffix}"))
+                        .debug_selector(move || format!("{id}-{suffix}"))
+                        .px(px(8.))
+                        .py(px(3.))
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(theme.active))
+                        .bg(rgb(theme.background))
+                        .when(enabled, |button| {
+                            button
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(theme.active)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.change_font_size(face, direction, cx);
+                                }))
+                        })
+                        .when(!enabled, |button| button.text_color(rgb(theme.muted)))
+                        .child(symbol)
+                };
+            let ready = self.config_load.is_none();
+            body = body.child(
+                div()
+                    .debug_selector(move || id.into())
+                    .flex()
+                    .items_center()
+                    .min_w_0()
+                    .gap(px(12.))
+                    .py(px(7.))
+                    .border_b_1()
+                    .border_color(rgb(theme.active))
+                    .child(
+                        div()
+                            .w(relative(0.3))
+                            .flex_none()
+                            .min_w_0()
+                            .text_color(rgb(theme.muted))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_right()
+                            .child(value.family.clone()),
+                    )
+                    .child(control(
+                        "decrease",
+                        "−",
+                        -1.,
+                        ready && value.size > *FONT_SIZE_RANGE.start(),
+                    ))
+                    .child(div().flex_none().child(format!("{} px", value.size)))
+                    .child(control(
+                        "increase",
+                        "+",
+                        1.,
+                        ready && value.size < *FONT_SIZE_RANGE.end(),
+                    )),
+            );
         }
         body = body
             .child(section("NOTIFICATIONS"))
@@ -147,7 +217,7 @@ impl HerdrWindow {
             .child(row("preferences-notifications-position", "Corner", format!("{:?}", self.config.notifications.position)))
             .child(note("Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications."))
             .child(note(
-                "Font families and sizes are read-only here. Sizes are logical pixels, independent of display scaling.",
+                "Font families are read-only here. Font size changes are saved to local GUI overrides and reload in every window. Sizes are logical pixels, independent of display scaling.",
             ))
             .child(section("FEATURES"));
         for (id, label, enabled) in feature_rows(&self.config.features) {

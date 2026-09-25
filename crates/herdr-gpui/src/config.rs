@@ -32,6 +32,34 @@ pub const FONT_SIZE_RANGE: RangeInclusive<f32> = 8.0..=48.0;
 /// One logical pixel: the smallest step that can move the terminal cell grid.
 pub const FONT_SIZE_STEP: f32 = 1.0;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FontFace {
+    Sidebar,
+    Tabs,
+    Terminal,
+    Ui,
+}
+
+impl FontFace {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Sidebar => "sidebar",
+            Self::Tabs => "tabs",
+            Self::Terminal => "terminal",
+            Self::Ui => "ui",
+        }
+    }
+
+    pub(crate) fn size(self, config: &Config) -> f32 {
+        match self {
+            Self::Sidebar => config.sidebar.size,
+            Self::Tabs => config.tabs.size,
+            Self::Terminal => config.terminal.size,
+            Self::Ui => config.ui.size,
+        }
+    }
+}
+
 /// Shared logical-pixel radii for native-style chrome, independent of the
 /// terminal grid. Small badges/keycaps retain a tighter curve than controls.
 pub(crate) mod corners {
@@ -1052,6 +1080,36 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
+    /// Persist one font's logical pixel size without replacing other overrides.
+    /// The lock also serializes this edit with migration and other GUI saves.
+    pub(crate) fn save_font_size(face: FontFace, size: f32) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_font_size_path(face, size, &local)
+    }
+
+    fn save_font_size_path(face: FontFace, size: f32, path: &Path) -> Result<()> {
+        if !size.is_finite() || !FONT_SIZE_RANGE.contains(&size) {
+            return Err(Error::InvalidFontSize(face.name()));
+        }
+        let result = (|| -> Result<()> {
+            let text = fs::read_to_string(path)?;
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            let font = document
+                .entry(face.name())
+                .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+            let table = font
+                .as_table_like_mut()
+                .ok_or(Error::InvalidFontSize(face.name()))?;
+            let mut value = toml_edit::Value::from(size as f64);
+            if let Some(previous) = table.get("size").and_then(toml_edit::Item::as_value) {
+                *value.decor_mut() = previous.decor().clone();
+            }
+            table.insert("size", toml_edit::Item::Value(value));
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
     pub fn theme(&self) -> Result<Theme> {
         self.theme_with_directories(theme_directories)
     }
@@ -1729,6 +1787,41 @@ mod tests {
                     .theme_with_directories(|| Err(Error::MissingHome))
                     .is_ok()
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn font_size_saves_preserve_other_overrides_and_comments() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config.toml");
+        let original = "# user settings\ntheme = 'Nord'\nfuture = true\n\n[tabs] # keep table\nsize = 19 # keep size\nfamily = 'Custom'\n";
+        fs::write(&path, original)?;
+        for (face, size) in [
+            (FontFace::Sidebar, 8.),
+            (FontFace::Tabs, 20.),
+            (FontFace::Terminal, 48.),
+            (FontFace::Ui, 14.),
+        ] {
+            Config::save_font_size_path(face, size, &path)?;
+            let text = fs::read_to_string(&path)?;
+            let known = text.replace("future = true\n", "");
+            assert_eq!(
+                face.size(&Config::parse_layers(
+                    [DEFAULT_CONFIG, &known],
+                    ClipboardToast::default()
+                )?),
+                size
+            );
+            assert!(text.contains("future = true"));
+            assert!(text.contains("family = 'Custom'"));
+            assert!(text.contains("[tabs] # keep table"));
+            assert!(text.contains("size = 20.0 # keep size") || face != FontFace::Tabs);
+        }
+        let before = fs::read_to_string(&path)?;
+        for invalid in [7., 49., f32::NAN, f32::INFINITY] {
+            assert!(Config::save_font_size_path(FontFace::Tabs, invalid, &path).is_err());
+            assert_eq!(fs::read_to_string(&path)?, before);
         }
         Ok(())
     }

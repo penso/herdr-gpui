@@ -738,7 +738,8 @@ Windows setup) nothing is saved and the window says so.
 - In-app sidebar menu for settings information, keybinds, config reload, update
   information, and detach/reconnect. Styled Preferences include Appearance,
   Fonts, Configuration, and Connection sections, with theme selection and GUI
-  config reload; font values remain read-only and are edited in the config file.
+  config reload; font families remain read-only, while the four font sizes have
+  −/+ controls that save to the local GUI overrides file and reload in all windows.
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
