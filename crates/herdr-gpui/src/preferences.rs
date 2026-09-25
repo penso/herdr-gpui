@@ -3,6 +3,7 @@ use crate::{
     config::{Config, FONT_SIZE_RANGE, Features, FontFace},
     font_picker::{FontTarget, shared_family},
     fonts::StyledFont,
+    search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 use std::env;
@@ -23,7 +24,64 @@ pub(crate) fn feature_rows(features: &Features) -> [(&'static str, &'static str,
     )]
 }
 
+pub(crate) struct FontSizeEditor {
+    face: FontFace,
+    pub(crate) input: Entity<SearchInput>,
+    _blur: Subscription,
+}
+
+fn parse_font_size(text: &str) -> Option<f32> {
+    let text = text.trim();
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let value = text.parse::<u8>().ok()?;
+    FONT_SIZE_RANGE
+        .contains(&f32::from(value))
+        .then_some(f32::from(value))
+}
+
 impl HerdrWindow {
+    fn begin_font_size_edit(
+        &mut self,
+        face: FontFace,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_load.is_some() {
+            return;
+        }
+        let input = cx.new(SearchInput::new);
+        input.update(cx, |input, cx| {
+            input.set_text_selected(&format!("{}", face.size(&self.config)), cx);
+            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+        });
+        let focus = input.read(cx).focus.clone();
+        let blur = cx.on_blur(&focus, window, |this, _, cx| {
+            this.finish_font_size_edit(true, cx);
+        });
+        self.menu.font_size_editor = Some(FontSizeEditor {
+            face,
+            input: input.clone(),
+            _blur: blur,
+        });
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(super) fn finish_font_size_edit(&mut self, save: bool, cx: &mut Context<Self>) {
+        let Some(editor) = self.menu.font_size_editor.take() else {
+            return;
+        };
+        if save
+            && !editor.input.read(cx).is_composing()
+            && let Some(size) = parse_font_size(editor.input.read(cx).text())
+        {
+            self.set_font_size(editor.face, size, cx);
+        }
+        cx.notify();
+    }
+
     pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
@@ -87,6 +145,14 @@ impl HerdrWindow {
             .min_w_0()
             .overflow_y_scroll()
             .track_scroll(&self.menu.preferences_scroll)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.menu.font_size_editor.is_some() {
+                        this.finish_font_size_edit(true, cx);
+                    }
+                }),
+            )
             .px(px(16.))
             .py(px(8.))
             .child(section("APPEARANCE"))
@@ -247,7 +313,30 @@ impl HerdrWindow {
                         -1.,
                         ready && value.size > *FONT_SIZE_RANGE.start(),
                     ))
-                    .child(div().flex_none().child(format!("{} px", value.size)))
+                    .child(
+                        if let Some(editor) = &self.menu.font_size_editor
+                            && editor.face == face
+                        {
+                            div()
+                                .w(px(55.))
+                                .flex_none()
+                                .child(editor.input.clone())
+                                .into_any_element()
+                        } else {
+                            div()
+                                .id(format!("{id}-size"))
+                                .debug_selector(move || format!("{id}-size"))
+                                .flex_none()
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(theme.active)))
+                                .child(format!("{} px", value.size))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.begin_font_size_edit(face, window, cx);
+                                }))
+                                .into_any_element()
+                        },
+                    )
                     .child(control(
                         "increase",
                         "+",
@@ -263,7 +352,7 @@ impl HerdrWindow {
             .child(row("preferences-notifications-position", "Corner", format!("{:?}", self.config.notifications.position)))
             .child(note("Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications."))
             .child(note(
-                "Font families and sizes save to local GUI overrides and reload in every window. Sizes are logical pixels, independent of display scaling.",
+                "Font families and sizes save to local GUI overrides and reload in every window. Click a size to type 8–48; Enter or leaving the field saves, Escape cancels. Sizes are logical pixels.",
             ))
             .child(section("FEATURES"));
         for (id, label, enabled) in feature_rows(&self.config.features) {
@@ -669,6 +758,25 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[core::prelude::v1::test]
+    fn font_size_input_accepts_only_whole_values_in_range() {
+        for (input, expected) in [
+            ("8", Some(8.)),
+            ("48", Some(48.)),
+            (" 24 ", Some(24.)),
+            ("7", None),
+            ("49", None),
+            ("14.5", None),
+            ("-8", None),
+            ("+12", None),
+            ("12px", None),
+            ("", None),
+            ("999999", None),
+        ] {
+            assert_eq!(parse_font_size(input), expected, "{input:?}");
+        }
+    }
 
     struct TestDirectory(PathBuf);
 

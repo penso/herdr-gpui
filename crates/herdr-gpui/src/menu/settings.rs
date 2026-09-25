@@ -89,7 +89,11 @@ impl HerdrWindow {
         let current = face.size(&self.config);
         let size = (current + direction * FONT_SIZE_STEP)
             .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
-        if size == current {
+        self.set_font_size(face, size, cx);
+    }
+
+    pub(crate) fn set_font_size(&mut self, face: FontFace, size: f32, cx: &mut Context<Self>) {
+        if self.config_load.is_some() || face.size(&self.config) == size {
             return;
         }
         let text_system = cx.text_system().clone();

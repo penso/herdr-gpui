@@ -740,7 +740,8 @@ Windows setup) nothing is saved and the window says so.
   Fonts, Configuration, and Connection sections, with theme selection and GUI
   config reload; a searchable installed-font picker can set all four families
   together or each independently (including Platform default), while sizes have
-  −/+ controls. Both save to the local GUI overrides file and reload in all windows.
+  −/+ controls and editable whole-number fields (8–48; Enter or leave to save,
+  Escape to cancel). Both save to the local GUI overrides file and reload in all windows.
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
