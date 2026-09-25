@@ -16,12 +16,14 @@ use std::{
 
 pub(super) const OUTPUT_LIMIT: usize = 2 * 1024 * 1024;
 pub(super) const TIMEOUT: Duration = Duration::from_secs(15);
-const QUERY: &str = r#"query($owner: String!, $repo: String!, $branch: String!) {
+const QUERY: &str = r#"query($owner: String!, $repo: String!, $branch: String!, $limit: Int!) {
   repository(owner: $owner, name: $repo) {
-    pullRequests(first: 2, headRefName: $branch, orderBy: {field: UPDATED_AT, direction: DESC}) {
+    pullRequests(first: $limit, headRefName: $branch, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage }
       nodes {
         number url title state isDraft headRefName baseRefName additions deletions
         changedFiles updatedAt mergeStateStatus reviewDecision headRepositoryOwner { login }
+        headRepository { name }
         commits(last: 1) { nodes { commit { statusCheckRollup {
           contexts(first: 100) {
             pageInfo { hasNextPage }
@@ -106,12 +108,42 @@ pub(super) fn fetch_with_backoff(
     cooldown: &mut Option<Duration>,
 ) -> Result {
     let deadline = Instant::now() + TIMEOUT;
-    let (owner, repo) = match origin {
-        Origin::Local => local_repository(input, deadline, &cancelled)?,
+    let ((owner, repo), head) = match origin {
+        Origin::Local => {
+            let checkout = local_checkout(input, deadline, &cancelled)?;
+            let repository = origin_repository(&checkout, deadline, &cancelled)?;
+            let head = upstream_head(&input.branch, |key| {
+                let value = git(
+                    &checkout,
+                    &["config", "--default", "", "--get", key],
+                    deadline,
+                    &cancelled,
+                )?;
+                Ok((!value.is_empty()).then_some(value))
+            })?;
+            (repository, head)
+        }
         Origin::Ssh(target) => {
-            origins.resolve(target, input, Instant::now(), deadline, &cancelled)?
+            let repository =
+                origins.resolve(target, input, Instant::now(), deadline, &cancelled)?;
+            let head = upstream_head(&input.branch, |key| {
+                let timeout = deadline
+                    .checked_duration_since(Instant::now())
+                    .ok_or(Error::PrTimeout)?;
+                Ok(herdr_client::remote_config_value(
+                    target,
+                    &input.repo_key,
+                    key,
+                    timeout,
+                    &cancelled,
+                )?)
+            })?;
+            (repository, head)
         }
     };
+    let branch = head
+        .as_ref()
+        .map_or(input.branch.as_str(), |head| head.branch.as_str());
     let timeout = deadline
         .checked_duration_since(Instant::now())
         .ok_or(Error::PrTimeout)?;
@@ -119,12 +151,44 @@ pub(super) fn fetch_with_backoff(
         "pull_request",
         token,
         QUERY,
-        serde_json::json!({"owner":owner,"repo":repo,"branch":input.branch}),
+        serde_json::json!({"owner":owner,"repo":repo,"branch":branch,"limit":if head.is_some() { 100 } else { 2 }}),
         timeout,
         cancelled,
         cooldown,
     )?;
-    parse_graphql(response, &owner, &repo, &input.branch)
+    parse_graphql(response, &owner, &repo, branch, head.as_ref())
+}
+
+/// The remote head configured for this local branch, independent of its local name.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct Head {
+    pub owner: String,
+    pub repo: String,
+    pub branch: String,
+}
+
+pub(super) fn upstream_head(
+    branch: &str,
+    mut config: impl FnMut(&str) -> crate::Result<Option<String>>,
+) -> crate::Result<Option<Head>> {
+    let remote = config(&format!("branch.{branch}.remote"))?;
+    let merge = config(&format!("branch.{branch}.merge"))?;
+    let (Some(remote), Some(merge)) = (remote, merge) else {
+        return Ok(None);
+    };
+    // An explicitly configured but unsupported upstream must not fall back to
+    // a potentially unrelated origin branch (including local `.` upstreams).
+    let branch = merge
+        .strip_prefix("refs/heads/")
+        .filter(|branch| !branch.is_empty())
+        .ok_or(Error::PrBranch)?;
+    let url = config(&format!("remote.{remote}.url"))?.ok_or(Error::PrOrigin)?;
+    let (owner, repo) = crate::avatars::github_repo(&url).ok_or(Error::PrOrigin)?;
+    Ok(Some(Head {
+        owner,
+        repo,
+        branch: branch.to_owned(),
+    }))
 }
 
 pub(crate) fn local_repository(

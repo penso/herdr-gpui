@@ -816,6 +816,10 @@ Windows setup) nothing is saved and the window says so.
    Discovery uses the daemon repository key and exact branch to resolve a unique
    Git worktree, followed by common-directory/current-branch checks and an explicit
    GitHub repository/head query. It never occupies the deletion dialog response slot.
+   PR heads use the branch's configured upstream remote owner/repository and merge
+   branch, so renamed local branches can identify fork PRs. Without an upstream,
+   lookup uses the local branch name and requires the origin owner as before.
+   Unsupported upstreams fail closed rather than matching an unrelated fork.
   On macOS, all socket modes (including explicit/inherited sockets) require a
   same-user kernel peer at the standard configured session socket, with owned,
   non-group/world-writable socket and parent. Executable upgrades/removal do not
@@ -826,8 +830,8 @@ Windows setup) nothing is saved and the window says so.
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
   keys, no master connection), keeping stdout bounded and discarding stderr.
-  Each resolved repository is reused for ten minutes, so refreshes do not dial the
-  host each time. The daemon-reported branch is trusted as-is. Sidebar PR badges
+  Each resolved origin repository is reused for ten minutes. Upstream configuration
+  is read over SSH on each lookup using the daemon-reported local branch. Sidebar PR badges
   show only on the selected device's rows, because the cache holds that device's
   lookups and the same path and branch may exist on another host.
 - Each saved SSH device can have its own GitHub account, for hosts whose

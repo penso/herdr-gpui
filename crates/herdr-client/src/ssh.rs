@@ -169,30 +169,47 @@ pub fn remote_origin_url(
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
+    remote_config_value(target, git_dir, "remote.origin.url", timeout, cancelled)
+}
+
+/// Read one Git configuration value on a saved host using bounded,
+/// noninteractive SSH. Call only from a background thread.
+#[cfg(unix)]
+pub fn remote_config_value(
+    target: &str,
+    git_dir: &str,
+    key: &str,
+    timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<String>> {
     validate_target(target)?;
     if !git_dir.starts_with('/') || git_dir.chars().any(char::is_control) {
         return Err(Error::InvalidGitDir);
     }
-    let (status, output) = run_remote(target, &origin_command(git_dir), timeout, cancelled)?;
+    let (status, output) = run_remote(target, &config_command(git_dir, key), timeout, cancelled)?;
     match status.code() {
         Some(0) => {}
         // `git config --get` exits 1 when the key is absent.
         Some(1) => return Ok(None),
         _ => return Err(Error::RemoteCommand(status)),
     }
-    let url = String::from_utf8(output).map_err(|_| Error::RemoteOutput)?;
-    let url = url.trim_end_matches(['\r', '\n']);
-    if url.is_empty() || url.len() > 2048 || url.chars().any(char::is_control) {
+    let value = String::from_utf8(output).map_err(|_| Error::RemoteOutput)?;
+    let value = value.trim_end_matches(['\r', '\n']);
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value.len() > 2048 || value.chars().any(char::is_control) {
         return Err(Error::RemoteOutput);
     }
-    Ok(Some(url.to_owned()))
+    Ok(Some(value.to_owned()))
 }
 
 #[cfg(unix)]
-fn origin_command(git_dir: &str) -> String {
+fn config_command(git_dir: &str, key: &str) -> String {
     let script = format!(
-        "exec git -c core.fsmonitor=false --git-dir {} config --get remote.origin.url",
-        quote(git_dir)
+        "exec git -c core.fsmonitor=false --git-dir {} config --get -- {}",
+        quote(git_dir),
+        quote(key)
     );
     format!("/bin/sh -c {}", quote(&script))
 }
@@ -313,6 +330,18 @@ pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
 pub fn remote_origin_url(
     target: &str,
     _git_dir: &str,
+    _timeout: std::time::Duration,
+    _cancelled: impl Fn() -> bool,
+) -> Result<Option<String>> {
+    validate_target(target)?;
+    Err(Error::SshUnsupported)
+}
+
+#[cfg(windows)]
+pub fn remote_config_value(
+    target: &str,
+    _git_dir: &str,
+    _key: &str,
     _timeout: std::time::Duration,
     _cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
@@ -638,7 +667,10 @@ esac
         let git_dir = root.join(".git");
         let run = || {
             Command::new("/bin/sh")
-                .args(["-c", &origin_command(git_dir.to_str().unwrap())])
+                .args([
+                    "-c",
+                    &config_command(git_dir.to_str().unwrap(), "remote.origin.url"),
+                ])
                 .output()
                 .unwrap()
         };
@@ -648,6 +680,15 @@ esac
         let output = run();
         assert!(output.status.success());
         assert_eq!(output.stdout, b"git@github.com:owner/repo.git\n");
+        // Both the repository path and branch-derived key are shell quoted.
+        let key = "branch.pr/'$(false).merge";
+        git(&["config", key, "refs/heads/feat/inline-ime-preedit"]);
+        let output = Command::new("/bin/sh")
+            .args(["-c", &config_command(git_dir.to_str().unwrap(), key)])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"refs/heads/feat/inline-ime-preedit\n");
         std::fs::remove_dir_all(root).unwrap();
     }
 

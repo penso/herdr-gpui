@@ -9,11 +9,26 @@ pub(super) fn parse_graphql(
     owner: &str,
     repo: &str,
     branch: &str,
+    head: Option<&super::fetch::Head>,
 ) -> Result {
+    if response["data"]["repository"]["pullRequests"]["pageInfo"]["hasNextPage"] == true {
+        return Err(Error::PrAmbiguous);
+    }
     let mut nodes = response["data"]["repository"]["pullRequests"]["nodes"]
         .as_array()
         .ok_or(Error::PrRepository)?
         .clone();
+    if let Some(head) = head {
+        nodes.retain(|pr| {
+            pr["headRefName"].as_str() == Some(head.branch.as_str())
+                && pr["headRepositoryOwner"]["login"]
+                    .as_str()
+                    .is_some_and(|owner| owner.eq_ignore_ascii_case(&head.owner))
+                && pr["headRepository"]["name"]
+                    .as_str()
+                    .is_some_and(|repo| repo.eq_ignore_ascii_case(&head.repo))
+        });
+    }
     let mut incomplete = false;
     for pr in &mut nodes {
         let contexts = &pr["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"];
@@ -21,11 +36,12 @@ pub(super) fn parse_graphql(
         let checks = contexts["nodes"].clone();
         pr["statusCheckRollup"] = checks;
     }
-    let mut result = parse(
+    let mut result = parse_with_owner(
         &serde_json::to_string(&nodes).map_err(Error::github_json)?,
         owner,
         repo,
         branch,
+        head.map_or(owner, |head| head.owner.as_str()),
     )?;
     if incomplete && let Some(pr) = &mut result {
         pr.checks_summary
@@ -34,7 +50,12 @@ pub(super) fn parse_graphql(
     Ok(result)
 }
 
+#[cfg(any(test, all(feature = "integration-test", target_os = "macos")))]
 pub(super) fn parse(text: &str, owner: &str, repo: &str, branch: &str) -> Result {
+    parse_with_owner(text, owner, repo, branch, owner)
+}
+
+fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owner: &str) -> Result {
     if text.len() > OUTPUT_LIMIT {
         return Err(Error::PrSize);
     }
@@ -53,7 +74,10 @@ pub(super) fn parse(text: &str, owner: &str, repo: &str, branch: &str) -> Result
         || pr.state == State::Unknown
         || !pr.url.eq_ignore_ascii_case(&expected)
         || pr.head_ref_name != branch
-        || !pr.head_repository_owner.login.eq_ignore_ascii_case(owner)
+        || !pr
+            .head_repository_owner
+            .login
+            .eq_ignore_ascii_case(head_owner)
     {
         return Err(Error::PrIdentity);
     }

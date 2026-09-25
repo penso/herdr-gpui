@@ -77,6 +77,10 @@ the first snapshot and unadvertised methods via
 `CommandRejected`. Navigation uses the real `pane.focus`, `tab.focus`, and
 `workspace.focus` API methods, not synthetic terminal keys.
 
+`remote_config_value` reads a single Git configuration key on a saved SSH host
+with the same bounded, noninteractive process policy as `remote_origin_url`.
+Both are blocking helpers for background workers; absent or empty keys return `None`.
+
 All fallible client APIs return the crate-root `Error`, derived with `thiserror`.
 I/O, protocol, and JSON failures retain their concrete sources; callers can match
 variants or inspect `std::error::Error::source()` rather than parsing messages.
