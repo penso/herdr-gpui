@@ -10,11 +10,12 @@
 //! only the Cookie header is sent.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp},
+        service::{Meta, Service, Setting, Timestamp},
+        values::invalid,
     },
 };
 use serde_json::{Map, Value};
@@ -24,37 +25,23 @@ use std::time::{Duration, SystemTime};
 /// `{"0":{"json":{"sessionId":null},"meta":{"values":{"sessionId":["undefined"]}}}}`.
 const URL: &str = "https://t3.chat/api/trpc/getCustomerData?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22sessionId%22%3Anull%7D%2C%22meta%22%3A%7B%22values%22%3A%7B%22sessionId%22%3A%5B%22undefined%22%5D%7D%7D%7D%7D";
 const BASE: Duration = Duration::from_secs(4 * 3600);
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
 
 pub(crate) struct T3chat;
 
+static META: Meta = Meta::new("t3chat", "T3 Chat")
+    .dashboard("https://t3.chat/settings/customization")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Your t3.chat browser session. Sign in at https://t3.chat, open Developer Tools → \
+         Application → Cookies → https://t3.chat, and copy every cookie there (the session \
+         cookies change names between releases), pasted as one header: \
+         \"name=value; name2=value2\". It is sent only to t3.chat.",
+    )]);
+
 impl Service for T3chat {
-    fn id(&self) -> &'static str {
-        "t3chat"
-    }
-
-    fn name(&self) -> &'static str {
-        "T3 Chat"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/t3chat.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://t3.chat/settings/customization")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Your t3.chat browser session. Sign in at https://t3.chat, open Developer Tools → \
-             Application → Cookies → https://t3.chat, and copy every cookie there (the session \
-             cookies change names between releases), pasted as one header: \
-             \"name=value; name2=value2\". It is sent only to t3.chat.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -78,12 +65,7 @@ impl Service for T3chat {
             .header("trpc-accept", "application/jsonl")
             .header("x-trpc-source", "web-client")
             .header("x-trpc-batch", "true");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -93,7 +75,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
         .find_map(|line| find(&line).cloned())
-        .ok_or(INVALID)?;
+        .ok_or_else(invalid)?;
 
     let number = |key: &str| -> Result<Option<f64>> {
         match data.get(key) {
@@ -102,26 +84,26 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                 .as_f64()
                 .filter(|n| n.is_finite())
                 .map(Some)
-                .ok_or(INVALID),
+                .ok_or_else(invalid),
         }
     };
     let text = |object: &Map<String, Value>, key: &str| -> Result<Option<String>> {
         match object.get(key) {
             None | Some(Value::Null) => Ok(None),
             Some(Value::String(text)) => Ok(Some(text.trim().to_owned()).filter(|t| !t.is_empty())),
-            Some(_) => Err(INVALID),
+            Some(_) => Err(invalid()),
         }
     };
     let subscription = match data.get("subscription") {
         None | Some(Value::Null) => None,
         Some(Value::Object(subscription)) => Some(subscription),
-        Some(_) => return Err(INVALID),
+        Some(_) => return Err(invalid()),
     };
     let period = |key: &str| -> Result<Option<SystemTime>> {
         match subscription.and_then(|subscription| subscription.get(key)) {
             None | Some(Value::Null) => Ok(None),
             Some(Value::Number(value)) => Ok(value.as_f64().and_then(time)),
-            Some(_) => Err(INVALID),
+            Some(_) => Err(invalid()),
         }
     };
 
@@ -216,6 +198,7 @@ fn plan_name(raw: &str) -> String {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     /// The JSONL shape of a `getCustomerData` batch, with a subscription.
     const FIXTURE: &str = concat!(

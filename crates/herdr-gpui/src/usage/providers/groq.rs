@@ -14,7 +14,8 @@ use crate::{
     usage::{
         model::{Account, Provider, Report, Section},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -30,43 +31,27 @@ const QUERIES: [&str; 4] = [
 
 pub(crate) struct Groq;
 
+static META: Meta = Meta::new("groq", "Groq")
+    .dashboard("https://console.groq.com/dashboard/usage")
+    .status_page("https://status.groq.com")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["GROQ_API_KEY"],
+            "A GroqCloud Enterprise API key from https://console.groq.com/keys. Only \
+             Enterprise organizations can read Prometheus metrics.",
+        ),
+        Setting::new(
+            "base_url",
+            &["GROQ_API_URL"],
+            "Optional HTTPS API base URL for a private gateway. Defaults to \
+             https://api.groq.com/v1.",
+        ),
+    ]);
+
 impl Service for Groq {
-    fn id(&self) -> &'static str {
-        "groq"
-    }
-
-    fn name(&self) -> &'static str {
-        "Groq"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/groq.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.groq.com/dashboard/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.groq.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["GROQ_API_KEY"],
-                "A GroqCloud Enterprise API key from https://console.groq.com/keys. Only \
-                 Enterprise organizations can read Prometheus metrics.",
-            ),
-            Setting::new(
-                "base_url",
-                &["GROQ_API_URL"],
-                "Optional HTTPS API base URL for a private gateway. Defaults to \
-                 https://api.groq.com/v1.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -108,7 +93,6 @@ fn base_url(raw: Option<String>) -> Result<String> {
 
 /// The sum of a Prometheus instant vector; an empty result is zero.
 pub(crate) fn parse_scalar(body: &str) -> Result<f64> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let answer: Answer = json(body)?;
     if answer.status != "success" {
         return Err(invalid());

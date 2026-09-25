@@ -79,7 +79,8 @@ identity to select the matching icon, even when packaging in another checkout.
 workspace menu alongside the original `pencil.svg` (rename), `trash.svg`
 (delete checkout) and `chevron-up.svg` / `chevron-down.svg` (fold and unfold a
 worktree group); `git-branch.svg` is original artwork for the titlebar's Git
-actions button; `user.svg` is an
+actions button; `sessions.svg` is original artwork for the sidebar footer's local
+session list; `user.svg` is an
 original generic silhouette for the future account placeholder, not a personal
 identity or GitHub logo. All of them are embedded through a
 minimal GPUI asset source. GPUI renders them as SVG masks tinted with the current

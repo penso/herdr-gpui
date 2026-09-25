@@ -15,7 +15,7 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, Window, group, title_case},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
 use serde::Deserialize;
@@ -26,45 +26,29 @@ const PLUGIN_APP: &str = "github.com:Iv1.b507a08c87ecfe98";
 
 pub(crate) struct Copilot;
 
+static META: Meta = Meta::new("copilot", "Copilot")
+    .dashboard("https://github.com/settings/copilot")
+    .status_page("https://www.githubstatus.com")
+    .settings(&[
+        Setting::new(
+            "token",
+            &["COPILOT_API_TOKEN"],
+            "A GitHub token of the account with Copilot, e.g. a fine-grained personal \
+             access token from https://github.com/settings/personal-access-tokens with no \
+             extra permissions, or the output of `gh auth token`. Not needed when a \
+             Copilot editor plugin is signed in on the host.",
+        ),
+        Setting::new(
+            "enterprise_host",
+            &[],
+            "For GitHub Enterprise Cloud with data residency: the host, such as \
+             octocorp.ghe.com. Usage is then read from api.<host>.",
+        ),
+    ]);
+
 impl Service for Copilot {
-    fn id(&self) -> &'static str {
-        "copilot"
-    }
-
-    fn name(&self) -> &'static str {
-        "Copilot"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/copilot.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://github.com/settings/copilot")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://www.githubstatus.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "token",
-                &["COPILOT_API_TOKEN"],
-                "A GitHub token of the account with Copilot, e.g. a fine-grained personal \
-                 access token from https://github.com/settings/personal-access-tokens with no \
-                 extra permissions, or the output of `gh auth token`. Not needed when a \
-                 Copilot editor plugin is signed in on the host.",
-            ),
-            Setting::new(
-                "enterprise_host",
-                &[],
-                "For GitHub Enterprise Cloud with data residency: the host, such as \
-                 octocorp.ghe.com. Usage is then read from api.<host>.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -77,7 +61,7 @@ impl Service for Copilot {
             .header("Editor-Plugin-Version", "copilot-chat/0.26.7")
             .header("User-Agent", "GitHubCopilotChat/0.26.7")
             .header("X-Github-Api-Version", "2025-04-01");
-        let body = match probe.http(request).and_then(|response| response.ok()) {
+        let body = match probe.body(request) {
             Ok(body) => body,
             Err(error) => return Some(Err(error)),
         };

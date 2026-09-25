@@ -14,11 +14,12 @@
 //! body, as it does to CodexBar, and is dropped by the parser.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window},
         probe::{HostPath, Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -31,33 +32,20 @@ const LATEST: f64 = 64_092_211_200.;
 
 pub(crate) struct Muse;
 
+static META: Meta = Meta::new("muse", "Muse Code")
+    .dashboard("https://dev.meta.ai")
+    .settings(&[Setting::new(
+        "token",
+        &[],
+        "A Muse CLI device-code access token (it starts with dca:), used when this host \
+         has no `muse login`. It is providers.meta.access_token in \
+         ~/.config/muse/auth.json on a machine where you ran `muse login`. Dashboard \
+         LLM_ keys and LLM| inference keys are not accepted.",
+    )]);
+
 impl Service for Muse {
-    fn id(&self) -> &'static str {
-        "muse"
-    }
-
-    fn name(&self) -> &'static str {
-        "Muse Code"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/muse.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://dev.meta.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "token",
-            &[],
-            "A Muse CLI device-code access token (it starts with dca:), used when this host \
-             has no `muse login`. It is providers.meta.access_token in \
-             ~/.config/muse/auth.json on a machine where you ran `muse login`. Dashboard \
-             LLM_ keys and LLM| inference keys are not accepted.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -84,12 +72,7 @@ impl Service for Muse {
             .header("x-api-version", "1.0.0")
             .header("User-Agent", "CodexBar")
             .json("{}");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -128,7 +111,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     if let Some(usage) = key.subs_usage {
         let minutes = usage.window.window_duration_mins.round();
         if !(1. ..1e9).contains(&minutes) {
-            return Err(Error::UsageJson(serde_json::error::Category::Data));
+            return Err(invalid());
         }
         let length = Duration::from_secs(minutes as u64 * 60);
         let kind = if length == SESSION {

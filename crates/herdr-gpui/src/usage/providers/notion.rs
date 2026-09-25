@@ -11,11 +11,12 @@
 //! and Enterprise workspaces; others show that instead of windows.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, Window, title_case},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -37,46 +38,30 @@ const ROLLING: Duration = Duration::from_secs(6 * 3600);
 
 pub(crate) struct Notion;
 
+static META: Meta = Meta::new("notion", "Notion AI")
+    .dashboard("https://app.notion.com")
+    .status_page("https://status.notion.so")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "Your Notion session cookie. Sign in at https://app.notion.com, open Developer \
+             Tools > Application > Cookies for https://app.notion.com (or notion.so), copy \
+             the token_v2 cookie and paste it as \"token_v2=value\" (add \
+             \"; notion_user_id=value\" for accounts signed in to several users).",
+        ),
+        Setting::new(
+            "workspace_id",
+            &[],
+            "The workspace (space) ID to read, dashed or not, for accounts in several \
+             workspaces. Defaults to the first Business or Enterprise workspace. It is the \
+             x-notion-space-id header of requests in Developer Tools > Network.",
+        ),
+    ]);
+
 impl Service for Notion {
-    fn id(&self) -> &'static str {
-        "notion"
-    }
-
-    fn name(&self) -> &'static str {
-        "Notion AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/notion.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.notion.com")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.notion.so")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "Your Notion session cookie. Sign in at https://app.notion.com, open Developer \
-                 Tools > Application > Cookies for https://app.notion.com (or notion.so), copy \
-                 the token_v2 cookie and paste it as \"token_v2=value\" (add \
-                 \"; notion_user_id=value\" for accounts signed in to several users).",
-            ),
-            Setting::new(
-                "workspace_id",
-                &[],
-                "The workspace (space) ID to read, dashed or not, for accounts in several \
-                 workspaces. Defaults to the first Business or Enterprise workspace. It is the \
-                 x-notion-space-id header of requests in Developer Tools > Network.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -87,18 +72,11 @@ impl Service for Notion {
 }
 
 fn read(probe: &mut Probe, cookie: &Secret, preferred: Option<&str>) -> Result<Report> {
-    let spaces = probe
-        .http(post("getSpaces", cookie, "{}".into()))
-        .and_then(|response| response.ok())?;
+    let spaces = probe.body(post("getSpaces", cookie, "{}".into()))?;
     let account = parse_spaces(&spaces)?;
-    let workspace = account
-        .workspace(preferred)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?
-        .clone();
+    let workspace = account.workspace(preferred).ok_or_else(invalid)?.clone();
     let body = serde_json::json!({ "spaceId": workspace.id }).to_string();
-    let status = probe
-        .http(post("getCreditRateLimitStatus", cookie, body))
-        .and_then(|response| response.ok())?;
+    let status = probe.body(post("getCreditRateLimitStatus", cookie, body))?;
     parse(&status, account.email, &workspace, SystemTime::now())
 }
 
@@ -173,7 +151,6 @@ fn space_id(raw: &str) -> String {
 /// `getSpaces` is keyed by user id; each record is wrapped in one or two
 /// `value` objects depending on the response's age.
 pub(crate) fn parse_spaces(body: &str) -> Result<SignedIn> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let root: Map<String, Value> = json(body)?;
     let identified: Vec<&String> = root
         .iter()
@@ -257,7 +234,7 @@ pub(crate) fn parse(
     // Every field is optional, so an unrelated body would otherwise read as
     // an unused allowance.
     if !not_applicable && status.window.is_none() && status.billing_period_window.is_none() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let mut windows = Vec::new();
     if let Some(window) = &status.window

@@ -5,11 +5,12 @@
 //! weekly credit budget, and the generic quota shapes CodexBar falls back to.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Unit, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, number},
     },
 };
 use serde_json::{Map, Value};
@@ -19,35 +20,19 @@ const URL: &str = "https://api.synthetic.new/v2/quotas";
 
 pub(crate) struct Synthetic;
 
+static META: Meta = Meta::new("synthetic", "Synthetic")
+    .dashboard("https://synthetic.new/billing")
+    .status_page("https://status.synthetic.new")
+    .settings(&[Setting::new(
+        "api_key",
+        &["SYNTHETIC_API_KEY"],
+        "A Synthetic API key, created as described in \
+         https://dev.synthetic.new/docs/api/getting-started.",
+    )]);
+
 impl Service for Synthetic {
-    fn id(&self) -> &'static str {
-        "synthetic"
-    }
-
-    fn name(&self) -> &'static str {
-        "Synthetic"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/synthetic.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://synthetic.new/billing")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.synthetic.new")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["SYNTHETIC_API_KEY"],
-            "A Synthetic API key, created as described in \
-             https://dev.synthetic.new/docs/api/getting-started.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -57,12 +42,7 @@ impl Service for Synthetic {
         let request = Request::get(URL)
             .bearer(&key)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -157,7 +137,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let root = match root {
         Value::Array(items) => Object::from_iter([("quotas".to_owned(), Value::Array(items))]),
         Value::Object(object) => object,
-        _ => return Err(Error::UsageJson(serde_json::error::Category::Data)),
+        _ => return Err(invalid()),
     };
     let data = root.get("data").and_then(Value::as_object);
     let slot = |path: &[&str]| {
@@ -202,7 +182,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .collect()
     };
     if quotas.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let balance = quotas
         .iter()
@@ -343,18 +323,6 @@ fn collect<'a>(value: &'a Value, found: &mut Vec<&'a Object>) {
     }
 }
 
-fn number(value: &Value) -> Option<f64> {
-    match value {
-        Value::Number(number) => number.as_f64().filter(|value| value.is_finite()),
-        Value::String(text) if !text.trim().is_empty() => text
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|value| value.is_finite()),
-        _ => None,
-    }
-}
-
 fn first_number(payload: &Object, keys: &[&str]) -> Option<f64> {
     keys.iter()
         .filter_map(|key| payload.get(*key))
@@ -463,6 +431,7 @@ fn window_minutes(payload: &Object) -> Option<u64> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     fn at(seconds: f64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs_f64(seconds)

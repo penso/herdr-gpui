@@ -12,7 +12,8 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values,
     },
 };
 use serde_json::{Map, Value};
@@ -32,38 +33,25 @@ type Object = Map<String, Value>;
 
 pub(crate) struct Chutes;
 
+static META: Meta = Meta::new("chutes", "Chutes")
+    .dashboard("https://chutes.ai")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["CHUTES_API_KEY"],
+            "A Chutes API key (cpk_…), created as described at \
+             https://chutes.ai/docs/getting-started/authentication.",
+        ),
+        Setting::new(
+            "base_url",
+            &["CHUTES_API_URL"],
+            "Optional HTTPS management API URL. Defaults to https://api.chutes.ai.",
+        ),
+    ]);
+
 impl Service for Chutes {
-    fn id(&self) -> &'static str {
-        "chutes"
-    }
-
-    fn name(&self) -> &'static str {
-        "Chutes"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/chutes.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://chutes.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["CHUTES_API_KEY"],
-                "A Chutes API key (cpk_…), created as described at \
-                 https://chutes.ai/docs/getting-started/authentication.",
-            ),
-            Setting::new(
-                "base_url",
-                &["CHUTES_API_URL"],
-                "Optional HTTPS management API URL. Defaults to https://api.chutes.ai.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -75,13 +63,13 @@ impl Service for Chutes {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    let base = values::https_base(probe.text_setting("base_url"), BASE)?;
     let get = |path: &str| {
         Request::get(format!("{base}/users/me/{path}"))
             .bearer(key)
             .timeout(TIMEOUT)
     };
-    let mut parsed = parse(&document(&probe.http(get("subscription_usage"))?.ok()?)?);
+    let mut parsed = parse(&document(&probe.body(get("subscription_usage"))?)?);
     if parsed.rolling.is_none() || parsed.monthly.is_none() {
         // Quota detail is optional, but must not hide a revoked key.
         match quotas(probe, &get) {
@@ -98,7 +86,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
 }
 
 fn quotas(probe: &mut Probe, get: &impl Fn(&str) -> Request) -> Result<Parsed> {
-    let raw = document(&probe.http(get("quotas"))?.ok()?)?;
+    let raw = document(&probe.body(get("quotas"))?)?;
     let mut parsed = parse(&raw);
     let root = raw.as_object();
     let data = root.and_then(|root| root.get("data"));
@@ -124,8 +112,7 @@ fn quotas(probe: &mut Probe, get: &impl Fn(&str) -> Request) -> Result<Parsed> {
             Some(id) => {
                 let id: String = url::form_urlencoded::byte_serialize(id.as_bytes()).collect();
                 match probe
-                    .http(get(&format!("quota_usage/{id}")))
-                    .and_then(|response| response.ok())
+                    .body(get(&format!("quota_usage/{id}")))
                     .and_then(|body| document(&body))
                 {
                     Ok(usage) => Some(usage),
@@ -169,25 +156,8 @@ fn document(body: &str) -> Result<Value> {
     if value.is_object() || value.is_array() {
         Ok(value)
     } else {
-        Err(Error::UsageJson(serde_json::error::Category::Data))
+        Err(values::invalid())
     }
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
 }
 
 const ROLLING_KEYS: &[&str] = &[
@@ -478,8 +448,8 @@ impl Quota {
         let limit = self.limit.filter(|limit| *limit > 0.)?;
         Some(format!(
             "{}/{} {}",
-            amount(self.used?),
-            amount(limit),
+            values::trimmed(self.used?),
+            values::trimmed(limit),
             self.unit
         ))
     }
@@ -490,15 +460,6 @@ impl Quota {
             .or(minutes)
             .map(|minutes| Duration::from_secs(minutes.saturating_mul(60)));
         Window::new(kind, self.percent, self.resets_at.or(resets_at), length)
-    }
-}
-
-fn amount(value: f64) -> String {
-    if (value - value.round()).abs() < 1e-4 {
-        format!("{value:.0}")
-    } else {
-        let text = format!("{value:.2}");
-        text.trim_end_matches('0').trim_end_matches('.').to_owned()
     }
 }
 

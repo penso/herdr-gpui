@@ -335,3 +335,12 @@ pub(crate) static PROVIDER_ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../../../../assets/icons/providers/xkiro.svg"),
     ),
 ];
+
+/// The logo for a provider id, when one ships.
+pub(crate) fn for_id(id: &str) -> Option<&'static str> {
+    PROVIDER_ICONS.iter().map(|(path, _)| *path).find(|path| {
+        path.strip_prefix("icons/providers/")
+            .and_then(|file| file.strip_suffix(".svg"))
+            == Some(id)
+    })
+}

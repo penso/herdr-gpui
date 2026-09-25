@@ -64,7 +64,7 @@ impl UsageConfig {
         for (id, settings) in &self.providers {
             let provider =
                 registry::find(id).ok_or_else(|| Error::UnknownUsageProvider(id.clone()))?;
-            let declared = provider.service().settings();
+            let declared = provider.service().meta().settings;
             if let Some(name) = settings
                 .0
                 .keys()
@@ -103,7 +103,7 @@ const DOCS_END: &str = "# --- end usage providers ---\n";
 pub(super) fn example_docs() -> String {
     let mut docs = String::from(DOCS_START);
     let (configurable, automatic): (Vec<_>, Vec<_>) =
-        registry::all().partition(|provider| !provider.service().settings().is_empty());
+        registry::all().partition(|provider| !provider.service().meta().settings.is_empty());
     docs.push_str("#\n# Found from the agent's own sign-in on the host, with nothing to set:\n");
     for line in wrap(
         &automatic
@@ -119,11 +119,11 @@ pub(super) fn example_docs() -> String {
         let service = provider.service();
         docs.push_str(&format!(
             "#\n# {} ({})\n# [usage.providers.{}]\n",
-            service.name(),
-            service.id(),
-            service.id()
+            service.meta().name,
+            service.meta().id,
+            service.meta().id
         ));
-        for setting in service.settings() {
+        for setting in service.meta().settings {
             for line in wrap(setting.help, 76) {
                 docs.push_str(&format!("#   {line}\n"));
             }

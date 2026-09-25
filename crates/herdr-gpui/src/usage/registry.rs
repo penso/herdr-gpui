@@ -105,6 +105,6 @@ pub(crate) fn find(id: &str) -> Option<Provider> {
 pub(crate) fn position(provider: Provider) -> usize {
     SERVICES
         .iter()
-        .position(|service| service.id() == provider.id())
+        .position(|service| service.meta().id == provider.id())
         .unwrap_or(SERVICES.len())
 }

@@ -8,14 +8,15 @@
 //! taking the most recently written quota file, or set with `ide_path`.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{
             Account, Balance, DAY, Kind, MONTH, Provider, Report, Section, Unit, WEEK, Window,
             group,
         },
         probe::{HostPath, Probe},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -45,29 +46,18 @@ const IDES: &[(&str, &str)] = &[
 
 pub(crate) struct Jetbrains;
 
+static META: Meta = Meta::new("jetbrains", "JetBrains AI").settings(&[Setting::new(
+    "ide_path",
+    &[],
+    "The config directory of the IDE to read, when the most recently used one is not \
+         the right one, e.g. \"~/Library/Application Support/JetBrains/IntelliJIdea2025.3\" \
+         on a Mac or \"~/.config/JetBrains/PyCharm2025.3\" on Linux. Its \
+         options/AIAssistantQuotaManager2.xml appears once AI Assistant has been used.",
+)]);
+
 impl Service for Jetbrains {
-    fn id(&self) -> &'static str {
-        "jetbrains"
-    }
-
-    fn name(&self) -> &'static str {
-        "JetBrains AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/jetbrains.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "ide_path",
-            &[],
-            "The config directory of the IDE to read, when the most recently used one is not \
-             the right one, e.g. \"~/Library/Application Support/JetBrains/IntelliJIdea2025.3\" \
-             on a Mac or \"~/.config/JetBrains/PyCharm2025.3\" on Linux. Its \
-             options/AIAssistantQuotaManager2.xml appears once AI Assistant has been used.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -117,7 +107,6 @@ fn ide(base: &str) -> Option<Ide> {
 }
 
 pub(crate) fn parse(xml: &str, ide: Option<Ide>) -> Result<Report> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let component = component(xml).ok_or_else(invalid)?;
     let quota: Quota = json(&decode(
         &option(component, "quotaInfo").ok_or_else(invalid)?,

@@ -125,7 +125,13 @@ without changing the active terminal. Choosing a device filters both lists and
 switches the terminal through the existing surface handoff. While filtered,
 navigation to another device follows that device; removal or disable falls back
 to Local. The filter is window-local and starts at All Devices. The adjacent gear
-opens the existing Settings page (also available with `Cmd-,`).
+opens the existing Settings page (also available with `Cmd-,`). Beside it, the
+sessions icon lists this machine's sessions and each saved device's own, grouped
+under the device, with the device this window is on leading (also available with
+`Cmd-Shift-S`). A device's list is asked for over SSH, at most once every 30
+seconds while the popup is open; until it answers, and if it never does, the
+device still offers the session it was saved with. Choosing a session attaches
+this window to it on that device.
 
 **Add Device…** accepts an SSH target, label, and optional remote session (default:
 `default`). Herdr's `machine add` saves a new profile every time and takes no

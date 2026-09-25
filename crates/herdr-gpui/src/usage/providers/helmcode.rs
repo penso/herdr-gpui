@@ -12,7 +12,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use chrono::Datelike;
@@ -43,43 +44,30 @@ const MAX_WINDOW_HOURS: u64 = 8760;
 
 pub(crate) struct Helmcode;
 
+static META: Meta = Meta::new("helmcode", "Helmcode")
+    .dashboard("https://cloud.helmcode.com/dashboard")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "The dashboard session. Sign in to https://cloud.helmcode.com/dashboard (or \
+             https://cloud.nan.builders/dashboard for NaN Builders), open Developer Tools > \
+             Network, reload, and copy the Cookie request header of a request to \
+             cloud-api.helmcode.com (or cloud-api.nan.builders). Developer Tools > \
+             Application > Cookies lists the same cookies. Paste it as \
+             \"name=value; name2=value2\".",
+        ),
+        Setting::new(
+            "tenant",
+            &[],
+            "Which dashboard a pasted cookie belongs to: \"helmcode\" (default) or \
+             \"nanBuilders\".",
+        ),
+    ]);
+
 impl Service for Helmcode {
-    fn id(&self) -> &'static str {
-        "helmcode"
-    }
-
-    fn name(&self) -> &'static str {
-        "Helmcode"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/helmcode.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://cloud.helmcode.com/dashboard")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "The dashboard session. Sign in to https://cloud.helmcode.com/dashboard (or \
-                 https://cloud.nan.builders/dashboard for NaN Builders), open Developer Tools > \
-                 Network, reload, and copy the Cookie request header of a request to \
-                 cloud-api.helmcode.com (or cloud-api.nan.builders). Developer Tools > \
-                 Application > Cookies lists the same cookies. Paste it as \
-                 \"name=value; name2=value2\".",
-            ),
-            Setting::new(
-                "tenant",
-                &[],
-                "Which dashboard a pasted cookie belongs to: \"helmcode\" (default) or \
-                 \"nanBuilders\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -154,7 +142,7 @@ fn parse(quota: &str, premium: bool, credits: Option<&str>, tenant: &str) -> Res
                 .window_hours
                 .is_some_and(|hours| !(1..=MAX_WINDOW_HOURS).contains(&hours))
         {
-            return Err(Error::UsageJson(serde_json::error::Category::Data));
+            return Err(invalid());
         }
         // Rolling tiers belong to premium subscriptions; billing must say so.
         if model.cap > 0 && (model.window_hours.is_none() || premium) {

@@ -262,13 +262,14 @@ fn every_provider_is_registered_once_with_its_icon() {
         );
         for url in provider
             .service()
-            .dashboard()
+            .meta()
+            .dashboard
             .into_iter()
-            .chain(provider.service().status_page())
+            .chain(provider.service().meta().status_page)
         {
             assert!(url.starts_with("https://"), "{url}");
         }
-        for setting in provider.service().settings() {
+        for setting in provider.service().meta().settings {
             assert!(
                 !setting.help.trim().is_empty(),
                 "{}.{}",

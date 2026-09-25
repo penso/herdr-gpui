@@ -12,11 +12,12 @@
 //! refresh, and its failure only leaves the account out.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use chrono::Datelike;
@@ -28,51 +29,35 @@ const AGENT: &str = "herdr-gpui";
 
 pub(crate) struct Huggingface;
 
+static META: Meta = Meta::new("huggingface", "Hugging Face")
+    .dashboard("https://huggingface.co/settings/billing")
+    .status_page("https://status.huggingface.co")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &[
+                "CODEXBAR_HUGGINGFACE_API_KEY",
+                "HF_TOKEN",
+                "HUGGING_FACE_HUB_TOKEN",
+            ],
+            "A Hugging Face access token from https://huggingface.co/settings/tokens. A \
+             classic read token works; a fine-grained token needs the Billing read \
+             permission. Not needed when `hf auth login` has saved a token on the host.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Optional, for the prepaid credit balance. Sign in at \
+             https://huggingface.co/settings/billing with the token's account, open \
+             Developer Tools > Application > Cookies > https://huggingface.co, and copy \
+             the token cookie as \"token=value\" (or every cookie there as \
+             \"name=value; name2=value2\").",
+        ),
+    ]);
+
 impl Service for Huggingface {
-    fn id(&self) -> &'static str {
-        "huggingface"
-    }
-
-    fn name(&self) -> &'static str {
-        "Hugging Face"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/huggingface.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://huggingface.co/settings/billing")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.huggingface.co")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &[
-                    "CODEXBAR_HUGGINGFACE_API_KEY",
-                    "HF_TOKEN",
-                    "HUGGING_FACE_HUB_TOKEN",
-                ],
-                "A Hugging Face access token from https://huggingface.co/settings/tokens. A \
-                 classic read token works; a fine-grained token needs the Billing read \
-                 permission. Not needed when `hf auth login` has saved a token on the host.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Optional, for the prepaid credit balance. Sign in at \
-                 https://huggingface.co/settings/billing with the token's account, open \
-                 Developer Tools > Application > Cookies > https://huggingface.co, and copy \
-                 the token cookie as \"token=value\" (or every cookie there as \
-                 \"name=value; name2=value2\").",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -112,11 +97,9 @@ fn read(probe: &mut Probe, token: &Secret) -> Result<Report> {
     let start = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1)
         .and_then(|day| day.and_hms_opt(0, 0, 0))
         .map_or(end, |start| start.and_utc().timestamp());
-    let billing = probe
-        .http(api(&format!(
-            "/api/settings/billing/usage-v2?startDate={start}&endDate={end}"
-        )))?
-        .ok()?;
+    let billing = probe.body(api(&format!(
+        "/api/settings/billing/usage-v2?startDate={start}&endDate={end}"
+    )))?;
     let gpu = optional(probe, api("/api/spaces/zero-gpu/quota"));
     let whoami = optional(probe, api("/api/whoami-v2"));
     let profile = whoami
@@ -131,10 +114,7 @@ fn read(probe: &mut Probe, token: &Secret) -> Result<Report> {
 
 /// Quota and identity only enrich the charges, so their failures are dropped.
 fn optional(probe: &mut Probe, request: Request) -> Option<String> {
-    probe
-        .http(request.timeout(Duration::from_secs(5)))
-        .and_then(|response| response.ok())
-        .ok()
+    probe.body(request.timeout(Duration::from_secs(5))).ok()
 }
 
 /// The prepaid balance, when a browser session for the token's own user
@@ -165,7 +145,6 @@ pub(crate) fn parse(
     profile: Option<Profile>,
     wallet: Option<f64>,
 ) -> Result<Report> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let inference = json::<Billing>(billing)?
         .usage
         .and_then(|usage| usage.inference_providers)

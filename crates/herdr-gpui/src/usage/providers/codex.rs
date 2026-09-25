@@ -6,7 +6,7 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
         probe::{HostPath, Probe, Request},
-        service::{Service, Timestamp, json},
+        service::{Meta, Service, Timestamp, json},
     },
 };
 use serde::Deserialize;
@@ -17,25 +17,14 @@ pub(crate) const AGENT: &str = "codex-cli";
 
 pub(crate) struct Codex;
 
+static META: Meta = Meta::new("codex", "Codex")
+    .icon("icons/agent-codex.svg")
+    .dashboard("https://chatgpt.com/codex/settings/usage")
+    .status_page("https://status.openai.com");
+
 impl Service for Codex {
-    fn id(&self) -> &'static str {
-        "codex"
-    }
-
-    fn name(&self) -> &'static str {
-        "Codex"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/agent-codex.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://chatgpt.com/codex/settings/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.openai.com")
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -49,12 +38,7 @@ impl Service for Codex {
         if let Some(account) = probe.field(&auth, &["tokens", "account_id"]) {
             request = request.secret_header("ChatGPT-Account-Id", "", &account);
         }
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 

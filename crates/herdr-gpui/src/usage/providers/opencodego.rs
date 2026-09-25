@@ -20,7 +20,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use serde_json::{Map, Value};
@@ -36,49 +37,36 @@ const MICRO_CENTS: f64 = 100_000_000.;
 
 pub(crate) struct Opencodego;
 
+static META: Meta = Meta::new("opencodego", "OpenCode Go")
+    .dashboard("https://opencode.ai/auth")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["OPENCODE_API_KEY"],
+            "An OpenCode API key for the account with the Go subscription, created at \
+             https://opencode.ai/auth under API Keys. Preferred over the cookie.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Your opencode.ai session, used when no API key is set. Sign in at \
+             https://opencode.ai/auth, open Developer Tools > Application > Cookies > \
+             https://opencode.ai, and copy the __Host-console_session and auth cookies \
+             (either one alone also works). Paste them as \
+             \"__Host-console_session=value; auth=value\".",
+        ),
+        Setting::new(
+            "workspace_id",
+            &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
+            "Optional, for the cookie sign-in. The workspace to read, as a wrk_... or \
+             org_... ID or its https://opencode.ai/console/... URL. Defaults to the first \
+             workspace of the account.",
+        ),
+    ]);
+
 impl Service for Opencodego {
-    fn id(&self) -> &'static str {
-        "opencodego"
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenCode Go"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/opencodego.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://opencode.ai/auth")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["OPENCODE_API_KEY"],
-                "An OpenCode API key for the account with the Go subscription, created at \
-                 https://opencode.ai/auth under API Keys. Preferred over the cookie.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Your opencode.ai session, used when no API key is set. Sign in at \
-                 https://opencode.ai/auth, open Developer Tools > Application > Cookies > \
-                 https://opencode.ai, and copy the __Host-console_session and auth cookies \
-                 (either one alone also works). Paste them as \
-                 \"__Host-console_session=value; auth=value\".",
-            ),
-            Setting::new(
-                "workspace_id",
-                &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-                "Optional, for the cookie sign-in. The workspace to read, as a wrk_... or \
-                 org_... ID or its https://opencode.ai/console/... URL. Defaults to the first \
-                 workspace of the account.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -89,8 +77,7 @@ impl Service for Opencodego {
                 .header("User-Agent", "CodexBar");
             return Some(
                 probe
-                    .http(request)
-                    .and_then(|response| response.ok())
+                    .body(request)
                     .and_then(|body| parse_api(&body, SystemTime::now())),
             );
         }
@@ -110,7 +97,7 @@ fn fetch_web(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
             console_workspaces(&orgs)
                 .into_iter()
                 .next()
-                .ok_or(Error::UsageJson(serde_json::error::Category::Data))?
+                .ok_or_else(invalid)?
         }
     };
     let now = SystemTime::now();
@@ -153,7 +140,7 @@ fn console(
     if let Some(workspace) = workspace {
         request = request.header(ORG_HEADER, workspace);
     }
-    probe.http(request)?.ok()
+    probe.body(request)
 }
 
 fn console_workspaces(text: &str) -> Vec<String> {
@@ -189,19 +176,18 @@ fn report(windows: Vec<Window>, balance: Option<f64>) -> Report {
 
 /// The public usage API: `usage.rolling/weekly/monthly`, in percent units.
 pub(crate) fn parse_api(body: &str, now: SystemTime) -> Result<Report> {
-    let value: Value =
-        serde_json::from_str(body).map_err(|error| Error::UsageJson(error.classify()))?;
+    let value: Value = json(body)?;
     let usage = value
         .get("usage")
         .and_then(Value::as_object)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let pick = |key: &str| {
         usage
             .get(key)
             .and_then(Value::as_object)
             .and_then(|window| meter(window, now, false))
     };
-    let rolling = pick("rolling").ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let rolling = pick("rolling").ok_or_else(invalid)?;
     Ok(report(
         meter_windows(Some(rolling), pick("weekly"), pick("monthly")),
         None,
@@ -212,8 +198,7 @@ pub(crate) fn parse_api(body: &str, now: SystemTime) -> Result<Report> {
 /// period (`access.endsAt`) does. A `null` status or access is no
 /// subscription, which still shows a prepaid balance.
 pub(crate) fn parse_console(body: &str, balance: Option<f64>, now: SystemTime) -> Result<Report> {
-    let value: Value =
-        serde_json::from_str(body).map_err(|error| Error::UsageJson(error.classify()))?;
+    let value: Value = json(body)?;
     let Some(access) = value.get("access").and_then(Value::as_object) else {
         if value.is_null() || value.get("access").is_some_and(Value::is_null) {
             return Ok(report(Vec::new(), balance).with_sections([Section::Facts {
@@ -223,12 +208,12 @@ pub(crate) fn parse_console(body: &str, balance: Option<f64>, now: SystemTime) -
         }
         return json_windows(&value, now, true)
             .map(|windows| report(windows, balance))
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data));
+            .ok_or_else(invalid);
     };
     let meters = access
         .get("meters")
         .and_then(Value::as_object)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let pick = |key: &str, fallback_reset: Option<&Value>| {
         let mut window: Map<String, Value> = meters.get(key)?.as_object()?.clone();
         if window.get("resetsAt").is_none_or(Value::is_null)
@@ -244,8 +229,7 @@ pub(crate) fn parse_console(body: &str, balance: Option<f64>, now: SystemTime) -
         let (_, reset) = meter(&window, now, false)?;
         Some((used / limit * 100., reset))
     };
-    let rolling =
-        pick("fiveHour", None).ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let rolling = pick("fiveHour", None).ok_or_else(invalid)?;
     Ok(report(
         meter_windows(
             Some(rolling),

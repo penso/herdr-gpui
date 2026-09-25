@@ -9,11 +9,12 @@
 //! shown as a balance when present; it never feeds the daily window.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, DAY, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::{invalid, number},
     },
 };
 use serde::{Deserialize, Deserializer};
@@ -26,39 +27,25 @@ const MAX_COUNTER: u64 = (1 << 53) - 1;
 
 pub(crate) struct Xkiro;
 
+static META: Meta = Meta::new("xkiro", "xKiro")
+    .dashboard("https://xkiro.com")
+    .settings(&[Setting::new(
+        "api_key",
+        &["XKIRO_API_KEY"],
+        "An xKiro API key from your account at https://xkiro.com. It is sent only to \
+         api.xkiro.com; reading usage spends no tokens.",
+    )]);
+
 impl Service for Xkiro {
-    fn id(&self) -> &'static str {
-        "xkiro"
-    }
-
-    fn name(&self) -> &'static str {
-        "xKiro"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/xkiro.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://xkiro.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["XKIRO_API_KEY"],
-            "An xKiro API key from your account at https://xkiro.com. It is sent only to \
-             api.xkiro.com; reading usage spends no tokens.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let key = probe.setting("api_key")?;
         Some(
             probe
-                .http(Request::get(URL).bearer(&key))
-                .and_then(|response| response.ok())
+                .body(Request::get(URL).bearer(&key))
                 .and_then(|body| parse(&body, SystemTime::now())),
         )
     }
@@ -68,14 +55,14 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     let usage: Usage = json(body)?;
     let free = match (usage.object.as_deref(), usage.free_tokens) {
         (Some("usage"), Some(free)) => free,
-        _ => return Err(INVALID),
+        _ => return Err(invalid()),
     };
     let uncapped = matches!(free.limit_per_day, Some(None));
     let used = counter(free.used_today.flatten())?;
     let limit = counter(free.limit_per_day.flatten())?;
     let remaining = counter(free.remaining.flatten())?;
     if used.is_none() && limit.is_none() && remaining.is_none() && !uncapped {
-        return Err(INVALID);
+        return Err(invalid());
     }
 
     let windows = match (used, limit) {
@@ -128,12 +115,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .wallet
         .as_ref()
         .and_then(|wallet| wallet.get("balance_usd"))
-        .and_then(|balance| match balance {
-            Value::String(text) => text.trim().parse::<f64>().ok(),
-            Value::Number(number) => number.as_f64(),
-            _ => None,
-        })
-        .filter(|balance| balance.is_finite())
+        .and_then(number)
         .map(|balance| Balance::new("Wallet", balance, Unit::Currency("USD".into())));
 
     Ok(
@@ -146,8 +128,6 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     )
 }
 
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
-
 /// A counter is a non-negative whole number or absent; anything else means
 /// the response is not what the counters are documented as.
 fn counter(value: Option<Value>) -> Result<Option<u64>> {
@@ -157,7 +137,7 @@ fn counter(value: Option<Value>) -> Result<Option<u64>> {
             .as_u64()
             .filter(|count| *count <= MAX_COUNTER)
             .map(Some)
-            .ok_or(INVALID),
+            .ok_or_else(invalid),
     }
 }
 
@@ -207,6 +187,7 @@ struct FreeTokens {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     /// https://docs.xkiro.com/api/usage/: the PAYG example CodexBar tests
     /// with, with a synthetic identity.

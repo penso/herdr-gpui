@@ -239,45 +239,53 @@ impl HerdrWindow {
                     // Lift the popup off the terminal behind it, as the pickers do.
                     .shadow_lg()
             })
-            .when(matches!(page, Page::Menu | Page::Devices), |panel| {
-                // Open on whichever side of the anchor has room, and keep a
-                // margin from the window chrome and the bottom edge: a clamped
-                // list then reads as scrollable rather than clipped.
-                let chrome = px(crate::titlebar::HEIGHT
-                    + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1"));
-                let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
-                let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
-                let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
-                let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
-                let panel = panel
-                    .absolute()
-                    .left(if page == Page::Devices {
-                        self.menu.anchor.x
-                    } else {
-                        px(56.)
-                    })
-                    .w(px(if page == Page::Devices {
+            .when(
+                matches!(page, Page::Menu | Page::Devices | Page::Sessions),
+                |panel| {
+                    // Open on whichever side of the anchor has room, and keep a
+                    // margin from the window chrome and the bottom edge: a clamped
+                    // list then reads as scrollable rather than clipped.
+                    let chrome = px(crate::titlebar::HEIGHT
+                        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1"));
+                    let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
+                    let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
+                    let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
+                    let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
+                    // Both footer buttons open lists of the same width. The
+                    // sessions button sits at the sidebar's right edge, so its
+                    // popup is pulled back to stay inside the window.
+                    let list = matches!(page, Page::Devices | Page::Sessions);
+                    let width = if list {
                         super::devices::MENU_WIDTH
                     } else {
                         180.
-                    })
-                    .min((viewport.width - px(16.)).max(px(0.))));
-                if above >= below {
-                    panel
-                        .bottom(
-                            (viewport.height - self.menu.anchor.y
-                                + px(if page == Page::Devices {
-                                    super::devices::MENU_GAP
-                                } else {
-                                    12.
-                                }))
-                            .max(px(MENU_MARGIN)),
-                        )
-                        .max_h(above)
-                } else {
-                    panel.top(self.menu.anchor.y + px(12.)).max_h(below)
-                }
-            })
+                    };
+                    let left = match page {
+                        Page::Devices => self.menu.anchor.x,
+                        Page::Sessions => self
+                            .menu
+                            .anchor
+                            .x
+                            .min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
+                        _ => px(56.),
+                    };
+                    let panel = panel
+                        .absolute()
+                        .left(left)
+                        .w(px(width).min((viewport.width - px(16.)).max(px(0.))));
+                    if above >= below {
+                        panel
+                            .bottom(
+                                (viewport.height - self.menu.anchor.y
+                                    + px(if list { super::devices::MENU_GAP } else { 12. }))
+                                .max(px(MENU_MARGIN)),
+                            )
+                            .max_h(above)
+                    } else {
+                        panel.top(self.menu.anchor.y + px(12.)).max_h(below)
+                    }
+                },
+            )
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside
                 // the window and clear of the titlebar.
@@ -340,8 +348,10 @@ impl HerdrWindow {
                 },
             )
             .when(
-                !matches!(page, Page::Menu | Page::Devices | Page::Usage(_))
-                    && !pointer_anchored
+                !matches!(
+                    page,
+                    Page::Menu | Page::Devices | Page::Sessions | Page::Usage(_)
+                ) && !pointer_anchored
                     && !matches!(page, Page::Dialog(_)),
                 |panel| {
                     panel
@@ -458,6 +468,8 @@ impl HerdrWindow {
             }
         } else if page == Page::Devices {
             panel = panel.child(self.render_devices(cx));
+        } else if page == Page::Sessions {
+            panel = panel.child(self.render_sessions(cx));
         } else if let Page::Usage(provider) = page {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
@@ -654,7 +666,10 @@ impl HerdrWindow {
             .absolute()
             .inset_0()
             .when(
-                !matches!(page, Page::Menu | Page::Devices | Page::Usage(_)) && !pointer_anchored,
+                !matches!(
+                    page,
+                    Page::Menu | Page::Devices | Page::Sessions | Page::Usage(_)
+                ) && !pointer_anchored,
                 |overlay| {
                     overlay
                         .flex()
@@ -786,6 +801,10 @@ impl HerdrWindow {
                 }
                 if matches!(this.menu.page, Some(Page::Devices | Page::AddDevice)) {
                     this.devices_key(event, window, cx);
+                    return;
+                }
+                if this.menu.page == Some(Page::Sessions) {
+                    this.sessions_key(event, window, cx);
                     return;
                 }
                 if this.menu.page == Some(Page::Palette) {

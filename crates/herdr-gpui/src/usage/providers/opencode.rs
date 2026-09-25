@@ -18,11 +18,15 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp},
+        service::{Meta, Service, Setting, Timestamp},
+        values,
     },
 };
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime};
+
+// Shared with [`super::opencodego`] under the name it imports.
+pub(super) use crate::usage::values::number as value_number;
 
 pub(super) const BASE: &str = "https://opencode.ai";
 pub(super) const DOMAINS: &[&str] = &["opencode.ai"];
@@ -41,42 +45,29 @@ pub(super) const MICRO_CENTS: f64 = 100_000_000.;
 
 pub(crate) struct Opencode;
 
+static META: Meta = Meta::new("opencode", "OpenCode")
+    .dashboard("https://opencode.ai/auth")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "Your opencode.ai session. Sign in at https://opencode.ai/auth, open Developer \
+             Tools > Application > Cookies > https://opencode.ai, and copy the auth and \
+             __Host-console_session cookies (either one alone also works). Paste them as \
+             \"auth=value; __Host-console_session=value\".",
+        ),
+        Setting::new(
+            "workspace_id",
+            &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
+            "Optional. The workspace to read, as a wrk_... ID or the \
+             https://opencode.ai/workspace/... URL of its dashboard. Defaults to the first \
+             workspace of the account.",
+        ),
+    ]);
+
 impl Service for Opencode {
-    fn id(&self) -> &'static str {
-        "opencode"
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenCode"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/opencode.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://opencode.ai/auth")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "Your opencode.ai session. Sign in at https://opencode.ai/auth, open Developer \
-                 Tools > Application > Cookies > https://opencode.ai, and copy the auth and \
-                 __Host-console_session cookies (either one alone also works). Paste them as \
-                 \"auth=value; __Host-console_session=value\".",
-            ),
-            Setting::new(
-                "workspace_id",
-                &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-                "Optional. The workspace to read, as a wrk_... ID or the \
-                 https://opencode.ai/workspace/... URL of its dashboard. Defaults to the first \
-                 workspace of the account.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -100,7 +91,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
                     workspace_ids(&text)
                         .into_iter()
                         .next()
-                        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?
+                        .ok_or_else(values::invalid)?
                 }
             }
         }
@@ -122,7 +113,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     // A pay-as-you-go workspace has no subscription; its spend is billing's.
     let referer = format!("{BASE}/workspace/{workspace}");
     let billing = server(probe, cookie, BILLING, Some(&args), &referer)?;
-    parse_billing(&billing).ok_or(Error::UsageJson(serde_json::error::Category::Data))
+    parse_billing(&billing).ok_or_else(values::invalid)
 }
 
 /// Calls a SolidStart server function with GET, as the dashboard does.
@@ -320,15 +311,6 @@ const RESET_AT_KEYS: &[&str] = &[
     "renewAt",
     "renew_at",
 ];
-
-pub(super) fn value_number(value: &Value) -> Option<f64> {
-    let number = match value {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse().ok(),
-        _ => None,
-    };
-    number.filter(|value| value.is_finite())
-}
 
 fn first_number(object: &Map<String, Value>, keys: &[&str]) -> Option<f64> {
     keys.iter()

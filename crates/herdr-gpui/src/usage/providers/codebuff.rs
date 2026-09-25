@@ -7,55 +7,43 @@
 //! Everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{
             Account, Balance, Kind, Provider, Report, Section, Unit, WEEK, Window, title_case,
         },
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values,
     },
 };
-use serde_json::{Value, error::Category};
+use serde_json::Value;
 
 const BASE_URL: &str = "https://www.codebuff.com";
 
 pub(crate) struct Codebuff;
 
+static META: Meta = Meta::new("codebuff", "Codebuff")
+    .dashboard("https://www.codebuff.com/usage")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["CODEBUFF_API_KEY"],
+            "A Codebuff API key from https://www.codebuff.com. It reads the credit balance \
+             only; without it, the session from `codebuff login` is used, which also reads \
+             the plan and weekly limit.",
+        ),
+        Setting::new(
+            "base_url",
+            &["CODEBUFF_API_URL"],
+            "An https URL that replaces https://www.codebuff.com, e.g. for a staging server. \
+             Other schemes are ignored so the token never travels unencrypted.",
+        ),
+    ]);
+
 impl Service for Codebuff {
-    fn id(&self) -> &'static str {
-        "codebuff"
-    }
-
-    fn name(&self) -> &'static str {
-        "Codebuff"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/codebuff.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://www.codebuff.com/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["CODEBUFF_API_KEY"],
-                "A Codebuff API key from https://www.codebuff.com. It reads the credit balance \
-                 only; without it, the session from `codebuff login` is used, which also reads \
-                 the plan and weekly limit.",
-            ),
-            Setting::new(
-                "base_url",
-                &["CODEBUFF_API_URL"],
-                "An https URL that replaces https://www.codebuff.com, e.g. for a staging server. \
-                 Other schemes are ignored so the token never travels unencrypted.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -95,7 +83,7 @@ fn read(
         .bearer(token)
         .header("Accept", "application/json")
         .json(r#"{"fingerprintId":"codexbar-usage"}"#);
-    let usage = probe.http(usage)?.ok()?;
+    let usage = probe.body(usage)?;
     let Some(email) = session else {
         return parse(&usage, None, None);
     };
@@ -104,10 +92,7 @@ fn read(
         .header("Accept", "application/json");
     // The subscription only adds the plan and weekly limit; the credits
     // stand without it.
-    let subscription = probe
-        .http(subscription)
-        .and_then(|response| response.ok())
-        .ok();
+    let subscription = probe.body(subscription).ok();
     parse(&usage, subscription.as_deref(), email)
 }
 
@@ -118,7 +103,7 @@ pub(crate) fn parse(
 ) -> Result<Report> {
     let usage: Value = json(usage)?;
     if !usage.is_object() {
-        return Err(Error::UsageJson(Category::Data));
+        return Err(values::invalid());
     }
     let used = amount(&usage, &["usage", "used"]);
     let quota = amount(&usage, &["quota", "limit"]);
@@ -219,14 +204,7 @@ pub(crate) fn parse(
 
 /// The first of `keys` holding a finite number, sent as a number or a string.
 fn amount(value: &Value, keys: &[&str]) -> Option<f64> {
-    keys.iter().find_map(|key| {
-        let number = match value.get(*key)? {
-            Value::Number(number) => number.as_f64(),
-            Value::String(text) => text.trim().parse().ok(),
-            _ => None,
-        }?;
-        number.is_finite().then_some(number)
-    })
+    keys.iter().find_map(|key| values::number(value.get(*key)?))
 }
 
 fn text(value: &Value) -> Option<String> {
@@ -250,6 +228,7 @@ fn time(value: Option<&Value>) -> Option<std::time::SystemTime> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     #[test]
     fn api_key_reads_credits_only() {

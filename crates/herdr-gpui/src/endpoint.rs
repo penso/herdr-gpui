@@ -125,6 +125,10 @@ pub(super) struct Endpoint {
     pub label: String,
     pub connection: ConnectionBridge,
     pub enabled: bool,
+    /// The saved entry this endpoint was last reconciled against. Its own session
+    /// may have been picked in the sessions list since, so a catalog change can
+    /// only be told from such a pick by remembering what the catalog said.
+    saved_host: Option<SavedHost>,
     pub collapsed: bool,
     pub collapsed_repos: HashSet<String>,
     pub live: LiveState,
@@ -148,6 +152,7 @@ impl Endpoint {
             label,
             connection: ConnectionBridge::new(target),
             enabled,
+            saved_host: None,
             collapsed: false,
             collapsed_repos: HashSet::new(),
             live: LiveState::default(),
@@ -169,6 +174,33 @@ impl Endpoint {
         self.online_since = None;
         self.generation += 1;
         self.live = self.connection.take_update().unwrap_or_default();
+    }
+
+    /// The SSH target and session this device was saved with. The sessions list
+    /// may have pointed the live connection at another of the host's sessions,
+    /// so whatever speaks for the saved device (duplicate checks, the device's
+    /// own menu) reads this instead. One never reconciled against the catalog
+    /// has only its live target to go on.
+    pub(crate) fn saved_ssh(&self) -> Option<(&str, &str)> {
+        if let Some(host) = &self.saved_host {
+            return Some((&host.target, &host.session));
+        }
+        match &self.connection.target {
+            ConnectTarget::Ssh { target, session } => Some((target, session)),
+            _ => None,
+        }
+    }
+
+    /// Point this endpoint at another target, retiring the old transport. The
+    /// endpoint keeps its identity, label, and sidebar state; nothing the old
+    /// connection produced survives it.
+    fn retarget(&mut self, target: ConnectTarget) {
+        self.stop();
+        self.connection = ConnectionBridge::new(target);
+        self.detached = false;
+        self.attempts = 0;
+        // The replacement transport has produced no state of its own yet.
+        self.live = LiveState::default();
     }
 
     fn connect(&mut self, options: ConnectOptions, active: bool) {
@@ -448,6 +480,100 @@ impl HerdrWindow {
         true
     }
 
+    /// The installation this window's local endpoint belongs to. A development
+    /// target lists the development catalog's sessions, not the release ones.
+    pub(super) fn local_development(&self) -> bool {
+        matches!(
+            self.endpoints[0].connection.target,
+            ConnectTarget::Session {
+                development: true,
+                ..
+            }
+        )
+    }
+
+    /// Attach this window to another named local session. The local endpoint
+    /// keeps its identity, so the session changes its target rather than adding
+    /// an endpoint for every session on the machine.
+    pub(super) fn select_local_session(&mut self, name: &str, cx: &mut Context<Self>) {
+        let target = ConnectTarget::Session {
+            name: name.to_owned(),
+            development: self.local_development(),
+        };
+        if self.selected_endpoint == 0 && self.endpoints[0].connection.target == target {
+            return;
+        }
+        // Retarget before selecting: the poll loop reconnects endpoint zero, so
+        // it must never still name the session it is leaving.
+        if self.endpoints[0].connection.target != target {
+            self.endpoints[0].retarget(target);
+        }
+        if self.selected_endpoint != 0 && !self.switch_endpoint(LOCAL, cx) {
+            return;
+        }
+        // This is a deliberate move off any remote selection, which must not be
+        // restored over it on the next launch.
+        self.catalog.choose(LOCAL);
+        self.reconnect();
+        // After the reconnect: resetting the connection clears the error slot.
+        if let Some(error) = self.catalog.poll_write() {
+            self.local_error = Some(format!("Save host selection: {error}"));
+        }
+        cx.notify();
+    }
+
+    /// Attach this window to another session of a saved device. The device keeps
+    /// its identity, so the session changes that endpoint's target rather than
+    /// adding an endpoint for every session the host has.
+    pub(super) fn select_device_session(
+        &mut self,
+        id: &str,
+        session: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self
+            .endpoints
+            .iter()
+            .position(|endpoint| endpoint.id == id && endpoint.enabled)
+        else {
+            return;
+        };
+        // Only an SSH device has a session to name; the local endpoint has its
+        // own path through `select_local_session`.
+        let ConnectTarget::Ssh { target, .. } = &self.endpoints[index].connection.target else {
+            return;
+        };
+        let target = ConnectTarget::Ssh {
+            target: target.clone(),
+            session: session.to_owned(),
+        };
+        if self.selected_endpoint == index && self.endpoints[index].connection.target == target {
+            return;
+        }
+        // Retarget before switching, exactly as attaching to a local session
+        // does: the poll loop reconnects this endpoint, so it must never still
+        // name the session the window is leaving.
+        let retargeted = self.endpoints[index].connection.target != target;
+        if retargeted {
+            self.endpoints[index].retarget(target);
+        }
+        if self.selected_endpoint != index && !self.switch_endpoint(id, cx) {
+            return;
+        }
+        self.catalog.choose(id);
+        // Only a session this device was not already on needs a new connection:
+        // choosing the device itself keeps the transport it has, the way choosing
+        // it from the picker does.
+        if retargeted {
+            self.reconnect();
+        }
+        // After the reconnect: resetting the connection clears the error slot.
+        if let Some(error) = self.catalog.poll_write() {
+            self.local_error = Some(format!("Save host selection: {error}"));
+        }
+        cx.notify();
+    }
+
     fn switch_endpoint(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let Some(index) = self.endpoints.iter().position(|e| e.id == id && e.enabled) else {
             return false;
@@ -709,6 +835,39 @@ impl HerdrWindow {
         }
     }
 
+    /// Scan local sessions while the popup asks for them, and ask the saved
+    /// devices for their own sessions on their own slower interval. Probing is
+    /// I/O to the disk and to each host, so both run on workers and only this
+    /// page starts one; results are cached between opens.
+    pub(super) fn poll_sessions(&mut self, cx: &mut Context<Self>) {
+        let development = self.local_development();
+        let open = self.menu.page == Some(crate::menu::Page::Sessions);
+        let now = Instant::now();
+        let mut changed = self.sessions.poll(development, open, now);
+        let targets = self.probe_targets();
+        if self.sessions.devices.poll(&targets, open, now) {
+            changed = true;
+        }
+        if changed {
+            cx.notify();
+        }
+    }
+
+    /// The devices this window may ask for their sessions: every enabled saved
+    /// device reachable over SSH. One the user disabled is never dialled, and the
+    /// local endpoint has no host to ask.
+    pub(super) fn probe_targets(&self) -> Vec<(String, String)> {
+        self.endpoints
+            .iter()
+            .skip(1)
+            .filter(|endpoint| endpoint.enabled)
+            .filter_map(|endpoint| match &endpoint.connection.target {
+                ConnectTarget::Ssh { target, .. } => Some((endpoint.id.clone(), target.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
     fn restore_selection(&mut self, cx: &mut Context<Self>) {
         if !self.catalog.restore_pending {
             return;
@@ -735,14 +894,14 @@ impl HerdrWindow {
         }
     }
 
-    fn reconcile_catalog(&mut self, hosts: Vec<SavedHost>, cx: &mut Context<Self>) {
+    pub(super) fn reconcile_catalog(&mut self, hosts: Vec<SavedHost>, cx: &mut Context<Self>) {
         let selected = &self.endpoints[self.selected_endpoint];
         let selected_id = selected.id.clone();
         let selected_retired = self.selected_endpoint != 0
             && !hosts.iter().any(|host| {
                 format!("{SAVED_PREFIX}{}", host.id) == selected_id
                     && host.enabled
-                    && same_target(&selected.connection.target, host)
+                    && !entry_changed(selected, host)
             });
         if selected_retired {
             self.switch_endpoint(LOCAL, cx);
@@ -765,19 +924,20 @@ impl HerdrWindow {
                     host.enabled,
                 )
             };
-            if endpoint.enabled != host.enabled || !same_target(&endpoint.connection.target, &host)
-            {
+            let changed = endpoint.enabled != host.enabled || entry_changed(&endpoint, &host);
+            if changed {
                 endpoint.stop();
                 endpoint.attempts = 0;
                 endpoint.connection.target = ConnectTarget::Ssh {
-                    target: host.target,
-                    session: host.session,
+                    target: host.target.clone(),
+                    session: host.session.clone(),
                 };
                 endpoint.enabled = host.enabled;
                 endpoint.detached = false;
                 endpoint.retry_at = Instant::now();
             }
-            endpoint.label = host.label;
+            endpoint.label = host.label.clone();
+            endpoint.saved_host = Some(host);
             next.push(endpoint);
         }
         self.endpoints = next;
@@ -790,6 +950,20 @@ impl HerdrWindow {
     }
 }
 
+/// Whether a saved entry differs from the one this endpoint was last reconciled
+/// against, which is what an edit to a device's saved profile looks like. An
+/// endpoint that has never been reconciled compares its live target instead, so
+/// one built outside the catalog still retires when its entry changes.
+fn entry_changed(endpoint: &Endpoint, host: &SavedHost) -> bool {
+    match &endpoint.saved_host {
+        Some(saved) => saved.target != host.target || saved.session != host.session,
+        None => !same_target(&endpoint.connection.target, host),
+    }
+}
+
+/// Whether an endpoint's live target is exactly the saved entry's, session
+/// included. A device's identity as the catalog describes it; the sessions list
+/// deliberately points an endpoint at other sessions of the same device.
 fn same_target(target: &ConnectTarget, host: &SavedHost) -> bool {
     matches!(target, ConnectTarget::Ssh { target, session } if target == &host.target && session == &host.session)
 }
@@ -1168,6 +1342,32 @@ mod tests {
             view.reconcile_catalog(vec![], cx);
             assert_eq!(view.selected_endpoint, 0);
             assert_eq!(view.endpoints.len(), 1);
+        });
+    }
+
+    /// The sessions list retargets a device to another of its sessions without
+    /// touching the catalog, which still names the session the device was saved
+    /// with. Reconciliation must not read that pick as a change of device and drag
+    /// the window back to the session it was previously on.
+    #[gpui::test]
+    fn a_session_picked_from_the_device_list_survives_catalog_reconciliation(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        view.update(cx, |view, cx| {
+            view.reconcile_catalog(vec![host("b", true)], cx);
+            assert!(view.select_endpoint("ssh:b", cx));
+            view.select_device_session("ssh:b", "other", cx);
+            assert!(matches!(
+                &view.endpoints[1].connection.target,
+                ConnectTarget::Ssh { session, .. } if session == "other"
+            ));
+            view.reconcile_catalog(vec![host("b", true)], cx);
+            assert_eq!(view.selected_endpoint, 1);
+            assert!(matches!(
+                &view.endpoints[1].connection.target,
+                ConnectTarget::Ssh { session, .. } if session == "other"
+            ));
         });
     }
 

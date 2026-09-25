@@ -27,25 +27,65 @@ impl Setting {
     }
 }
 
-pub(crate) trait Service: Sync {
+/// What a provider is, for config, the status bar, and the panel. Built in a
+/// `static` with [`Meta::new`] and the builder methods, so a provider states
+/// only what differs from the defaults.
+#[derive(Debug)]
+pub(crate) struct Meta {
     /// Lowercase ASCII, stable: config tables and saved choices use it.
-    fn id(&self) -> &'static str;
-    fn name(&self) -> &'static str;
-    /// An embedded SVG asset path.
-    fn icon(&self) -> &'static str {
-        "icons/agent-generic.svg"
-    }
+    pub id: &'static str,
+    pub name: &'static str,
+    /// An embedded SVG asset path; None uses `icons/providers/<id>.svg` when
+    /// it exists, else a generic mark.
+    pub icon: Option<&'static str>,
     /// The account's own usage page.
-    fn dashboard(&self) -> Option<&'static str> {
-        None
-    }
-    fn status_page(&self) -> Option<&'static str> {
-        None
-    }
+    pub dashboard: Option<&'static str>,
+    pub status_page: Option<&'static str>,
     /// Values this provider reads from config or the environment.
-    fn settings(&self) -> &'static [Setting] {
-        &[]
+    pub settings: &'static [Setting],
+}
+
+impl Meta {
+    pub const fn new(id: &'static str, name: &'static str) -> Self {
+        Self {
+            id,
+            name,
+            icon: None,
+            dashboard: None,
+            status_page: None,
+            settings: &[],
+        }
     }
+
+    pub const fn icon(mut self, path: &'static str) -> Self {
+        self.icon = Some(path);
+        self
+    }
+
+    pub const fn dashboard(mut self, url: &'static str) -> Self {
+        self.dashboard = Some(url);
+        self
+    }
+
+    pub const fn status_page(mut self, url: &'static str) -> Self {
+        self.status_page = Some(url);
+        self
+    }
+
+    pub const fn settings(mut self, settings: &'static [Setting]) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    pub fn icon_path(&self) -> &'static str {
+        self.icon
+            .or_else(|| super::icons::for_id(self.id))
+            .unwrap_or("icons/agent-generic.svg")
+    }
+}
+
+pub(crate) trait Service: Sync {
+    fn meta(&self) -> &'static Meta;
     /// Finds the sign-in through `probe` and asks the service. None means
     /// the probed host has no sign-in and the config names none, so the
     /// provider is left out unless the config asks for it.

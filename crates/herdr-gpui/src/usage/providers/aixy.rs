@@ -8,7 +8,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::{gateway, invalid, usd},
     },
 };
 use serde::Deserialize;
@@ -20,41 +21,28 @@ const MAX_BUDGETS: usize = 64;
 
 pub(crate) struct Aixy;
 
+static META: Meta = Meta::new("aixy", "Aixy")
+    .dashboard("https://dash.aixy-gateway.com")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["AIXY_API_KEY"],
+            "The project-scoped Aixy API key your workload uses, from \
+             https://dash.aixy-gateway.com under the project's API keys. Usage is that \
+             key's own traffic from every machine.",
+        ),
+        Setting::new(
+            "base_url",
+            &["AIXY_BASE_URL"],
+            "Optional gateway URL for a self-hosted or dedicated Aixy, with or without /v1. \
+             Defaults to https://api.aixy-gateway.com. It must be HTTPS unless it is on \
+             localhost, a private network, or a .local host.",
+        ),
+    ]);
+
 impl Service for Aixy {
-    fn id(&self) -> &'static str {
-        "aixy"
-    }
-
-    fn name(&self) -> &'static str {
-        "Aixy"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/aixy.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://dash.aixy-gateway.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["AIXY_API_KEY"],
-                "The project-scoped Aixy API key your workload uses, from \
-                 https://dash.aixy-gateway.com under the project's API keys. Usage is that \
-                 key's own traffic from every machine.",
-            ),
-            Setting::new(
-                "base_url",
-                &["AIXY_BASE_URL"],
-                "Optional gateway URL for a self-hosted or dedicated Aixy, with or without /v1. \
-                 Defaults to https://api.aixy-gateway.com. It must be HTTPS unless it is on \
-                 localhost, a private network, or a .local host.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -73,7 +61,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let request = Request::get(usage_url(&base)?)
         .bearer(key)
         .header("Accept", "application/json");
-    let body = probe.http(request)?.ok()?;
+    let body = probe.body(request)?;
     parse(&body)
 }
 
@@ -88,33 +76,6 @@ fn usage_url(raw: &str) -> Result<String> {
     Ok(url.to_string())
 }
 
-/// The key goes to this URL, so it must be HTTPS unless it stays on this
-/// machine or a private network, and it must not carry credentials.
-fn gateway(raw: &str) -> Result<url::Url> {
-    let url = url::Url::parse(raw.trim()).map_err(|_| Error::UsageNotSignedIn)?;
-    let private = match url.host() {
-        Some(url::Host::Domain(name)) => {
-            let name = name.to_ascii_lowercase();
-            name == "localhost" || name.ends_with(".local")
-        }
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        Some(url::Host::Ipv6(ip)) => {
-            let first = ip.segments()[0];
-            ip.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
-        }
-        None => return Err(Error::UsageNotSignedIn),
-    };
-    let secure = url.scheme() == "https" || (url.scheme() == "http" && private);
-    if !secure || !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url)
-}
-
-fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
-}
-
 fn text(value: Option<&String>) -> Option<&str> {
     value
         .map(|value| value.trim())
@@ -127,10 +88,6 @@ fn amount(value: Option<f64>) -> Result<Option<f64>> {
         Some(value) if !value.is_finite() || value < 0. => Err(invalid()),
         value => Ok(value),
     }
-}
-
-fn usd(value: f64) -> String {
-    format!("${value:.2}")
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {

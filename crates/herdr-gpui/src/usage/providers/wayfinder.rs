@@ -12,7 +12,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit, group},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
     },
 };
 use serde::{Deserialize, de::IgnoredAny};
@@ -26,28 +26,17 @@ const LATENCY: &str = "wayfinder_router_decision_latency_seconds";
 
 pub(crate) struct Wayfinder;
 
+static META: Meta = Meta::new("wayfinder", "Wayfinder").settings(&[Setting::new(
+    "base_url",
+    &["WAYFINDER_GATEWAY_URL"],
+    "The Wayfinder gateway, started with `wayfinder-router serve`. Defaults to \
+         http://127.0.0.1:8088; another URL must be HTTPS, or plain HTTP on a loopback \
+         address.",
+)]);
+
 impl Service for Wayfinder {
-    fn id(&self) -> &'static str {
-        "wayfinder"
-    }
-
-    fn name(&self) -> &'static str {
-        "Wayfinder"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/wayfinder.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "base_url",
-            &["WAYFINDER_GATEWAY_URL"],
-            "The Wayfinder gateway, started with `wayfinder-router serve`. Defaults to \
-             http://127.0.0.1:8088; another URL must be HTTPS, or plain HTTP on a loopback \
-             address.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -69,11 +58,7 @@ impl Service for Wayfinder {
 }
 
 fn fetch(probe: &mut Probe, base: &str, health: Option<String>) -> Result<Report> {
-    let mut get = |path: &str| {
-        probe
-            .http(Request::get(format!("{base}/{path}")).timeout(TIMEOUT))
-            .and_then(|response| response.ok())
-    };
+    let mut get = |path: &str| probe.body(Request::get(format!("{base}/{path}")).timeout(TIMEOUT));
     let health = match health {
         Some(health) => health,
         None => get("healthz")?,

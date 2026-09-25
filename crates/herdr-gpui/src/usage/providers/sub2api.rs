@@ -11,7 +11,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
     },
 };
 use serde::Deserialize;
@@ -19,35 +19,24 @@ use std::time::Duration;
 
 pub(crate) struct Sub2api;
 
+static META: Meta = Meta::new("sub2api", "sub2api").settings(&[
+    Setting::new(
+        "api_key",
+        &["SUB2API_API_KEY"],
+        "A sub2api group API key (sk-…), created in your sub2api deployment's dashboard \
+             under API keys. Usage is scoped to that key's group.",
+    ),
+    Setting::new(
+        "base_url",
+        &["SUB2API_BASE_URL"],
+        "Your sub2api deployment, e.g. https://sub2api.example.com. HTTPS is required, \
+             except plain HTTP on a loopback address such as http://127.0.0.1:8080.",
+    ),
+]);
+
 impl Service for Sub2api {
-    fn id(&self) -> &'static str {
-        "sub2api"
-    }
-
-    fn name(&self) -> &'static str {
-        "sub2api"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/sub2api.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["SUB2API_API_KEY"],
-                "A sub2api group API key (sk-…), created in your sub2api deployment's dashboard \
-                 under API keys. Usage is scoped to that key's group.",
-            ),
-            Setting::new(
-                "base_url",
-                &["SUB2API_BASE_URL"],
-                "Your sub2api deployment, e.g. https://sub2api.example.com. HTTPS is required, \
-                 except plain HTTP on a loopback address such as http://127.0.0.1:8080.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -66,7 +55,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let request = Request::get(format!("{base}?days=30&timezone=UTC"))
         .bearer(key)
         .timeout(Duration::from_secs(15));
-    parse(&probe.http(request)?.ok()?)
+    parse(&probe.body(request)?)
 }
 
 /// The usage endpoint of a deployment URL, which may already name `/v1` or

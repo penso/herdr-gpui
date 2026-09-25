@@ -11,7 +11,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::Probe,
-        service::{Service, Setting},
+        service::{Meta, Service, Setting},
     },
 };
 use std::{collections::HashMap, time::Duration};
@@ -23,35 +23,19 @@ const SCRIPT: &str = "\"$0\" usage 2>&1";
 
 pub(crate) struct Coderabbit;
 
+static META: Meta = Meta::new("coderabbit", "CodeRabbit")
+    .dashboard("https://app.coderabbit.ai")
+    .status_page("https://status.coderabbit.ai")
+    .settings(&[Setting::new(
+        "cli_path",
+        &["CODERABBIT_CLI_PATH"],
+        "The path of the coderabbit executable on the probed host, when it is not on the \
+         usual PATH (~/.local/bin, Homebrew). Sign in once with `coderabbit auth login`.",
+    )]);
+
 impl Service for Coderabbit {
-    fn id(&self) -> &'static str {
-        "coderabbit"
-    }
-
-    fn name(&self) -> &'static str {
-        "CodeRabbit"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/coderabbit.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.coderabbit.ai")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.coderabbit.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cli_path",
-            &["CODERABBIT_CLI_PATH"],
-            "The path of the coderabbit executable on the probed host, when it is not on the \
-             usual PATH (~/.local/bin, Homebrew). Sign in once with `coderabbit auth login`.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {

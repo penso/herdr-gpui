@@ -11,11 +11,12 @@
 //! 30-day totals are shown here.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::{https_base, invalid, usd},
     },
 };
 use serde::Deserialize;
@@ -28,58 +29,42 @@ const ACTIVITY: &str = "https://openrouter.ai/api/v1/activity";
 
 pub(crate) struct Openrouter;
 
+static META: Meta = Meta::new("openrouter", "OpenRouter")
+    .dashboard("https://openrouter.ai/activity")
+    .status_page("https://status.openrouter.ai")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["OPENROUTER_API_KEY"],
+            "An OpenRouter API key (sk-or-v1-…) from https://openrouter.ai/settings/keys. \
+             A Management API key also works and adds the last 30 days of activity.",
+        ),
+        Setting::new(
+            "management_api_key",
+            &["OPENROUTER_MANAGEMENT_API_KEY"],
+            "Optional Management API key from https://openrouter.ai/settings/management-keys, \
+             used only for the last 30 days of account activity.",
+        ),
+        Setting::new(
+            "base_url",
+            &["OPENROUTER_API_URL"],
+            "Optional HTTPS API URL for a proxy. Defaults to https://openrouter.ai/api/v1.",
+        ),
+        Setting::new(
+            "http_referer",
+            &["OPENROUTER_HTTP_REFERER"],
+            "Optional client URL sent as the HTTP-Referer header.",
+        ),
+        Setting::new(
+            "x_title",
+            &["OPENROUTER_X_TITLE"],
+            "Optional client title sent as the X-Title header. Defaults to Herdr.",
+        ),
+    ]);
+
 impl Service for Openrouter {
-    fn id(&self) -> &'static str {
-        "openrouter"
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenRouter"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/openrouter.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://openrouter.ai/activity")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.openrouter.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["OPENROUTER_API_KEY"],
-                "An OpenRouter API key (sk-or-v1-…) from https://openrouter.ai/settings/keys. \
-                 A Management API key also works and adds the last 30 days of activity.",
-            ),
-            Setting::new(
-                "management_api_key",
-                &["OPENROUTER_MANAGEMENT_API_KEY"],
-                "Optional Management API key from https://openrouter.ai/settings/management-keys, \
-                 used only for the last 30 days of account activity.",
-            ),
-            Setting::new(
-                "base_url",
-                &["OPENROUTER_API_URL"],
-                "Optional HTTPS API URL for a proxy. Defaults to https://openrouter.ai/api/v1.",
-            ),
-            Setting::new(
-                "http_referer",
-                &["OPENROUTER_HTTP_REFERER"],
-                "Optional client URL sent as the HTTP-Referer header.",
-            ),
-            Setting::new(
-                "x_title",
-                &["OPENROUTER_X_TITLE"],
-                "Optional client title sent as the X-Title header. Defaults to Herdr.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -91,7 +76,8 @@ impl Service for Openrouter {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    // An override must stay on HTTPS: the key is attached to it.
+    let base = https_base(probe.text_setting("base_url"), BASE)?;
     let title = probe
         .text_setting("x_title")
         .filter(|title| !title.is_empty())
@@ -111,12 +97,8 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     };
     // Either answer alone is worth showing, as CodexBar keeps whichever
     // arrived; only when both fail is the key's failure reported.
-    let credits = probe
-        .http(request(format!("{base}/credits")))
-        .and_then(|response| response.ok());
-    let key_info = probe
-        .http(request(format!("{base}/key")))
-        .and_then(|response| response.ok());
+    let credits = probe.body(request(format!("{base}/credits")));
+    let key_info = probe.body(request(format!("{base}/key")));
     let key_info = match (key_info, &credits) {
         (Err(error), Err(_)) => return Err(error),
         (key_info, _) => key_info.ok(),
@@ -131,12 +113,11 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     });
     let activity = management.and_then(|management| {
         probe
-            .http(
+            .body(
                 Request::get(ACTIVITY)
                     .bearer(&management)
                     .header("Accept", "application/json"),
             )
-            .and_then(|response| response.ok())
             .ok()
     });
     parse(
@@ -144,23 +125,6 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
         credits.ok().as_deref(),
         activity.as_deref(),
     )
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
 }
 
 /// Builds the report from whichever of the three answers arrived. Optional
@@ -179,7 +143,7 @@ pub(crate) fn parse(
         (key, credits) => (key.ok().flatten(), credits.ok().flatten()),
     };
     if key.is_none() && credits.is_none() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let balance = credits.as_ref().map(|credits| {
         Balance::new(
@@ -215,10 +179,6 @@ fn parse_key(body: &str) -> Result<KeyData> {
     Ok(json::<Envelope<KeyData>>(body)?.data)
 }
 
-fn money(amount: f64) -> String {
-    format!("${:.2}", amount.max(0.))
-}
-
 fn activity_facts(rows: &[Activity]) -> Section {
     let spend: f64 = rows
         .iter()
@@ -237,7 +197,7 @@ fn activity_facts(rows: &[Activity]) -> Section {
     Section::Facts {
         title: "Last 30 days".into(),
         facts: vec![
-            ("Spend".into(), money(spend)),
+            ("Spend".into(), usd(spend)),
             ("Requests".into(), group(requests.round() as i64)),
             ("Tokens".into(), group(tokens.round() as i64)),
             ("Models".into(), models.len().to_string()),
@@ -315,12 +275,12 @@ impl KeyData {
         let mut facts = Vec::new();
         match self.limit() {
             Some(limit) => {
-                facts.push(("Spending cap".into(), money(limit)));
+                facts.push(("Spending cap".into(), usd(limit)));
                 if let Some(spent) = self.spent(limit) {
-                    facts.push(("Cap remaining".into(), money(limit - spent)));
+                    facts.push(("Cap remaining".into(), usd(limit - spent)));
                 }
                 if let Some(usage) = self.usage {
-                    facts.push(("Key used".into(), money(usage)));
+                    facts.push(("Key used".into(), usd(usage)));
                 }
             }
             None => facts.push(("Spending cap".into(), "No limit configured".into())),
@@ -334,7 +294,7 @@ impl KeyData {
             ("This month", self.usage_monthly),
         ] {
             if let Some(value) = value {
-                facts.push((label.into(), money(value)));
+                facts.push((label.into(), usd(value)));
             }
         }
         Section::Facts {

@@ -16,7 +16,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Unit, Window, group},
         probe::{HostPath, Probe, Request},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
 use chrono::{NaiveDate, TimeZone};
@@ -27,38 +27,22 @@ const BASE: &str = "https://app.augmentcode.com";
 
 pub(crate) struct Augment;
 
+static META: Meta = Meta::new("augment", "Augment")
+    .dashboard("https://app.augmentcode.com/account/subscription")
+    .status_page("https://status.augmentcode.com")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Your app.augmentcode.com browser session, used when the Auggie CLI is not signed \
+         in. Sign in at https://app.augmentcode.com, open Developer Tools → Application → \
+         Cookies → https://app.augmentcode.com, and copy the session cookies (such as \
+         `_session`, `session`, `web_rpc_proxy_session`, or `auth0`), pasted as one \
+         header: \"name=value; name2=value2\".",
+    )]);
+
 impl Service for Augment {
-    fn id(&self) -> &'static str {
-        "augment"
-    }
-
-    fn name(&self) -> &'static str {
-        "Augment"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/augment.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.augmentcode.com/account/subscription")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.augmentcode.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Your app.augmentcode.com browser session, used when the Auggie CLI is not signed \
-             in. Sign in at https://app.augmentcode.com, open Developer Tools → Application → \
-             Cookies → https://app.augmentcode.com, and copy the session cookies (such as \
-             `_session`, `session`, `web_rpc_proxy_session`, or `auth0`), pasted as one \
-             header: \"name=value; name2=value2\".",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -86,18 +70,12 @@ impl Service for Augment {
                 .cookie(&cookie)
                 .header("Accept", "application/json")
         };
-        let credits = match probe
-            .http(get("/api/credits"))
-            .and_then(|response| response.ok())
-        {
+        let credits = match probe.body(get("/api/credits")) {
             Ok(body) => body,
             Err(error) => return Some(Err(error)),
         };
         // The subscription only adds the plan, email, and cycle end.
-        let subscription = probe
-            .http(get("/api/subscription"))
-            .and_then(|response| response.ok())
-            .ok();
+        let subscription = probe.body(get("/api/subscription")).ok();
         Some(parse_web(&credits, subscription.as_deref()))
     }
 }

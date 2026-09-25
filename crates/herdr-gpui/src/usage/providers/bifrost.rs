@@ -9,7 +9,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values,
     },
 };
 use serde::Deserialize;
@@ -24,36 +25,25 @@ const TOP_MODELS: usize = 5;
 
 pub(crate) struct Bifrost;
 
+static META: Meta = Meta::new("bifrost", "Bifrost").settings(&[
+    Setting::new(
+        "api_key",
+        &["BIFROST_API_KEY"],
+        "Your Bifrost virtual key (vk-…), from the gateway's Virtual Keys page. It is \
+             sent as the x-bf-vk header to base_url only.",
+    ),
+    Setting::new(
+        "base_url",
+        &["BIFROST_BASE_URL"],
+        "Your Bifrost gateway's URL, e.g. https://bifrost.example.com. Bifrost has no \
+             public host. It must be HTTPS unless it is on localhost, a private network, \
+             or a .local host.",
+    ),
+]);
+
 impl Service for Bifrost {
-    fn id(&self) -> &'static str {
-        "bifrost"
-    }
-
-    fn name(&self) -> &'static str {
-        "Bifrost"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/bifrost.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["BIFROST_API_KEY"],
-                "Your Bifrost virtual key (vk-…), from the gateway's Virtual Keys page. It is \
-                 sent as the x-bf-vk header to base_url only.",
-            ),
-            Setting::new(
-                "base_url",
-                &["BIFROST_BASE_URL"],
-                "Your Bifrost gateway's URL, e.g. https://bifrost.example.com. Bifrost has no \
-                 public host. It must be HTTPS unless it is on localhost, a private network, \
-                 or a .local host.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -72,39 +62,16 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let request = Request::get(quota_url(&base)?)
         .secret_header("x-bf-vk", "", key)
         .header("Accept", "application/json");
-    let body = probe.http(request)?.ok()?;
+    let body = probe.body(request)?;
     parse(&body, SystemTime::now())
 }
 
 fn quota_url(raw: &str) -> Result<String> {
-    let mut url = gateway(raw)?;
+    let mut url = values::gateway(raw)?;
     let path = format!("{}{QUOTA_PATH}", url.path().trim_end_matches('/'));
     url.set_path(&path);
     url.set_fragment(None);
     Ok(url.to_string())
-}
-
-/// The key goes to this URL, so it must be HTTPS unless it stays on this
-/// machine or a private network, and it must not carry credentials.
-fn gateway(raw: &str) -> Result<url::Url> {
-    let url = url::Url::parse(raw.trim()).map_err(|_| Error::UsageNotSignedIn)?;
-    let private = match url.host() {
-        Some(url::Host::Domain(name)) => {
-            let name = name.to_ascii_lowercase();
-            name == "localhost" || name.ends_with(".local")
-        }
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        Some(url::Host::Ipv6(ip)) => {
-            let first = ip.segments()[0];
-            ip.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
-        }
-        None => return Err(Error::UsageNotSignedIn),
-    };
-    let secure = url.scheme() == "https" || (url.scheme() == "http" && private);
-    if !secure || !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url)
 }
 
 fn text(value: Option<&String>) -> Option<&str> {
@@ -147,7 +114,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 };
             let limit = row.max_limit.unwrap_or(0.) + if active { amount } else { 0. };
             if !limit.is_finite() {
-                return Err(Error::UsageJson(serde_json::error::Category::Data));
+                return Err(values::invalid());
             }
             budgets.push(Budget {
                 id: id.to_owned(),

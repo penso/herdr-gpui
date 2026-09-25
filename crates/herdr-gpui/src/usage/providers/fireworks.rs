@@ -13,7 +13,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
     },
 };
 use serde::Deserialize;
@@ -26,40 +26,27 @@ const PERIOD: Duration = Duration::from_secs(30 * 86_400);
 
 pub(crate) struct Fireworks;
 
+static META: Meta = Meta::new("fireworks", "Fireworks")
+    .dashboard("https://app.fireworks.ai/billing")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["FIREWORKS_API_KEY", "FIREWORKS_KEY"],
+            "A Fireworks API key from https://app.fireworks.ai/settings/users/api-keys. \
+             It reads the account's billing summary.",
+        ),
+        Setting::new(
+            "account_slug",
+            &["FIREWORKS_ACCOUNT_SLUG"],
+            "The Fireworks account id, needed only when the API key can see several \
+             accounts. Find it in the account switcher on https://app.fireworks.ai or \
+             with `firectl whoami`.",
+        ),
+    ]);
+
 impl Service for Fireworks {
-    fn id(&self) -> &'static str {
-        "fireworks"
-    }
-
-    fn name(&self) -> &'static str {
-        "Fireworks"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/fireworks.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.fireworks.ai/billing")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["FIREWORKS_API_KEY", "FIREWORKS_KEY"],
-                "A Fireworks API key from https://app.fireworks.ai/settings/users/api-keys. \
-                 It reads the account's billing summary.",
-            ),
-            Setting::new(
-                "account_slug",
-                &["FIREWORKS_ACCOUNT_SLUG"],
-                "The Fireworks account id, needed only when the API key can see several \
-                 accounts. Find it in the account switcher on https://app.fireworks.ai or \
-                 with `firectl whoami`.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {

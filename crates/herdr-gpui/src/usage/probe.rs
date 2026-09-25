@@ -325,7 +325,8 @@ impl<'a> Probe<'a> {
     fn declared(&self, name: &str) -> Option<&'static Setting> {
         self.provider
             .service()
-            .settings()
+            .meta()
+            .settings
             .iter()
             .find(|setting| setting.name == name)
     }
@@ -553,6 +554,12 @@ impl<'a> Probe<'a> {
                 Exec::Local => Err(Error::UsageMixedSecrets),
             },
         }
+    }
+
+    /// The body of a successful answer; a failed one becomes its usage
+    /// error, as [`Response::ok`] maps it.
+    pub fn body(&mut self, request: Request) -> Result<String> {
+        self.http(request)?.ok()
     }
 
     /// Exchanges one credential for another, such as a short-lived API token,

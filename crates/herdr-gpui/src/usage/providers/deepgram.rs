@@ -6,11 +6,12 @@
 //! shows facts only. Everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Provider, Report, Section, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::https_base,
     },
 };
 use serde::Deserialize;
@@ -21,44 +22,31 @@ const MAX_PROJECTS: usize = 20;
 
 pub(crate) struct Deepgram;
 
+static META: Meta = Meta::new("deepgram", "Deepgram")
+    .dashboard("https://console.deepgram.com/project/")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["DEEPGRAM_API_KEY"],
+            "A Deepgram API key with the usage:read scope, created in the Deepgram Console \
+             (https://console.deepgram.com) under API Keys.",
+        ),
+        Setting::new(
+            "project_id",
+            &["DEEPGRAM_PROJECT_ID"],
+            "Optional project UUID from the Deepgram Console. Leave unset to sum usage over \
+             every project the key can see.",
+        ),
+        Setting::new(
+            "base_url",
+            &["DEEPGRAM_API_URL"],
+            "Optional HTTPS API URL for a proxy. Defaults to https://api.deepgram.com/v1.",
+        ),
+    ]);
+
 impl Service for Deepgram {
-    fn id(&self) -> &'static str {
-        "deepgram"
-    }
-
-    fn name(&self) -> &'static str {
-        "Deepgram"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/deepgram.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.deepgram.com/project/")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["DEEPGRAM_API_KEY"],
-                "A Deepgram API key with the usage:read scope, created in the Deepgram Console \
-                 (https://console.deepgram.com) under API Keys.",
-            ),
-            Setting::new(
-                "project_id",
-                &["DEEPGRAM_PROJECT_ID"],
-                "Optional project UUID from the Deepgram Console. Leave unset to sum usage over \
-                 every project the key can see.",
-            ),
-            Setting::new(
-                "base_url",
-                &["DEEPGRAM_API_URL"],
-                "Optional HTTPS API URL for a proxy. Defaults to https://api.deepgram.com/v1.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -70,42 +58,24 @@ impl Service for Deepgram {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    // An override must stay on HTTPS: the key is attached to it.
+    let base = https_base(probe.text_setting("base_url"), BASE)?;
     let get = |url: String| Request::get(url).secret_header("Authorization", "Token ", key);
     let projects = match probe.text_setting("project_id").filter(|id| !id.is_empty()) {
         Some(id) => vec![Project {
             project_id: id,
             name: None,
         }],
-        None => parse_projects(&probe.http(get(format!("{base}/projects")))?.ok()?)?,
+        None => parse_projects(&probe.body(get(format!("{base}/projects")))?)?,
     };
     let mut totals = Totals::default();
     for project in projects.iter().take(MAX_PROJECTS) {
         let id: String =
             url::form_urlencoded::byte_serialize(project.project_id.as_bytes()).collect();
-        let body = probe
-            .http(get(format!("{base}/projects/{id}/usage/breakdown")))?
-            .ok()?;
+        let body = probe.body(get(format!("{base}/projects/{id}/usage/breakdown")))?;
         totals.add(parse_breakdown(&body)?);
     }
     Ok(report(&projects, &totals))
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
 }
 
 fn parse_projects(body: &str) -> Result<Vec<Project>> {
@@ -311,12 +281,12 @@ mod tests {
 
     #[test]
     fn rejects_plain_http_overrides() {
-        assert!(base_url(Some("http://proxy.test/v1".into())).is_err());
+        assert!(https_base(Some("http://proxy.test/v1".into()), BASE).is_err());
         assert_eq!(
-            base_url(Some("proxy.test/v1/".into())).unwrap(),
+            https_base(Some("proxy.test/v1/".into()), BASE).unwrap(),
             "https://proxy.test/v1"
         );
-        assert_eq!(base_url(None).unwrap(), BASE);
+        assert_eq!(https_base(None, BASE).unwrap(), BASE);
     }
 
     #[test]

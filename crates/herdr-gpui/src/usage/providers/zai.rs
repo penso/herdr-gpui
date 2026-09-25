@@ -21,7 +21,8 @@ use crate::{
             Window, group,
         },
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use chrono::{Datelike, Duration as Span, Timelike, Utc, Weekday};
@@ -47,72 +48,59 @@ const CHINA_FILES: [&str; 3] = [
 
 pub(crate) struct Zai;
 
+static META: Meta = Meta::new("zai", "z.ai / GLM")
+    .dashboard("https://z.ai/manage-apikey/coding-plan/personal/my-plan")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["Z_AI_API_KEY"],
+            "A z.ai API key from https://z.ai/manage-apikey/apikey-list, or for BigModel \
+             China one from https://bigmodel.cn/usercenter/proj-mgmt/apikeys.",
+        ),
+        Setting::new(
+            "region",
+            &[],
+            "\"global\" for api.z.ai (the default) or \"bigmodel-cn\" for \
+             open.bigmodel.cn, the China mainland GLM Coding Plan.",
+        ),
+        Setting::new(
+            "api_host",
+            &["Z_AI_API_HOST"],
+            "An HTTPS host that replaces the region's API host, e.g. a proxy.",
+        ),
+        Setting::new(
+            "quota_url",
+            &["Z_AI_QUOTA_URL"],
+            "A full HTTPS URL that replaces the quota endpoint.",
+        ),
+        Setting::new(
+            "balance_url",
+            &["Z_AI_BALANCE_URL"],
+            "A full HTTPS URL that replaces the BigModel China balance endpoint.",
+        ),
+        Setting::new(
+            "usage_scope",
+            &[],
+            "\"personal\" (the default) or \"team\" for BigModel team usage, which also \
+             needs organization and project.",
+        ),
+        Setting::new(
+            "organization",
+            &["Z_AI_BIGMODEL_ORGANIZATION"],
+            "For team usage: open https://bigmodel.cn/coding-plan/team/usage-stats, pick \
+             the team, and in Developer Tools > Network copy the Bigmodel-Organization \
+             request header of the quota/limit request.",
+        ),
+        Setting::new(
+            "project",
+            &["Z_AI_BIGMODEL_PROJECT"],
+            "For team usage: the Bigmodel-Project request header of the same request.",
+        ),
+    ]);
+
 impl Service for Zai {
-    fn id(&self) -> &'static str {
-        "zai"
-    }
-
-    fn name(&self) -> &'static str {
-        "z.ai / GLM"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/zai.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://z.ai/manage-apikey/coding-plan/personal/my-plan")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["Z_AI_API_KEY"],
-                "A z.ai API key from https://z.ai/manage-apikey/apikey-list, or for BigModel \
-                 China one from https://bigmodel.cn/usercenter/proj-mgmt/apikeys.",
-            ),
-            Setting::new(
-                "region",
-                &[],
-                "\"global\" for api.z.ai (the default) or \"bigmodel-cn\" for \
-                 open.bigmodel.cn, the China mainland GLM Coding Plan.",
-            ),
-            Setting::new(
-                "api_host",
-                &["Z_AI_API_HOST"],
-                "An HTTPS host that replaces the region's API host, e.g. a proxy.",
-            ),
-            Setting::new(
-                "quota_url",
-                &["Z_AI_QUOTA_URL"],
-                "A full HTTPS URL that replaces the quota endpoint.",
-            ),
-            Setting::new(
-                "balance_url",
-                &["Z_AI_BALANCE_URL"],
-                "A full HTTPS URL that replaces the BigModel China balance endpoint.",
-            ),
-            Setting::new(
-                "usage_scope",
-                &[],
-                "\"personal\" (the default) or \"team\" for BigModel team usage, which also \
-                 needs organization and project.",
-            ),
-            Setting::new(
-                "organization",
-                &["Z_AI_BIGMODEL_ORGANIZATION"],
-                "For team usage: open https://bigmodel.cn/coding-plan/team/usage-stats, pick \
-                 the team, and in Developer Tools > Network copy the Bigmodel-Organization \
-                 request header of the quota/limit request.",
-            ),
-            Setting::new(
-                "project",
-                &["Z_AI_BIGMODEL_PROJECT"],
-                "For team usage: the Bigmodel-Project request header of the same request.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -187,7 +175,7 @@ fn read(probe: &mut Probe, key: &Secret, china: bool) -> Result<Report> {
     } else {
         quota_url
     };
-    let body = probe.http(get(quota_url))?.ok()?;
+    let body = probe.body(get(quota_url))?;
     let now = SystemTime::now();
     let mut report = parse(&body, now)?;
 
@@ -205,8 +193,7 @@ fn read(probe: &mut Probe, key: &Secret, china: bool) -> Result<Report> {
             .header("Accept", "application/json")
             .timeout(Duration::from_secs(5));
         if let Some(balance) = probe
-            .http(request)
-            .and_then(|response| response.ok())
+            .body(request)
             .ok()
             .and_then(|body| parse_balance(&body))
         {
@@ -224,8 +211,7 @@ fn read(probe: &mut Probe, key: &Secret, china: bool) -> Result<Report> {
         url.push_str("&type=3");
     }
     if let Some(tokens) = probe
-        .http(get(url))
-        .and_then(|response| response.ok())
+        .body(get(url))
         .ok()
         .and_then(|body| parse_tokens(&body))
     {
@@ -284,12 +270,10 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     if root.success != Some(true) || root.code != Some(200) {
         return Err(Error::UsageRejected);
     }
-    let data = root
-        .data
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let data = root.data.ok_or_else(invalid)?;
     let limits: Vec<Limit> = data
         .limits
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?
+        .ok_or_else(invalid)?
         .into_iter()
         .filter(|limit| {
             matches!(

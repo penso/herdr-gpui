@@ -6,11 +6,12 @@
 //! professional voice slots, and the plan tier and status.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, Window, group, title_case},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values,
     },
 };
 use serde::Deserialize;
@@ -19,42 +20,26 @@ const BASE: &str = "https://api.elevenlabs.io";
 
 pub(crate) struct Elevenlabs;
 
+static META: Meta = Meta::new("elevenlabs", "ElevenLabs")
+    .dashboard("https://elevenlabs.io/app/subscription")
+    .status_page("https://status.elevenlabs.io")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["ELEVENLABS_API_KEY", "XI_API_KEY"],
+            "An ElevenLabs API key with the user_read permission, from \
+             https://elevenlabs.io/app/settings/api-keys.",
+        ),
+        Setting::new(
+            "base_url",
+            &["ELEVENLABS_API_URL"],
+            "Optional HTTPS API origin for a proxy. Defaults to https://api.elevenlabs.io.",
+        ),
+    ]);
+
 impl Service for Elevenlabs {
-    fn id(&self) -> &'static str {
-        "elevenlabs"
-    }
-
-    fn name(&self) -> &'static str {
-        "ElevenLabs"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/elevenlabs.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://elevenlabs.io/app/subscription")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.elevenlabs.io")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["ELEVENLABS_API_KEY", "XI_API_KEY"],
-                "An ElevenLabs API key with the user_read permission, from \
-                 https://elevenlabs.io/app/settings/api-keys.",
-            ),
-            Setting::new(
-                "base_url",
-                &["ELEVENLABS_API_URL"],
-                "Optional HTTPS API origin for a proxy. Defaults to https://api.elevenlabs.io.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -62,37 +47,15 @@ impl Service for Elevenlabs {
             .setting("api_key")
             .or_else(|| probe.env("ELEVENLABS_API_KEY"))
             .or_else(|| probe.env("XI_API_KEY"))?;
-        let base = match base_url(probe.text_setting("base_url")) {
+        let base = match values::https_base(probe.text_setting("base_url"), BASE) {
             Ok(base) => base,
             Err(error) => return Some(Err(error)),
         };
         let request = Request::get(format!("{base}/v1/user/subscription"))
             .secret_header("xi-api-key", "", &key)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {
@@ -208,6 +171,7 @@ struct Subscription {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
     use std::time::{Duration, SystemTime};
 
     /// Shaped like the documented subscription response.

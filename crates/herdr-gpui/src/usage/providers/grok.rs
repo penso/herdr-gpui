@@ -16,7 +16,8 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, WEEK, Window},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -32,36 +33,20 @@ const SCOPES: &[&str] = &[
 
 pub(crate) struct Grok;
 
+static META: Meta = Meta::new("grok", "Grok")
+    .dashboard("https://grok.com/?_s=usage")
+    .status_page("https://status.x.ai")
+    .settings(&[Setting::new(
+        "token",
+        &["GROK_OAUTH_TOKEN"],
+        "A SuperGrok bearer token, only needed when the Grok CLI is not signed in on the \
+         selected host (run `grok login` there instead when you can). It is the \"key\" of \
+         the https://auth.x.ai entry in ~/.grok/auth.json. xai- API keys do not work.",
+    )]);
+
 impl Service for Grok {
-    fn id(&self) -> &'static str {
-        "grok"
-    }
-
-    fn name(&self) -> &'static str {
-        "Grok"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/grok.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://grok.com/?_s=usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.x.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "token",
-            &["GROK_OAUTH_TOKEN"],
-            "A SuperGrok bearer token, only needed when the Grok CLI is not signed in on the \
-             selected host (run `grok login` there instead when you can). It is the \"key\" of \
-             the https://auth.x.ai entry in ~/.grok/auth.json. xai- API keys do not work.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -107,7 +92,7 @@ fn fetch(probe: &mut Probe, token: &Secret, account: Account) -> Result<Report> 
             .header("Accept", "application/json")
             .header("User-Agent", "herdr-gpui")
     };
-    let body = probe.http(get(CREDITS))?.ok()?;
+    let body = probe.body(get(CREDITS))?;
     // The billed tier is decoration: usage still shows when this fails.
     let tier = probe
         .http(get(SETTINGS_URL).timeout(Duration::from_secs(5)))
@@ -148,9 +133,7 @@ pub(crate) fn parse(
     now: SystemTime,
 ) -> Result<Report> {
     let credits: Credits = json(body)?;
-    let config = credits
-        .config
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let config = credits.config.ok_or_else(invalid)?;
     if let Some(plan) = tier
         .or(config.subscription_tier.as_deref())
         .or(credits.subscription_tier.as_deref())
@@ -193,7 +176,7 @@ pub(crate) fn parse(
         (Some(percent), _) => vec![Window::new(kind(length), percent, end, length)],
         // A period without a percentage is unknown usage, not zero.
         (None, Some(_)) => Vec::new(),
-        (None, None) => return Err(Error::UsageJson(serde_json::error::Category::Data)),
+        (None, None) => return Err(invalid()),
     };
     let unknown = windows.is_empty().then(|| Section::Facts {
         title: "Credits".into(),

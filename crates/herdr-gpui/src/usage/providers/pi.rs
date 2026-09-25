@@ -11,22 +11,20 @@
 
 use crate::{
     Result,
-    usage::{model::Report, probe::Probe, service::Service},
+    usage::{
+        model::Report,
+        probe::Probe,
+        service::{Meta, Service},
+    },
 };
 
 pub(crate) struct Pi;
 
+static META: Meta = Meta::new("pi", "Pi");
+
 impl Service for Pi {
-    fn id(&self) -> &'static str {
-        "pi"
-    }
-
-    fn name(&self) -> &'static str {
-        "Pi"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/pi.svg"
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, _probe: &mut Probe) -> Option<Result<Report>> {

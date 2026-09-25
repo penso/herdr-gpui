@@ -8,11 +8,12 @@
 //! sign-in that CodexBar reads.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, plain},
     },
 };
 use serde::Deserialize;
@@ -23,43 +24,27 @@ const BOB: &str = "bob.ibm.com";
 
 pub(crate) struct Ibmbob;
 
+static META: Meta = Meta::new("ibmbob", "IBM Bob")
+    .dashboard("https://bob.ibm.com")
+    .status_page("https://status.bob.ibm.com")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["BOBSHELL_API_KEY"],
+            "An IBM Bob API key that can read subscription usage, created at \
+             https://bob.ibm.com (the same key Bob Shell uses as BOBSHELL_API_KEY).",
+        ),
+        Setting::new(
+            "token",
+            &[],
+            "Instead of an API key, an IBM Cloud bearer token (a JWT) for your Bob account. \
+             It is sent as \"Authorization: Bearer <token>\".",
+        ),
+    ]);
+
 impl Service for Ibmbob {
-    fn id(&self) -> &'static str {
-        "ibmbob"
-    }
-
-    fn name(&self) -> &'static str {
-        "IBM Bob"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/ibmbob.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://bob.ibm.com")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.bob.ibm.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["BOBSHELL_API_KEY"],
-                "An IBM Bob API key that can read subscription usage, created at \
-                 https://bob.ibm.com (the same key Bob Shell uses as BOBSHELL_API_KEY).",
-            ),
-            Setting::new(
-                "token",
-                &[],
-                "Instead of an API key, an IBM Cloud bearer token (a JWT) for your Bob account. \
-                 It is sent as \"Authorization: Bearer <token>\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -89,16 +74,14 @@ impl Auth {
 }
 
 fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
-    let profile = probe
-        .http(auth.request(format!("{BASE}/admin/v1/profile")))
-        .and_then(|response| response.ok())?;
+    let profile = probe.body(auth.request(format!("{BASE}/admin/v1/profile")))?;
     let mut teams = Vec::new();
     for target in parse_profile(&profile)? {
         let request = auth
             .request(&target.url)
             .header("x-instance-id", target.instance_id.as_str())
             .header("x-team-id", target.team_id.as_str());
-        let body = probe.http(request).and_then(|response| response.ok())?;
+        let body = probe.body(request)?;
         teams.push(target.usage(&body)?);
     }
     report(&teams)
@@ -152,8 +135,7 @@ pub(crate) fn parse_profile(body: &str) -> Result<Vec<Target>> {
             continue;
         };
         // A host outside Bob's domain must never receive the key.
-        let base = regional_base(instance.region_domain.as_deref())
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        let base = regional_base(instance.region_domain.as_deref()).ok_or_else(invalid)?;
         let name = non_empty(instance.instance_name.as_deref())
             .or_else(|| non_empty(instance.name.as_deref()))
             .unwrap_or(&instance.instance_id)
@@ -165,9 +147,14 @@ pub(crate) fn parse_profile(body: &str) -> Result<Vec<Target>> {
                 continue;
             }
             let mut url = base.clone();
-            url.path_segments_mut()
-                .map_err(|()| Error::UsageJson(serde_json::error::Category::Data))?
-                .extend(["admin", "v1", "teams", team.id.as_str(), "users", user]);
+            url.path_segments_mut().map_err(|()| invalid())?.extend([
+                "admin",
+                "v1",
+                "teams",
+                team.id.as_str(),
+                "users",
+                user,
+            ]);
             targets.push(Target {
                 url: url.to_string(),
                 instance_id: instance.instance_id.clone(),
@@ -212,7 +199,7 @@ fn regional_base(domain: Option<&str>) -> Option<url::Url> {
 pub(crate) fn report(teams: &[Team]) -> Result<Report> {
     if teams.is_empty() {
         // The key reads no subscription at all.
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let used: f64 = teams.iter().map(|team| team.used).sum();
     let limit = teams
@@ -244,8 +231,8 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
                 format!("{} · {}", team.instance, team.team)
             };
             let value = match team.limit {
-                Some(limit) => format!("{} / {} Bobcoins", coins(team.used), coins(limit)),
-                None => format!("{} Bobcoins used", coins(team.used)),
+                Some(limit) => format!("{} / {} Bobcoins", plain(team.used), plain(limit)),
+                None => format!("{} Bobcoins used", plain(team.used)),
             };
             (label, value)
         })
@@ -263,14 +250,6 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
         title: "Bobcoin usage".into(),
         facts,
     }]))
-}
-
-fn coins(value: f64) -> String {
-    if value.fract() == 0. {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.2}")
-    }
 }
 
 fn non_empty(value: Option<&str>) -> Option<&str> {

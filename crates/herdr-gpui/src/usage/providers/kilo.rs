@@ -14,7 +14,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, number, plain, usd},
     },
 };
 use serde_json::{Map, Value};
@@ -23,36 +24,22 @@ use serde_json::{Map, Value};
 /// `user.getAutoTopUpPaymentMethod`, each with a null input, as one batch.
 const URL: &str = "https://app.kilo.ai/api/trpc/user.getCreditBlocks,kiloPass.getState,user.getAutoTopUpPaymentMethod?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%7D%2C%221%22%3A%7B%22json%22%3Anull%7D%2C%222%22%3A%7B%22json%22%3Anull%7D%7D";
 const PROCEDURES: usize = 3;
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
 
 pub(crate) struct Kilo;
 
+static META: Meta = Meta::new("kilo", "Kilo")
+    .dashboard("https://app.kilo.ai/usage")
+    .settings(&[Setting::new(
+        "api_key",
+        &["KILO_API_KEY"],
+        "A Kilo API key from https://app.kilo.ai (Profile → API keys). Without one, the \
+         Kilo CLI's sign-in in ~/.local/share/kilo/auth.json is used; run `kilo auth \
+         login` to create it.",
+    )]);
+
 impl Service for Kilo {
-    fn id(&self) -> &'static str {
-        "kilo"
-    }
-
-    fn name(&self) -> &'static str {
-        "Kilo"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/kilo.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.kilo.ai/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["KILO_API_KEY"],
-            "A Kilo API key from https://app.kilo.ai (Profile → API keys). Without one, the \
-             Kilo CLI's sign-in in ~/.local/share/kilo/auth.json is used; run `kilo auth \
-             login` to create it.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -63,12 +50,7 @@ impl Service for Kilo {
         let request = Request::get(URL)
             .bearer(&token)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -143,7 +125,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     });
 
     if windows.is_empty() && balances.is_none() && plan.is_none() {
-        return Err(INVALID);
+        return Err(invalid());
     }
     Ok(
         Report::new(Provider(&Kilo), Account { email: None, plan }, windows)
@@ -172,11 +154,11 @@ fn entries(root: &Value) -> Result<Vec<Option<&Map<String, Value>>>> {
                 .map(|index| object.get(&index.to_string()).and_then(Value::as_object))
                 .collect();
             if entries.iter().all(Option::is_none) {
-                return Err(INVALID);
+                return Err(invalid());
             }
             Ok(entries)
         }
-        _ => Err(INVALID),
+        _ => Err(invalid()),
     }
 }
 
@@ -199,7 +181,7 @@ fn trpc_error(error: &Value) -> Error {
     } else if code.contains("not_found") || code.contains("not found") {
         Error::UsageStatus(404)
     } else {
-        INVALID
+        invalid()
     }
 }
 
@@ -240,14 +222,14 @@ impl Credits {
 
 fn credits(payload: Option<&Value>) -> Option<Credits> {
     let contexts = contexts(payload?);
-    let usd = || Unit::Currency("USD".into());
+    let dollars = || Unit::Currency("USD".into());
     if let Some(blocks) = first(&contexts, &["creditBlocks"]).and_then(Value::as_array) {
         let (mut total, mut remaining) = (None::<f64>, None::<f64>);
         for block in blocks.iter().filter_map(Value::as_object) {
-            if let Some(amount) = number(block.get("amount_mUsd")) {
+            if let Some(amount) = block.get("amount_mUsd").and_then(number) {
                 *total.get_or_insert(0.) += amount / 1_000_000.;
             }
-            if let Some(balance) = number(block.get("balance_mUsd")) {
+            if let Some(balance) = block.get("balance_mUsd").and_then(number) {
                 *remaining.get_or_insert(0.) += balance / 1_000_000.;
             }
         }
@@ -257,7 +239,7 @@ fn credits(payload: Option<&Value>) -> Option<Credits> {
             let used = total
                 .zip(remaining)
                 .map(|(total, remaining)| (total - remaining).max(0.));
-            return Some(Credits::new(used, total, remaining, usd()));
+            return Some(Credits::new(used, total, remaining, dollars()));
         }
     }
 
@@ -268,8 +250,11 @@ fn credits(payload: Option<&Value>) -> Option<Credits> {
     const USED: &[&str] = &["used", "usedCredits", "consumed", "spent", "creditsUsed"];
     const TOTAL: &[&str] = &["total", "totalCredits", "creditsTotal", "limit"];
     const REMAINING: &[&str] = &["remaining", "remainingCredits", "creditsRemaining"];
-    let find =
-        |keys: &[&str]| number(first(&blocks, keys)).or_else(|| number(first(&contexts, keys)));
+    let find = |keys: &[&str]| {
+        first(&blocks, keys)
+            .and_then(number)
+            .or_else(|| first(&contexts, keys).and_then(number))
+    };
     let (used, total, remaining) = (find(USED), find(TOTAL), find(REMAINING));
     if used.is_some() || total.is_some() || remaining.is_some() {
         return Some(Credits::new(
@@ -281,9 +266,14 @@ fn credits(payload: Option<&Value>) -> Option<Credits> {
     }
 
     // An account with no credit blocks still reports its balance.
-    let balance = number(first(&contexts, &["totalBalance_mUsd"]))?;
+    let balance = first(&contexts, &["totalBalance_mUsd"]).and_then(number)?;
     let balance = (balance / 1_000_000.).max(0.);
-    Some(Credits::new(Some(0.), Some(balance), Some(balance), usd()))
+    Some(Credits::new(
+        Some(0.),
+        Some(balance),
+        Some(balance),
+        dollars(),
+    ))
 }
 
 struct Pass {
@@ -311,9 +301,17 @@ fn subscription(payload: &Value) -> Option<&Map<String, Value>> {
 }
 
 fn pass(subscription: &Map<String, Value>) -> Pass {
-    let used = number(subscription.get("currentPeriodUsageUsd")).map(|used| used.max(0.));
-    let base = number(subscription.get("currentPeriodBaseCreditsUsd")).map(|base| base.max(0.));
-    let bonus = number(subscription.get("currentPeriodBonusCreditsUsd"))
+    let used = subscription
+        .get("currentPeriodUsageUsd")
+        .and_then(number)
+        .map(|used| used.max(0.));
+    let base = subscription
+        .get("currentPeriodBaseCreditsUsd")
+        .and_then(number)
+        .map(|base| base.max(0.));
+    let bonus = subscription
+        .get("currentPeriodBonusCreditsUsd")
+        .and_then(number)
         .unwrap_or(0.)
         .max(0.);
     let resets_at = ["nextBillingAt", "nextRenewalAt", "renewsAt", "renewAt"]
@@ -385,17 +383,12 @@ fn top_up(credits: Option<&Value>, method: Option<&Value>) -> Option<(bool, Opti
         &method,
         &["paymentMethod", "paymentMethodType", "method", "cardBrand"],
     ));
-    let amount = number(first(&method, &["amountCents"]))
+    let amount = first(&method, &["amountCents"])
+        .and_then(number)
         .map(|cents| cents / 100.)
-        .or_else(|| number(first(&method, &["amount", "topUpAmount", "amountUsd"])))
+        .or_else(|| first(&method, &["amount", "topUpAmount", "amountUsd"]).and_then(number))
         .filter(|amount| *amount > 0.)
-        .map(|amount| {
-            if amount.fract() == 0. {
-                format!("${amount:.0}")
-            } else {
-                format!("${amount:.2}")
-            }
-        });
+        .map(|amount| format!("${}", plain(amount)));
     Some((enabled, name.or(amount)))
 }
 
@@ -444,15 +437,6 @@ fn dig_map<'a>(map: &'a Map<String, Value>, path: &[&str]) -> Option<&'a Value> 
     dig(map.get(*head)?, rest)
 }
 
-fn number(value: Option<&Value>) -> Option<f64> {
-    let number = match value? {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse::<f64>().ok(),
-        _ => None,
-    };
-    number.filter(|number| number.is_finite())
-}
-
 fn text(value: Option<&Value>) -> Option<String> {
     value?
         .as_str()
@@ -480,10 +464,6 @@ fn time(value: Option<&Value>) -> Option<std::time::SystemTime> {
         Value::String(text) if !text.trim().is_empty() => Timestamp::Text(text.clone()).time(),
         _ => None,
     }
-}
-
-fn usd(amount: f64) -> String {
-    format!("${:.2}", amount.max(0.))
 }
 
 #[cfg(test)]

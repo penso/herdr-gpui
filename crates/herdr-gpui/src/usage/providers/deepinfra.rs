@@ -8,7 +8,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
     },
 };
 use serde::Deserialize;
@@ -21,35 +21,19 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) struct Deepinfra;
 
+static META: Meta = Meta::new("deepinfra", "DeepInfra")
+    .dashboard("https://deepinfra.com/dash")
+    .status_page("https://status.deepinfra.com")
+    .settings(&[Setting::new(
+        "api_key",
+        &["DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"],
+        "A DeepInfra API key from https://deepinfra.com/dash/api_keys, without a \
+         \"Bearer \" prefix. It must be allowed to read billing data.",
+    )]);
+
 impl Service for Deepinfra {
-    fn id(&self) -> &'static str {
-        "deepinfra"
-    }
-
-    fn name(&self) -> &'static str {
-        "DeepInfra"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/deepinfra.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://deepinfra.com/dash")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.deepinfra.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"],
-            "A DeepInfra API key from https://deepinfra.com/dash/api_keys, without a \
-             \"Bearer \" prefix. It must be allowed to read billing data.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -63,8 +47,8 @@ impl Service for Deepinfra {
 
 fn read(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let get = |url: &str| Request::get(url).bearer(key).timeout(TIMEOUT);
-    let checklist = probe.http(get(CHECKLIST_URL))?.ok()?;
-    let usage = probe.http(get(USAGE_URL))?.ok()?;
+    let checklist = probe.body(get(CHECKLIST_URL))?;
+    let usage = probe.body(get(USAGE_URL))?;
     parse(&checklist, &usage)
 }
 

@@ -7,11 +7,12 @@
 //! per-model breakdown are not fetched, as CodexBar does not either.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::{invalid, trimmed},
     },
 };
 use serde::Deserialize;
@@ -23,32 +24,19 @@ const AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit
 
 pub(crate) struct Raycast;
 
+static META: Meta = Meta::new("raycast", "Raycast")
+    .dashboard("https://www.raycast.com/settings")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in at https://www.raycast.com/settings, open Developer Tools > Application > \
+         Cookies > https://www.raycast.com, and copy __raycast_session (and csrf_token when \
+         present) as one \"__raycast_session=value; csrf_token=value\" header.",
+    )]);
+
 impl Service for Raycast {
-    fn id(&self) -> &'static str {
-        "raycast"
-    }
-
-    fn name(&self) -> &'static str {
-        "Raycast"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/raycast.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://www.raycast.com/settings")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in at https://www.raycast.com/settings, open Developer Tools > Application > \
-             Cookies > https://www.raycast.com, and copy __raycast_session (and csrf_token when \
-             present) as one \"__raycast_session=value; csrf_token=value\" header.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -59,18 +47,12 @@ impl Service for Raycast {
             .header("Origin", "https://www.raycast.com")
             .header("Referer", "https://www.raycast.com/settings")
             .header("User-Agent", AGENT);
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {
     let credits: Credits = json(body)?;
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let (remaining, total) = (
         credits.remaining_balance_credits,
         credits.total_balance_credits,
@@ -117,10 +99,10 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         _ => {
             let mut facts = Vec::new();
             if let Some(remaining) = remaining {
-                facts.push(("Left".into(), amount(remaining)));
+                facts.push(("Left".into(), trimmed(remaining)));
             }
             if let Some(total) = total {
-                facts.push(("Total".into(), amount(total)));
+                facts.push(("Total".into(), trimmed(total)));
             }
             if let Some(renewal) = renewal {
                 let at = chrono::DateTime::<chrono::Utc>::from(renewal);
@@ -138,12 +120,6 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         }
     };
     Ok(report)
-}
-
-/// `337.38`, without grouping, as the site shows it.
-fn amount(value: f64) -> String {
-    let text = format!("{value:.2}");
-    text.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
 #[derive(Deserialize)]

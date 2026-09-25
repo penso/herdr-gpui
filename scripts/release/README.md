@@ -132,7 +132,7 @@ Linux format ships the tarball's exact bytes. nfpm is the only packaging tool;
 `scripts/release/install-nfpm.sh` downloads its pinned release and checks a
 SHA-256 copied from that release's Sigstore-verified `checksums.txt`. Package
 dependencies are declared explicitly, not inferred: the binary requires
-GLIBC_2.39 (it is built on Ubuntu 24.04), links ALSA, FreeType, xcb and
+GLIBC_2.39 (it is built on Ubuntu 24.04), links ALSA, FreeType, Fontconfig, xcb and
 xkbcommon, and dlopens the Vulkan loader and libwayland-client. RPM
 requirements are sonames so they resolve on any RPM distribution. Entries are
 stamped with the release date, and the release host name is kept out of the

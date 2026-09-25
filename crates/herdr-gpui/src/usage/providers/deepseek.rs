@@ -13,7 +13,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json, number},
+        service::{Meta, Service, Setting, json, number},
     },
 };
 use serde::Deserialize;
@@ -24,45 +24,29 @@ const SUMMARY_URL: &str = "https://platform.deepseek.com/api/v0/users/get_user_s
 
 pub(crate) struct Deepseek;
 
+static META: Meta = Meta::new("deepseek", "DeepSeek")
+    .dashboard("https://platform.deepseek.com/usage")
+    .status_page("https://status.deepseek.com")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["DEEPSEEK_API_KEY", "DEEPSEEK_KEY"],
+            "A DeepSeek API key from https://platform.deepseek.com/api_keys. It reads \
+             the remaining credit balance.",
+        ),
+        Setting::new(
+            "platform_token",
+            &["DEEPSEEK_PLATFORM_TOKEN", "DEEPSEEK_USER_TOKEN"],
+            "Used when no API key is set. Sign in to https://platform.deepseek.com, open \
+             Developer Tools > Application > Local Storage > https://platform.deepseek.com, \
+             and copy the value of the userToken entry (either the whole JSON value or \
+             just its \"value\" field).",
+        ),
+    ]);
+
 impl Service for Deepseek {
-    fn id(&self) -> &'static str {
-        "deepseek"
-    }
-
-    fn name(&self) -> &'static str {
-        "DeepSeek"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/deepseek.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.deepseek.com/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.deepseek.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["DEEPSEEK_API_KEY", "DEEPSEEK_KEY"],
-                "A DeepSeek API key from https://platform.deepseek.com/api_keys. It reads \
-                 the remaining credit balance.",
-            ),
-            Setting::new(
-                "platform_token",
-                &["DEEPSEEK_PLATFORM_TOKEN", "DEEPSEEK_USER_TOKEN"],
-                "Used when no API key is set. Sign in to https://platform.deepseek.com, open \
-                 Developer Tools > Application > Local Storage > https://platform.deepseek.com, \
-                 and copy the value of the userToken entry (either the whole JSON value or \
-                 just its \"value\" field).",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -74,12 +58,7 @@ impl Service for Deepseek {
             let request = Request::get(BALANCE_URL)
                 .bearer(&key)
                 .header("Accept", "application/json");
-            return Some(
-                probe
-                    .http(request)
-                    .and_then(|response| response.ok())
-                    .and_then(|body| parse_balance(&body)),
-            );
+            return Some(probe.body(request).and_then(|body| parse_balance(&body)));
         }
         let stored = probe.setting("platform_token")?;
         // localStorage keeps the token as `{"value":"…"}`; a bare token is used as is.
@@ -88,12 +67,7 @@ impl Service for Deepseek {
             .bearer(&token)
             .header("Accept", "application/json")
             .header("x-client-platform", "web");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse_summary(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse_summary(&body)))
     }
 }
 

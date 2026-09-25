@@ -16,7 +16,8 @@ use crate::{
             title_case,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::{https_base, invalid},
     },
 };
 use serde::Deserialize;
@@ -27,42 +28,29 @@ const AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit
 
 pub(crate) struct Mimo;
 
+static META: Meta = Meta::new("mimo", "Xiaomi MiMo")
+    .dashboard("https://platform.xiaomimimo.com/#/console/balance")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "The MiMo console session. Sign in at \
+             https://platform.xiaomimimo.com/#/console/balance, open Developer Tools → \
+             Application → Cookies → https://platform.xiaomimimo.com, copy the \
+             api-platform_serviceToken and userId cookies (and api-platform_ph and \
+             api-platform_slh when present), and paste them as \
+             \"api-platform_serviceToken=value; userId=value\".",
+        ),
+        Setting::new(
+            "base_url",
+            &["MIMO_API_URL"],
+            "Optional HTTPS API URL. Defaults to https://platform.xiaomimimo.com/api/v1.",
+        ),
+    ]);
+
 impl Service for Mimo {
-    fn id(&self) -> &'static str {
-        "mimo"
-    }
-
-    fn name(&self) -> &'static str {
-        "Xiaomi MiMo"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/mimo.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.xiaomimimo.com/#/console/balance")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "The MiMo console session. Sign in at \
-                 https://platform.xiaomimimo.com/#/console/balance, open Developer Tools → \
-                 Application → Cookies → https://platform.xiaomimimo.com, copy the \
-                 api-platform_serviceToken and userId cookies (and api-platform_ph and \
-                 api-platform_slh when present), and paste them as \
-                 \"api-platform_serviceToken=value; userId=value\".",
-            ),
-            Setting::new(
-                "base_url",
-                &["MIMO_API_URL"],
-                "Optional HTTPS API URL. Defaults to https://platform.xiaomimimo.com/api/v1.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -80,7 +68,8 @@ impl Service for Mimo {
 }
 
 fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    // An override must stay on HTTPS: the session is attached to it.
+    let base = https_base(probe.text_setting("base_url"), BASE)?;
     let mut get = |path: &str| -> Result<String> {
         let request = Request::get(format!("{base}/{path}"))
             .cookie(cookie)
@@ -106,33 +95,14 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     parse(&balance, detail.as_deref(), usage.as_deref())
 }
 
-/// An override must stay on HTTPS: the session is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
-}
-
 /// The balance is required; the token plan's detail and usage are optional
 /// and left out when they do not parse.
 pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) -> Result<Report> {
     let balance = payload::<BalancePayload>(balance)?;
-    let amount = balance
-        .balance
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let amount = balance.balance.ok_or_else(invalid)?;
     let currency = balance.currency.trim().to_uppercase();
     if currency.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let detail = detail.and_then(|body| payload::<PlanDetail>(body).ok());
     let item = usage
@@ -189,11 +159,9 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
 fn payload<T: for<'de> Deserialize<'de>>(body: &str) -> Result<T> {
     let envelope: Envelope<T> = json(body)?;
     match envelope.code {
-        0 => envelope
-            .data
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data)),
+        0 => envelope.data.ok_or_else(invalid),
         401 | 403 => Err(Error::UsageRejected),
-        _ => Err(Error::UsageJson(serde_json::error::Category::Data)),
+        _ => Err(invalid()),
     }
 }
 

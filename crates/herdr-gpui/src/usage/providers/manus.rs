@@ -8,13 +8,14 @@
 //! one: an explicitly set token is simply tried first.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{
             Account, Balance, Kind, Provider, Report, Section, Unit, Window, group, title_case,
         },
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -28,41 +29,28 @@ const REFERENCE_EPOCH: u64 = 978_307_200;
 
 pub(crate) struct Manus;
 
+static META: Meta = Meta::new("manus", "Manus")
+    .dashboard("https://manus.im")
+    .settings(&[
+        Setting::new(
+            "session_token",
+            &["MANUS_SESSION_TOKEN", "MANUS_SESSION_ID"],
+            "Sign in to https://manus.im, open Developer Tools > Application > Cookies > \
+             https://manus.im, and copy the value of the session_id cookie (the value \
+             only, without \"session_id=\"). Not needed when Manus is listed in \
+             show_providers and you are signed in with Chrome or Safari.",
+        ),
+        Setting::new(
+            "cookie",
+            &["MANUS_COOKIE"],
+            "Instead of session_token, a whole manus.im Cookie header that includes \
+             session_id, as \"session_id=value; …\".",
+        ),
+    ]);
+
 impl Service for Manus {
-    fn id(&self) -> &'static str {
-        "manus"
-    }
-
-    fn name(&self) -> &'static str {
-        "Manus"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/manus.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://manus.im")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "session_token",
-                &["MANUS_SESSION_TOKEN", "MANUS_SESSION_ID"],
-                "Sign in to https://manus.im, open Developer Tools > Application > Cookies > \
-                 https://manus.im, and copy the value of the session_id cookie (the value \
-                 only, without \"session_id=\"). Not needed when Manus is listed in \
-                 show_providers and you are signed in with Chrome or Safari.",
-            ),
-            Setting::new(
-                "cookie",
-                &["MANUS_COOKIE"],
-                "Instead of session_token, a whole manus.im Cookie header that includes \
-                 session_id, as \"session_id=value; …\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -76,12 +64,7 @@ impl Service for Manus {
             .header("Connect-Protocol-Version", "1")
             .header("User-Agent", AGENT)
             .json("{}");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -100,7 +83,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     .next()
     .unwrap_or(root.credits);
     if !credits.any() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let total = credits.total_credits.unwrap_or(0.);
     let free = credits.free_credits.unwrap_or(0.);

@@ -14,7 +14,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
 use chrono::Datelike;
@@ -27,38 +27,22 @@ const FLIGHT: &str = "self.__next_f.push(";
 
 pub(crate) struct Mistral;
 
+static META: Meta = Meta::new("mistral", "Mistral")
+    .dashboard("https://admin.mistral.ai/organization/usage")
+    .status_page("https://status.mistral.ai")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in to https://admin.mistral.ai/organization/usage, open Developer Tools > \
+         Application > Cookies for https://admin.mistral.ai, and copy the ory_session_… \
+         cookie (its name ends in a per-project suffix) and csrftoken. Paste them as \
+         \"name=value; name2=value2\"; the Cookie header of any admin.mistral.ai request \
+         also works.",
+    )]);
+
 impl Service for Mistral {
-    fn id(&self) -> &'static str {
-        "mistral"
-    }
-
-    fn name(&self) -> &'static str {
-        "Mistral"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/mistral.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://admin.mistral.ai/organization/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.mistral.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in to https://admin.mistral.ai/organization/usage, open Developer Tools > \
-             Application > Cookies for https://admin.mistral.ai, and copy the ory_session_… \
-             cookie (its name ends in a per-project suffix) and csrftoken. Paste them as \
-             \"name=value; name2=value2\"; the Cookie header of any admin.mistral.ai request \
-             also works.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -78,7 +62,7 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     .header("Accept", "*/*")
     .header("Referer", format!("{ADMIN}/organization/usage"))
     .header("Origin", ADMIN);
-    let usage = probe.http(usage)?.ok()?;
+    let usage = probe.body(usage)?;
     // Credits and allowances are optional; spend stands without them.
     let credits = Request::get(format!("{ADMIN}/api/billing/credits"))
         .cookie(cookie)
@@ -86,17 +70,14 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
         .header("Referer", format!("{ADMIN}/organization/billing"))
         .header("Origin", ADMIN)
         .timeout(Duration::from_secs(5));
-    let credits = probe.http(credits).and_then(|response| response.ok()).ok();
+    let credits = probe.body(credits).ok();
     let subscription = Request::get(format!("{ADMIN}/subscription"))
         .cookie(cookie)
         .header("Accept", "text/html")
         .header("Accept-Language", "en-US,en;q=0.9")
         .header("Referer", format!("{ADMIN}/subscription"))
         .timeout(Duration::from_secs(5));
-    let subscription = probe
-        .http(subscription)
-        .and_then(|response| response.ok())
-        .ok();
+    let subscription = probe.body(subscription).ok();
     parse(&usage, credits.as_deref(), subscription.as_deref())
 }
 

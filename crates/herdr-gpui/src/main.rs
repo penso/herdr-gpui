@@ -37,6 +37,7 @@ mod presentation;
 mod pull_request;
 mod repo_items;
 mod search_input;
+mod sessions;
 mod sidebar;
 mod sound;
 mod state;

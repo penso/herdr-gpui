@@ -16,6 +16,7 @@ mod method;
 mod options;
 mod queue;
 mod session;
+mod sessions;
 mod ssh;
 mod transport;
 mod upload;
@@ -41,6 +42,9 @@ pub use event::ClientEvent;
 pub use handle::{Client, ClientHandle};
 pub use method::Method;
 pub use options::ConnectOptions;
+pub use sessions::{
+    LocalSession, RemoteSession, SessionState, list_local_sessions, list_remote_sessions,
+};
 #[cfg(unix)]
 pub use ssh::script_command;
 pub use ssh::{Destination, HostProbe, probe_host, remote_origin_url, resolve_destination};

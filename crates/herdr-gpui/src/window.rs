@@ -34,7 +34,7 @@ use crate::{
     navigation::OwnedNavigationTarget,
     preferences,
     presentation::Presentation,
-    sidebar,
+    sessions, sidebar,
     state::LiveState,
     terminal::{Selection, WheelAccumulator},
     terminal_painter, updater,
@@ -62,6 +62,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) selected_endpoint: usize,
     pub(crate) selection_epoch: u64,
     pub(crate) catalog: endpoint::Catalog,
+    /// Local sessions on this machine, scanned on a worker while the popup is open.
+    pub(crate) sessions: sessions::Sessions,
+    /// Where the footer's sessions button last painted. The window owns it so a
+    /// shortcut and a click anchor the list at the same place.
+    pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) activation_deadline: Option<std::time::Instant>,
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,
     pub(crate) pending_toast: Option<u64>,
@@ -210,6 +215,7 @@ impl HerdrWindow {
             .as_ref()
             .and_then(|s| s.focused_pane_id.clone());
         self.poll_endpoints(cx);
+        self.poll_sessions(cx);
         self.flush_scrollbar(cx);
         self.flush_split(cx);
         #[cfg(target_os = "macos")]
@@ -320,6 +326,8 @@ impl HerdrWindow {
             config_watch: None,
             config_load_revision: 0,
             catalog: endpoint::Catalog::new(&target),
+            sessions: sessions::Sessions::default(),
+            sessions_anchor: Default::default(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
                 "Local".into(),

@@ -20,7 +20,8 @@ use crate::{
     usage::{
         model::{Account, DAY, Kind, Provider, Report, Section, WEEK, Window},
         probe::{HostPath, Part, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -37,41 +38,25 @@ const SCRIPT: &str = "exec sqlite3 -readonly \"$HOME/$1\" \"$2\"";
 
 pub(crate) struct Windsurf;
 
+static META: Meta = Meta::new("windsurf", "Windsurf")
+    .dashboard("https://windsurf.com/subscription/usage")
+    .status_page("https://status.windsurf.com")
+    .settings(&[Setting::new(
+        "session",
+        &[],
+        "The windsurf.com session bundle, for live quota. Sign in at \
+         https://windsurf.com/profile in Chrome, open Developer Tools → Application → \
+         Local Storage → https://windsurf.com (or https://app.devin.ai), and copy the values \
+         of devin_session_token, devin_auth1_token, devin_account_id, and \
+         devin_primary_org_id into one JSON object: \
+         {\"devin_session_token\": \"…\", \"devin_auth1_token\": \"…\", \
+         \"devin_account_id\": \"…\", \"devin_primary_org_id\": \"…\"}. Without it, the \
+         plan the Windsurf editor cached at its last launch is shown.",
+    )]);
+
 impl Service for Windsurf {
-    fn id(&self) -> &'static str {
-        "windsurf"
-    }
-
-    fn name(&self) -> &'static str {
-        "Windsurf"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/windsurf.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://windsurf.com/subscription/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.windsurf.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "session",
-            &[],
-            "The windsurf.com session bundle, for live quota. Sign in at \
-             https://windsurf.com/profile in Chrome, open Developer Tools → Application → \
-             Local Storage → https://windsurf.com (or https://app.devin.ai), and copy the values \
-             of devin_session_token, devin_auth1_token, devin_account_id, and \
-             devin_primary_org_id into one JSON object: \
-             {\"devin_session_token\": \"…\", \"devin_auth1_token\": \"…\", \
-             \"devin_account_id\": \"…\", \"devin_primary_org_id\": \"…\"}. Without it, the \
-             plan the Windsurf editor cached at its last launch is shown.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -122,7 +107,7 @@ fn web(probe: &mut Probe, bundle: &Secret) -> Result<Report> {
             Part::Secret(session.clone()),
             Part::Text("\",\"includeTopUpStatus\":true}".into()),
         ]);
-    parse_web(&probe.http(request)?.ok()?)
+    parse_web(&probe.body(request)?)
 }
 
 /// One value of the pasted bundle; a bundle missing one is no sign-in.
@@ -134,7 +119,7 @@ fn value(probe: &mut Probe, bundle: &Secret, key: &str) -> Result<Secret> {
 pub(crate) fn parse_web(body: &str) -> Result<Report> {
     let status = json::<PlanStatusResponse>(body)?
         .plan_status
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let quota = |remaining: Option<f64>, resets: Option<&Timestamp>| {
         Some((remaining?, resets.and_then(Timestamp::time)))
     };

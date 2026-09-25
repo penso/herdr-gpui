@@ -15,7 +15,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe},
-        service::Service,
+        service::{Meta, Service},
+        values::plain,
     },
 };
 use chrono::{Datelike, NaiveDate, TimeZone};
@@ -25,25 +26,13 @@ const CLI: &str = "kiro-cli";
 
 pub(crate) struct Kiro;
 
+static META: Meta = Meta::new("kiro", "Kiro")
+    .dashboard("https://app.kiro.dev/account/usage")
+    .status_page("https://health.aws.amazon.com/health/status");
+
 impl Service for Kiro {
-    fn id(&self) -> &'static str {
-        "kiro"
-    }
-
-    fn name(&self) -> &'static str {
-        "Kiro"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/kiro.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.kiro.dev/account/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://health.aws.amazon.com/health/status")
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -149,7 +138,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     if let Some((used, _)) =
         after(&text, "Credits used:").and_then(|rest| leading_number(rest.trim_start()))
     {
-        facts.push(("Overage credits used".to_owned(), format_number(used)));
+        facts.push(("Overage credits used".to_owned(), plain(used)));
     }
     if let Some((cost, rest)) = after(&text, "Est. cost:").and_then(|rest| {
         let rest = rest.trim_start();
@@ -353,14 +342,6 @@ fn leading_number(text: &str) -> Option<(f64, &str)> {
         text[..end].trim_end_matches('.').parse().ok()?,
         &text[end..],
     ))
-}
-
-fn format_number(value: f64) -> String {
-    if value.fract() == 0. {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.2}")
-    }
 }
 
 /// The CLI decorates its report; escape sequences go before parsing.

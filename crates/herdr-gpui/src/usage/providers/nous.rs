@@ -16,7 +16,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -31,40 +32,27 @@ const POOL: usize = 8;
 
 pub(crate) struct Nous;
 
+static META: Meta = Meta::new("nous", "Nous Portal")
+    .dashboard("https://portal.nousresearch.com/usage")
+    .settings(&[
+        Setting::new(
+            "token",
+            &["NOUS_PORTAL_ACCESS_TOKEN"],
+            "A Nous Portal OAuth access token, used instead of Hermes Agent's login in \
+             ~/.hermes/auth.json (sign in with `hermes auth add nous`). It lasts about an \
+             hour; portal API keys are not accepted.",
+        ),
+        Setting::new(
+            "base_url",
+            &["NOUS_PORTAL_BASE_URL", "HERMES_PORTAL_BASE_URL"],
+            "An HTTPS portal origin such as https://portal.nousresearch.com, for a preview \
+             deployment. Plain HTTP is refused.",
+        ),
+    ]);
+
 impl Service for Nous {
-    fn id(&self) -> &'static str {
-        "nous"
-    }
-
-    fn name(&self) -> &'static str {
-        "Nous Portal"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/nous.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://portal.nousresearch.com/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "token",
-                &["NOUS_PORTAL_ACCESS_TOKEN"],
-                "A Nous Portal OAuth access token, used instead of Hermes Agent's login in \
-                 ~/.hermes/auth.json (sign in with `hermes auth add nous`). It lasts about an \
-                 hour; portal API keys are not accepted.",
-            ),
-            Setting::new(
-                "base_url",
-                &["NOUS_PORTAL_BASE_URL", "HERMES_PORTAL_BASE_URL"],
-                "An HTTPS portal origin such as https://portal.nousresearch.com, for a preview \
-                 deployment. Plain HTTP is refused.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -87,8 +75,7 @@ impl Service for Nous {
             .unwrap_or_else(|| PORTAL.to_owned());
         Some(
             probe
-                .http(Request::get(format!("{portal}/api/oauth/account")).bearer(&token))
-                .and_then(|response| response.ok())
+                .body(Request::get(format!("{portal}/api/oauth/account")).bearer(&token))
                 .and_then(|body| parse(&body)),
         )
     }
@@ -202,17 +189,16 @@ fn trusted(origin: &str) -> bool {
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {
-    let invalid = Error::UsageJson(serde_json::error::Category::Data);
     let account: AccountResponse = json(body)?;
     // The portal's own client treats any truthy `error` as a failure.
     if account.error.as_ref().is_some_and(truthy) {
-        return Err(invalid);
+        return Err(invalid());
     }
     let subscription = account.subscription.unwrap_or_default();
     let access = account.paid_service_access.unwrap_or_default();
     let monthly = subscription.monthly_credits;
     if monthly.is_some_and(|monthly| monthly < 0.) {
-        return Err(invalid);
+        return Err(invalid());
     }
     let remaining = subscription
         .credits_remaining
@@ -226,7 +212,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .iter()
         .all(Option::is_none)
     {
-        return Err(invalid);
+        return Err(invalid());
     }
     let renews = subscription
         .current_period_end

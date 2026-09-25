@@ -9,7 +9,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -20,40 +21,27 @@ const DOMAIN: &str = "hyper.charm.land";
 
 pub(crate) struct Hyper;
 
+static META: Meta = Meta::new("hyper", "Charm Hyper")
+    .dashboard("https://hyper.charm.land")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["HYPER_API_KEY"],
+            "A Charm Hyper API key from https://hyper.charm.land. Used when no browser \
+             session is available or the session has expired.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Sign in at https://hyper.charm.land, open Developer Tools > Application > \
+             Cookies > https://hyper.charm.land, and copy every cookie there as one \
+             \"name=value; name2=value2\" header.",
+        ),
+    ]);
+
 impl Service for Hyper {
-    fn id(&self) -> &'static str {
-        "hyper"
-    }
-
-    fn name(&self) -> &'static str {
-        "Charm Hyper"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/hyper.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://hyper.charm.land")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["HYPER_API_KEY"],
-                "A Charm Hyper API key from https://hyper.charm.land. Used when no browser \
-                 session is available or the session has expired.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Sign in at https://hyper.charm.land, open Developer Tools > Application > \
-                 Cookies > https://hyper.charm.land, and copy every cookie there as one \
-                 \"name=value; name2=value2\" header.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -70,8 +58,7 @@ impl Service for Hyper {
                 .header("Accept", "application/json")
                 .timeout(Duration::from_secs(5));
             let answer = probe
-                .http(request)
-                .and_then(|response| response.ok())
+                .body(request)
                 .and_then(|body| parse(&body, Source::Session));
             // An expired session or one that cannot connect falls back to the
             // key; a malformed answer does not, as in CodexBar.
@@ -92,8 +79,7 @@ fn with_key(probe: &mut Probe, key: &Secret) -> Result<Report> {
         .bearer(key)
         .header("Accept", "application/json");
     probe
-        .http(request)
-        .and_then(|response| response.ok())
+        .body(request)
         .and_then(|body| parse(&body, Source::Key))
 }
 
@@ -112,7 +98,7 @@ pub(crate) fn parse(body: &str, source: Source) -> Result<Report> {
     let balance = credits
         .balance
         .filter(|balance| balance.is_finite() && *balance >= 0.)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let account = Account {
         email: None,
         plan: Some(

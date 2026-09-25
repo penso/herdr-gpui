@@ -28,6 +28,7 @@ pub enum Command {
     ResetFontSize,
     Settings,
     Keybinds,
+    Sessions,
     Themes,
     WorkspacePicker,
     Palette,
@@ -259,6 +260,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-/"],
     },
     CommandInfo {
+        command: Command::Sessions,
+        name: "sessions",
+        label: "Sessions",
+        shortcuts: &["cmd-shift-s"],
+    },
+    CommandInfo {
         command: Command::Themes,
         name: "themes",
         label: "Themes",
@@ -401,6 +408,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::ResetFontSize
         | Command::Settings
         | Command::Keybinds
+        | Command::Sessions
         | Command::Themes
         | Command::WorkspacePicker
         | Command::Palette
@@ -427,7 +435,7 @@ mod tests {
     #[test]
     fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         use Command::*;
-        let expected: [(Command, &[&str]); 41] = [
+        let expected: [(Command, &[&str]); 42] = [
             (OpenNotificationTarget, &["cmd-alt-n"]),
             (Logs, &[]),
             (NewWindow, &["cmd-alt-shift-n"]),
@@ -463,6 +471,7 @@ mod tests {
             (ResetFontSize, &["cmd-0"]),
             (Settings, &["cmd-,"]),
             (Keybinds, &["cmd-/"]),
+            (Sessions, &["cmd-shift-s"]),
             (Themes, &[]),
             (WorkspacePicker, &["cmd-p"]),
             (Palette, &["cmd-shift-p"]),
@@ -524,6 +533,7 @@ mod tests {
             Command::ResetFontSize,
             Command::Settings,
             Command::Keybinds,
+            Command::Sessions,
             Command::Themes,
             Command::WorkspacePicker,
             Command::Palette,

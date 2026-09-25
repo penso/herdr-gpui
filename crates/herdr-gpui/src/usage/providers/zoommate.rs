@@ -15,7 +15,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -31,48 +32,32 @@ const DOMAINS: &[&str] = &["ai.zoom.us", "zoommate.zoom.us", "zoom.us"];
 
 pub(crate) struct Zoommate;
 
+static META: Meta = Meta::new("zoommate", "ZoomMate")
+    .dashboard("https://zoommate.zoom.us/#/?settings=credit-usage")
+    .status_page("https://www.zoomstatus.com")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "Your Zoom session cookies. Sign in at https://zoommate.zoom.us, open Developer \
+             Tools > Application > Cookies for https://zoommate.zoom.us (Zoom's sign-in \
+             cookies such as _zm_ssid, _zm_lang and cf_clearance live on zoom.us), and \
+             paste them all as \"name=value; name2=value2\". They are exchanged for a \
+             short-lived token on every refresh.",
+        ),
+        Setting::new(
+            "token",
+            &[],
+            "A bearer token instead of cookies: on https://zoommate.zoom.us open Developer \
+             Tools > Network, reload the AI credit usage page, select the credits/status \
+             request and copy its Authorization header without \"Bearer \". It expires \
+             after about an hour.",
+        ),
+    ]);
+
 impl Service for Zoommate {
-    fn id(&self) -> &'static str {
-        "zoommate"
-    }
-
-    fn name(&self) -> &'static str {
-        "ZoomMate"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/zoommate.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://zoommate.zoom.us/#/?settings=credit-usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://www.zoomstatus.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "Your Zoom session cookies. Sign in at https://zoommate.zoom.us, open Developer \
-                 Tools > Application > Cookies for https://zoommate.zoom.us (Zoom's sign-in \
-                 cookies such as _zm_ssid, _zm_lang and cf_clearance live on zoom.us), and \
-                 paste them all as \"name=value; name2=value2\". They are exchanged for a \
-                 short-lived token on every refresh.",
-            ),
-            Setting::new(
-                "token",
-                &[],
-                "A bearer token instead of cookies: on https://zoommate.zoom.us open Developer \
-                 Tools > Network, reload the AI credit usage page, select the credits/status \
-                 request and copy its Authorization header without \"Bearer \". It expires \
-                 after about an hour.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -93,7 +78,7 @@ impl Service for Zoommate {
                 if let Some(cookie) = &cookie {
                     request = request.cookie(cookie);
                 }
-                probe.http(request).and_then(|response| response.ok())
+                probe.body(request)
             })
             .and_then(|body| parse(&body)),
         )
@@ -138,7 +123,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let status = json::<Envelope>(body)?
         .data
         .and_then(|data| data.credit_status)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let cap = status.budget_cap.unwrap_or(0.);
     let used = status.used_credit.unwrap_or(0.);
     let unlimited = status.is_unlimited.unwrap_or(false) || cap <= 0.;

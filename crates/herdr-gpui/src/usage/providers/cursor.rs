@@ -20,7 +20,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
 use serde::Deserialize;
@@ -42,38 +42,22 @@ const SESSION_COOKIES: &[&str] = &[
 
 pub(crate) struct Cursor;
 
+static META: Meta = Meta::new("cursor", "Cursor")
+    .dashboard("https://cursor.com/dashboard?tab=usage")
+    .status_page("https://status.cursor.com")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Your cursor.com session. Sign in at https://cursor.com/dashboard, open Developer \
+         Tools > Application > Cookies > https://cursor.com, and copy the \
+         WorkosCursorSessionToken cookie (or __Secure-next-auth.session-token on older \
+         accounts). Paste it as \"WorkosCursorSessionToken=value\". Not needed when Cursor \
+         is listed in show_providers and you are signed in with Chrome or Safari.",
+    )]);
+
 impl Service for Cursor {
-    fn id(&self) -> &'static str {
-        "cursor"
-    }
-
-    fn name(&self) -> &'static str {
-        "Cursor"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/cursor.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://cursor.com/dashboard?tab=usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.cursor.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Your cursor.com session. Sign in at https://cursor.com/dashboard, open Developer \
-             Tools > Application > Cookies > https://cursor.com, and copy the \
-             WorkosCursorSessionToken cookie (or __Secure-next-auth.session-token on older \
-             accounts). Paste it as \"WorkosCursorSessionToken=value\". Not needed when Cursor \
-             is listed in show_providers and you are signed in with Chrome or Safari.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -83,13 +67,12 @@ impl Service for Cursor {
                 .cookie(&cookie)
                 .header("Accept", "application/json")
         };
-        let summary = match probe.http(get("/api/usage-summary")).and_then(|r| r.ok()) {
+        let summary = match probe.body(get("/api/usage-summary")) {
             Ok(summary) => summary,
             Err(error) => return Some(Err(error)),
         };
         let me = probe
-            .http(get("/api/auth/me"))
-            .and_then(|r| r.ok())
+            .body(get("/api/auth/me"))
             .ok()
             .and_then(|body| json::<User>(&body).ok());
         let requests = me
@@ -98,13 +81,10 @@ impl Service for Cursor {
             .filter(|sub| !sub.is_empty())
             .and_then(|sub| {
                 let user: String = url::form_urlencoded::byte_serialize(sub.as_bytes()).collect();
-                probe
-                    .http(get(&format!("/api/usage?user={user}")))
-                    .and_then(|r| r.ok())
-                    .ok()
+                probe.body(get(&format!("/api/usage?user={user}"))).ok()
             });
         let sand = probe
-            .http(
+            .body(
                 Request::post(format!("{BASE}/api/dashboard/get-sand-usage-status"))
                     .cookie(&cookie)
                     .header("Accept", "application/json")
@@ -112,7 +92,6 @@ impl Service for Cursor {
                     .timeout(Duration::from_secs(5))
                     .json("{}"),
             )
-            .and_then(|r| r.ok())
             .ok();
         Some(parse(
             &summary,

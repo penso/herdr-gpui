@@ -18,3 +18,7 @@ pub(crate) fn accent(theme: &crate::config::Theme) -> Rgba {
 pub(super) fn danger(theme: &crate::config::Theme) -> Rgba {
     tint(theme, 1)
 }
+
+/// The connected-or-running indicator the device picker and the session list
+/// both green, so one machine's state reads the same in each.
+pub(super) const ONLINE: u32 = 0x63c68b;

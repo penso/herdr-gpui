@@ -13,7 +13,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, title_case},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -24,42 +25,29 @@ const AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit
 
 pub(crate) struct Devin;
 
+static META: Meta = Meta::new("devin", "Devin")
+    .dashboard("https://app.devin.ai/settings/usage")
+    .settings(&[
+        Setting::new(
+            "token",
+            &["DEVIN_BEARER_TOKEN"],
+            "Sign in to https://app.devin.ai, open your organization's Usage & Limits \
+             page, then in Developer Tools > Network select the successful \
+             billing/quota/usage request and copy its Authorization request header \
+             without the leading \"Bearer \". The value is a browser session token and \
+             expires with that session.",
+        ),
+        Setting::new(
+            "organization",
+            &["DEVIN_ORGANIZATION", "DEVIN_ORG"],
+            "The x-cog-org-id request header of the same request (an org-… or org_… \
+             id). An organization slug or its app.devin.ai URL also works.",
+        ),
+    ]);
+
 impl Service for Devin {
-    fn id(&self) -> &'static str {
-        "devin"
-    }
-
-    fn name(&self) -> &'static str {
-        "Devin"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/devin.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.devin.ai/settings/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "token",
-                &["DEVIN_BEARER_TOKEN"],
-                "Sign in to https://app.devin.ai, open your organization's Usage & Limits \
-                 page, then in Developer Tools > Network select the successful \
-                 billing/quota/usage request and copy its Authorization request header \
-                 without the leading \"Bearer \". The value is a browser session token and \
-                 expires with that session.",
-            ),
-            Setting::new(
-                "organization",
-                &["DEVIN_ORGANIZATION", "DEVIN_ORG"],
-                "The x-cog-org-id request header of the same request (an org-… or org_… \
-                 id). An organization slug or its app.devin.ai URL also works.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -86,7 +74,7 @@ fn read(probe: &mut Probe, token: &Secret, organization: &Organization) -> Resul
         if let Some(id) = &organization.id {
             request = request.header("x-cog-org-id", id.as_str());
         }
-        match probe.http(request).and_then(|response| response.ok()) {
+        match probe.body(request) {
             Ok(body) => return parse(&body, organization.display()),
             Err(error @ Error::UsageRejected) => return Err(error),
             Err(error) => last = error,
@@ -180,7 +168,7 @@ pub(crate) fn parse(body: &str, organization: &str) -> Result<Report> {
         &usage.weekly_reset_at,
     );
     if daily.is_none() && weekly.is_none() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let plan = [
         usage.plan_name,

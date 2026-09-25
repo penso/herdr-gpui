@@ -5,11 +5,12 @@
 //! sign-in or dashboard cookie to find.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, WEEK, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{self, invalid},
     },
 };
 use serde::Deserialize;
@@ -18,39 +19,25 @@ const URL: &str = "https://api.llmgateway.io/v1/key";
 
 pub(crate) struct Devpass;
 
+static META: Meta = Meta::new("devpass", "DevPass")
+    .dashboard("https://devpass.llmgateway.io/dashboard")
+    .settings(&[Setting::new(
+        "api_key",
+        &["DEVPASS_API_KEY"],
+        "A regular LLM Gateway API key from https://devpass.llmgateway.io/dashboard. \
+         Publishable keys cannot read plan usage.",
+    )]);
+
 impl Service for Devpass {
-    fn id(&self) -> &'static str {
-        "devpass"
-    }
-
-    fn name(&self) -> &'static str {
-        "DevPass"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/devpass.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://devpass.llmgateway.io/dashboard")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["DEVPASS_API_KEY"],
-            "A regular LLM Gateway API key from https://devpass.llmgateway.io/dashboard. \
-             Publishable keys cannot read plan usage.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let key = probe.setting("api_key")?;
         Some(
             probe
-                .http(Request::get(URL).bearer(&key))
-                .and_then(|response| response.ok())
+                .body(Request::get(URL).bearer(&key))
                 .and_then(|body| parse(&body)),
         )
     }
@@ -139,10 +126,6 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .with_sections([credits, key_section]))
 }
 
-fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
-}
-
 fn usd_unit() -> Unit {
     Unit::Currency("USD".into())
 }
@@ -154,15 +137,10 @@ fn usd(amount: f64) -> String {
 /// Amounts arrive as unsigned decimal strings; anything else is a changed
 /// response, never a zero.
 fn money(text: &str) -> Result<f64> {
-    let (whole, fraction) = text.split_once('.').unwrap_or((text, "0"));
-    let digits = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
-    if !digits(whole) || !digits(fraction) {
+    if text.starts_with('-') {
         return Err(invalid());
     }
-    text.parse::<f64>()
-        .ok()
-        .filter(|value| value.is_finite())
-        .ok_or_else(invalid)
+    values::decimal(text).ok_or_else(invalid)
 }
 
 #[derive(Deserialize)]

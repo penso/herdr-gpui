@@ -20,7 +20,7 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
     },
 };
 use serde::Deserialize;
@@ -35,36 +35,25 @@ const MODELS: usize = 24;
 
 pub(crate) struct Llmman;
 
+static META: Meta = Meta::new("llmman", "llmman").settings(&[
+    Setting::new(
+        "base_url",
+        &[],
+        "The llmman serve address, when not http://127.0.0.1:17434. A host without a \
+             scheme uses HTTP on port 17434, e.g. localhost:18000. Plain HTTP is allowed \
+             only for loopback, private-network, and .local hosts; others need HTTPS. \
+             Without it, LLMMAN_HOST on the probed host is used when set.",
+    ),
+    Setting::new(
+        "api_key",
+        &["LLMMAN_API_KEY"],
+        "Only when the daemon was started with LLMMAN_API_KEYS: one of those keys.",
+    ),
+]);
+
 impl Service for Llmman {
-    fn id(&self) -> &'static str {
-        "llmman"
-    }
-
-    fn name(&self) -> &'static str {
-        "llmman"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/llmman.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "base_url",
-                &[],
-                "The llmman serve address, when not http://127.0.0.1:17434. A host without a \
-                 scheme uses HTTP on port 17434, e.g. localhost:18000. Plain HTTP is allowed \
-                 only for loopback, private-network, and .local hosts; others need HTTPS. \
-                 Without it, LLMMAN_HOST on the probed host is used when set.",
-            ),
-            Setting::new(
-                "api_key",
-                &["LLMMAN_API_KEY"],
-                "Only when the daemon was started with LLMMAN_API_KEYS: one of those keys.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {

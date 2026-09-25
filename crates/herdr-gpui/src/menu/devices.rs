@@ -4,7 +4,7 @@ mod setup;
 
 pub(crate) use host_menu::HostMenu;
 
-use super::Page;
+use super::{Page, colors};
 use crate::{Command, HerdrWindow, NavigationTarget, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_client::{
@@ -14,6 +14,17 @@ use herdr_client::{
 
 pub(super) const MENU_GAP: f32 = 12.;
 pub(super) const MENU_WIDTH: f32 = 280.;
+
+/// How tall an anchored list above the sidebar footer may be, measured from the
+/// origin of the button that opened it. The device picker and the session list
+/// clamp at the same place, so neither grows over the terminal.
+pub(super) fn list_height(anchor_y: Pixels) -> Pixels {
+    let chrome = crate::titlebar::HEIGHT
+        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
+    (anchor_y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.))
+        .max(px(48.))
+        .min(px(420.))
+}
 
 pub(super) struct Setup {
     fields: [Entity<SearchInput>; 3],
@@ -135,6 +146,9 @@ impl HerdrWindow {
     pub(crate) fn render_device_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let button_bounds = std::rc::Rc::new(std::cell::Cell::new(Bounds::<Pixels>::default()));
         let painted_bounds = button_bounds.clone();
+        // The window owns this cell, so the shortcut and the click anchor the
+        // list in the same place and it outlives this frame's rebuild.
+        let painted_sessions = self.sessions_anchor.clone();
         let hint: SharedString = self
             .config
             .keybindings
@@ -194,7 +208,7 @@ impl HerdrWindow {
                             .flex_none()
                             .rounded_full()
                             .bg(rgb(if connected {
-                                0x63c68b
+                                colors::ONLINE
                             } else {
                                 self.theme.muted
                             })),
@@ -225,6 +239,48 @@ impl HerdrWindow {
                             this.menu.page = Some(Page::Devices);
                             this.menu.selected = Some(0);
                         }
+                    })),
+            )
+            .child(
+                div()
+                    .id("device-sessions")
+                    .relative()
+                    .debug_selector(|| "device-sessions".into())
+                    .size(px(28.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .cursor_pointer()
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| SettingsHint {
+                            text: "Sessions".into(),
+                            foreground,
+                            surface,
+                        })
+                        .into()
+                    })
+                    .hover(|s| s.bg(rgb(self.theme.active)))
+                    .child(
+                        svg()
+                            .path("icons/sessions.svg")
+                            .size(px(18.))
+                            .text_color(rgb(self.theme.foreground)),
+                    )
+                    .child(
+                        canvas(
+                            |_, _, _| (),
+                            move |bounds, _, _, _| {
+                                painted_sessions.set(bounds.origin);
+                            },
+                        )
+                        .absolute()
+                        .inset_0()
+                        .size_full(),
+                    )
+                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                        this.open_sessions(this.sessions_anchor.get(), window, cx);
                     })),
             )
             .child(
@@ -297,15 +353,9 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
-        let chrome = crate::titlebar::HEIGHT
-            + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
         let mut view = div()
             .id("devices-list")
-            .max_h(
-                (self.menu.anchor.y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.))
-                    .max(px(48.))
-                    .min(px(420.)),
-            )
+            .max_h(list_height(self.menu.anchor.y))
             .overflow_y_scroll()
             .track_scroll(&self.menu.devices_scroll)
             .flex()
@@ -387,7 +437,7 @@ impl HerdrWindow {
                                 .flex_none()
                                 .rounded_full()
                                 .bg(rgb(if endpoint.live.status.is_connected() {
-                                    0x63c68b
+                                    colors::ONLINE
                                 } else {
                                     self.theme.muted
                                 })),
@@ -621,13 +671,15 @@ impl HerdrWindow {
     }
 
     /// Refuse a host already in the catalog. Checked again before each step
-    /// that saves, since another window or the CLI can add it meanwhile.
+    /// that saves, since another window or the CLI can add it meanwhile. A
+    /// device is matched by its saved entry: the sessions list may have attached
+    /// it to another session, and that does not add one to the catalog.
     fn ensure_new_device(&self, request: &setup::Request) -> crate::Result<()> {
-        match self
-            .endpoints
-            .iter()
-            .find(|endpoint| request.same_host(&endpoint.connection.target))
-        {
+        match self.endpoints.iter().find(|endpoint| {
+            endpoint
+                .saved_ssh()
+                .is_some_and(|(target, session)| request.same_host(target, session))
+        }) {
             Some(endpoint) => Err(crate::Error::DeviceExists(endpoint.label.clone())),
             None => Ok(()),
         }
@@ -1130,6 +1182,42 @@ mod tests {
                         .unwrap()
                         .starts_with("Open a local workspace:")
                 );
+            });
+        });
+    }
+
+    /// The sessions list can attach a saved device to another of its sessions.
+    /// The catalog still holds the entry it was saved with, so adding that entry
+    /// again is refused, and the session it now shows was never saved.
+    #[gpui::test]
+    fn a_device_on_another_session_is_still_matched_by_its_saved_entry(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(fixture_window);
+        cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.reconcile_catalog(
+                    vec![herdr_client::SavedHost {
+                        id: "0123456789abcdef0123456789abcdef".into(),
+                        label: "m5max-ms".into(),
+                        target: "penso@box".into(),
+                        session: "default".into(),
+                        enabled: true,
+                    }],
+                    cx,
+                );
+                // What choosing another session from the list does to the target.
+                view.endpoints[1].connection.target = herdr_client::ConnectTarget::Ssh {
+                    target: "penso@box".into(),
+                    session: "work".into(),
+                };
+                let saved = setup::Request::new("penso@box", "Again", "").unwrap();
+                assert!(matches!(
+                    view.ensure_new_device(&saved),
+                    Err(crate::Error::DeviceExists(label)) if label == "m5max-ms"
+                ));
+                let work = setup::Request::new("penso@box", "Work", "work").unwrap();
+                assert!(view.ensure_new_device(&work).is_ok());
             });
         });
     }

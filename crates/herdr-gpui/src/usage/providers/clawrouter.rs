@@ -6,11 +6,12 @@
 //! CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::https_base,
     },
 };
 use serde::Deserialize;
@@ -22,39 +23,26 @@ const SHOWN_PROVIDERS: usize = 5;
 
 pub(crate) struct Clawrouter;
 
+static META: Meta = Meta::new("clawrouter", "ClawRouter")
+    .dashboard("https://clawrouter.openclaw.ai/dashboard/access")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["CLAWROUTER_API_KEY"],
+            "A ClawRouter policy API key, created at \
+             https://clawrouter.openclaw.ai/dashboard/access.",
+        ),
+        Setting::new(
+            "base_url",
+            &["CLAWROUTER_BASE_URL"],
+            "Optional HTTPS service root or /v1 URL of another ClawRouter deployment. \
+             Defaults to https://clawrouter.openclaw.ai.",
+        ),
+    ]);
+
 impl Service for Clawrouter {
-    fn id(&self) -> &'static str {
-        "clawrouter"
-    }
-
-    fn name(&self) -> &'static str {
-        "ClawRouter"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/clawrouter.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://clawrouter.openclaw.ai/dashboard/access")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["CLAWROUTER_API_KEY"],
-                "A ClawRouter policy API key, created at \
-                 https://clawrouter.openclaw.ai/dashboard/access.",
-            ),
-            Setting::new(
-                "base_url",
-                &["CLAWROUTER_BASE_URL"],
-                "Optional HTTPS service root or /v1 URL of another ClawRouter deployment. \
-                 Defaults to https://clawrouter.openclaw.ai.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -66,30 +54,14 @@ impl Service for Clawrouter {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    // An override must stay on HTTPS: the key is attached to it.
+    let base = https_base(probe.text_setting("base_url"), BASE)?;
     let url = if base.ends_with("/v1") {
         format!("{base}/usage")
     } else {
         format!("{base}/v1/usage")
     };
-    parse(&probe.http(Request::get(url).bearer(key))?.ok()?)
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
+    parse(&probe.body(Request::get(url).bearer(key))?)
 }
 
 fn parse(body: &str) -> Result<Report> {

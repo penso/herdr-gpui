@@ -227,6 +227,12 @@ impl HerdrWindow {
                 self.open_keybinds(window, cx);
                 return;
             }
+            Command::Sessions => {
+                // The button's own position, so the shortcut opens the list where
+                // clicking the button does.
+                self.open_sessions(self.sessions_anchor.get(), window, cx);
+                return;
+            }
             Command::Themes => {
                 self.open_theme_picker(window, cx);
                 return;

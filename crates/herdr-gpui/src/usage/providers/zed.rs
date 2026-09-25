@@ -18,11 +18,12 @@
 //! the probe cannot read.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, title_case},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, usd},
     },
 };
 use serde::Deserialize;
@@ -35,37 +36,21 @@ const BILLING: &str = "https://cloud.zed.dev/frontend/billing/usage";
 
 pub(crate) struct Zed;
 
+static META: Meta = Meta::new("zed", "Zed")
+    .dashboard("https://zed.dev/account")
+    .status_page("https://status.zed.dev")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "The zed.dev browser session, for token spend. Sign in at https://zed.dev in your \
+         browser (signing in inside the editor is not enough), open Developer Tools → \
+         Application → Cookies → https://zed.dev, copy the zed.session cookie, and paste it \
+         as \"zed.session=value\".",
+    )]);
+
 impl Service for Zed {
-    fn id(&self) -> &'static str {
-        "zed"
-    }
-
-    fn name(&self) -> &'static str {
-        "Zed"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/zed.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://zed.dev/account")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.zed.dev")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "The zed.dev browser session, for token spend. Sign in at https://zed.dev in your \
-             browser (signing in inside the editor is not enough), open Developer Tools → \
-             Application → Cookies → https://zed.dev, copy the zed.session cookie, and paste it \
-             as \"zed.session=value\".",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -76,12 +61,7 @@ impl Service for Zed {
         let request = Request::get(BILLING)
             .cookie(&cookie)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse_billing(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse_billing(&body)))
     }
 }
 
@@ -106,12 +86,7 @@ fn editor(probe: &mut Probe) -> Option<Result<Report>> {
     let request = Request::get(api)
         .secret_header("Authorization", &format!("{user} "), &token)
         .header("Accept", "application/json");
-    Some(
-        probe
-            .http(request)
-            .and_then(|response| response.ok())
-            .and_then(|body| parse_editor(&body)),
-    )
+    Some(probe.body(request).and_then(|body| parse_editor(&body)))
 }
 
 /// The keychain item classes Zed's sign-in may be kept under, in the
@@ -199,13 +174,13 @@ fn predictions_limit(limit: &Value, null_is_unlimited: bool) -> Result<Predictio
         Value::Number(number) => number
             .as_u64()
             .map(Predictions::Limited)
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data)),
+            .ok_or_else(invalid),
         Value::Object(object) => object
             .get("limited")
             .and_then(Value::as_u64)
             .map(Predictions::Limited)
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data)),
-        _ => Err(Error::UsageJson(serde_json::error::Category::Data)),
+            .ok_or_else(invalid),
+        _ => Err(invalid()),
     }
 }
 
@@ -274,17 +249,16 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
     let spent = spend.spend_in_cents / 100.;
     let cap = spend.limit_in_cents.map(|cents| cents / 100.);
     let balance = Balance::new("Token spend", spent, Unit::Currency("USD".into()));
-    let money = |amount: f64| format!("${:.2}", amount.max(0.));
     let mut facts = vec![
         prediction,
-        ("Spent".into(), money(spent)),
+        ("Spent".into(), usd(spent)),
         (
             "Spend limit".into(),
-            cap.map_or_else(|| "Not reported".into(), money),
+            cap.map_or_else(|| "Not reported".into(), usd),
         ),
     ];
     if let Some(cap) = cap {
-        facts.push(("Remaining budget".into(), money(cap - spent)));
+        facts.push(("Remaining budget".into(), usd(cap - spent)));
     }
     Ok(Report::new(
         Provider(&Zed),

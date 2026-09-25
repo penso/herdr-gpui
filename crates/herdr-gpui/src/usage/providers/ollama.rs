@@ -19,7 +19,8 @@ use crate::{
             Account, Kind, MONTH, Provider, Report, SESSION, Section, WEEK, Window, title_case,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -55,41 +56,28 @@ const BLOCK: usize = 4000;
 
 pub(crate) struct Ollama;
 
+static META: Meta = Meta::new("ollama", "Ollama")
+    .dashboard("https://ollama.com/settings")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "The ollama.com browser session, needed for quota. Sign in at \
+             https://ollama.com/signin, open Developer Tools → Application → Cookies → \
+             https://ollama.com, copy the session cookie (wos-session, or __Secure-session \
+             on older sign-ins), and paste it as \"name=value\".",
+        ),
+        Setting::new(
+            "api_key",
+            &["OLLAMA_API_KEY", "OLLAMA_KEY"],
+            "An Ollama API key from https://ollama.com/settings/keys. It only verifies \
+             access: Ollama shows quota on its website, not through the API.",
+        ),
+    ]);
+
 impl Service for Ollama {
-    fn id(&self) -> &'static str {
-        "ollama"
-    }
-
-    fn name(&self) -> &'static str {
-        "Ollama"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/ollama.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://ollama.com/settings")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "The ollama.com browser session, needed for quota. Sign in at \
-                 https://ollama.com/signin, open Developer Tools → Application → Cookies → \
-                 https://ollama.com, copy the session cookie (wos-session, or __Secure-session \
-                 on older sign-ins), and paste it as \"name=value\".",
-            ),
-            Setting::new(
-                "api_key",
-                &["OLLAMA_API_KEY", "OLLAMA_KEY"],
-                "An Ollama API key from https://ollama.com/settings/keys. It only verifies \
-                 access: Ollama shows quota on its website, not through the API.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -143,7 +131,7 @@ fn api(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let tags = Request::get(TAGS_URL)
         .bearer(key)
         .header("Accept", "application/json");
-    parse_tags(&probe.http(tags)?.ok()?)
+    parse_tags(&probe.body(tags)?)
 }
 
 pub(crate) fn parse_tags(body: &str) -> Result<Report> {
@@ -187,7 +175,7 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
         return Err(if signed_out(html) {
             Error::UsageRejected
         } else {
-            Error::UsageJson(serde_json::error::Category::Data)
+            invalid()
         });
     }
     let windows = [

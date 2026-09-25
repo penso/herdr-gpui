@@ -10,7 +10,7 @@ use crate::{
     usage::{
         model::{Account, Balance, DAY, Provider, Report, Section, Unit, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
 use serde::Deserialize;
@@ -28,30 +28,17 @@ const PERIOD: Duration = Duration::from_secs(30 * 86_400);
 
 pub(crate) struct Poe;
 
+static META: Meta = Meta::new("poe", "Poe")
+    .dashboard("https://poe.com/api/keys")
+    .settings(&[Setting::new(
+        "api_key",
+        &["POE_API_KEY"],
+        "A Poe API key, created or copied at https://poe.com/api/keys.",
+    )]);
+
 impl Service for Poe {
-    fn id(&self) -> &'static str {
-        "poe"
-    }
-
-    fn name(&self) -> &'static str {
-        "Poe"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/poe.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://poe.com/api/keys")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["POE_API_KEY"],
-            "A Poe API key, created or copied at https://poe.com/api/keys.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -63,7 +50,7 @@ impl Service for Poe {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let body = probe.http(Request::get(BALANCE).bearer(key))?.ok()?;
+    let body = probe.body(Request::get(BALANCE).bearer(key))?;
     let balance = parse_balance(&body)?;
     let now = SystemTime::now();
     let cutoff = now.checked_sub(PERIOD).unwrap_or(SystemTime::UNIX_EPOCH);
@@ -78,8 +65,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
             None => "?limit=100".to_owned(),
         };
         let page = probe
-            .http(Request::get(format!("{HISTORY}{query}")).bearer(key))
-            .and_then(|response| response.ok())
+            .body(Request::get(format!("{HISTORY}{query}")).bearer(key))
             .and_then(|body| parse_history(&body, cutoff));
         let Ok(page) = page else {
             break;

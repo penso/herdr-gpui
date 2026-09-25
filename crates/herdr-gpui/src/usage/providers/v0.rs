@@ -5,11 +5,12 @@
 //! daily allowance and grace period are not shown, as in CodexBar.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
-        model::{Account, Kind, MONTH, Provider, Report, Section, Window, group},
+        model::{Account, Kind, MONTH, Provider, Report, Section, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{count, encode, invalid},
     },
 };
 use serde::Deserialize;
@@ -18,37 +19,24 @@ const BASE: &str = "https://api.v0.dev/v1";
 
 pub(crate) struct V0;
 
+static META: Meta = Meta::new("v0", "v0")
+    .dashboard("https://v0.app/settings/billing")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["V0_API_KEY"],
+            "A v0 Platform API key from https://v0.app/settings/keys.",
+        ),
+        Setting::new(
+            "scope",
+            &["V0_SCOPE"],
+            "Optional project ID or slug to read that scope's billing and rate limit.",
+        ),
+    ]);
+
 impl Service for V0 {
-    fn id(&self) -> &'static str {
-        "v0"
-    }
-
-    fn name(&self) -> &'static str {
-        "v0"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/v0.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://v0.app/settings/billing")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["V0_API_KEY"],
-                "A v0 Platform API key from https://v0.app/settings/keys.",
-            ),
-            Setting::new(
-                "scope",
-                &["V0_SCOPE"],
-                "Optional project ID or slug to read that scope's billing and rate limit.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -60,11 +48,8 @@ impl Service for V0 {
             .as_deref()
             .map(|scope| format!("?scope={}", encode(scope)))
             .unwrap_or_default();
-        let mut get = |path: &str| {
-            probe
-                .http(Request::get(format!("{BASE}{path}{query}")).bearer(&key))
-                .and_then(|response| response.ok())
-        };
+        let mut get =
+            |path: &str| probe.body(Request::get(format!("{BASE}{path}{query}")).bearer(&key));
         let billing = match get("/user/billing") {
             Ok(body) => body,
             Err(error) => return Some(Err(error)),
@@ -133,7 +118,7 @@ pub(crate) fn parse(billing: &str, rate_limits: &str, scope: Option<&str>) -> Re
     .collect();
     let mut facts = vec![("Billing remaining".to_owned(), allowance.describe())];
     if let Some(on_demand) = on_demand {
-        facts.push(("On-demand balance".into(), amount(on_demand)));
+        facts.push(("On-demand balance".into(), count(on_demand)));
     }
     facts.push(("Rate-limit remaining".into(), rate.describe()));
     if let Some(kind) = billing.billing_type {
@@ -176,41 +161,14 @@ impl Quota {
 
     fn describe(&self) -> String {
         match self.remaining {
-            Some(remaining) => format!("{} of {}", amount(remaining), amount(self.limit)),
-            None => format!("Unavailable (limit {})", amount(self.limit)),
+            Some(remaining) => format!("{} of {}", count(remaining), count(self.limit)),
+            None => format!("Unavailable (limit {})", count(self.limit)),
         }
     }
-}
-
-fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
 }
 
 fn finite(value: Option<f64>) -> Result<f64> {
     value.filter(|value| value.is_finite()).ok_or_else(invalid)
-}
-
-/// The API's own units, which are not labelled as money.
-fn amount(value: f64) -> String {
-    let whole = value.round();
-    if (value - whole).abs() < 0.005 {
-        group(whole as i64)
-    } else {
-        format!("{value:.2}")
-    }
-}
-
-/// Percent-encodes a query value.
-fn encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
-            out.push(char::from(byte));
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
 }
 
 #[derive(Deserialize)]

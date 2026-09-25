@@ -12,10 +12,11 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values,
     },
 };
-use serde_json::{Value, error::Category};
+use serde_json::Value;
 use std::time::Duration;
 
 const POINTS_URL: &str = "https://apps.abacus.ai/api/_getOrganizationComputePoints";
@@ -23,33 +24,20 @@ const BILLING_URL: &str = "https://apps.abacus.ai/api/_getBillingInfo";
 
 pub(crate) struct Abacus;
 
+static META: Meta = Meta::new("abacus", "Abacus AI")
+    .dashboard("https://apps.abacus.ai/chatllm/admin/compute-points-usage")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in to https://apps.abacus.ai, open Developer Tools > Application > Cookies \
+         for https://apps.abacus.ai, and copy its session cookies (names containing \
+         \"session\", \"auth\", or \"sid\"). Paste them as \"name=value; name2=value2\"; \
+         the whole Cookie header of any apps.abacus.ai request also works.",
+    )]);
+
 impl Service for Abacus {
-    fn id(&self) -> &'static str {
-        "abacus"
-    }
-
-    fn name(&self) -> &'static str {
-        "Abacus AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/abacus.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://apps.abacus.ai/chatllm/admin/compute-points-usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in to https://apps.abacus.ai, open Developer Tools > Application > Cookies \
-             for https://apps.abacus.ai, and copy its session cookies (names containing \
-             \"session\", \"auth\", or \"sid\"). Paste them as \"name=value; name2=value2\"; \
-             the whole Cookie header of any apps.abacus.ai request also works.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -63,14 +51,14 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
         .cookie(cookie)
         .header("Accept", "application/json")
         .header("Content-Type", "application/json");
-    let points = probe.http(points)?.ok()?;
+    let points = probe.body(points)?;
     let billing = Request::post(BILLING_URL)
         .cookie(cookie)
         .header("Accept", "application/json")
         .json("{}")
         .timeout(Duration::from_secs(5));
     // Billing only adds the plan and reset date; credits stand without it.
-    let billing = probe.http(billing).and_then(|response| response.ok()).ok();
+    let billing = probe.body(billing).ok();
     parse(&points, billing.as_deref())
 }
 
@@ -79,7 +67,7 @@ pub(crate) fn parse(points: &str, billing: Option<&str>) -> Result<Report> {
     let total = amount(points.get("totalComputePoints"));
     let left = amount(points.get("computePointsLeft"));
     let (Some(total), Some(left)) = (total, left) else {
-        return Err(Error::UsageJson(Category::Data));
+        return Err(values::invalid());
     };
     let billing = billing.and_then(|body| result(body).ok());
     let resets_at = billing
@@ -146,7 +134,7 @@ fn result(body: &str) -> Result<Value> {
     Err(if signed_out {
         Error::UsageRejected
     } else {
-        Error::UsageJson(Category::Data)
+        values::invalid()
     })
 }
 

@@ -6,13 +6,14 @@
 //! allowance is an extra limit. Everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{
             Account, Balance, Kind, Provider, Report, Section, Unit, Window, group, title_case,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{https_base, invalid, plain},
     },
 };
 use serde::Deserialize;
@@ -22,38 +23,25 @@ const BASE: &str = "https://api.neuralwatt.com";
 
 pub(crate) struct Neuralwatt;
 
+static META: Meta = Meta::new("neuralwatt", "Neuralwatt")
+    .dashboard("https://portal.neuralwatt.com/dashboard")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["NEURALWATT_API_KEY"],
+            "A Neuralwatt API key, created or copied at \
+             https://portal.neuralwatt.com/dashboard.",
+        ),
+        Setting::new(
+            "base_url",
+            &["NEURALWATT_API_URL"],
+            "Optional HTTPS API URL for a proxy. Defaults to https://api.neuralwatt.com.",
+        ),
+    ]);
+
 impl Service for Neuralwatt {
-    fn id(&self) -> &'static str {
-        "neuralwatt"
-    }
-
-    fn name(&self) -> &'static str {
-        "Neuralwatt"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/neuralwatt.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://portal.neuralwatt.com/dashboard")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["NEURALWATT_API_KEY"],
-                "A Neuralwatt API key, created or copied at \
-                 https://portal.neuralwatt.com/dashboard.",
-            ),
-            Setting::new(
-                "base_url",
-                &["NEURALWATT_API_URL"],
-                "Optional HTTPS API URL for a proxy. Defaults to https://api.neuralwatt.com.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -65,7 +53,8 @@ impl Service for Neuralwatt {
 }
 
 fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
-    let base = base_url(probe.text_setting("base_url"))?;
+    // An override must stay on HTTPS: the key is attached to it.
+    let base = https_base(probe.text_setting("base_url"), BASE)?;
     let url = if base.ends_with("/v1") {
         format!("{base}/quota")
     } else {
@@ -74,38 +63,19 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let request = Request::get(url)
         .bearer(key)
         .timeout(Duration::from_secs(15));
-    parse(&probe.http(request)?.ok()?)
-}
-
-/// An override must stay on HTTPS: the key is attached to it.
-fn base_url(raw: Option<String>) -> Result<String> {
-    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
-        return Ok(BASE.to_owned());
-    };
-    let url = if raw.contains("://") {
-        raw
-    } else {
-        format!("https://{raw}")
-    };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
-    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url.trim_end_matches('/').to_owned())
+    parse(&probe.body(request)?)
 }
 
 fn parse(body: &str) -> Result<Report> {
     let quota: Quota = json(body)?;
-    let balance = quota
-        .balance
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let balance = quota.balance.ok_or_else(invalid)?;
     let nonnegative = |value: Option<f64>| value.filter(|value| value.is_finite() && *value >= 0.);
     let positive = |value: Option<f64>| value.filter(|value| value.is_finite() && *value > 0.);
     let remaining = nonnegative(balance.credits_remaining_usd);
     let used = nonnegative(balance.credits_used_usd);
     let total = positive(balance.total_credits_usd);
     if remaining.is_none() && used.is_none() && total.is_none() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let total = total.or_else(|| positive(Some(used? + remaining?)));
     let used = used.or_else(|| Some((total? - remaining?).max(0.)));
@@ -141,7 +111,7 @@ fn parse(body: &str) -> Result<Report> {
         (Some(consumed), Some(included)) => {
             facts.push((
                 "Energy".to_owned(),
-                format!("{} / {} kWh", kwh(consumed), kwh(included)),
+                format!("{} / {} kWh", plain(consumed), plain(included)),
             ));
             vec![Window::new(kind, consumed / included * 100., end, length)]
         }
@@ -214,14 +184,6 @@ fn words(text: &str) -> String {
         .map(|word| title_case(&word.to_lowercase()))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn kwh(value: f64) -> String {
-    if value.fract() == 0. {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.2}")
-    }
 }
 
 #[derive(Deserialize)]

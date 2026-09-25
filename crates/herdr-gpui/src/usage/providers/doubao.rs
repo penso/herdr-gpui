@@ -12,7 +12,7 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, SESSION, WEEK, Window},
         probe::Probe,
-        service::{Service, Timestamp, json},
+        service::{Meta, Service, Timestamp, json},
     },
 };
 use serde::Deserialize;
@@ -21,23 +21,12 @@ use std::time::Duration;
 
 pub(crate) struct Doubao;
 
+static META: Meta = Meta::new("doubao", "Doubao")
+    .dashboard("https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=subscribe");
+
 impl Service for Doubao {
-    fn id(&self) -> &'static str {
-        "doubao"
-    }
-
-    fn name(&self) -> &'static str {
-        "Doubao"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/doubao.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some(
-            "https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=subscribe",
-        )
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {

@@ -12,7 +12,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{encode, invalid},
     },
 };
 use serde::Deserialize;
@@ -22,33 +23,20 @@ const SITE: &str = "https://replicate.com";
 
 pub(crate) struct Replicate;
 
+static META: Meta = Meta::new("replicate", "Replicate")
+    .dashboard("https://replicate.com/account/billing")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in at https://replicate.com/account/billing, open Developer Tools > \
+         Application > Cookies > https://replicate.com, and copy sessionid (and csrftoken \
+         when present) as one \"sessionid=value; csrftoken=value\" header. An API token \
+         does not work here.",
+    )]);
+
 impl Service for Replicate {
-    fn id(&self) -> &'static str {
-        "replicate"
-    }
-
-    fn name(&self) -> &'static str {
-        "Replicate"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/replicate.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://replicate.com/account/billing")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in at https://replicate.com/account/billing, open Developer Tools > \
-             Application > Cookies > https://replicate.com, and copy sessionid (and csrftoken \
-             when present) as one \"sessionid=value; csrftoken=value\" header. An API token \
-             does not work here.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -58,22 +46,17 @@ impl Service for Replicate {
 }
 
 fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
-    let page = probe
-        .http(
-            Request::get(format!("{SITE}/account/billing"))
-                .cookie(cookie)
-                .header("Accept", "text/html"),
-        )?
-        .ok()?;
+    let page = probe.body(
+        Request::get(format!("{SITE}/account/billing"))
+            .cookie(cookie)
+            .header("Accept", "text/html"),
+    )?;
     let owner = owner(&page)?;
     let base = owner.base();
-    let invoices = probe
-        .http(Request::get(format!("{base}/invoices")).cookie(cookie))?
-        .ok()?;
+    let invoices = probe.body(Request::get(format!("{base}/invoices")).cookie(cookie))?;
     // The credit balance only enriches the spend, so its failure is dropped.
     let credit = probe
-        .http(Request::get(format!("{base}/unused-credit")).cookie(cookie))
-        .and_then(|response| response.ok())
+        .body(Request::get(format!("{base}/unused-credit")).cookie(cookie))
         .ok();
     parse(&owner, &invoices, credit.as_deref(), SystemTime::now())
 }
@@ -125,7 +108,7 @@ pub(crate) fn owner(html: &str) -> Result<Owner> {
     if lower.contains("<title>sign in | replicate</title>") || lower.contains("/login/github/") {
         return Err(Error::UsageRejected);
     }
-    Err(Error::UsageJson(serde_json::error::Category::Data))
+    Err(invalid())
 }
 
 /// Breadth first and bounded, as the props can be large.
@@ -173,7 +156,6 @@ pub(crate) fn parse(
     credit: Option<&str>,
     now: SystemTime,
 ) -> Result<Report> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let invoices: Invoices = json(invoices)?;
     let current = invoices
         .invoices
@@ -240,19 +222,6 @@ fn money(text: &str) -> Option<f64> {
         .then(|| text.parse::<f64>().ok())
         .flatten()
         .filter(|value| value.is_finite())
-}
-
-/// Percent-encodes a path segment.
-fn encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
-            out.push(char::from(byte));
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
 }
 
 #[derive(Deserialize)]

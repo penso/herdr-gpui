@@ -14,7 +14,8 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Window},
         probe::{Part, Probe, Request},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -28,47 +29,34 @@ const CREDIT_FAMILY: f64 = 2.;
 
 pub(crate) struct Stepfun;
 
+static META: Meta = Meta::new("stepfun", "StepFun")
+    .dashboard("https://platform.stepfun.com/plan-usage")
+    .settings(&[
+        Setting::new(
+            "token",
+            &["STEPFUN_TOKEN"],
+            "Your StepFun Oasis-Token. Sign in at https://platform.stepfun.com, open \
+             Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
+             value of the Oasis-Token cookie. Set webid too.",
+        ),
+        Setting::new(
+            "webid",
+            &[],
+            "The value of the Oasis-Webid cookie next to Oasis-Token on \
+             platform.stepfun.com. StepFun rejects a token sent with another device's web id.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Instead of token and webid: sign in at https://platform.stepfun.com, open \
+             Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
+             Oasis-Token and Oasis-Webid cookies as \"Oasis-Token=…; Oasis-Webid=…\".",
+        ),
+    ]);
+
 impl Service for Stepfun {
-    fn id(&self) -> &'static str {
-        "stepfun"
-    }
-
-    fn name(&self) -> &'static str {
-        "StepFun"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/stepfun.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.stepfun.com/plan-usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "token",
-                &["STEPFUN_TOKEN"],
-                "Your StepFun Oasis-Token. Sign in at https://platform.stepfun.com, open \
-                 Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
-                 value of the Oasis-Token cookie. Set webid too.",
-            ),
-            Setting::new(
-                "webid",
-                &[],
-                "The value of the Oasis-Webid cookie next to Oasis-Token on \
-                 platform.stepfun.com. StepFun rejects a token sent with another device's web id.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Instead of token and webid: sign in at https://platform.stepfun.com, open \
-                 Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
-                 Oasis-Token and Oasis-Webid cookies as \"Oasis-Token=…; Oasis-Webid=…\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -94,13 +82,10 @@ impl Service for Stepfun {
 }
 
 fn fetch(probe: &mut Probe, cookie: &[Part], webid: Option<&str>) -> Result<Report> {
-    let body = probe
-        .http(request("QueryStepPlanRateLimit", cookie, webid))?
-        .ok()?;
+    let body = probe.body(request("QueryStepPlanRateLimit", cookie, webid))?;
     // The plan name is decoration: usage still shows when this fails.
     let plan = probe
-        .http(request("GetStepPlanStatus", cookie, webid))
-        .and_then(|response| response.ok())
+        .body(request("GetStepPlanStatus", cookie, webid))
         .ok()
         .and_then(|body| parse_plan(&body));
     parse(&body, plan)
@@ -147,7 +132,6 @@ pub(crate) fn parse(body: &str, plan: Option<String>) -> Result<Report> {
             .collect();
         return Ok(Report::new(Provider(&Stepfun), account, windows));
     }
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let windows = [
         (
             Kind::Session,

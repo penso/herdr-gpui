@@ -3,7 +3,6 @@
 use super::setup;
 use crate::{HerdrWindow, github::Account, menu::Page, search_input::SearchInput};
 use gpui::{prelude::*, *};
-use herdr_client::ConnectTarget;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
@@ -50,7 +49,9 @@ impl HerdrWindow {
         let Some(endpoint) = self.endpoints.iter().find(|endpoint| endpoint.id == id) else {
             return;
         };
-        let ConnectTarget::Ssh { target, session } = &endpoint.connection.target else {
+        // The saved entry, not the live target: removal claims and names the
+        // profile, whichever session the list has attached the device to.
+        let Some((target, session)) = endpoint.saved_ssh() else {
             return;
         };
         let Some(profile) = crate::endpoint::saved_profile_id(&endpoint.id) else {
@@ -60,8 +61,8 @@ impl HerdrWindow {
             id: endpoint.id.clone(),
             profile: profile.to_owned(),
             label: endpoint.label.clone(),
-            target: target.clone(),
-            session: session.clone(),
+            target: target.to_owned(),
+            session: session.to_owned(),
             selected: None,
             forget_github: true,
             input: None,
@@ -596,6 +597,40 @@ mod tests {
         assert!(cx.debug_bounds("remove-device-github").is_none());
         cx.simulate_keystrokes("escape");
         assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
+    }
+
+    /// The menu speaks for the saved device: after the sessions list attached it
+    /// to another session, it still names, and removal still claims, the session
+    /// the device was saved with.
+    #[gpui::test]
+    fn the_menu_names_the_saved_session_after_a_session_pick(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(fixture_window);
+        view.update_in(cx, |view, window, cx| {
+            view.endpoints[0].connection.target = herdr_client::ConnectTarget::Local;
+            view.reconcile_catalog(
+                vec![herdr_client::SavedHost {
+                    id: "0123456789abcdef0123456789abcdef".into(),
+                    label: "m5max-ms".into(),
+                    target: "penso@box".into(),
+                    session: "default".into(),
+                    enabled: true,
+                }],
+                cx,
+            );
+            // What choosing another session from the list does to the target.
+            view.endpoints[1].connection.target = herdr_client::ConnectTarget::Ssh {
+                target: "penso@box".into(),
+                session: "work".into(),
+            };
+            view.open_host_menu(HOST, point(px(0.), px(0.)), window, cx);
+            // Saved SSH devices are unavailable on Windows, so there is no menu.
+            if cfg!(windows) {
+                assert!(view.menu.host.is_none());
+                return;
+            }
+            assert_eq!(host(view).target, "penso@box");
+            assert_eq!(host(view).session, "default");
+        });
     }
 
     #[gpui::test]

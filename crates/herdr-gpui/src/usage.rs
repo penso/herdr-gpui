@@ -16,6 +16,7 @@ mod render;
 mod service;
 mod settings;
 mod ui;
+mod values;
 
 #[cfg(test)]
 mod tests;

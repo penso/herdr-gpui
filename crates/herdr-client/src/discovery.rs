@@ -42,14 +42,28 @@ pub enum ConnectTarget {
     Ssh { target: String, session: String },
 }
 
-pub fn session_socket(config_dir: &Path, name: &str) -> Result<PathBuf> {
-    if name.is_empty()
-        || name.len() > 64
-        || matches!(name, "." | "..")
-        || !name
+/// Whether a name may become a session directory. Both ends derive the same
+/// path from it, so a name that escapes the configuration root is refused.
+pub(crate) fn valid_session_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && !matches!(name, "." | "..")
+        && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-    {
+}
+
+fn app_dir(development: bool) -> &'static str {
+    if development { "herdr-dev" } else { "herdr" }
+}
+
+/// The directory a release or development installation keeps its sessions in.
+pub(crate) fn config_dir(development: bool) -> PathBuf {
+    config_root(&|name| env::var_os(name)).join(app_dir(development))
+}
+
+pub fn session_socket(config_dir: &Path, name: &str) -> Result<PathBuf> {
+    if !valid_session_name(name) {
         return Err(Error::InvalidSession);
     }
     Ok(if name == "default" {
@@ -113,7 +127,7 @@ impl ConnectTarget {
                 ..
             }
         );
-        let base = config_root(&var).join(if development { "herdr-dev" } else { "herdr" });
+        let base = config_root(&var).join(app_dir(development));
         let name = match self {
             Self::Session { name, .. } => name.clone(),
             _ => var("HERDR_SESSION")
@@ -272,8 +286,10 @@ mod tests {
             root.join("sessions/work.1/herdr-client.sock")
         );
         for name in ["", ".", "..", "../other", "a/b", "a b"] {
+            assert!(!valid_session_name(name));
             assert!(session_socket(root, name).is_err());
         }
+        assert!(!valid_session_name(&"a".repeat(65)));
         assert!(session_socket(root, &"a".repeat(65)).is_err());
         let target = ConnectTarget::Socket("/tmp/explicit.sock".into());
         assert_eq!(

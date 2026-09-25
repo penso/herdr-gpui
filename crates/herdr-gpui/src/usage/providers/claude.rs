@@ -6,7 +6,7 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
         probe::{HostPath, Probe, Request},
-        service::{Service, Timestamp, json},
+        service::{Meta, Service, Timestamp, json},
     },
 };
 use serde::Deserialize;
@@ -27,25 +27,14 @@ pub(crate) struct SignIn {
     pub email: Option<String>,
 }
 
+static META: Meta = Meta::new("claude", "Claude")
+    .icon("icons/agent-claude.svg")
+    .dashboard("https://claude.ai/settings/usage")
+    .status_page("https://status.anthropic.com");
+
 impl Service for Claude {
-    fn id(&self) -> &'static str {
-        "claude"
-    }
-
-    fn name(&self) -> &'static str {
-        "Claude"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/agent-claude.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://claude.ai/settings/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.anthropic.com")
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -73,12 +62,7 @@ impl Service for Claude {
             .bearer(&token)
             .header("anthropic-beta", BETA)
             .header("User-Agent", AGENT);
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body, sign_in)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body, sign_in)))
     }
 }
 

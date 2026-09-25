@@ -15,8 +15,9 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
         ui::Ui,
+        values::usd,
     },
 };
 use gpui::{AnyElement, App, div, prelude::*, px};
@@ -47,56 +48,41 @@ pub(crate) struct Daily {
     pub days: Vec<(String, f64)>,
 }
 
+static META: Meta = Meta::new("openai", "OpenAI")
+    .icon("icons/agent-codex.svg")
+    .dashboard("https://platform.openai.com/usage")
+    .status_page("https://status.openai.com")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["OPENAI_ADMIN_KEY", "OPENAI_API_KEY"],
+            "An organization Admin API key (sk-admin-...), created by an organization owner \
+             at https://platform.openai.com/settings/organization/admin-keys. Project and \
+             service-account keys cannot read organization usage.",
+        ),
+        Setting::new(
+            "project_id",
+            &["OPENAI_PROJECT_ID"],
+            "Optional. A project ID (proj_...) from \
+             https://platform.openai.com/settings/organization/projects to limit spend and \
+             usage to that project.",
+        ),
+        Setting::new(
+            "history_days",
+            &["OPENAI_HISTORY_DAYS"],
+            "Optional. How many days of spend to total, 1 to 365. Defaults to 30.",
+        ),
+        Setting::new(
+            "balance_fallback",
+            &["OPENAI_ALLOW_BALANCE_FALLBACK"],
+            "Optional. Set to 1 to show the legacy prepaid credit balance when the key \
+             cannot read organization usage (older user API keys). Ignored with project_id.",
+        ),
+    ]);
+
 impl Service for Openai {
-    fn id(&self) -> &'static str {
-        "openai"
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenAI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/agent-codex.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.openai.com/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.openai.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["OPENAI_ADMIN_KEY", "OPENAI_API_KEY"],
-                "An organization Admin API key (sk-admin-...), created by an organization owner \
-                 at https://platform.openai.com/settings/organization/admin-keys. Project and \
-                 service-account keys cannot read organization usage.",
-            ),
-            Setting::new(
-                "project_id",
-                &["OPENAI_PROJECT_ID"],
-                "Optional. A project ID (proj_...) from \
-                 https://platform.openai.com/settings/organization/projects to limit spend and \
-                 usage to that project.",
-            ),
-            Setting::new(
-                "history_days",
-                &["OPENAI_HISTORY_DAYS"],
-                "Optional. How many days of spend to total, 1 to 365. Defaults to 30.",
-            ),
-            Setting::new(
-                "balance_fallback",
-                &["OPENAI_ALLOW_BALANCE_FALLBACK"],
-                "Optional. Set to 1 to show the legacy prepaid credit balance when the key \
-                 cannot read organization usage (older user API keys). Ignored with project_id.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -116,8 +102,7 @@ impl Service for Openai {
         Some(match usage {
             Err(error) if fallback && project.is_none() => {
                 let balance = probe
-                    .http(Request::get(GRANTS).bearer(&key))
-                    .and_then(|response| response.ok())
+                    .body(Request::get(GRANTS).bearer(&key))
                     .and_then(|body| parse_grants(&body, now));
                 // A rejected Admin key says less than the balance endpoint's
                 // own answer; any other Admin failure is the one to show.
@@ -202,7 +187,7 @@ fn admin_usage(
             let mut page: Option<String> = None;
             for _ in 0..PAGES {
                 let url = query_url(path, range, group_by, project, page.as_deref());
-                let body = probe.http(Request::get(url).bearer(key))?.ok()?;
+                let body = probe.body(Request::get(url).bearer(key))?;
                 let next = if path == COSTS {
                     tally.add_costs(&body)?
                 } else {
@@ -421,10 +406,6 @@ fn name(value: Option<String>, fallback: &str) -> String {
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| fallback.to_owned())
-}
-
-fn usd(amount: f64) -> String {
-    format!("${:.2}", amount.max(0.))
 }
 
 fn count(value: u64) -> String {

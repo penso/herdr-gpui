@@ -5,11 +5,12 @@
 //! Neither Cline nor CodexBar keeps a local sign-in that holds this key.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Kind, Provider, Report, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -18,31 +19,18 @@ const URL: &str = "https://api.cline.bot/api/v1/users/me/plan/usage-limits";
 
 pub(crate) struct Clinepass;
 
+static META: Meta = Meta::new("clinepass", "ClinePass")
+    .dashboard("https://app.cline.bot/dashboard/subscription?personal=true")
+    .settings(&[Setting::new(
+        "api_key",
+        &["CLINE_API_KEY", "CLINEPASS_API_KEY"],
+        "A Cline API key for the account with the ClinePass subscription. Create one at \
+         https://app.cline.bot under Settings > API Keys.",
+    )]);
+
 impl Service for Clinepass {
-    fn id(&self) -> &'static str {
-        "clinepass"
-    }
-
-    fn name(&self) -> &'static str {
-        "ClinePass"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/clinepass.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.cline.bot/dashboard/subscription?personal=true")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["CLINE_API_KEY", "CLINEPASS_API_KEY"],
-            "A Cline API key for the account with the ClinePass subscription. Create one at \
-             https://app.cline.bot under Settings > API Keys.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -50,19 +38,14 @@ impl Service for Clinepass {
         let request = Request::get(URL)
             .bearer(&key)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {
     let payload: Payload = json(body)?;
     if !payload.success {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let windows = payload
         .data
@@ -115,6 +98,7 @@ struct Limit {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
     use std::time::{Duration, SystemTime};
 
     #[test]

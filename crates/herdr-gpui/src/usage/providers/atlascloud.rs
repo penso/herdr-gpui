@@ -6,11 +6,12 @@
 //! either, and there is no local credential or browser session to detect.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::{decimal, invalid},
     },
 };
 use serde::Deserialize;
@@ -19,40 +20,26 @@ const URL: &str = "https://api.atlascloud.ai/public/v1/balance";
 
 pub(crate) struct Atlascloud;
 
+static META: Meta = Meta::new("atlascloud", "Atlas Cloud")
+    .dashboard("https://www.atlascloud.ai/console")
+    .settings(&[Setting::new(
+        "api_key",
+        &["ATLASCLOUD_API_KEY"],
+        "A standard Atlas Cloud API key from https://www.atlascloud.ai/console. It needs \
+         account balance read permission: use the account owner's key, or an Account Admin \
+         or Finance key for a team. A public key ID (ak_…) cannot authenticate.",
+    )]);
+
 impl Service for Atlascloud {
-    fn id(&self) -> &'static str {
-        "atlascloud"
-    }
-
-    fn name(&self) -> &'static str {
-        "Atlas Cloud"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/atlascloud.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://www.atlascloud.ai/console")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["ATLASCLOUD_API_KEY"],
-            "A standard Atlas Cloud API key from https://www.atlascloud.ai/console. It needs \
-             account balance read permission: use the account owner's key, or an Account Admin \
-             or Finance key for a team. A public key ID (ak_…) cannot authenticate.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let key = probe.setting("api_key")?;
         Some(
             probe
-                .http(Request::get(URL).bearer(&key))
-                .and_then(|response| response.ok())
+                .body(Request::get(URL).bearer(&key))
                 .and_then(|body| parse(&body)),
         )
     }
@@ -62,41 +49,23 @@ impl Service for Atlascloud {
 /// currency amount would be shown as something it is not.
 pub(crate) fn parse(body: &str) -> Result<Report> {
     let balance: BalanceBody = json(body)?;
-    let available = balance.available.ok_or(INVALID)?;
+    let available = balance.available.ok_or_else(invalid)?;
     if balance.object.as_deref() != Some("balance")
         || balance.scope.as_deref() != Some("account")
         || available.currency.as_deref() != Some("usd")
     {
-        return Err(INVALID);
+        return Err(invalid());
     }
     let amount = available
         .value
         .as_deref()
         .and_then(decimal)
-        .ok_or(INVALID)?;
+        .ok_or_else(invalid)?;
     Ok(
         Report::new(Provider(&Atlascloud), Account::default(), Vec::new()).with_balances([
             Balance::new("Available balance", amount, Unit::Currency("USD".into())),
         ]),
     )
-}
-
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
-
-/// `-12.50`: the API sends money as decimal strings, and anything else is
-/// malformed rather than zero.
-fn decimal(text: &str) -> Option<f64> {
-    let digits = text.strip_prefix('-').unwrap_or(text);
-    let (whole, fraction) = match digits.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (digits, None),
-    };
-    let all_digits =
-        |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
-    if !all_digits(whole) || !fraction.is_none_or(all_digits) {
-        return None;
-    }
-    text.parse::<f64>().ok().filter(|value| value.is_finite())
 }
 
 #[derive(Deserialize)]
@@ -116,6 +85,7 @@ struct Available {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     fn fixture(value: &str) -> String {
         format!(

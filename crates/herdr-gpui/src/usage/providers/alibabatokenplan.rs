@@ -25,11 +25,15 @@ use crate::{
             group, title_case,
         },
         probe::{Part, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp},
+        service::{Meta, Service, Setting, Timestamp},
+        values,
     },
 };
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime};
+
+// Shared with [`super::alibaba`], which reads the same gateway numbers.
+pub(super) use crate::usage::values::number;
 
 pub(super) const CHROME_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
@@ -48,56 +52,39 @@ const CLI_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(crate) struct Alibabatokenplan;
 
+static META: Meta = Meta::new("alibabatokenplan", "Alibaba Token Plan")
+    .icon("icons/providers/alibaba.svg")
+    .dashboard("https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=plan#/efm/subscription/token-plan")
+    .status_page("https://status.aliyun.com")
+    .settings(&[
+        Setting::new(
+            "region",
+            &[],
+            "Which Token Plan to read: \"intl\" (International Team, the default), \"cn\" \
+             (China mainland Team), \"intl-personal\" or \"cn-personal\" (Personal/Solo).",
+        ),
+        Setting::new(
+            "cookie",
+            &["ALIBABA_TOKEN_PLAN_COOKIE"],
+            "Only needed without a signed-in Bailian CLI (bl). Sign in to the Token Plan page \
+             (https://modelstudio.console.alibabacloud.com, or https://bailian.console.aliyun.com \
+             in China), open Developer Tools > Application > Cookies for that site, and copy \
+             at least login_aliyunid_ticket, login_aliyunid_pk, login_aliyunid_csrf and cna. \
+             Paste them as \"name=value; name2=value2\", or copy the whole Cookie header of the \
+             data/api.json request from the Network tab.",
+        ),
+        Setting::new(
+            "sec_token",
+            &[],
+            "Optional. The console's sec_token, when it cannot be read from \
+             /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
+             any data/api.json request on the Token Plan page.",
+        ),
+    ]);
+
 impl Service for Alibabatokenplan {
-    fn id(&self) -> &'static str {
-        "alibabatokenplan"
-    }
-
-    fn name(&self) -> &'static str {
-        "Alibaba Token Plan"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/alibaba.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some(
-            "https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=plan#/efm/subscription/token-plan",
-        )
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.aliyun.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "region",
-                &[],
-                "Which Token Plan to read: \"intl\" (International Team, the default), \"cn\" \
-                 (China mainland Team), \"intl-personal\" or \"cn-personal\" (Personal/Solo).",
-            ),
-            Setting::new(
-                "cookie",
-                &["ALIBABA_TOKEN_PLAN_COOKIE"],
-                "Only needed without a signed-in Bailian CLI (bl). Sign in to the Token Plan page \
-                 (https://modelstudio.console.alibabacloud.com, or https://bailian.console.aliyun.com \
-                 in China), open Developer Tools > Application > Cookies for that site, and copy \
-                 at least login_aliyunid_ticket, login_aliyunid_pk, login_aliyunid_csrf and cna. \
-                 Paste them as \"name=value; name2=value2\", or copy the whole Cookie header of the \
-                 data/api.json request from the Network tab.",
-            ),
-            Setting::new(
-                "sec_token",
-                &[],
-                "Optional. The console's sec_token, when it cannot be read from \
-                 /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
-                 any data/api.json request on the Token Plan page.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -115,8 +102,7 @@ impl Service for Alibabatokenplan {
             cli_answered = true;
         }
         let Some(cookie) = probe.cookies(DOMAINS, &[]) else {
-            return cli_answered
-                .then_some(Err(Error::UsageJson(serde_json::error::Category::Data)));
+            return cli_answered.then_some(Err(values::invalid()));
         };
         let token = sec_token(probe, &cookie, region.gateway());
         Some(if region.personal() {
@@ -271,7 +257,7 @@ fn fetch_team(
         "*/*",
         body,
     );
-    let body = probe.http(request)?.ok()?;
+    let body = probe.body(request)?;
     parse_team(&body)
 }
 
@@ -314,7 +300,7 @@ fn fetch_personal(
             "application/json, text/plain, */*",
             body,
         );
-        let body = probe.http(request)?.ok()?;
+        let body = probe.body(request)?;
         let value = expand(
             serde_json::from_str(&body).map_err(|error| Error::UsageJson(error.classify()))?,
         );
@@ -339,7 +325,7 @@ fn fetch_personal(
             return Ok(found.report(Provider(&Alibabatokenplan)));
         }
     }
-    Err(Error::UsageJson(serde_json::error::Category::Data))
+    Err(values::invalid())
 }
 
 /// The Bailian CLI's JSON, which carries only the Personal-style ratios.
@@ -449,7 +435,7 @@ pub(crate) fn parse_team(body: &str) -> Result<Report> {
     check(&value)?;
     team(&value)
         .map(|report| report_with(Provider(&Alibabatokenplan), report))
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))
+        .ok_or_else(values::invalid)
 }
 
 /// What a subscription summary says, before it is tied to a provider.
@@ -789,15 +775,6 @@ pub(super) fn first<'a, T>(
     keys.iter().find_map(|key| convert(object.get(*key)?))
 }
 
-pub(super) fn number(value: &Value) -> Option<f64> {
-    let number = match value {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse().ok(),
-        _ => None,
-    };
-    number.filter(|number| number.is_finite())
-}
-
 pub(super) fn string(value: &Value) -> Option<String> {
     value
         .as_str()
@@ -910,7 +887,7 @@ pub(super) fn check(value: &Value) -> Result<()> {
         return Err(
             match bad_status.and_then(|code| u16::try_from(code as i64).ok()) {
                 Some(code) if (100..=599).contains(&code) => Error::UsageStatus(code),
-                _ => Error::UsageJson(serde_json::error::Category::Data),
+                _ => values::invalid(),
             },
         );
     }

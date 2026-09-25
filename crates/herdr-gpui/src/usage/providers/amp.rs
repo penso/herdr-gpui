@@ -14,7 +14,8 @@ use crate::{
     usage::{
         model::{Account, Balance, DAY, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::invalid,
     },
 };
 use chrono::{Datelike, Months, NaiveDate, TimeZone, Utc, Weekday};
@@ -25,46 +26,32 @@ const API_URL: &str = "https://ampcode.com/api/internal?userDisplayBalanceInfo";
 const SETTINGS_URL: &str = "https://ampcode.com/settings";
 /// Runs the Amp CLI from `PATH`, else from its installer's directory.
 const CLI: &str = r#"if command -v amp >/dev/null 2>&1; then exec amp usage; elif [ -x "$HOME/.amp/bin/amp" ]; then exec "$HOME/.amp/bin/amp" usage; else exit 127; fi"#;
-const MISSING: Error = Error::UsageJson(serde_json::error::Category::Data);
 
 pub(crate) struct Amp;
 
+static META: Meta = Meta::new("amp", "Amp")
+    .dashboard("https://ampcode.com/settings/usage")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["AMP_API_KEY"],
+            "An Amp access token, created in Amp's settings at \
+             https://ampcode.com/settings. Not needed when the Amp CLI is installed and \
+             signed in on the host (`amp login`).",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Your ampcode.com browser session, used when neither the CLI nor a token is \
+             available; it shows Amp Free only. Sign in at https://ampcode.com, open \
+             Developer Tools → Application → Cookies → https://ampcode.com, and copy the \
+             `session` cookie as \"session=value\".",
+        ),
+    ]);
+
 impl Service for Amp {
-    fn id(&self) -> &'static str {
-        "amp"
-    }
-
-    fn name(&self) -> &'static str {
-        "Amp"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/amp.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://ampcode.com/settings/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["AMP_API_KEY"],
-                "An Amp access token, created in Amp's settings at \
-                 https://ampcode.com/settings. Not needed when the Amp CLI is installed and \
-                 signed in on the host (`amp login`).",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Your ampcode.com browser session, used when neither the CLI nor a token is \
-                 available; it shows Amp Free only. Sign in at https://ampcode.com, open \
-                 Developer Tools → Application → Cookies → https://ampcode.com, and copy the \
-                 `session` cookie as \"session=value\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -88,12 +75,7 @@ impl Service for Amp {
                 .bearer(&token)
                 .header("Accept", "application/json")
                 .json(r#"{"method":"userDisplayBalanceInfo","params":{}}"#);
-            return Some(
-                probe
-                    .http(request)
-                    .and_then(|response| response.ok())
-                    .and_then(|body| parse_api(&body, now)),
-            );
+            return Some(probe.body(request).and_then(|body| parse_api(&body, now)));
         }
 
         if let Some(cookie) = probe.cookies(&["ampcode.com", "www.ampcode.com"], &["session"]) {
@@ -111,12 +93,7 @@ impl Service for Amp {
                 )
                 .header("Origin", "https://ampcode.com")
                 .header("Referer", SETTINGS_URL);
-            return Some(
-                probe
-                    .http(request)
-                    .and_then(|response| response.ok())
-                    .and_then(|html| parse_html(&html, now)),
-            );
+            return Some(probe.body(request).and_then(|html| parse_html(&html, now)));
         }
         failure.map(Err)
     }
@@ -128,7 +105,7 @@ pub(crate) fn parse_api(body: &str, now: SystemTime) -> Result<Report> {
         return Err(
             match response.error.and_then(|error| error.code).as_deref() {
                 Some("auth-required") => Error::UsageRejected,
-                _ => MISSING,
+                _ => invalid(),
             },
         );
     }
@@ -136,7 +113,7 @@ pub(crate) fn parse_api(body: &str, now: SystemTime) -> Result<Report> {
         .result
         .map(|result| result.display_text)
         .filter(|text| !text.is_empty())
-        .ok_or(MISSING)?;
+        .ok_or_else(invalid)?;
     parse_report(&text, now)
 }
 
@@ -190,7 +167,7 @@ pub(crate) fn parse_report(text: &str, now: SystemTime) -> Result<Report> {
         return Err(Error::UsageRejected);
     }
     if free.is_none() && subscription.is_none() && individual.is_none() && workspaces.is_empty() {
-        return Err(MISSING);
+        return Err(invalid());
     }
 
     let (email, organization) = identity.unwrap_or_default();
@@ -276,7 +253,7 @@ pub(crate) fn parse_html(html: &str, now: SystemTime) -> Result<Report> {
         return Err(if looks_signed_out(html) {
             Error::UsageRejected
         } else {
-            MISSING
+            invalid()
         });
     };
     let free = dollar_free(quota, quota - used, hourly, window_hours, now);

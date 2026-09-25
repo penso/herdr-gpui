@@ -13,7 +13,8 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, number},
     },
 };
 use serde_json::Value;
@@ -29,34 +30,21 @@ const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 
 pub(crate) struct Longcat;
 
+static META: Meta = Meta::new("longcat", "LongCat")
+    .dashboard("https://longcat.chat/platform/")
+    .settings(&[Setting::new(
+        "cookie",
+        &["LONGCAT_MANUAL_COOKIE"],
+        "The LongCat console session. Sign in at https://longcat.chat/platform/usage, open \
+         Developer Tools > Application > Cookies > https://longcat.chat, and copy every \
+         cookie of the site (the console does not document which one holds the session). \
+         Paste them as \"name=value; name2=value2\", or copy the Cookie request header of \
+         a request to longcat.chat from the Network tab.",
+    )]);
+
 impl Service for Longcat {
-    fn id(&self) -> &'static str {
-        "longcat"
-    }
-
-    fn name(&self) -> &'static str {
-        "LongCat"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/longcat.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://longcat.chat/platform/")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &["LONGCAT_MANUAL_COOKIE"],
-            "The LongCat console session. Sign in at https://longcat.chat/platform/usage, open \
-             Developer Tools > Application > Cookies > https://longcat.chat, and copy every \
-             cookie of the site (the console does not document which one holds the session). \
-             Paste them as \"name=value; name2=value2\", or copy the Cookie request header of \
-             a request to longcat.chat from the Network tab.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -71,7 +59,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     // showing an empty report.
     let account = payload(&required(probe, get(USER_CURRENT))?)?;
     if !account.is_object() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let packs = console(Request::post(format!("{HOST}{TOKEN_PACKS}")), cookie).json("{}");
     let summary = optional(probe, packs);
@@ -82,7 +70,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
             .filter(|usage| usage.is_object())
             .unwrap_or(&usage);
         if canonical.get("totalToken").and_then(number).is_none() {
-            return Err(Error::UsageJson(serde_json::error::Category::Data));
+            return Err(invalid());
         }
         Some(usage)
     } else {
@@ -127,33 +115,21 @@ fn optional(probe: &mut Probe, request: Request) -> Option<Value> {
 fn payload(body: &str) -> Result<Value> {
     let mut envelope: Value = json(body)?;
     let Some(object) = envelope.as_object_mut() else {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     };
     if let Some(code) = object.get("code") {
         let code = number(code)
             .filter(|code| code.fract() == 0.)
-            .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+            .ok_or_else(invalid)?;
         if code != 0. && code != 200. {
             return Err(if code == 401. || code == 403. {
                 Error::UsageRejected
             } else {
-                u16::try_from(code as i64).map_or(
-                    Error::UsageJson(serde_json::error::Category::Data),
-                    Error::UsageStatus,
-                )
+                u16::try_from(code as i64).map_or(invalid(), Error::UsageStatus)
             });
         }
     }
     Ok(object.remove("data").unwrap_or(envelope))
-}
-
-fn number(value: &Value) -> Option<f64> {
-    let number = match value {
-        Value::Number(number) => number.as_f64()?,
-        Value::String(text) => text.trim().parse().ok()?,
-        _ => return None,
-    };
-    number.is_finite().then_some(number)
 }
 
 fn active_lot(summary: Option<&Value>) -> Option<&Value> {

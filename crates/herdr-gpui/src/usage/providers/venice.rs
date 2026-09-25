@@ -14,7 +14,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request},
-        service::{Service, Setting, json, number},
+        service::{Meta, Service, Setting, json, number},
     },
 };
 use serde::Deserialize;
@@ -29,42 +29,29 @@ const EXPIRY_SKEW: Duration = Duration::from_secs(60);
 
 pub(crate) struct Venice;
 
+static META: Meta = Meta::new("venice", "Venice")
+    .dashboard("https://venice.ai/settings/api")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["VENICE_API_KEY", "VENICE_KEY"],
+            "A Venice API key from https://venice.ai/settings/api. It reads the USD and \
+             DIEM API balance.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Used when no API key is set, for subscription credits. Sign in to \
+             https://venice.ai, open Developer Tools > Application > Cookies for \
+             https://venice.ai, and copy the __venice-auth.session-token cookie (or every \
+             __venice-auth.session-token.N chunk when it is split). Paste them as \
+             \"name=value; name2=value2\".",
+        ),
+    ]);
+
 impl Service for Venice {
-    fn id(&self) -> &'static str {
-        "venice"
-    }
-
-    fn name(&self) -> &'static str {
-        "Venice"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/venice.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://venice.ai/settings/api")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["VENICE_API_KEY", "VENICE_KEY"],
-                "A Venice API key from https://venice.ai/settings/api. It reads the USD and \
-                 DIEM API balance.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Used when no API key is set, for subscription credits. Sign in to \
-                 https://venice.ai, open Developer Tools > Application > Cookies for \
-                 https://venice.ai, and copy the __venice-auth.session-token cookie (or every \
-                 __venice-auth.session-token.N chunk when it is split). Paste them as \
-                 \"name=value; name2=value2\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -76,12 +63,7 @@ impl Service for Venice {
             let request = Request::get(BALANCE_URL)
                 .bearer(&key)
                 .header("Accept", "application/json");
-            return Some(
-                probe
-                    .http(request)
-                    .and_then(|response| response.ok())
-                    .and_then(|body| parse_balance(&body)),
-            );
+            return Some(probe.body(request).and_then(|body| parse_balance(&body)));
         }
         let cookie = probe.cookies(&["venice.ai"], &[SESSION_COOKIE])?;
         let request = Request::get(SESSION_URL)
@@ -89,8 +71,7 @@ impl Service for Venice {
             .header("Accept", "application/json");
         Some(
             probe
-                .http(request)
-                .and_then(|response| response.ok())
+                .body(request)
                 .and_then(|body| parse_session(&body, SystemTime::now())),
         )
     }

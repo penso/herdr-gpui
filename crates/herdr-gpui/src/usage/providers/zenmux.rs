@@ -9,7 +9,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, plain},
     },
 };
 use serde::Deserialize;
@@ -18,48 +19,30 @@ const BASE: &str = "https://zenmux.ai/api/v1/management";
 
 pub(crate) struct Zenmux;
 
+static META: Meta = Meta::new("zenmux", "ZenMux")
+    .dashboard("https://zenmux.ai/platform/management")
+    .settings(&[Setting::new(
+        "api_key",
+        &["ZENMUX_MANAGEMENT_API_KEY"],
+        "A Management API key created at https://zenmux.ai/platform/management. \
+         Normal inference API keys are rejected by the usage endpoints.",
+    )]);
+
 impl Service for Zenmux {
-    fn id(&self) -> &'static str {
-        "zenmux"
-    }
-
-    fn name(&self) -> &'static str {
-        "ZenMux"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/zenmux.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://zenmux.ai/platform/management")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["ZENMUX_MANAGEMENT_API_KEY"],
-            "A Management API key created at https://zenmux.ai/platform/management. \
-             Normal inference API keys are rejected by the usage endpoints.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let key = probe.setting("api_key")?;
-        let subscription = match probe
-            .http(Request::get(format!("{BASE}/subscription/detail")).bearer(&key))
-            .and_then(|response| response.ok())
-        {
-            Ok(body) => body,
-            Err(error) => return Some(Err(error)),
-        };
+        let subscription =
+            match probe.body(Request::get(format!("{BASE}/subscription/detail")).bearer(&key)) {
+                Ok(body) => body,
+                Err(error) => return Some(Err(error)),
+            };
         // The balance only enriches the quota, but a rejected key still fails
         // the whole refresh as CodexBar does.
-        let balance = match probe
-            .http(Request::get(format!("{BASE}/payg/balance")).bearer(&key))
-            .and_then(|response| response.ok())
-        {
+        let balance = match probe.body(Request::get(format!("{BASE}/payg/balance")).bearer(&key)) {
             Ok(body) => Some(body),
             Err(Error::UsageRejected) => return Some(Err(Error::UsageRejected)),
             Err(_) => None,
@@ -71,7 +54,7 @@ impl Service for Zenmux {
 pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report> {
     let detail = json::<Envelope<Subscription>>(subscription)?
         .into_data()
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     let quotas = [
         (Kind::Session, detail.quota_5_hour, SESSION),
         (Kind::Weekly, detail.quota_7_day, WEEK),
@@ -86,7 +69,7 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         if let (Some(used), Some(max)) = (quota.used_flows, quota.max_flows) {
             flows.push((
                 kind.title().to_owned(),
-                format!("{} / {} flows", amount(used), amount(max)),
+                format!("{} / {} flows", plain(used), plain(max)),
             ));
         }
         windows.push(Window::new(
@@ -146,15 +129,6 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
                 facts: flows,
             })),
     )
-}
-
-/// `57.2` as `57.20`, `800` as `800`, as CodexBar prints flow counts.
-fn amount(value: f64) -> String {
-    if value.fract() == 0. {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.2}")
-    }
 }
 
 fn capitalize(value: &str) -> String {

@@ -22,7 +22,7 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{HostPath, Part, Probe, Request, Secret},
-        service::{Service, Setting, json, number},
+        service::{Meta, Service, Setting, json, number},
     },
 };
 use serde::Deserialize;
@@ -40,41 +40,25 @@ const MAX_PAGES: usize = 5;
 
 pub(crate) struct Vertexai;
 
+static META: Meta = Meta::new("vertexai", "Vertex AI")
+    .dashboard("https://console.cloud.google.com/vertex-ai")
+    .status_page("https://status.cloud.google.com")
+    .settings(&[Setting::new(
+        "project",
+        &[
+            "GOOGLE_CLOUD_PROJECT",
+            "GCLOUD_PROJECT",
+            "CLOUDSDK_CORE_PROJECT",
+        ],
+        "The Google Cloud project id whose Vertex AI quotas to read, when gcloud has none \
+         set (`gcloud config set project PROJECT_ID`). Sign in with `gcloud auth \
+         application-default login`; the account needs Cloud Monitoring read access \
+         (roles/monitoring.viewer) on the project.",
+    )]);
+
 impl Service for Vertexai {
-    fn id(&self) -> &'static str {
-        "vertexai"
-    }
-
-    fn name(&self) -> &'static str {
-        "Vertex AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/vertexai.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.cloud.google.com/vertex-ai")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.cloud.google.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "project",
-            &[
-                "GOOGLE_CLOUD_PROJECT",
-                "GCLOUD_PROJECT",
-                "CLOUDSDK_CORE_PROJECT",
-            ],
-            "The Google Cloud project id whose Vertex AI quotas to read, when gcloud has none \
-             set (`gcloud config set project PROJECT_ID`). Sign in with `gcloud auth \
-             application-default login`; the account needs Cloud Monitoring read access \
-             (roles/monitoring.viewer) on the project.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -200,8 +184,7 @@ fn series(probe: &mut Probe, token: &Secret, project: &str, filter: &str) -> Res
             .finish();
         let url = format!("{MONITORING_URL}/{project}/timeSeries?{query}");
         let page: Page = probe
-            .http(Request::get(url).bearer(token))
-            .and_then(|response| response.ok())
+            .body(Request::get(url).bearer(token))
             .and_then(|body| json(&body))?;
         found.extend(page.time_series);
         page_token = page.next_page_token.filter(|token| !token.is_empty());

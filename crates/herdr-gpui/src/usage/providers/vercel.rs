@@ -7,11 +7,12 @@
 //! the metered Custom Reporting API.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::{decimal, invalid},
     },
 };
 use serde::Deserialize;
@@ -20,39 +21,25 @@ const URL: &str = "https://ai-gateway.vercel.sh/v1/credits";
 
 pub(crate) struct Vercel;
 
+static META: Meta = Meta::new("vercel", "Vercel AI Gateway")
+    .dashboard("https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway")
+    .settings(&[Setting::new(
+        "api_key",
+        &["AI_GATEWAY_API_KEY"],
+        "An AI Gateway API key from the Vercel dashboard: AI Gateway > API Keys. The \
+         balance is the key's team, so use a key of the team to show.",
+    )]);
+
 impl Service for Vercel {
-    fn id(&self) -> &'static str {
-        "vercel"
-    }
-
-    fn name(&self) -> &'static str {
-        "Vercel AI Gateway"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/vercel.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["AI_GATEWAY_API_KEY"],
-            "An AI Gateway API key from the Vercel dashboard: AI Gateway > API Keys. The \
-             balance is the key's team, so use a key of the team to show.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let key = probe.setting("api_key")?;
         Some(
             probe
-                .http(Request::get(URL).bearer(&key))
-                .and_then(|response| response.ok())
+                .body(Request::get(URL).bearer(&key))
                 .and_then(|body| parse(&body)),
         )
     }
@@ -64,13 +51,13 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .balance
         .as_deref()
         .and_then(decimal)
-        .ok_or(INVALID)?;
+        .ok_or_else(invalid)?;
     let spent = credits
         .total_used
         .as_deref()
         .and_then(decimal)
         .filter(|spent| *spent >= 0.)
-        .ok_or(INVALID)?;
+        .ok_or_else(invalid)?;
     let usd = || Unit::Currency("USD".into());
     Ok(
         Report::new(Provider(&Vercel), Account::default(), Vec::new()).with_balances([
@@ -78,24 +65,6 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             Balance::new("Lifetime spend", spent, usd()),
         ]),
     )
-}
-
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
-
-/// `-12.50`: the API sends money as decimal strings, and anything else is
-/// malformed rather than zero.
-fn decimal(text: &str) -> Option<f64> {
-    let digits = text.strip_prefix('-').unwrap_or(text);
-    let (whole, fraction) = match digits.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (digits, None),
-    };
-    let all_digits =
-        |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
-    if !all_digits(whole) || !fraction.is_none_or(all_digits) {
-        return None;
-    }
-    text.parse::<f64>().ok().filter(|value| value.is_finite())
 }
 
 #[derive(Deserialize)]
@@ -108,6 +77,7 @@ struct Credits {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     #[test]
     fn reads_balance_and_lifetime_spend() {

@@ -236,6 +236,7 @@ impl HerdrWindow {
                 | Command::ResetFontSize
                 | Command::Settings
                 | Command::Keybinds
+                | Command::Sessions
                 | Command::Themes
                 | Command::Palette
                 | Command::Reconnect

@@ -10,7 +10,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values::{invalid, usd},
     },
 };
 use chrono::{DateTime, Days, NaiveDate, Utc};
@@ -20,43 +21,27 @@ const ROOT: &str = "https://management-api.x.ai/v1/billing/teams";
 
 pub(crate) struct Xai;
 
+static META: Meta = Meta::new("xai", "xAI")
+    .dashboard("https://console.x.ai")
+    .status_page("https://status.x.ai")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["XAI_MANAGEMENT_API_KEY"],
+            "A Management API key from https://console.x.ai under Settings > Management \
+             Keys, with billing read access. Inference API keys are not accepted.",
+        ),
+        Setting::new(
+            "team_id",
+            &["XAI_TEAM_ID"],
+            "The xAI team ID to bill against, shown in the xAI Console URL and team \
+             settings. The Management key must belong to this team.",
+        ),
+    ]);
+
 impl Service for Xai {
-    fn id(&self) -> &'static str {
-        "xai"
-    }
-
-    fn name(&self) -> &'static str {
-        "xAI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/xai.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.x.ai")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.x.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["XAI_MANAGEMENT_API_KEY"],
-                "A Management API key from https://console.x.ai under Settings > Management \
-                 Keys, with billing read access. Inference API keys are not accepted.",
-            ),
-            Setting::new(
-                "team_id",
-                &["XAI_TEAM_ID"],
-                "The xAI team ID to bill against, shown in the xAI Console URL and team \
-                 settings. The Management key must belong to this team.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -71,22 +56,17 @@ impl Service for Xai {
             "{ROOT}/{}",
             url::form_urlencoded::byte_serialize(team.as_bytes()).collect::<String>()
         );
-        let balance = match probe
-            .http(Request::get(format!("{root}/prepaid/balance")).bearer(&key))
-            .and_then(|response| response.ok())
+        let balance = match probe.body(Request::get(format!("{root}/prepaid/balance")).bearer(&key))
         {
             Ok(body) => body,
             Err(error) => return Some(Err(error)),
         };
         let now = Utc::now();
-        let usage = match probe
-            .http(
-                Request::post(format!("{root}/usage"))
-                    .bearer(&key)
-                    .json(query(now)),
-            )
-            .and_then(|response| response.ok())
-        {
+        let usage = match probe.body(
+            Request::post(format!("{root}/usage"))
+                .bearer(&key)
+                .json(query(now)),
+        ) {
             Ok(body) => Some(body),
             Err(Error::UsageRejected) => return Some(Err(Error::UsageRejected)),
             // History only enriches the balance.
@@ -127,7 +107,7 @@ pub(crate) fn parse(balance: &str, usage: Option<&str>, today: NaiveDate) -> Res
         .and_then(|total| total.val)
         .and_then(|val| val.trim().parse::<f64>().ok())
         .filter(|cents| cents.is_finite())
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     // Adding zero turns an empty ledger's -0 into 0.
     let balance = Balance::new(
         "Prepaid balance",
@@ -143,8 +123,8 @@ pub(crate) fn parse(balance: &str, usage: Option<&str>, today: NaiveDate) -> Res
         Section::Facts {
             title: "Spend".into(),
             facts: vec![
-                ("Today".into(), format!("${:.2}", spend.today)),
-                (label.into(), format!("${:.2}", spend.total)),
+                ("Today".into(), usd(spend.today)),
+                (label.into(), usd(spend.total)),
             ],
         }
     });

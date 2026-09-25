@@ -6,11 +6,12 @@
 //! pick the site. The `site` setting chooses qoder.com.cn instead.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Unit, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -23,41 +24,28 @@ const BROWSER: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebK
 
 pub(crate) struct Qoder;
 
+static META: Meta = Meta::new("qoder", "Qoder")
+    .dashboard("https://qoder.com/account/usage")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &[],
+            "Your Qoder browser session. Sign in at https://qoder.com/account/usage (or \
+             https://qoder.com.cn/account/usage), open Developer Tools > Application > \
+             Cookies for qoder.com (or qoder.com.cn), and copy every cookie of the site as \
+             one header: \"name=value; name2=value2\".",
+        ),
+        Setting::new(
+            "site",
+            &[],
+            "Which Qoder site the account belongs to: \"global\" for qoder.com (the \
+             default) or \"china\" for qoder.com.cn.",
+        ),
+    ]);
+
 impl Service for Qoder {
-    fn id(&self) -> &'static str {
-        "qoder"
-    }
-
-    fn name(&self) -> &'static str {
-        "Qoder"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/qoder.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://qoder.com/account/usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &[],
-                "Your Qoder browser session. Sign in at https://qoder.com/account/usage (or \
-                 https://qoder.com.cn/account/usage), open Developer Tools > Application > \
-                 Cookies for qoder.com (or qoder.com.cn), and copy every cookie of the site as \
-                 one header: \"name=value; name2=value2\".",
-            ),
-            Setting::new(
-                "site",
-                &[],
-                "Which Qoder site the account belongs to: \"global\" for qoder.com (the \
-                 default) or \"china\" for qoder.com.cn.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -86,13 +74,12 @@ fn fetch(probe: &mut Probe, origin: &str, cookie: &Secret) -> Result<Report> {
         .header("Referer", format!("{origin}/account/usage"))
         .header("X-Requested-With", "XMLHttpRequest")
         .header("Bx-V", "2.5.35");
-    let body = probe.http(request)?.ok()?;
+    let body = probe.body(request)?;
     parse(&body, origin == CHINA)
 }
 
 pub(crate) fn parse(body: &str, china: bool) -> Result<Report> {
     let usage: Usage = json(body)?;
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let base = usage
         .total_quota
         .and_then(|quota| quota.quota_summary)
@@ -195,6 +182,7 @@ impl Summary {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     #[test]
     fn parses_credits_and_reset() {

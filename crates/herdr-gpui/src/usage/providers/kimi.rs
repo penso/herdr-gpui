@@ -26,77 +26,64 @@ use crate::{
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, SESSION, Section, WEEK, Window, group},
         probe::{HostPath, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
 use serde_json::Value;
 use std::time::{Duration, SystemTime};
 
-const INVALID: Error = Error::UsageJson(serde_json::error::Category::Data);
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 \
                           (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 
 pub(crate) struct Kimi;
 
+static META: Meta = Meta::new("kimi", "Kimi Code")
+    .dashboard("https://www.kimi.com/code/console")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["KIMI_CODE_API_KEY"],
+            "A Kimi Code API key from the Kimi Code console (https://www.kimi.com/code/console, \
+             or https://www.kimi.ai/code/console for International). Not needed when the \
+             Kimi Code CLI is signed in on the host.",
+        ),
+        Setting::new(
+            "region",
+            &[],
+            "Which Kimi service the credentials belong to: \"china\" (the default, kimi.com) \
+             or \"international\" (kimi.ai). Moonshot Open Platform keys belong to the \
+             moonshot provider instead.",
+        ),
+        Setting::new(
+            "base_url",
+            &["KIMI_CODE_BASE_URL"],
+            "An https Kimi Code API base to use with the API key instead of \
+             https://api.kimi.com, for a compatible proxy. Setting it stops the CLI's \
+             sign-in from being used.",
+        ),
+        Setting::new(
+            "token",
+            &["KIMI_AUTH_TOKEN"],
+            "Your Kimi web session, for the membership pool and plan, or on its own. Sign in \
+             at https://www.kimi.com/code/console, open Developer Tools → Application → \
+             Cookies → https://www.kimi.com, and copy the value of the `kimi-auth` cookie \
+             (a JWT starting with eyJ), without its name. On kimi.ai, copy `access_token` \
+             from Local Storage instead. Not needed when Kimi is listed in show_providers \
+             and you are signed in with Chrome or Safari.",
+        ),
+        Setting::new(
+            "cookie",
+            &["KIMI_MANUAL_COOKIE"],
+            "Instead of token, a whole Kimi Cookie header that includes kimi-auth, as \
+             \"kimi-auth=value; …\".",
+        ),
+    ]);
+
 impl Service for Kimi {
-    fn id(&self) -> &'static str {
-        "kimi"
-    }
-
-    fn name(&self) -> &'static str {
-        "Kimi Code"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/kimi.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://www.kimi.com/code/console")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["KIMI_CODE_API_KEY"],
-                "A Kimi Code API key from the Kimi Code console (https://www.kimi.com/code/console, \
-                 or https://www.kimi.ai/code/console for International). Not needed when the \
-                 Kimi Code CLI is signed in on the host.",
-            ),
-            Setting::new(
-                "region",
-                &[],
-                "Which Kimi service the credentials belong to: \"china\" (the default, kimi.com) \
-                 or \"international\" (kimi.ai). Moonshot Open Platform keys belong to the \
-                 moonshot provider instead.",
-            ),
-            Setting::new(
-                "base_url",
-                &["KIMI_CODE_BASE_URL"],
-                "An https Kimi Code API base to use with the API key instead of \
-                 https://api.kimi.com, for a compatible proxy. Setting it stops the CLI's \
-                 sign-in from being used.",
-            ),
-            Setting::new(
-                "token",
-                &["KIMI_AUTH_TOKEN"],
-                "Your Kimi web session, for the membership pool and plan, or on its own. Sign in \
-                 at https://www.kimi.com/code/console, open Developer Tools → Application → \
-                 Cookies → https://www.kimi.com, and copy the value of the `kimi-auth` cookie \
-                 (a JWT starting with eyJ), without its name. On kimi.ai, copy `access_token` \
-                 from Local Storage instead. Not needed when Kimi is listed in show_providers \
-                 and you are signed in with Chrome or Safari.",
-            ),
-            Setting::new(
-                "cookie",
-                &["KIMI_MANUAL_COOKIE"],
-                "Instead of token, a whole Kimi Cookie header that includes kimi-auth, as \
-                 \"kimi-auth=value; …\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -217,9 +204,7 @@ fn code(
     web: Option<&Secret>,
     region: Region,
 ) -> Result<Report> {
-    let body = probe
-        .http(request.header("Accept", "application/json"))?
-        .ok()?;
+    let body = probe.body(request.header("Accept", "application/json"))?;
     let mut usage = parse_code(&body)?;
     if let Some(token) = web {
         enrich(probe, token, region, &mut usage);
@@ -228,16 +213,14 @@ fn code(
 }
 
 fn web_usage(probe: &mut Probe, token: &Secret, region: Region) -> Result<Report> {
-    let body = probe
-        .http(
-            web_request(
-                region,
-                "kimi.gateway.billing.v1.BillingService/GetUsages",
-                token,
-            )
-            .json(r#"{"scope":["FEATURE_CODING"]}"#),
-        )?
-        .ok()?;
+    let body = probe.body(
+        web_request(
+            region,
+            "kimi.gateway.billing.v1.BillingService/GetUsages",
+            token,
+        )
+        .json(r#"{"scope":["FEATURE_CODING"]}"#),
+    )?;
     let mut usage = parse_web(&body)?;
     enrich(probe, token, region, &mut usage);
     Ok(usage.report())
@@ -248,8 +231,7 @@ fn web_usage(probe: &mut Probe, token: &Secret, region: Region) -> Result<Report
 fn enrich(probe: &mut Probe, token: &Secret, region: Region, usage: &mut Usage) {
     let mut call = |method: &str| {
         probe
-            .http(web_request(region, method, token).json("{}"))
-            .and_then(|response| response.ok())
+            .body(web_request(region, method, token).json("{}"))
             .ok()
     };
     if let Some(stats) = call("kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats")
@@ -381,7 +363,7 @@ pub(crate) fn parse_code(body: &str) -> Result<Usage> {
         .as_ref()
         .and_then(|pool| pool.window(total_usage(), MONTH));
     if weekly.is_none() && session.is_none() && monthly.is_none() {
-        return Err(INVALID);
+        return Err(invalid());
     }
     Ok(Usage {
         weekly,
@@ -406,7 +388,7 @@ pub(crate) fn parse_web(body: &str) -> Result<Usage> {
         .usages
         .into_iter()
         .find(|usage| usage.scope == "FEATURE_CODING")
-        .ok_or(INVALID)?;
+        .ok_or_else(invalid)?;
     let limit = coding.limits.as_ref().and_then(|limits| limits.first());
     let length = limit.map_or(Some(SESSION), |limit| {
         limit

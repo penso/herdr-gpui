@@ -17,7 +17,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::Probe,
-        service::{Service, Setting, json, number},
+        service::{Meta, Service, Setting, json, number},
     },
 };
 use chrono::{Datelike, NaiveDate};
@@ -30,52 +30,36 @@ const REGION: &str = "us-east-1";
 
 pub(crate) struct Bedrock;
 
+static META: Meta = Meta::new("bedrock", "AWS Bedrock")
+    .dashboard("https://console.aws.amazon.com/bedrock")
+    .status_page("https://health.aws.amazon.com/health/status")
+    .settings(&[
+        Setting::new(
+            "profile",
+            &[],
+            "The AWS CLI profile to read Cost Explorer with, from ~/.aws/config on the \
+             selected host (run `aws sso login --profile <name>` first for SSO). Use \
+             \"default\" for the default credentials. The identity needs \
+             ce:GetCostAndUsage. AWS bills every Cost Explorer request, so this provider \
+             runs only once profile or budget is set here.",
+        ),
+        Setting::new(
+            "budget",
+            &["CODEXBAR_BEDROCK_BUDGET"],
+            "Optional monthly Bedrock budget in US dollars, e.g. 250, shown as a monthly \
+             limit. It does not cap AWS charges.",
+        ),
+        Setting::new(
+            "aws_cli",
+            &["AWS_CLI_PATH"],
+            "Optional path to the AWS CLI v2 on the selected host when `aws` is not on \
+             its PATH, e.g. /opt/homebrew/bin/aws.",
+        ),
+    ]);
+
 impl Service for Bedrock {
-    fn id(&self) -> &'static str {
-        "bedrock"
-    }
-
-    fn name(&self) -> &'static str {
-        "AWS Bedrock"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/bedrock.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.aws.amazon.com/bedrock")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://health.aws.amazon.com/health/status")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "profile",
-                &[],
-                "The AWS CLI profile to read Cost Explorer with, from ~/.aws/config on the \
-                 selected host (run `aws sso login --profile <name>` first for SSO). Use \
-                 \"default\" for the default credentials. The identity needs \
-                 ce:GetCostAndUsage. AWS bills every Cost Explorer request, so this provider \
-                 runs only once profile or budget is set here.",
-            ),
-            Setting::new(
-                "budget",
-                &["CODEXBAR_BEDROCK_BUDGET"],
-                "Optional monthly Bedrock budget in US dollars, e.g. 250, shown as a monthly \
-                 limit. It does not cap AWS charges.",
-            ),
-            Setting::new(
-                "aws_cli",
-                &["AWS_CLI_PATH"],
-                "Optional path to the AWS CLI v2 on the selected host when `aws` is not on \
-                 its PATH, e.g. /opt/homebrew/bin/aws.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {

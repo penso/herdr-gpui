@@ -17,7 +17,8 @@ use crate::{
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, WEEK, Window},
         probe::{HostPath, Probe},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -35,31 +36,20 @@ const MINIMUM: (u64, u64, u64) = (1, 1, 11);
 
 pub(crate) struct Antigravity;
 
+static META: Meta = Meta::new("antigravity", "Antigravity")
+    .status_page(
+        "https://www.google.com/appsstatus/dashboard/products/npdyhgECDJ6tB66MxXyo/history",
+    )
+    .settings(&[Setting::new(
+        "cli_path",
+        &["ANTIGRAVITY_CLI_PATH"],
+        "The agy executable on the probed host when it is not on the PATH (install it \
+         with `brew install --cask antigravity-cli`, run `agy` once, and sign in).",
+    )]);
+
 impl Service for Antigravity {
-    fn id(&self) -> &'static str {
-        "antigravity"
-    }
-
-    fn name(&self) -> &'static str {
-        "Antigravity"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/antigravity.svg"
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://www.google.com/appsstatus/dashboard/products/npdyhgECDJ6tB66MxXyo/history")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cli_path",
-            &["ANTIGRAVITY_CLI_PATH"],
-            "The agy executable on the probed host when it is not on the PATH (install it \
-             with `brew install --cask antigravity-cli`, run `agy` once, and sign in).",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -137,7 +127,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         })
         .collect();
     if windows.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     Ok(Report::new(
         Provider(&Antigravity),

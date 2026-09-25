@@ -3,7 +3,7 @@
 //! installation prompts runs in a local workspace, so no remote installer
 //! policy is duplicated here.
 use crate::{Error, Result};
-use herdr_client::{ConnectTarget, Destination, HostProbe, SavedHost};
+use herdr_client::{Destination, HostProbe, SavedHost};
 use std::{
     io::Read,
     process::{Command, ExitStatus, Stdio},
@@ -282,11 +282,10 @@ impl Request {
         &self.label
     }
 
-    /// Whether `target` connects the same way: Herdr's `machine add` saves a
-    /// new profile every time, so the same host would otherwise appear twice.
-    pub(super) fn same_host(&self, target: &ConnectTarget) -> bool {
-        matches!(target, ConnectTarget::Ssh { target, session }
-            if *target == self.target && *session == self.session)
+    /// Whether a saved device connects the same way: Herdr's `machine add` saves
+    /// a new profile every time, so the same host would otherwise appear twice.
+    pub(super) fn same_host(&self, target: &str, session: &str) -> bool {
+        target == self.target && session == self.session
     }
 
     /// Blocks on SSH: call it from the background executor.
@@ -750,16 +749,11 @@ mod tests {
 
     #[test]
     fn same_host_means_same_ssh_target_and_session() -> Result<()> {
-        let ssh = |target: &str, session: &str| ConnectTarget::Ssh {
-            target: target.into(),
-            session: session.into(),
-        };
         // An empty session is the default one, as `machine add` saves it.
         let request = Request::new(" penso@box ", "Box", "")?;
-        assert!(request.same_host(&ssh("penso@box", "default")));
-        assert!(!request.same_host(&ssh("penso@box", "work")));
-        assert!(!request.same_host(&ssh("other@box", "default")));
-        assert!(!request.same_host(&ConnectTarget::Local));
+        assert!(request.same_host("penso@box", "default"));
+        assert!(!request.same_host("penso@box", "work"));
+        assert!(!request.same_host("other@box", "default"));
         Ok(())
     }
 

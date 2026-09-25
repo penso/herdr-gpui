@@ -17,18 +17,38 @@ find its sign-in, how to ask its service, and how to read the answer.
 
 ```rust
 pub(crate) trait Service: Sync {
-    fn id(&self) -> &'static str;              // lowercase ASCII, stable
-    fn name(&self) -> &'static str;
-    fn icon(&self) -> &'static str { "icons/agent-generic.svg" }
-    fn dashboard(&self) -> Option<&'static str> { None }   // https only
-    fn status_page(&self) -> Option<&'static str> { None } // https only
-    fn settings(&self) -> &'static [Setting] { &[] }
+    fn meta(&self) -> &'static Meta;
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>>;
     fn render(&self, report: &Report, ui: &Ui, cx: &App) -> AnyElement {
         ui.standard(report)
     }
 }
 ```
+
+What a provider is lives in one `static`:
+
+```rust
+static META: Meta = Meta::new("openrouter", "OpenRouter")
+    .dashboard("https://openrouter.ai/settings/credits")
+    .status_page("https://status.openrouter.ai")
+    .settings(&[Setting::new("api_key", &["OPENROUTER_API_KEY"], "…")]);
+
+impl Service for Openrouter {
+    fn meta(&self) -> &'static Meta {
+        &META
+    }
+
+    fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
+        let key = probe.setting("api_key")?;
+        Some(probe.body(Request::get(URL).bearer(&key)).and_then(|body| parse(&body)))
+    }
+}
+```
+
+`id` is lowercase ASCII and stable (config tables use it). The icon is
+`assets/icons/providers/<id>.svg` when that exists; `.icon(path)` sets
+another embedded SVG. `.dashboard(url)` and `.status_page(url)` must be
+HTTPS.
 
 `fetch` returns `None` when the probed host has no sign-in and the config
 sets none: the provider is then left out, unless the user lists it in
@@ -48,13 +68,11 @@ api_key = "sk-or-…"
 ```
 
 ```rust
-fn settings(&self) -> &'static [Setting] {
-    const SETTINGS: &[Setting] = &[
-        Setting::new("api_key", &["OPENROUTER_API_KEY"],
-            "An API key from https://openrouter.ai/settings/keys."),
-    ];
-    SETTINGS
-}
+.settings(&[Setting::new(
+    "api_key",
+    &["OPENROUTER_API_KEY"],
+    "An API key from https://openrouter.ai/settings/keys.",
+)])
 ```
 
 - `name` is the key in the table. Use `api_key`, `cookie`, `base_url`,
@@ -96,7 +114,8 @@ secret (emails, plan names, ids shown to the user).
 | `cookie_value(&[domain], name)` | `Option<Secret>` | One cookie's bare value, for a service that wants it as a bearer or in a header. |
 | `keychain_internet(server, account)` | `Option<Secret>` | A macOS keychain internet password (`find-internet-password`). |
 | `env_text(name)` | `Option<String>` | A host environment variable that is not secret, e.g. a local server URL. |
-| `http(Request)` | `Result<Response>` | An HTTP request; runs where its secrets are. |
+| `body(Request)` | `Result<String>` | The body of a successful answer; failures become typed usage errors. Most providers need only this. |
+| `http(Request)` | `Result<Response>` | The whole answer, for a provider that reads the status itself; runs where its secrets are. |
 | `exchange(Request, &[key])` | `Result<Secret>` | A request whose JSON answer holds a new credential (token refresh or exchange); the new credential stays where the request ran. |
 | `command(program, &[arg], timeout)` | `Result<Output>` | Runs a CLI on the host (`~/.local/bin`, Homebrew and similar are on PATH). Its stdout comes back, so only for commands that print no secrets. |
 | `is_remote()`, `is_macos()` | `bool` | Where the probe runs. |
@@ -118,6 +137,14 @@ and returns the body; `response.json::<T>()?` also parses it. Parse with
 serde structs; `service::json(body)` maps parse errors without echoing the
 body. `service::Timestamp` accepts seconds, milliseconds, numeric strings,
 and RFC 3339; `service::number` deserializes numbers sent as strings.
+
+Shared readings live in `usage::values`: `number` (a JSON number or
+numeric string), `decimal` (a strict money string), `https_base` (a
+configured service address, HTTPS only, before sending a key there),
+`gateway` (a self-hosted proxy address, HTTP only on private networks),
+`encode` (a URL component), `invalid()` (the error for a response that
+lacks what the service documents), and fact formats `usd`, `plain`,
+`count`, `trimmed`. Use them rather than writing another.
 
 Errors: use `crate::Error::Usage*` variants (`UsageRejected`,
 `UsageRateLimited`, `UsageStatus`, `UsageJson`, `UsageConnect`,

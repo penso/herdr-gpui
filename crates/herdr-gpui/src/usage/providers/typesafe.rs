@@ -12,7 +12,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit, title_case},
         probe::{Probe, Request, Response, Secret},
-        service::{Service, Setting, Timestamp},
+        service::{Meta, Service, Setting, Timestamp},
+        values::{invalid, trimmed},
     },
 };
 use serde::Deserialize;
@@ -32,33 +33,20 @@ static ACTION: Mutex<Option<(String, Instant)>> = Mutex::new(None);
 
 pub(crate) struct Typesafe;
 
+static META: Meta = Meta::new("typesafe", "TypeSafe")
+    .dashboard(BILLING)
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in at https://console.typesafe.ai/settings/billing, open Developer Tools > \
+         Application > Cookies > https://console.typesafe.ai, and copy every cookie there \
+         as one \"name=value; name2=value2\" header. An inference API key does not work \
+         here.",
+    )]);
+
 impl Service for Typesafe {
-    fn id(&self) -> &'static str {
-        "typesafe"
-    }
-
-    fn name(&self) -> &'static str {
-        "TypeSafe"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/typesafe.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some(BILLING)
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in at https://console.typesafe.ai/settings/billing, open Developer Tools > \
-             Application > Cookies > https://console.typesafe.ai, and copy every cookie there \
-             as one \"name=value; name2=value2\" header. An inference API key does not work \
-             here.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -145,7 +133,7 @@ fn discover(probe: &mut Probe, cookie: &Secret) -> Result<String> {
             }
         }
     }
-    Err(failure.unwrap_or(Error::UsageJson(serde_json::error::Category::Data)))
+    Err(failure.unwrap_or_else(invalid))
 }
 
 /// Same-origin script chunks the billing page loads, in page order.
@@ -225,7 +213,6 @@ pub(crate) fn action_id(chunk: &str) -> Option<String> {
 /// The React Server Components answer: numbered lines of JSON, one of them
 /// the action's `{ok, data}` result.
 pub(crate) fn parse(body: &str) -> Result<Report> {
-    let invalid = || Error::UsageJson(serde_json::error::Category::Data);
     let result = body
         .lines()
         .filter_map(|line| {
@@ -293,8 +280,8 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                 "Credit".to_owned(),
                 format!(
                     "{} of {}, expires {expires}",
-                    number(remaining),
-                    number(amount)
+                    trimmed(remaining),
+                    trimmed(amount)
                 ),
             ))
         })
@@ -321,12 +308,6 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             Balance::new(spent_label, spent, usd()),
         ])
         .with_sections(sections))
-}
-
-/// `4.98`, `5`: up to two decimals, as the console shows credits.
-fn number(value: f64) -> String {
-    let text = format!("{value:.2}");
-    text.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
 #[derive(Deserialize)]

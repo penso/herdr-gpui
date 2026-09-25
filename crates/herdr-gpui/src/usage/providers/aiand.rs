@@ -10,7 +10,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
     },
 };
 use serde::Deserialize;
@@ -23,31 +23,18 @@ const SCALE: u32 = 12;
 
 pub(crate) struct Aiand;
 
+static META: Meta = Meta::new("aiand", "ai&")
+    .dashboard("https://console.aiand.com")
+    .settings(&[Setting::new(
+        "api_key",
+        &["AIAND_API_KEY"],
+        "An ai& API key (starts with sk-), created at https://console.aiand.com under \
+         Settings > API Keys > Create. Keys are shown only once.",
+    )]);
+
 impl Service for Aiand {
-    fn id(&self) -> &'static str {
-        "aiand"
-    }
-
-    fn name(&self) -> &'static str {
-        "ai&"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/aiand.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.aiand.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["AIAND_API_KEY"],
-            "An ai& API key (starts with sk-), created at https://console.aiand.com under \
-             Settings > API Keys > Create. Keys are shown only once.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -62,8 +49,7 @@ impl Service for Aiand {
                 None => URL.to_owned(),
             };
             let page = probe
-                .http(Request::get(url).bearer(&key))
-                .and_then(|response| response.ok())
+                .body(Request::get(url).bearer(&key))
                 .and_then(|body| tally.add(&body));
             match page {
                 Ok(Some(next)) => cursor = Some(next),

@@ -12,7 +12,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting},
+        service::{Meta, Service, Setting},
+        values::invalid,
     },
 };
 use std::time::{Duration, SystemTime};
@@ -22,34 +23,21 @@ const PAYG_URL: &str = "https://console.sakana.ai/billing?tab=payAsYouGo";
 
 pub(crate) struct Sakana;
 
+static META: Meta = Meta::new("sakana", "Sakana AI")
+    .dashboard("https://console.sakana.ai/billing")
+    .settings(&[Setting::new(
+        "cookie",
+        &["SAKANA_COOKIE"],
+        "Sign in to https://console.sakana.ai, open Developer Tools > Application > \
+         Cookies for https://console.sakana.ai, and copy every cookie there (the \
+         sign-in session cookies are required). Paste them as \"name=value; \
+         name2=value2\"; the Cookie header of a request to console.sakana.ai/billing \
+         in the Network tab also works.",
+    )]);
+
 impl Service for Sakana {
-    fn id(&self) -> &'static str {
-        "sakana"
-    }
-
-    fn name(&self) -> &'static str {
-        "Sakana AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/sakana.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://console.sakana.ai/billing")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &["SAKANA_COOKIE"],
-            "Sign in to https://console.sakana.ai, open Developer Tools > Application > \
-             Cookies for https://console.sakana.ai, and copy every cookie there (the \
-             sign-in session cookies are required). Paste them as \"name=value; \
-             name2=value2\"; the Cookie header of a request to console.sakana.ai/billing \
-             in the Network tab also works.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -73,8 +61,7 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     let billing = response.ok()?;
     // Pay-as-you-go credit is optional; the subscription windows stand without it.
     let payg = probe
-        .http(page(PAYG_URL).timeout(Duration::from_secs(5)))
-        .and_then(|response| response.ok())
+        .body(page(PAYG_URL).timeout(Duration::from_secs(5)))
         .ok();
     parse(&billing, payg.as_deref())
 }
@@ -120,7 +107,7 @@ fn window(nodes: &[Node], label: &str, kind: Kind, length: Duration) -> Result<O
         if let Some(percent) = text.strip_suffix("% used") {
             used = percent.trim().parse::<f64>().ok();
             if used.is_none() {
-                return Err(Error::UsageJson(serde_json::error::Category::Data));
+                return Err(invalid());
             }
         } else if let Some(date) = text.strip_prefix("Resets on ") {
             resets_at = reset_time(date);
@@ -128,7 +115,7 @@ fn window(nodes: &[Node], label: &str, kind: Kind, length: Duration) -> Result<O
     }
     let used = used
         .filter(|used| (0. ..=100.).contains(used))
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
     Ok(Some(Window::new(kind, used, resets_at, Some(length))))
 }
 

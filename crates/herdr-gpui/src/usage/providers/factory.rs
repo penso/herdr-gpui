@@ -19,7 +19,8 @@ use crate::{
             title_case,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json, number},
+        service::{Meta, Service, Setting, Timestamp, json, number},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -48,44 +49,28 @@ enum Auth {
     Cookie(Secret),
 }
 
+static META: Meta = Meta::new("factory", "Droid")
+    .dashboard("https://app.factory.ai/settings/billing")
+    .status_page("https://status.factory.ai")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["FACTORY_API_KEY"],
+            "A Factory API key (fk-…) from https://app.factory.ai/settings/api-keys.",
+        ),
+        Setting::new(
+            "cookie",
+            &[],
+            "Used when no API key is set. Sign in to https://app.factory.ai, open \
+             Developer Tools > Application > Cookies > https://app.factory.ai, and copy \
+             the session cookies (wos-session, access-token, and any *.session-token) \
+             as \"name=value; name2=value2\".",
+        ),
+    ]);
+
 impl Service for Factory {
-    fn id(&self) -> &'static str {
-        "factory"
-    }
-
-    fn name(&self) -> &'static str {
-        "Droid"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/factory.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.factory.ai/settings/billing")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.factory.ai")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["FACTORY_API_KEY"],
-                "A Factory API key (fk-…) from https://app.factory.ai/settings/api-keys.",
-            ),
-            Setting::new(
-                "cookie",
-                &[],
-                "Used when no API key is set. Sign in to https://app.factory.ai, open \
-                 Developer Tools > Application > Cookies > https://app.factory.ai, and copy \
-                 the session cookies (wos-session, access-token, and any *.session-token) \
-                 as \"name=value; name2=value2\".",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -119,10 +104,7 @@ fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
     let mut failure: Option<Error> = None;
     let mut found = None;
     for base in [API, APP] {
-        match probe
-            .http(request(format!("{base}/api/app/auth/me"), auth))
-            .and_then(|response| response.ok())
-        {
+        match probe.body(request(format!("{base}/api/app/auth/me"), auth)) {
             Ok(body) => {
                 found = Some((base, body));
                 break;
@@ -141,8 +123,7 @@ fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
     let now = SystemTime::now();
 
     let limits = probe
-        .http(request(format!("{API}/api/billing/limits"), auth))
-        .and_then(|response| response.ok())
+        .body(request(format!("{API}/api/billing/limits"), auth))
         .ok();
     if let Some(report) = limits.and_then(|body| parse_limits(&me, &body, now).ok().flatten()) {
         return Ok(report);
@@ -153,7 +134,7 @@ fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
         url.push_str("&userId=");
         url.extend(url::form_urlencoded::byte_serialize(user.as_bytes()));
     }
-    let body = probe.http(request(url, auth))?.ok()?;
+    let body = probe.body(request(url, auth))?;
     parse_usage(&me, &body)
 }
 
@@ -217,9 +198,7 @@ fn parse_limits(me: &Me, body: &str, now: SystemTime) -> Result<Option<Report>> 
 /// Standard and Premium token allowances over the billing period.
 fn parse_usage(me: &Me, body: &str) -> Result<Report> {
     let usage: UsageAnswer = json(body)?;
-    let usage = usage
-        .usage
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+    let usage = usage.usage.ok_or_else(invalid)?;
     let start = usage.start_date.as_ref().and_then(Timestamp::time);
     let end = usage.end_date.as_ref().and_then(Timestamp::time);
     let length = start
@@ -239,7 +218,7 @@ fn parse_usage(me: &Me, body: &str) -> Result<Report> {
         })
         .collect();
     if windows.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     let plan = me.plan(None);
     Ok(Report::new(Provider(&Factory), me.account(plan), windows).with_sections(me.organization()))

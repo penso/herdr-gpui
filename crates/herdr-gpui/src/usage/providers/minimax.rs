@@ -17,7 +17,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, json, number},
+        service::{Meta, Service, Setting, json, number},
+        values,
     },
 };
 use serde::Deserialize;
@@ -55,46 +56,33 @@ const CHINA: Hosts = Hosts {
     www: "https://www.minimaxi.com",
 };
 
+static META: Meta = Meta::new("minimax", "MiniMax")
+    .dashboard("https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["MINIMAX_CODING_API_KEY", "MINIMAX_API_KEY"],
+            "A MiniMax Coding Plan or Token Plan API key (sk-cp-…) from \
+             https://platform.minimax.io/user-center/basic-information/interface-key.",
+        ),
+        Setting::new(
+            "cookie",
+            &["MINIMAX_COOKIE", "MINIMAX_COOKIE_HEADER"],
+            "Used when no API key is set. Sign in to https://platform.minimax.io, open \
+             Developer Tools > Application > Cookies > https://platform.minimax.io, and \
+             copy every cookie (including HERTZ-SESSION) as \"name=value; name2=value2\".",
+        ),
+        Setting::new(
+            "region",
+            &[],
+            "\"global\" for minimax.io (the default) or \"cn\" for the China mainland \
+             platform at minimaxi.com.",
+        ),
+    ]);
+
 impl Service for Minimax {
-    fn id(&self) -> &'static str {
-        "minimax"
-    }
-
-    fn name(&self) -> &'static str {
-        "MiniMax"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/minimax.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.minimax.io/user-center/payment/coding-plan?cycle_type=3")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["MINIMAX_CODING_API_KEY", "MINIMAX_API_KEY"],
-                "A MiniMax Coding Plan or Token Plan API key (sk-cp-…) from \
-                 https://platform.minimax.io/user-center/basic-information/interface-key.",
-            ),
-            Setting::new(
-                "cookie",
-                &["MINIMAX_COOKIE", "MINIMAX_COOKIE_HEADER"],
-                "Used when no API key is set. Sign in to https://platform.minimax.io, open \
-                 Developer Tools > Application > Cookies > https://platform.minimax.io, and \
-                 copy every cookie (including HERTZ-SESSION) as \"name=value; name2=value2\".",
-            ),
-            Setting::new(
-                "region",
-                &[],
-                "\"global\" for minimax.io (the default) or \"cn\" for the China mainland \
-                 platform at minimaxi.com.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -123,8 +111,7 @@ fn with_key(probe: &mut Probe, key: &Secret, hosts: &Hosts) -> Result<Report> {
             .bearer(key)
             .header("Accept", "application/json");
         let result = probe
-            .http(request)
-            .and_then(|response| response.ok())
+            .body(request)
             .and_then(|body| parse(&body, SystemTime::now()));
         match result {
             Ok(report) => return Ok(report),
@@ -154,8 +141,7 @@ fn with_cookie(probe: &mut Probe, cookie: &Secret, hosts: &Hosts) -> Result<Repo
                 format!("{}/user-center/payment/coding-plan", hosts.platform),
             );
         match probe
-            .http(request)
-            .and_then(|response| response.ok())
+            .body(request)
             .and_then(|body| parse(&body, SystemTime::now()))
         {
             Ok(report) => return Ok(report),
@@ -179,11 +165,11 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         None => {}
         Some(0.) => {}
         Some(1004.) => return Err(Error::UsageRejected),
-        Some(_) => return Err(Error::UsageJson(serde_json::error::Category::Data)),
+        Some(_) => return Err(values::invalid()),
     }
     let data = root.data.unwrap_or(root.plan);
     if data.model_remains.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(values::invalid());
     }
 
     let mut windows = Vec::new();

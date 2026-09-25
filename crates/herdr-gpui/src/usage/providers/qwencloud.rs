@@ -24,7 +24,8 @@ use crate::{
     usage::{
         model::{Provider, Report},
         probe::{Probe, Secret},
-        service::{Service, Setting},
+        service::{Meta, Service, Setting},
+        values,
     },
 };
 use serde_json::Value;
@@ -40,48 +41,32 @@ const QUOTA_CONFIG_API: &str = "zeldaHttp.apikeyMgr./tokenplan/personal/api/v2/q
 
 pub(crate) struct Qwencloud;
 
+static META: Meta = Meta::new("qwencloud", "Qwen Cloud")
+    .dashboard(DASHBOARD)
+    .status_page("https://status.alibabacloud.com")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &["QWEN_CLOUD_COOKIE"],
+            "Your Qwen Cloud console session. Sign in at \
+             https://home.qwencloud.com/billing/subscription/token-plan-individual, open \
+             Developer Tools > Application > Cookies > https://home.qwencloud.com, and copy \
+             the login ticket (login_qwencloud_ticket or login_aliyunid_ticket) together with \
+             login_aliyunid_csrf and cna. Paste them as \"name=value; name2=value2\", or copy \
+             the whole Cookie header of the data/api.json request from the Network tab.",
+        ),
+        Setting::new(
+            "sec_token",
+            &[],
+            "Optional. The console's sec_token, when it cannot be read from \
+             /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
+             the data/api.json request on the Token Plan page.",
+        ),
+    ]);
+
 impl Service for Qwencloud {
-    fn id(&self) -> &'static str {
-        "qwencloud"
-    }
-
-    fn name(&self) -> &'static str {
-        "Qwen Cloud"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/qwencloud.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some(DASHBOARD)
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.alibabacloud.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &["QWEN_CLOUD_COOKIE"],
-                "Your Qwen Cloud console session. Sign in at \
-                 https://home.qwencloud.com/billing/subscription/token-plan-individual, open \
-                 Developer Tools > Application > Cookies > https://home.qwencloud.com, and copy \
-                 the login ticket (login_qwencloud_ticket or login_aliyunid_ticket) together with \
-                 login_aliyunid_csrf and cna. Paste them as \"name=value; name2=value2\", or copy \
-                 the whole Cookie header of the data/api.json request from the Network tab.",
-            ),
-            Setting::new(
-                "sec_token",
-                &[],
-                "Optional. The console's sec_token, when it cannot be read from \
-                 /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
-                 the data/api.json request on the Token Plan page.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -123,7 +108,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
             "application/json, text/plain, */*",
             body,
         );
-        probe.http(request)?.ok()
+        probe.body(request)
     };
     let usage = call(USAGE_API, serde_json::json!({}))?;
     let subscription = call(
@@ -162,7 +147,7 @@ pub(crate) fn parse(
     check(&value)?;
     team(&value)
         .map(|summary| report_with(Provider(&Qwencloud), summary))
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))
+        .ok_or_else(values::invalid)
 }
 
 #[cfg(test)]

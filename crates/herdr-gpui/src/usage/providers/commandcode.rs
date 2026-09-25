@@ -9,17 +9,18 @@
 //! cookie is pasted as `name=value`.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{
             Account, Balance, Kind, MONTH, Provider, Report, SESSION, Unit, WEEK, Window,
             title_case,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{invalid, number},
     },
 };
-use serde_json::{Value, error::Category};
+use serde_json::Value;
 use std::time::{Duration, SystemTime};
 
 const API: &str = "https://api.commandcode.ai";
@@ -48,33 +49,20 @@ const PLANS: &[(&str, &str, f64)] = &[
 
 pub(crate) struct Commandcode;
 
+static META: Meta = Meta::new("commandcode", "Command Code")
+    .dashboard("https://commandcode.ai/studio")
+    .settings(&[Setting::new(
+        "cookie",
+        &[],
+        "Sign in to https://commandcode.ai, open Developer Tools > Application > Cookies \
+         for https://commandcode.ai, and copy the session cookie: \
+         __Secure-better-auth.session_token (or __Secure-commandcode_prod_.session_token, \
+         whichever is present). Paste it as \"name=value\".",
+    )]);
+
 impl Service for Commandcode {
-    fn id(&self) -> &'static str {
-        "commandcode"
-    }
-
-    fn name(&self) -> &'static str {
-        "Command Code"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/commandcode.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://commandcode.ai/studio")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "cookie",
-            &[],
-            "Sign in to https://commandcode.ai, open Developer Tools > Application > Cookies \
-             for https://commandcode.ai, and copy the session cookie: \
-             __Secure-better-auth.session_token (or __Secure-commandcode_prod_.session_token, \
-             whichever is present). Paste it as \"name=value\".",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -95,22 +83,29 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
             .header("Origin", ORIGIN)
             .header("Referer", format!("{ORIGIN}/"))
     };
-    let credits = probe.http(get("/internal/billing/credits"))?.ok()?;
+    let credits = probe.body(get("/internal/billing/credits"))?;
     // The subscription only names the plan and its period; credits stand without it.
     let subscription = probe
-        .http(get("/internal/billing/subscriptions").timeout(Duration::from_secs(5)))
-        .and_then(|response| response.ok())
+        .body(get("/internal/billing/subscriptions").timeout(Duration::from_secs(5)))
         .ok();
     parse(&credits, subscription.as_deref())
 }
 
 pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report> {
     let root: Value = json(credits)?;
-    let invalid = || Error::UsageJson(Category::Data);
     let credits = root.get("credits").ok_or_else(invalid)?;
-    let remaining = amount(credits.get("monthlyCredits")).ok_or_else(invalid)?;
-    let purchased = amount(credits.get("purchasedCredits")).unwrap_or(0.);
-    let granted = amount(credits.get("monthlyCreditsGranted")).filter(|total| *total > 0.);
+    let remaining = credits
+        .get("monthlyCredits")
+        .and_then(number)
+        .ok_or_else(invalid)?;
+    let purchased = credits
+        .get("purchasedCredits")
+        .and_then(number)
+        .unwrap_or(0.);
+    let granted = credits
+        .get("monthlyCreditsGranted")
+        .and_then(number)
+        .filter(|total| *total > 0.);
     let limits = root
         .get("windowLimits")
         .or_else(|| credits.get("windowLimits"));
@@ -121,8 +116,8 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
     .into_iter()
     .filter_map(|(kind, key, length)| {
         let limit = limits?.get(key)?;
-        let cap = amount(limit.get("cap")).filter(|cap| *cap > 0.)?;
-        let used = amount(limit.get("used")).unwrap_or(0.);
+        let cap = limit.get("cap").and_then(number).filter(|cap| *cap > 0.)?;
+        let used = limit.get("used").and_then(number).unwrap_or(0.);
         Some(Window::new(
             kind,
             used / cap * 100.,
@@ -207,15 +202,6 @@ fn parse_subscription(body: &str) -> Option<Option<Subscription>> {
     }))
 }
 
-fn amount(value: Option<&Value>) -> Option<f64> {
-    let number = match value? {
-        Value::Number(number) => number.as_f64(),
-        Value::String(text) => text.trim().parse().ok(),
-        _ => None,
-    }?;
-    number.is_finite().then_some(number)
-}
-
 fn time(value: Option<&Value>) -> Option<SystemTime> {
     match value? {
         Value::Number(number) => Timestamp::Number(number.as_f64()?).time(),
@@ -228,6 +214,7 @@ fn time(value: Option<&Value>) -> Option<SystemTime> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     const CREDITS: &str = r#"{
       "credits": {"monthlyCredits": 8.5, "purchasedCredits": 2, "premiumMonthlyCredits": 0,

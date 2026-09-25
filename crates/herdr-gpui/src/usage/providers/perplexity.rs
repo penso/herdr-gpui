@@ -14,7 +14,7 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
     },
 };
 use serde::Deserialize;
@@ -45,45 +45,29 @@ const COOKIE_NAMES: &[&str] = &[
 
 pub(crate) struct Perplexity;
 
+static META: Meta = Meta::new("perplexity", "Perplexity")
+    .dashboard("https://www.perplexity.ai/account/usage")
+    .status_page("https://status.perplexity.com")
+    .settings(&[
+        Setting::new(
+            "cookie",
+            &["PERPLEXITY_COOKIE"],
+            "The perplexity.ai web session. Sign in at https://www.perplexity.ai, open \
+             Developer Tools → Application → Cookies → https://www.perplexity.ai, copy the \
+             session cookie (__Secure-next-auth.session-token, or __Secure-authjs.session-token \
+             on newer sign-ins), and paste it as \"name=value\".",
+        ),
+        Setting::new(
+            "session_token",
+            &["PERPLEXITY_SESSION_TOKEN"],
+            "Alternatively, only the value of that session cookie; each session cookie name \
+             is tried in turn.",
+        ),
+    ]);
+
 impl Service for Perplexity {
-    fn id(&self) -> &'static str {
-        "perplexity"
-    }
-
-    fn name(&self) -> &'static str {
-        "Perplexity"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/perplexity.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://www.perplexity.ai/account/usage")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.perplexity.com")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "cookie",
-                &["PERPLEXITY_COOKIE"],
-                "The perplexity.ai web session. Sign in at https://www.perplexity.ai, open \
-                 Developer Tools → Application → Cookies → https://www.perplexity.ai, copy the \
-                 session cookie (__Secure-next-auth.session-token, or __Secure-authjs.session-token \
-                 on newer sign-ins), and paste it as \"name=value\".",
-            ),
-            Setting::new(
-                "session_token",
-                &["PERPLEXITY_SESSION_TOKEN"],
-                "Alternatively, only the value of that session cookie; each session cookie name \
-                 is tried in turn.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -112,7 +96,7 @@ fn credits(probe: &mut Probe, session: &Secret, prefix: &str) -> Result<String> 
         .header("Origin", "https://www.perplexity.ai")
         .header("Referer", "https://www.perplexity.ai/account/usage")
         .header("User-Agent", AGENT);
-    probe.http(request)?.ok()
+    probe.body(request)
 }
 
 pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {

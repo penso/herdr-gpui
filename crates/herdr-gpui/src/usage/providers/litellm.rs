@@ -12,7 +12,8 @@ use crate::{
             Account, Balance, DAY, Kind, MONTH, Provider, Report, Section, Unit, WEEK, Window,
         },
         probe::{Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{gateway, invalid},
     },
 };
 use chrono::Datelike;
@@ -21,36 +22,25 @@ use std::time::Duration;
 
 pub(crate) struct Litellm;
 
+static META: Meta = Meta::new("litellm", "LiteLLM").settings(&[
+    Setting::new(
+        "api_key",
+        &["LITELLM_API_KEY"],
+        "A LiteLLM virtual key (sk-…) issued by your LiteLLM proxy, e.g. from its admin \
+             UI under Virtual Keys. A master key is not needed.",
+    ),
+    Setting::new(
+        "base_url",
+        &["LITELLM_BASE_URL"],
+        "The LiteLLM proxy's URL, with or without /v1, e.g. \
+             https://litellm.example.com. It must be HTTPS unless it is on localhost, a \
+             private network, or a .local host.",
+    ),
+]);
+
 impl Service for Litellm {
-    fn id(&self) -> &'static str {
-        "litellm"
-    }
-
-    fn name(&self) -> &'static str {
-        "LiteLLM"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/litellm.svg"
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["LITELLM_API_KEY"],
-                "A LiteLLM virtual key (sk-…) issued by your LiteLLM proxy, e.g. from its admin \
-                 UI under Virtual Keys. A master key is not needed.",
-            ),
-            Setting::new(
-                "base_url",
-                &["LITELLM_BASE_URL"],
-                "The LiteLLM proxy's URL, with or without /v1, e.g. \
-                 https://litellm.example.com. It must be HTTPS unless it is on localhost, a \
-                 private network, or a .local host.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -85,7 +75,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
         let query = format!("?start_date={start}&end_date={end}");
         let response = probe.http(get("key/spend/report", &query))?;
         let (scope, body) = if matches!(response.status, 401 | 403 | 404) {
-            ("User", probe.http(get("user/spend/report", &query))?.ok()?)
+            ("User", probe.body(get("user/spend/report", &query))?)
         } else {
             ("Key", response.ok()?)
         };
@@ -93,15 +83,11 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     }
     let key_info = parse_key(&response.ok()?)?;
     if let Some(user) = &key_info.user_id {
-        let body = probe
-            .http(get("user/info", &format!("?user_id={}", encode(user))))?
-            .ok()?;
+        let body = probe.body(get("user/info", &format!("?user_id={}", encode(user))))?;
         return parse_user(&body, &key_info);
     }
     let team = key_info.team_id.as_deref().unwrap_or_default();
-    let body = probe
-        .http(get("team/info", &format!("?team_id={}", encode(team))))?
-        .ok()?;
+    let body = probe.body(get("team/info", &format!("?team_id={}", encode(team))))?;
     parse_team(&body, &key_info)
 }
 
@@ -118,33 +104,6 @@ fn root_url(raw: &str) -> Result<String> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.to_string().trim_end_matches('/').to_owned())
-}
-
-/// The key goes to this URL, so it must be HTTPS unless it stays on this
-/// machine or a private network, and it must not carry credentials.
-fn gateway(raw: &str) -> Result<url::Url> {
-    let url = url::Url::parse(raw.trim()).map_err(|_| Error::UsageNotSignedIn)?;
-    let private = match url.host() {
-        Some(url::Host::Domain(name)) => {
-            let name = name.to_ascii_lowercase();
-            name == "localhost" || name.ends_with(".local")
-        }
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        Some(url::Host::Ipv6(ip)) => {
-            let first = ip.segments()[0];
-            ip.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
-        }
-        None => return Err(Error::UsageNotSignedIn),
-    };
-    let secure = url.scheme() == "https" || (url.scheme() == "http" && private);
-    if !secure || !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
-    }
-    Ok(url)
-}
-
-fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
 }
 
 fn nonempty(value: Option<String>) -> Option<String> {

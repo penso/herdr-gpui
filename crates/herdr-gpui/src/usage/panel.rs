@@ -123,7 +123,7 @@ impl HerdrWindow {
                             div()
                                 .text_size(px(font.size * 1.25))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .child(service.name()),
+                                .child(service.meta().name),
                         )
                         .child(
                             div()
@@ -170,7 +170,7 @@ impl HerdrWindow {
         };
         if let Some(report) = reading.and_then(|r| r.report.as_ref()) {
             view = view.child(rule()).child(service.render(report, &ui, cx));
-        } else if !service.settings().is_empty() {
+        } else if !service.meta().settings.is_empty() {
             // Nothing to show yet: say what would sign it in.
             view = view.child(rule()).child(setup(service, &ui));
         }
@@ -185,7 +185,7 @@ impl HerdrWindow {
                     cx.notify();
                 }),
             ))
-            .children(service.dashboard().map(|url| {
+            .children(service.meta().dashboard.map(|url| {
                 self.usage_action(
                     "usage-dashboard",
                     "icons/chart.svg",
@@ -193,7 +193,7 @@ impl HerdrWindow {
                     move |_, _, cx| cx.open_url(url),
                 )
             }))
-            .children(service.status_page().map(|url| {
+            .children(service.meta().status_page.map(|url| {
                 self.usage_action(
                     "usage-status",
                     "icons/pulse.svg",
@@ -311,7 +311,7 @@ impl HerdrWindow {
 fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
     ui.block()
         .child(ui.heading("Set up"))
-        .children(service.settings().iter().map(|setting| {
+        .children(service.meta().settings.iter().map(|setting| {
             let variables = if setting.env.is_empty() {
                 String::new()
             } else {
@@ -324,7 +324,7 @@ fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
                 .text_size(ui.small())
                 .child(format!(
                     "[usage.providers.{}] {}{variables}",
-                    service.id(),
+                    service.meta().id,
                     setting.name
                 ))
                 .child(div().text_color(ui.muted()).child(setting.help))

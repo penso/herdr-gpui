@@ -6,11 +6,12 @@
 //! expired token has to be replaced by hand.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
-        model::{Account, Kind, Provider, Report, Section, WEEK, Window, group},
+        model::{Account, Kind, Provider, Report, Section, WEEK, Window},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::{count, invalid},
     },
 };
 use serde::Deserialize;
@@ -19,41 +20,28 @@ const URL: &str = "https://api.gitkraken.dev/v1/ai-tasks/usage";
 
 pub(crate) struct Gitkraken;
 
+static META: Meta = Meta::new("gitkraken", "GitKraken AI")
+    .dashboard("https://gitkraken.dev/account#ai-usage")
+    .settings(&[
+        Setting::new(
+            "token",
+            &["GITKRAKEN_API_TOKEN"],
+            "A GitKraken account session access token. Sign in at \
+             https://gitkraken.dev/account#ai-usage, open Developer Tools > Network, \
+             select the successful ai-tasks/usage request, and copy only the value after \
+             \"Bearer \" in its Authorization header. Replace it when it expires.",
+        ),
+        Setting::new(
+            "org_id",
+            &["GITKRAKEN_ORG_ID"],
+            "Optional organization ID: the gk-org-id header of the same request, to read \
+             that organization's shared pool.",
+        ),
+    ]);
+
 impl Service for Gitkraken {
-    fn id(&self) -> &'static str {
-        "gitkraken"
-    }
-
-    fn name(&self) -> &'static str {
-        "GitKraken AI"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/gitkraken.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://gitkraken.dev/account#ai-usage")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "token",
-                &["GITKRAKEN_API_TOKEN"],
-                "A GitKraken account session access token. Sign in at \
-                 https://gitkraken.dev/account#ai-usage, open Developer Tools > Network, \
-                 select the successful ai-tasks/usage request, and copy only the value after \
-                 \"Bearer \" in its Authorization header. Replace it when it expires.",
-            ),
-            Setting::new(
-                "org_id",
-                &["GITKRAKEN_ORG_ID"],
-                "Optional organization ID: the gk-org-id header of the same request, to read \
-                 that organization's shared pool.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -69,12 +57,7 @@ impl Service for Gitkraken {
         {
             request = request.header("gk-org-id", organization);
         }
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -127,22 +110,8 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     )
 }
 
-fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
-}
-
-/// `1,250`, or two decimals when the amount is fractional.
-fn amount(value: f64) -> String {
-    let whole = value.round();
-    if (value - whole).abs() < 0.005 {
-        group(whole as i64)
-    } else {
-        format!("{value:.2}")
-    }
-}
-
 fn credits(value: f64) -> String {
-    format!("{} credits", amount(value))
+    format!("{} credits", count(value))
 }
 
 /// A limit of zero is no allowance and -1 unlimited; neither has a percent.
@@ -164,9 +133,9 @@ impl Quota {
     }
 
     fn describe(&self) -> String {
-        let used = amount(self.used);
+        let used = count(self.used);
         if self.limit > 0. {
-            format!("{used} / {} credits used", amount(self.limit))
+            format!("{used} / {} credits used", count(self.limit))
         } else if self.limit == -1. {
             format!("{used} credits used · Unlimited")
         } else {

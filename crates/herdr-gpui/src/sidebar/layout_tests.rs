@@ -1009,6 +1009,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         catalog: crate::endpoint::Catalog::new(&ConnectTarget::Socket(
             "/unused-layout-test.sock".into(),
         )),
+        sessions: Default::default(),
+        sessions_anchor: Default::default(),
         activation_deadline: None,
         pending_navigation: None,
         pending_toast: None,

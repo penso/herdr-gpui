@@ -8,11 +8,12 @@
 //! "china"`. Kimi Code subscriptions are a separate provider (`kimi`).
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request},
-        service::{Service, Setting, json},
+        service::{Meta, Service, Setting, json},
+        values,
     },
 };
 use serde::Deserialize;
@@ -22,42 +23,30 @@ const CHINA: &str = "https://api.moonshot.cn";
 
 pub(crate) struct Moonshot;
 
+static META: Meta = Meta::new("moonshot", "Moonshot / Kimi Open Platform")
+    .icon("icons/providers/kimi.svg")
+    .dashboard("https://platform.moonshot.ai/console/account")
+    .settings(&[
+        Setting::new(
+            "api_key",
+            &["MOONSHOT_API_KEY", "MOONSHOT_KEY"],
+            "A Moonshot / Kimi Open Platform API key, from \
+             https://platform.moonshot.ai/console/api-keys (International) or \
+             https://platform.moonshot.cn/console/api-keys (China mainland). Use a key \
+             issued for the region set below.",
+        ),
+        Setting::new(
+            "region",
+            &["MOONSHOT_REGION"],
+            "Which platform issued the key: \"international\" (the default, \
+             api.moonshot.ai, balances in USD) or \"china\" (api.moonshot.cn, balances \
+             in CNY).",
+        ),
+    ]);
+
 impl Service for Moonshot {
-    fn id(&self) -> &'static str {
-        "moonshot"
-    }
-
-    fn name(&self) -> &'static str {
-        "Moonshot / Kimi Open Platform"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/kimi.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://platform.moonshot.ai/console/account")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "api_key",
-                &["MOONSHOT_API_KEY", "MOONSHOT_KEY"],
-                "A Moonshot / Kimi Open Platform API key, from \
-                 https://platform.moonshot.ai/console/api-keys (International) or \
-                 https://platform.moonshot.cn/console/api-keys (China mainland). Use a key \
-                 issued for the region set below.",
-            ),
-            Setting::new(
-                "region",
-                &["MOONSHOT_REGION"],
-                "Which platform issued the key: \"international\" (the default, \
-                 api.moonshot.ai, balances in USD) or \"china\" (api.moonshot.cn, balances \
-                 in CNY).",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -66,12 +55,7 @@ impl Service for Moonshot {
         let request = Request::get(format!("{}/v1/users/me/balance", region.origin()))
             .bearer(&key)
             .header("Accept", "application/json");
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body, region)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body, region)))
     }
 }
 
@@ -113,7 +97,7 @@ pub(crate) fn parse(body: &str, region: Region) -> Result<Report> {
     let response: BalanceResponse = json(body)?;
     // The platform reports failures in a 200 body; only a clean answer is usage.
     if response.code != 0 || !response.status {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(values::invalid());
     }
     let data = response.data;
     let unit = || Unit::Currency(region.currency().into());
@@ -153,6 +137,7 @@ struct BalanceData {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     /// The documented `GET /v1/users/me/balance` answer.
     const FIXTURE: &str = r#"{"code":0,"data":{"available_balance":49.58894,

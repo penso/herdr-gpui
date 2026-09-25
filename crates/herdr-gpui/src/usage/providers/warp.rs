@@ -10,7 +10,8 @@ use crate::{
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -35,35 +36,19 @@ const QUERY: &str = "query GetRequestLimitInfo($requestContext: RequestContext!)
 
 pub(crate) struct Warp;
 
+static META: Meta = Meta::new("warp", "Warp")
+    .dashboard("https://app.warp.dev/settings/billing")
+    .status_page("https://status.warp.dev")
+    .settings(&[Setting::new(
+        "api_key",
+        &["WARP_API_KEY", "WARP_TOKEN"],
+        "A Warp API key (wk-…). In Warp open your profile menu, then Settings → Platform → \
+         API Keys, and create one. See https://docs.warp.dev/reference/cli/api-keys.",
+    )]);
+
 impl Service for Warp {
-    fn id(&self) -> &'static str {
-        "warp"
-    }
-
-    fn name(&self) -> &'static str {
-        "Warp"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/warp.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://app.warp.dev/settings/billing")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://status.warp.dev")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[Setting::new(
-            "api_key",
-            &["WARP_API_KEY", "WARP_TOKEN"],
-            "A Warp API key (wk-…). In Warp open your profile menu, then Settings → Platform → \
-             API Keys, and create one. See https://docs.warp.dev/reference/cli/api-keys.",
-        )];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -91,12 +76,7 @@ impl Service for Warp {
             .header("x-warp-os-name", os)
             .header("x-warp-os-version", "0.0.0")
             .json(body.to_string());
-        Some(
-            probe
-                .http(request)
-                .and_then(|response| response.ok())
-                .and_then(|body| parse(&body)),
-        )
+        Some(probe.body(request).and_then(|body| parse(&body)))
     }
 }
 
@@ -110,10 +90,8 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .data
         .and_then(|data| data.user)
         .and_then(|user| user.user)
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
-    let limits = user
-        .request_limit_info
-        .ok_or(Error::UsageJson(serde_json::error::Category::Data))?;
+        .ok_or_else(invalid)?;
+    let limits = user.request_limit_info.ok_or_else(invalid)?;
     let unlimited = limits.is_unlimited.as_ref().is_some_and(flag);
     let limit = limits.request_limit.as_ref().map_or(0, count);
     let used = limits

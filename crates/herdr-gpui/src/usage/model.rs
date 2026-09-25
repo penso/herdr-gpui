@@ -40,15 +40,15 @@ impl Provider {
     }
 
     pub fn id(self) -> &'static str {
-        self.0.id()
+        self.0.meta().id
     }
 
     pub fn name(self) -> &'static str {
-        self.0.name()
+        self.0.meta().name
     }
 
     pub fn icon(self) -> &'static str {
-        self.0.icon()
+        self.0.meta().icon_path()
     }
 }
 

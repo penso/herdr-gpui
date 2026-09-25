@@ -19,7 +19,8 @@ use crate::{
     usage::{
         model::{Account, DAY, Kind, Provider, Report, Section, Window},
         probe::{HostPath, Part, Probe, Request, Secret},
-        service::{Service, Setting, Timestamp, json},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
     },
 };
 use serde::Deserialize;
@@ -59,44 +60,30 @@ exit 1"#;
 
 pub(crate) struct Gemini;
 
+static META: Meta = Meta::new("gemini", "Gemini")
+    .dashboard("https://gemini.google.com")
+    .status_page(
+        "https://www.google.com/appsstatus/dashboard/products/npdyhgECDJ6tB66MxXyo/history",
+    )
+    .settings(&[
+        Setting::new(
+            "client_id",
+            &["GEMINI_OAUTH_CLIENT_ID"],
+            "The Gemini CLI's OAuth client id, used to refresh an expired sign-in. \
+             Normally found in the installed CLI (OAUTH_CLIENT_ID in \
+             @google/gemini-cli-core/dist/src/code_assist/oauth2.js); set it only when \
+             the CLI is not on the host's PATH.",
+        ),
+        Setting::new(
+            "client_secret",
+            &["GEMINI_OAUTH_CLIENT_SECRET"],
+            "The matching OAUTH_CLIENT_SECRET from the same file.",
+        ),
+    ]);
+
 impl Service for Gemini {
-    fn id(&self) -> &'static str {
-        "gemini"
-    }
-
-    fn name(&self) -> &'static str {
-        "Gemini"
-    }
-
-    fn icon(&self) -> &'static str {
-        "icons/providers/gemini.svg"
-    }
-
-    fn dashboard(&self) -> Option<&'static str> {
-        Some("https://gemini.google.com")
-    }
-
-    fn status_page(&self) -> Option<&'static str> {
-        Some("https://www.google.com/appsstatus/dashboard/products/npdyhgECDJ6tB66MxXyo/history")
-    }
-
-    fn settings(&self) -> &'static [Setting] {
-        const SETTINGS: &[Setting] = &[
-            Setting::new(
-                "client_id",
-                &["GEMINI_OAUTH_CLIENT_ID"],
-                "The Gemini CLI's OAuth client id, used to refresh an expired sign-in. \
-                 Normally found in the installed CLI (OAUTH_CLIENT_ID in \
-                 @google/gemini-cli-core/dist/src/code_assist/oauth2.js); set it only when \
-                 the CLI is not on the host's PATH.",
-            ),
-            Setting::new(
-                "client_secret",
-                &["GEMINI_OAUTH_CLIENT_SECRET"],
-                "The matching OAUTH_CLIENT_SECRET from the same file.",
-            ),
-        ];
-        SETTINGS
+    fn meta(&self) -> &'static Meta {
+        &META
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -119,12 +106,11 @@ impl Service for Gemini {
 fn read(probe: &mut Probe, credentials: &Secret, email: Option<String>) -> Result<Report> {
     let token = access_token(probe, credentials)?;
     let assist = probe
-        .http(
+        .body(
             Request::post(CODE_ASSIST_URL)
                 .bearer(&token)
                 .json(r#"{"metadata":{"ideType":"GEMINI_CLI","pluginType":"GEMINI"}}"#),
         )
-        .and_then(|response| response.ok())
         .map(|body| parse_code_assist(&body))
         .unwrap_or_default();
     if assist.ineligible {
@@ -133,8 +119,7 @@ fn read(probe: &mut Probe, credentials: &Secret, email: Option<String>) -> Resul
     let project = match assist.project.clone() {
         Some(project) => Some(project),
         None => probe
-            .http(Request::get(PROJECTS_URL).bearer(&token))
-            .and_then(|response| response.ok())
+            .body(Request::get(PROJECTS_URL).bearer(&token))
             .ok()
             .and_then(|body| gemini_project(&body)),
     };
@@ -306,7 +291,7 @@ pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<String>) -> 
         }
     }
     if models.is_empty() {
-        return Err(Error::UsageJson(serde_json::error::Category::Data));
+        return Err(invalid());
     }
     models.sort_by(|a, b| a.0.cmp(&b.0));
     let family = |id: &str| {
