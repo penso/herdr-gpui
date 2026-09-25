@@ -74,6 +74,28 @@ pub(crate) fn input_cursor_bounds(
     Bounds::new(origin, size(px(cell_width), px(cell_height)))
 }
 
+/// Where input lands: the popup when one is open, otherwise the whole grid.
+/// An IME composition and its candidate window stay inside this area.
+pub(crate) fn input_area(
+    surface: Option<&PaneSurfaceFrame>,
+    grid: Bounds<Pixels>,
+    cell_width: f32,
+    cell_height: f32,
+) -> Bounds<Pixels> {
+    let Some((frame, popup)) =
+        surface.and_then(|surface| Some((&surface.frame, surface.popup.as_ref()?)))
+    else {
+        return grid;
+    };
+    Bounds::new(
+        grid.origin + popup_origin(frame, &popup.frame, cell_width, cell_height),
+        size(
+            px(f32::from(popup.frame.width) * cell_width),
+            px(f32::from(popup.frame.height) * cell_height),
+        ),
+    )
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum InputTarget {
     Pane(String),
@@ -769,7 +791,15 @@ mod tests {
             input_cursor_bounds(Some(&surface), origin, 8.5, 30.5).origin,
             origin + point(px(255.), px(213.5))
         );
+        let grid = Bounds::new(origin, size(px(680.), px(480.)));
+        // A composition in a popup stays inside the popup, not the grid.
+        assert_eq!(
+            input_area(Some(&surface), grid, 8.5, CELL_HEIGHT),
+            Bounds::new(origin + point(px(255.), px(140.)), size(px(170.), px(200.)))
+        );
         surface.popup = None;
+        assert_eq!(input_area(Some(&surface), grid, 8.5, CELL_HEIGHT), grid);
+        assert_eq!(input_area(None, grid, 8.5, CELL_HEIGHT), grid);
         assert_eq!(
             input_cursor_bounds(Some(&surface), origin, 8.5, CELL_HEIGHT).origin,
             origin + point(px(595.), px(400.))

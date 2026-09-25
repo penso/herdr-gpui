@@ -1,4 +1,7 @@
-use super::{HerdrWindow, terminal::input_cursor_bounds};
+use super::{
+    HerdrWindow,
+    terminal::{input_area, input_cursor_bounds},
+};
 use gpui::*;
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::ops::Range;
@@ -110,17 +113,14 @@ impl EntityInputHandler for HerdrWindow {
         if self.menu.page.is_some() {
             return self.menu.input.as_ref()?.range_bounds(range);
         }
-        let cursor = input_cursor_bounds(
-            self.live.surface.as_deref(),
-            self.bounds.origin,
-            self.cell_width,
-            self.config.terminal.line_height(),
-        );
+        let surface = self.live.surface.as_deref();
+        let cell_height = self.config.terminal.line_height();
+        let cursor = input_cursor_bounds(surface, self.bounds.origin, self.cell_width, cell_height);
         Some(self.painter.borrow().composition_bounds(
             &self.marked,
             range,
             cursor,
-            self.bounds,
+            input_area(surface, self.bounds, self.cell_width, cell_height),
             &self.config.terminal.font(),
             window,
         ))
