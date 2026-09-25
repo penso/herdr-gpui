@@ -147,6 +147,12 @@ impl Render for HerdrWindow {
         // The highlight is grid coordinates, so it paints with the frame that
         // owns the cells rather than being recomputed from the pointer here.
         let selection = self.selection.clone();
+        // The IME composition paints inline at the input cursor; a menu's
+        // text field shows its own.
+        // It anchors to the live surface, as the IME's candidate window does,
+        // so a retained frame never separates the text from the window.
+        let marked = (!menu_open && !self.marked.is_empty())
+            .then(|| (self.marked.clone(), self.live.surface.clone()));
         self.hovered_terminal_link =
             self.terminal_link_hovered(window.mouse_position(), window.modifiers());
         self.split_cursor = self.split_cursor_at(window.mouse_position());
@@ -399,6 +405,17 @@ impl Render for HerdrWindow {
                                 );
                             }
                         }
+                        if let Some((marked, live)) = &marked {
+                            let live = live.as_deref();
+                            painter.borrow().paint_composition(
+                                marked,
+                                input_cursor_bounds(live, bounds.origin, cell_width, cell_height)
+                                    .origin,
+                                input_area(live, bounds, cell_width, cell_height),
+                                &font,
+                                window,
+                            );
+                        }
                     },
                 )
                 .size_full(),
@@ -613,16 +630,6 @@ impl Render for HerdrWindow {
                                 div().debug_selector(|| "connection-message".into()).child(status)
                             )),
                     )
-                    .when(!self.marked.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .min_w_0()
-                                .max_w(px(160.))
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(format!("Composing: {}", self.marked)),
-                        )
-                    })
                     .child(
                         div()
                                     .id("status-theme")
