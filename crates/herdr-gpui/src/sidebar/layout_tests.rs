@@ -880,6 +880,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         config_load_revision: 0,
         git: Default::default(),
         sidebar_visible: true,
+        sidebar_mode: crate::preferences::SidebarMode::default(),
+        sidebar_mode_modified: false,
         device_filter: None,
         endpoints: vec![crate::endpoint::Endpoint::new(
             crate::endpoint::LOCAL.into(),
@@ -3813,4 +3815,279 @@ fn holding_a_workspace_row_lifts_it_and_a_release_picks_the_gap(cx: &mut gpui::T
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     view.read_with(cx, |view, _| assert!(view.workspace_drag.is_none()));
     assert_eq!(cx.debug_bounds("row-sidebar-child").unwrap(), child);
+}
+
+#[cfg(test)]
+fn rail_fixture(
+    cx: &mut gpui::TestAppContext,
+) -> (Entity<HerdrWindow>, &mut gpui::VisualTestContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        let view = cx.new(|cx| fixture_window(window, cx));
+        cx.observe(&view, |_, _, cx| cx.notify()).detach();
+        SidebarFixture(view)
+    });
+    let view = cx.update(|_, cx| fixture.read(cx).0.clone());
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    (view, cx)
+}
+
+#[cfg(test)]
+fn run_command(
+    view: &Entity<HerdrWindow>,
+    command: crate::Command,
+    cx: &mut gpui::VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| view.command(command, window, cx));
+        cx.default_global::<TextProbes>().0.clear();
+        full_draw(window, cx).clear(cx);
+    });
+}
+
+#[gpui::test]
+fn collapsing_the_sidebar_leaves_a_rail_the_terminal_reclaims(cx: &mut gpui::TestAppContext) {
+    use crate::{Command, preferences::SidebarMode};
+    let (view, cx) = rail_fixture(cx);
+    let full = cx.debug_bounds("sidebar").unwrap();
+    assert_eq!(full.size.width, px(232.));
+    assert!(cx.debug_bounds("rail-local-w0").is_none());
+
+    run_command(&view, Command::CollapseSidebar, cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_mode, SidebarMode::Collapsed);
+        assert!(view.sidebar_visible);
+        // Collapsing keeps the width the full sidebar comes back at.
+        assert_eq!(view.sidebar_width, None);
+    });
+    let rail = cx.debug_bounds("sidebar").unwrap();
+    assert_eq!(rail.size.width, px(super::metrics::RAIL_WIDTH));
+    let terminal = cx.debug_bounds("terminal").unwrap();
+    assert_eq!(terminal.left(), rail.right());
+    // Labels give way to cells; every cell stays inside the rail.
+    assert!(cx.debug_bounds("name-herdr").is_none());
+    for key in [
+        "rail-local-w0",
+        "rail-local-w3",
+        "rail-local-w4",
+        "rail-agent-local-p0",
+    ] {
+        let cell = cx.debug_bounds(key).unwrap_or_else(|| panic!("{key}"));
+        assert!(
+            cell.left() >= rail.left() && cell.right() <= rail.right(),
+            "{key}"
+        );
+    }
+    // Each workspace carries the daemon's status dot; agents are dots only.
+    assert!(cx.debug_bounds("status-rail-local-w0").is_some());
+
+    // Hiding and showing again returns to the rail, not the full sidebar.
+    run_command(&view, Command::ToggleSidebar, cx);
+    assert!(cx.debug_bounds("sidebar").is_none());
+    assert_eq!(cx.debug_bounds("terminal").unwrap().left(), px(0.));
+    run_command(&view, Command::ToggleSidebar, cx);
+    assert_eq!(
+        cx.debug_bounds("sidebar").unwrap().size.width,
+        px(super::metrics::RAIL_WIDTH)
+    );
+    // Collapsing a hidden sidebar only shows it.
+    run_command(&view, Command::ToggleSidebar, cx);
+    run_command(&view, Command::CollapseSidebar, cx);
+    view.read_with(cx, |view, _| {
+        assert!(view.sidebar_visible);
+        assert_eq!(view.sidebar_mode, SidebarMode::Collapsed);
+    });
+
+    run_command(&view, Command::CollapseSidebar, cx);
+    assert_eq!(cx.debug_bounds("sidebar").unwrap(), full);
+    assert!(cx.debug_bounds("rail-local-w0").is_none());
+}
+
+#[gpui::test]
+fn rail_cells_show_pull_requests_children_and_navigate(cx: &mut gpui::TestAppContext) {
+    use crate::{Command, NavigationTarget};
+    let (view, cx) = rail_fixture(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let now = std::time::Instant::now();
+            let input = |branch: &str| crate::pull_request::Input {
+                checkout: None,
+                repo_key: REPO_KEY.into(),
+                branch: branch.into(),
+            };
+            let mut pr = crate::pull_request::fixture().unwrap();
+            pr.number = 12345;
+            view.menu
+                .pr_cache
+                .seed(input("worktree/sidebar-child"), pr, now);
+            view.git.seed_probe(input("develop"), true, now);
+        })
+    });
+    run_command(&view, Command::CollapseSidebar, cx);
+
+    // The pull request number replaces the icon, shrunk to fit the cell and
+    // clear of the status dot in its corner.
+    let cell = cx.debug_bounds("rail-local-w4").unwrap();
+    let number = cx.debug_bounds("pr-rail-local-w4").unwrap();
+    assert!(cell.left() < number.left() && number.right() < cell.right());
+    assert!(cell.top() < number.top() && number.bottom() < cell.bottom());
+    let dot = cx.debug_bounds("status-rail-local-w4").unwrap();
+    assert!(dot.bottom() <= number.top() + px(2.) || dot.left() >= number.right() - px(2.));
+    cx.update(|_, cx| {
+        let probes = &cx.global::<TextProbes>().0;
+        let (bounds, _, glyphs) = &probes["12345"];
+        assert!(
+            *glyphs <= bounds.size.width + px(1.),
+            "{glyphs:?} {bounds:?}"
+        );
+    });
+    assert!(cx.debug_bounds("pr-rail-local-w5").is_none());
+    // Uncommitted work keeps its mark.
+    assert!(cx.debug_bounds("dirty-rail-local-w3").is_some());
+    assert!(cx.debug_bounds("dirty-rail-local-w4").is_none());
+
+    // Children have cells of their own, and fold with their group.
+    let parent = cx.debug_bounds("rail-local-w3").unwrap();
+    assert_eq!(cell.top(), parent.bottom());
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.collapsed_repos.insert(REPO_KEY.into());
+            cx.notify();
+        })
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("rail-local-w4").is_none());
+    assert_eq!(
+        cx.debug_bounds("rail-local-w6").unwrap().top(),
+        parent.bottom()
+    );
+
+    // A click selects, as the full row's does.
+    let target = cx.debug_bounds("rail-local-w2").unwrap();
+    cx.simulate_click(target.center(), Default::default());
+    view.read_with(cx, |view, _| {
+        assert_eq!(
+            view.pending_navigation,
+            Some(NavigationTarget::Workspace("w2".into()))
+        );
+    });
+    let agent = cx.debug_bounds("rail-agent-local-p1").unwrap();
+    cx.simulate_click(agent.center(), Default::default());
+    view.read_with(cx, |view, _| {
+        assert_eq!(
+            view.pending_navigation,
+            Some(NavigationTarget::Pane("p1".into()))
+        );
+    });
+}
+
+#[gpui::test]
+fn dragging_the_edge_collapses_and_expands_the_sidebar(cx: &mut gpui::TestAppContext) {
+    use crate::preferences::SidebarMode;
+    use gpui::{MouseButton, MouseDownEvent};
+    let (view, cx) = rail_fixture(cx);
+    let drag = |from: gpui::Point<Pixels>, to: Pixels, cx: &mut gpui::VisualTestContext| {
+        let end = point(to, from.y);
+        cx.simulate_mouse_down(from, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
+        cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    };
+    view.update(cx, |view, cx| {
+        view.sidebar_width = Some(300.);
+        cx.notify();
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    let handle = cx.debug_bounds("sidebar-resize").unwrap().center();
+
+    // Past the line, the sidebar collapses and keeps the width it had.
+    drag(handle, px(80.), cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_mode, SidebarMode::Collapsed);
+        assert_eq!(view.sidebar_width, Some(300.));
+        assert!(view.sidebar_drag.is_none());
+    });
+    let rail = cx.debug_bounds("sidebar").unwrap();
+    assert_eq!(rail.size.width, px(super::metrics::RAIL_WIDTH));
+
+    // A short drag on the rail stays collapsed; a long one expands to the
+    // pointer.
+    let handle = cx.debug_bounds("sidebar-resize").unwrap().center();
+    drag(handle, px(90.), cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_mode, SidebarMode::Collapsed)
+    });
+    let handle = cx.debug_bounds("sidebar-resize").unwrap().center();
+    drag(handle, handle.x + px(250.), cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_mode, SidebarMode::Expanded)
+    });
+    let expanded = cx.debug_bounds("sidebar").unwrap().size.width;
+    assert!((expanded - px(super::metrics::RAIL_WIDTH + 250.)).abs() <= px(3.));
+
+    // A double click on the rail's edge expands it.
+    drag(
+        cx.debug_bounds("sidebar-resize").unwrap().center(),
+        px(60.),
+        cx,
+    );
+    let position = cx.debug_bounds("sidebar-resize").unwrap().center();
+    cx.simulate_event(MouseDownEvent {
+        position,
+        button: MouseButton::Left,
+        click_count: 2,
+        ..Default::default()
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_mode, SidebarMode::Expanded)
+    });
+}
+
+#[gpui::test]
+fn rail_hosts_show_the_devices_icon_and_their_connection(cx: &mut gpui::TestAppContext) {
+    use crate::{Command, state::ConnectionStatus};
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        let view = cx.new(|cx| {
+            let mut view = fixture_window(window, cx);
+            view.live.snapshot = Some(Arc::new(snapshot(1)));
+            view.live.status = ConnectionStatus::Connected;
+            let mut remote = crate::endpoint::Endpoint::new(
+                "ssh:test".into(),
+                "Remote".into(),
+                ConnectTarget::Ssh {
+                    target: "unused".into(),
+                    session: "default".into(),
+                },
+                true,
+            );
+            remote.live.snapshot = view.live.snapshot.clone();
+            view.endpoints.push(remote);
+            view
+        });
+        cx.observe(&view, |_, _, cx| cx.notify()).detach();
+        SidebarFixture(view)
+    });
+    let view = cx.update(|_, cx| fixture.read(cx).0.clone());
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    run_command(&view, Command::CollapseSidebar, cx);
+    for (cell, icon) in [
+        ("rail-host-local", "icon-rail-host-local"),
+        ("rail-host-ssh:test", "icon-rail-host-ssh:test"),
+    ] {
+        let bounds = cx.debug_bounds(cell).unwrap();
+        assert!(
+            bounds.contains(&cx.debug_bounds(icon).unwrap().center()),
+            "{cell}"
+        );
+    }
+    // Only the connected device carries the dot; neither prints a letter.
+    assert!(cx.debug_bounds("connected-rail-host-local").is_some());
+    assert!(cx.debug_bounds("connected-rail-host-ssh:test").is_none());
+    cx.update(|_, cx| {
+        let probes = &cx.global::<TextProbes>().0;
+        assert!(!probes.contains_key("L") && !probes.contains_key("R"));
+    });
 }

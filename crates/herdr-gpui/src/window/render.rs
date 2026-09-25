@@ -29,6 +29,7 @@ impl Render for HerdrWindow {
         let sidebar = self.sidebar_visible.then(|| {
             crate::sidebar::cached_view(
                 &self.sidebar_view,
+                self.sidebar_mode,
                 self.sidebar_width,
                 f32::from(window.viewport_size().width),
             )

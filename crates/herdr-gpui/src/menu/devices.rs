@@ -7,6 +7,8 @@ use gpui::{prelude::*, *};
 use herdr_client::ConnectTarget;
 
 pub(super) const MENU_GAP: f32 = 12.;
+/// The dot that marks a connected device, here and in the collapsed sidebar.
+pub(crate) const CONNECTED: u32 = 0x63c68b;
 pub(super) const MENU_WIDTH: f32 = 280.;
 
 pub(super) struct Setup {
@@ -16,13 +18,15 @@ pub(super) struct Setup {
     task: Option<Task<()>>,
 }
 
-struct SettingsHint {
-    text: SharedString,
-    foreground: u32,
-    surface: u32,
+/// A one-line tooltip in the theme's colors, for controls that show an icon
+/// where a label would not fit.
+pub(crate) struct Hint {
+    pub(crate) text: SharedString,
+    pub(crate) foreground: u32,
+    pub(crate) surface: u32,
 }
 
-impl Render for SettingsHint {
+impl Render for Hint {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .px(px(8.))
@@ -118,7 +122,7 @@ impl HerdrWindow {
                             .flex_none()
                             .rounded_full()
                             .bg(rgb(if connected {
-                                0x63c68b
+                                CONNECTED
                             } else {
                                 self.theme.muted
                             })),
@@ -163,7 +167,7 @@ impl HerdrWindow {
                     .rounded(px(crate::config::corners::CONTROL))
                     .cursor_pointer()
                     .tooltip(move |_, cx| {
-                        cx.new(|_| SettingsHint {
+                        cx.new(|_| Hint {
                             text: hint.clone(),
                             foreground,
                             surface,
@@ -311,7 +315,7 @@ impl HerdrWindow {
                                 .flex_none()
                                 .rounded_full()
                                 .bg(rgb(if endpoint.live.status.is_connected() {
-                                    0x63c68b
+                                    CONNECTED
                                 } else {
                                     self.theme.muted
                                 })),

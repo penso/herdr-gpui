@@ -205,6 +205,18 @@ impl HerdrWindow {
                 return;
             }
             Command::ToggleSidebar => self.sidebar_visible = !self.sidebar_visible,
+            // A hidden sidebar is shown in the mode it had, rather than
+            // switched to a mode nobody can see.
+            Command::CollapseSidebar => {
+                if self.sidebar_visible {
+                    self.sidebar_mode = self.sidebar_mode.toggled();
+                } else {
+                    self.sidebar_visible = true;
+                }
+                self.sidebar_mode_modified = true;
+                self.save_chrome();
+                cx.notify();
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP

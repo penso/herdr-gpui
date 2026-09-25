@@ -5,6 +5,7 @@ mod agents;
 mod hover;
 mod layout;
 mod metrics;
+mod rail;
 mod render;
 mod reorder;
 mod row;
@@ -44,6 +45,12 @@ pub(crate) const DEVICE_FOOTER_HEIGHT: f32 = 40.;
 
 #[derive(Clone, Copy)]
 pub(crate) enum SidebarDrag {
-    Width { start: f32, width: f32 },
+    /// `preferred` is the stored width when the drag began, restored if the
+    /// drag collapses the sidebar.
+    Width {
+        start: f32,
+        width: f32,
+        preferred: Option<f32>,
+    },
     Split,
 }

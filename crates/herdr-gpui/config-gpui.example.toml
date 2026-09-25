@@ -86,6 +86,7 @@ position = "bottom-right"
 # close_tab = "cmd-shift-w"
 # focus_tab_1 = "cmd-1"   # through focus_tab_9 = "cmd-9"
 # toggle_sidebar = "cmd-b"
+# collapse_sidebar = "cmd-shift-b"
 # increase_font_size = ["cmd-=", "cmd-+"]
 # decrease_font_size = "cmd--"
 # reset_font_size = "cmd-0"

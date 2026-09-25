@@ -221,6 +221,7 @@ impl HerdrWindow {
                 | Command::WorkspacePicker => 1,
                 Command::NewWindow
                 | Command::ToggleSidebar
+                | Command::CollapseSidebar
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize

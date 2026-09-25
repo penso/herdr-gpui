@@ -130,6 +130,19 @@ pub(crate) fn menus() -> Vec<Menu> {
                         command: Command::ResetFontSize,
                     },
                 ),
+                MenuItem::separator(),
+                MenuItem::action(
+                    "Collapse or Expand Sidebar",
+                    RunCommand {
+                        command: Command::CollapseSidebar,
+                    },
+                ),
+                MenuItem::action(
+                    "Show or Hide Sidebar",
+                    RunCommand {
+                        command: Command::ToggleSidebar,
+                    },
+                ),
             ],
         },
         Menu {
@@ -177,12 +190,6 @@ pub(crate) fn menus() -> Vec<Menu> {
                     "Open Notification Target",
                     RunCommand {
                         command: Command::OpenNotificationTarget,
-                    },
-                ),
-                MenuItem::action(
-                    "Toggle Sidebar",
-                    RunCommand {
-                        command: Command::ToggleSidebar,
                     },
                 ),
                 MenuItem::separator(),
@@ -478,11 +485,11 @@ mod tests {
         });
     }
 
-    /// The font size items are the only way to reach these commands from the
-    /// macOS menu bar, and each must dispatch the catalog command rather than
-    /// an action of its own.
+    /// The font size and sidebar items are the only way to reach these
+    /// commands from the macOS menu bar, and each must dispatch the catalog
+    /// command rather than an action of its own.
     #[test]
-    fn view_menu_carries_the_font_size_commands() {
+    fn view_menu_carries_the_font_size_and_sidebar_commands() {
         let menus = menus();
         let view = menus
             .iter()
@@ -500,6 +507,8 @@ mod tests {
             ("Increase Font Size", Command::IncreaseFontSize),
             ("Decrease Font Size", Command::DecreaseFontSize),
             ("Reset Font Size", Command::ResetFontSize),
+            ("Collapse or Expand Sidebar", Command::CollapseSidebar),
+            ("Show or Hide Sidebar", Command::ToggleSidebar),
         ];
         assert_eq!(actions.len(), expected.len());
         for ((name, action), (label, command)) in actions.iter().zip(expected) {
@@ -508,5 +517,6 @@ mod tests {
         }
         // Reset is a different kind of act from stepping, so it sits apart.
         assert!(matches!(view.items[2], MenuItem::Separator));
+        assert!(matches!(view.items[4], MenuItem::Separator));
     }
 }

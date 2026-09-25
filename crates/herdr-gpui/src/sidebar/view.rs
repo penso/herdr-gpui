@@ -10,7 +10,8 @@
 //! The rows still come from `HerdrWindow::render_sidebar`, so their listeners
 //! and state stay where they were.
 
-use super::metrics::sidebar_width;
+use super::metrics::sidebar_extent;
+use crate::preferences::SidebarMode;
 use crate::window::HerdrWindow;
 use gpui::{
     AnyView, Context, Empty, Entity, IntoElement, Render, StyleRefinement, Styled, ViewElement,
@@ -57,10 +58,11 @@ impl Render for SidebarView {
 /// root, which GPUI lays out without rendering while the cache holds.
 pub(crate) fn cached(
     view: &Entity<SidebarView>,
+    mode: SidebarMode,
     preferred: Option<f32>,
     window_width: f32,
 ) -> ViewElement<AnyView> {
-    let width = sidebar_width(preferred, window_width);
+    let width = sidebar_extent(mode, preferred, window_width);
     AnyView::from(view.clone()).cached(
         StyleRefinement::default()
             .w(px(width))

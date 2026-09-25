@@ -29,6 +29,7 @@ mod worktree_tests;
 
 pub(crate) use {
     colors::accent,
+    devices::{CONNECTED, Hint},
     page::{Page, WorkspaceAction},
     state::{MenuState, Removal},
     worktree_source::WorktreeSource,

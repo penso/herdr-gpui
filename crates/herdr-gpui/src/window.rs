@@ -106,7 +106,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) git: git::Git,
     pub(crate) install_warning_shown: bool,
     pub(crate) collapsed_repos: std::collections::HashSet<String>,
+    /// Shown or hidden, which is not saved; how it shows is `sidebar_mode`.
     pub(crate) sidebar_visible: bool,
+    pub(crate) sidebar_mode: preferences::SidebarMode,
+    /// Keeps a collapse made before the stored chrome arrives from being undone.
+    pub(crate) sidebar_mode_modified: bool,
     pub(crate) device_filter: Option<String>,
     pub(crate) wheel: WheelAccumulator,
     pub(crate) sidebar_width: Option<f32>,
@@ -198,6 +202,9 @@ impl HerdrWindow {
             }
             if !self.agent_sort_modified {
                 self.agent_sort = chrome.agent_sort;
+            }
+            if !self.sidebar_mode_modified {
+                self.sidebar_mode = chrome.sidebar_mode;
             }
             cx.notify();
         }
@@ -340,6 +347,8 @@ impl HerdrWindow {
             install_warning_shown: false,
             collapsed_repos: Default::default(),
             sidebar_visible: true,
+            sidebar_mode: preferences::SidebarMode::default(),
+            sidebar_mode_modified: false,
             device_filter: None,
             wheel: WheelAccumulator::default(),
             sidebar_width: None,

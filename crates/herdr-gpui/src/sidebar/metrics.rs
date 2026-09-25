@@ -1,7 +1,7 @@
 //! Sidebar geometry. The same numbers feed layout, hit testing, and the
 //! label budgets, so a row never paints wider than it was measured.
 
-use crate::config::FontConfig;
+use crate::{config::FontConfig, preferences::SidebarMode};
 use std::time::Duration;
 
 pub(super) const SIDEBAR_WIDTH: f32 = 232.;
@@ -30,6 +30,24 @@ pub(crate) const LABEL_WIDTH: f32 =
 
 pub(super) fn line_height(font: &FontConfig) -> f32 {
     font.size * 4. / 3.
+}
+
+/// The collapsed sidebar: one column of icon cells and status dots.
+pub(crate) const RAIL_WIDTH: f32 = 52.;
+/// A width drag that would leave the sidebar narrower than this collapses it,
+/// and dragging a collapsed one past it expands it again.
+pub(super) const COLLAPSE_BELOW: f32 = 110.;
+/// Rail cells fit an avatar or a pull request badge with little to spare,
+/// so a long list stays scannable.
+pub(super) const RAIL_CELL: f32 = 32.;
+pub(super) const RAIL_DOT_CELL: f32 = 18.;
+
+/// The width the sidebar takes in the window, whichever mode it is in.
+pub(super) fn sidebar_extent(mode: SidebarMode, preferred: Option<f32>, window_width: f32) -> f32 {
+    match mode {
+        SidebarMode::Expanded => sidebar_width(preferred, window_width),
+        SidebarMode::Collapsed => RAIL_WIDTH,
+    }
 }
 
 pub(super) fn sidebar_width(preferred: Option<f32>, window_width: f32) -> f32 {

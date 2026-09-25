@@ -130,6 +130,14 @@ impl RowBadge {
         (pr.is_some() || dirty).then_some(Self { pr, dirty })
     }
 
+    pub(super) fn pr(&self) -> Option<&PrBadge> {
+        self.pr.as_ref()
+    }
+
+    pub(super) fn dirty(&self) -> bool {
+        self.dirty
+    }
+
     pub(super) fn width(&self, font: &FontConfig, layout: &dyn SidebarDensity) -> f32 {
         let pr = self.pr.as_ref().map_or(0., |pr| pr.width(font, layout));
         // Reserve the icon and the gap before the PR number, even at small fonts.
@@ -158,6 +166,15 @@ impl PrBadge {
             additions: format!("+{}", compact(pr.additions)),
             deletions: format!("-{}", compact(pr.deletions)),
         }
+    }
+
+    /// The number as it prints, `#` included.
+    pub(super) fn number(&self) -> &str {
+        &self.number
+    }
+
+    pub(super) fn color(&self) -> u32 {
+        self.color
     }
 
     /// Reserved width. Sidebar labels are monospace by default and digits are

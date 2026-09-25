@@ -23,6 +23,7 @@ pub enum Command {
     CloseTab,
     TabNumber(u8),
     ToggleSidebar,
+    CollapseSidebar,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -229,6 +230,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-b"],
     },
     CommandInfo {
+        command: Command::CollapseSidebar,
+        name: "collapse_sidebar",
+        label: "Collapse or Expand Sidebar",
+        shortcuts: &["cmd-shift-b"],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -396,6 +403,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         Command::NewWindow
         | Command::NewWorktree
         | Command::ToggleSidebar
+        | Command::CollapseSidebar
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
@@ -427,7 +435,7 @@ mod tests {
     #[test]
     fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         use Command::*;
-        let expected: [(Command, &[&str]); 41] = [
+        let expected: [(Command, &[&str]); 42] = [
             (OpenNotificationTarget, &["cmd-alt-n"]),
             (Logs, &[]),
             (NewWindow, &["cmd-alt-shift-n"]),
@@ -458,6 +466,7 @@ mod tests {
             (TabNumber(8), &["cmd-8"]),
             (TabNumber(9), &["cmd-9"]),
             (ToggleSidebar, &["cmd-b"]),
+            (CollapseSidebar, &["cmd-shift-b"]),
             (IncreaseFontSize, &["cmd-=", "cmd-+"]),
             (DecreaseFontSize, &["cmd--"]),
             (ResetFontSize, &["cmd-0"]),
@@ -519,6 +528,7 @@ mod tests {
             Command::NewWindow,
             Command::NewWorktree,
             Command::ToggleSidebar,
+            Command::CollapseSidebar,
             Command::IncreaseFontSize,
             Command::DecreaseFontSize,
             Command::ResetFontSize,

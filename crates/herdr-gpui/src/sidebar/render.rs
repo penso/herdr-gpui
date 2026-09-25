@@ -8,6 +8,7 @@ use super::{
     agents_sort, label_text,
     layout::{self, SidebarLook},
     line_height,
+    metrics::COLLAPSE_BELOW,
     reorder::{self, Plan},
     row::first_text,
     row::{RowIcon, RowKind, RowLift, RowTree, row},
@@ -18,6 +19,7 @@ use crate::{
     Command, HerdrWindow, NavigationTarget,
     config::{FontConfig, Theme},
     fonts::StyledFont,
+    preferences::SidebarMode,
 };
 use gpui::{prelude::*, *};
 
@@ -27,6 +29,9 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
+        if self.sidebar_mode == SidebarMode::Collapsed {
+            return self.render_rail(cx);
+        }
         let width = sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width));
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
         let look = layout::for_mode(self.config.layout.mode);
@@ -467,29 +472,7 @@ impl HerdrWindow {
         if sliding {
             window.request_animation_frame();
         }
-        // Follow the selection, but only once a frame has measured the viewport:
-        // the handle resolves the request against the previous frame's bounds, so
-        // an unmeasured list would scroll to a meaningless offset. Recording what
-        // was revealed keeps later frames from undoing the user's own scrolling.
-        for (list, row) in highlighted.iter().enumerate() {
-            let Some(row) = *row else { continue };
-            if self.sidebar_revealed[list].get() != Some(row)
-                && self.sidebar_scroll[list].bounds().size.height > px(0.)
-            {
-                let scroll = &self.sidebar_scroll[list];
-                let visible = scroll.bounds_for_item(row).is_some_and(|bounds| {
-                    let offset = scroll.offset().y;
-                    bounds.bottom() + offset > scroll.bounds().top()
-                        && bounds.top() + offset < scroll.bounds().bottom()
-                });
-                // Even a partially visible worktree is already seen. GPUI's
-                // reveal also moves clipped rows, so only request it off-screen.
-                if !visible {
-                    scroll.scroll_to_item(row);
-                }
-                self.sidebar_revealed[list].set(Some(row));
-            }
-        }
+        self.reveal_highlighted(highlighted);
         if agent_count == 0 {
             agents = agents.child(
                 div()
@@ -619,114 +602,187 @@ impl HerdrWindow {
                     )
             })
             .child(self.render_device_footer(cx))
-            .child(
-                div()
-                    .id("sidebar-resize")
-                    .debug_selector(|| "sidebar-resize".into())
-                    .absolute()
-                    .right_0()
-                    .top_0()
-                    .h_full()
-                    .w(px(6.))
-                    .cursor(CursorStyle::ResizeLeftRight)
-                    .hover(|s| s.bg(rgba(0x78a9ff44)))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.sidebar_modified = true;
-                            if event.click_count == 2 {
-                                this.sidebar_drag = None;
-                                this.sidebar_width = None;
-                                this.save_sidebar_width();
-                            } else {
-                                this.sidebar_drag = Some(SidebarDrag::Width {
-                                    start: f32::from(event.position.x),
-                                    width,
-                                });
-                            }
-                            cx.notify();
-                        }),
-                    ),
-            )
-            .child(
-                canvas(
-                    |_, _, _| (),
-                    move |bounds, _, window, _| {
-                        // Capture globally so dragging continues outside the narrow divider,
-                        // and terminal handlers never receive the resize gesture's release.
-                        let moving = view.clone();
-                        window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
-                            if phase == DispatchPhase::Capture {
-                                let _ = moving.update(cx, |this, cx| {
-                                    let scroll = this.sidebar_scroll[0].clone();
-                                    if this.move_workspace_drag(
-                                        event.position,
-                                        event.pressed_button == Some(MouseButton::Left),
-                                        |lift| {
-                                            reorder::resolve(
-                                                &drop_rows,
-                                                &drop_requests,
-                                                drop_dragged,
-                                                &scroll,
-                                                lift,
-                                            )
-                                        },
-                                        cx,
-                                    ) {
-                                        cx.stop_propagation();
-                                    } else if let Some(drag) = this.sidebar_drag {
-                                        match drag {
-                                            SidebarDrag::Width { start, width } => {
-                                                this.sidebar_width = Some(sidebar_width(
-                                                    Some(
-                                                        width + f32::from(event.position.x) - start,
-                                                    ),
-                                                    f32::from(window.viewport_size().width),
-                                                ));
-                                            }
-                                            SidebarDrag::Split => {
-                                                let height = (f32::from(bounds.size.height)
-                                                    - 6.
-                                                    - DEVICE_FOOTER_HEIGHT)
-                                                    .max(1.);
-                                                this.sidebar_split = Some(
-                                                    ((f32::from(
-                                                        event.position.y - bounds.origin.y,
-                                                    ) - 3.)
-                                                        / height)
-                                                        .clamp(0.1, 0.9),
-                                                );
-                                            }
-                                        }
-                                        cx.stop_propagation();
-                                        cx.notify();
-                                    }
-                                });
-                            }
+            .child(self.resize_handle(width, cx))
+            .child(drag_capture(
+                view,
+                Drops {
+                    rows: drop_rows,
+                    requests: drop_requests,
+                    dragged: drop_dragged,
+                },
+            ))
+    }
+
+    /// The handle on the sidebar's right edge. Dragging it resizes the
+    /// sidebar, and past `COLLAPSE_BELOW` collapses or expands it; a double
+    /// click restores the default width, or expands a collapsed sidebar.
+    pub(super) fn resize_handle(&self, width: f32, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id("sidebar-resize")
+            .debug_selector(|| "sidebar-resize".into())
+            .absolute()
+            .right_0()
+            .top_0()
+            .h_full()
+            .w(px(6.))
+            .cursor(CursorStyle::ResizeLeftRight)
+            .hover(|s| s.bg(rgba(0x78a9ff44)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    if event.click_count == 2 {
+                        this.sidebar_drag = None;
+                        if this.sidebar_mode == SidebarMode::Collapsed {
+                            this.sidebar_mode = SidebarMode::Expanded;
+                            this.sidebar_mode_modified = true;
+                            this.save_chrome();
+                        } else {
+                            this.sidebar_width = None;
+                            this.save_sidebar_width();
+                        }
+                    } else {
+                        this.sidebar_drag = Some(SidebarDrag::Width {
+                            start: f32::from(event.position.x),
+                            width,
+                            preferred: this.sidebar_width,
                         });
-                        let released = view.clone();
-                        window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
-                            if phase == DispatchPhase::Capture && event.button == MouseButton::Left
-                            {
-                                let _ = released.update(cx, |this, cx| {
-                                    // A lifted row's release is its drop, not a click.
-                                    if this.release_workspace_drag(cx) {
-                                        cx.stop_propagation();
-                                    } else if this.sidebar_drag.take().is_some() {
-                                        this.save_chrome();
-                                        cx.stop_propagation();
-                                        cx.notify();
-                                    }
-                                });
-                            }
-                        });
-                    },
-                )
-                .absolute()
-                .size_full(),
+                    }
+                    cx.notify();
+                }),
             )
     }
+
+    /// Applies a width drag. The sidebar collapses while the pointer would
+    /// leave it narrower than `COLLAPSE_BELOW`, keeping the width it had so
+    /// expanding by command restores it, and expands again past that line.
+    fn drag_width(&mut self, drag: (f32, f32, Option<f32>), x: f32, window_width: f32) {
+        let (start, width, preferred) = drag;
+        let dragged = width + x - start;
+        if dragged < COLLAPSE_BELOW {
+            self.sidebar_mode = SidebarMode::Collapsed;
+            self.sidebar_width = preferred;
+        } else {
+            self.sidebar_mode = SidebarMode::Expanded;
+            self.sidebar_width = Some(sidebar_width(Some(dragged), window_width));
+        }
+        self.sidebar_modified = true;
+        self.sidebar_mode_modified = true;
+    }
+
+    /// Scroll each list to its highlighted row once a frame has measured the
+    /// viewport: the handle resolves the request against the previous frame's
+    /// bounds, so an unmeasured list would scroll to a meaningless offset.
+    /// Recording what was revealed keeps later frames from undoing the user's
+    /// own scrolling.
+    pub(super) fn reveal_highlighted(&self, highlighted: [Option<usize>; 2]) {
+        for (list, row) in highlighted.iter().enumerate() {
+            let Some(row) = *row else { continue };
+            if self.sidebar_revealed[list].get() != Some(row)
+                && self.sidebar_scroll[list].bounds().size.height > px(0.)
+            {
+                let scroll = &self.sidebar_scroll[list];
+                let visible = scroll.bounds_for_item(row).is_some_and(|bounds| {
+                    let offset = scroll.offset().y;
+                    bounds.bottom() + offset > scroll.bounds().top()
+                        && bounds.top() + offset < scroll.bounds().bottom()
+                });
+                // Even a partially visible worktree is already seen. GPUI's
+                // reveal also moves clipped rows, so only request it off-screen.
+                if !visible {
+                    scroll.scroll_to_item(row);
+                }
+                self.sidebar_revealed[list].set(Some(row));
+            }
+        }
+    }
+}
+
+/// Where a lifted workspace row may drop: each drop unit's rows in the spaces
+/// list, and the move every gap makes. The collapsed sidebar lifts no row, so
+/// it passes none.
+#[derive(Default)]
+pub(super) struct Drops {
+    rows: Vec<(usize, usize, Pixels)>,
+    requests: Vec<Option<reorder::MoveBlock>>,
+    dragged: usize,
+}
+
+/// Captures the pointer for the sidebar's drags: a lifted workspace row, the
+/// width handle, and the split between the lists. Capturing globally keeps a
+/// drag going outside the narrow handle, and keeps its release from reaching
+/// the terminal.
+pub(super) fn drag_capture(view: WeakEntity<HerdrWindow>, drops: Drops) -> Canvas<()> {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let moving = view.clone();
+            window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                if phase == DispatchPhase::Capture {
+                    let _ = moving.update(cx, |this, cx| {
+                        let scroll = this.sidebar_scroll[0].clone();
+                        if this.move_workspace_drag(
+                            event.position,
+                            event.pressed_button == Some(MouseButton::Left),
+                            |lift| {
+                                reorder::resolve(
+                                    &drops.rows,
+                                    &drops.requests,
+                                    drops.dragged,
+                                    &scroll,
+                                    lift,
+                                )
+                            },
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                        } else if let Some(drag) = this.sidebar_drag {
+                            match drag {
+                                SidebarDrag::Width {
+                                    start,
+                                    width,
+                                    preferred,
+                                } => this.drag_width(
+                                    (start, width, preferred),
+                                    f32::from(event.position.x),
+                                    f32::from(window.viewport_size().width),
+                                ),
+                                SidebarDrag::Split => {
+                                    let height =
+                                        (f32::from(bounds.size.height) - 6. - DEVICE_FOOTER_HEIGHT)
+                                            .max(1.);
+                                    this.sidebar_split = Some(
+                                        ((f32::from(event.position.y - bounds.origin.y) - 3.)
+                                            / height)
+                                            .clamp(0.1, 0.9),
+                                    );
+                                }
+                            }
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    });
+                }
+            });
+            let released = view.clone();
+            window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                    let _ = released.update(cx, |this, cx| {
+                        // A lifted row's release is its drop, not a click.
+                        if this.release_workspace_drag(cx) {
+                            cx.stop_propagation();
+                        } else if this.sidebar_drag.take().is_some() {
+                            this.save_chrome();
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    });
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_full()
 }
 
 pub(super) fn header(
