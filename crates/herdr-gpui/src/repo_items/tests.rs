@@ -112,6 +112,83 @@ fn search_matches_number_title_and_author() {
     assert_eq!(prs[0].label(), "#48 Centre the worktree dialog");
 }
 
+#[test]
+fn fork_pr_fetch_uses_the_origin_pr_ref_without_moving_local_branches() {
+    let temporary = tempfile::tempdir().unwrap();
+    let remote = temporary.path().join("remote");
+    let checkout = temporary.path().join("checkout");
+    let git = |path: &std::path::Path, args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    std::fs::create_dir(&remote).unwrap();
+    git(&remote, &["init", "-b", "main"]);
+    git(
+        &remote,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "base",
+        ],
+    );
+    let base = git(&remote, &["rev-parse", "HEAD"]);
+    git(
+        temporary.path(),
+        &[
+            "clone",
+            remote.to_str().unwrap(),
+            checkout.to_str().unwrap(),
+        ],
+    );
+    git(&checkout, &["branch", "pr/51"]);
+    git(
+        &remote,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fork head",
+        ],
+    );
+    let head = git(&remote, &["rev-parse", "HEAD"]);
+    git(&remote, &["update-ref", "refs/pull/51/head", &head]);
+    let input = crate::pull_request::Input {
+        checkout: Some(checkout.to_str().unwrap().into()),
+        repo_key: checkout.join(".git").to_str().unwrap().into(),
+        branch: "main".into(),
+    };
+    let prs = parse(&response(), &origin(), Kind::PullRequest).unwrap();
+    super::fetch::fetch_branch(&input, &prs[1], &|| false).unwrap();
+    assert_eq!(git(&checkout, &["rev-parse", &prs[1].base_ref()]), head);
+    assert_eq!(git(&checkout, &["rev-parse", "pr/51"]), base);
+    assert_eq!(git(&checkout, &["rev-parse", "HEAD"]), base);
+    let mut missing = prs[1].clone();
+    missing.number = 999;
+    assert!(matches!(
+        super::fetch::fetch_branch(&input, &missing, &|| false),
+        Err(Error::GitFailed { .. })
+    ));
+}
+
 /// The note lands in the checkout's own Git directory, so it is neither an
 /// untracked file in the working tree nor shared with sibling checkouts.
 #[test]

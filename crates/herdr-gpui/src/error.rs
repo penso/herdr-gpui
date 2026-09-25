@@ -171,10 +171,6 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
-    #[error(
-        "Pull request #{number} comes from the fork {owner}. Fetch its branch yourself, then create the checkout from the branch field."
-    )]
-    ForkPullRequest { number: u64, owner: String },
     #[error("git {operation} failed: {details}")]
     GitFailed {
         operation: &'static str,

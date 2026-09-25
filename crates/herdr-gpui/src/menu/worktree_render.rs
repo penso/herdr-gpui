@@ -139,6 +139,7 @@ impl HerdrWindow {
                 kind.empty_label(),
             ),
         };
+        let message = self.menu.error.as_ref().or(message);
         let status = if let Some(pending) = &source.pending {
             // Dismissing only closes the panel; the daemon keeps queued work,
             // as the branch tab's own waiting note says.
@@ -220,7 +221,16 @@ impl HerdrWindow {
                     .border_t_1()
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
-                    .child(status),
+                    .when(message.is_some(), |status| {
+                        status.text_color(super::danger(theme))
+                    })
+                    .child(
+                        div()
+                            .when(message.is_some(), |text| {
+                                text.debug_selector(|| "dialog-error".into())
+                            })
+                            .child(status),
+                    ),
             )
     }
 

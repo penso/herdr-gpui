@@ -638,25 +638,14 @@ impl HerdrWindow {
         let Some(item) = source.item(row).cloned() else {
             return;
         };
-        if let Some(owner) = item.fork_owner.clone() {
-            self.menu.error = Some(
-                crate::Error::ForkPullRequest {
-                    number: item.number,
-                    owner,
-                }
-                .to_string(),
-            );
-            cx.notify();
-            return;
-        }
         self.menu.error = None;
         match (item.head.clone(), self.repo_items_request()) {
             // An existing pull request branch may only exist on the remote, so
-            // `origin/<branch>` is refreshed before the daemon is asked for it.
-            (Some(head), Ok((input, token))) => {
+            // its base ref is refreshed before the daemon is asked for it.
+            (Some(_), Ok((input, token))) => {
                 if let Some(source) = &mut self.menu.worktree {
+                    source.lookup.fetch_branch(input, token, &item);
                     source.pending = Some(Pending::Item(item));
-                    source.lookup.fetch_branch(input, token, &head);
                 }
                 cx.notify();
             }
@@ -733,9 +722,7 @@ impl HerdrWindow {
         source.refresh();
         let pending = match (ready, &source.pending) {
             // The fetch succeeded for the branch that is still being created.
-            (Some(branch), Some(Pending::Item(item)))
-                if item.head.as_deref() == Some(branch.as_str()) =>
-            {
+            (Some(branch), Some(Pending::Item(item))) if item.branch() == branch => {
                 source.pending.clone()
             }
             (Some(_), _) => None,
@@ -816,7 +803,7 @@ pub(super) fn pick_request(
 /// neither widens what may be created.
 ///
 /// A pull request's head may exist only on `origin`, so its base names the
-/// remote-tracking ref the fetch just updated. The daemon checks out a branch
+/// ref the fetch just updated (a dedicated PR ref for forks). The daemon checks out a branch
 /// that already exists locally and ignores the base in that case. An issue's
 /// branch is new, so it keeps the dialog's default base of `HEAD`.
 pub(super) fn item_request(
@@ -827,7 +814,7 @@ pub(super) fn item_request(
     let branch = item.branch();
     let (method, mut params) = target.request(snapshot, WorkspaceAction::NewWorktree, &branch)?;
     if item.head.is_some() {
-        params["base"] = format!("origin/{branch}").into();
+        params["base"] = item.base_ref().into();
     }
     // The checkout is named for what it is for, so the sidebar shows it too.
     params["label"] = item.label().into();

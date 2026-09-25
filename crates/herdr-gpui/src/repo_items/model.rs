@@ -52,8 +52,7 @@ pub(crate) struct Item {
     pub author: String,
     /// A pull request's head branch. An issue has none until one is created.
     pub head: Option<String>,
-    /// Set when the head branch lives in a fork, naming its owner: `origin`
-    /// carries no ref for it, so no checkout can be created from this row.
+    /// Set when the head branch lives in a fork, naming its owner.
     pub fork_owner: Option<String>,
     pub draft: bool,
 }
@@ -63,9 +62,28 @@ impl Item {
     /// head branch, or the branch an issue's number and title name.
     pub(crate) fn branch(&self) -> String {
         match &self.head {
+            Some(_) if self.fork_owner.is_some() => format!("pr/{}", self.number),
             Some(head) => head.clone(),
             None => issue_branch(self.number, &self.title),
         }
+    }
+
+    /// Fork heads use GitHub's PR ref, isolated from origin's branch namespace.
+    pub(crate) fn base_ref(&self) -> String {
+        if self.fork_owner.is_some() {
+            format!("refs/herdr/pull/{}/head", self.number)
+        } else {
+            format!("refs/remotes/origin/{}", self.branch())
+        }
+    }
+
+    pub(super) fn fetch_refspec(&self) -> String {
+        let source = if self.fork_owner.is_some() {
+            format!("refs/pull/{}/head", self.number)
+        } else {
+            format!("refs/heads/{}", self.branch())
+        };
+        format!("+{source}:{}", self.base_ref())
     }
 
     /// What the picker's search matches against, lowercased once per item.

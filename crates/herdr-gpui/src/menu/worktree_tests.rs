@@ -226,8 +226,13 @@ fn a_picked_row_names_the_branch_base_and_label_it_creates(cx: &mut gpui::TestAp
         assert_eq!(params["branch"], "worktree/rapid-forest");
         // An existing head may live only on the remote, so the base names the
         // tracking ref rather than the source workspace's HEAD.
-        assert_eq!(params["base"], "origin/worktree/rapid-forest");
+        assert_eq!(params["base"], "refs/remotes/origin/worktree/rapid-forest");
         assert_eq!(params["label"], "#48 Centre the worktree dialog");
+        assert_eq!(params["trust_repository"], false);
+
+        let (_, params) = item_request(target, snapshot, &items[1]).unwrap();
+        assert_eq!(params["branch"], "pr/51");
+        assert_eq!(params["base"], "refs/herdr/pull/51/head");
         assert_eq!(params["trust_repository"], false);
 
         let (_, params) = item_request(target, snapshot, &items[2]).unwrap();
@@ -238,8 +243,8 @@ fn a_picked_row_names_the_branch_base_and_label_it_creates(cx: &mut gpui::TestAp
     });
 }
 
-/// Picking a row is the whole action, and it is the only one running: a fork is
-/// refused before the daemon is asked for anything, a pull request holds the
+/// Picking a row is the whole action, and it is the only one running: a fork
+/// pull request holds the
 /// dialog while its branch is fetched, and a refusal releases the row again.
 #[gpui::test]
 fn picking_a_row_creates_its_checkout(cx: &mut gpui::TestAppContext) {
@@ -248,20 +253,8 @@ fn picking_a_row_creates_its_checkout(cx: &mut gpui::TestAppContext) {
     open_dialog(&view, cx, true, Tab::Items(Kind::PullRequest));
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            // The fork row says why it cannot be picked instead of failing once
-            // the daemon is asked for a branch `origin` does not carry.
             view.create_from_repo_item(1, cx);
-            assert!(
-                view.menu
-                    .error
-                    .as_deref()
-                    .unwrap()
-                    .contains("comes from the fork outsider"),
-                "{:?}",
-                view.menu.error
-            );
             assert!(view.menu.creation.is_none());
-            assert!(view.menu.worktree.as_ref().unwrap().pending.is_none());
 
             view.create_from_repo_item(0, cx);
             let source = view.menu.worktree.as_ref().unwrap();
@@ -270,7 +263,7 @@ fn picking_a_row_creates_its_checkout(cx: &mut gpui::TestAppContext) {
             assert!(source.busy());
             assert!(matches!(
                 &source.pending,
-                Some(Pending::Item(item)) if item.number == 48
+                Some(Pending::Item(item)) if item.number == 51
             ));
             assert!(source.lookup.loading);
             assert!(view.menu.error.is_none());
@@ -292,6 +285,7 @@ fn picking_a_row_creates_its_checkout(cx: &mut gpui::TestAppContext) {
             );
             let source = view.menu.worktree.as_ref().unwrap();
             assert!(!source.busy());
+            assert_eq!(source.tab, Tab::Items(Kind::PullRequest));
             assert!(
                 view.menu
                     .error
@@ -305,6 +299,40 @@ fn picking_a_row_creates_its_checkout(cx: &mut gpui::TestAppContext) {
             );
         });
     });
+    draw(cx);
+    assert!(cx.debug_bounds("dialog-error").is_some());
+    assert!(cx.debug_bounds("worktree-row-0").is_some());
+    assert!(cx.debug_bounds("dialog-input").is_none());
+}
+
+#[gpui::test]
+fn action_errors_stay_visible_in_every_listing_tab(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    cx.simulate_resize(gpui::size(gpui::px(600.), gpui::px(500.)));
+    open_dialog(&view, cx, true, Tab::Items(Kind::PullRequest));
+    for selected in [
+        Tab::Existing,
+        Tab::Branches,
+        Tab::Items(Kind::PullRequest),
+        Tab::Items(Kind::Issue),
+    ] {
+        cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                let source = view.menu.worktree.as_mut().unwrap();
+                source.tab = selected;
+                source.refresh();
+                view.menu.error = Some("The checkout could not be created. ".repeat(100));
+                cx.notify();
+            })
+        });
+        draw(cx);
+        assert_eq!(tab(&view, cx), selected);
+        assert!(cx.debug_bounds("dialog-error").is_some());
+        let status = cx.debug_bounds("worktree-status").unwrap();
+        let footer = cx.debug_bounds("dialog-footer").unwrap();
+        assert!(status.bottom() <= footer.top());
+        assert!(cx.debug_bounds("dialog-input").is_none());
+    }
 }
 
 /// Tab moves between the dialog's tabs, and the listing owns the keys that

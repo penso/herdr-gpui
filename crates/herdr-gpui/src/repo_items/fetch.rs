@@ -55,18 +55,16 @@ pub(super) fn list(
     Ok((origin, items))
 }
 
-/// Update `origin/<head>` so the daemon can create a checkout on a pull request
-/// branch this clone has not seen yet. A branch that already exists locally is
-/// checked out by the daemon as-is, so a fetch failure is only fatal when the
-/// remote ref is the only copy; the caller reports what Git said either way.
+/// Fetch the PR's head from origin, including GitHub's published fork PR refs.
+/// Existing local branches are never moved by this fetch.
 pub(super) fn fetch_branch(
     input: &Input,
-    head: &str,
+    item: &Item,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<()> {
     let deadline = Instant::now() + FETCH_TIMEOUT;
     let checkout = local_checkout(input, deadline, cancelled)?;
-    let refspec = format!("+refs/heads/{head}:refs/remotes/origin/{head}");
+    let refspec = item.fetch_refspec();
     let mut command = Command::new("git");
     command
         .args(["-c", "core.fsmonitor=false", "-C", &checkout])
