@@ -104,17 +104,25 @@ impl EntityInputHandler for HerdrWindow {
         &mut self,
         range: Range<usize>,
         _: Bounds<Pixels>,
-        _: &mut Window,
+        window: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         if self.menu.page.is_some() {
             return self.menu.input.as_ref()?.range_bounds(range);
         }
-        Some(input_cursor_bounds(
+        let cursor = input_cursor_bounds(
             self.live.surface.as_deref(),
             self.bounds.origin,
             self.cell_width,
             self.config.terminal.line_height(),
+        );
+        Some(self.painter.borrow().composition_bounds(
+            &self.marked,
+            range,
+            cursor,
+            self.bounds,
+            &self.config.terminal.font(),
+            window,
         ))
     }
     fn character_index_for_point(
