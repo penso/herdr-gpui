@@ -47,6 +47,8 @@ pub use sessions::{
 };
 #[cfg(unix)]
 pub use ssh::script_command;
-pub use ssh::{Destination, HostProbe, probe_host, remote_origin_url, resolve_destination};
+pub use ssh::{
+    Destination, HostProbe, probe_host, remote_config_value, remote_origin_url, resolve_destination,
+};
 pub use transport::Stream;
 pub use upload::{remove_uploaded_files, upload_files};
