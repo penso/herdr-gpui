@@ -189,11 +189,19 @@ impl HerdrWindow {
                     )
                     .child(
                         div()
+                            .id(format!("{id}-choose"))
+                            .debug_selector(move || format!("{id}-choose"))
                             .flex_1()
                             .min_w_0()
                             .truncate()
                             .text_right()
-                            .child(value.family.clone()),
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .child(format!("{} ▾", value.family))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.open_font_picker(face, window, cx);
+                            })),
                     )
                     .child(control(
                         "decrease",
@@ -217,7 +225,7 @@ impl HerdrWindow {
             .child(row("preferences-notifications-position", "Corner", format!("{:?}", self.config.notifications.position)))
             .child(note("Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications."))
             .child(note(
-                "Font families are read-only here. Font size changes are saved to local GUI overrides and reload in every window. Sizes are logical pixels, independent of display scaling.",
+                "Font families and sizes save to local GUI overrides and reload in every window. Sizes are logical pixels, independent of display scaling.",
             ))
             .child(section("FEATURES"));
         for (id, label, enabled) in feature_rows(&self.config.features) {

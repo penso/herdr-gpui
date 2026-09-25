@@ -32,7 +32,7 @@ impl HerdrWindow {
                     }
                     if watch.observe(sample)
                         && this.config_load.is_none()
-                        && this.menu.page != Some(Page::Themes)
+                        && !matches!(this.menu.page, Some(Page::Themes | Page::Fonts))
                         && !this.theme_save_in_flight()
                     {
                         this.load_gui_config(cx);
@@ -128,7 +128,7 @@ impl HerdrWindow {
         );
     }
 
-    pub(super) fn load_gui_config_with(
+    pub(crate) fn load_gui_config_with(
         &mut self,
         load: impl FnOnce() -> crate::Result<(Config, crate::config::Theme)> + Send + 'static,
         cx: &mut Context<Self>,

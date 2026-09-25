@@ -16,6 +16,7 @@ pub(crate) enum Page {
     RemoveDevice,
     Keybinds,
     Themes,
+    Fonts,
     Palette,
     ConfirmClose,
     Update,

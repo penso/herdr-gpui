@@ -37,6 +37,7 @@ pub(crate) struct MenuState {
     pub(super) _keybinds_subscription: Option<Subscription>,
     pub(crate) preferences_scroll: ScrollHandle,
     pub(crate) themes: Option<crate::theme_picker::ThemePicker>,
+    pub(crate) fonts: Option<crate::font_picker::FontPicker>,
     pub(crate) palette: Option<crate::palette::Palette>,
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
@@ -199,6 +200,7 @@ impl MenuState {
             _keybinds_subscription: None,
             preferences_scroll: ScrollHandle::new(),
             themes: None,
+            fonts: None,
             palette: None,
             close: None,
             pr: Default::default(),
@@ -232,6 +234,7 @@ impl MenuState {
             self.github.cancel();
         }
         self.page = None;
+        self.fonts = None;
         self.selected = None;
         self.workspace_selected = None;
         self.git_selected = None;

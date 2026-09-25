@@ -354,6 +354,7 @@ impl HerdrWindow {
                     page,
                     Page::Keybinds
                         | Page::Themes
+                        | Page::Fonts
                         | Page::Palette
                         | Page::Preferences
                         | Page::AppUpdate
@@ -373,7 +374,7 @@ impl HerdrWindow {
             .when(
                 matches!(
                     page,
-                    Page::Keybinds | Page::Themes | Page::Palette | Page::Preferences
+                    Page::Keybinds | Page::Themes | Page::Fonts | Page::Palette | Page::Preferences
                 ),
                 |panel| {
                     panel
@@ -561,6 +562,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_keybinds(cx));
         } else if page == Page::Themes {
             panel = panel.child(self.render_theme_picker(cx));
+        } else if page == Page::Fonts {
+            panel = panel.child(self.render_font_picker(cx));
         } else if page == Page::Palette {
             panel = panel.child(self.render_palette(cx));
         } else if page == Page::ConfirmClose {
@@ -802,6 +805,10 @@ impl HerdrWindow {
                 }
                 if this.menu.page == Some(Page::Themes) {
                     this.theme_picker_key(event, window, cx);
+                    return;
+                }
+                if this.menu.page == Some(Page::Fonts) {
+                    this.font_picker_key(event, window, cx);
                     return;
                 }
                 if this.menu.page == Some(Page::Keybinds)
