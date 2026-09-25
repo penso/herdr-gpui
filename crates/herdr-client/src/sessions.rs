@@ -570,6 +570,7 @@ mod tests {
     /// closing, the way a host that answered leaves one.
     struct Answered(std::collections::VecDeque<u8>);
 
+    #[cfg(unix)]
     impl Read for Answered {
         fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
             if self.0.is_empty() {
@@ -582,6 +583,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_host_that_answered_is_read_without_waiting_for_the_channel_to_close() {
         let listing = br#"{"sessions":[{"name":"default","running":true}]}"#;
@@ -598,6 +600,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_child_that_finished_ends_the_read_instead_of_the_deadline() {
         // A host with no usable Herdr prints nothing and exits, which is a failure
@@ -617,6 +620,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_channel_that_never_prints_a_listing_still_times_out() {
         let mut stream = Answered(std::collections::VecDeque::new());
@@ -626,6 +630,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_complete_listing_ends_the_read_before_any_eof() {
         // The command that prints a listing leaves a process holding the SSH
@@ -641,6 +646,7 @@ mod tests {
         assert!(!listed_sessions(b""));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_host_that_prints_nothing_is_a_closed_bridge() {
         assert!(matches!(parse_session_list(b""), Err(Error::SshClosed)));
