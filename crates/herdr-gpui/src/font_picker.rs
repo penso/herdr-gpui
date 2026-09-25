@@ -9,6 +9,27 @@ use gpui::{prelude::*, *};
 
 const DEFAULT_LABEL: &str = "Platform default";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FontTarget {
+    All,
+    Face(FontFace),
+}
+
+impl FontTarget {
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "All fonts",
+            Self::Face(face) => face.name(),
+        }
+    }
+}
+
+pub(crate) fn shared_family(config: &Config) -> Option<&str> {
+    let family = config.sidebar.family.as_str();
+    (config.tabs.family == family && config.terminal.family == family && config.ui.family == family)
+        .then_some(family)
+}
+
 fn font_names(names: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut names: Vec<_> = names
         .into_iter()
@@ -20,14 +41,13 @@ fn font_names(names: impl IntoIterator<Item = String>) -> Vec<String> {
 }
 
 pub(crate) struct FontPicker {
-    face: FontFace,
+    target: FontTarget,
     search: Entity<SearchInput>,
     names: Vec<String>,
     filtered: Vec<Option<String>>,
     selected: usize,
     scroll: UniformListScrollHandle,
     loading: bool,
-    error: Option<String>,
     _subscription: Subscription,
 }
 
@@ -55,7 +75,7 @@ impl FontPicker {
 impl HerdrWindow {
     pub(super) fn open_font_picker(
         &mut self,
-        face: FontFace,
+        target: FontTarget,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -79,14 +99,13 @@ impl HerdrWindow {
             },
         );
         let mut picker = FontPicker {
-            face,
+            target,
             search,
             names: Vec::new(),
             filtered: Vec::new(),
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             loading: true,
-            error: None,
             _subscription: subscription,
         };
         picker.filter("");
@@ -99,23 +118,28 @@ impl HerdrWindow {
             let names = names.await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(picker) = &mut this.menu.fonts
-                    && picker.face == face
+                    && picker.target == target
                     && this.menu.page == Some(Page::Fonts)
                 {
                     picker.names = names;
                     picker.loading = false;
                     picker.filter(picker.search.read(cx).text());
-                    let current = match face {
-                        FontFace::Sidebar => &this.config.sidebar.family,
-                        FontFace::Tabs => &this.config.tabs.family,
-                        FontFace::Terminal => &this.config.terminal.family,
-                        FontFace::Ui => &this.config.ui.family,
+                    let current = match target {
+                        FontTarget::All => shared_family(&this.config),
+                        FontTarget::Face(FontFace::Sidebar) => {
+                            Some(this.config.sidebar.family.as_str())
+                        }
+                        FontTarget::Face(FontFace::Tabs) => Some(this.config.tabs.family.as_str()),
+                        FontTarget::Face(FontFace::Terminal) => {
+                            Some(this.config.terminal.family.as_str())
+                        }
+                        FontTarget::Face(FontFace::Ui) => Some(this.config.ui.family.as_str()),
                     };
                     if picker.search.read(cx).text().is_empty() {
                         picker.selected = picker
                             .filtered
                             .iter()
-                            .position(|name| name.as_deref() == Some(current))
+                            .position(|name| name.as_deref() == current)
                             .unwrap_or(0);
                         picker
                             .scroll
@@ -145,11 +169,14 @@ impl HerdrWindow {
         {
             return;
         }
-        let face = picker.face;
+        let target = picker.target;
         let text_system = cx.text_system().clone();
         self.load_gui_config_with(
             move || {
-                Config::save_font_family(face, family.as_deref())?;
+                match target {
+                    FontTarget::All => Config::save_all_font_families(family.as_deref())?,
+                    FontTarget::Face(face) => Config::save_font_family(face, family.as_deref())?,
+                }
                 let mut config = Config::load()?;
                 config.resolve_font_fallbacks(|| text_system.all_font_names());
                 let theme = config.theme()?;
@@ -220,7 +247,7 @@ impl HerdrWindow {
         div().flex().flex_col().size_full().min_h_0()
             .child(div().flex_none().p(px(16.)).border_b_1().border_color(rgb(theme.active))
                 .child(div().flex().items_center()
-                    .child(div().flex_1().text_size(px(font.size * 1.35)).font_weight(FontWeight::SEMIBOLD).child(format!("{} Font", picker.face.name())))
+                    .child(div().flex_1().text_size(px(font.size * 1.35)).font_weight(FontWeight::SEMIBOLD).child(format!("{} Font", picker.target.label())))
                     .child(div().id("font-picker-back").cursor_pointer().child("Back").on_click(cx.listener(|this, _, window, cx| {
                         this.menu.page = Some(Page::Preferences); this.menu.fonts = None; window.focus(&this.menu.focus, cx); cx.notify();
                     }))))
@@ -243,7 +270,7 @@ impl HerdrWindow {
                     }).collect()
                 })).track_scroll(&picker.scroll).flex_1().min_h_0()))
             .child(div().flex_none().p(px(12.)).border_t_1().border_color(rgb(theme.active)).text_color(rgb(theme.muted))
-                .child(picker.error.clone().unwrap_or_else(|| "Type to filter; Enter or click to save. Platform default clears the override.".into())))
+                .child("Type to filter; Enter or click to save. Platform default clears the override."))
     }
 }
 
@@ -257,6 +284,25 @@ mod tests {
             font_names(["Zed", "Alpha", "Zed", "Mono", " "].map(str::to_owned)),
             vec!["Alpha", "Mono", "Zed"]
         );
+    }
+
+    #[test]
+    fn all_fonts_shows_mixed_until_all_four_match() {
+        let mut config = Config::default();
+        assert_eq!(shared_family(&config), None);
+        config.ui.family = config.sidebar.family.clone();
+        assert_eq!(shared_family(&config), Some(config.sidebar.family.as_str()));
+        config.tabs.family = "Different".into();
+        assert_eq!(shared_family(&config), None);
+        for font in [
+            &mut config.sidebar,
+            &mut config.tabs,
+            &mut config.terminal,
+            &mut config.ui,
+        ] {
+            font.family = "Shared".into();
+        }
+        assert_eq!(shared_family(&config), Some("Shared"));
     }
 
     #[test]

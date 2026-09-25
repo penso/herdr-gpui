@@ -102,6 +102,9 @@ fn a_font_at_the_limit_cannot_be_increased_or_start_a_save(cx: &mut gpui::TestAp
         view.update(cx, |view, cx| {
             view.config.sidebar.size = *crate::config::FONT_SIZE_RANGE.end();
             view.open_preferences(window, cx);
+            view.menu
+                .preferences_scroll
+                .set_offset(point(px(0.), px(-120.)));
         });
         window.draw(cx).clear(cx);
     });

@@ -99,7 +99,7 @@ position = "bottom-right"
 # quit = "cmd-q"
 # Unbound by default: themes, reconnect, logs, about.
 
-# Preferences offers a searchable picker of every installed family for each row.
+# Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.
 [sidebar]
 # Default: "Menlo" on macOS, "DejaVu Sans Mono" on Linux.

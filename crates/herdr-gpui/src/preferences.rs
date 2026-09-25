@@ -1,6 +1,7 @@
 use crate::{
     HerdrWindow,
     config::{Config, FONT_SIZE_RANGE, Features, FontFace},
+    font_picker::{FontTarget, shared_family},
     fonts::StyledFont,
 };
 use gpui::{prelude::*, *};
@@ -124,6 +125,43 @@ impl HerdrWindow {
                 )),
             ))
             .child(section("FONTS"));
+        body = body.child(
+            div()
+                .debug_selector(|| "preferences-font-all".into())
+                .flex()
+                .items_center()
+                .min_w_0()
+                .gap(px(12.))
+                .py(px(7.))
+                .border_b_1()
+                .border_color(rgb(theme.active))
+                .child(
+                    div()
+                        .w(relative(0.3))
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child("All fonts"),
+                )
+                .child(
+                    div()
+                        .id("preferences-font-all-choose")
+                        .debug_selector(|| "preferences-font-all-choose".into())
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_right()
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(theme.active)))
+                        .child(format!(
+                            "{} ▾",
+                            shared_family(&self.config).unwrap_or("Mixed")
+                        ))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_font_picker(FontTarget::All, window, cx);
+                        })),
+                ),
+        );
         for (face, id, label, value) in [
             (
                 FontFace::Sidebar,
@@ -200,7 +238,7 @@ impl HerdrWindow {
                             .child(format!("{} ▾", value.family))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 cx.stop_propagation();
-                                this.open_font_picker(face, window, cx);
+                                this.open_font_picker(FontTarget::Face(face), window, cx);
                             })),
                     )
                     .child(control(

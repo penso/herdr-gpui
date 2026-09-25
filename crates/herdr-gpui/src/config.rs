@@ -1093,30 +1093,55 @@ impl Config {
         Self::save_font_family_path(face, family, &local)
     }
 
+    pub(crate) fn save_all_font_families(family: Option<&str>) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_font_families_path(
+            &[
+                FontFace::Sidebar,
+                FontFace::Tabs,
+                FontFace::Terminal,
+                FontFace::Ui,
+            ],
+            family,
+            &local,
+        )
+    }
+
     fn save_font_family_path(face: FontFace, family: Option<&str>, path: &Path) -> Result<()> {
+        Self::save_font_families_path(&[face], family, path)
+    }
+
+    fn save_font_families_path(
+        faces: &[FontFace],
+        family: Option<&str>,
+        path: &Path,
+    ) -> Result<()> {
         if family.is_some_and(|name| name.trim().is_empty()) {
-            return Err(Error::EmptyFontFamily(face.name()));
+            return Err(Error::EmptyFontFamily("fonts"));
         }
         let result = (|| -> Result<()> {
             let text = fs::read_to_string(path)?;
             let mut document = text.parse::<toml_edit::DocumentMut>()?;
-            if let Some(family) = family {
-                let font = document
-                    .entry(face.name())
-                    .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
-                let table = font
-                    .as_table_like_mut()
-                    .ok_or(Error::EmptyFontFamily(face.name()))?;
-                let mut value = toml_edit::Value::from(family);
-                if let Some(previous) = table.get("family").and_then(toml_edit::Item::as_value) {
-                    *value.decor_mut() = previous.decor().clone();
+            for face in faces {
+                if let Some(family) = family {
+                    let font = document
+                        .entry(face.name())
+                        .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+                    let table = font
+                        .as_table_like_mut()
+                        .ok_or(Error::EmptyFontFamily(face.name()))?;
+                    let mut value = toml_edit::Value::from(family);
+                    if let Some(previous) = table.get("family").and_then(toml_edit::Item::as_value)
+                    {
+                        *value.decor_mut() = previous.decor().clone();
+                    }
+                    table.insert("family", toml_edit::Item::Value(value));
+                } else if let Some(table) = document
+                    .get_mut(face.name())
+                    .and_then(toml_edit::Item::as_table_like_mut)
+                {
+                    table.remove("family");
                 }
-                table.insert("family", toml_edit::Item::Value(value));
-            } else if let Some(table) = document
-                .get_mut(face.name())
-                .and_then(toml_edit::Item::as_table_like_mut)
-            {
-                table.remove("family");
             }
             write_config(path, &document.to_string())
         })();
@@ -1860,6 +1885,46 @@ mod tests {
             assert!(text.contains("# keep me"));
             assert!(text.contains("size = 18 # size comment"));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn all_font_families_save_and_reset_in_one_document() -> anyhow::Result<()> {
+        let directory = TempDirectory::new()?;
+        let path = directory.0.join("config-gpui.local.toml");
+        fs::write(
+            &path,
+            "# keep\n[terminal]\nsize = 18 # keep size\nfamily = 'Old'\n",
+        )?;
+        let faces = [
+            FontFace::Sidebar,
+            FontFace::Tabs,
+            FontFace::Terminal,
+            FontFace::Ui,
+        ];
+        Config::save_font_families_path(&faces, Some("Shared"), &path)?;
+        let document = fs::read_to_string(&path)?;
+        let parsed = document.parse::<toml_edit::DocumentMut>()?;
+        for face in faces {
+            assert_eq!(parsed[face.name()]["family"].as_str(), Some("Shared"));
+        }
+        Config::save_font_family_path(FontFace::Tabs, Some("Independent"), &path)?;
+        let parsed = fs::read_to_string(&path)?.parse::<toml_edit::DocumentMut>()?;
+        assert_eq!(parsed["tabs"]["family"].as_str(), Some("Independent"));
+        assert_eq!(parsed["terminal"]["family"].as_str(), Some("Shared"));
+        Config::save_font_families_path(&faces, None, &path)?;
+        let text = fs::read_to_string(&path)?;
+        let parsed = text.parse::<toml_edit::DocumentMut>()?;
+        for face in faces {
+            assert!(
+                parsed
+                    .get(face.name())
+                    .and_then(|item| item.get("family"))
+                    .is_none()
+            );
+        }
+        assert!(text.contains("# keep"));
+        assert!(text.contains("size = 18 # keep size"));
         Ok(())
     }
 
