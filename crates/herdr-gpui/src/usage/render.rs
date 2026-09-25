@@ -36,6 +36,7 @@ impl HerdrWindow {
         let busy = self.usage.busy();
         let now = SystemTime::now();
         let theme = &self.theme;
+        let muted = theme.readable_chrome(self.paint_opacity()).muted;
         let mut row = div()
             .id("usage")
             .debug_selector(|| "usage".into())
@@ -57,7 +58,7 @@ impl HerdrWindow {
                     .debug_selector(|| "usage-host-error".into())
                     .min_w_0()
                     .truncate()
-                    .text_color(rgb(theme.muted))
+                    .text_color(rgb(muted))
                     .child("Usage unavailable")
                     .tooltip(move |_, cx| {
                         let text = error.clone();
@@ -73,7 +74,7 @@ impl HerdrWindow {
         let refresh = svg()
             .path("icons/refresh.svg")
             .size(px(11.))
-            .text_color(rgb(theme.muted));
+            .text_color(rgb(muted));
         // The segments clip when crowded; refresh stays in reach beside them.
         Some(
             div()
@@ -125,6 +126,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = &self.theme;
+        let muted = theme.readable_chrome(self.paint_opacity()).muted;
         let provider = reading.provider;
         let key = provider.id();
         let bounds = Rc::new(Cell::new(Bounds::<Pixels>::default()));
@@ -183,7 +185,7 @@ impl HerdrWindow {
             .gap(px(4.));
         for (index, window) in report.windows.iter().enumerate() {
             if index > 0 {
-                labels = labels.child(div().text_color(rgb(theme.muted)).child("·"));
+                labels = labels.child(div().text_color(rgb(muted)).child("·"));
             }
             labels = labels.child(
                 div()

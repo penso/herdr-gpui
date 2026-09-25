@@ -86,6 +86,7 @@ fn open_deferred(cx: &mut App) {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(620.), px(360.))),
             titlebar: Some(crate::titlebar::options("Logs")),
+            window_background: WindowBackgroundAppearance::Opaque,
             ..Default::default()
         },
         |window, cx| cx.new(|cx| LogWindow::new(window, cx)),
@@ -502,7 +503,7 @@ impl Render for LogWindow {
             .line_height(px(config.ui.line_height()))
             .map(|root| {
                 #[cfg(target_os = "macos")]
-                let root = root.child(crate::titlebar::render(theme.surface));
+                let root = root.child(crate::titlebar::render(theme.surface, 100));
                 root
             })
             .child(

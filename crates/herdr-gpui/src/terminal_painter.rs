@@ -73,6 +73,7 @@ pub(crate) struct TerminalPainter {
     font_size: f32,
     cell_height: f32,
     theme: Theme,
+    pub(crate) background_opacity: u8,
     config: Option<Font>,
     // Resolved foreground includes reverse, dim and hidden; only bold/italic
     // affect shaping. Decorations remain at exact cell-grid coordinates.
@@ -89,6 +90,7 @@ impl Default for TerminalPainter {
             font_size: FONT_SIZE,
             cell_height: CELL_HEIGHT,
             theme: Theme::default(),
+            background_opacity: 100,
             config: None,
             glyphs: GlyphCache::default(),
             cell_width: None,
@@ -139,6 +141,16 @@ fn paint_glyphs(
         }
     }
     Ok(())
+}
+
+fn cell_background_opacity(color: u32, theme: &Theme, opacity: u8) -> u8 {
+    // The terminal container already paints the default background; a second
+    // layer of the same tint would make the grid nearly opaque.
+    if color == theme.background {
+        0
+    } else {
+        opacity
+    }
 }
 
 fn background_spans<'a>(
@@ -316,7 +328,10 @@ impl TerminalPainter {
                                 ),
                             size(px((end - start) as f32 * cell_width), px(self.cell_height)),
                         ),
-                        rgb(color),
+                        crate::config::background(
+                            color,
+                            cell_background_opacity(color, &self.theme, self.background_opacity),
+                        ),
                     ));
                     #[cfg(feature = "integration-test")]
                     {
@@ -539,6 +554,21 @@ impl TerminalPainter {
 mod tests {
     use super::*;
     use core::prelude::v1::test;
+
+    #[test]
+    fn terminal_default_cells_do_not_compound_container_opacity() {
+        let theme = Theme::default();
+        let opacity = crate::config::readable_opacity(&theme, 0);
+        assert!(opacity < 100);
+        assert_eq!(
+            cell_background_opacity(theme.background, &theme, opacity),
+            0
+        );
+        assert_eq!(
+            cell_background_opacity(theme.palette[1], &theme, opacity),
+            opacity
+        );
+    }
 
     #[test]
     #[allow(clippy::unwrap_used)]

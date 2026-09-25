@@ -3,6 +3,8 @@
 //! split by responsibility across the submodules below; the fields live here
 //! because every one of them describes this window's own presentation state.
 
+#[cfg(target_os = "macos")]
+pub(crate) mod blur;
 mod clipboard;
 mod commands;
 mod file_drop;
@@ -114,6 +116,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) wheel: WheelAccumulator,
     pub(crate) sidebar_width: Option<f32>,
     pub(crate) sidebar_drag: Option<sidebar::SidebarDrag>,
+    pub(crate) opacity_drag: bool,
+    pub(crate) blur_drag: bool,
+    pub(crate) last_window_background: Option<WindowBackgroundAppearance>,
+    #[cfg(target_os = "macos")]
+    pub(crate) native_blur: Option<blur::NativeBlur>,
     /// A press on a workspace row that may lift it for reordering.
     pub(crate) workspace_drag: Option<sidebar::WorkspaceDrag>,
     pub(crate) sidebar_split: Option<f32>,
@@ -145,6 +152,10 @@ pub(crate) struct HerdrWindow {
 pub(crate) struct SurfaceSignal;
 
 impl HerdrWindow {
+    pub(crate) fn paint_opacity(&self) -> u8 {
+        config::readable_opacity(&self.theme, self.config.background_opacity)
+    }
+
     /// Redraws for a surface-only update. Notifying this view instead would
     /// also invalidate the cached sidebar, rebuilding every row for a frame
     /// whose rows did not change.
@@ -371,6 +382,11 @@ impl HerdrWindow {
             wheel: WheelAccumulator::default(),
             sidebar_width: None,
             sidebar_drag: None,
+            opacity_drag: false,
+            blur_drag: false,
+            last_window_background: None,
+            #[cfg(target_os = "macos")]
+            native_blur: None,
             workspace_drag: None,
             sidebar_split: None,
             sidebar_split_modified: false,

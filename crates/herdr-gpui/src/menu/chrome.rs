@@ -408,6 +408,8 @@ impl HerdrWindow {
             .rounded(px(crate::config::corners::PANEL))
             .border_1()
             .border_color(rgb(theme.active))
+            // Popup pages (preferences, pickers, dialogs, about and update)
+            // must remain legible even when the terminal window is transparent.
             .bg(rgb(theme.surface))
             .text_color(rgb(theme.foreground))
             .text_font(font)

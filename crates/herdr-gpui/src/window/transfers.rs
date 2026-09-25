@@ -297,7 +297,10 @@ impl HerdrWindow {
                 .rounded(px(crate::config::corners::PANEL))
                 .border_1()
                 .border_color(rgb(accent))
-                .bg(rgb(self.theme.surface))
+                .bg(crate::config::background(
+                    self.theme.surface,
+                    self.paint_opacity(),
+                ))
                 .text_color(rgb(self.theme.foreground))
                 .text_font(&self.config.ui)
                 .text_size(px(self.config.ui.size))
@@ -326,7 +329,11 @@ impl HerdrWindow {
                                 .bg(rgb(accent)),
                         ),
                 )
-                .child(div().text_color(rgb(self.theme.muted)).child(progress))
+                .child(
+                    div()
+                        .text_color(rgb(self.theme.readable_chrome(self.paint_opacity()).muted))
+                        .child(progress),
+                )
                 .child(
                     div()
                         .id("cancel-file-transfer")

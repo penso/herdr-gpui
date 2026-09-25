@@ -22,11 +22,71 @@ pub(crate) fn feature_rows(features: &Features) -> [(&'static str, &'static str,
     )]
 }
 
+fn blur_available() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        crate::window::blur::available()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 impl HerdrWindow {
+    fn set_background_opacity_at(
+        &mut self,
+        x: Pixels,
+        bounds: Bounds<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let percent = ((f32::from(x - bounds.origin.x) / f32::from(bounds.size.width)) * 100.)
+            .round()
+            .clamp(0., 100.) as u8;
+        if self.config.background_opacity != percent {
+            self.config.background_opacity = percent;
+            cx.notify();
+        }
+    }
+
+    fn set_background_blur_at(
+        &mut self,
+        x: Pixels,
+        bounds: Bounds<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let percent = ((f32::from(x - bounds.origin.x) / f32::from(bounds.size.width)) * 100.)
+            .round()
+            .clamp(0., 100.) as u8;
+        if self.config.background_blur_radius != percent {
+            self.config.background_blur_radius = percent;
+            cx.notify();
+        }
+    }
+
+    fn save_background(&mut self, cx: &mut Context<Self>) {
+        let opacity = self.config.background_opacity;
+        let blur = self.config.background_blur_radius;
+        let task = cx
+            .background_executor()
+            .spawn(async move { Config::save_background(opacity, blur) });
+        cx.spawn(async move |this, cx| {
+            if let Err(error) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.local_error = Some(format!("Save background settings: {error}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
     pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
         let accent = crate::menu::accent(theme);
+        let opacity_view = cx.entity().downgrade();
+        let blur_view = cx.entity().downgrade();
         let section = |title: &'static str| {
             div()
                 .pt(px(12.))
@@ -115,6 +175,209 @@ impl HerdrWindow {
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
             .child(row("preferences-theme", "Theme", self.config.theme.clone()))
+            .child(row(
+                "preferences-background-opacity",
+                "Background opacity",
+                format!("{}%", self.config.background_opacity),
+            ))
+            .child(
+                div()
+                    .debug_selector(|| "preferences-opacity-slider".into())
+                    .relative()
+                    .w_full()
+                    .h(px(30.))
+                    .cursor_pointer()
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right_0()
+                            .top(px(12.))
+                            .h(px(6.))
+                            .rounded_full()
+                            .bg(rgb(theme.active)),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top(px(12.))
+                            .h(px(6.))
+                            .w(relative(f32::from(self.config.background_opacity) / 100.))
+                            .rounded_full()
+                            .bg(accent),
+                    )
+                    .child(
+                        canvas(
+                            |_, _, _| (),
+                            move |bounds, _, window, _| {
+                                let view = opacity_view.clone();
+                                let pressed = view.clone();
+                                window.on_mouse_event(
+                                    move |event: &MouseDownEvent, phase, _, cx| {
+                                        if phase == DispatchPhase::Bubble
+                                            && event.button == MouseButton::Left
+                                            && bounds.contains(&event.position)
+                                        {
+                                            let _ = pressed.update(cx, |this, cx| {
+                                                this.opacity_drag = true;
+                                                this.set_background_opacity_at(
+                                                    event.position.x,
+                                                    bounds,
+                                                    cx,
+                                                );
+                                            });
+                                            cx.stop_propagation();
+                                        }
+                                    },
+                                );
+                                let released = view.clone();
+                                window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                                    if phase == DispatchPhase::Capture
+                                        && event.button == MouseButton::Left
+                                    {
+                                        let _ = released.update(cx, |this, cx| {
+                                            if this.opacity_drag {
+                                                this.opacity_drag = false;
+                                                this.save_background(cx);
+                                                cx.stop_propagation();
+                                            }
+                                        });
+                                    }
+                                });
+                                window.on_mouse_event(
+                                    move |event: &MouseMoveEvent, phase, _, cx| {
+                                        if phase == DispatchPhase::Capture {
+                                            let _ = view.update(cx, |this, cx| {
+                                                if this.opacity_drag {
+                                                    if event.pressed_button
+                                                        == Some(MouseButton::Left)
+                                                    {
+                                                        this.set_background_opacity_at(
+                                                            event.position.x,
+                                                            bounds,
+                                                            cx,
+                                                        );
+                                                    } else {
+                                                        this.opacity_drag = false;
+                                                        this.save_background(cx);
+                                                    }
+                                                    cx.stop_propagation();
+                                                }
+                                            });
+                                        }
+                                    },
+                                );
+                            },
+                        )
+                        .size_full(),
+                    ),
+            )
+            .when(blur_available(), |panel| {
+                panel
+                    .child(row(
+                        "preferences-background-blur",
+                        "Blur",
+                        format!("{}%", self.config.background_blur_radius),
+                    ))
+                    .child(
+                        div()
+                            .debug_selector(|| "preferences-blur-slider".into())
+                            .relative()
+                            .w_full()
+                            .h(px(30.))
+                            .cursor_pointer()
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .right_0()
+                                    .top(px(12.))
+                                    .h(px(6.))
+                                    .rounded_full()
+                                    .bg(rgb(theme.active)),
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top(px(12.))
+                                    .h(px(6.))
+                                    .w(relative(
+                                        f32::from(self.config.background_blur_radius) / 100.,
+                                    ))
+                                    .rounded_full()
+                                    .bg(accent),
+                            )
+                            .child(
+                                canvas(
+                                    |_, _, _| (),
+                                    move |bounds, _, window, _| {
+                                        let view = blur_view.clone();
+                                        let pressed = view.clone();
+                                        window.on_mouse_event(
+                                            move |event: &MouseDownEvent, phase, _, cx| {
+                                                if phase == DispatchPhase::Bubble
+                                                    && event.button == MouseButton::Left
+                                                    && bounds.contains(&event.position)
+                                                {
+                                                    let _ = pressed.update(cx, |this, cx| {
+                                                        this.blur_drag = true;
+                                                        this.set_background_blur_at(
+                                                            event.position.x,
+                                                            bounds,
+                                                            cx,
+                                                        );
+                                                    });
+                                                    cx.stop_propagation();
+                                                }
+                                            },
+                                        );
+                                        let released = view.clone();
+                                        window.on_mouse_event(
+                                            move |event: &MouseUpEvent, phase, _, cx| {
+                                                if phase == DispatchPhase::Capture
+                                                    && event.button == MouseButton::Left
+                                                {
+                                                    let _ = released.update(cx, |this, cx| {
+                                                        if this.blur_drag {
+                                                            this.blur_drag = false;
+                                                            this.save_background(cx);
+                                                            cx.stop_propagation();
+                                                        }
+                                                    });
+                                                }
+                                            },
+                                        );
+                                        window.on_mouse_event(
+                                            move |event: &MouseMoveEvent, phase, _, cx| {
+                                                if phase == DispatchPhase::Capture {
+                                                    let _ = view.update(cx, |this, cx| {
+                                                        if this.blur_drag {
+                                                            if event.pressed_button
+                                                                == Some(MouseButton::Left)
+                                                            {
+                                                                this.set_background_blur_at(
+                                                                    event.position.x,
+                                                                    bounds,
+                                                                    cx,
+                                                                );
+                                                            } else {
+                                                                this.blur_drag = false;
+                                                                this.save_background(cx);
+                                                            }
+                                                            cx.stop_propagation();
+                                                        }
+                                                    });
+                                                }
+                                            },
+                                        );
+                                    },
+                                )
+                                .size_full(),
+                            ),
+                    )
+            })
             .child(div().py(px(10.)).child(
                 button("preferences-choose-theme", "Choose theme").on_click(cx.listener(
                     |this, _, window, cx| {
@@ -552,7 +815,22 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+    use core::prelude::v1::test;
     use std::time::{Duration, Instant};
+
+    #[gpui::test]
+    fn blur_slider_only_exists_when_window_server_api_is_available(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| view.open_preferences(window, cx));
+            window.draw(cx).clear(cx);
+        });
+        assert_eq!(
+            cx.debug_bounds("preferences-blur-slider").is_some(),
+            blur_available()
+        );
+        assert!(cx.debug_bounds("preferences-toggle-blur").is_none());
+    }
 
     struct TestDirectory(PathBuf);
 

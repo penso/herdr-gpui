@@ -2874,6 +2874,7 @@ dependencies = [
  "gpui-pre-platform",
  "herdr-client",
  "image",
+ "libloading",
  "nix",
  "objc",
  "objc2 0.6.4",
