@@ -5,7 +5,9 @@
 //! every display at origin (0, 0), so a position is only meaningful together
 //! with its display. Each window records its display's persistent UUID and is
 //! reopened on that display, falling back to the primary one when it is gone.
-use gpui::{App, Bounds, Context, DisplayId, Global, Pixels, Window, WindowId, point, px, size};
+use gpui_kit::{
+    App, Bounds, Context, DisplayId, Global, Pixels, Window, WindowId, point, px, size,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,

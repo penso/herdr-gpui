@@ -1,5 +1,5 @@
 use super::{HerdrWindow, terminal::input_cursor_bounds};
-use gpui::*;
+use gpui_kit::*;
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::ops::Range;
 
@@ -11,12 +11,6 @@ impl EntityInputHandler for HerdrWindow {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<String> {
-        if self.menu.page.is_some() {
-            let input = self.menu.input.as_ref()?;
-            let range = input.range_from_utf16(range);
-            *adjusted = Some(input.to_utf16(range.clone()));
-            return Some(input.text[range].to_owned());
-        }
         let text: Vec<u16> = self.marked.encode_utf16().collect();
         let range = range.start.min(text.len())..range.end.min(text.len());
         *adjusted = Some(range.clone());
@@ -28,13 +22,6 @@ impl EntityInputHandler for HerdrWindow {
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
-        if self.menu.page.is_some() {
-            let input = self.menu.input.as_ref()?;
-            return Some(UTF16Selection {
-                range: input.to_utf16(input.selection.clone()),
-                reversed: input.reversed,
-            });
-        }
         let end = self.marked.encode_utf16().count();
         Some(UTF16Selection {
             range: end..end,
@@ -42,31 +29,21 @@ impl EntityInputHandler for HerdrWindow {
         })
     }
     fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
-        if self.menu.page.is_some() {
-            let input = self.menu.input.as_ref()?;
-            return input.marked.clone().map(|range| input.to_utf16(range));
-        }
         (!self.marked.is_empty()).then(|| 0..self.marked.encode_utf16().count())
     }
     fn unmark_text(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(input) = self.menu.input.as_mut() {
-            input.marked = None;
-        }
         self.marked.clear();
         cx.notify();
     }
     fn replace_text_in_range(
         &mut self,
-        range: Option<Range<usize>>,
+        _: Option<Range<usize>>,
         text: &str,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A menu page owns input; text meant for it must not reach the pane.
         if self.menu.page.is_some() {
-            if let Some(input) = self.menu.input.as_mut() {
-                input.replace(range, text, false, None);
-                cx.notify();
-            }
             return;
         }
         #[cfg(feature = "integration-test")]
@@ -81,17 +58,13 @@ impl EntityInputHandler for HerdrWindow {
     }
     fn replace_and_mark_text_in_range(
         &mut self,
-        range: Option<Range<usize>>,
+        _: Option<Range<usize>>,
         text: &str,
-        selected: Option<Range<usize>>,
+        _: Option<Range<usize>>,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.menu.page.is_some() {
-            if let Some(input) = self.menu.input.as_mut() {
-                input.replace(range, text, true, selected);
-                cx.notify();
-            }
             return;
         }
         if !self.input_ready() {
@@ -102,14 +75,11 @@ impl EntityInputHandler for HerdrWindow {
     }
     fn bounds_for_range(
         &mut self,
-        range: Range<usize>,
+        _: Range<usize>,
         _: Bounds<Pixels>,
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        if self.menu.page.is_some() {
-            return self.menu.input.as_ref()?.range_bounds(range);
-        }
         Some(input_cursor_bounds(
             self.live.surface.as_deref(),
             self.bounds.origin,
@@ -119,32 +89,26 @@ impl EntityInputHandler for HerdrWindow {
     }
     fn character_index_for_point(
         &mut self,
-        point: Point<Pixels>,
+        _: Point<Pixels>,
         _: &mut Window,
         _: &mut Context<Self>,
     ) -> Option<usize> {
-        if self.menu.page.is_some() {
-            let input = self.menu.input.as_ref()?;
-            let index = input.index_at(point)?;
-            return Some(input.to_utf16(index..index).start);
-        }
         None
     }
 }
 
 /// The terminal's platform input handler. A terminal repeats a held key, so
 /// it opts out of macOS press-and-hold, which would otherwise swallow the
-/// repeats and open the accent picker. Menu text fields keep the picker.
+/// repeats and open the accent picker. Dialog text fields are kit inputs with
+/// their own handler, and keep the picker.
 pub(crate) struct TerminalInputHandler {
     inner: ElementInputHandler<HerdrWindow>,
-    press_and_hold: bool,
 }
 
 impl TerminalInputHandler {
-    pub(crate) fn new(bounds: Bounds<Pixels>, view: Entity<HerdrWindow>, menu_open: bool) -> Self {
+    pub(crate) fn new(bounds: Bounds<Pixels>, view: Entity<HerdrWindow>) -> Self {
         Self {
             inner: ElementInputHandler::new(bounds, view),
-            press_and_hold: menu_open,
         }
     }
 }
@@ -218,6 +182,6 @@ impl InputHandler for TerminalInputHandler {
         self.inner.character_index_for_point(point, window, cx)
     }
     fn apple_press_and_hold_enabled(&mut self) -> bool {
-        self.press_and_hold
+        false
     }
 }

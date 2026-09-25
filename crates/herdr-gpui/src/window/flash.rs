@@ -4,14 +4,14 @@
 //! [`HerdrWindow::show_flash`]; nothing here names individual messages.
 
 use super::HerdrWindow;
-use crate::config::Theme;
-use gpui::{Context, SharedString};
+use gpui_kit::{Context, SharedString};
 use std::time::{Duration, Instant};
 
 /// How long a flash stays up, matching herdr's own clipboard feedback.
 const FLASH_DURATION: Duration = Duration::from_secs(2);
 
-/// Whether the flash reports something done or something declined.
+/// Whether the flash reports something done or something declined; the tag
+/// shows it as the kit's success or warning variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tone {
     Success,
@@ -36,14 +36,6 @@ impl Flash {
         Self {
             tone: Tone::Warning,
             text: text.into(),
-        }
-    }
-
-    /// Green for something done, yellow for something declined.
-    pub(crate) fn accent(&self, theme: &Theme) -> u32 {
-        match self.tone {
-            Tone::Success => theme.palette[2],
-            Tone::Warning => theme.palette[3],
         }
     }
 }

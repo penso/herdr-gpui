@@ -4,7 +4,7 @@
 
 use super::HerdrWindow;
 use crate::{WINDOW_TITLE, sidebar};
-use gpui::Window;
+use gpui_kit::Window;
 use std::time::{Duration, Instant};
 
 /// A drag or the full screen animation passes through many sizes, and each

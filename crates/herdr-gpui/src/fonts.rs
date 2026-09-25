@@ -7,7 +7,7 @@
 //! carries that cascade alongside the family; this trait applies both.
 
 use crate::config::FontConfig;
-use gpui::{Font, Styled};
+use gpui_kit::{Font, Styled};
 
 pub(crate) trait StyledFont: Styled + Sized {
     /// Sets the family and its fallback cascade, and nothing else. `Styled::font`
@@ -16,7 +16,7 @@ pub(crate) trait StyledFont: Styled + Sized {
         let Font {
             family, fallbacks, ..
         } = config.font();
-        let style = self.text_style().get_or_insert_with(Default::default);
+        let style = &mut self.style().text;
         style.font_family = Some(family);
         style.font_fallbacks = fallbacks;
         self

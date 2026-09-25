@@ -1,5 +1,8 @@
-//! What a menu popup is currently showing, and the workspace actions a row
-//! can trigger. Closed sets, so a page is never a string tag.
+//! What a menu popup or dialog is currently showing, and the workspace actions
+//! a row can trigger. Closed sets, so a page is never a string tag. The kit
+//! draws the surfaces; this enum is what fences input while one is open.
+
+use gpui_kit::component::{Icon, IconName};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Page {
@@ -27,6 +30,16 @@ pub(crate) enum Page {
     Dialog(WorkspaceAction),
 }
 
+impl Page {
+    /// Pages drawn as a kit popup menu rather than a modal dialog.
+    pub(crate) fn is_popup(self) -> bool {
+        matches!(
+            self,
+            Self::Menu | Self::Devices | Self::Tab | Self::Pane | Self::Workspace | Self::Git
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WorkspaceAction {
     Rename,
@@ -47,17 +60,19 @@ pub(crate) enum WorkspaceMenuAction {
 }
 
 impl WorkspaceMenuAction {
-    /// Embedded icon for the row, so each action is recognizable before reading.
-    /// The pull request section draws its own header rather than a menu row.
-    pub(crate) fn icon(self) -> Option<&'static str> {
+    /// Icon for the row, so each action is recognizable before reading. The
+    /// pull request section draws its own header rather than a menu row.
+    pub(crate) fn icon(self) -> Option<Icon> {
         Some(match self {
-            Self::Dialog(WorkspaceAction::Rename) => "icons/pencil.svg",
-            Self::Dialog(WorkspaceAction::Close) => "icons/close.svg",
-            Self::Dialog(WorkspaceAction::NewWorktree) => "icons/plus.svg",
-            Self::Dialog(WorkspaceAction::OpenWorktree) => "icons/chevron-down.svg",
-            Self::Dialog(WorkspaceAction::DeleteWorktree) => "icons/trash.svg",
-            Self::Collapse => "icons/chevron-up.svg",
-            Self::Expand => "icons/chevron-down.svg",
+            Self::Dialog(WorkspaceAction::Rename) => Icon::default().path("icons/pencil.svg"),
+            Self::Dialog(WorkspaceAction::Close) => Icon::new(IconName::Close),
+            Self::Dialog(WorkspaceAction::NewWorktree) => Icon::new(IconName::Plus),
+            Self::Dialog(WorkspaceAction::OpenWorktree) => Icon::new(IconName::FolderOpen),
+            Self::Dialog(WorkspaceAction::DeleteWorktree) => {
+                Icon::default().path("icons/trash.svg")
+            }
+            Self::Collapse => Icon::new(IconName::ChevronUp),
+            Self::Expand => Icon::new(IconName::ChevronDown),
             Self::PullRequest => return None,
         })
     }

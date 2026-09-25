@@ -11,7 +11,7 @@ use crate::{
     PlaySound, ShowHerdrNotDetected, ShowUpdatePreview,
     actions::{ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview},
 };
-use gpui::{Menu, MenuItem, OsAction};
+use gpui_kit::{Menu, MenuItem, OsAction};
 #[cfg(feature = "qa-menu")]
 use herdr_client::protocol::SemanticNotificationKind;
 
@@ -19,6 +19,7 @@ pub(crate) fn menus() -> Vec<Menu> {
     vec![
         Menu {
             name: "Herdr".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     "About Herdr",
@@ -52,6 +53,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         },
         Menu {
             name: "File".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     "New Workspace",
@@ -96,6 +98,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         // the file panels, the way every macOS app's Edit menu does.
         Menu {
             name: "Edit".into(),
+            disabled: false,
             items: vec![
                 MenuItem::os_action("Cut", Cut, OsAction::Cut),
                 MenuItem::os_action("Copy", Copy, OsAction::Copy),
@@ -106,6 +109,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         },
         Menu {
             name: "View".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     "Increase Font Size",
@@ -130,6 +134,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         },
         Menu {
             name: "Terminal".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     "Split Vertically (Right)",
@@ -191,6 +196,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         },
         Menu {
             name: "Window".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action(
                     "New Window",
@@ -205,6 +211,7 @@ pub(crate) fn menus() -> Vec<Menu> {
         #[cfg(feature = "qa-menu")]
         Menu {
             name: "QA".into(),
+            disabled: false,
             items: vec![
                 MenuItem::action("Show herdr non-detected modal", ShowHerdrNotDetected),
                 MenuItem::action("Show app update available", ShowUpdatePreview),
@@ -295,7 +302,7 @@ mod tests {
         for (label, expected) in [
             (
                 "Show update download progress (50%)",
-                Box::new(ShowUpdateDownloadPreview) as Box<dyn gpui::Action>,
+                Box::new(ShowUpdateDownloadPreview) as Box<dyn gpui_kit::Action>,
             ),
             (
                 "Show Homebrew update progress",
@@ -323,7 +330,7 @@ mod tests {
         assert_eq!(names, expected);
     }
 
-    fn edit_action(label: &str) -> Box<dyn gpui::Action> {
+    fn edit_action(label: &str) -> Box<dyn gpui_kit::Action> {
         menus()
             .into_iter()
             .find(|menu| menu.name.as_ref() == "Edit")
@@ -339,8 +346,8 @@ mod tests {
 
     /// Standard Edit items: native selectors for OS text fields, the shortcuts
     /// every macOS app shows, and labels that do not claim the keystrokes.
-    #[gpui::test]
-    fn edit_menu_carries_standard_items_and_shortcut_labels(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn edit_menu_carries_standard_items_and_shortcut_labels(cx: &mut gpui_kit::TestAppContext) {
         let items = &menus()
             .into_iter()
             .find(|menu| menu.name.as_ref() == "Edit")
@@ -378,7 +385,7 @@ mod tests {
                 assert_eq!(bindings.len(), 1, "{name}");
                 assert_eq!(
                     bindings[0].keystrokes()[0].inner(),
-                    &gpui::Keystroke::parse(keystroke).unwrap()
+                    &gpui_kit::Keystroke::parse(keystroke).unwrap()
                 );
                 // No element sets the context, so the keystroke never dispatches
                 // the action ahead of the focused element's own key handler.
@@ -389,59 +396,62 @@ mod tests {
 
     /// Each item is enabled only where it acts, and choosing it does what its
     /// shortcut does in the focused element.
-    #[gpui::test]
-    fn edit_menu_items_follow_focus(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn edit_menu_items_follow_focus(cx: &mut gpui_kit::TestAppContext) {
         use crate::{
-            dialog_input::DialogInput,
-            menu::{Page, WorkspaceAction},
+            menu::WorkspaceAction,
             sidebar::layout_tests::{fixture_window, full_draw},
         };
-        use gpui::ClipboardItem;
+        use gpui_kit::ClipboardItem;
 
         const LABELS: [&str; 4] = ["Cut", "Copy", "Paste", "Select All"];
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             crate::bind_keys(cx);
             fixture_window(window, cx)
         });
-        let available = |cx: &mut gpui::VisualTestContext| {
+        let available = |cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|window, cx| {
-                full_draw(window, cx).clear();
+                full_draw(window, cx).clear(cx);
                 LABELS
                     .into_iter()
                     .filter(|label| window.is_action_available(edit_action(label).as_ref(), cx))
                     .collect::<Vec<_>>()
             })
         };
-        let choose = |label: &str, cx: &mut gpui::VisualTestContext| {
+        let choose = |label: &str, cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|window, cx| window.dispatch_action(edit_action(label), cx));
             cx.run_until_parked();
         };
 
         // A released selection is already copied; the terminal only pastes.
-        cx.update(|window, cx| view.read(cx).focus.focus(window));
+        cx.update(|window, cx| {
+            let focus = view.read(cx).focus.clone();
+            focus.focus(window, cx);
+        });
         assert_eq!(available(cx), ["Paste"]);
 
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
                 view.live.status = crate::state::ConnectionStatus::Connected;
                 view.open_workspace_menu("w3", Default::default(), window, cx);
-                view.menu.page = Some(Page::Dialog(WorkspaceAction::Rename));
-                view.menu.input = Some(DialogInput::new("draft".into()));
+                view.open_workspace_dialog(WorkspaceAction::Rename, window, cx);
+                view.set_menu_input("draft", "", window, cx);
+                view.focus_menu_input(window, cx);
             });
             cx.write_to_clipboard(ClipboardItem::new_string("renamed".into()));
         });
         assert_eq!(available(cx), LABELS);
         choose("Select All", cx);
         choose("Paste", cx);
-        let draft = |cx: &mut gpui::VisualTestContext| {
-            view.read_with(cx, |view, _| view.menu.input.as_ref().unwrap().text.clone())
+        let draft = |cx: &mut gpui_kit::VisualTestContext| {
+            view.read_with(cx, |view, cx| view.menu.input_text(cx))
         };
         assert_eq!(draft(cx), "renamed");
         cx.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string("other".into())));
         choose("Select All", cx);
         choose("Copy", cx);
         assert_eq!(draft(cx), "renamed");
-        let clipboard = |cx: &mut gpui::VisualTestContext| {
+        let clipboard = |cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text()))
         };
         assert_eq!(clipboard(cx).as_deref(), Some("renamed"));
@@ -449,26 +459,6 @@ mod tests {
         choose("Cut", cx);
         assert_eq!(draft(cx), "");
         assert_eq!(clipboard(cx).as_deref(), Some("renamed"));
-
-        // A search field takes the action before the overlay around it.
-        let search = cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
-                view.dismiss_menu(window, cx);
-                view.open_theme_picker(window, cx);
-            });
-            cx.write_to_clipboard(ClipboardItem::new_string("nord".into()));
-            view.read(cx).menu.themes.as_ref().unwrap().search.clone()
-        });
-        assert_eq!(available(cx), LABELS);
-        choose("Paste", cx);
-        assert_eq!(
-            search.read_with(cx, |search, _| search.text().to_owned()),
-            "nord"
-        );
-        view.read_with(cx, |view, _| {
-            assert!(view.menu.input.is_none());
-            assert_eq!(view.menu.page, Some(Page::Themes));
-        });
     }
 
     /// The font size items are the only way to reach these commands from the

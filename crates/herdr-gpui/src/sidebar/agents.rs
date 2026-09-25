@@ -2,40 +2,39 @@
 //! are labelled. Status comes from the daemon's snapshot, never from guessing
 //! at terminal output.
 
-use super::{STATUS_DOT_UNKNOWN, STATUS_WIDTH, first_text, label_text, line_height};
-use crate::{HerdrWindow, config::FontConfig};
-use gpui::{prelude::*, *};
+use super::first_text;
+use crate::HerdrWindow;
+use gpui_kit::component::{
+    Disableable, IconName, Sizable,
+    button::{Button, ButtonVariants},
+};
+use gpui_kit::{Context, InteractiveElement, SharedString};
 use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
 
-pub(super) fn agents_sort(window: &HerdrWindow, cx: &mut Context<HerdrWindow>) -> Stateful<Div> {
-    let theme = &window.theme;
+/// Toggles the agents' order. A daemon that names its own agent view owns the
+/// order, so the button then only reports that view.
+pub(super) fn agents_sort(window: &HerdrWindow, cx: &mut Context<HerdrWindow>) -> Button {
     let view = window
         .live
         .snapshot
         .as_ref()
         .and_then(|snapshot| snapshot.agent_view_label.clone());
-    let label = view
-        .clone()
-        .unwrap_or_else(|| window.agent_sort.to_string());
-    div()
-        .id("agents-sort")
+    let fixed = view.is_some();
+    let label: SharedString = view.unwrap_or_else(|| window.agent_sort.to_string()).into();
+    Button::new("agents-sort")
         .debug_selector(|| "agents-sort".into())
-        .flex_none()
-        .min_w_0()
-        .truncate()
-        .text_color(rgb(theme.muted))
-        .when(view.is_none(), |sort| {
-            sort.cursor_pointer()
-                .hover(|style| style.text_color(rgb(theme.foreground)))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.agent_sort = this.agent_sort.toggled();
-                    this.agent_sort_modified = true;
-                    this.save_chrome();
-                    cx.notify();
-                }))
-        })
-        .child(label_text(&label))
+        .ghost()
+        .xsmall()
+        .icon(IconName::SortDescending)
+        .label(label)
+        .disabled(fixed)
+        .on_click(cx.listener(|this, _, _, cx| {
+            cx.stop_propagation();
+            this.agent_sort = this.agent_sort.toggled();
+            this.agent_sort_modified = true;
+            this.save_chrome();
+            cx.notify();
+        }))
 }
 
 /// Attention first, then the most recent change, as upstream orders it.
@@ -118,38 +117,16 @@ pub(super) fn agent_labels<'a>(
     (segments, name)
 }
 
-// Match the expanded upstream shell order, including orphaned linked worktrees.
-
-pub(super) fn status_indicator(status: AgentStatus, font: &FontConfig) -> Div {
-    // Upstream dots: working/blocked/done filled, idle hollow, unknown a small dot.
-    let (diameter, filled, color) = status_style(status);
-    div()
-        .size(px(STATUS_WIDTH))
-        .mt(px((line_height(font) - STATUS_WIDTH) / 2.))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .child(
-            div()
-                .size(px(diameter))
-                .rounded_full()
-                .border_1()
-                .border_color(rgb(color))
-                .when(filled, |dot| dot.bg(rgb(color))),
-        )
-}
-
-/// Upstream draws status from its own palette, defaulting to Catppuccin Mocha,
-/// and never from the terminal's ANSI colors. Matching those literals keeps a
-/// dot the same color in both clients whatever terminal theme is loaded, where
-/// ANSI slots would drift: Xcode Dark paints its cyan purple.
-pub(super) fn status_style(status: AgentStatus) -> (f32, bool, u32) {
-    match status {
-        AgentStatus::Working => (STATUS_WIDTH, true, 0xf9e2af),
-        AgentStatus::Blocked => (STATUS_WIDTH, true, 0xf38ba8),
-        AgentStatus::Done => (STATUS_WIDTH, true, 0x94e2d5),
-        AgentStatus::Idle => (STATUS_WIDTH, false, 0xa6e3a1),
-        AgentStatus::Unknown => (STATUS_DOT_UNKNOWN, true, 0x6c7086),
+/// An agent row's one line: the agent, then where it runs.
+pub(super) fn agent_row_label(segments: &[(&str, bool)], name: &str) -> String {
+    let place = segments
+        .iter()
+        .map(|(text, _)| *text)
+        .collect::<Vec<_>>()
+        .join(" \u{b7} ");
+    if name.is_empty() {
+        place
+    } else {
+        format!("{name} \u{b7} {place}")
     }
 }

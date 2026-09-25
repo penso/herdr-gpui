@@ -7,7 +7,7 @@ use crate::{
     navigation::NavigationTarget,
     terminal::{InputTarget, Scrollbar, WheelTarget, wheel_target},
 };
-use gpui::{
+use gpui_kit::{
     Context, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
     Window,
 };
@@ -148,7 +148,7 @@ impl HerdrWindow {
         };
         self.pressed_terminal_link = None;
         self.selection = None;
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.stop_propagation();
         if let Some(button) = button(event.button)
             && !cx.has_active_drag()

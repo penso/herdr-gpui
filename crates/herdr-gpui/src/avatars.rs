@@ -1,4 +1,4 @@
-use gpui::{Image, ImageFormat};
+use gpui_kit::{Image, ImageFormat};
 mod cache;
 use std::{
     collections::HashMap,

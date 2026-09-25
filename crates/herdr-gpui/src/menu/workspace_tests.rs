@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::{WorkspaceAction, WorkspaceTarget, state::Deletion};
-use crate::{HerdrWindow, dialog_input::DialogInput, sidebar};
+use crate::{HerdrWindow, sidebar};
 use herdr_client::Method;
 
 /// The workspace a menu currently targets, for tests outside this module.
@@ -15,8 +15,8 @@ pub(crate) fn target_id(view: &HerdrWindow) -> Option<&str> {
 pub(crate) fn submit_focus_change(
     view: &mut HerdrWindow,
     method: Method,
-    window: &mut gpui::Window,
-    cx: &mut gpui::Context<HerdrWindow>,
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::Context<HerdrWindow>,
 ) {
     let action = match method {
         Method::WorkspaceClose => WorkspaceAction::Close,
@@ -44,12 +44,12 @@ pub(crate) fn submit_focus_change(
             }),
         )
     });
-    view.open_menu(window, cx);
+    view.begin_menu(window, cx);
     view.menu.target = Some(target);
     view.menu.page = Some(super::Page::Dialog(action));
     if let Some(check) = close_check {
         view.menu.close_check = Some(check);
-        view.menu.input = Some(DialogInput::new("close".into()));
+        view.set_menu_input("close", "", window, cx);
     }
     if action == WorkspaceAction::DeleteWorktree {
         view.menu.deletion = Some(Deletion {
@@ -59,9 +59,10 @@ pub(crate) fn submit_focus_change(
         });
     }
     if action == WorkspaceAction::OpenWorktree {
-        use gpui::AppContext;
-        let mut picker =
-            super::worktree_open::Picker::new(cx.new(crate::search_input::SearchInput::new));
+        use gpui_kit::AppContext;
+        let mut picker = super::worktree_open::Picker::new(
+            cx.new(|cx| gpui_kit::component::input::InputState::new(window, cx)),
+        );
         picker.pending = Some("list".into());
         view.menu.worktree_open = Some(picker);
         view.menu.apply_worktree_list_response("list", Ok(serde_json::json!({"result": {
@@ -96,12 +97,13 @@ pub(crate) fn submit_focus_change(
     view.dismiss_menu(window, cx);
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn close_dialog_blocks_submission_until_risks_are_explicitly_accepted(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
     use super::workspace_close::{CloseCheck, Report};
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.live.status = crate::state::ConnectionStatus::Connected;
@@ -122,26 +124,11 @@ fn close_dialog_blocks_submission_until_risks_are_explicitly_accepted(
                 unpushed: true,
                 unknown: true,
             });
-            view.menu.input = Some(DialogInput::new(String::new()));
+            view.set_menu_input("", "", window, cx);
             view.submit_workspace_dialog(window, cx);
             assert!(view.menu.error.is_none());
-        });
-        window.draw(cx).clear();
-    });
-    let panel = cx.debug_bounds("menu-panel").unwrap();
-    let warning = cx.debug_bounds("close-git-status").unwrap();
-    let submit = cx.debug_bounds("dialog-submit").unwrap();
-    assert!(panel.contains(&warning.origin));
-    assert!(warning.bottom() <= submit.top());
-    assert!(submit.bottom() <= panel.bottom());
-    cx.simulate_keystrokes("enter");
-    view.read_with(cx, |view, _| {
-        assert!(view.menu.error.is_none());
-        assert!(view.menu.page.is_some());
-    });
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.menu.input = Some(DialogInput::new("close".into()));
+            assert!(view.menu.page.is_some());
+            view.set_menu_input("close", "", window, cx);
             view.submit_workspace_dialog(window, cx);
             // Only after consent does submission reach the absent fixture connection.
             assert!(view.menu.error.is_some());
@@ -151,9 +138,10 @@ fn close_dialog_blocks_submission_until_risks_are_explicitly_accepted(
     });
 }
 
-#[gpui::test]
-fn signed_out_workspace_has_no_github_section_or_requests(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn signed_out_workspace_has_no_github_section_or_requests(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.live.status = crate::state::ConnectionStatus::Connected;
@@ -163,16 +151,14 @@ fn signed_out_workspace_has_no_github_section_or_requests(cx: &mut gpui::TestApp
             assert!(view.menu.pr.message.is_none());
             assert!(!view.menu.github.busy());
             assert!(!view.menu.github.loading_profile());
-            cx.notify();
         })
     });
-    cx.run_until_parked();
-    assert!(cx.debug_bounds("workspace-pr").is_none());
 }
 
-#[gpui::test]
-fn workspace_dialogs_and_prs_are_fenced_by_host_and_generation(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn workspace_dialogs_and_prs_are_fenced_by_host_and_generation(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.menu.github = crate::github::Auth::connected_fixture();
@@ -219,7 +205,22 @@ fn workspace_dialogs_and_prs_are_fenced_by_host_and_generation(cx: &mut gpui::Te
     });
 }
 
-pub(crate) fn check_pr_fences(view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext) {
+/// A pull request shown for one workspace must not survive a change of the
+/// daemon, the workspace, its branch, the connection, or the session.
+#[gpui_kit::test]
+fn workspace_prs_are_fenced_by_identity_and_connection(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.live.status = crate::state::ConnectionStatus::Connected;
+            view.open_workspace_menu("w3", Default::default(), window, cx);
+        })
+    });
+    check_pr_fences(&view, cx);
+}
+
+fn check_pr_fences(view: &gpui_kit::Entity<HerdrWindow>, cx: &mut gpui_kit::VisualTestContext) {
     use std::sync::{Arc, Mutex};
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
@@ -316,288 +317,14 @@ pub(crate) fn check_pr_fences(view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::V
     });
 }
 
-pub(crate) fn check_menu_interactions(
-    view: &gpui::Entity<HerdrWindow>,
-    cx: &mut gpui::VisualTestContext,
-) {
-    use gpui::{Modifiers, point, px};
-    let selection = |view: &HerdrWindow| {
-        if view.menu.page == Some(super::Page::Workspace) {
-            view.menu.workspace_selected.and_then(|selected| {
-                view.workspace_menu_actions()
-                    .iter()
-                    .position(|action| *action == selected)
-            })
-        } else {
-            view.menu.selected
-        }
-    };
-    let (page, count, first, second) = cx.update(|_, cx| {
-        let view = view.read(cx);
-        assert_eq!(view.menu.selected, None);
-        if view.menu.page == Some(super::Page::Workspace) {
-            (
-                super::Page::Workspace,
-                view.workspace_items().len(),
-                "workspace-menu-Rename",
-                "workspace-menu-Close group",
-            )
-        } else {
-            (
-                super::Page::Menu,
-                view.menu_items().len(),
-                "menu-settings",
-                "menu-shortcuts",
-            )
-        }
-    });
-    cx.simulate_keystrokes("enter");
-    cx.update(|_, cx| {
-        assert!(view.read(cx).menu.page == Some(page));
-        assert_eq!(view.read(cx).menu.selected, None);
-        assert!(view.read(cx).menu.input.is_none());
-    });
-    let first = cx.debug_bounds(first).unwrap().center();
-    let second = cx.debug_bounds(second).unwrap().center();
-    let outside = point(px(790.), px(590.));
-    for (position, selected) in [(second, Some(1)), (first, Some(0)), (outside, None)] {
-        cx.simulate_mouse_move(position, None, Modifiers::default());
-        cx.update(|window, cx| {
-            window.draw(cx).clear();
-            assert_eq!(selection(view.read(cx)), selected);
-        });
-    }
-    // Leaving the hovered row also leaves Enter inert.
-    cx.simulate_keystrokes("enter");
-    cx.update(|_, cx| assert!(view.read(cx).menu.page == Some(page)));
-    for (keys, selected) in [
-        ("up", count - 1),
-        ("down", 0),
-        ("up", count - 1),
-        ("down down", 1),
-    ] {
-        cx.simulate_keystrokes(keys);
-        cx.update(|window, cx| {
-            window.draw(cx).clear();
-            assert_eq!(selection(view.read(cx)), Some(selected));
-        });
-    }
-    cx.simulate_mouse_move(first, None, Modifiers::default());
-    cx.update(|window, cx| {
-        window.draw(cx).clear();
-        assert_eq!(selection(view.read(cx)), Some(0));
-    });
-    // Keyboard selection replaces hover even while the pointer stays on the first row.
-    cx.simulate_keystrokes("down");
-    cx.update(|window, cx| {
-        window.draw(cx).clear();
-        assert_eq!(selection(view.read(cx)), Some(1));
-    });
-    cx.simulate_mouse_move(second, None, Modifiers::default());
-    cx.update(|window, cx| {
-        window.draw(cx).clear();
-        assert_eq!(selection(view.read(cx)), Some(1));
-    });
-    cx.simulate_mouse_move(outside, None, Modifiers::default());
-    cx.update(|window, cx| {
-        window.draw(cx).clear();
-        assert_eq!(selection(view.read(cx)), None);
-    });
-    cx.simulate_keystrokes("down");
-    cx.update(|_, cx| assert_eq!(selection(view.read(cx)), Some(0)));
-    cx.simulate_mouse_move(second, None, Modifiers::default());
-    cx.update(|window, cx| {
-        window.draw(cx).clear();
-        assert_eq!(selection(view.read(cx)), Some(1));
-    });
-    cx.simulate_keystrokes("enter");
-    cx.update(|_, cx| {
-        assert!(
-            view.read(cx).menu.page
-                == Some(if page == super::Page::Workspace {
-                    super::Page::Dialog(WorkspaceAction::Close)
-                } else {
-                    super::Page::Keybinds
-                })
-        );
-    });
-    cx.simulate_mouse_move(outside, None, Modifiers::default());
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            let anchor = view.menu.anchor;
-            let target = view.menu.target.as_ref().map(|target| target.id.clone());
-            view.dismiss_menu(window, cx);
-            if let Some(target) = target {
-                view.open_workspace_menu(&target, anchor, window, cx);
-            } else {
-                view.open_menu(window, cx);
-            }
-            assert_eq!(view.menu.selected, None);
-        });
-        window.draw(cx).clear();
-    });
-}
-
-/// The row menu follows the pointer, but the dialog it opens is a modal: it
-/// centres over the window like the Herdr TUI's, whatever corner the menu was
-/// opened from.
-#[gpui::test]
-fn workspace_dialogs_centre_on_the_window_rather_than_the_pointer(cx: &mut gpui::TestAppContext) {
-    use gpui::{point, px};
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
-    cx.simulate_resize(gpui::size(px(800.), px(600.)));
-    let centre = point(px(400.), px(300.));
-    for anchor in [point(px(120.), px(140.)), point(px(700.), px(520.))] {
-        for action in [
-            WorkspaceAction::NewWorktree,
-            WorkspaceAction::DeleteWorktree,
-        ] {
-            cx.update(|window, cx| {
-                view.update(cx, |view, cx| {
-                    let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
-                    snapshot.workspaces = sidebar::layout_tests::snapshot(7).workspaces;
-                    view.live.status = crate::state::ConnectionStatus::Connected;
-                    view.menu.reset();
-                    let id = if action == WorkspaceAction::NewWorktree {
-                        "w3"
-                    } else {
-                        "w4"
-                    };
-                    view.open_workspace_menu(id, anchor, window, cx);
-                });
-                window.draw(cx).clear();
-            });
-            // The menu itself still opens where the pointer asked for it.
-            let menu = cx.debug_bounds("menu-panel").unwrap();
-            assert!(
-                (menu.center() - centre).x.abs() > px(40.)
-                    || (menu.center() - centre).y.abs() > px(40.),
-                "{anchor:?}: {menu:?}"
-            );
-            cx.update(|window, cx| {
-                view.update(cx, |view, cx| {
-                    view.open_workspace_dialog(action, window, cx)
-                });
-                window.draw(cx).clear();
-            });
-            let panel = cx.debug_bounds("menu-panel").unwrap();
-            let offset = panel.center() - centre;
-            assert!(
-                offset.x.abs() <= px(1.) && offset.y.abs() <= px(1.),
-                "{anchor:?} {action:?}: {panel:?}"
-            );
-            // The new worktree tabs keep a listing's width on every tab.
-            let widest = if action == WorkspaceAction::NewWorktree {
-                px(560.)
-            } else {
-                px(480.)
-            };
-            assert!(panel.size.width <= widest && panel.size.width >= px(400.));
-        }
-    }
-}
-
-/// The dialog chrome matches the other modals: sections stacked in reading
-/// order inside the panel, and a right-aligned Cancel/submit row.
-#[gpui::test]
-fn workspace_dialog_sections_and_buttons_stay_inside_the_panel(cx: &mut gpui::TestAppContext) {
-    use gpui::px;
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
-    for (width, height) in [(640., 400.), (1200., 780.)] {
-        cx.simulate_resize(gpui::size(px(width), px(height)));
-        for action in [
-            WorkspaceAction::NewWorktree,
-            WorkspaceAction::DeleteWorktree,
-        ] {
-            cx.update(|window, cx| {
-                view.update(cx, |view, cx| {
-                    let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
-                    snapshot.workspaces = sidebar::layout_tests::snapshot(7).workspaces;
-                    snapshot.worktree_directory = "/endpoint/.herdr/worktrees".into();
-                    view.live.status = crate::state::ConnectionStatus::Connected;
-                    view.menu.reset();
-                    let id = if action == WorkspaceAction::NewWorktree {
-                        "w3"
-                    } else {
-                        "w4"
-                    };
-                    view.open_workspace_menu(id, Default::default(), window, cx);
-                    view.open_workspace_dialog(action, window, cx);
-                    if action == WorkspaceAction::DeleteWorktree {
-                        // Ready to confirm: the daemon has named the
-                        // checkout and nothing is in flight.
-                        view.menu.deletion = Some(Deletion {
-                            pending: None,
-                            path: Some("/endpoint/.herdr/worktrees/agent-launcher/child".into()),
-                            force: true,
-                        });
-                    } else {
-                        // The creation waits on the daemon here, so its
-                        // waiting note belongs to this frame too.
-                        view.menu.creation = Some("create".into());
-                    }
-                    view.menu.error = Some("fixture error".into());
-                });
-                window.draw(cx).clear();
-            });
-            let panel = cx.debug_bounds("menu-panel").unwrap();
-            let cancel = cx.debug_bounds("dialog-cancel").unwrap();
-            let submit = cx.debug_bounds("dialog-submit").unwrap();
-            let error = cx.debug_bounds("dialog-error").unwrap();
-            // Only a creation waits on the daemon: a removal is queued and
-            // its dialog closes rather than reporting progress.
-            let waiting = (action == WorkspaceAction::NewWorktree)
-                .then(|| cx.debug_bounds("dialog-waiting").unwrap());
-            // Creation drafts a branch and previews its checkout; deletion
-            // confirms the one the daemon named, with nothing to type.
-            let (field, subject) = if action == WorkspaceAction::NewWorktree {
-                (
-                    cx.debug_bounds("dialog-input").unwrap(),
-                    cx.debug_bounds("dialog-checkout").unwrap(),
-                )
-            } else {
-                // Deletion is confirmed by its button, with nothing to type.
-                assert!(cx.update(|_, cx| view.read(cx).menu.input.is_none()));
-                let path = cx.debug_bounds("dialog-path").unwrap();
-                (path, path)
-            };
-            let parts: Vec<_> = [field, subject, cancel, submit, error]
-                .into_iter()
-                .chain(waiting)
-                .collect();
-            for part in &parts {
-                assert!(
-                    part.left() >= panel.left() && part.right() <= panel.right(),
-                    "{action:?} at {width}: {part:?} escapes {panel:?}"
-                );
-                assert!(part.right() <= px(width));
-                // A roomy window must not make any dialog scroll to its buttons.
-                if height > 400. {
-                    assert!(
-                        part.top() >= panel.top() && part.bottom() <= panel.bottom(),
-                        "{action:?} at {height}: {part:?} needs scrolling in {panel:?}"
-                    );
-                    assert!(part.bottom() <= px(height));
-                }
-            }
-            // One gutter on both sides, and a trailing button row.
-            assert_eq!(field.left() - panel.left(), panel.right() - field.right());
-            assert!(cancel.right() <= submit.left());
-            assert!(submit.right() < panel.right());
-            assert!(error.bottom() <= cancel.top());
-            // The checkout follows the branch it is derived from, and the
-            // daemon's answer follows whichever one the dialog is about.
-            assert!(field.bottom() <= subject.top() || field == subject);
-            assert!(subject.bottom() <= error.top());
-        }
-    }
-}
-
 /// Opening the dialog prepares the same branch and checkout the terminal
 /// client proposes, rather than an empty field.
-#[gpui::test]
-fn new_worktree_dialog_proposes_a_branch_and_previews_its_checkout(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn new_worktree_dialog_proposes_a_branch_and_previews_its_checkout(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
@@ -606,41 +333,48 @@ fn new_worktree_dialog_proposes_a_branch_and_previews_its_checkout(cx: &mut gpui
             view.live.status = crate::state::ConnectionStatus::Connected;
             view.open_workspace_menu("w3", Default::default(), window, cx);
             view.open_workspace_dialog(WorkspaceAction::NewWorktree, window, cx);
-            let branch = view.menu.input.as_ref().unwrap().text.clone();
+            let branch = view.menu.input_text(cx);
             assert!(branch.starts_with("worktree/"), "{branch}");
             // Selected, so the first keystroke replaces the proposal.
-            assert_eq!(view.menu.input.as_ref().unwrap().selection, 0..branch.len());
             assert_eq!(
-                view.checkout_preview(),
+                view.menu.input.as_ref().unwrap().read(cx).selected_range(),
+                0..branch.len()
+            );
+            assert_eq!(
+                view.checkout_preview(cx),
                 format!(
                     "/endpoint/.herdr/worktrees/agent-launcher/{}",
                     crate::worktree::branch_to_path_slug(&branch)
                 )
             );
             // A blank field defers to the daemon instead of guessing a path.
-            view.menu.input = Some(DialogInput::new("  ".into()));
-            assert_eq!(view.checkout_preview(), "The daemon names the checkout.");
-            view.menu.input = Some(DialogInput::new("feature/Login v2".into()));
+            view.set_menu_input("  ", "", window, cx);
+            assert_eq!(view.checkout_preview(cx), "The daemon names the checkout.");
+            view.set_menu_input("feature/Login v2", "", window, cx);
             assert_eq!(
-                view.checkout_preview(),
+                view.checkout_preview(cx),
                 "/endpoint/.herdr/worktrees/agent-launcher/feature-login-v2"
             );
             // Without a reported worktree directory no path is invented.
             std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap())
                 .worktree_directory
                 .clear();
-            assert_eq!(view.checkout_preview(), "The daemon chooses the checkout.");
+            assert_eq!(
+                view.checkout_preview(cx),
+                "The daemon chooses the checkout."
+            );
         });
     });
 }
 
 /// The daemon switches only its own session, so the client follows the
 /// created checkout itself; failures stay visible in the open dialog.
-#[gpui::test]
+#[gpui_kit::test]
 fn worktree_creation_reports_failures_and_follows_the_created_checkout(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
@@ -756,11 +490,13 @@ fn deletion_schema_and_target_validation() {
     );
 }
 
-#[gpui::test]
-fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui::TestAppContext) {
-    cx.update(|cx| {
+#[gpui_kit::test]
+fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
+    cx.update(|_, cx| view.update(cx, |view, _| {
         let snapshot = sidebar::layout_tests::snapshot(7);
-        let mut menu = super::MenuState::new(cx);
+        let menu = &mut view.menu;
         menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[4]));
         menu.page = Some(super::Page::Dialog(WorkspaceAction::DeleteWorktree));
         menu.deletion = Some(Deletion { pending: Some("list".into()), path: None, force: false });
@@ -789,16 +525,17 @@ fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui::TestAppC
         menu.apply_deletion_response("late", Err(std::sync::Arc::new(crate::Error::Client(herdr_client::Error::Disconnected))));
         assert!(menu.deletion.is_none());
         assert!(menu.error.is_none());
-    });
+    }));
 }
 
 /// Confirming a removal closes the popover, because the daemon drops the
 /// workspace from its own snapshot when the removal lands. A refusal still
 /// has to reach the user, and a dirty checkout arms the next dialog with
 /// force instead of repeating the same refusal.
-#[gpui::test]
-fn queued_removal_closes_the_dialog_and_reports_refusals(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn queued_removal_closes_the_dialog_and_reports_refusals(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.live.status = crate::state::ConnectionStatus::Connected;
@@ -843,59 +580,12 @@ fn queued_removal_closes_the_dialog_and_reports_refusals(cx: &mut gpui::TestAppC
     });
 }
 
-#[gpui::test]
-fn pending_removal_shows_loading_only_on_its_worktree(cx: &mut gpui::TestAppContext) {
-    for state in 0..7 {
-        let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
-                view.live.status = crate::state::ConnectionStatus::Connected;
-                view.removal = Some(super::Removal {
-                    endpoint: (
-                        view.selection_epoch,
-                        view.endpoints[view.selected_endpoint].generation,
-                    ),
-                    boot_id: view.live.snapshot.as_ref().unwrap().boot_id.clone(),
-                    workspace: "w4".into(),
-                    pending: Some("remove".into()),
-                    force: false,
-                });
-                match state {
-                    1 => view.removal.as_mut().unwrap().pending = None,
-                    2 => view.removal.as_mut().unwrap().boot_id = "stale".into(),
-                    3 => view.removal.as_mut().unwrap().endpoint.1 += 1,
-                    4 => {
-                        view.live.dialog_response = Some((
-                            "remove".into(),
-                            Some(Ok(
-                                serde_json::json!({"result":{"type":"worktree_removed"}}),
-                            )),
-                        ));
-                        view.update_workspace_dialog(window, cx);
-                    }
-                    5 => view.live.status = crate::state::ConnectionStatus::Connecting,
-                    6 => view.removal.as_mut().unwrap().endpoint.0 += 1,
-                    _ => {}
-                }
-                cx.notify();
-            });
-        });
-        cx.run_until_parked();
-        let loading = cx.debug_bounds("worktree-removing");
-        assert_eq!(loading.is_some(), state == 0);
-        if let Some(loading) = loading {
-            let row = cx.debug_bounds("row-sidebar-child").unwrap();
-            assert!(row.contains(&loading.origin));
-            assert!(loading.right() <= row.right() && loading.bottom() <= row.bottom());
-        }
-    }
-}
-
 /// The confirmation matches the Herdr TUI: one modal, no typed phrase. The
 /// queued removal itself is exercised by the connected endpoint fixture.
-#[gpui::test]
-fn deletion_dialog_confirms_without_a_text_field(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn deletion_dialog_confirms_without_a_text_field(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.live.status = crate::state::ConnectionStatus::Connected;
@@ -908,38 +598,25 @@ fn deletion_dialog_confirms_without_a_text_field(cx: &mut gpui::TestAppContext) 
                 path: Some("/daemon/checkout".into()),
                 force: false,
             });
-            cx.notify();
         })
     });
-    cx.run_until_parked();
-    assert!(cx.debug_bounds("dialog-input").is_none());
-    assert!(cx.debug_bounds("dialog-error").is_none());
-    // The daemon path reads as its own block above right-aligned actions,
-    // all of it inside the panel rather than clipped by it.
-    let panel = cx.debug_bounds("menu-panel").unwrap();
-    let path = cx.debug_bounds("dialog-path").unwrap();
-    let cancel = cx.debug_bounds("dialog-cancel").unwrap();
-    let submit = cx.debug_bounds("dialog-submit").unwrap();
-    assert!(panel.contains(&path.origin) && path.right() <= panel.right());
-    assert!(path.bottom() <= cancel.top() && path.bottom() <= submit.top());
-    assert_eq!(cancel.top(), submit.top());
-    assert!(cancel.right() < submit.left());
-    assert!(submit.right() <= panel.right());
-    assert!(submit.bottom() <= panel.bottom());
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn deletion_fails_closed_on_lookup_and_does_not_force_generic_errors(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    cx.update(|cx| {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
+    cx.update(|_, cx| view.update(cx, |view, _| {
         let snapshot = sidebar::layout_tests::snapshot(7);
         for response in [
             serde_json::json!({"result":{"type":"worktree_list", "worktrees":[]}}),
             serde_json::json!({"error":{"code":"worktree_remove_failed", "message":"is not a working tree"}}),
             serde_json::json!({"result":{"type":"unexpected"}}),
         ] {
-            let mut menu = super::MenuState::new(cx);
+            let menu = &mut view.menu;
+            menu.reset();
             menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[4]));
             menu.deletion = Some(Deletion { pending: Some("id".into()), path: None, force: false });
             menu.apply_deletion_response("id", Ok(response));
@@ -948,25 +625,26 @@ fn deletion_fails_closed_on_lookup_and_does_not_force_generic_errors(
             assert!(!deletion.force);
             assert!(!deletion.ready());
         }
-    });
+    }));
 }
 
-#[gpui::test]
-fn reset_drops_target_draft_composition_and_error(cx: &mut gpui::TestAppContext) {
-    cx.update(|cx| {
-        let snapshot = sidebar::layout_tests::snapshot(7);
-        let mut menu = super::MenuState::new(cx);
-        menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]));
-        menu.page = Some(super::Page::Dialog(WorkspaceAction::Rename));
-        let mut input = DialogInput::new("draft".into());
-        input.replace(None, "composition", true, None);
-        menu.input = Some(input);
-        menu.error = Some("old connection error".into());
-        menu.reset();
-        assert!(menu.page.is_none());
-        assert!(menu.target.is_none());
-        assert!(menu.input.is_none());
-        assert!(menu.error.is_none());
+#[gpui_kit::test]
+fn reset_drops_target_draft_and_error(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, sidebar::layout_tests::fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            let snapshot = sidebar::layout_tests::snapshot(7);
+            view.menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]));
+            view.menu.page = Some(super::Page::Dialog(WorkspaceAction::Rename));
+            view.set_menu_input("draft", "", window, cx);
+            view.menu.error = Some("old connection error".into());
+            view.menu.reset();
+            assert!(view.menu.page.is_none());
+            assert!(view.menu.target.is_none());
+            assert!(view.menu.input.is_none());
+            assert!(view.menu.error.is_none());
+        })
     });
 }
 

@@ -7,7 +7,7 @@ use crate::{
     Error, Result,
     controls::{COMMANDS, Command},
 };
-use gpui::{Keystroke, Modifiers};
+use gpui_kit::{Keystroke, Modifiers};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 

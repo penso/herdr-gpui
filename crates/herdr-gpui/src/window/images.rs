@@ -7,7 +7,7 @@ use super::{
     image_source::{self, PreparedImage, Source},
 };
 use crate::{Error, terminal::InputTarget};
-use gpui::{ClipboardEntry, ClipboardItem, Context, Task};
+use gpui_kit::{ClipboardEntry, ClipboardItem, Context, Task};
 use herdr_client::{
     ClipboardImageCancellation, ConnectTarget,
     protocol::{ClientClipboardImageTarget, ClientPaneInputEvent},
@@ -536,9 +536,10 @@ mod tests {
         }
     }
 
-    #[gpui::test]
-    fn all_processing_errors_show_redacted_local_feedback(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    #[gpui_kit::test]
+    fn all_processing_errors_show_redacted_local_feedback(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         let mut errors = processing_errors();
         errors.push(Error::ImageFile {
             operation: "read",
@@ -569,11 +570,12 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn shared_transfer_notice_uses_selected_endpoint_and_sanitizes_text(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.endpoints.push(crate::endpoint::Endpoint::new(
                 "other".into(),

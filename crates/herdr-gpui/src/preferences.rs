@@ -1,9 +1,16 @@
 use crate::{
     HerdrWindow,
     config::{Config, Features},
-    fonts::StyledFont,
+    menu::listener,
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{
+    component::{
+        ActiveTheme as _, button::Button, description_list::DescriptionList, dialog::Dialog,
+        group_box::GroupBox, h_flex, v_flex,
+    },
+    prelude::*,
+    *,
+};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -23,261 +30,153 @@ pub(crate) fn feature_rows(features: &Features) -> [(&'static str, &'static str,
 }
 
 impl HerdrWindow {
-    pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
-        let theme = &self.theme;
-        let font = &self.config.ui;
-        let accent = crate::menu::accent(theme);
-        let section = |title: &'static str| {
-            div()
-                .pt(px(12.))
-                .pb(px(6.))
-                .text_size(px(font.size * 0.85))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(accent)
-                .child(title)
-        };
-        let row = |id: &'static str, label: &'static str, value: String| {
-            div()
-                .debug_selector(move || id.into())
-                .flex()
-                .min_w_0()
-                .gap(px(12.))
-                .py(px(7.))
-                .border_b_1()
-                .border_color(rgb(theme.active))
-                .child(
-                    div()
-                        .w(relative(0.3))
-                        .flex_none()
-                        .min_w_0()
-                        .text_color(rgb(theme.muted))
-                        .child(label),
-                )
-                .child(div().flex_1().min_w_0().text_right().child(value))
-        };
-        let note = |text: &'static str| {
-            div()
-                .min_w_0()
-                .py(px(10.))
-                .text_color(rgb(theme.muted))
-                .child(text)
-        };
-        let button = |id: &'static str, label: &'static str| {
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .min_w_0()
-                .px(px(8.))
-                .py(px(6.))
-                .rounded(px(crate::config::corners::CONTROL))
-                .border_1()
-                .border_color(rgb(theme.active))
-                .bg(rgb(theme.background))
-                .text_color(accent)
-                .cursor_pointer()
-                .hover(|style| style.bg(rgb(theme.active)))
-                .child(label)
-        };
-        let mut body = div()
-            .id("preferences-body")
-            .debug_selector(|| "preferences-body".into())
-            .flex_1()
-            .min_h_0()
-            .min_w_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.menu.preferences_scroll)
-            .px(px(16.))
-            .py(px(8.))
-            .child(section("APPEARANCE"))
-            .child(row(
-                "preferences-show-agents",
-                "Show agents",
-                self.config.show_agents.to_string(),
-            ))
-            .child(row(
-                "preferences-confirm-close-tab",
+    /// The current GUI settings, read-only: every value is edited in the
+    /// config file, which reloads on save.
+    pub(crate) fn preferences_dialog(
+        &self,
+        dialog: Dialog,
+        weak: &WeakEntity<HerdrWindow>,
+        cx: &App,
+    ) -> Dialog {
+        let muted = cx.theme().muted_foreground;
+        let note = |text: &'static str| div().text_sm().text_color(muted).child(text);
+        let list = || DescriptionList::new().columns(1).label_width(px(160.));
+        let appearance = list()
+            .item("Show agents", self.config.show_agents.to_string(), 1)
+            .item(
                 "Confirm tab close",
                 self.config.confirm_close_tab.to_string(),
-            ))
-            .child(row(
-                "preferences-layout",
-                "Layout",
-                self.config.layout.mode.to_string(),
-            ))
-            .child(row(
-                "preferences-sidebar-gap",
+                1,
+            )
+            .item("Layout", self.config.layout.mode.to_string(), 1)
+            .item(
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
-            ))
-            .child(row("preferences-theme", "Theme", self.config.theme.clone()))
-            .child(div().py(px(10.)).child(
-                button("preferences-choose-theme", "Choose theme").on_click(cx.listener(
-                    |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.open_theme_picker(window, cx);
-                    },
-                )),
-            ))
-            .child(section("FONTS"));
-        for (id, label, value) in [
-            ("preferences-font-sidebar", "Sidebar", &self.config.sidebar),
-            ("preferences-font-tabs", "Tabs", &self.config.tabs),
-            (
-                "preferences-font-terminal",
-                "Terminal",
-                &self.config.terminal,
-            ),
-            ("preferences-font-ui", "UI", &self.config.ui),
-        ] {
-            body = body.child(row(
-                id,
-                label,
-                format!("{}, {} px", value.family, value.size),
-            ));
-        }
-        body = body
-            .child(section("NOTIFICATIONS"))
-            .child(row("preferences-notifications-enabled", "In-app toasts", self.config.notifications.enabled.to_string()))
-            .child(row("preferences-notifications-delay", "Delay (seconds)", self.config.notifications.delay_seconds.to_string()))
-            .child(row("preferences-notifications-position", "Corner", format!("{:?}", self.config.notifications.position)))
-            .child(note("Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications."))
-            .child(note(
-                "Font families and sizes are read-only here. Sizes are logical pixels, independent of display scaling.",
-            ))
-            .child(section("FEATURES"));
-        for (id, label, enabled) in feature_rows(&self.config.features) {
-            body = body.child(row(id, label, if enabled { "On" } else { "Off" }.into()));
-        }
-        body = body
-            .child(note(
-                "Optional behaviors, off by default. Turn one on in the [features] table of the local GUI config file; saved changes reload automatically.",
-            ))
-            .child(section("CONFIGURATION"))
-            .child(
-                div()
-                    .text_color(rgb(theme.muted))
-                    .py(px(7.))
-                    .child("GUI local overrides"),
+                1,
             )
-            .child(
-                div()
-                    .debug_selector(|| "preferences-config-path".into())
-                    .w_full()
-                    .min_w_0()
-                    .p(px(10.))
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .border_1()
-                    .border_color(rgb(theme.active))
-                    .bg(rgb(theme.background))
-                    .child(
-                        Config::local_path()
-                            .map(|path| path.display().to_string())
-                            .unwrap_or_else(|error| format!("Unavailable ({error})")),
-                    ),
+            .item("Theme", self.config.theme.clone(), 1);
+        let fonts = [
+            ("Sidebar", &self.config.sidebar),
+            ("Tabs", &self.config.tabs),
+            ("Terminal", &self.config.terminal),
+            ("UI", &self.config.ui),
+        ]
+        .into_iter()
+        .fold(list(), |fonts, (label, value)| {
+            fonts.item(label, format!("{}, {} px", value.family, value.size), 1)
+        });
+        let notifications = list()
+            .item(
+                "In-app toasts",
+                self.config.notifications.enabled.to_string(),
+                1,
             )
-            .child(note(
-                "Edit this local file; saved changes reload automatically. Unset keys inherit config-gpui.toml, which is overwritten with current defaults on startup and reload. Invalid overrides leave the current appearance unchanged.",
-            ))
-            .child(
-                button("preferences-reload-config", "Reload GUI config").on_click(cx.listener(
-                    |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.reload_gui_config(window, cx);
-                    },
-                )),
+            .item(
+                "Delay (seconds)",
+                self.config.notifications.delay_seconds.to_string(),
+                1,
             )
-            .child(note(
-                "Daemon configuration is separate. Reloading GUI config does not reload daemon settings.",
-            ))
-            .child(section("CONNECTION"))
-            .child(row(
-                "preferences-connection-status",
+            .item(
+                "Corner",
+                format!("{:?}", self.config.notifications.position),
+                1,
+            );
+        let features = feature_rows(&self.config.features).into_iter().fold(
+            list(),
+            |features, (_, label, enabled)| {
+                features.item(label, if enabled { "On" } else { "Off" }, 1)
+            },
+        );
+        let connection = list()
+            .item(
                 "Status",
                 self.live.status_text(self.local_error.as_deref()),
-            ))
-            .child(row(
-                "preferences-connection-target",
+                1,
+            )
+            .item(
                 "Target",
-                format!("{:?}", self.endpoints[self.selected_endpoint].connection.target),
-            ));
-
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .min_h_0()
-            .min_w_0()
-            .text_font(font)
-            .text_size(px(font.size))
-            .line_height(px(font.line_height()))
-            .text_color(rgb(theme.foreground))
+                format!(
+                    "{:?}",
+                    self.endpoints[self.selected_endpoint].connection.target
+                ),
+                1,
+            );
+        let path = Config::local_path()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|error| format!("Unavailable ({error})"));
+        dialog
+            .title("Preferences")
+            .w(px(560.))
             .child(
-                div()
-                    .debug_selector(|| "preferences-header".into())
-                    .flex()
-                    .items_center()
-                    .flex_none()
-                    .gap(px(12.))
-                    .p(px(16.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
+                v_flex()
+                    .debug_selector(|| "preferences-body".into())
+                    .gap_4()
                     .child(
-                        div()
-                            .flex_none()
-                            .w(px(3.))
-                            .h(px(font.size * 2.5))
-                            .rounded_full()
-                            .bg(accent),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
+                        GroupBox::new()
+                            .title("Appearance")
+                            .child(appearance)
                             .child(
-                                div()
-                                    .text_size(px(font.size * 1.35))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Preferences"),
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgb(theme.muted))
-                                    .child("Current GUI settings"),
+                                Button::new("preferences-choose-theme")
+                                    .outline()
+                                    .label("Choose theme")
+                                    .on_click(listener(weak, |this, window, cx| {
+                                        this.open_theme_picker(window, cx)
+                                    })),
                             ),
                     )
                     .child(
-                        div()
-                            .id("preferences-close")
-                            .debug_selector(|| "preferences-close".into())
-                            .flex_none()
-                            .px(px(8.))
-                            .py(px(4.))
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .cursor_pointer()
-                            .text_color(rgb(theme.muted))
-                            .hover(|style| {
-                                style
-                                    .bg(rgb(theme.active))
-                                    .text_color(rgb(theme.foreground))
-                            })
-                            .child("Close")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.dismiss_menu(window, cx);
-                            })),
-                    ),
+                        GroupBox::new()
+                            .title("Fonts")
+                            .child(fonts)
+                            .child(note(
+                                "Font families and sizes are read-only here. Sizes are logical pixels, independent of display scaling.",
+                            )),
+                    )
+                    .child(
+                        GroupBox::new()
+                            .title("Notifications")
+                            .child(notifications)
+                            .child(note(
+                                "Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications.",
+                            )),
+                    )
+                    .child(
+                        GroupBox::new()
+                            .title("Features")
+                            .child(features)
+                            .child(note(
+                                "Optional behaviors, off by default. Turn one on in the [features] table of the local GUI config file; saved changes reload automatically.",
+                            )),
+                    )
+                    .child(
+                        GroupBox::new()
+                            .title("Configuration")
+                            .child(list().item("GUI local overrides", path, 1))
+                            .child(note(
+                                "Edit this local file; saved changes reload automatically. Unset keys inherit config-gpui.toml, which is overwritten with current defaults on startup and reload. Invalid overrides leave the current appearance unchanged.",
+                            ))
+                            .child(
+                                Button::new("preferences-reload-config")
+                                    .outline()
+                                    .label("Reload GUI config")
+                                    .on_click(listener(weak, |this, window, cx| {
+                                        this.reload_gui_config(window, cx)
+                                    })),
+                            )
+                            .child(note(
+                                "Daemon configuration is separate. Reloading GUI config does not reload daemon settings.",
+                            )),
+                    )
+                    .child(GroupBox::new().title("Connection").child(connection)),
             )
-            .child(body)
-            .child(
-                div()
-                    .debug_selector(|| "preferences-footer".into())
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .text_color(rgb(theme.muted))
-                    .child("Esc to close  /  click outside to dismiss"),
+            .footer(
+                h_flex().w_full().justify_end().child(
+                    Button::new("preferences-close")
+                        .label("Close")
+                        .on_click(listener(weak, |this, window, cx| {
+                            this.dismiss_menu(window, cx)
+                        })),
+                ),
             )
     }
 }

@@ -4,18 +4,21 @@
 
 use super::HerdrWindow;
 use crate::{
-    APP_VERSION, CheckForUpdates, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
-    TAB_HEIGHT, TAB_WIDTH, actions::ShowToastPreview, config::ClipboardToastPosition,
-    controls::Command, fonts::StyledFont, navigation::NavigationTarget, state::ConnectionStatus,
-    terminal::*, worktree_banner,
+    CheckForUpdates, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
+    actions::ShowToastPreview, fonts::StyledFont, terminal::*, worktree_banner,
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{component::Root, prelude::*, *};
 use herdr_client::ConnectOptions;
-use std::time::Duration;
 
 impl Render for HerdrWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.restore_menu_focus(window);
+        // Theme previews and config reloads only change `self.theme`; follow
+        // them here so kit components repaint in the same colors. The kit
+        // theme is app-global, so only the active window drives it: windows
+        // with different themes would otherwise overwrite each other forever.
+        if window.is_window_active() {
+            crate::kit_theme::sync(&self.theme, &self.config, cx);
+        }
         let font = self.config.terminal.font();
         let cell_height = self.config.terminal.line_height();
         self.painter.borrow_mut().set_appearance(
@@ -26,114 +29,9 @@ impl Render for HerdrWindow {
         self.cell_width = self.painter.borrow_mut().cell_width(&font, window, cx);
         // Registers the window for surface-only redraws; see `redraw_terminal`.
         self.surface_signal.read(cx);
-        let sidebar = self.sidebar_visible.then(|| {
-            crate::sidebar::cached_view(
-                &self.sidebar_view,
-                self.sidebar_width,
-                f32::from(window.viewport_size().width),
-            )
-        });
-        let mut tabs = div()
-            .id("tabs")
-            .flex()
-            .flex_none()
-            .h(px((self.config.tabs.size * 1.6 + 4.).max(TAB_HEIGHT)))
-            .text_font(&self.config.tabs)
-            .text_size(px(self.config.tabs.size))
-            .overflow_x_scroll()
-            .bg(rgb(self.theme.surface))
-            .text_color(rgb(self.theme.foreground))
-            .items_center();
-        if let Some(snapshot) = &self.live.snapshot {
-            for tab in snapshot
-                .tabs
-                .iter()
-                .filter(|t| Some(&t.workspace_id) == snapshot.focused_workspace_id.as_ref())
-            {
-                let id = tab.tab_id.clone();
-                let context_id = id.clone();
-                let close_id = id.clone();
-                // Selected tabs carry the theme's accent, so the choice reads as
-                // primary rather than as the hover tint used elsewhere; the rest
-                // recede into the strip, as they do in the reference UI.
-                let (background, text) = if tab.focused {
-                    let background = self.theme.primary_wash();
-                    (background, self.theme.text_on(background))
-                } else {
-                    (self.theme.surface, self.theme.muted)
-                };
-                tabs = tabs.child(
-                    div()
-                        .id(SharedString::from(format!("tab-{id}")))
-                        .debug_selector({
-                            let id = id.clone();
-                            move || format!("tab-{id}")
-                        })
-                        .pl(px(12.))
-                        // The close button hugs the tab's inner right edge, well
-                        // clear of the label it would otherwise crowd.
-                        .pr(px(3.))
-                        .py(px(2.))
-                        // Even cells divided by a single rule, as in the reference UI.
-                        .min_w(px(TAB_WIDTH))
-                        .border_r_1()
-                        .border_color(rgb(self.theme.active))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .cursor_pointer()
-                        .bg(rgb(background))
-                        .text_color(rgb(text))
-                        .child(tab.label.clone())
-                        .child(
-                            div()
-                                .id("close-tab")
-                                .debug_selector({
-                                    let id = id.clone();
-                                    move || format!("close-tab-{id}")
-                                })
-                                .size(px(18.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .hover(move |s| s.bg(rgba((text << 8) | 0x24)))
-                                .child(
-                                    svg()
-                                        .path("icons/close.svg")
-                                        .debug_selector({
-                                            let id = id.clone();
-                                            move || format!("close-tab-icon-{id}")
-                                        })
-                                        .size(px(12.))
-                                        .text_color(rgb(text)),
-                                )
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                    cx.stop_propagation();
-                                })
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    this.open_tab_close(&close_id, window, cx);
-                                })),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.open_tab_menu(&context_id, event.position, window, cx);
-                                this.menu.opening_right_click =
-                                    this.menu.page == Some(crate::menu::Page::Tab);
-                            }),
-                        )
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.navigate(NavigationTarget::Tab(&id), cx);
-                            window.focus(&this.focus);
-                        })),
-                );
-            }
-        }
+        // The sidebar and the main column, divided by the kit's resize handle.
+        let body = self.sidebar_body(window, cx);
+        let tabs = self.render_tab_strip(cx);
         // Paints the frame on screen, which during a focus change is the one
         // presented before it: the terminal area never blanks between two
         // projections. What the client knows to be current stays in `live`.
@@ -141,7 +39,6 @@ impl Render for HerdrWindow {
         let entity = cx.entity();
         let paint_entity = entity.clone();
         let focus = self.focus.clone();
-        let menu_open = self.menu.page.is_some();
         let cell_width = self.cell_width;
         let painter = self.painter.clone();
         // The highlight is grid coordinates, so it paints with the frame that
@@ -206,7 +103,6 @@ impl Render for HerdrWindow {
                     }
                     cx.stop_propagation();
                     this.open_pane_menu_at(event.position, window, cx);
-                    this.menu.opening_right_click = this.menu.page == Some(crate::menu::Page::Pane);
                 }),
             )
             .on_mouse_down(
@@ -231,7 +127,7 @@ impl Render for HerdrWindow {
                         cx.stop_propagation();
                         return;
                     }
-                    window.focus(&this.focus);
+                    window.focus(&this.focus, cx);
                     if this.input_ready()
                         && let Some(surface) = &this.live.surface
                     {
@@ -301,14 +197,6 @@ impl Render for HerdrWindow {
                         window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
                             if phase == DispatchPhase::Capture {
                                 released.update(cx, |this, cx| {
-                                    // Global: the overlay occludes the opener, and release
-                                    // may also precede the overlay's first frame.
-                                    if matches!(
-                                        event.button,
-                                        MouseButton::Left | MouseButton::Right
-                                    ) {
-                                        this.menu.opening_right_click = false;
-                                    }
                                     if this.scrollbar_mouse_up(event, cx)
                                         || this.terminal_mouse_up(event, cx)
                                         || (event.button == MouseButton::Left
@@ -322,11 +210,7 @@ impl Render for HerdrWindow {
                         });
                         window.handle_input(
                             &focus,
-                            crate::input::TerminalInputHandler::new(
-                                bounds,
-                                paint_entity.clone(),
-                                menu_open,
-                            ),
+                            crate::input::TerminalInputHandler::new(bounds, paint_entity.clone()),
                             cx,
                         );
                         if let Some(surface) = &surface {
@@ -383,60 +267,9 @@ impl Render for HerdrWindow {
                 )
                 .size_full(),
             )
-            // Direct feedback for the user's own gesture, not a daemon notice:
-            // it sits over the cells it copied and needs no dismissing.
-            .when_some(self.flash.as_ref(), |terminal, (flash, _)| {
-                use ClipboardToastPosition::*;
-                let position = self.config.clipboard_toast.position;
-                terminal.child(
-                    div()
-                        .absolute()
-                        .map(|row| match position {
-                            TopLeft | TopCenter | TopRight => row.top(px(12.)),
-                            BottomLeft | BottomCenter | BottomRight => row.bottom(px(12.)),
-                        })
-                        .map(|row| match position {
-                            TopLeft | BottomLeft => row.justify_start(),
-                            TopCenter | BottomCenter => row.justify_center(),
-                            TopRight | BottomRight => row.justify_end(),
-                        })
-                        // The pane's own padding is not part of the terminal:
-                        // the flash spans the cells, so centering centers on
-                        // them and a corner is the corner of the grid.
-                        .left(px(sidebar_gap))
-                        .right_0()
-                        .px(px(12.))
-                        .flex()
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .debug_selector(|| "flash".into())
-                                .min_w_0()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .px(px(12.))
-                                .py(px(6.))
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .border_1()
-                                .border_color(rgb(flash.accent(&self.theme)))
-                                .bg(rgb(self.theme.surface))
-                                .text_color(rgb(self.theme.foreground))
-                                .child(
-                                    div()
-                                        .size(px(6.))
-                                        .flex_none()
-                                        .rounded_full()
-                                        .bg(rgb(flash.accent(&self.theme))),
-                                )
-                                .child(div().truncate().child(flash.text.clone())),
-                        ),
-                )
-            });
-        let status = (!matches!(self.live.status, ConnectionStatus::Connected)
-            || self.local_error.is_some()
-            || self.live.error.is_some())
-        .then(|| self.live.status_text(self.local_error.as_deref()));
+            .children(self.render_flash(sidebar_gap));
+        let status_bar = self.render_status_bar(cx);
+        self.sync_toasts(window, cx);
         div()
             .on_action(cx.listener(|this, action: &RunCommand, window, cx| {
                 this.command(action.command, window, cx);
@@ -451,20 +284,29 @@ impl Render for HerdrWindow {
             .on_action(cx.listener(|this, _: &ShowUpdatePreview, window, cx| {
                 this.open_app_update(true, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &crate::actions::ShowUpdateDownloadPreview, window, cx| {
-                this.open_update_progress_preview(
-                    crate::updater::State::Downloading { received: 50_000_000, total: 100_000_000 },
-                    window,
-                    cx,
-                );
-            }))
-            .on_action(cx.listener(|this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
-                this.open_update_progress_preview(
-                    crate::updater::State::Upgrading { detail: "Refreshing Homebrew metadata with brew update...".into() },
-                    window,
-                    cx,
-                );
-            }))
+            .on_action(cx.listener(
+                |this, _: &crate::actions::ShowUpdateDownloadPreview, window, cx| {
+                    this.open_update_progress_preview(
+                        crate::updater::State::Downloading {
+                            received: 50_000_000,
+                            total: 100_000_000,
+                        },
+                        window,
+                        cx,
+                    );
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
+                    this.open_update_progress_preview(
+                        crate::updater::State::Upgrading {
+                            detail: "Refreshing Homebrew metadata with brew update...".into(),
+                        },
+                        window,
+                        cx,
+                    );
+                },
+            ))
             .on_action(cx.listener(|this, action: &ShowToastPreview, _, cx| {
                 this.show_toast_preview(action.kind, cx);
             }))
@@ -486,233 +328,21 @@ impl Render for HerdrWindow {
                 env!("HERDR_BUILD_PR"),
             ))
             .child(
-                div()
-                    .debug_selector(|| "window-body".into())
-                    .flex()
-                    .flex_1()
-                    .min_h_0()
-                    .children(sidebar)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                             .flex_1()
-                             .min_w_0()
-                             .min_h_0()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_none()
-                                    .bg(rgb(self.theme.surface))
-                                    .text_color(rgb(self.theme.foreground))
-                                    // Tabs size to their content and shrink when the
-                                    // row is full, so the button sits after the last
-                                    // tab instead of at the far right of the window.
-                                    .child(tabs.flex_shrink().min_w_0())
-                                    .child(
-                                        div()
-                                            .id("new-tab")
-                                            .debug_selector(|| "new-tab".into())
-                                            .w(px(34.))
-                                            .min_h(px(TAB_HEIGHT))
-                                            .border_r_1()
-                                            .border_color(rgb(self.theme.active))
-                                            .flex_none()
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .hover(|s| s.bg(rgb(self.theme.active)))
-                                            .child(
-                                                svg()
-                                                    .path("icons/plus.svg")
-                                                    .debug_selector(|| "new-tab-icon".into())
-                                                    .size(px(14.))
-                                                    // Quiet like the unselected tabs beside it.
-                                                    .text_color(rgb(self.theme.muted)),
-                                            )
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.command(Command::Tab, window, cx)
-                                            })),
-                                    ),
-                            )
-                            .child(terminal)
-                            .child(
-                div()
-                    .id("connection-status")
-                    .debug_selector(|| "connection-status".into())
-                    .flex()
-                    .flex_none()
-                    .h(px((self.config.ui.size * 1.5 + 4.).max(22.)))
-                    .overflow_hidden()
-                    .items_center()
-                    .gap(px(6.))
-                    .px_3()
-                    .bg(rgb(self.theme.surface))
-                    .text_color(rgb(self.theme.foreground))
-                    .when(!self.live.status.is_connected(), |bar| bar.child(
-                        if matches!(self.live.status, ConnectionStatus::StartingDaemon) {
-                            div()
-                                .size(px(8.))
-                                .flex_none()
-                                .rounded_full()
-                                .bg(rgb(self.theme.palette[3]))
-                                .with_animation(
-                                    "daemon-starting-loader",
-                                    Animation::new(Duration::from_secs(1)).repeat(),
-                                    |dot, delta| {
-                                        dot.opacity(
-                                            0.3 + 0.7 * (delta * std::f32::consts::PI).sin(),
-                                        )
-                                    },
-                                )
-                                .into_any_element()
-                        } else {
-                            div()
-                                .size(px(6.))
-                                .flex_none()
-                                .rounded_full()
-                                .bg(rgb(self.theme.palette[1]))
-                                .into_any_element()
-                        },
-                    ))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .when_some(status, |row, status| row.child(
-                                div().debug_selector(|| "connection-message".into()).child(status)
-                            )),
-                    )
-                    .when(!self.marked.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .min_w_0()
-                                .max_w(px(160.))
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(format!("Composing: {}", self.marked)),
-                        )
-                    })
-                    .child(
-                        div()
-                                    .id("status-theme")
-                                    .debug_selector(|| "status-theme".into())
-                                    .flex_shrink()
-                                    .min_w(px(33.))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .px_2()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(rgb(self.theme.active)))
-                            .child(
-                                svg()
-                                    .path("icons/theme.svg")
-                                    .size(px(12.))
-                                    .flex_none()
-                                    .text_color(rgb(self.theme.foreground)),
-                            )
-                                    .child(div().min_w_0().truncate().child("Theme"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_theme_picker(window, cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                                    .id("status-keybinds")
-                                    .debug_selector(|| "status-keybinds".into())
-                                    .flex_shrink()
-                                    .min_w(px(33.))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .px_2()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(rgb(self.theme.active)))
-                            .child(
-                                svg()
-                                    .path("icons/keyboard.svg")
-                                    .size(px(12.))
-                                    .flex_none()
-                                    .text_color(rgb(self.theme.foreground)),
-                            )
-                                    .child(div().min_w_0().truncate().child("Shortcuts"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_keybinds(window, cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                                    .id("report-issue")
-                                    .debug_selector(|| "report-issue".into())
-                                    .flex_shrink()
-                                    .min_w(px(33.))
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .px_2()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(rgb(self.theme.active)))
-                            .child(
-                                div()
-                                    .size(px(12.))
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(rgb(self.theme.foreground))
-                                    .child(
-                                        div()
-                                            .size(px(3.))
-                                            .rounded_full()
-                                            .bg(rgb(self.theme.foreground)),
-                                    ),
-                            )
-                                    .child(div().min_w_0().truncate().child("Report issue"))
-                            .on_click(|_, _, cx| {
-                                cx.open_url(&format!(
-                                    "https://github.com/penso/herdr-gpui/issues/new?template=bug_report.yml&version={}",
-                                    APP_VERSION.replace('+', "%2B"),
-                                ));
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("status-version")
-                            .debug_selector(|| "status-version".into())
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(rgb(self.theme.active)))
-                            // A waiting update is the one status here worth
-                            // interrupting for, so it takes the accent color
-                            // the rest of the chrome reserves for chosen rows.
-                            .text_color(rgb(if self.updater.update_available() {
-                                self.theme.primary()
-                            } else {
-                                self.theme.muted
-                            }))
-                            .child(if self.updater.update_available() {
-                                "Update available"
-                            } else {
-                                APP_VERSION
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_app_update(false, window, cx);
-                            })),
-                    ),
-                            ),
-                    ),
+                body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .child(tabs)
+                        .child(terminal)
+                        .child(status_bar),
+                ),
             )
-            .children(self.render_toasts(window, cx))
             .children(self.render_file_transfer(window, cx))
-            .when(self.menu.page.is_some(), |root| {
-                root.child(self.render_menu(window, cx))
-            })
+            .children(Root::render_notification_layer(window, cx))
+            // Popup menus and dialogs; see `menu::OverlayLayer`.
+            .child(self.menu.layer.clone())
     }
 }

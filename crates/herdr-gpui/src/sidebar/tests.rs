@@ -1,42 +1,16 @@
 #![allow(clippy::unwrap_used)]
 
 use super::{
-    STATUS_DOT_UNKNOWN, STATUS_WIDTH,
-    agents::{agent_labels, status_style},
+    agents::{agent_labels, agent_row_label},
     layout_tests,
-    render::header,
-    row::first_text,
+    metrics::{sidebar_width, split_fraction},
+    row::{first_text, status_color},
     workspace_label,
     workspaces::workspace_entries,
 };
-use crate::config::{FontConfig, Theme};
 use herdr_client::protocol::{
     AgentStatus, ClientShellAgent, ClientShellSnapshot, ClientShellWorkspace,
 };
-
-#[test]
-fn section_headings_use_the_configured_sidebar_font_size() {
-    use gpui::{Styled, px};
-    for size in [12., 16., 20.] {
-        let font = FontConfig {
-            family: "Menlo".into(),
-            size,
-            fallbacks: None,
-        };
-        for label in ["spaces", "agents"] {
-            let mut heading = header(
-                label,
-                &font,
-                &Theme::default(),
-                super::layout::for_mode(Default::default()),
-            );
-            assert_eq!(
-                heading.text_style().as_ref().unwrap().font_size,
-                Some(px(size).into())
-            );
-        }
-    }
-}
 
 #[test]
 fn hierarchy_uses_git_metadata_and_emits_each_workspace_once() {
@@ -193,83 +167,34 @@ fn agent_rows_name_their_place_then_their_agent() {
 }
 
 #[test]
-fn rows_weight_and_dim_their_text_like_upstream() {
-    use super::row::{RowKind, row_text};
-    use gpui::FontWeight;
-    let theme = Theme::default();
-    // Agents stay bold whether or not they are the current row; a workspace
-    // earns bold only while focused, and hands its branch the accent then.
-    for (kind, focused, weight, name, detail) in [
-        (
-            RowKind::Agent(crate::icons::AgentIcon::Generic),
-            false,
-            FontWeight::BOLD,
-            theme.subtext(),
-            theme.muted,
+fn agent_rows_read_agent_first_then_place() {
+    assert_eq!(
+        agent_row_label(
+            &[("remote", false), ("herdr", true), ("tab 1", false)],
+            "Claude Code"
         ),
-        (
-            RowKind::Agent(crate::icons::AgentIcon::Generic),
-            true,
-            FontWeight::BOLD,
-            theme.foreground,
-            theme.muted,
-        ),
-        (
-            RowKind::Workspace,
-            false,
-            FontWeight::NORMAL,
-            theme.subtext(),
-            theme.muted,
-        ),
-        (
-            RowKind::Workspace,
-            true,
-            FontWeight::BOLD,
-            theme.foreground,
-            theme.primary(),
-        ),
-    ] {
-        assert_eq!(row_text(kind, focused, &theme), (name, weight, detail));
-    }
-    // Subtext sits between the muted detail and the focused name.
-    let brightness = |color: u32| (color >> 16) + ((color >> 8) & 255) + (color & 255);
-    assert!(brightness(theme.muted) < brightness(theme.subtext()));
-    assert!(brightness(theme.subtext()) < brightness(theme.foreground));
+        "Claude Code \u{b7} remote \u{b7} herdr \u{b7} tab 1"
+    );
+    // An orphan names itself in its only segment.
+    assert_eq!(agent_row_label(&[("agent", true)], ""), "agent");
 }
 
 #[test]
-fn status_colors_match_upstream_and_ignore_the_theme() {
-    // The literals are upstream's default palette (Catppuccin Mocha), which
-    // its status dots use whatever terminal colors are loaded.
-    for (status, color) in [
-        (AgentStatus::Working, 0xf9e2af),
-        (AgentStatus::Blocked, 0xf38ba8),
-        (AgentStatus::Done, 0x94e2d5),
-        (AgentStatus::Idle, 0xa6e3a1),
-        (AgentStatus::Unknown, 0x6c7086),
+fn status_colors_come_from_the_theme_semantics() {
+    let theme = gpui_kit::component::ThemeColor::default();
+    for (status, expected) in [
+        (AgentStatus::Working, theme.warning),
+        (AgentStatus::Blocked, theme.danger),
+        (AgentStatus::Done, theme.info),
+        (AgentStatus::Idle, theme.success),
+        (AgentStatus::Unknown, theme.muted_foreground),
     ] {
-        assert_eq!(status_style(status).2, color);
-    }
-    for name in Theme::BUILTIN_NAMES {
-        let theme = Theme::builtin(name).unwrap();
-        for status in [
-            AgentStatus::Working,
-            AgentStatus::Blocked,
-            AgentStatus::Done,
-            AgentStatus::Idle,
-            AgentStatus::Unknown,
-        ] {
-            let color = status_style(status).2;
-            assert!(
-                !theme.palette.contains(&color) || theme.palette[..16].contains(&color),
-                "{name}: dots must not be read out of the theme"
-            );
-        }
+        assert_eq!(status_color(status, &theme), expected, "{status:?}");
     }
 }
 
 #[test]
-fn status_shapes_match_upstream_dots_and_wire_casing() {
+fn status_wire_casing_round_trips() {
     let snapshot = layout_tests::snapshot(1);
     for (wire, status) in [
         ("idle", AgentStatus::Idle),
@@ -287,25 +212,17 @@ fn status_shapes_match_upstream_dots_and_wire_casing() {
         let agent: ClientShellAgent = serde_json::from_value(value).unwrap();
         assert_eq!(agent.agent_status, status);
         assert_eq!(serde_json::to_value(status).unwrap(), wire);
-        let (diameter, filled, color) = status_style(status);
-        assert_eq!(
-            color,
-            match status {
-                AgentStatus::Working => 0xf9e2af,
-                AgentStatus::Blocked => 0xf38ba8,
-                AgentStatus::Done => 0x94e2d5,
-                AgentStatus::Idle => 0xa6e3a1,
-                AgentStatus::Unknown => 0x6c7086,
-            }
-        );
-        assert_eq!(filled, status != AgentStatus::Idle);
-        assert_eq!(
-            diameter,
-            if status == AgentStatus::Unknown {
-                STATUS_DOT_UNKNOWN
-            } else {
-                STATUS_WIDTH
-            }
-        );
     }
+}
+
+#[test]
+fn stored_width_and_split_are_clamped() {
+    assert_eq!(sidebar_width(None, 1200.), 232.);
+    assert_eq!(sidebar_width(Some(10.), 1200.), 160.);
+    assert_eq!(sidebar_width(Some(900.), 1200.), 480.);
+    // The terminal keeps its share of a narrow window.
+    assert_eq!(sidebar_width(Some(300.), 500.), 260.);
+    assert_eq!(split_fraction(None), 0.5);
+    assert_eq!(split_fraction(Some(0.)), 0.1);
+    assert_eq!(split_fraction(Some(2.)), 0.9);
 }

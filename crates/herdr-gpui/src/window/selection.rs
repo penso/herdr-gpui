@@ -5,7 +5,7 @@
 
 use super::HerdrWindow;
 use crate::terminal::Selection;
-use gpui::{ClipboardItem, Context, Pixels, Point};
+use gpui_kit::{ClipboardItem, Context, Pixels, Point};
 
 impl HerdrWindow {
     /// Starts a selection under the pointer, discarding the previous one. A
@@ -124,7 +124,7 @@ impl HerdrWindow {
         self.live.surface.as_deref()
     }
 
-    fn terminal_offset(bounds: gpui::Bounds<Pixels>, position: Point<Pixels>) -> (f32, f32) {
+    fn terminal_offset(bounds: gpui_kit::Bounds<Pixels>, position: Point<Pixels>) -> (f32, f32) {
         (
             f32::from(position.x - bounds.origin.x),
             f32::from(position.y - bounds.origin.y),
@@ -137,7 +137,7 @@ impl HerdrWindow {
 mod tests {
     use super::*;
     use crate::sidebar::layout_tests::fixture_window;
-    use gpui::{Modifiers, MouseButton, TestAppContext, point, px};
+    use gpui_kit::{Modifiers, MouseButton, TestAppContext, point, px};
     use herdr_client::protocol::*;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
@@ -198,9 +198,9 @@ mod tests {
     /// A drag across the painted cells copies what it covered when the button
     /// comes up, leaves nothing selected behind it, and says so; a press alone
     /// leaves the clipboard alone.
-    #[gpui::test]
+    #[gpui_kit::test]
     fn dragging_copies_on_release_then_deselects_and_reports(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&["hello there", "second row"], 12);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -211,7 +211,7 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, cell) = view.read_with(cx, |view, _| {
             (
@@ -277,9 +277,9 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn chinese_mouse_selection_copies_exact_text_only_on_release(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             // Daemon-style wide cells: ordinary blank continuations, skip=false.
             let mut frame = surface(&["你 好 世 界 ", "A你  B"], 12);
@@ -291,7 +291,7 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, width, height) = view.read_with(cx, |view, _| {
             (
@@ -326,10 +326,10 @@ mod tests {
 
     /// A link is a destination for a click and text for a drag: the same
     /// press must be able to become either one.
-    #[gpui::test]
+    #[gpui_kit::test]
     fn dragging_across_a_link_copies_it_instead_of_opening_it(cx: &mut TestAppContext) {
         let url = "https://example.com/x";
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&[url], 24);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -340,7 +340,7 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, width) = view.read_with(cx, |view, _| (view.bounds.origin, view.cell_width));
         let at = |column: f32| origin + point(px(column * width), px(10.));
@@ -365,10 +365,10 @@ mod tests {
         );
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn application_mouse_takes_precedence_and_shift_keeps_copy_and_links(cx: &mut TestAppContext) {
         let url = "https://example.com/x";
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&[url], 24);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -381,7 +381,7 @@ mod tests {
         cx.update(|window, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string("kept".into()));
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, width) = view.read_with(cx, |view, _| (view.bounds.origin, view.cell_width));
         let at = |column: f32| origin + point(px(column * width), px(10.));
@@ -419,9 +419,9 @@ mod tests {
         assert_eq!(cx.opened_url().as_deref(), Some(url));
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn external_file_drag_cancels_local_selection_without_copying(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&["hello there"], 12);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -433,19 +433,19 @@ mod tests {
         cx.update(|window, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string("kept".into()));
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, width) = view.read_with(cx, |view, _| (view.bounds.origin, view.cell_width));
         let at = |column: f32| origin + point(px(column * width), px(10.));
         cx.simulate_mouse_down(at(0.), MouseButton::Left, Modifiers::default());
         cx.simulate_mouse_move(at(5.), MouseButton::Left, Modifiers::default());
         assert!(view.read_with(cx, |view, _| view.selection.is_some()));
-        cx.simulate_event(gpui::FileDropEvent::Entered {
+        cx.simulate_event(gpui_kit::FileDropEvent::Entered {
             position: at(5.),
-            paths: gpui::ExternalPaths::default(),
+            paths: gpui_kit::ExternalPaths::default(),
         });
         assert!(view.read_with(cx, |view, _| view.selection.is_none()));
-        cx.simulate_event(gpui::FileDropEvent::Submit { position: at(5.) });
+        cx.simulate_event(gpui_kit::FileDropEvent::Submit { position: at(5.) });
         assert_eq!(
             cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text())),
             Some("kept".into())
@@ -454,10 +454,10 @@ mod tests {
 
     /// The flash obeys the resolved clipboard-toast settings: turned off, a
     /// copy still happens silently, and each position puts it where it says.
-    #[gpui::test]
+    #[gpui_kit::test]
     fn the_flash_follows_the_clipboard_toast_configuration(cx: &mut TestAppContext) {
         use crate::config::ClipboardToastPosition::*;
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&["configured"], 12);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -468,11 +468,11 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, width) = view.read_with(cx, |view, _| (view.bounds.origin, view.cell_width));
         let at = |column: f32| origin + point(px(column * width), px(10.));
-        let drag = |view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext| {
+        let drag = |view: &gpui_kit::Entity<HerdrWindow>, cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string("stale".into())));
             cx.simulate_mouse_down(at(0.), MouseButton::Left, Modifiers::default());
             cx.simulate_mouse_move(at(10.), MouseButton::Left, Modifiers::default());
@@ -529,9 +529,9 @@ mod tests {
 
     /// A menu page holds the whole gesture: nothing is selected, copied, or
     /// reported while one is up.
-    #[gpui::test]
+    #[gpui_kit::test]
     fn a_menu_page_holds_the_gesture(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = fixture_window(window, cx);
             let mut frame = surface(&["copied text"], 12);
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -542,7 +542,7 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let (origin, cell) = view.read_with(cx, |view, _| {
             (

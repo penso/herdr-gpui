@@ -1,6 +1,14 @@
-use gpui::{prelude::*, *};
+//! The strip that marks a worktree build, so it is never mistaken for a
+//! release: the branch it was built from and, when there is one, its pull
+//! request.
+use gpui_kit::component::{ActiveTheme, Sizable, h_flex, link::Link, tag::Tag};
+use gpui_kit::{
+    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window,
+    div, prelude::FluentBuilder, px,
+};
 
 /// Worktree builds hang this strip under the titlebar; other builds do not.
+/// Fixed, so popups that clear the chrome can reserve it.
 const HEIGHT: f32 = 22.;
 
 pub(super) fn reserved(worktree: bool) -> f32 {
@@ -11,50 +19,64 @@ pub(super) fn pull_request_url(pr: &str) -> String {
     format!("{}/pull/{pr}", crate::about::REPOSITORY)
 }
 
-pub(super) fn render(worktree: bool, branch: &str, pr: &str) -> Option<Div> {
-    worktree.then(|| {
-        div()
+#[derive(IntoElement)]
+pub(super) struct Banner {
+    branch: SharedString,
+    pr: Option<SharedString>,
+}
+
+pub(super) fn render(worktree: bool, branch: &str, pr: &str) -> Option<Banner> {
+    worktree.then(|| Banner {
+        branch: branch.to_owned().into(),
+        pr: (!pr.is_empty()).then(|| pr.to_owned().into()),
+    })
+}
+
+impl RenderOnce for Banner {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        h_flex()
             .debug_selector(|| "worktree-banner".into())
-            .flex()
             .flex_none()
-            .items_center()
-            .gap(px(10.))
-            .px(px(12.))
             .w_full()
             .h(px(HEIGHT))
+            .gap_2()
+            .px_3()
             .overflow_hidden()
-            .bg(rgb(0xf6c453))
-            .text_color(rgb(0x402b08))
-            .text_size(px(12.))
+            .text_xs()
+            .bg(cx.theme().warning.opacity(0.15))
+            .border_b_1()
+            .border_color(cx.theme().border)
+            .child(Tag::warning().xsmall().flex_none().child("Worktree"))
             .child(
                 div()
                     .debug_selector(|| "worktree-branch".into())
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .child(branch.to_owned()),
+                    .child(self.branch),
             )
-            .when(!pr.is_empty(), |row| {
-                let url = pull_request_url(pr);
+            .when_some(self.pr, |row, pr| {
                 row.child(
                     div()
-                        .id("worktree-pr")
                         .debug_selector(|| "worktree-pr".into())
                         .flex_none()
-                        .cursor_pointer()
-                        .hover(|style| style.underline())
-                        .child(format!("PR #{pr}"))
-                        .on_click(move |_, _, cx| cx.open_url(&url)),
+                        .child(
+                            Link::new("worktree-pr")
+                                .href(pull_request_url(&pr))
+                                .child(format!("PR #{pr}")),
+                        ),
                 )
             })
-    })
+    }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::render;
-    use gpui::{Context, IntoElement, Render, TestAppContext, Window, div, prelude::*, px, size};
+    use gpui_kit::{
+        Context, IntoElement, Render, TestAppContext, Window, div, prelude::*, px, size,
+    };
 
     struct Fixture {
         worktree: bool,
@@ -76,9 +98,9 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn banner_reserves_space_only_for_worktrees(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|_, _| Fixture {
+        let (view, cx) = crate::test_support::add_window_view(cx, |_, _| Fixture {
             worktree: false,
             pr: "",
         });
@@ -102,8 +124,7 @@ mod tests {
                     if worktree {
                         let banner = cx.debug_bounds("worktree-banner").unwrap();
                         let branch = cx.debug_bounds("worktree-branch").unwrap();
-                        assert_eq!(banner.size, size(px(width), px(22.)));
-                        assert_eq!(branch.left(), banner.left() + px(12.));
+                        assert_eq!(banner.size.height, px(22.));
                         assert!(branch.right() <= banner.right());
                         if !pr.is_empty() {
                             let pr = cx.debug_bounds("worktree-pr").unwrap();

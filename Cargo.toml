@@ -32,7 +32,7 @@ crossbeam-channel    = "0.5"
 ed25519-dalek        = { default-features = false, features = ["std"], version = "2.2" }
 flate2               = "1"
 foreign-types        = "0.5"
-gpui                 = "=0.2.2"
+gpui-kit             = "=0.6.6"
 herdr-client         = { path = "crates/herdr-client" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 interprocess         = "2.4.2"

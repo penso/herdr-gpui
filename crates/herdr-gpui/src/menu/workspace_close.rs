@@ -7,7 +7,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use gpui::App;
+use gpui_kit::App;
 use herdr_client::protocol::{ClientShellSnapshot, ClientShellWorktree};
 
 use super::workspace::WorkspaceTarget;

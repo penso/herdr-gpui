@@ -2,10 +2,7 @@
 //! its linked worktrees form one group, folded or unfolded locally: collapsing
 //! changes this client's view only, never the daemon's state.
 
-use super::{
-    RowBadge,
-    row::{PrBadge, first_text},
-};
+use super::row::{PrTag, first_text};
 use crate::config::Theme;
 use herdr_client::protocol::ClientShellWorkspace;
 use std::collections::{HashMap, HashSet};
@@ -69,11 +66,17 @@ pub(super) fn workspace_badge(
     cache: &crate::pull_request::Cache,
     git: &crate::git::Git,
     theme: &Theme,
-) -> Option<RowBadge> {
-    let key = workspace.worktree.as_ref()?.key.as_str();
-    let branch = workspace.branch.as_deref()?;
-    RowBadge::new(
-        cache.peek(key, branch).map(|pr| PrBadge::new(pr, theme)),
+) -> (Option<PrTag>, bool) {
+    let Some((key, branch)) = workspace
+        .worktree
+        .as_ref()
+        .map(|tree| tree.key.as_str())
+        .zip(workspace.branch.as_deref())
+    else {
+        return (None, false);
+    };
+    (
+        cache.peek(key, branch).map(|pr| PrTag::new(pr, theme)),
         git.dirty(key, branch).unwrap_or(false),
     )
 }

@@ -1,9 +1,9 @@
 //! Bounded clipboard acquisition, including image copies and hashing, off the UI thread.
 
 use crate::{Error, Result};
-use gpui::ClipboardItem;
+use gpui_kit::ClipboardItem;
 #[cfg(any(target_os = "macos", target_os = "linux", test))]
-use gpui::{Image, ImageFormat};
+use gpui_kit::{Image, ImageFormat};
 
 #[cfg(any(target_os = "macos", target_os = "linux", test))]
 const TEXT_LIMIT: usize = 2 * 1024 * 1024;
@@ -32,7 +32,9 @@ pub(super) fn read(image_only: bool) -> Result<Option<ClipboardItem>> {
                     Some(ImageFormat::Webp) => "org.webmproject.webp",
                     Some(ImageFormat::Bmp) => "com.microsoft.bmp",
                     Some(ImageFormat::Tiff) => "public.tiff",
-                    Some(ImageFormat::Svg) => return Err(Error::ImageFormat),
+                    Some(ImageFormat::Svg | ImageFormat::Ico | ImageFormat::Pnm) => {
+                        return Err(Error::ImageFormat);
+                    }
                 });
                 let Some(data) = pasteboard.dataForType(&kind) else {
                     return Ok(None);
@@ -162,7 +164,7 @@ mod linux {
                                 ImageFormat::Webp => image::ImageFormat::WebP,
                                 ImageFormat::Bmp => image::ImageFormat::Bmp,
                                 ImageFormat::Tiff => image::ImageFormat::Tiff,
-                                ImageFormat::Svg => {
+                                ImageFormat::Svg | ImageFormat::Ico | ImageFormat::Pnm => {
                                     return Err(Error::ImageFormat);
                                 }
                             };
@@ -274,7 +276,7 @@ mod linux {
                 ]
             );
             assert!(matches!(item.as_ref().map(|item| item.entries()),
-                Some([gpui::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Jpeg));
+                Some([gpui_kit::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Jpeg));
             assert!(
                 read_commands(true, false, false, |_, _, _, _| panic!("no display"))?.is_none()
             );
@@ -344,7 +346,12 @@ mod tests {
                 assert_eq!(limit, TEXT_LIMIT);
                 Ok(Some(text.as_bytes().to_vec()))
             })?;
-            assert_eq!(item.and_then(|item| item.text()).as_deref(), Some(text));
+            // GPUI reports empty text as no text; the entry must still be a
+            // string rather than falling through to an image read.
+            let entries = item.map(|item| item.into_entries().collect::<Vec<_>>());
+            assert!(
+                matches!(entries.as_deref(), Some([gpui_kit::ClipboardEntry::String(string)]) if string.text() == text)
+            );
         }
         Ok(())
     }
@@ -361,7 +368,7 @@ mod tests {
             }))
         })?;
         assert!(matches!(item.as_ref().map(|item| item.entries()),
-            Some([gpui::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Jpeg && image.bytes == [1, 2, 3]));
+            Some([gpui_kit::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Jpeg && image.bytes == [1, 2, 3]));
         assert!(read_with(true, |_, _| Ok(None))?.is_none());
         Ok(())
     }
@@ -385,7 +392,7 @@ mod tests {
             ]
         );
         assert!(matches!(item.as_ref().map(|item| item.entries()),
-            Some([gpui::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Tiff));
+            Some([gpui_kit::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Tiff));
         Ok(())
     }
 
@@ -433,7 +440,7 @@ mod tests {
             Ok(bytes.take())
         })?;
         assert!(matches!(item.as_ref().map(|item| item.entries()),
-            Some([gpui::ClipboardEntry::Image(image)])
+            Some([gpui_kit::ClipboardEntry::Image(image)])
                 if image.bytes.as_ptr() == pointer
                     && image.bytes.len() > herdr_client::protocol::MAX_CLIPBOARD_IMAGE_PAYLOAD));
         Ok(())

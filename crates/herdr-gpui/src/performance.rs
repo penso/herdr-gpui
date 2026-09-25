@@ -1,7 +1,7 @@
 //! Native event-dispatch + scene-construction benchmark; never connects to a daemon.
 use crate::{HerdrWindow, sidebar, smoke};
 use anyhow::{Context as _, Result, anyhow, bail};
-use gpui::*;
+use gpui_kit::*;
 use herdr_client::protocol::*;
 use std::{
     sync::Arc,
@@ -91,7 +91,7 @@ fn report(label: &str, samples: &mut [f64]) -> f64 {
     percentile(95)
 }
 
-pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
+pub fn start(handle: crate::app::MainWindow, cx: &mut App) {
     // AppKit termination can exit(0) inside cx.quit(), before main returns its
     // ExitCode. This daemon-free driver must exit explicitly on pass AND fail.
     smoke::EXIT_CODE.store(1, std::sync::atomic::Ordering::SeqCst);
@@ -130,7 +130,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
             timer.timer(Duration::from_millis(20)).await;
             let prepared = AnyWindowHandle::from(handle).update(cx, |root, window, cx| {
                 if (1..=10).contains(&frame) {
-                    root.downcast::<HerdrWindow>()
+                    crate::app::herdr_view(root, cx)
                         .map_err(|_| anyhow!("unexpected root"))?
                         .update(cx, |view, _| {
                             view.painter.borrow_mut().reset_cache();
@@ -186,7 +186,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         window.resize(size(px(1640.), px(1100.)));
                     }
                     window.refresh();
-                    window.draw(cx).clear();
+                    window.draw(cx).clear(cx);
                     let elapsed = start.elapsed().as_secs_f64() * 1000.;
                     let counts = *cx.global::<Counts>();
                     if frame > 0
@@ -199,9 +199,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         );
                     }
                     if frame == 89 || frame == 129 {
-                        let view = root
-                            .clone()
-                            .downcast::<HerdrWindow>()
+                        let view = crate::app::herdr_view(root.clone(), cx)
                             .map_err(|_| anyhow!("unexpected root"))?;
                         let list = usize::from(frame > 110);
                         let offset = view.read(cx).sidebar_scroll[list].offset();
@@ -242,8 +240,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         );
                     }
                     if frame == 140 && !uncached {
-                        let view = root
-                            .downcast::<HerdrWindow>()
+                        let view = crate::app::herdr_view(root, cx)
                             .map_err(|_| anyhow!("unexpected root"))?;
                         let verified =
                             view.read(cx).painter.borrow().verify_native_cache(window)?;
@@ -291,7 +288,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         for redraw in 0..2 {
                             *cx.default_global::<Counts>() = Counts::default();
                             window.refresh();
-                            window.draw(cx).clear();
+                            window.draw(cx).clear(cx);
                             let c = cx.global::<Counts>();
                             if c.quads != 54
                                 || c.decorations != 1922
@@ -324,9 +321,8 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
             let full = step % 2 == 1;
             let result =
                 AnyWindowHandle::from(handle).update(cx, |root, window, cx| -> Result<f64> {
-                    let view = root
-                        .downcast::<HerdrWindow>()
-                        .map_err(|_| anyhow!("unexpected root"))?;
+                    let view =
+                        crate::app::herdr_view(root, cx).map_err(|_| anyhow!("unexpected root"))?;
                     view.update(cx, |view, cx| -> Result<()> {
                         let surface = Arc::make_mut(
                             view.live
@@ -345,7 +341,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     }
                     *cx.default_global::<Counts>() = Counts::default();
                     let start = Instant::now();
-                    window.draw(cx).clear();
+                    window.draw(cx).clear(cx);
                     let elapsed = start.elapsed().as_secs_f64() * 1000.;
                     let counts = *cx.global::<Counts>();
                     if counts.paints != 1

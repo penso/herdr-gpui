@@ -6,7 +6,7 @@
 
 use super::{HOVER_MENU_DELAY, HOVER_MENU_SLOP};
 use crate::HerdrWindow;
-use gpui::{Context, Pixels, Point, Window, px};
+use gpui_kit::{Context, Pixels, Point, Window, px};
 use std::time::Instant;
 
 pub(crate) struct HoverRest {

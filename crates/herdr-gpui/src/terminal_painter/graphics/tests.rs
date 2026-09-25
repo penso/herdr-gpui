@@ -1,5 +1,5 @@
 use super::*;
-use gpui::size;
+use gpui_kit::size;
 
 fn rectangles(symbol: &str, cell: Bounds<Pixels>, scale: f32) -> Vec<Bounds<Pixels>> {
     let mut result = Vec::new();

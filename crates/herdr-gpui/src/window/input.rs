@@ -7,24 +7,24 @@ use crate::{
     connection::ConnectionBridge,
     terminal::{InputTarget, WheelAccumulator, key_input, wheel_target},
 };
-use gpui::{Context, KeyDownEvent, ScrollWheelEvent, Window};
+use gpui_kit::{Context, KeyDownEvent, ScrollWheelEvent, Window};
 use herdr_client::protocol::ClientPaneInputEvent;
 
 impl HerdrWindow {
     pub(crate) fn open_terminal_link(
         &mut self,
-        event: &gpui::ClickEvent,
+        event: &gpui_kit::ClickEvent,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let pressed = self.pressed_terminal_link.take();
-        let gpui::ClickEvent::Mouse(event) = event else {
+        let gpui_kit::ClickEvent::Mouse(event) = event else {
             return;
         };
-        if event.down.button != gpui::MouseButton::Left
+        if event.down.button != gpui_kit::MouseButton::Left
             || event.down.click_count != 1
-            || (event.up.position.x - event.down.position.x).abs() > gpui::px(4.)
-            || (event.up.position.y - event.down.position.y).abs() > gpui::px(4.)
+            || (event.up.position.x - event.down.position.x).abs() > gpui_kit::px(4.)
+            || (event.up.position.y - event.down.position.y).abs() > gpui_kit::px(4.)
         {
             return;
         }
@@ -38,7 +38,10 @@ impl HerdrWindow {
         }
     }
 
-    pub(crate) fn terminal_link_at(&self, position: gpui::Point<gpui::Pixels>) -> Option<String> {
+    pub(crate) fn terminal_link_at(
+        &self,
+        position: gpui_kit::Point<gpui_kit::Pixels>,
+    ) -> Option<String> {
         if self.menu.page.is_some()
             || !self.live.surface_ready()
             || !self.bounds.contains(&position)

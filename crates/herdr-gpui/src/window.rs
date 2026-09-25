@@ -3,6 +3,7 @@
 //! split by responsibility across the submodules below; the fields live here
 //! because every one of them describes this window's own presentation state.
 
+mod chrome;
 mod clipboard;
 mod commands;
 mod file_drop;
@@ -28,7 +29,7 @@ mod tests;
 #[cfg(feature = "integration-test")]
 use crate::smoke;
 use crate::{
-    WINDOW_TITLE, avatars, config, endpoint, git, log_window, menu,
+    WINDOW_TITLE, avatars, config, endpoint, git, menu,
     navigation::OwnedNavigationTarget,
     preferences,
     presentation::Presentation,
@@ -37,7 +38,7 @@ use crate::{
     terminal::{Selection, WheelAccumulator},
     terminal_painter, updater,
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{prelude::*, *};
 use herdr_client::{ConnectOptions, ConnectTarget};
 #[cfg(feature = "integration-test")]
 use std::sync::Arc;
@@ -64,6 +65,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,
     pub(crate) pending_toast: Option<u64>,
     pub(crate) toasts_hidden: bool,
+    /// The visible notices currently mirrored as kit notifications.
+    pub(crate) toast_cards: Vec<toasts::ToastCard>,
     pub(crate) pending_releases: Vec<endpoint::Release>,
     pub(crate) selected_generation: u64,
     pub(crate) live: LiveState,
@@ -107,7 +110,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) device_filter: Option<String>,
     pub(crate) wheel: WheelAccumulator,
     pub(crate) sidebar_width: Option<f32>,
-    pub(crate) sidebar_drag: Option<sidebar::SidebarDrag>,
+    /// The kit panel groups sizing the sidebar and splitting its lists.
+    pub(crate) sidebar_panels: sidebar::Panels,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
     pub(crate) sidebar_preferences: Option<preferences::Preferences>,
@@ -215,6 +219,8 @@ impl HerdrWindow {
         }
         self.poll_tab_rename(window, cx);
         self.poll_pane_rename(window, cx);
+        self.sync_menu_overlay(window, cx);
+        self.sync_theme_highlight(window, cx);
         if old_pane
             != self
                 .live
@@ -253,7 +259,7 @@ impl HerdrWindow {
             target
         };
         let focus = cx.focus_handle();
-        window.focus(&focus);
+        window.focus(&focus, cx);
         let weak = cx.weak_entity();
         let sidebar_view = cx.new(|_| sidebar::SidebarView::new(weak));
         let timer = cx.background_executor().clone();
@@ -300,6 +306,7 @@ impl HerdrWindow {
             pending_navigation: None,
             pending_toast: None,
             toasts_hidden: false,
+            toast_cards: Vec::new(),
             pending_releases: Vec::new(),
             selected_generation: 0,
             live: LiveState::default(),
@@ -335,7 +342,7 @@ impl HerdrWindow {
             device_filter: None,
             wheel: WheelAccumulator::default(),
             sidebar_width: None,
-            sidebar_drag: None,
+            sidebar_panels: sidebar::Panels::new(cx),
             sidebar_split: None,
             sidebar_split_modified: false,
             sidebar_preferences: None,
@@ -381,7 +388,6 @@ impl HerdrWindow {
             .map(|path| preferences::Preferences::new(&path));
         this.avatars = Some(avatars::Avatars::new());
         this.reconnect();
-        log_window::set_appearance(&this.config, &this.theme, cx);
         this.load_gui_config(cx);
         this.watch_gui_config(cx);
         this

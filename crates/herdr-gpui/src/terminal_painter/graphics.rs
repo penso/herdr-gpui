@@ -1,6 +1,6 @@
 //! Terminal graphics occupy the cell, not the font's ink bounds. Keep their
 //! edges on the same device-pixel grid even with fractional cell metrics.
-use gpui::{Bounds, Pixels, point, px};
+use gpui_kit::{Bounds, Pixels, point, px};
 
 #[derive(Clone, Copy)]
 pub(super) enum Graphic {

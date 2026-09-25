@@ -5,7 +5,7 @@ use objc2_app_kit::NSPasteboard;
 use objc2_foundation::{NSData, NSString};
 use std::io::Cursor;
 
-pub(super) async fn verify(handle: WindowHandle<HerdrWindow>, cx: &mut AsyncApp) -> Result<()> {
+pub(super) async fn verify(handle: crate::app::MainWindow, cx: &mut AsyncApp) -> Result<()> {
     cases(handle, "local", cx).await
 }
 
@@ -20,17 +20,17 @@ pub(super) async fn verify_remote(cx: &mut AsyncApp) -> Result<()> {
             cx,
             false,
         )
-    })??;
+    })?;
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
         let ready =
             AnyWindowHandle::from(handle).update(cx, |root, window, cx| -> Result<bool> {
-                let view = root
-                    .downcast::<HerdrWindow>()
-                    .map_err(|_| anyhow!("unexpected root"))?;
-                window.focus(&view.read(cx).focus);
+                let view =
+                    crate::app::herdr_view(root, cx).map_err(|_| anyhow!("unexpected root"))?;
+                let focus = view.read(cx).focus.clone();
+                window.focus(&focus, cx);
                 window.refresh();
-                window.draw(cx).clear();
+                window.draw(cx).clear(cx);
                 Ok(view.read(cx).input_ready())
             })??;
         if ready {
@@ -46,7 +46,7 @@ pub(super) async fn verify_remote(cx: &mut AsyncApp) -> Result<()> {
     cases(handle, "remote", cx).await
 }
 
-async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut AsyncApp) -> Result<()> {
+async fn cases(handle: crate::app::MainWindow, endpoint: &str, cx: &mut AsyncApp) -> Result<()> {
     let home = std::env::var_os("HOME").context("missing sandbox HOME")?;
     let source = std::path::PathBuf::from(home).join("clipboard-source.png");
     let mut fixtures = fixtures()?;
@@ -72,9 +72,7 @@ async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut Async
         })
         .await?;
         AnyWindowHandle::from(handle).update(cx, |root, window, cx| -> Result<()> {
-            let view = root
-                .downcast::<HerdrWindow>()
-                .map_err(|_| anyhow!("unexpected root"))?;
+            let view = crate::app::herdr_view(root, cx).map_err(|_| anyhow!("unexpected root"))?;
             type_text(
                 &format!("/usr/bin/python3 \"$HOME/clipboard_capture.py\" {name}"),
                 &view,
@@ -106,9 +104,7 @@ async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut Async
         drop(target);
         // No wait for preparation: these must arrive after the reserved paste.
         AnyWindowHandle::from(handle).update(cx, |root, window, cx| -> Result<()> {
-            let view = root
-                .downcast::<HerdrWindow>()
-                .map_err(|_| anyhow!("unexpected root"))?;
+            let view = crate::app::herdr_view(root, cx).map_err(|_| anyhow!("unexpected root"))?;
             type_text("!AFTER", &view, window, cx)?;
             selection::key("enter", window, cx)
         })??;

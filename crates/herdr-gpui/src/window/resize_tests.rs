@@ -1,9 +1,9 @@
 use super::HerdrWindow;
 use herdr_client::ConnectTarget;
 
-#[gpui::test]
-fn resize_tracks_cell_metrics_and_retries_failed_options(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn resize_tracks_cell_metrics_and_retries_failed_options(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         HerdrWindow::new(
             ConnectTarget::Socket("/unused-resize-test.sock".into()),
             window,

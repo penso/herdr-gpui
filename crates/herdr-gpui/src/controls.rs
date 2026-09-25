@@ -501,11 +501,11 @@ mod tests {
     #[test]
     fn every_catalog_shortcut_parses_as_a_keystroke() {
         for shortcut in COMMANDS.iter().flat_map(|info| info.shortcuts) {
-            let keystroke = gpui::Keystroke::parse(shortcut)
+            let keystroke = gpui_kit::Keystroke::parse(shortcut)
                 .unwrap_or_else(|error| panic!("{shortcut}: {error}"));
             assert!(keystroke.modifiers.platform, "{shortcut}");
         }
-        let minus = gpui::Keystroke::parse("cmd--").unwrap();
+        let minus = gpui_kit::Keystroke::parse("cmd--").unwrap();
         assert_eq!(minus.key, "-");
         assert!(!minus.modifiers.shift);
     }

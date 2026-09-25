@@ -8,7 +8,7 @@ use crate::{
     keymap::{Binding, Keymap},
 };
 pub(crate) mod watch;
-use gpui::{Font, FontFallbacks};
+use gpui_kit::{Font, FontFallbacks};
 use serde::Deserialize;
 use std::{
     env, fs,
@@ -33,11 +33,10 @@ pub const FONT_SIZE_RANGE: RangeInclusive<f32> = 8.0..=48.0;
 pub const FONT_SIZE_STEP: f32 = 1.0;
 
 /// Shared logical-pixel radii for native-style chrome, independent of the
-/// terminal grid. Small badges/keycaps retain a tighter curve than controls.
+/// terminal grid.
 pub(crate) mod corners {
     pub(crate) const PANEL: f32 = 12.;
     pub(crate) const CONTROL: f32 = 8.;
-    pub(crate) const SMALL: f32 = 4.;
 }
 
 #[derive(Clone, Debug)]
@@ -352,7 +351,7 @@ impl FontConfig {
     /// face and no platform default cascade covers, so those cells shape to the
     /// missing-glyph box unless the cascade names an icon font explicitly.
     pub fn font(&self) -> Font {
-        let mut font = gpui::font(self.family.clone());
+        let mut font = gpui_kit::font(self.family.clone());
         font.fallbacks = self
             .fallbacks
             .as_ref()

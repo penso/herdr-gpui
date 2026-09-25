@@ -6,7 +6,7 @@
 //! every frame. ASCII, most of any grid, is found by index without hashing.
 
 use crate::terminal::{BOLD, ITALIC};
-use gpui::ShapedLine;
+use gpui_kit::ShapedLine;
 use std::collections::HashMap;
 
 pub(super) const CACHE_LIMIT: usize = 4096;

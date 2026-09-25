@@ -16,7 +16,6 @@ mod constants;
 mod controls;
 mod daemon;
 mod diagnostics;
-mod dialog_input;
 mod endpoint;
 mod error;
 mod fonts;
@@ -25,6 +24,7 @@ mod github;
 mod icons;
 mod input;
 mod keymap;
+mod kit_theme;
 mod log_window;
 mod menu;
 mod menus;
@@ -36,13 +36,14 @@ mod preferences;
 mod presentation;
 mod pull_request;
 mod repo_items;
-mod search_input;
 mod sidebar;
 mod sound;
 mod state;
 mod tab_menu;
 mod terminal;
 mod terminal_painter;
+#[cfg(test)]
+mod test_support;
 mod theme_picker;
 mod titlebar;
 mod update_panel;
@@ -65,7 +66,7 @@ pub(crate) use {
         ShowUpdatePreview, bind_keys,
     },
     app::open_additional_window,
-    constants::{APP_VERSION, RELEASE_BUILD, TAB_HEIGHT, TAB_WIDTH, WINDOW_TITLE},
+    constants::{APP_VERSION, RELEASE_BUILD, WINDOW_TITLE},
     menus::menus,
     navigation::{NavigationTarget, OwnedNavigationTarget},
     window::HerdrWindow,

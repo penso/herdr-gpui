@@ -24,7 +24,7 @@ fn avatar_refresh_is_scoped_to_the_verified_profile() {
     let mut auth = Auth::connected_fixture();
     let (tx, rx) = mpsc::sync_channel(1);
     auth.profile.as_mut().unwrap().avatar_updates = Some(rx);
-    let image = Arc::new(gpui::Image::empty());
+    let image = Arc::new(gpui_kit::Image::empty());
     tx.send(image.clone()).unwrap();
     assert!(auth.poll_with_store(|_| panic!("avatar must not access credentials")));
     assert!(Arc::ptr_eq(

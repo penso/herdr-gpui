@@ -1,7 +1,7 @@
 //! Public images only. All filesystem access and decoding happens on workers.
 #![forbid(unsafe_code)]
 
-use gpui::{Image, ImageFormat};
+use gpui_kit::{Image, ImageFormat};
 #[cfg(unix)]
 use rustix::fs::{AtFlags, FlockOperation, Mode, OFlags, flock, open, openat, renameat, unlinkat};
 #[cfg(unix)]

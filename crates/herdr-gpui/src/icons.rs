@@ -1,7 +1,32 @@
-use gpui::{AssetSource, SharedString};
+use gpui_kit::{AssetSource, SharedString};
 use std::borrow::Cow;
 
 pub(super) struct Icons;
+
+/// Icons embedded by this app, as opposed to the kit's `IconName` set.
+const OWN: [&str; 21] = [
+    "icons/agent-opencode.svg",
+    "icons/agent-claude.svg",
+    "icons/agent-codex.svg",
+    "icons/agent-gemini.svg",
+    "icons/agent-cursor.svg",
+    "icons/agent-copilot.svg",
+    "icons/agent-generic.svg",
+    "icons/devices.svg",
+    "icons/settings.svg",
+    "icons/plus.svg",
+    "icons/close.svg",
+    "icons/user.svg",
+    "icons/x.svg",
+    "icons/pencil.svg",
+    "icons/trash.svg",
+    "icons/chevron-up.svg",
+    "icons/chevron-down.svg",
+    "icons/git-branch.svg",
+    "icons/github.svg",
+    "icons/theme.svg",
+    "icons/keyboard.svg",
+];
 
 /// Canonical daemon identities, independent of editable display names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,29 +66,8 @@ impl AgentIcon {
     }
 }
 
-/// Shared working-tree marker, distinct from the daemon's activity dots.
-pub(super) fn uncommitted(theme: &crate::config::Theme, size: f32) -> gpui::Div {
-    use gpui::{div, prelude::*, px, rgb, rgba, svg};
-    div()
-        .size(px(size))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(crate::config::corners::SMALL))
-        .bg(rgba((theme.palette[3] << 8) | 0x30))
-        .border_1()
-        .border_color(rgba((theme.palette[3] << 8) | 0x90))
-        .child(
-            svg()
-                .path("icons/pencil.svg")
-                .size(px(size - 4.))
-                .text_color(rgb(theme.palette[3])),
-        )
-}
-
 impl AssetSource for Icons {
-    fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+    fn load(&self, path: &str) -> gpui_kit::Result<Option<Cow<'static, [u8]>>> {
         let bytes: &'static [u8] = match path {
             "icons/agent-opencode.svg" => {
                 include_bytes!("../../../assets/icons/agent-opencode.svg")
@@ -88,39 +92,20 @@ impl AssetSource for Icons {
             "icons/github.svg" => include_bytes!("../../../assets/icons/github.svg"),
             "icons/theme.svg" => include_bytes!("../../../assets/icons/theme.svg"),
             "icons/keyboard.svg" => include_bytes!("../../../assets/icons/keyboard.svg"),
-            _ => return Ok(None),
+            // Anything else is a gpui-kit icon (`IconName`), which the kit's
+            // own components also load through this single app asset source.
+            _ => return gpui_kit::assets::Assets.load(path),
         };
         Ok(Some(Cow::Borrowed(bytes)))
     }
 
-    fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
-        Ok([
-            "icons/agent-opencode.svg",
-            "icons/agent-claude.svg",
-            "icons/agent-codex.svg",
-            "icons/agent-gemini.svg",
-            "icons/agent-cursor.svg",
-            "icons/agent-copilot.svg",
-            "icons/agent-generic.svg",
-            "icons/devices.svg",
-            "icons/settings.svg",
-            "icons/plus.svg",
-            "icons/close.svg",
-            "icons/user.svg",
-            "icons/x.svg",
-            "icons/pencil.svg",
-            "icons/trash.svg",
-            "icons/chevron-up.svg",
-            "icons/chevron-down.svg",
-            "icons/git-branch.svg",
-            "icons/github.svg",
-            "icons/theme.svg",
-            "icons/keyboard.svg",
-        ]
-        .into_iter()
-        .filter(|name| name.starts_with(path))
-        .map(Into::into)
-        .collect())
+    fn list(&self, path: &str) -> gpui_kit::Result<Vec<SharedString>> {
+        Ok(OWN
+            .into_iter()
+            .filter(|name| name.starts_with(path))
+            .map(SharedString::from)
+            .chain(gpui_kit::assets::Assets.list(path)?)
+            .collect())
     }
 }
 
@@ -128,13 +113,13 @@ impl AssetSource for Icons {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use gpui::{DevicePixels, Image, ImageFormat, TestAppContext};
+    use gpui_kit::{DevicePixels, Image, ImageFormat, TestAppContext};
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn embedded_icons_render_nonempty_masks(cx: &mut TestAppContext) {
         let renderer = cx.update(|cx| cx.svg_renderer());
-        for path in Icons.list("icons/").unwrap() {
-            let bytes = Icons.load(&path).unwrap().unwrap();
+        for path in OWN {
+            let bytes = Icons.load(path).unwrap().unwrap();
             // Decode through GPUI's SVG renderer; production uses svg() for tinting.
             let image = Image::from_bytes(ImageFormat::Svg, bytes.into_owned())
                 .to_image_data(renderer.clone())
@@ -148,8 +133,8 @@ mod tests {
             assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] > 0));
             assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] == 0));
         }
-        assert!(Icons.load("unknown.svg").unwrap().is_none());
-        assert_eq!(Icons.list("icons/").unwrap().len(), 21);
+        // Unknown paths fall through to the kit, which reports them as errors.
+        assert!(!matches!(Icons.load("unknown.svg"), Ok(Some(_))));
     }
 
     #[test]

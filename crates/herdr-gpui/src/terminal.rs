@@ -4,7 +4,7 @@ pub(crate) use links::link_at;
 pub(crate) use selection::Selection;
 
 use crate::config::Theme;
-use gpui::{
+use gpui_kit::{
     Bounds, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent,
     TouchPhase, point, px, size,
 };

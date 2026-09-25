@@ -4,26 +4,37 @@
 //! from a replaced connection can never be applied to the current one.
 
 use super::endpoint_error;
-use super::{Page, WorkspaceMenuAction, WorkspaceTarget, git, github};
-use crate::dialog_input::DialogInput;
-use gpui::{App, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
+use super::{Page, WorkspaceTarget, chrome::OverlayLayer};
+use crate::HerdrWindow;
+use gpui_kit::{
+    AppContext as _, Context, Entity, Pixels, Point, Subscription,
+    component::{input::InputState, menu::PopupMenu},
+};
 use herdr_client::protocol::ClientShellSnapshot;
+
+/// The kit popup menu a pointer-anchored page is showing.
+pub(super) struct Popup {
+    pub(super) menu: Entity<PopupMenu>,
+    pub(super) anchor: Point<Pixels>,
+    /// Which corner of the menu sits at `anchor`.
+    pub(super) corner: gpui_kit::Anchor,
+    pub(super) _dismiss: Subscription,
+}
 
 pub(crate) struct MenuState {
     pub page: Option<Page>,
+    /// Hosts the popup menu and the kit dialog layer. A child view, so dialog
+    /// builders can read this window's state after its own render returns.
+    pub(crate) layer: Entity<OverlayLayer>,
+    pub(super) popup: Option<Popup>,
     pub(super) device_setup: Option<super::devices::Setup>,
-    pub(super) devices_scroll: ScrollHandle,
     // Selection epoch and connection generation fence captured modal actions.
     pub(super) endpoint_target: (u64, u64),
     pub anchor: Point<Pixels>,
-    /// Ignore repeated right presses until the opening gesture is released.
-    pub(crate) opening_right_click: bool,
-    pub focus: FocusHandle,
-    pub(super) selected: Option<usize>,
-    pub(super) workspace_selected: Option<WorkspaceMenuAction>,
-    pub(super) git_selected: Option<git::Row>,
     pub(super) target: Option<WorkspaceTarget>,
-    pub input: Option<DialogInput>,
+    /// The open dialog's text field, when it has one.
+    pub input: Option<Entity<InputState>>,
+    pub(super) _input_subscription: Option<Subscription>,
     pub(super) error: Option<String>,
     pub(super) deletion: Option<Deletion>,
     pub(super) close_check: Option<super::workspace_close::CloseCheck>,
@@ -31,10 +42,7 @@ pub(crate) struct MenuState {
     /// can report the daemon's answer and follow the returned workspace.
     pub(super) creation: Option<String>,
     pub(super) worktree_open: Option<super::worktree_open::Picker>,
-    pub(super) keybinds_scroll: ScrollHandle,
-    pub(crate) keybinds_search: Option<Entity<crate::search_input::SearchInput>>,
-    pub(super) _keybinds_subscription: Option<Subscription>,
-    pub(crate) preferences_scroll: ScrollHandle,
+    pub(crate) keybinds_search: Option<Entity<InputState>>,
     pub(crate) themes: Option<crate::theme_picker::ThemePicker>,
     pub(crate) palette: Option<crate::palette::Palette>,
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
@@ -49,8 +57,6 @@ pub(crate) struct MenuState {
         Option<std::sync::Weak<std::sync::Mutex<crate::state::LiveState>>>,
     pub(super) pr_snapshot: Option<std::sync::Weak<ClientShellSnapshot>>,
     pub(crate) github: crate::github::Auth,
-    pub(super) github_selected: Option<github::Action>,
-    pub(super) github_scroll: ScrollHandle,
     pub(super) pr_connection: Option<std::sync::Weak<std::sync::Mutex<crate::state::LiveState>>>,
 }
 
@@ -165,29 +171,24 @@ impl MenuState {
         }
     }
 
-    pub fn new(cx: &App) -> Self {
+    pub fn new(cx: &mut Context<HerdrWindow>) -> Self {
+        let window = cx.weak_entity();
         Self {
             page: None,
+            layer: cx.new(|_| OverlayLayer::new(window)),
+            popup: None,
             device_setup: None,
-            devices_scroll: ScrollHandle::new(),
             endpoint_target: (0, 0),
             anchor: Point::default(),
-            opening_right_click: false,
-            focus: cx.focus_handle(),
-            selected: None,
-            workspace_selected: None,
-            git_selected: None,
             target: None,
             input: None,
+            _input_subscription: None,
             error: None,
             deletion: None,
             close_check: None,
             creation: None,
             worktree_open: None,
-            keybinds_scroll: ScrollHandle::new(),
             keybinds_search: None,
-            _keybinds_subscription: None,
-            preferences_scroll: ScrollHandle::new(),
             themes: None,
             palette: None,
             close: None,
@@ -196,8 +197,6 @@ impl MenuState {
             pr_cache_connection: None,
             pr_snapshot: None,
             github: Default::default(),
-            github_selected: None,
-            github_scroll: ScrollHandle::new(),
             pr_connection: None,
             tab: None,
             pane: None,
@@ -205,23 +204,22 @@ impl MenuState {
         }
     }
 
+    /// Forgets whatever the menu was showing. The kit surfaces follow on the
+    /// next poll (see `HerdrWindow::sync_menu_overlay`), or at once through
+    /// `dismiss_menu`, which also has the window to close them with.
     pub fn reset(&mut self) {
         self.device_setup = None;
-        self.devices_scroll.set_offset(Point::default());
-        self.opening_right_click = false;
+        self.popup = None;
         self.tab = None;
         self.pane = None;
-        self.github_selected = None;
-        self.github_scroll.set_offset(Point::default());
         if self.github.busy() {
             self.github.cancel();
         }
         self.page = None;
-        self.selected = None;
-        self.workspace_selected = None;
-        self.git_selected = None;
         self.target = None;
         self.input = None;
+        self._input_subscription = None;
+        self.keybinds_search = None;
         self.error = None;
         self.deletion = None;
         self.close_check = None;
@@ -229,7 +227,16 @@ impl MenuState {
         self.worktree_open = None;
         self.close = None;
         self.worktree = None;
+        self.palette = None;
         self.pr.clear();
         self.pr_connection = None;
+    }
+
+    /// The open dialog's text, or empty when it has no field.
+    pub(crate) fn input_text(&self, cx: &gpui_kit::App) -> String {
+        self.input
+            .as_ref()
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default()
     }
 }

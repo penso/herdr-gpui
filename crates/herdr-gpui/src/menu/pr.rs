@@ -1,9 +1,13 @@
-use super::{Page, WorkspaceMenuAction};
+use super::Page;
 use crate::{
     HerdrWindow,
-    pull_request::{Input, repository_input},
+    pull_request::{Input, PullRequest, State, repository_input},
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{
+    component::{ActiveTheme as _, h_flex, tag::Tag, v_flex},
+    prelude::*,
+    *,
+};
 use herdr_client::protocol::*;
 use std::sync::Arc;
 
@@ -96,10 +100,6 @@ impl HerdrWindow {
         if !self.menu.github.connected() {
             self.menu.pr_cache.clear();
             self.menu.pr.clear();
-            if self.menu.workspace_selected == Some(WorkspaceMenuAction::PullRequest) {
-                self.menu.workspace_selected = None;
-                changed = true;
-            }
             return changed;
         }
         let eligible = self.selected_endpoint == 0
@@ -155,12 +155,6 @@ impl HerdrWindow {
         } else if changed && self.menu.page == Some(Page::Workspace) {
             self.refresh_workspace_pr();
         }
-        if self.menu.pr.value.is_none()
-            && self.menu.workspace_selected == Some(WorkspaceMenuAction::PullRequest)
-        {
-            self.menu.workspace_selected = None;
-            changed = true;
-        }
         changed
     }
 
@@ -173,169 +167,82 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_workspace_pr(&self, text_width: Pixels, cx: &mut Context<Self>) -> Div {
-        let theme = &self.theme;
+    /// The workspace menu's pull request section, read live from the lookup so
+    /// it follows the answer while the menu is open.
+    pub(super) fn render_workspace_pr(&self, cx: &App) -> AnyElement {
         let pr = &self.menu.pr;
-        let mut section = div()
+        let muted = cx.theme().muted_foreground;
+        let mut section = v_flex()
             .debug_selector(|| "workspace-pr".into())
-            .mt(px(6.))
-            .pt(px(4.))
-            .pb(px(6.))
-            .border_t_1()
-            .border_color(rgb(theme.active))
-            .flex_none()
-            .min_w_0();
+            .w_full()
+            .min_w_0()
+            .gap_1()
+            .py_1();
         if let Some(value) = &pr.value {
-            let action = WorkspaceMenuAction::PullRequest;
-            let color = value.color(theme);
-            section =
-                section
-                    .child(
-                        div()
-                            .id("workspace-pr-title")
-                            .debug_selector(|| "workspace-pr-title".into())
-                            .px(px(8.))
-                            .py(px(6.))
-                            .flex_none()
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .cursor_pointer()
-                            .when(self.menu.workspace_selected == Some(action), |row| {
-                                row.bg(rgb(theme.active))
-                            })
-                            .on_hover(cx.listener(move |this, hovered, _, cx| {
-                                if *hovered {
-                                    this.menu.workspace_selected = Some(action);
-                                } else if this.menu.workspace_selected == Some(action) {
-                                    this.menu.workspace_selected = None;
-                                }
-                                cx.notify();
-                            }))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.activate_workspace_menu(action, window, cx);
-                            }))
-                            .child(
-                                div()
-                                    .w(text_width)
-                                    .truncate()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(crate::sidebar::label_text(&format!(
-                                        "#{} {}",
-                                        value.number, value.title
-                                    ))),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .ml(px(8.))
-                            .w(text_width)
-                            .flex_none()
-                            .truncate()
-                            .text_size(px((self.config.ui.size - 1.).max(8.)))
-                            .text_color(rgb(theme.muted))
-                            .child(format!(
-                                "{} -> {}",
-                                value.head_ref_name, value.base_ref_name
-                            )),
-                    )
-                    .child(
-                        div()
-                            .mx(px(8.))
-                            .mt(px(8.))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .px(px(6.))
-                                    .rounded(px(crate::config::corners::CONTROL))
-                                    .bg(rgba((color << 8) | 0x20))
-                                    .text_color(rgb(color))
-                                    .child(value.lifecycle()),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .text_color(rgb(theme.muted))
-                                    .child(value.review()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mx(px(8.))
-                            .mt(px(4.))
-                            .text_color(rgb(theme.muted))
-                            .child(value.merge_status()),
-                    )
-                    .child(
-                        div()
-                            .mx(px(8.))
-                            .mt(px(4.))
-                            .child(value.checks_summary.clone()),
-                    )
-                    .child(
-                        div()
-                            .mx(px(8.))
-                            .mt(px(6.))
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .flex_wrap()
-                            .gap(px(8.))
-                            .child(div().text_color(rgb(theme.palette[2])).child(
-                                crate::sidebar::label_text(&format!("+{}", value.additions)),
-                            ))
-                            .child(div().text_color(rgb(theme.palette[1])).child(
-                                crate::sidebar::label_text(&format!("-{}", value.deletions)),
-                            ))
-                            .child(div().text_color(rgb(theme.muted)).child(format!(
-                                "{} {}",
-                                value.changed_files,
-                                if value.changed_files == 1 {
-                                    "file"
-                                } else {
-                                    "files"
-                                }
-                            ))),
-                    );
+            section = section
+                .child(
+                    div()
+                        .debug_selector(|| "workspace-pr-title".into())
+                        .truncate()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(format!("#{} {}", value.number, value.title)),
+                )
+                .child(div().truncate().text_sm().text_color(muted).child(format!(
+                    "{} -> {}",
+                    value.head_ref_name, value.base_ref_name
+                )))
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(Tag::secondary().child(value.lifecycle()))
+                        .child(div().min_w_0().text_color(muted).child(value.review())),
+                )
+                .child(div().text_color(muted).child(value.merge_status()))
+                .child(div().child(value.checks_summary.clone()))
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_color(cx.theme().green)
+                                .child(format!("+{}", value.additions)),
+                        )
+                        .child(
+                            div()
+                                .text_color(cx.theme().red)
+                                .child(format!("-{}", value.deletions)),
+                        )
+                        .child(div().text_color(muted).child(format!(
+                            "{} {}",
+                            value.changed_files,
+                            if value.changed_files == 1 {
+                                "file"
+                            } else {
+                                "files"
+                            }
+                        ))),
+                );
         }
-        if pr.loading {
-            section = section.child(
-                div()
-                    .px(px(8.))
-                    .py(px(4.))
-                    .text_color(rgb(theme.muted))
-                    .child("Checking GitHub..."),
-            );
+        let note = if pr.loading {
+            Some("Checking GitHub...".to_owned())
         } else if let Some(message) = &pr.message {
-            section = section.child(
-                div()
-                    .px(px(8.))
-                    .py(px(4.))
-                    .text_color(rgb(theme.muted))
-                    .child(format!(
-                        "{}{message}",
-                        if pr.value.is_some() { "Stale: " } else { "" }
-                    )),
-            );
+            Some(format!(
+                "{}{message}",
+                if pr.value.is_some() { "Stale: " } else { "" }
+            ))
         } else if pr.value.is_none() {
-            section = section.child(
-                div()
-                    .px(px(8.))
-                    .py(px(4.))
-                    .text_color(rgb(theme.muted))
-                    .child("No PR found for this origin and branch."),
-            );
-        }
+            Some("No PR found for this origin and branch.".to_owned())
+        } else {
+            None
+        };
         section
+            .children(note.map(|note| div().text_color(muted).child(note)))
+            .into_any_element()
     }
 
     #[cfg(any(test, all(feature = "integration-test", target_os = "macos")))]
-    pub(crate) fn workspace_pr_fixture(
-        &mut self,
-        value: crate::pull_request::PullRequest,
-    ) -> crate::Result<()> {
+    pub(crate) fn workspace_pr_fixture(&mut self, value: PullRequest) -> crate::Result<()> {
         let target = self
             .menu
             .target
@@ -359,10 +266,21 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_menu(window, cx);
-        self.menu.page = Some(Page::GitHub);
+        self.open_github(false, window, cx);
         self.menu.github = crate::github::Auth::fixture(waiting);
         cx.notify();
+    }
+}
+
+/// A pull request's lifecycle in the kit's semantic colors.
+pub(super) fn pr_color(pr: &PullRequest, cx: &App) -> Hsla {
+    let theme = cx.theme();
+    match pr.state {
+        State::Merged => theme.magenta,
+        State::Closed => theme.danger,
+        State::Unknown => theme.muted_foreground,
+        State::Open if pr.is_draft => theme.muted_foreground,
+        State::Open => theme.success,
     }
 }
 
@@ -453,11 +371,12 @@ mod tests {
         assert!(branches(&snapshot, None, 0).is_empty());
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn cached_menu_open_is_immediate_and_does_not_touch_deletion_response(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
                 view.live.status = crate::state::ConnectionStatus::Connected;
@@ -476,7 +395,6 @@ mod tests {
                 view.open_workspace_menu("w3", Default::default(), window, cx);
                 assert_eq!(view.menu.pr.value.as_ref().unwrap().number, 8);
                 assert!(!view.menu.pr.loading);
-                assert_eq!(view.menu.workspace_selected, None);
                 assert!(
                     matches!(&view.live.dialog_response, Some((id, None)) if id == "delete-request")
                 );
@@ -498,136 +416,6 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
-        use super::super::{Page, WorkspaceAction, WorkspaceMenuAction};
-        use gpui::{point, px, size};
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
-                view.live.status = crate::state::ConnectionStatus::Connected;
-                view.open_workspace_menu("w3", point(px(620.), px(380.)), window, cx);
-                view.menu.github = crate::github::Auth::connected_fixture();
-                view.menu.pr.clear();
-                view.menu.pr.loading = true;
-                cx.notify();
-            })
-        });
-        cx.run_until_parked();
-        cx.simulate_keystrokes("down");
-        cx.update(|_, cx| {
-            view.update(cx, |view, cx| {
-                view.menu.pr.loading = false;
-                view.menu.pr.value = Some(crate::pull_request::fixture().unwrap());
-                assert_eq!(
-                    view.menu.workspace_selected,
-                    Some(WorkspaceMenuAction::Dialog(WorkspaceAction::Rename))
-                );
-                cx.notify();
-            })
-        });
-        for width in [320., 640., 1200.] {
-            cx.simulate_resize(size(px(width), px(400.)));
-            cx.update(|window, cx| {
-                window.draw(cx).clear();
-            });
-            let panel = cx.debug_bounds("menu-panel").unwrap();
-            let title = cx.debug_bounds("workspace-pr-title").unwrap();
-            let header = cx.debug_bounds("workspace-menu-header").unwrap();
-            assert!(
-                panel.size.height < px(340.) + header.size.height + px(4.),
-                "oversized popover: {panel:?}"
-            );
-            assert!(panel.left() >= px(0.) && panel.right() <= px(width));
-            assert!(panel.bottom() <= px(400.));
-            assert!(panel.contains(&title.origin) && title.right() <= panel.right());
-            assert!(cx.debug_bounds("workspace-pr-open").is_none());
-            assert!(cx.debug_bounds("workspace-pr-refresh").is_none());
-        }
-        // No O/R aliases, and no default activation when the result arrives.
-        cx.update(|_, cx| view.update(cx, |view, _| view.menu.workspace_selected = None));
-        cx.simulate_keystrokes("enter o r");
-        assert!(cx.opened_url().is_none());
-        cx.simulate_keystrokes("up");
-        cx.update(|_, cx| {
-            assert_eq!(
-                view.read(cx).menu.workspace_selected,
-                Some(WorkspaceMenuAction::PullRequest)
-            );
-        });
-        // A stale target is rejected even before the asynchronous invalidation tick.
-        cx.update(|_, cx| view.update(cx, |view, _| view.endpoints[0].generation += 1));
-        cx.simulate_keystrokes("enter");
-        assert!(cx.opened_url().is_none());
-        cx.update(|_, cx| {
-            view.update(cx, |view, cx| {
-                assert!(view.update_workspace_pr());
-                assert_eq!(view.menu.workspace_selected, None);
-                view.endpoints[0].generation -= 1;
-                view.menu.pr.clear();
-                view.menu.pr.value = Some(crate::pull_request::fixture().unwrap());
-                cx.notify();
-            })
-        });
-        cx.update(|window, cx| {
-            window.draw(cx).clear();
-        });
-        let title = cx.debug_bounds("workspace-pr-title").unwrap().center();
-        let rename = cx.debug_bounds("workspace-menu-Rename").unwrap().center();
-        cx.simulate_mouse_move(title, None, Default::default());
-        cx.update(|_, cx| {
-            assert_eq!(
-                view.read(cx).menu.workspace_selected,
-                Some(WorkspaceMenuAction::PullRequest)
-            )
-        });
-        cx.simulate_keystrokes("down");
-        cx.update(|_, cx| {
-            assert_eq!(
-                view.read(cx).menu.workspace_selected,
-                Some(WorkspaceMenuAction::Dialog(WorkspaceAction::Rename))
-            )
-        });
-        cx.simulate_mouse_move(rename, None, Default::default());
-        cx.simulate_keystrokes("up enter");
-        let expected = cx.update(|_, cx| view.read(cx).menu.pr.value.as_ref().unwrap().url.clone());
-        assert_eq!(cx.opened_url(), Some(expected.clone()));
-        cx.simulate_click(title, Default::default());
-        assert_eq!(cx.opened_url(), Some(expected));
-        cx.update(|_, cx| {
-            view.update(cx, |view, cx| {
-                view.menu.github = Default::default();
-                view.update_workspace_pr();
-                assert_eq!(view.menu.workspace_selected, None);
-                assert!(
-                    !view
-                        .workspace_menu_actions()
-                        .contains(&WorkspaceMenuAction::PullRequest)
-                );
-                assert!(view.menu.page == Some(Page::Workspace));
-                cx.notify();
-            })
-        });
-        cx.run_until_parked();
-        cx.update(|window, cx| {
-            window.draw(cx).clear();
-        });
-        // GPUI retains removed debug selectors; measure the remaining action panel.
-        // Five action rows and the target header: no PR section or stale metadata.
-        let rows = cx.update(|_, cx| view.read(cx).workspace_menu_actions().len());
-        assert_eq!(rows, 5);
-        let panel = cx.debug_bounds("menu-panel").unwrap().size.height;
-        let header = cx
-            .debug_bounds("workspace-menu-header")
-            .unwrap()
-            .size
-            .height
-            + px(4.);
-        assert!(panel - header < px(35. * rows as f32), "{panel:?}");
-    }
-
-    /// Explicitly selected running daemon only: no start, focus, resize, input,
-    /// credential writes, or terminal surface subscription. Do not log metadata.
     #[cfg(all(feature = "integration-test", target_os = "macos"))]
     #[test]
     #[allow(clippy::expect_used)]

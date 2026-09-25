@@ -3,11 +3,23 @@
 //! requests to the daemon and report what came back.
 
 use super::{
-    Page, Removal, Submission, WorkspaceAction, WorkspaceMenuAction, danger, endpoint_error,
-    state::Deletion,
+    Page, Removal, Submission, WorkspaceAction, WorkspaceMenuAction, dialog_buttons,
+    endpoint_error, error_alert, listener, state::Deletion, submit,
 };
-use crate::{HerdrWindow, NavigationTarget, dialog_input::DialogInput};
-use gpui::{prelude::*, *};
+use crate::{HerdrWindow, NavigationTarget};
+use gpui_kit::{
+    component::{
+        ActiveTheme as _, Disableable as _,
+        alert::Alert,
+        button::{Button, ButtonVariants as _},
+        dialog::Dialog,
+        input::Input,
+        menu::PopupMenuItem,
+        v_flex,
+    },
+    prelude::*,
+    *,
+};
 use herdr_client::{
     Method,
     protocol::{ClientShellSnapshot, ClientShellWorkspace, ClientShellWorktree},
@@ -210,6 +222,30 @@ fn close_members(snapshot: &ClientShellSnapshot, workspace: &ClientShellWorkspac
 }
 
 impl HerdrWindow {
+    /// Captures the workspace `id` as the target of a new menu page. False when
+    /// another page is open or the workspace is gone.
+    fn begin_workspace(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.menu_is_open() || !self.live.status.is_connected() {
+            return false;
+        }
+        let Some(target) = self.live.snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .workspaces
+                .iter()
+                .find(|w| w.workspace_id == id)
+                .map(|workspace| WorkspaceTarget::new(snapshot, workspace))
+        }) else {
+            return false;
+        };
+        self.hover = None;
+        self.hover_menu = None;
+        if !self.begin_menu(window, cx) {
+            return false;
+        }
+        self.menu.target = Some(target);
+        true
+    }
+
     pub(crate) fn open_workspace_menu(
         &mut self,
         id: &str,
@@ -217,29 +253,72 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.menu.page.is_some() || !self.live.status.is_connected() {
+        if !self.begin_workspace(id, window, cx) {
             return;
         }
-        let Some(snapshot) = &self.live.snapshot else {
-            return;
-        };
-        let Some(workspace) = snapshot.workspaces.iter().find(|w| w.workspace_id == id) else {
-            return;
-        };
-        self.hover = None;
-        self.hover_menu = None;
-        self.menu.reset();
-        self.menu.endpoint_target = (
-            self.selection_epoch,
-            self.endpoints[self.selected_endpoint].generation,
-        );
-        self.menu.target = Some(WorkspaceTarget::new(snapshot, workspace));
-        self.menu.anchor = anchor;
-        self.menu.page = Some(Page::Workspace);
         self.refresh_workspace_pr();
-        self.marked.clear();
-        window.focus(&self.menu.focus);
-        cx.notify();
+        let Some(target) = &self.menu.target else {
+            return;
+        };
+        let label = target.label.clone();
+        let branch = target
+            .branch
+            .as_deref()
+            .filter(|branch| !branch.trim().is_empty())
+            .map(str::to_owned);
+        let items = self.workspace_items();
+        let github = self.menu.github.connected();
+        let weak = cx.weak_entity();
+        self.show_popup(Page::Workspace, anchor, window, cx, move |menu, _, _| {
+            let menu = menu
+                .min_w(px(260.))
+                .max_w(px(340.))
+                .item(
+                    PopupMenuItem::element(move |_, cx| {
+                        v_flex()
+                            .debug_selector(|| "workspace-menu-header".into())
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(label.clone()),
+                            )
+                            .children(branch.clone().map(|branch| {
+                                div()
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(branch)
+                            }))
+                    })
+                    .disabled(true),
+                )
+                .separator();
+            let menu = items.into_iter().fold(menu, |menu, (action, label)| {
+                menu.item(
+                    PopupMenuItem::new(label)
+                        .when_some(action.icon(), |item, icon| item.icon(icon))
+                        .on_click(listener(&weak, move |this, window, cx| {
+                            this.activate_workspace_menu(action, window, cx)
+                        })),
+                )
+            });
+            if !github {
+                return menu;
+            }
+            let pr = weak.clone();
+            menu.separator().item(
+                PopupMenuItem::element(move |_, cx| {
+                    pr.upgrade()
+                        .map(|view| view.read(cx).render_workspace_pr(cx))
+                        .unwrap_or_else(|| div().into_any_element())
+                })
+                .on_click(listener(&weak, |this, window, cx| {
+                    this.activate_workspace_menu(WorkspaceMenuAction::PullRequest, window, cx)
+                })),
+            )
+        });
     }
 
     /// Opens the new worktree dialog for the focused workspace, as its menu's
@@ -259,8 +338,7 @@ impl HerdrWindow {
                 return;
             }
         };
-        self.open_workspace_menu(&id, Point::default(), window, cx);
-        if self.menu.page == Some(Page::Workspace) {
+        if self.begin_workspace(&id, window, cx) {
             self.open_workspace_dialog(WorkspaceAction::NewWorktree, window, cx);
         }
     }
@@ -313,7 +391,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn toggle_selected_group(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_selected_group(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(key) = self
             .menu
             .target
@@ -327,11 +405,10 @@ impl HerdrWindow {
         if !collapsed.remove(&key) {
             collapsed.insert(key);
         }
-        self.menu.reset();
-        cx.notify();
+        self.dismiss_menu(window, cx);
     }
 
-    pub(super) fn open_workspace_dialog(
+    pub(crate) fn open_workspace_dialog(
         &mut self,
         action: WorkspaceAction,
         window: &mut Window,
@@ -340,31 +417,24 @@ impl HerdrWindow {
         let Some(target) = &self.menu.target else {
             return;
         };
-        self.menu.input = match action {
-            WorkspaceAction::Rename => Some(DialogInput::new(target.label.clone())),
+        let text = match action {
+            WorkspaceAction::Rename => Some((target.label.clone(), "Workspace name")),
             // Propose the daemon's own branch shape, selected so typing replaces it.
-            WorkspaceAction::NewWorktree => {
-                Some(DialogInput::new(crate::worktree::proposed_branch()))
-            }
+            WorkspaceAction::NewWorktree => Some((crate::worktree::proposed_branch(), "Branch")),
             WorkspaceAction::Close
             | WorkspaceAction::DeleteWorktree
             | WorkspaceAction::OpenWorktree => None,
         };
-        self.menu.page = Some(Page::Dialog(action));
+        self.menu.input = None;
+        if let Some((text, placeholder)) = text {
+            self.set_menu_input(text, placeholder, window, cx);
+        }
         self.menu.pr.clear();
         self.menu.pr_connection = None;
         self.menu.error = None;
-        if action == WorkspaceAction::OpenWorktree {
-            self.open_existing_worktrees(window, cx);
-            return;
-        }
-        if action == WorkspaceAction::NewWorktree {
-            self.open_worktree_source(window, cx);
-            cx.notify();
-            return;
-        }
         if action == WorkspaceAction::Close
             && let Some(snapshot) = &self.live.snapshot
+            && let Some(target) = &self.menu.target
         {
             self.menu.close_check = Some(super::workspace_close::CloseCheck::start(
                 snapshot,
@@ -373,7 +443,9 @@ impl HerdrWindow {
                 cx,
             ));
         }
-        if action == WorkspaceAction::DeleteWorktree {
+        if action == WorkspaceAction::DeleteWorktree
+            && let Some(target) = &self.menu.target
+        {
             let result = self.endpoints[self.selected_endpoint]
                 .connection
                 .request_dialog(
@@ -392,19 +464,21 @@ impl HerdrWindow {
             });
             self.menu.error = result.err().map(|error| error.to_string());
         }
-        cx.notify();
-    }
-
-    pub(super) fn workspace_menu_actions(&self) -> Vec<WorkspaceMenuAction> {
-        let mut actions: Vec<_> = self
-            .workspace_items()
-            .into_iter()
-            .map(|(action, _)| action)
-            .collect();
-        if self.menu.github.connected() && self.menu.pr.value.is_some() {
-            actions.push(WorkspaceMenuAction::PullRequest);
+        self.show_dialog(
+            Page::Dialog(action),
+            window,
+            cx,
+            move |this, dialog, weak, _, cx| this.workspace_dialog(action, dialog, weak, cx),
+        );
+        match action {
+            WorkspaceAction::OpenWorktree => self.open_existing_worktrees(window, cx),
+            WorkspaceAction::NewWorktree => {
+                self.open_worktree_source(window, cx);
+                self.focus_menu_input(window, cx);
+            }
+            _ => self.focus_menu_input(window, cx),
         }
-        actions
+        cx.notify();
     }
 
     pub(super) fn activate_workspace_menu(
@@ -416,9 +490,12 @@ impl HerdrWindow {
         match action {
             WorkspaceMenuAction::Dialog(action) => self.open_workspace_dialog(action, window, cx),
             WorkspaceMenuAction::Collapse | WorkspaceMenuAction::Expand => {
-                self.toggle_selected_group(cx)
+                self.toggle_selected_group(window, cx)
             }
-            WorkspaceMenuAction::PullRequest => self.open_workspace_pr(cx),
+            WorkspaceMenuAction::PullRequest => {
+                self.open_workspace_pr(cx);
+                self.dismiss_menu(window, cx);
+            }
         }
     }
 
@@ -482,7 +559,7 @@ impl HerdrWindow {
 
     /// The checkout the daemon would create for the branch currently drafted.
     /// Only a preview: the daemon derives the path it actually uses.
-    pub(super) fn checkout_preview(&self) -> String {
+    pub(super) fn checkout_preview(&self, cx: &App) -> String {
         let repo = self
             .menu
             .target
@@ -495,11 +572,8 @@ impl HerdrWindow {
             .as_ref()
             .map(|snapshot| snapshot.worktree_directory.as_str())
             .filter(|root| !root.is_empty());
-        let branch = self
-            .menu
-            .input
-            .as_ref()
-            .map_or("", |input| input.text.trim());
+        let text = self.menu.input_text(cx);
+        let branch = text.trim();
         match (repo, root) {
             _ if branch.is_empty() => "The daemon names the checkout.".to_owned(),
             (Some(repo), Some(root)) => crate::worktree::checkout_preview(root, repo, branch),
@@ -519,7 +593,8 @@ impl HerdrWindow {
                 .as_ref()
                 .is_some_and(|report| report.needs_consent())
             {
-                self.menu.input = Some(DialogInput::new(String::new()));
+                self.set_menu_input("", "close", window, cx);
+                self.focus_menu_input(window, cx);
             }
             cx.notify();
         }
@@ -552,7 +627,7 @@ impl HerdrWindow {
                     .is_none_or(|snapshot| snapshot.boot_id != target.boot_id)
             })
         {
-            self.menu.reset();
+            self.dismiss_menu(window, cx);
             return;
         }
         let Some((id, Some(result))) = &self.live.dialog_response else {
@@ -656,23 +731,7 @@ impl HerdrWindow {
         let Some(Page::Dialog(action)) = self.menu.page else {
             return;
         };
-        if action == WorkspaceAction::OpenWorktree
-            && self
-                .menu
-                .worktree_open
-                .as_ref()
-                .is_some_and(|picker| picker.search.read(cx).is_composing())
-        {
-            return;
-        }
-        if self
-            .menu
-            .input
-            .as_ref()
-            .is_some_and(|input| input.marked.is_some())
-        {
-            return;
-        }
+        let text = self.menu.input_text(cx);
         let result = (|| {
             if !self.menu_target_current() {
                 return Err(crate::Error::StaleConnection);
@@ -699,11 +758,7 @@ impl HerdrWindow {
                     .map(|entry| entry.path.as_str())
                     .ok_or(crate::Error::WorktreeSelection)?
             } else {
-                self.menu
-                    .input
-                    .as_ref()
-                    .map(|input| input.text.as_str())
-                    .unwrap_or("")
+                text.as_str()
             };
             let (method, mut params) = target.request(snapshot, action, text)?;
             if action == WorkspaceAction::Close {
@@ -809,45 +864,43 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_workspace_dialog(
+    /// A workspace dialog, rebuilt every frame from the window's state.
+    fn workspace_dialog(
         &self,
         action: WorkspaceAction,
-        cx: &mut Context<Self>,
-    ) -> Div {
+        dialog: Dialog,
+        weak: &WeakEntity<HerdrWindow>,
+        cx: &App,
+    ) -> Dialog {
         let Some(target) = &self.menu.target else {
-            return div();
+            return dialog;
         };
-        let theme = &self.theme;
-        let font = &self.config.ui;
-        let danger = danger(theme);
+        let muted = cx.theme().muted_foreground;
         let deletion = self.menu.deletion.as_ref();
         let force = deletion.is_some_and(|deletion| deletion.force);
         let creating = self.menu.creation.is_some();
+        let text = self.menu.input_text(cx);
         // Until the daemon names the checkout there is nothing to confirm, and a
         // request already in flight leaves nothing to press either.
-        let armed = (action != WorkspaceAction::DeleteWorktree
-            || deletion.is_some_and(|deletion| deletion.ready()))
-            && (action != WorkspaceAction::OpenWorktree
-                || self.menu.worktree_open.as_ref().is_some_and(|picker| {
-                    picker.pending.is_none()
-                        && !picker.filtered.is_empty()
-                        && !picker.search.read(cx).is_composing()
-                }))
-            && (action != WorkspaceAction::Close
-                || self.menu.close_check.as_ref().is_some_and(|check| {
-                    check.ready(
-                        self.menu
-                            .input
-                            .as_ref()
-                            .map_or("", |input| input.text.as_str()),
-                    )
-                }))
-            && !creating;
+        let armed =
+            (action != WorkspaceAction::DeleteWorktree
+                || deletion.is_some_and(|deletion| deletion.ready()))
+                && (action != WorkspaceAction::OpenWorktree
+                    || self.menu.worktree_open.as_ref().is_some_and(|picker| {
+                        picker.pending.is_none() && !picker.filtered.is_empty()
+                    }))
+                && (action != WorkspaceAction::Close
+                    || self
+                        .menu
+                        .close_check
+                        .as_ref()
+                        .is_some_and(|check| check.ready(&text)))
+                && !creating;
         let destructive = matches!(
             action,
             WorkspaceAction::Close | WorkspaceAction::DeleteWorktree
         );
-        let (title, submit) = match action {
+        let (title, submit_label) = match action {
             WorkspaceAction::Rename => ("Rename workspace", "Rename"),
             WorkspaceAction::Close => (target.close_label(), target.close_label()),
             WorkspaceAction::NewWorktree => ("New worktree", "Create"),
@@ -855,31 +908,52 @@ impl HerdrWindow {
             WorkspaceAction::DeleteWorktree if force => ("Force delete checkout?", "Force remove"),
             WorkspaceAction::DeleteWorktree => ("Delete worktree checkout?", "Remove"),
         };
-        let mut body = div().flex().flex_col().gap(px(10.)).px(px(16.)).py(px(12.));
+        let field = || {
+            self.menu
+                .input
+                .as_ref()
+                .map(|input| Input::new(input).disabled(creating))
+        };
+        let mut body = if matches!(
+            action,
+            WorkspaceAction::NewWorktree | WorkspaceAction::OpenWorktree
+        ) {
+            super::worktree_render::list_keys(v_flex().gap_3(), weak)
+        } else {
+            v_flex().gap_3()
+        };
         body = match action {
-            WorkspaceAction::OpenWorktree => body,
-            WorkspaceAction::Rename => {
-                body.child(div().text_color(rgb(theme.muted)).child("Edit the workspace label."))
-            }
-            WorkspaceAction::Close => body.child(div().text_color(rgb(theme.muted)).child(format!(
+            WorkspaceAction::OpenWorktree => body.child(self.render_existing_worktrees(weak, cx)),
+            WorkspaceAction::Rename => body
+                .child(div().text_color(muted).child("Edit the workspace label."))
+                .children(field()),
+            WorkspaceAction::Close => body.child(div().text_color(muted).child(format!(
                 "Closes {} workspace(s) and terminates their running terminals. Checkout files and branches are not deleted.",
                 target.close_members.len()
             ))),
-            WorkspaceAction::NewWorktree => body
-                .child(div().text_color(rgb(theme.muted)).child(
-                    "Branch for the new checkout. Base: HEAD. Repository trust is not granted.",
-                ))
-                .child(self.render_dialog_input(cx))
-                .child("This creates the checkout folder:")
-                .child(
-                    div()
-                        .debug_selector(|| "dialog-checkout".into())
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .bg(rgb(theme.active))
-                        .px(px(10.))
-                        .py(px(6.))
-                        .child(self.checkout_preview()),
-                ),
+            WorkspaceAction::NewWorktree => {
+                let form = v_flex()
+                    .gap_3()
+                    .child(div().text_color(muted).child(
+                        "Branch for the new checkout. Base: HEAD. Repository trust is not granted.",
+                    ))
+                    .children(field())
+                    .child("This creates the checkout folder:")
+                    .child(
+                        div()
+                            .debug_selector(|| "dialog-checkout".into())
+                            .text_sm()
+                            .text_color(muted)
+                            .child(self.checkout_preview(cx)),
+                    );
+                body.child(self.render_worktree_tabs(weak, cx)).child(
+                    if self.worktree_listing() {
+                        self.render_worktree_items(weak, cx).into_any_element()
+                    } else {
+                        form.into_any_element()
+                    },
+                )
+            }
             WorkspaceAction::DeleteWorktree => body
                 .child(if force {
                     "This force removes the checkout folder:"
@@ -889,10 +963,7 @@ impl HerdrWindow {
                 .child(
                     div()
                         .debug_selector(|| "dialog-path".into())
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .bg(rgb(theme.active))
-                        .px(px(10.))
-                        .py(px(6.))
+                        .text_sm()
                         .child(
                             deletion
                                 .and_then(|deletion| deletion.path.as_deref())
@@ -900,236 +971,110 @@ impl HerdrWindow {
                                 .to_owned(),
                         ),
                 )
-                .child(div().text_color(rgb(theme.muted)).child(if force {
+                .child(div().text_color(muted).child(if force {
                     "Modified and untracked files, including submodule contents, are discarded. The branch is not deleted. The Herdr workspace will close."
                 } else {
                     "The branch is not deleted. The Herdr workspace will close."
                 })),
         };
         if action == WorkspaceAction::Close {
-            body = body.child(div().debug_selector(|| "close-git-status".into()).text_color(danger).child(
-                match self.menu.close_check.as_ref().and_then(|check| check.report.as_ref()) {
-                    None => "Checking for uncommitted files and unpushed commits...".to_owned(),
-                    Some(report) => {
-                        let mut warnings = Vec::new();
-                        if report.dirty { warnings.push("Uncommitted files are present."); }
-                        if report.unpushed { warnings.push("Unpushed commits are present."); }
-                        if report.unknown { warnings.push("Git status could not be verified for every checkout."); }
-                        if report.needs_consent() { warnings.push("Type close to consent to closing anyway, or Cancel to keep working."); }
-                        else { warnings.push("No uncommitted files or unpushed commits found (using local remote-tracking refs)."); }
-                        warnings.join(" ")
+            let report = self
+                .menu
+                .close_check
+                .as_ref()
+                .and_then(|check| check.report.as_ref());
+            let status = match report {
+                None => "Checking for uncommitted files and unpushed commits...".to_owned(),
+                Some(report) => {
+                    let mut warnings = Vec::new();
+                    if report.dirty {
+                        warnings.push("Uncommitted files are present.");
                     }
+                    if report.unpushed {
+                        warnings.push("Unpushed commits are present.");
+                    }
+                    if report.unknown {
+                        warnings.push("Git status could not be verified for every checkout.");
+                    }
+                    if report.needs_consent() {
+                        warnings.push(
+                            "Type close to consent to closing anyway, or Cancel to keep working.",
+                        );
+                    } else {
+                        warnings.push(
+                            "No uncommitted files or unpushed commits found (using local remote-tracking refs).",
+                        );
+                    }
+                    warnings.join(" ")
                 }
-            ));
+            };
+            body = body
+                .child(if report.is_some_and(|report| report.needs_consent()) {
+                    Alert::warning("close-git-status", status)
+                } else {
+                    Alert::info("close-git-status", status)
+                })
+                .children(field());
         }
-        if self.menu.input.is_some() && action != WorkspaceAction::NewWorktree {
-            body = body.child(self.render_dialog_input(cx));
-        }
-        if let Some(error) = &self.menu.error {
-            body = body.child(
-                div()
-                    .debug_selector(|| "dialog-error".into())
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .bg(rgb(theme.active))
-                    .px(px(10.))
-                    .py(px(6.))
-                    .text_color(danger)
-                    .child(error.clone()),
-            );
-        }
+        body = body.children(error_alert("dialog-error", self.menu.error.as_ref()));
         if creating {
             // Dismissing only closes the panel; the daemon keeps the queued work.
             body = body.child(
                 div()
                     .debug_selector(|| "dialog-waiting".into())
-                    .text_color(rgb(theme.muted))
+                    .text_color(muted)
                     .child("Waiting for the daemon. Dismissing does not cancel it."),
             );
         }
-        let button = |id: &'static str| {
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .px(px(12.))
-                .py(px(6.))
-                .rounded(px(crate::config::corners::CONTROL))
-                .border_1()
-                .cursor_pointer()
-        };
-        // A picker owns the panel's height, so its list scrolls inside the
-        // dialog instead of growing it past the window.
-        let listing = action == WorkspaceAction::OpenWorktree || self.worktree_listing();
-        div()
-            .flex()
-            .flex_col()
+        // GitHub rows create their own checkouts without a submit button.
+        let listing = self.worktree_listing();
+        let confirm = (!listing).then(|| {
+            Button::new("dialog-submit")
+                .label(if creating { "Waiting..." } else { submit_label })
+                .loading(creating)
+                .disabled(!armed)
+                .map(|button| {
+                    if destructive {
+                        button.danger()
+                    } else {
+                        button.primary()
+                    }
+                })
+                .on_click(listener(weak, |this, window, cx| {
+                    this.submit_workspace_dialog(window, cx)
+                }))
+        });
+        dialog
+            .title(
+                v_flex().min_w_0().child(title).child(
+                    div()
+                        .truncate()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(target.label.clone()),
+                ),
+            )
             .when(
-                listing || action == WorkspaceAction::NewWorktree,
-                |dialog| dialog.size_full().min_h_0(),
+                matches!(
+                    action,
+                    WorkspaceAction::NewWorktree | WorkspaceAction::OpenWorktree
+                ),
+                |dialog| dialog.w(px(560.)),
             )
-            .child(
-                div()
-                    .debug_selector(|| "dialog-header".into())
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .px(px(16.))
-                    .py(px(12.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
-                    .when_some(
-                        WorkspaceMenuAction::Dialog(action).icon(),
-                        |header, icon| {
-                            header.child(svg().path(icon).size(px(16.)).flex_none().text_color(
-                                if destructive {
-                                    danger
-                                } else {
-                                    rgb(theme.muted)
-                                },
-                            ))
-                        },
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .debug_selector(|| "dialog-title".into())
-                                    .when(action == WorkspaceAction::OpenWorktree, |title| {
-                                        title.truncate()
-                                    })
-                                    .text_size(px(font.size * 1.35))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_color(rgb(theme.muted))
-                                    .child(target.label.clone()),
-                            ),
-                    )
-                    .when(action == WorkspaceAction::OpenWorktree, |header| {
-                        header.child(
-                            div()
-                                .id("open-worktree-escape")
-                                .debug_selector(|| "open-worktree-escape".into())
-                                .flex_none()
-                                .px_2()
-                                .py_1()
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .cursor_pointer()
-                                .text_color(rgb(theme.muted))
-                                .hover(|button| {
-                                    button
-                                        .bg(rgb(theme.active))
-                                        .text_color(rgb(theme.foreground))
-                                })
-                                .child("ESC")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    this.dismiss_menu(window, cx);
-                                })),
-                        )
-                    }),
-            )
-            .when(action == WorkspaceAction::NewWorktree, |dialog| {
-                dialog.child(self.render_worktree_tabs(cx))
-            })
-            .child(if action == WorkspaceAction::OpenWorktree {
-                self.render_existing_worktrees(cx)
-                    .when(creating || self.menu.error.is_some(), |picker| {
-                        picker.child(
-                            div()
-                                .id("open-worktree-status")
-                                .debug_selector(|| "open-worktree-status".into())
-                                .flex_none()
-                                .h(px(font.line_height() * 3. + 20.))
-                                .overflow_y_scroll()
-                                .child(body),
-                        )
-                    })
-                    .into_any_element()
-            } else if listing {
-                self.render_worktree_items(cx).into_any_element()
-            } else if action == WorkspaceAction::NewWorktree {
-                // The branch form shares the listings' settled height, so it
-                // fills the space above the footer and scrolls within it.
-                div()
-                    .id("new-worktree-form")
-                    .debug_selector(|| "new-worktree-form".into())
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .child(body)
-                    .into_any_element()
-            } else {
-                body.into_any_element()
-            })
-            .child(
-                div()
-                    .debug_selector(|| "dialog-footer".into())
-                    .flex()
-                    .justify_end()
-                    .gap(px(8.))
-                    .px(px(16.))
-                    .py(px(12.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .child(
-                        button("dialog-cancel")
-                            .border_color(rgb(theme.active))
-                            .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Cancel")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.dismiss_menu(window, cx);
-                            })),
-                    )
-                    // GitHub rows create their own checkouts without a submit button.
-                    .when(
-                        !listing || action == WorkspaceAction::OpenWorktree,
-                        |footer| {
-                            footer.child(
-                                button("dialog-submit")
-                                    // The primary action carries the fill; a
-                                    // destructive one also carries the warning hue.
-                                    .border_color(if !armed {
-                                        rgb(theme.active)
-                                    } else if destructive {
-                                        danger
-                                    } else {
-                                        rgb(theme.foreground)
-                                    })
-                                    .when(armed, |button| button.bg(rgb(theme.active)))
-                                    .text_color(if !armed {
-                                        rgb(theme.muted)
-                                    } else if destructive {
-                                        danger
-                                    } else {
-                                        rgb(theme.foreground)
-                                    })
-                                    .child(if creating { "Waiting..." } else { submit })
-                                    // Faded and inert until there is something
-                                    // to submit, so it never reads as pressable.
-                                    .when(!armed, |button| {
-                                        button.opacity(0.4).cursor(CursorStyle::OperationNotAllowed)
-                                    })
-                                    .when(armed, |button| {
-                                        button
-                                            .hover(|button| button.bg(rgb(theme.active)))
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                cx.stop_propagation();
-                                                this.submit_workspace_dialog(window, cx);
-                                            }))
-                                    }),
-                            )
-                        },
-                    ),
-            )
+            .child(body)
+            .footer(dialog_buttons(weak, confirm))
+            .on_ok(submit(weak, move |this, window, cx| {
+                if this.menu.creation.is_some() {
+                    return;
+                }
+                if this.worktree_listing() {
+                    let selected = this.menu.worktree.as_ref().map(|source| source.selected);
+                    if let Some(selected) = selected {
+                        this.pick_worktree_row(selected, cx);
+                    }
+                } else if !this.worktree_search_focused(window, cx) {
+                    this.submit_workspace_dialog(window, cx);
+                }
+            }))
     }
 }

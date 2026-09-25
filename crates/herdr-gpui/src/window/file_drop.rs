@@ -7,7 +7,7 @@ use crate::{
     connection::ConnectionBridge,
     terminal::{InputTarget, wheel_target},
 };
-use gpui::{Context, ExternalPaths, Pixels, Point, Window};
+use gpui_kit::{Context, ExternalPaths, Pixels, Point, Window};
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::path::PathBuf;
 
@@ -58,7 +58,7 @@ impl HerdrWindow {
             Ok(())
         });
         match result {
-            Ok(()) => window.focus(&self.focus),
+            Ok(()) => window.focus(&self.focus, cx),
             Err(error) => {
                 self.local_error = Some(format!("Files not pasted: {error}"));
                 cx.notify();
@@ -133,7 +133,7 @@ mod tests {
 
     use super::*;
     use crate::{sidebar::layout_tests::fixture_window, state::ConnectionStatus};
-    use gpui::{AppContext, Bounds, point, prelude::*, px, size};
+    use gpui_kit::{AppContext, Bounds, point, prelude::*, px, size};
     use herdr_client::protocol::{
         ClientShellPopupSurface, FrameData, PaneSurfaceFrame, PaneSurfacePane, SurfaceRect,
     };
@@ -276,13 +276,13 @@ mod tests {
     }
 
     struct DropFixture {
-        view: gpui::Entity<HerdrWindow>,
+        view: gpui_kit::Entity<HerdrWindow>,
         submitted_at: Option<Point<Pixels>>,
     }
 
     impl Render for DropFixture {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            gpui::div().size_full().on_drop(cx.listener(
+            gpui_kit::div().size_full().on_drop(cx.listener(
                 |this, paths: &ExternalPaths, window, cx| {
                     this.submitted_at = Some(window.mouse_position());
                     this.view.update(cx, |view, cx| {
@@ -293,14 +293,14 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn external_drop_dispatches_with_submit_position_and_empty_payload_is_inert(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
         // GPUI 0.2.2 exposes only Default for ExternalPaths construction; its
         // populated constructor is platform-private. Exercise actual dispatch
         // with an empty payload, and populated formatting separately above.
-        let (fixture, cx) = cx.add_window_view(|window, cx| DropFixture {
+        let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| DropFixture {
             view: cx.new(|cx| {
                 let mut view = fixture_window(window, cx);
                 prepare(&mut view);
@@ -309,17 +309,17 @@ mod tests {
             submitted_at: None,
         });
         cx.update(|window, cx| {
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string("unchanged".into()));
+            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string("unchanged".into()));
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let entered = point(px(120.), px(100.));
         let submitted = point(px(520.), px(100.));
-        cx.simulate_event(gpui::FileDropEvent::Entered {
+        cx.simulate_event(gpui_kit::FileDropEvent::Entered {
             position: entered,
             paths: ExternalPaths::default(),
         });
-        cx.simulate_event(gpui::FileDropEvent::Submit {
+        cx.simulate_event(gpui_kit::FileDropEvent::Submit {
             position: submitted,
         });
         fixture.read_with(cx, |fixture, cx| {
@@ -332,11 +332,11 @@ mod tests {
         );
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn targets_drop_position_not_focus_and_never_targets_chrome_or_covered_panes(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(fixture_window);
+        let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
         view.update(cx, |view, _| {
             prepare(view);
             let at = |column: f32, row: f32| {
@@ -384,9 +384,9 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn drops_obey_menu_readiness_and_projection_fences(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(fixture_window);
+    #[gpui_kit::test]
+    fn drops_obey_menu_readiness_and_projection_fences(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
         view.update(cx, |view, _| {
             prepare(view);
             let position =

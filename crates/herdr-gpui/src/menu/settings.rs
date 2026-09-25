@@ -2,9 +2,21 @@
 //! load is a cancellable background task: config parsing never runs on the UI
 //! thread, and a superseded load cannot overwrite a newer one.
 
-use super::{Page, accent};
+use super::{Page, listener};
 use crate::{HerdrWindow, config::Config};
-use gpui::{prelude::*, *};
+use gpui_kit::{
+    component::{
+        ActiveTheme as _,
+        button::Button,
+        dialog::Dialog,
+        h_flex,
+        input::{Input, InputState},
+        kbd::Kbd,
+        v_flex,
+    },
+    prelude::*,
+    *,
+};
 
 impl HerdrWindow {
     pub(crate) fn watch_gui_config(&mut self, cx: &mut Context<Self>) {
@@ -45,33 +57,27 @@ impl HerdrWindow {
     }
 
     pub(crate) fn open_keybinds(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.open_menu(window, cx) {
+        if !self.begin_menu(window, cx) {
             return;
         }
-        self.menu.page = Some(Page::Keybinds);
-        self.menu.keybinds_scroll.set_offset(Point::default());
-        let search = cx.new(crate::search_input::SearchInput::new);
-        search.update(cx, |input, cx| {
-            input.set_placeholder("Search shortcuts...", cx);
-            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-            window.focus(&input.focus);
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search shortcuts..."));
+        self.menu.keybinds_search = Some(search.clone());
+        self.show_dialog(Page::Keybinds, window, cx, |this, dialog, weak, _, cx| {
+            this.keybinds_dialog(dialog, weak, cx)
         });
-        self.menu._keybinds_subscription = Some(cx.subscribe(
-            &search,
-            |this, _, _: &crate::search_input::Changed, cx| {
-                this.menu.keybinds_scroll.set_offset(Point::default());
-                cx.notify();
-            },
-        ));
-        self.menu.keybinds_search = Some(search);
+        search.update(cx, |search, cx| search.focus(window, cx));
     }
 
     pub(crate) fn open_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.open_menu(window, cx) {
+        if !self.begin_menu(window, cx) {
             return;
         }
-        self.menu.page = Some(Page::Preferences);
-        self.menu.preferences_scroll.set_offset(Point::default());
+        self.show_dialog(
+            Page::Preferences,
+            window,
+            cx,
+            |this, dialog, weak, _, cx| this.preferences_dialog(dialog, weak, cx),
+        );
     }
 
     pub(crate) fn reload_gui_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -137,7 +143,6 @@ impl HerdrWindow {
                             std::time::Instant::now(),
                         );
                         this.theme = theme;
-                        crate::log_window::set_appearance(&this.config, &this.theme, cx);
                         this.wheel = Default::default();
                         this.last_queued_options = None;
                         this.local_error = None;
@@ -161,28 +166,69 @@ impl HerdrWindow {
     }
 }
 
-impl HerdrWindow {
-    pub(super) fn render_keybinds(&self, cx: &mut Context<Self>) -> Div {
-        use crate::controls::{COMMANDS, Command};
+/// Which keybinds section a command is listed under.
+fn keybind_section(command: crate::controls::Command) -> usize {
+    use crate::controls::Command;
+    match command {
+        Command::Workspace
+        | Command::NewWorktree
+        | Command::Tab
+        | Command::SplitRight
+        | Command::SplitDown
+        | Command::Zoom
+        | Command::ClearPane
+        | Command::ClosePane
+        | Command::CloseTab => 0,
+        Command::NextTab
+        | Command::PreviousTab
+        | Command::FocusLeft
+        | Command::FocusRight
+        | Command::FocusUp
+        | Command::FocusDown
+        | Command::NextPane
+        | Command::PreviousPane
+        | Command::TabNumber(_)
+        | Command::WorkspacePicker
+        | Command::OpenNotificationTarget => 1,
+        Command::NewWindow
+        | Command::ToggleSidebar
+        | Command::IncreaseFontSize
+        | Command::DecreaseFontSize
+        | Command::ResetFontSize
+        | Command::Settings
+        | Command::Keybinds
+        | Command::Themes
+        | Command::Palette
+        | Command::Reconnect
+        | Command::Quit
+        | Command::Logs
+        | Command::About => 2,
+    }
+}
 
-        let theme = &self.theme;
-        let font = &self.config.ui;
+/// One keystroke as kit key chips, or as its own caps when the kit cannot
+/// parse it.
+fn keystroke_chips(keystroke: &str) -> AnyElement {
+    match Keystroke::parse(keystroke) {
+        Ok(stroke) => Kbd::new(stroke).into_any_element(),
+        Err(_) => h_flex()
+            .gap_1()
+            .children(keycaps(keystroke))
+            .into_any_element(),
+    }
+}
+
+impl HerdrWindow {
+    fn keybinds_dialog(&self, dialog: Dialog, weak: &WeakEntity<HerdrWindow>, cx: &App) -> Dialog {
+        use crate::controls::COMMANDS;
+
         let query = self
             .menu
             .keybinds_search
             .as_ref()
-            .map(|search| search.read(cx).text())
-            .unwrap_or("");
-        let accent = accent(theme);
-        let mut body = div()
-            .id("keybinds-body")
-            .debug_selector(|| "keybinds-body".into())
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.menu.keybinds_scroll)
-            .px(px(16.))
-            .py(px(8.));
+            .map(|search| search.read(cx).value().to_string())
+            .unwrap_or_default();
+        let muted = cx.theme().muted_foreground;
         let mut groups = [
             ("WORKSPACES & PANES", Vec::new()),
             ("NAVIGATION", Vec::new()),
@@ -199,51 +245,19 @@ impl HerdrWindow {
             if keys.is_empty() {
                 continue;
             }
-            let group = match info.command {
-                Command::Workspace
-                | Command::NewWorktree
-                | Command::Tab
-                | Command::SplitRight
-                | Command::SplitDown
-                | Command::Zoom
-                | Command::ClearPane
-                | Command::ClosePane
-                | Command::CloseTab => 0,
-                Command::NextTab
-                | Command::PreviousTab
-                | Command::FocusLeft
-                | Command::FocusRight
-                | Command::FocusUp
-                | Command::FocusDown
-                | Command::NextPane
-                | Command::PreviousPane
-                | Command::TabNumber(_)
-                | Command::WorkspacePicker => 1,
-                Command::NewWindow
-                | Command::ToggleSidebar
-                | Command::IncreaseFontSize
-                | Command::DecreaseFontSize
-                | Command::ResetFontSize
-                | Command::Settings
-                | Command::Keybinds
-                | Command::Themes
-                | Command::Palette
-                | Command::Reconnect
-                | Command::Quit
-                | Command::Logs
-                | Command::About => 2,
-                Command::OpenNotificationTarget => 1,
-            };
-            groups[group].1.push((keys, info.label));
+            groups[keybind_section(info.command)]
+                .1
+                .push((keys, info.label));
         }
         let total: usize = groups.iter().map(|(_, shortcuts)| shortcuts.len()).sum();
         let mut count = 0;
+        let mut body = v_flex().debug_selector(|| "keybinds-body".into()).gap_1();
         for (section, shortcuts) in groups {
             let shortcuts: Vec<_> = shortcuts
                 .into_iter()
                 .filter(|(keys, description)| {
                     keys.iter()
-                        .any(|keys| shortcut_matches(query, keys, description, section))
+                        .any(|keys| shortcut_matches(&query, keys, description, section))
                 })
                 .collect();
             if shortcuts.is_empty() {
@@ -252,56 +266,28 @@ impl HerdrWindow {
             count += shortcuts.len();
             body = body.child(
                 div()
-                    .pt(px(12.))
-                    .pb(px(6.))
-                    .text_size(px(font.size * 0.85))
+                    .pt_3()
+                    .pb_1()
+                    .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(accent)
+                    .text_color(muted)
                     .child(section),
             );
             for (keys, description) in shortcuts {
                 body = body.child(
-                    div()
+                    h_flex()
                         .debug_selector(|| format!("shortcut-{description}"))
-                        .flex()
-                        .items_center()
-                        .gap(px(12.))
-                        .py(px(7.))
-                        .border_b_1()
-                        .border_color(rgb(theme.active))
+                        .gap_3()
+                        .py_1()
                         .child(
-                            div()
-                                .debug_selector(|| format!("keys-{description}"))
+                            h_flex()
                                 .w(relative(0.45))
                                 .flex_none()
-                                .flex()
                                 .flex_wrap()
-                                .gap(px(10.))
-                                .children(keys.into_iter().map(|keys| {
-                                    div().flex().flex_wrap().gap(px(4.)).children(
-                                        keycaps(keys).map(|key| {
-                                            div()
-                                                .flex_none()
-                                                .px(px(6.))
-                                                .py(px(2.))
-                                                .rounded(px(crate::config::corners::SMALL))
-                                                .border_1()
-                                                .border_color(rgb(theme.active))
-                                                .bg(rgb(theme.background))
-                                                .text_size(px(font.size * 0.9))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .child(key)
-                                        }),
-                                    )
-                                })),
+                                .gap_2()
+                                .children(keys.into_iter().map(keystroke_chips)),
                         )
-                        .child(
-                            div()
-                                .debug_selector(|| format!("description-{description}"))
-                                .flex_1()
-                                .min_w_0()
-                                .child(description),
-                        ),
+                        .child(div().flex_1().min_w_0().child(description)),
                 );
             }
         }
@@ -309,104 +295,38 @@ impl HerdrWindow {
             body = body.child(
                 div()
                     .debug_selector(|| "keybinds-empty".into())
-                    .py(px(20.))
-                    .text_color(rgb(theme.muted))
+                    .py_4()
+                    .text_color(muted)
                     .child("No matching shortcuts. Try an action name or key combination."),
             );
         }
-        body = body.child(
-            div()
-                .py(px(14.))
-                .text_color(rgb(theme.muted))
-                .child("Native GUI shortcuts only. Terminal applications and daemon/TUI keybindings keep their own shortcuts."),
-        );
-        div()
-            .flex()
-            .flex_col()
-            .size_full()
-            .min_h_0()
+        dialog
+            .title("Keyboard Shortcuts")
+            .w(px(560.))
             .child(
-                div()
-                    .debug_selector(|| "keybinds-header".into())
-                    .flex()
-                    .items_center()
-                    .flex_none()
-                    .gap(px(12.))
-                    .p(px(16.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
-                    .child(
-                        div()
-                            .w(px(3.))
-                            .h(px(font.size * 2.5))
-                            .rounded_full()
-                            .bg(accent),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(font.size * 1.35))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Keyboard Shortcuts"),
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgb(theme.muted))
-                                    .child("Your Herdr quick reference"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("menu-close")
-                            .debug_selector(|| "keybinds-close".into())
-                            .flex_none()
-                            .px(px(8.))
-                            .py(px(4.))
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .cursor_pointer()
-                            .text_color(rgb(theme.muted))
-                            .hover(|style| {
-                                style
-                                    .bg(rgb(theme.active))
-                                    .text_color(rgb(theme.foreground))
-                            })
-                            .child("Close")
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "keybinds-search-area".into())
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(8.))
-                    .when_some(self.menu.keybinds_search.clone(), |area, search| {
-                        area.child(search)
-                    })
+                v_flex()
+                    .gap_2()
+                    .children(self.menu.keybinds_search.as_ref().map(Input::new))
                     .child(
                         div()
                             .debug_selector(|| "keybinds-count".into())
-                            .pt(px(4.))
-                            .text_color(rgb(theme.muted))
+                            .text_sm()
+                            .text_color(muted)
                             .child(format!("{count} of {total} shortcuts")),
-                    ),
+                    )
+                    .child(body)
+                    .child(div().py_2().text_sm().text_color(muted).child(
+                        "Native GUI shortcuts only. Terminal applications and daemon/TUI keybindings keep their own shortcuts.",
+                    )),
             )
-            .child(body)
-            .child(
-                div()
-                    .debug_selector(|| "keybinds-footer".into())
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .text_color(rgb(theme.muted))
-                    .child("Esc to close  /  click outside to dismiss"),
+            .footer(
+                h_flex().w_full().justify_end().child(
+                    Button::new("keybinds-close")
+                        .label("Close")
+                        .on_click(listener(weak, |this, window, cx| {
+                            this.dismiss_menu(window, cx)
+                        })),
+                ),
             )
     }
 }
@@ -453,15 +373,16 @@ fn shortcut_matches(query: &str, keys: &str, description: &str, section: &str) -
 
 #[cfg(test)]
 mod tests {
-    #[gpui::test]
+    #[gpui_kit::test]
     #[allow(clippy::unwrap_used)]
-    fn enabling_does_not_replay_undrained_disabled_ingress(cx: &mut gpui::TestAppContext) {
+    fn enabling_does_not_replay_undrained_disabled_ingress(cx: &mut gpui_kit::TestAppContext) {
         use crate::{config::Config, notifications::tests::notification, state::ConnectionStatus};
         use herdr_client::{
             ClientEvent,
             protocol::{SemanticNotificationKind, ServerMessage},
         };
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         let inbox = view.update(cx, |view, _| {
             // This fixture has no transport; polling must not start one.
             view.endpoints[0].enabled = false;
@@ -522,17 +443,18 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     #[allow(clippy::unwrap_used)]
     fn notification_reload_retimes_pending_clears_disabled_and_keeps_failed_settings(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
         use crate::{
             config::{Config, NotificationConfig},
             notifications::{Notice, tests::notification},
         };
         use std::time::Instant;
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, _| {
             view.config.terminal.size = 24.;
             view.config.notifications = NotificationConfig {
@@ -601,11 +523,12 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn config_reload_toggles_tab_flags_and_preserves_them_on_failure(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         for (confirm_close_tab, show_agents) in
             [(false, true), (true, false), (false, false), (true, true)]
         {
@@ -649,9 +572,12 @@ mod tests {
         }
     }
 
-    #[gpui::test]
-    fn failed_config_load_still_restores_the_saved_github_sign_in(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    #[gpui_kit::test]
+    fn failed_config_load_still_restores_the_saved_github_sign_in(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.avatars = Some(crate::avatars::Avatars::new());
             view.load_gui_config_with(|| Err(crate::Error::MissingHome), cx);
@@ -669,10 +595,11 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     #[allow(clippy::unwrap_used)]
-    fn config_load_is_coherent_bounded_and_cancellable(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    fn config_load_is_coherent_bounded_and_cancellable(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.load_gui_config_with(
                 || {
@@ -764,19 +691,20 @@ mod tests {
 
     /// A saved `[keybindings]` change must reach the live keymap, the palette,
     /// and the keybindings page without restarting, and keep the console keys.
-    #[gpui::test]
+    #[gpui_kit::test]
     #[allow(clippy::unwrap_used)]
-    fn config_reload_rebinds_the_keymap(cx: &mut gpui::TestAppContext) {
+    fn config_reload_rebinds_the_keymap(cx: &mut gpui_kit::TestAppContext) {
         use crate::{
             Command, RunCommand,
             config::Config,
             keymap::{Binding, Keymap},
         };
-        use gpui::Keystroke;
+        use gpui_kit::Keystroke;
 
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|_, cx| crate::bind_keys(cx));
-        let runs = |keystroke: &str, command: Command, cx: &mut gpui::VisualTestContext| {
+        let runs = |keystroke: &str, command: Command, cx: &mut gpui_kit::VisualTestContext| {
             cx.update(|_, cx| {
                 cx.key_bindings()
                     .borrow()

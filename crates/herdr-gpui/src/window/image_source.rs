@@ -1,7 +1,7 @@
 //! Disk-free source recognition; opaque image bytes are prepared off the UI thread.
 
 use crate::{Error, Result};
-use gpui::{Image, ImageFormat};
+use gpui_kit::{Image, ImageFormat};
 use herdr_client::protocol::MAX_CLIPBOARD_IMAGE_PAYLOAD;
 use image::{
     DynamicImage, ImageDecoder, ImageEncoder, ImageReader, Limits,
@@ -174,7 +174,9 @@ impl Source {
                     ImageFormat::Webp => "webp",
                     ImageFormat::Bmp => "bmp",
                     ImageFormat::Tiff => "tiff",
-                    ImageFormat::Svg => return Err(Error::ImageFormat),
+                    ImageFormat::Svg | ImageFormat::Ico | ImageFormat::Pnm => {
+                        return Err(Error::ImageFormat);
+                    }
                 };
                 (extension, image.bytes)
             }

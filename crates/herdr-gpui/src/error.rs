@@ -346,7 +346,7 @@ pub enum Error {
         command: &'static str,
         keystroke: String,
         #[source]
-        source: gpui::InvalidKeystrokeError,
+        source: gpui_kit::InvalidKeystrokeError,
     },
     #[error(
         "keybindings.{command}: {keystroke:?} needs a cmd, ctrl, alt, or fn modifier so typing still reaches the terminal"

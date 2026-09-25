@@ -10,8 +10,69 @@ use crate::{
 #[cfg(feature = "integration-test")]
 use crate::{performance, smoke};
 use anyhow::Result;
-use gpui::{prelude::*, *};
+use gpui_kit::{component::Root, prelude::*, *};
 use herdr_client::ConnectTarget;
+
+/// A main Herdr window. GPUI's handle names the kit [`Root`], which wraps the
+/// view and renders the kit's dialog, sheet and notification layers above it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MainWindow(WindowHandle<Root>);
+
+impl MainWindow {
+    /// Updates the Herdr view inside this window, as `WindowHandle::update`
+    /// does for a window whose root is the view itself.
+    pub(crate) fn update<C: AppContext, R>(
+        self,
+        cx: &mut C,
+        update: impl FnOnce(&mut HerdrWindow, &mut Window, &mut Context<HerdrWindow>) -> R,
+    ) -> Result<R> {
+        self.0.update(cx, |root, window, cx| {
+            let view = root
+                .view()
+                .clone()
+                .downcast::<HerdrWindow>()
+                .map_err(|_| anyhow::anyhow!("the window root holds another view"))?;
+            Ok(view.update(cx, |view, cx| update(view, window, cx)))
+        })?
+    }
+
+    /// Finds the Herdr view behind any window, skipping the Logs window.
+    pub(crate) fn find(handle: AnyWindowHandle, cx: &App) -> Option<Self> {
+        let handle = handle.downcast::<Root>()?;
+        handle
+            .read(cx)
+            .ok()?
+            .view()
+            .clone()
+            .downcast::<HerdrWindow>()
+            .ok()?;
+        Some(Self(handle))
+    }
+
+    /// Every open main window, in GPUI's window order.
+    pub(crate) fn all(cx: &App) -> Vec<Self> {
+        cx.windows()
+            .into_iter()
+            .filter_map(|handle| Self::find(handle, cx))
+            .collect()
+    }
+}
+
+impl From<MainWindow> for AnyWindowHandle {
+    fn from(window: MainWindow) -> Self {
+        window.0.into()
+    }
+}
+
+/// The Herdr view inside a window's root view, mirroring `AnyView::downcast`.
+#[cfg(feature = "integration-test")]
+pub(crate) fn herdr_view(
+    root: AnyView,
+    cx: &App,
+) -> std::result::Result<Entity<HerdrWindow>, AnyView> {
+    let kit = root.downcast::<Root>()?;
+    kit.read(cx).view().clone().downcast::<HerdrWindow>()
+}
 
 /// The first frame must not use default density while disk settings load.
 /// Load before the UI event loop; later windows reuse the last validated pair.
@@ -47,28 +108,27 @@ pub(crate) fn open_window(
     updater: updater::Updater,
     cx: &mut App,
     #[cfg(feature = "integration-test")] fixture: bool,
-) -> Result<WindowHandle<HerdrWindow>> {
+) -> Result<MainWindow> {
     // Cascade rather than stack windows exactly, so a new one is visible at once.
-    let existing = cx
-        .windows()
-        .iter()
-        .filter(|handle| handle.downcast::<HerdrWindow>().is_some())
-        .count();
+    let existing = MainWindow::all(cx).len();
     let step = px(28. * existing.min(6) as f32);
     let mut bounds = Bounds::centered(None, size(px(1200.), px(780.)), cx);
     bounds.origin += point(step, step);
     let (bounds, display_id) = crate::window_state::WindowState::placement(bounds, cx);
-    cx.open_window(
+    let handle = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id,
             window_min_size: Some(size(px(640.), px(400.))),
             titlebar: Some(titlebar::options(WINDOW_TITLE)),
+            // The kit title bar moves the window and zooms on double click
+            // itself; AppKit must not also treat that strip as its own.
+            app_owns_titlebar_drag: cfg!(target_os = "macos"),
             app_id: Some("so.pen.herdr-gpui".into()),
             ..Default::default()
         },
         |window, cx| {
-            cx.new(|cx| {
+            let herdr = cx.new(|cx| {
                 let mut view = HerdrWindow::new(
                     target,
                     window,
@@ -79,9 +139,11 @@ pub(crate) fn open_window(
                 view.updater = updater;
                 crate::window_state::WindowState::observe(window, cx);
                 view
-            })
+            });
+            cx.new(|cx| Root::new(herdr, window, cx))
         },
-    )
+    )?;
+    Ok(MainWindow(handle))
 }
 
 /// Opens another window from inside the focused window's own update.
@@ -174,7 +236,11 @@ pub(crate) fn run() -> std::process::ExitCode {
     };
     let failed = startup_failed.clone();
     let window_state = (mode == LaunchMode::Normal).then(crate::window_state::WindowState::load);
-    Application::new().with_assets(icons::Icons).run(move |cx| {
+    application().with_assets(icons::Icons).run(move |cx| {
+        // The kit registers its themes, keybindings and globals before any
+        // kit component renders.
+        init(cx);
+        crate::kit_theme::sync(&appearance.theme, &appearance.config, cx);
         let window_count = window_state.as_ref().map_or(1, |state| state.count());
         if let Some(state) = window_state {
             state.install(cx);
@@ -187,7 +253,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         cx.on_action(|_: &ShowLogs, cx| log_window::open(cx));
         bind_keys(cx);
         cx.set_menus(menus());
-        cx.on_window_closed(move |cx| {
+        cx.on_window_closed(move |cx, _| {
             if cx.windows().is_empty() {
                 #[cfg(feature = "integration-test")]
                 if performance_test {
@@ -262,8 +328,6 @@ mod tests {
     use super::{ConnectTarget, HerdrWindow};
     use crate::config::LayoutMode;
     #[cfg(feature = "integration-test")]
-    use gpui::px;
-
     #[test]
     fn startup_appearance_loads_a_coherent_pair_and_reports_errors() {
         let appearance = InitialAppearance::load(|| {
@@ -299,8 +363,8 @@ mod tests {
     }
 
     #[cfg(feature = "integration-test")]
-    #[gpui::test]
-    fn first_window_frame_uses_startup_layout(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn first_window_frame_uses_startup_layout(cx: &mut gpui_kit::TestAppContext) {
         use crate::config::{Density, Style};
         for mode in [Density::Compact, Density::Normal, Density::Comfortable]
             .into_iter()
@@ -308,7 +372,7 @@ mod tests {
                 [Style::Flat, Style::Rounded].map(|style| LayoutMode::new(density, style))
             })
         {
-            let (view, cx) = cx.add_window_view(|window, cx| {
+            let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
                 let mut appearance = InitialAppearance::load(|| {
                     Ok(Config {
                         theme: "Nord".into(),
@@ -330,23 +394,13 @@ mod tests {
                 assert_eq!(state.config.layout.mode, mode);
                 assert_eq!(Some(state.theme.clone()), Theme::builtin("Nord"));
                 assert!(state.config_load.is_none());
-                crate::sidebar::layout_tests::full_draw(window, cx).clear();
+                crate::sidebar::layout_tests::full_draw(window, cx).clear(cx);
             });
-            let row = cx
-                .debug_bounds("row-herdr")
-                .unwrap_or_else(|| panic!("missing first-frame row"));
-            // Rounded rows add padding inside their highlight and spacing
-            // around it: a third of the density's gap, each, twice.
-            assert_eq!(
-                row.size.height,
-                px(match (mode.density, mode.style) {
-                    (Density::Compact, Style::Flat) => 16.,
-                    (Density::Normal, Style::Flat) => 32.,
-                    (Density::Comfortable, Style::Flat) => 40.,
-                    (Density::Compact, Style::Rounded) => 16. + 2. + 2.,
-                    (Density::Normal, Style::Rounded) => 32. + 4. + 4.,
-                    (Density::Comfortable, Style::Rounded) => 40. + 6. + 6.,
-                })
+            // Kit sidebar rows have one height; the layout reaches the frame
+            // through the config checked above.
+            assert!(
+                cx.debug_bounds("row-herdr").is_some(),
+                "missing first-frame row"
             );
         }
     }

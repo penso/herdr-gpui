@@ -5,7 +5,7 @@ use super::{
     state::ConnectionStatus,
 };
 use crate::{Error, Result};
-use gpui::Context;
+use gpui_kit::Context;
 use herdr_client::{ClientHandle, ConnectOptions, ConnectTarget, SavedHost};
 use std::{
     collections::HashSet,
@@ -1097,11 +1097,12 @@ mod tests {
         );
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn catalog_preserves_order_labels_and_scoped_collapse_but_retires_changed_targets(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.reconcile_catalog(vec![host("b", true), host("a", false)], cx);
             assert_eq!(
@@ -1139,9 +1140,10 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn device_filter_follows_navigation_and_catalog_retirement(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    #[gpui_kit::test]
+    fn device_filter_follows_navigation_and_catalog_retirement(cx: &mut gpui_kit::TestAppContext) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.reconcile_catalog(vec![host("a", true), host("b", true)], cx);
             assert!(view.select_endpoint("ssh:a", cx));
@@ -1166,9 +1168,12 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn switching_away_retires_an_active_handshake_without_a_boot_id(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    #[gpui_kit::test]
+    fn switching_away_retires_an_active_handshake_without_a_boot_id(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.reconcile_catalog(vec![host("remote", true)], cx);
             view.endpoints[0].initial_surface = true;
@@ -1180,9 +1185,12 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn timeout_and_return_to_local_do_not_wait_for_remote_release(cx: &mut gpui::TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    #[gpui_kit::test]
+    fn timeout_and_return_to_local_do_not_wait_for_remote_release(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         view.update(cx, |view, cx| {
             view.active = true;
             let painted = view.endpoints[view.selected_endpoint]

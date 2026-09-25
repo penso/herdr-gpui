@@ -10,7 +10,7 @@ use crate::{
     navigation::{NavigationTarget, OwnedNavigationTarget},
     open_additional_window, state,
 };
-use gpui::{Context, Window};
+use gpui_kit::{Context, Window};
 use std::time::Duration;
 
 impl HerdrWindow {
@@ -131,8 +131,6 @@ impl HerdrWindow {
             return;
         }
         self.config.terminal.size = size;
-        // The console follows the rendered terminal face, as a reload makes it.
-        log_window::set_appearance(&self.config, &self.theme, cx);
         cx.notify();
     }
 
@@ -243,7 +241,7 @@ impl HerdrWindow {
             });
             self.marked.clear();
         }
-        window.focus(&self.focus);
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 }

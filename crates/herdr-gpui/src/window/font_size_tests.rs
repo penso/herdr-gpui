@@ -9,15 +9,19 @@ use crate::{
     controls::Command,
     sidebar::layout_tests::fixture_window,
 };
-use gpui::{TestAppContext, px, size};
+use gpui_kit::{TestAppContext, px, size};
 
-fn run(view: &gpui::Entity<HerdrWindow>, command: Command, cx: &mut gpui::VisualTestContext) {
+fn run(
+    view: &gpui_kit::Entity<HerdrWindow>,
+    command: Command,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
     cx.update(|window, cx| view.update(cx, |view, cx| view.command(command, window, cx)));
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn stepping_moves_the_size_and_its_line_height(cx: &mut TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     let start = view.read_with(cx, |view, _| view.config.terminal.size);
 
     run(&view, Command::IncreaseFontSize, cx);
@@ -40,9 +44,9 @@ fn stepping_moves_the_size_and_its_line_height(cx: &mut TestAppContext) {
 /// Reset restores the size the loaded config asked for, which for a fresh
 /// window is the size it started with. [`crate::menu`] covers the baseline
 /// moving with a reload.
-#[gpui::test]
+#[gpui_kit::test]
 fn reset_returns_to_the_configured_size(cx: &mut TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     let start = view.read_with(cx, |view, _| view.config.terminal.size);
     run(&view, Command::IncreaseFontSize, cx);
     run(&view, Command::IncreaseFontSize, cx);
@@ -53,9 +57,9 @@ fn reset_returns_to_the_configured_size(cx: &mut TestAppContext) {
     });
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn stepping_clamps_to_the_configured_range(cx: &mut TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     let (&low, &high) = (FONT_SIZE_RANGE.start(), FONT_SIZE_RANGE.end());
     // Enough steps to overshoot either end from any size the range allows.
     let steps = ((high - low) / FONT_SIZE_STEP) as usize + 4;
@@ -79,9 +83,9 @@ fn stepping_clamps_to_the_configured_range(cx: &mut TestAppContext) {
 
 /// The daemon is told how many rows and cells of what size the window holds, so
 /// a font change has to reach `options` or the shell keeps its old grid.
-#[gpui::test]
+#[gpui_kit::test]
 fn a_size_change_recomputes_the_surface_geometry(cx: &mut TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     cx.simulate_resize(size(px(900.), px(600.)));
     cx.run_until_parked();
     let before = view.read_with(cx, |view, _| view.options);
@@ -108,16 +112,17 @@ fn a_size_change_recomputes_the_surface_geometry(cx: &mut TestAppContext) {
 
 /// The keymap is the main way these commands get used, and `cmd--` and `cmd-+`
 /// are the two whose strings the keystroke parser treats specially.
-#[gpui::test]
+#[gpui_kit::test]
 fn the_bound_keystrokes_reach_the_commands(cx: &mut TestAppContext) {
-    let (view, cx) = cx.add_window_view(|window, cx| {
+    let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         crate::bind_keys(cx);
         fixture_window(window, cx)
     });
     cx.update(|window, cx| {
         // Actions dispatch along the focus path, as they do for a live window.
-        view.update(cx, |view, _| window.focus(&view.focus));
-        window.draw(cx).clear();
+        let focus = view.read(cx).focus.clone();
+        window.focus(&focus, cx);
+        window.draw(cx).clear(cx);
     });
     cx.run_until_parked();
     let start = view.read_with(cx, |view, _| view.config.terminal.size);

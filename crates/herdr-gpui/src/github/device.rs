@@ -86,7 +86,7 @@ pub(super) enum Reply {
 
 pub(crate) struct Profile {
     pub login: String,
-    pub avatar: Option<Arc<gpui::Image>>,
+    pub avatar: Option<Arc<gpui_kit::Image>>,
     pub token: Arc<SecretString>,
     pub(super) avatar_updates: Option<crate::avatars::AvatarUpdates>,
 }

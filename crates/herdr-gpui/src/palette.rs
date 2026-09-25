@@ -1,10 +1,23 @@
+//! The command palette and Go To, as a kit `Command` in a dialog. Entries are
+//! prepared when it opens and filtered here, so nesting follows the rows a
+//! search keeps.
+
 use crate::{
     Error, HerdrWindow, NavigationTarget, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
-    menu::Page,
-    search_input::{Changed, SearchInput},
+    menu::{Page, error_alert},
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{
+    component::{
+        ActiveTheme as _,
+        command::{Command as CommandPalette, CommandItem, CommandState},
+        h_flex,
+        tag::Tag,
+        v_flex,
+    },
+    prelude::*,
+    *,
+};
 use herdr_client::{
     Method,
     protocol::{AgentStatus, ClientShellCommandAction, ClientShellSnapshot},
@@ -257,16 +270,13 @@ fn is_nested(entry: &Entry, filtered: &[usize]) -> bool {
         .is_some_and(|parent| filtered.binary_search(&parent).is_ok())
 }
 
-pub(super) struct Palette {
-    pub search: Entity<SearchInput>,
+pub(crate) struct Palette {
+    pub(crate) command: Entity<CommandState>,
     entries: Vec<Entry>,
     filtered: Vec<usize>,
-    selected: usize,
-    scroll: UniformListScrollHandle,
     target: Option<Target>,
     workspaces_only: bool,
     error: Option<String>,
-    _subscription: Subscription,
 }
 
 impl Palette {
@@ -287,29 +297,55 @@ impl Palette {
                 .then_some(index)
             })
             .collect();
-        self.selected = 0;
-        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+    }
+
+    /// One kit command row: label and detail, indented beneath a visible
+    /// parent, with the status badge trailing.
+    fn item(&self, index: usize) -> CommandItem {
+        let entry = &self.entries[index];
+        let nested = is_nested(entry, &self.filtered);
+        let (label, detail, badge) = (
+            SharedString::from(entry.label.clone()),
+            SharedString::from(entry.detail.clone()),
+            entry.badge,
+        );
+        CommandItem::new().label(label.clone()).child(move |_, cx| {
+            h_flex()
+                .w_full()
+                .gap_3()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .when(nested, |column| column.pl_4())
+                        .child(div().truncate().child(label.clone()))
+                        .when(!detail.is_empty(), |column| {
+                            column.child(
+                                div()
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(detail.clone()),
+                            )
+                        }),
+                )
+                .when(!badge.is_empty(), |row| {
+                    row.child(Tag::secondary().flex_none().child(badge))
+                })
+        })
     }
 }
 
 impl HerdrWindow {
-    pub(super) fn open_palette(
+    pub(crate) fn open_palette(
         &mut self,
         workspaces_only: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.open_menu(window, cx) {
+        if !self.begin_menu(window, cx) {
             return;
         }
-        self.menu.page = Some(Page::Palette);
-        let search = cx.new(SearchInput::new);
-        let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {
-            if let Some(palette) = &mut this.menu.palette {
-                palette.filter(search.read(cx).text());
-                cx.notify();
-            }
-        });
         let mut entries = Vec::new();
         if !workspaces_only {
             entries.extend(
@@ -382,32 +418,81 @@ impl HerdrWindow {
             }
             Target::capture(snapshot)
         });
-        search.update(cx, |input, cx| {
-            input.set_placeholder(
-                if workspaces_only {
-                    "Search workspaces, agents, and terminals..."
-                } else {
-                    "Search commands..."
-                },
-                cx,
-            );
-            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-            window.focus(&input.focus);
-        });
+        let command = cx.new(|cx| CommandState::new(window, cx));
         let mut palette = Palette {
-            search,
+            command: command.clone(),
             entries,
             filtered: Vec::new(),
-            selected: 0,
-            scroll: UniformListScrollHandle::new(),
             target,
             workspaces_only,
             error: None,
-            _subscription: subscription,
         };
         palette.filter("");
         self.menu.palette = Some(palette);
-        cx.notify();
+        self.show_dialog(Page::Palette, window, cx, |this, dialog, weak, _, cx| {
+            let Some(palette) = &this.menu.palette else {
+                return dialog;
+            };
+            let query = weak.clone();
+            let confirm = weak.clone();
+            dialog
+                .title(if palette.workspaces_only {
+                    "Go To"
+                } else {
+                    "Command Palette"
+                })
+                .w(px(640.))
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .children(error_alert("palette-error", palette.error.as_ref()))
+                        .child(
+                            CommandPalette::new(&palette.command)
+                                .bordered(false)
+                                .filterable(false)
+                                .max_h(px(420.))
+                                .placeholder(if palette.workspaces_only {
+                                    "Search workspaces, agents, and terminals..."
+                                } else {
+                                    "Search commands..."
+                                })
+                                .items(palette.filtered.iter().map(|index| palette.item(*index)))
+                                .empty(|_, _, _| "No matching results. Try a shorter search.")
+                                .on_query(move |text, _, cx| {
+                                    let _ = query.update(cx, |this, cx| {
+                                        if let Some(palette) = &mut this.menu.palette {
+                                            palette.filter(text);
+                                            cx.notify();
+                                        }
+                                    });
+                                })
+                                .on_confirm(move |index, window, cx| {
+                                    let _ = confirm.update(cx, |this, cx| {
+                                        let action =
+                                            this.menu.palette.as_ref().and_then(|palette| {
+                                                let entry = palette.filtered.get(index.row)?;
+                                                Some(palette.entries[*entry].action.clone())
+                                            });
+                                        if let Some(action) = action {
+                                            this.activate_palette(action, window, cx);
+                                        }
+                                    });
+                                }),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "palette-status".into())
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!(
+                                    "{} of {} results",
+                                    palette.filtered.len(),
+                                    palette.entries.len()
+                                )),
+                        ),
+                )
+        });
+        command.update(cx, |command, cx| command.focus(window, cx));
     }
 
     fn activate_palette(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
@@ -479,6 +564,23 @@ impl HerdrWindow {
         }
     }
 
+    /// Confirms the palette's `row`th visible entry, as Enter on it would.
+    #[cfg(all(test, unix))]
+    pub(crate) fn confirm_palette_row(
+        &mut self,
+        row: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let action = self.menu.palette.as_ref().and_then(|palette| {
+            let entry = palette.filtered.get(row)?;
+            Some(palette.entries[*entry].action.clone())
+        });
+        if let Some(action) = action {
+            self.activate_palette(action, window, cx);
+        }
+    }
+
     /// Checks a Go To destination against its host's current snapshot, and
     /// reports whether that host is the selected one. Another host is selected
     /// by the navigation itself, which waits for its surface when needed.
@@ -509,204 +611,6 @@ impl HerdrWindow {
         }
         Ok(selected)
     }
-
-    pub(super) fn palette_key(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(palette) = &mut self.menu.palette else {
-            return;
-        };
-        if palette.search.read(cx).is_composing() {
-            return;
-        }
-        match event.keystroke.key.as_str() {
-            "escape" => {
-                cx.stop_propagation();
-                window.prevent_default();
-                self.dismiss_menu(window, cx);
-            }
-            "up" | "down" if !palette.filtered.is_empty() => {
-                cx.stop_propagation();
-                window.prevent_default();
-                let count = palette.filtered.len();
-                palette.selected = (palette.selected
-                    + if event.keystroke.key == "up" {
-                        count - 1
-                    } else {
-                        1
-                    })
-                    % count;
-                palette
-                    .scroll
-                    .scroll_to_item(palette.selected, ScrollStrategy::Center);
-                cx.notify();
-            }
-            "enter" => {
-                cx.stop_propagation();
-                window.prevent_default();
-                if let Some(index) = palette.filtered.get(palette.selected) {
-                    let action = palette.entries[*index].action.clone();
-                    self.activate_palette(action, window, cx);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    pub(super) fn render_palette(&self, cx: &mut Context<Self>) -> Div {
-        let Some(palette) = &self.menu.palette else {
-            return div();
-        };
-        let theme = &self.theme;
-        div()
-            .flex()
-            .flex_col()
-            .size_full()
-            .min_h_0()
-            .child(
-                div()
-                    .flex_none()
-                    .p(px(16.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(12.))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_size(px(self.config.ui.size * 1.35))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(if palette.workspaces_only {
-                                        "Go To"
-                                    } else {
-                                        "Command Palette"
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .id("palette-close")
-                                    .px_2()
-                                    .py_1()
-                                    .cursor_pointer()
-                                    .rounded(px(crate::config::corners::CONTROL))
-                                    .hover(|s| s.bg(rgb(theme.active)))
-                                    .child("Close")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.dismiss_menu(window, cx)
-                                    })),
-                            ),
-                    )
-                    .child(div().pt(px(12.)).child(palette.search.clone()))
-                    .child(div().pt(px(8.)).text_color(rgb(theme.muted)).child(format!(
-                        "{} of {} results",
-                        palette.filtered.len(),
-                        palette.entries.len()
-                    ))),
-            )
-            .when_some(palette.error.clone(), |panel, error| {
-                panel.child(
-                    div()
-                        .id("palette-error")
-                        .max_h(px(90.))
-                        .overflow_y_scroll()
-                        .flex_none()
-                        .p(px(12.))
-                        .text_color(rgb(theme.foreground))
-                        .bg(rgb(theme.active))
-                        .child(error),
-                )
-            })
-            .when(palette.filtered.is_empty(), |panel| {
-                panel.child(
-                    div()
-                        .flex_1()
-                        .p(px(16.))
-                        .text_color(rgb(theme.muted))
-                        .child("No matching results. Try a shorter search."),
-                )
-            })
-            .when(!palette.filtered.is_empty(), |panel| {
-                panel.child(
-                    uniform_list(
-                        "palette-results",
-                        palette.filtered.len(),
-                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
-                            let Some(palette) = &this.menu.palette else {
-                                return Vec::new();
-                            };
-                            range
-                                .map(|index| {
-                                    let entry = palette.entries[palette.filtered[index]].clone();
-                                    let nested = is_nested(&entry, &palette.filtered);
-                                    div()
-                                        .id(index)
-                                        .debug_selector(move || format!("palette-row-{index}"))
-                                        // Selection and hover read as rows, not as
-                                        // labels, so the fill spans the whole list.
-                                        .w_full()
-                                        .h(px(this.config.ui.line_height() * 2. + 20.))
-                                        .px(px(16.))
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(12.))
-                                        .cursor_pointer()
-                                        .when(index == palette.selected, |row| {
-                                            row.bg(rgb(this.theme.active))
-                                        })
-                                        .hover(|s| s.bg(rgb(this.theme.active)))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .flex()
-                                                .flex_col()
-                                                .when(nested, |column| column.pl(px(16.)))
-                                                .child(div().truncate().child(entry.label))
-                                                .child(
-                                                    div()
-                                                        .truncate()
-                                                        .text_color(rgb(this.theme.muted))
-                                                        .child(entry.detail),
-                                                ),
-                                        )
-                                        .when(!entry.badge.is_empty(), |row| {
-                                            row.child(
-                                                div()
-                                                    .flex_none()
-                                                    .text_color(rgb(this.theme.muted))
-                                                    .child(entry.badge),
-                                            )
-                                        })
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.activate_palette(entry.action.clone(), window, cx)
-                                        }))
-                                })
-                                .collect()
-                        }),
-                    )
-                    .track_scroll(palette.scroll.clone())
-                    .flex_1()
-                    .min_h_0(),
-                )
-            })
-            .child(
-                div()
-                    .debug_selector(|| "palette-status".into())
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .text_color(rgb(theme.muted))
-                    .child("Up / Down to navigate. Enter or click to select. Esc to cancel."),
-            )
-    }
 }
 
 #[cfg(test)]
@@ -714,7 +618,7 @@ impl HerdrWindow {
 mod tests {
     use super::*;
     use core::prelude::v1::test;
-    use gpui::TestAppContext;
+    use gpui_kit::TestAppContext;
     use herdr_client::protocol::ClientShellCommand;
 
     fn snapshot() -> ClientShellSnapshot {
@@ -724,11 +628,12 @@ mod tests {
         .unwrap()
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn notification_command_is_searchable_and_targetless_activation_is_inert(
         cx: &mut TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
                 view.show_toast_preview(
@@ -754,19 +659,21 @@ mod tests {
         });
         cx.update(|window, cx| {
             crate::bind_keys(cx);
-            window.focus(&view.read(cx).focus);
-            window.draw(cx).clear();
+            let focus = view.read(cx).focus.clone();
+            window.focus(&focus, cx);
+            window.draw(cx).clear(cx);
             window.dispatch_keystroke(Keystroke::parse("cmd-alt-n").unwrap(), cx);
             assert!(view.read(cx).pending_navigation.is_none());
             assert_eq!(view.read(cx).endpoints[0].toasts.entries.len(), 1);
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn command_badges_mark_daemon_commands_and_go_to_badges_mark_agent_status(
         cx: &mut TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|_, cx| {
             view.update(cx, |view, _| {
                 let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
@@ -812,9 +719,10 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn clear_pane_is_offered_and_sent_only_when_the_daemon_advertises_it(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         for supported in [false, true] {
             cx.update(|window, cx| {
                 view.update(cx, |view, cx| {
@@ -848,11 +756,12 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn go_to_rejects_a_disabled_or_missing_host_and_keeps_the_palette_open(
         cx: &mut TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
                 view.open_palette(true, window, cx);
@@ -881,11 +790,11 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn go_to_lists_the_selected_host_first_and_switches_host_for_a_remote_row(
         cx: &mut TestAppContext,
     ) {
-        let (view, cx) = cx.add_window_view(|window, cx| {
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
             let mut remote = crate::endpoint::Endpoint::new(
                 "ssh:box".into(),

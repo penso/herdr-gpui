@@ -8,9 +8,12 @@ use super::{Page, WorkspaceAction, worktree_open::Entry};
 use crate::{
     HerdrWindow,
     repo_items::{self, Branch, Item, Kind},
-    search_input::SearchInput,
 };
-use gpui::{Entity, Subscription, Task, UniformListScrollHandle, prelude::*};
+use gpui_kit::{
+    Entity, ScrollHandle, Subscription, Task,
+    component::input::{InputEvent, InputState},
+    prelude::*,
+};
 use herdr_client::Method;
 
 /// Which part of the new worktree dialog is showing. A closed set: the tab
@@ -117,13 +120,13 @@ pub(super) struct Branches {
 /// The dialog's tab state and the listings behind its tabs.
 pub(crate) struct WorktreeSource {
     pub(super) tab: Tab,
-    pub(super) search: Entity<SearchInput>,
+    pub(super) search: Entity<InputState>,
     /// Indices into the open tab's listing, in listed order.
     pub(super) filtered: Vec<usize>,
     /// How many rows the search keeps in each tab, in `Tab::ALL` order.
     hits: [usize; Tab::ALL.len()],
     pub(super) selected: usize,
-    pub(super) scroll: UniformListScrollHandle,
+    pub(super) scroll: ScrollHandle,
     /// The search, trimmed and lowercased once for every listing.
     query: String,
     pub(super) lookup: repo_items::Lookup,
@@ -151,7 +154,17 @@ impl WorktreeSource {
         }
         self.filtered = self.matching(self.tab);
         self.selected = 0;
-        self.scroll.scroll_to_item(0, gpui::ScrollStrategy::Top);
+        self.scroll.scroll_to_item(0);
+    }
+
+    /// Moves the highlight by `step` rows, wrapping, and keeps it in view.
+    pub(super) fn step(&mut self, step: isize) {
+        let rows = self.filtered.len();
+        if rows == 0 {
+            return;
+        }
+        self.selected = (self.selected as isize + step).rem_euclid(rows as isize) as usize;
+        self.scroll.scroll_to_item(self.selected);
     }
 
     fn matching(&self, tab: Tab) -> Vec<usize> {
@@ -287,31 +300,34 @@ impl HerdrWindow {
 
     /// Whether the shared search field has focus, so typing belongs to it even
     /// while the branch form is showing.
-    pub(crate) fn worktree_search_focused(&self, window: &gpui::Window, cx: &gpui::App) -> bool {
+    pub(crate) fn worktree_search_focused(
+        &self,
+        window: &gpui_kit::Window,
+        cx: &gpui_kit::App,
+    ) -> bool {
         self.menu.page == Some(Page::Dialog(WorkspaceAction::NewWorktree))
-            && self
-                .menu
-                .worktree
-                .as_ref()
-                .is_some_and(|source| source.search.read(cx).focus.is_focused(window))
+            && self.menu.worktree.as_ref().is_some_and(|source| {
+                gpui_kit::Focusable::focus_handle(source.search.read(cx), cx).is_focused(window)
+            })
     }
 
     pub(super) fn open_worktree_source(
         &mut self,
-        window: &mut gpui::Window,
+        window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) {
-        let search = cx.new(SearchInput::new);
-        search.update(cx, |input, cx| {
-            input.set_placeholder("Search checkouts, branches, pull requests, issues...", cx);
-            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+        let search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Search checkouts, branches, pull requests, issues...")
         });
         let subscription = cx.subscribe_in(
             &search,
             window,
-            |this, search, _: &crate::search_input::Changed, window, cx| {
-                let text = search.read(cx).text().to_owned();
-                this.search_worktree_sources(&text, window, cx);
+            |this, search, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let text = search.read(cx).value().to_string();
+                    this.search_worktree_sources(&text, window, cx);
+                }
             },
         );
         self.menu.worktree = Some(WorktreeSource {
@@ -320,7 +336,7 @@ impl HerdrWindow {
             filtered: Vec::new(),
             hits: Default::default(),
             selected: 0,
-            scroll: UniformListScrollHandle::new(),
+            scroll: ScrollHandle::new(),
             query: String::new(),
             lookup: Default::default(),
             checkouts: Default::default(),
@@ -341,7 +357,7 @@ impl HerdrWindow {
     fn search_worktree_sources(
         &mut self,
         text: &str,
-        window: &mut gpui::Window,
+        window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) {
         let Some(source) = &mut self.menu.worktree else {
@@ -375,7 +391,7 @@ impl HerdrWindow {
     pub(super) fn select_worktree_tab(
         &mut self,
         tab: Tab,
-        window: &mut gpui::Window,
+        window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) {
         if tab.kind().is_some() && !self.menu.github.connected() {
@@ -393,22 +409,15 @@ impl HerdrWindow {
         let retry_branches = !source.branches.listed && !source.branches.loading;
         let list_checkouts = !source.checkouts.listed && source.checkouts.request.is_none();
         match tab {
-            Tab::New => window.focus(&self.menu.focus),
-            Tab::Existing => {
-                if list_checkouts {
-                    self.list_checkouts();
+            Tab::New => self.focus_menu_input(window, cx),
+            Tab::Existing | Tab::Branches | Tab::Items(_) => {
+                match tab {
+                    Tab::Existing if list_checkouts => self.list_checkouts(),
+                    Tab::Branches if retry_branches => self.list_branches(cx),
+                    Tab::Items(_) => self.list_repo_items(),
+                    _ => {}
                 }
-                window.focus(&search.read(cx).focus);
-            }
-            Tab::Branches => {
-                if retry_branches {
-                    self.list_branches(cx);
-                }
-                window.focus(&search.read(cx).focus);
-            }
-            Tab::Items(_) => {
-                window.focus(&search.read(cx).focus);
-                self.list_repo_items();
+                search.update(cx, |search, cx| search.focus(window, cx));
             }
         }
         cx.notify();
@@ -802,29 +811,4 @@ pub(super) fn item_request(
     // The checkout is named for what it is for, so the sidebar shows it too.
     params["label"] = item.label().into();
     Ok((method, params))
-}
-
-/// Finished listings, for tests that drive the tabs without a network, a
-/// daemon or a repository.
-#[cfg(test)]
-impl WorktreeSource {
-    pub(crate) fn install(&mut self, origin: repo_items::Origin, items: Vec<Item>) {
-        self.lookup.origin = Some(origin);
-        self.lookup.items = items;
-        self.lookup.loading = false;
-        self.refresh();
-    }
-
-    pub(crate) fn install_branches(&mut self, branches: Vec<Branch>) {
-        self.branches = Branches {
-            entries: branches,
-            listed: true,
-            ..Default::default()
-        };
-        self.refresh();
-    }
-
-    pub(super) fn install_checkouts(&mut self, response: serde_json::Value) {
-        self.apply_checkouts(Ok(response));
-    }
 }

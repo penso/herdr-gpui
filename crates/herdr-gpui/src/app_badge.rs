@@ -1,7 +1,7 @@
 //! A deduplicated Dock attention count across all windows, with a QA preview.
 
 use crate::endpoint::Endpoint;
-use gpui::{App, Global, WindowId};
+use gpui_kit::{App, Global, WindowId};
 use herdr_client::ConnectTarget;
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 use std::{collections::HashMap, sync::Arc};
@@ -85,7 +85,7 @@ pub(super) fn install(cx: &mut App) {
         badge.preview = action.enabled;
         badge.publish();
     });
-    cx.on_window_closed(|cx| {
+    cx.on_window_closed(|cx, _| {
         let open = cx.windows();
         let badge = cx.default_global::<Badge>();
         badge
@@ -176,9 +176,9 @@ mod tests {
     };
     use herdr_client::ConnectTarget;
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn first_snapshot_counts_existing_attention_without_surface_or_notifications(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
         let handle = cx.add_window(fixture_window);
         handle
@@ -212,8 +212,10 @@ mod tests {
             .unwrap();
     }
 
-    #[gpui::test]
-    fn qa_preview_survives_polling_and_restores_daemon_attention(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn qa_preview_survives_polling_and_restores_daemon_attention(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
         use crate::actions::SetBadgePreview;
 
         let handle = cx.add_window(fixture_window);
@@ -250,8 +252,8 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn only_done_and_blocked_need_attention_even_when_focused(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn only_done_and_blocked_need_attention_even_when_focused(cx: &mut gpui_kit::TestAppContext) {
         let handle = cx.add_window(fixture_window);
         let id = handle.window_id();
         let mut badge = Badge::default();
@@ -297,9 +299,9 @@ mod tests {
         assert_eq!(badge.published, Some(0));
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
         let first = cx.add_window(fixture_window).window_id();
         let second = cx.add_window(fixture_window).window_id();
@@ -371,9 +373,9 @@ mod tests {
         assert_eq!(badge.published, Some(2));
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn hosts_disconnect_reconnect_and_disable_without_local_acknowledgement(
-        cx: &mut gpui::TestAppContext,
+        cx: &mut gpui_kit::TestAppContext,
     ) {
         let handle = cx.add_window(fixture_window);
         handle
@@ -419,8 +421,8 @@ mod tests {
             .unwrap();
     }
 
-    #[gpui::test]
-    fn closing_windows_removes_only_their_contribution(cx: &mut gpui::TestAppContext) {
+    #[gpui_kit::test]
+    fn closing_windows_removes_only_their_contribution(cx: &mut gpui_kit::TestAppContext) {
         let first = cx.add_window(fixture_window);
         let second = cx.add_window(fixture_window);
         let quiet = cx.add_window(fixture_window);

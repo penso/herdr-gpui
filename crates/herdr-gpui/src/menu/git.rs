@@ -1,13 +1,26 @@
 //! The titlebar's Git actions popup: commit, push, and pull request creation
-//! for the focused local checkout.
-use super::{Page, accent, danger};
+//! for the focused local checkout, as a kit popup menu whose status rows read
+//! the window's live state.
+use super::{Page, dialog_buttons, error_alert, listener, pr::pr_color, submit};
 use crate::{
     HerdrWindow,
-    dialog_input::DialogInput,
     git::{Action, Status},
     pull_request::State as PrState,
 };
-use gpui::{prelude::*, *};
+use gpui_kit::{
+    component::{
+        ActiveTheme as _, Icon, IconName,
+        button::{Button, ButtonVariants as _},
+        dialog::Dialog,
+        h_flex,
+        input::Input,
+        menu::PopupMenuItem,
+        tag::Tag,
+        v_flex,
+    },
+    prelude::*,
+    *,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Row {
@@ -17,11 +30,11 @@ pub(super) enum Row {
 }
 
 impl Row {
-    fn icon(self) -> &'static str {
+    fn icon(self) -> Icon {
         match self {
-            Self::Commit => "icons/pencil.svg",
-            Self::Push => "icons/chevron-up.svg",
-            Self::PullRequest => "icons/git-branch.svg",
+            Self::Commit => Icon::default().path("icons/pencil.svg"),
+            Self::Push => Icon::new(IconName::ArrowUp),
+            Self::PullRequest => Icon::default().path("icons/git-branch.svg"),
         }
     }
 }
@@ -121,25 +134,88 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.menu.page.is_some() {
-            self.dismiss_menu(window, cx);
+        if self.menu_is_open() {
+            self.close_menu(window, cx);
             return;
         }
-        if self.git.tracked().is_none() {
+        self.show_git_menu(anchor, window, cx);
+    }
+
+    /// The popup, rebuilt from the current rows. Its status rows render the
+    /// window's live Git state, so a running action reports as it goes.
+    fn show_git_menu(
+        &mut self,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.git.tracked().is_none() || !self.begin_menu(window, cx) {
             return;
         }
-        self.menu.reset();
-        self.menu.anchor = anchor;
-        self.menu.page = Some(Page::Git);
         if self.menu.github.connected()
             && let Some(input) = self.git_input()
         {
             self.sync_pr_scope();
             self.menu.pr_cache.refresh(input, std::time::Instant::now());
         }
-        self.marked.clear();
-        window.focus(&self.menu.focus);
-        cx.notify();
+        let anchor = point(
+            anchor.x,
+            px(crate::titlebar::HEIGHT
+                + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1")
+                + 6.),
+        );
+        let weak = cx.weak_entity();
+        let rows = self.git_rows();
+        let running = self.git.running().is_some();
+        let branch = self.git.tracked().map(|input| input.branch.clone());
+        let pr_url = self.git_pull_request().map(|pr| pr.url.clone());
+        self.show_popup(Page::Git, anchor, window, cx, move |menu, _, _| {
+            let menu = menu
+                .min_w(px(300.))
+                .max_w(px(360.))
+                .when_some(branch, |menu, branch| menu.label(branch));
+            let status = weak.clone();
+            let menu = match pr_url {
+                Some(url) => {
+                    let pr = weak.clone();
+                    menu.item(
+                        PopupMenuItem::element(move |_, cx| {
+                            pr.upgrade()
+                                .map(|view| view.read(cx).render_git_pr(cx))
+                                .unwrap_or_else(|| div().into_any_element())
+                        })
+                        .on_click(listener(
+                            &weak,
+                            move |this, window, cx| {
+                                cx.open_url(&url);
+                                this.dismiss_menu(window, cx);
+                            },
+                        )),
+                    )
+                }
+                None => menu,
+            };
+            let menu = menu.item(
+                PopupMenuItem::element(move |_, cx| {
+                    status
+                        .upgrade()
+                        .map(|view| view.read(cx).render_git_status(cx))
+                        .unwrap_or_else(|| div().into_any_element())
+                })
+                .disabled(true),
+            );
+            rows.into_iter()
+                .fold(menu.separator(), |menu, (row, label)| {
+                    menu.item(
+                        PopupMenuItem::new(label)
+                            .icon(row.icon())
+                            .disabled(running)
+                            .on_click(listener(&weak, move |this, window, cx| {
+                                this.activate_git_row(row, window, cx)
+                            })),
+                    )
+                })
+        });
     }
 
     /// The pull request already prefetched for the focused branch, in whatever
@@ -186,10 +262,15 @@ impl HerdrWindow {
         if self.git.running().is_some() {
             return;
         }
+        let anchor = self.menu.anchor;
         match row {
             Row::Commit => {
-                self.menu.page = Some(Page::GitCommit);
-                self.menu.input = Some(DialogInput::default());
+                self.set_menu_input("", "Commit message", window, cx);
+                self.show_dialog(Page::GitCommit, window, cx, |this, dialog, weak, _, cx| {
+                    this.git_commit_dialog(dialog, weak, cx)
+                });
+                self.focus_menu_input(window, cx);
+                return;
             }
             Row::Push => self.start_git(Action::Push),
             Row::PullRequest => {
@@ -201,6 +282,10 @@ impl HerdrWindow {
                 self.start_git(Action::CreatePullRequest);
             }
         }
+        // Reopen, so the popup shows the action running and then its outcome.
+        let error = self.menu.error.take();
+        self.show_git_menu(anchor, window, cx);
+        self.menu.error = error;
         cx.notify();
     }
 
@@ -218,455 +303,192 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn submit_git_commit(&mut self, cx: &mut Context<Self>) {
-        if self
-            .menu
-            .input
-            .as_ref()
-            .is_some_and(|input| input.marked.is_some())
-        {
-            return;
-        }
-        let message = self
-            .menu
-            .input
-            .as_ref()
-            .map(|input| input.text.trim().to_owned())
-            .unwrap_or_default();
+    pub(super) fn submit_git_commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let message = self.menu.input_text(cx).trim().to_owned();
         self.start_git(Action::Commit(message));
         if self.menu.error.is_none() {
-            self.menu.input = None;
-            self.menu.page = Some(Page::Git);
+            let anchor = self.menu.anchor;
+            self.show_git_menu(anchor, window, cx);
         }
         cx.notify();
     }
 
-    pub(super) fn git_key(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let rows = self.git_rows();
-        match event.keystroke.key.as_str() {
-            "escape" => self.dismiss_menu(window, cx),
-            "up" | "down" if !rows.is_empty() => {
-                let selected = self
-                    .menu
-                    .git_selected
-                    .and_then(|selected| rows.iter().position(|(row, _)| *row == selected));
-                let index = match (selected, event.keystroke.key.as_str()) {
-                    (None, "up") => rows.len() - 1,
-                    (None, _) => 0,
-                    (Some(index), "up") => (index + rows.len() - 1) % rows.len(),
-                    (Some(index), _) => (index + 1) % rows.len(),
-                };
-                self.menu.git_selected = Some(rows[index].0);
-                cx.notify();
-            }
-            "enter" => {
-                if let Some(row) = self
-                    .menu
-                    .git_selected
-                    .filter(|row| rows.iter().any(|(candidate, _)| candidate == row))
-                {
-                    self.activate_git_row(row, window, cx);
-                }
-            }
-            _ => {}
-        }
+    /// The prefetched pull request: title, number, lifecycle, and its line
+    /// counts, then how ready it is.
+    fn render_git_pr(&self, cx: &App) -> AnyElement {
+        let Some(pr) = self.git_pull_request() else {
+            return div().into_any_element();
+        };
+        let muted = cx.theme().muted_foreground;
+        let color = pr_color(pr, cx);
+        v_flex()
+            .debug_selector(|| "git-menu-pr".into())
+            .w_full()
+            .gap_1()
+            .py_1()
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(pr.title.clone()),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(div().text_color(color).child(format!("#{}", pr.number)))
+                    .child(Tag::secondary().child(pr.lifecycle()))
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .text_color(cx.theme().green)
+                            .child(format!("+{}", crate::sidebar::compact(pr.additions))),
+                    )
+                    .child(
+                        div()
+                            .text_color(cx.theme().red)
+                            .child(format!("-{}", crate::sidebar::compact(pr.deletions))),
+                    ),
+            )
+            .when(pr.state == PrState::Open, |block| {
+                block.child(div().text_color(muted).child(if pr.is_draft {
+                    "Draft — not ready for review"
+                } else {
+                    "Ready for review"
+                }))
+            })
+            .children(
+                [
+                    ("Review", pr.review().to_owned()),
+                    ("Merge", pr.merge_status().to_owned()),
+                    ("Checks", pr.checks_summary.clone()),
+                ]
+                .into_iter()
+                .map(|(heading, label)| {
+                    h_flex()
+                        .gap_2()
+                        .text_sm()
+                        .child(
+                            div()
+                                .w(px(56.))
+                                .flex_none()
+                                .text_color(muted)
+                                .child(heading),
+                        )
+                        .child(div().flex_1().min_w_0().child(label))
+                }),
+            )
+            .into_any_element()
     }
 
-    fn render_git_summary(&self) -> Div {
-        let theme = &self.theme;
-        let row = div()
-            .debug_selector(|| "git-menu-summary".into())
-            .px(px(8.))
-            .pb(px(10.))
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .text_color(rgb(theme.muted));
-        let Some(status) = self.git.status().filter(|status| status.dirty()) else {
-            return row.child(summary(self.git.status()));
-        };
-        row.child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .child("Not yet committed")
-                .when(status.untracked > 0, |label| {
-                    label.child(format!(" ({} untracked)", status.untracked))
-                }),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .gap(px(6.))
+    /// What a commit would include, and the running action or its outcome.
+    fn render_git_status(&self, cx: &App) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let summary = match self.git.status().filter(|status| status.dirty()) {
+            None => div().text_color(muted).child(summary(self.git.status())),
+            Some(status) => h_flex()
+                .gap_2()
                 .child(
                     div()
-                        .debug_selector(|| "git-menu-uncommitted-additions".into())
-                        .text_color(rgb(theme.palette[2]))
+                        .flex_1()
+                        .min_w_0()
+                        .text_color(muted)
+                        .child("Not yet committed")
+                        .when(status.untracked > 0, |label| {
+                            label.child(format!(" ({} untracked)", status.untracked))
+                        }),
+                )
+                .child(
+                    div()
+                        .text_color(cx.theme().green)
                         .child(format!("+{}", crate::sidebar::compact(status.additions))),
                 )
                 .child(
                     div()
-                        .debug_selector(|| "git-menu-uncommitted-deletions".into())
-                        .text_color(rgb(theme.palette[1]))
+                        .text_color(cx.theme().red)
                         .child(format!("-{}", crate::sidebar::compact(status.deletions))),
                 ),
-        )
-    }
-
-    pub(super) fn render_git_menu(&self, cx: &mut Context<Self>) -> Div {
-        let theme = &self.theme;
-        let font = &self.config.ui;
-        let mut panel = div().flex().flex_col();
-        if let Some(input) = self.git.tracked() {
-            panel = panel.child(
-                div()
-                    .debug_selector(|| "git-menu-branch".into())
-                    .px(px(8.))
-                    .pt(px(4.))
-                    .pb(px(8.))
-                    .text_color(rgb(theme.muted))
-                    .truncate()
-                    .child(input.branch.clone()),
-            );
-        }
-        if let Some(pr) = self.git_pull_request() {
-            let url = pr.url.clone();
-            panel = panel.child(
-                div()
-                    .id("git-menu-pr-title")
-                    .debug_selector(|| "git-menu-pr-title".into())
-                    .px(px(8.))
-                    .py(px(6.))
-                    .mb(px(4.))
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .cursor_pointer()
-                    .hover(|link| link.bg(rgb(theme.active)))
-                    .child(pr.title.clone())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        cx.open_url(&url);
-                        this.dismiss_menu(window, cx);
-                    })),
-            );
-            panel = panel.child(
-                div()
-                    .debug_selector(|| "git-menu-pr".into())
-                    .px(px(8.))
-                    .pb(px(10.))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .text_color(rgb(pr.color(theme)))
-                            .child(format!("#{}", pr.number)),
-                    )
-                    .child(
-                        div()
-                            .px(px(6.))
-                            .py(px(2.))
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .bg(rgb(theme.active))
-                            .text_color(rgb(pr.color(theme)))
-                            .child(pr.lifecycle()),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .debug_selector(|| "git-menu-pr-counts".into())
-                            .flex()
-                            .child(
-                                div()
-                                    .text_color(rgb(theme.palette[2]))
-                                    .child(format!("+{}", crate::sidebar::compact(pr.additions))),
-                            )
-                            .gap(px(6.))
-                            .child(
-                                div()
-                                    .text_color(rgb(theme.palette[1]))
-                                    .child(format!("-{}", crate::sidebar::compact(pr.deletions))),
-                            ),
-                    ),
-            );
-            panel = panel.child(self.render_git_summary());
-            if pr.state == PrState::Open {
-                panel = panel.child(
-                    div()
-                        .debug_selector(|| "git-menu-pr-readiness".into())
-                        .px(px(8.))
-                        .pb(px(8.))
-                        .child(if pr.is_draft {
-                            "Draft — not ready for review"
-                        } else {
-                            "Ready for review"
-                        }),
-                );
-            }
-            for (selector, heading, label) in [
-                ("git-menu-pr-review", "Review", pr.review().to_owned()),
-                ("git-menu-pr-merge", "Merge", pr.merge_status().to_owned()),
-                ("git-menu-pr-checks", "Checks", pr.checks_summary.clone()),
-            ] {
-                panel = panel.child(
-                    div()
-                        .debug_selector(move || selector.into())
-                        .px(px(8.))
-                        .pb(px(6.))
-                        .flex()
-                        .gap(px(10.))
-                        .child(
-                            div()
-                                .w(px(48.))
-                                .flex_none()
-                                .text_color(rgb(theme.muted))
-                                .child(heading),
-                        )
-                        .child(div().flex_1().min_w_0().child(label)),
-                );
-            }
-        } else {
-            panel = panel.child(self.render_git_summary());
-        }
-        panel = panel.child(
-            div()
-                .mt(px(4.))
-                .mb(px(4.))
-                .border_t_1()
-                .border_color(rgb(theme.active)),
-        );
-        let running = self.git.running().is_some();
-        for (row, label) in self.git_rows() {
-            let selected = self.menu.git_selected == Some(row);
-            panel = panel.child(
-                div()
-                    .id(SharedString::from(label.clone()))
-                    .debug_selector({
-                        let label = label.clone();
-                        move || format!("git-menu-{label}")
-                    })
-                    .min_h(px(font.line_height() + 12.))
-                    .px(px(8.))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .when(!running, |item| item.cursor_pointer())
-                    .when(running, |item| item.text_color(rgb(theme.muted)))
-                    .when(selected && !running, |item| item.bg(rgb(theme.active)))
-                    .on_hover(cx.listener(move |this, hovered, _, cx| {
-                        if *hovered {
-                            this.menu.git_selected = Some(row);
-                        } else if this.menu.git_selected == Some(row) {
-                            this.menu.git_selected = None;
-                        }
-                        cx.notify();
-                    }))
-                    .child(
-                        svg()
-                            .path(row.icon())
-                            .size(px(14.))
-                            .flex_none()
-                            .text_color(rgb(theme.muted)),
-                    )
-                    .child(label)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.activate_git_row(row, window, cx);
-                    })),
-            );
-        }
-        if let Some(action) = self.git.running() {
-            panel = panel.child(
-                div()
-                    .debug_selector(|| "git-menu-running".into())
-                    .p(px(8.))
-                    .text_color(rgb(theme.palette[3]))
-                    .child(action.running_label()),
-            );
-        }
-        if let Some(outcome) = self.git.outcome() {
-            panel = panel.child(
-                div()
-                    .debug_selector(|| "git-menu-outcome".into())
-                    .p(px(8.))
-                    .child(outcome.message.clone()),
-            );
-            if let Some(url) = outcome.url.clone() {
-                panel = panel.child(
-                    div()
-                        .id("git-menu-open")
-                        .debug_selector(|| "git-menu-open".into())
-                        .px(px(8.))
-                        .pb(px(8.))
-                        .cursor_pointer()
-                        .text_color(accent(theme))
-                        .child("Open in browser")
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            cx.open_url(&url);
-                            this.dismiss_menu(window, cx);
-                        })),
-                );
-            }
-        }
-        for error in self
-            .git
-            .error()
-            .into_iter()
-            .chain(self.menu.error.as_deref())
-        {
-            panel = panel.child(
-                div()
-                    .debug_selector(|| "git-menu-error".into())
-                    .p(px(8.))
-                    .text_color(rgb(theme.palette[1]))
-                    .child(error.to_owned()),
-            );
-        }
-        panel
-    }
-
-    /// The commit dialog wears the workspace dialogs' chrome: a titled header
-    /// naming the branch, the body, then right-aligned actions. Its primary
-    /// action stays unarmed until there is a message to commit.
-    pub(super) fn render_git_commit(&self, cx: &mut Context<Self>) -> Div {
-        let theme = &self.theme;
-        let font = &self.config.ui;
-        let armed = self
-            .menu
-            .input
-            .as_ref()
-            .is_some_and(|input| !input.text.trim().is_empty());
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            .px(px(16.))
-            .py(px(12.))
-            .child(
-                div()
-                    .text_color(rgb(theme.muted))
-                    .child("Stages every change in the checkout, then commits."),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "git-commit-summary".into())
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .bg(rgb(theme.active))
-                    .px(px(10.))
-                    .py(px(6.))
-                    .child(summary(self.git.status())),
-            );
-        if self.menu.input.is_some() {
-            body = body.child(self.render_dialog_input(cx));
-        }
-        if let Some(error) = &self.menu.error {
-            body = body.child(
-                div()
-                    .debug_selector(|| "git-commit-error".into())
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .bg(rgb(theme.active))
-                    .px(px(10.))
-                    .py(px(6.))
-                    .text_color(danger(theme))
-                    .child(error.clone()),
-            );
-        }
-        let button = |id: &'static str| {
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .px(px(12.))
-                .py(px(6.))
-                .rounded(px(crate::config::corners::CONTROL))
-                .border_1()
-                .cursor_pointer()
         };
-        div()
-            .flex()
-            .flex_col()
-            .child(
+        v_flex()
+            .debug_selector(|| "git-menu-summary".into())
+            .w_full()
+            .gap_1()
+            .child(summary)
+            .children(self.git.running().map(|action| {
                 div()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .px(px(16.))
-                    .py(px(12.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
+                    .text_color(cx.theme().warning)
+                    .child(action.running_label())
+            }))
+            .children(self.git.outcome().map(|outcome| {
+                h_flex()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(outcome.message.clone()))
+                    .children(outcome.url.clone().map(|url| {
+                        Button::new("git-menu-open")
+                            .link()
+                            .label("Open")
+                            .on_click(move |_, _, cx| cx.open_url(&url))
+                    }))
+            }))
+            .children(
+                self.git
+                    .error()
+                    .map(str::to_owned)
+                    .into_iter()
+                    .chain(self.menu.error.clone())
+                    .map(|error| div().text_color(cx.theme().danger).child(error)),
+            )
+            .into_any_element()
+    }
+
+    /// The commit dialog: what will be staged, the message, then the actions.
+    fn git_commit_dialog(
+        &self,
+        dialog: Dialog,
+        weak: &WeakEntity<HerdrWindow>,
+        cx: &App,
+    ) -> Dialog {
+        let armed = !self.menu.input_text(cx).trim().is_empty();
+        dialog
+            .title(
+                v_flex()
+                    .child("Commit")
+                    .children(self.git.tracked().map(|input| {
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(input.branch.clone())
+                    })),
+            )
+            .child(
+                v_flex()
+                    .gap_3()
                     .child(
-                        svg()
-                            .path(Row::Commit.icon())
-                            .size(px(16.))
-                            .flex_none()
-                            .text_color(rgb(theme.muted)),
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Stages every change in the checkout, then commits."),
                     )
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(font.size * 1.35))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Commit"),
-                            )
-                            .when_some(self.git.tracked(), |header, input| {
-                                header.child(
-                                    div()
-                                        .truncate()
-                                        .text_color(rgb(theme.muted))
-                                        .child(input.branch.clone()),
-                                )
-                            }),
-                    ),
-            )
-            .child(body)
-            .child(
-                div()
-                    .flex()
-                    .justify_end()
-                    .gap(px(8.))
-                    .px(px(16.))
-                    .py(px(12.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .child(
-                        button("git-commit-cancel")
-                            .border_color(rgb(theme.active))
-                            .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Cancel")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.dismiss_menu(window, cx);
-                            })),
+                            .debug_selector(|| "git-commit-summary".into())
+                            .child(summary(self.git.status())),
                     )
-                    .child(
-                        button("git-commit-submit")
-                            .border_color(rgb(if armed {
-                                theme.foreground
-                            } else {
-                                theme.active
-                            }))
-                            .when(armed, |button| button.bg(rgb(theme.active)))
-                            .text_color(rgb(if armed { theme.foreground } else { theme.muted }))
-                            .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Commit")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.submit_git_commit(cx);
-                            })),
-                    ),
+                    .children(self.menu.input.as_ref().map(Input::new))
+                    .children(error_alert("git-commit-error", self.menu.error.as_ref())),
             )
+            .footer(dialog_buttons(
+                weak,
+                Some(
+                    Button::new("git-commit-submit")
+                        .primary()
+                        .label("Commit")
+                        .when(!armed, |button| button.ghost())
+                        .on_click(listener(weak, |this, window, cx| {
+                            this.submit_git_commit(window, cx)
+                        })),
+                ),
+            ))
+            .on_ok(submit(weak, |this, window, cx| {
+                this.submit_git_commit(window, cx)
+            }))
     }
 }
 
@@ -676,7 +498,7 @@ mod tests {
     use super::{Page, PrState, Row, summary};
     use crate::git::Status;
     use crate::sidebar::layout_tests::REPO_KEY;
-    use gpui::{TestAppContext, point, px, size};
+    use gpui_kit::{TestAppContext, point, px};
     use std::sync::Arc;
 
     fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
@@ -696,9 +518,10 @@ mod tests {
         assert_eq!(summary(Some(status(0, 0, 4))), "+0 -0, 4 untracked entries");
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn only_a_local_daemon_checkout_is_tracked(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         cx.update(|_, cx| {
             view.update(cx, |view, _| {
                 assert!(view.git_input().is_none(), "no connection, no checkout");
@@ -734,16 +557,17 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn a_cached_pull_request_is_named_and_only_an_open_one_can_be_opened(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         let input = crate::pull_request::Input {
             checkout: None,
             repo_key: REPO_KEY.into(),
             branch: "develop".into(),
         };
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
+        cx.update(|_, cx| {
+            view.update(cx, |view, _| {
                 view.git = crate::git::Git::fixture(input.clone(), status(146, 42, 0));
                 assert!(
                     view.git_pull_request().is_none(),
@@ -759,63 +583,10 @@ mod tests {
                     view.git_rows().last().map(|(_, label)| label.clone()),
                     Some("Open pull request #8".into())
                 );
-                view.open_git_menu(point(px(900.), px(20.)), window, cx);
             })
         });
-        cx.update(|window, cx| {
-            window.refresh();
-            let _ = window.draw(cx);
-        });
-        assert!(cx.debug_bounds("git-menu-pr").is_some());
-        for (width, height) in [(1200., 600.), (360., 600.), (360., 400.)] {
-            cx.simulate_resize(size(px(width), px(height)));
-            cx.update(|window, cx| {
-                window.refresh();
-                let _ = window.draw(cx);
-            });
-            let panel = cx.debug_bounds("menu-panel").unwrap();
-            let chrome = crate::titlebar::HEIGHT
-                + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
-            assert!(panel.top() >= px(chrome + 6.));
-            assert!(panel.bottom() <= px(height - 12.));
-            assert!(panel.left() >= px(12.) && panel.right() <= px(width - 12.));
-            for selector in [
-                "git-menu-pr-title",
-                "git-menu-pr-readiness",
-                "git-menu-pr-review",
-                "git-menu-pr-merge",
-                "git-menu-pr-checks",
-            ] {
-                let row = cx.debug_bounds(selector).unwrap();
-                assert!(row.size.height > px(0.));
-                assert!(row.left() >= panel.left() && row.right() <= panel.right());
-                assert!(row.top() >= panel.top() && row.bottom() <= panel.bottom());
-            }
-            let title = cx.debug_bounds("git-menu-pr-title").unwrap();
-            let identity = cx.debug_bounds("git-menu-pr").unwrap();
-            let summary = cx.debug_bounds("git-menu-summary").unwrap();
-            let action = cx.debug_bounds("git-menu-Commit...").unwrap();
-            assert!(title.bottom() <= identity.top());
-            assert!(identity.bottom() <= summary.top());
-            assert!(summary.bottom() <= cx.debug_bounds("git-menu-pr-readiness").unwrap().top());
-            let pr_counts = cx.debug_bounds("git-menu-pr-counts").unwrap();
-            let additions = cx.debug_bounds("git-menu-uncommitted-additions").unwrap();
-            let deletions = cx.debug_bounds("git-menu-uncommitted-deletions").unwrap();
-            assert_eq!(pr_counts.right(), deletions.right());
-            assert!(additions.right() < deletions.left());
-            assert!(additions.top() >= summary.top() && additions.bottom() <= summary.bottom());
-            assert!(summary.bottom() <= action.top());
-        }
-        let title = cx.debug_bounds("git-menu-pr-title").unwrap();
-        cx.simulate_click(title.center(), Default::default());
-        assert_eq!(
-            cx.opened_url(),
-            Some(crate::pull_request::fixture().unwrap().url)
-        );
-        cx.update(|_, cx| assert_eq!(view.read(cx).menu.page, None));
-        cx.update(|window, cx| {
+        cx.update(|_, cx| {
             view.update(cx, |view, cx| {
-                view.dismiss_menu(window, cx);
                 // A merged pull request still names the branch's history, but
                 // the next action is creating another one.
                 let mut merged = crate::pull_request::fixture().unwrap();
@@ -833,49 +604,10 @@ mod tests {
         });
     }
 
-    #[gpui::test]
-    fn the_commit_dialog_ends_in_a_button_row(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
-        cx.simulate_resize(size(px(900.), px(600.)));
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
-                view.git = crate::git::Git::fixture(
-                    crate::pull_request::Input {
-                        checkout: None,
-                        repo_key: REPO_KEY.into(),
-                        branch: "develop".into(),
-                    },
-                    status(12, 3, 1),
-                );
-                view.open_git_menu(point(px(860.), px(20.)), window, cx);
-                view.activate_git_row(Row::Commit, window, cx);
-                cx.notify();
-            })
-        });
-        cx.update(|window, cx| {
-            window.refresh();
-            let _ = window.draw(cx);
-        });
-        let cancel = cx.debug_bounds("git-commit-cancel").unwrap();
-        let commit = cx.debug_bounds("git-commit-submit").unwrap();
-        let field = cx.debug_bounds("dialog-input").unwrap();
-        // The workspace dialogs' chrome: what will be staged, then the message
-        // field, then the actions.
-        let staged = cx.debug_bounds("git-commit-summary").unwrap();
-        assert!(staged.bottom() <= field.top());
-        // Two real buttons, not bare text: padded boxes on one row, the
-        // default action last, under the message field.
-        assert_eq!(cancel.size.height, commit.size.height);
-        assert!(cancel.size.height >= px(24.));
-        assert!(cancel.size.width >= px(50.) && commit.size.width >= px(50.));
-        assert_eq!(cancel.top(), commit.top());
-        assert!(cancel.right() <= commit.left());
-        assert!(field.bottom() <= cancel.top());
-    }
-
-    #[gpui::test]
+    #[gpui_kit::test]
     fn the_menu_commits_through_a_dialog_and_refuses_an_empty_message(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let (view, cx) =
+            crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
         let input = crate::pull_request::Input {
             checkout: None,
             repo_key: REPO_KEY.into(),
@@ -895,17 +627,19 @@ mod tests {
                 view.activate_git_row(Row::Commit, window, cx);
                 assert_eq!(view.menu.page, Some(Page::GitCommit));
                 assert!(view.menu.input.is_some(), "the dialog opens with a field");
-                view.submit_git_commit(cx);
+                view.submit_git_commit(window, cx);
                 assert_eq!(
                     view.menu.error.as_deref(),
                     Some(crate::Error::GitCommitMessage.to_string().as_str())
                 );
                 assert_eq!(view.menu.page, Some(Page::GitCommit), "the dialog stays open");
                 assert!(view.git.running().is_none());
-                if let Some(dialog) = view.menu.input.as_mut() {
-                    dialog.text = "fix: keep the popup open".into();
+                if let Some(input) = view.menu.input.clone() {
+                    input.update(cx, |input, cx| {
+                        input.set_value("fix: keep the popup open", window, cx)
+                    });
                 }
-                view.submit_git_commit(cx);
+                view.submit_git_commit(window, cx);
                 assert_eq!(view.menu.error, None);
                 assert_eq!(view.menu.page, Some(Page::Git));
                 assert!(matches!(

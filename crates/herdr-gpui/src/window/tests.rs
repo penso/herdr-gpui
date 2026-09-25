@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 
-use super::HerdrWindow;
 use crate::{
     WINDOW_TITLE,
     controls::Command,
@@ -8,26 +7,23 @@ use crate::{
 };
 use std::sync::Arc;
 
-fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {
-    cx.windows()
-        .iter()
-        .filter_map(gpui::AnyWindowHandle::downcast::<HerdrWindow>)
-        .collect()
+fn main_windows(cx: &mut gpui_kit::App) -> Vec<crate::app::MainWindow> {
+    crate::app::MainWindow::all(cx)
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn new_window_adds_one_client_of_the_same_target_without_disturbing_the_first(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     let target = view.update(cx, |view, _| view.endpoints[0].connection.target.clone());
-    let before = cx.update(|_, cx| main_windows(cx));
+    let before = cx.cx.update(main_windows);
     assert_eq!(before.len(), 1);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| view.command(Command::NewWindow, window, cx));
     });
     cx.run_until_parked();
-    let opened = cx.update(|_, cx| main_windows(cx));
+    let opened = cx.cx.update(main_windows);
     assert_eq!(opened.len(), 2, "one more window onto the same daemon");
     let second = opened
         .into_iter()
@@ -54,9 +50,9 @@ fn new_window_adds_one_client_of_the_same_target_without_disturbing_the_first(
     });
 }
 
-#[gpui::test]
-fn window_title_follows_the_focused_space_of_that_window(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
+#[gpui_kit::test]
+fn window_title_follows_the_focused_space_of_that_window(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, _| {
             let mut snapshot = snapshot(4);
@@ -82,21 +78,21 @@ fn window_title_follows_the_focused_space_of_that_window(cx: &mut gpui::TestAppC
     );
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn the_sidebar_gap_narrows_the_terminal_only_while_the_sidebar_shows(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    use gpui::{px, size};
+    use gpui_kit::{px, size};
 
-    let (view, cx) = cx.add_window_view(fixture_window);
+    let (view, cx) = crate::test_support::add_window_view(cx, fixture_window);
     cx.simulate_resize(size(px(900.), px(600.)));
-    let draw = |cx: &mut gpui::VisualTestContext| {
+    let draw = |cx: &mut gpui_kit::VisualTestContext| {
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
     };
-    let set_gap = |cx: &mut gpui::VisualTestContext, gap: f32, visible: bool| {
+    let set_gap = |cx: &mut gpui_kit::VisualTestContext, gap: f32, visible: bool| {
         cx.update(|_, cx| {
             view.update(cx, |view, cx| {
                 view.config.layout.sidebar_gap = gap;
@@ -138,15 +134,13 @@ fn the_sidebar_gap_narrows_the_terminal_only_while_the_sidebar_shows(
     assert_eq!(hidden.size.width, flush.size.width + sidebar.size.width);
 }
 
-#[gpui::test]
-fn a_held_key_repeats_in_the_terminal_but_keeps_accents_in_menus(cx: &mut gpui::TestAppContext) {
+#[gpui_kit::test]
+fn a_held_key_repeats_in_the_terminal(cx: &mut gpui_kit::TestAppContext) {
     use crate::input::TerminalInputHandler;
-    use gpui::{Bounds, InputHandler};
+    use gpui_kit::{Bounds, InputHandler};
 
-    let (view, _) = cx.add_window_view(fixture_window);
+    let (view, _) = crate::test_support::add_window_view(cx, fixture_window);
     // macOS sends a held key's repeats only when press-and-hold is off.
-    let mut terminal = TerminalInputHandler::new(Bounds::default(), view.clone(), false);
+    let mut terminal = TerminalInputHandler::new(Bounds::default(), view);
     assert!(!terminal.apple_press_and_hold_enabled());
-    let mut menu = TerminalInputHandler::new(Bounds::default(), view, true);
-    assert!(menu.apple_press_and_hold_enabled());
 }

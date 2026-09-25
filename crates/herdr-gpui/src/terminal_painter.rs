@@ -5,7 +5,7 @@ use self::glyphs::GlyphCache;
 use self::graphics::Graphic;
 use crate::config::Theme;
 use crate::terminal::*;
-use gpui::*;
+use gpui_kit::*;
 use herdr_client::protocol::{CellData, FrameData, PaneSurfacePane, SurfaceRect};
 use std::time::{Duration, Instant};
 
@@ -630,9 +630,9 @@ mod tests {
     }
 
     #[cfg(feature = "integration-test")]
-    #[gpui::test]
+    #[gpui_kit::test]
     fn blank_cells_paint_decorations_without_shaping(cx: &mut TestAppContext) {
-        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        let (_, cx) = crate::test_support::add_window_view(cx, |_, _| Empty);
         cx.draw(Point::default(), size(px(800.), px(600.)), |_, _| {
             canvas(
                 |_, _, _| (),
@@ -734,9 +734,9 @@ mod tests {
     }
 
     #[cfg(feature = "integration-test")]
-    #[gpui::test]
+    #[gpui_kit::test]
     fn terminal_graphics_bypass_fonts_but_keep_decorations_and_skip_cells(cx: &mut TestAppContext) {
-        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        let (_, cx) = crate::test_support::add_window_view(cx, |_, _| Empty);
         cx.draw(Point::default(), size(px(800.), px(600.)), |_, _| {
             canvas(
                 |_, _, _| (),
@@ -814,9 +814,9 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn cache_reuses_cells_invalidates_fonts_and_bounds_storage(cx: &mut TestAppContext) {
-        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        let (_, cx) = crate::test_support::add_window_view(cx, |_, _| Empty);
         let painter = std::rc::Rc::new(std::cell::RefCell::new(TerminalPainter::default()));
         let frame = FrameData {
             width: 5,

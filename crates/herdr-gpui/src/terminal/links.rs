@@ -322,10 +322,12 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::TestAppContext) {
-        use gpui::{point, px};
-        let (view, cx) = cx.add_window_view(|window, cx| {
+    #[gpui_kit::test]
+    fn click_dispatch_opens_browser_and_respects_menu_and_revision(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::{point, px};
+        let (view, cx) = crate::test_support::add_window_view(cx, |window, cx| {
             let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
             let mut s = surface("https://example.com/click");
             let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -336,20 +338,20 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         let position = view.read_with(cx, |view, _| view.bounds.origin + point(px(1.), px(1.)));
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
-                let mut event = gpui::MouseClickEvent::default();
+                let mut event = gpui_kit::MouseClickEvent::default();
                 event.down.position = position;
                 event.up.position = position + point(px(20.), px(0.));
                 event.down.click_count = 1;
                 view.pressed_terminal_link = Some(("https://example.com/click".into(), position));
-                view.open_terminal_link(&gpui::ClickEvent::Mouse(event.clone()), window, cx);
+                view.open_terminal_link(&gpui_kit::ClickEvent::Mouse(event.clone()), window, cx);
                 event.up.position = position;
                 view.pressed_terminal_link = Some(("https://different.example/".into(), position));
-                view.open_terminal_link(&gpui::ClickEvent::Mouse(event), window, cx);
+                view.open_terminal_link(&gpui_kit::ClickEvent::Mouse(event), window, cx);
             })
         });
         assert!(cx.opened_url().is_none());
@@ -358,10 +360,10 @@ mod tests {
             position + point(px(0.), px(20.)),
             position - point(px(20.), px(20.)),
         ] {
-            cx.simulate_mouse_down(position, gpui::MouseButton::Left, Default::default());
-            cx.simulate_mouse_move(away, gpui::MouseButton::Left, Default::default());
-            cx.simulate_mouse_move(position, gpui::MouseButton::Left, Default::default());
-            cx.simulate_mouse_up(position, gpui::MouseButton::Left, Default::default());
+            cx.simulate_mouse_down(position, gpui_kit::MouseButton::Left, Default::default());
+            cx.simulate_mouse_move(away, gpui_kit::MouseButton::Left, Default::default());
+            cx.simulate_mouse_move(position, gpui_kit::MouseButton::Left, Default::default());
+            cx.simulate_mouse_up(position, gpui_kit::MouseButton::Left, Default::default());
             assert!(cx.opened_url().is_none());
             view.read_with(cx, |view, _| assert!(view.pressed_terminal_link.is_none()));
         }

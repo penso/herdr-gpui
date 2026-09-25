@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::controls::Command;
-use gpui::{
+use gpui_kit::{
     AppContext, ClipboardItem, Image, ImageFormat, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, point, px, size,
 };
@@ -23,10 +23,14 @@ struct Server {
 
 // Keep the tested entity out of the render tree: a terminal canvas would enqueue
 // unrelated native resize requests while these tests advance the lifecycle.
-struct Fixture(gpui::Entity<HerdrWindow>);
-impl gpui::Render for Fixture {
-    fn render(&mut self, _: &mut gpui::Window, _: &mut Context<Self>) -> impl gpui::IntoElement {
-        gpui::div()
+struct Fixture(gpui_kit::Entity<HerdrWindow>);
+impl gpui_kit::Render for Fixture {
+    fn render(
+        &mut self,
+        _: &mut gpui_kit::Window,
+        _: &mut Context<Self>,
+    ) -> impl gpui_kit::IntoElement {
+        gpui_kit::div()
     }
 }
 
@@ -264,14 +268,14 @@ fn prepare_mouse(view: &mut HerdrWindow, endpoint: Endpoint) {
         })
         .collect();
     view.cell_width = 10.;
-    view.bounds = gpui::Bounds::new(
+    view.bounds = gpui_kit::Bounds::new(
         point(px(100.), px(50.)),
         size(px(800.), px(24. * view.config.terminal.line_height())),
     );
     assert!(view.input_ready());
 }
 
-fn mouse_position(view: &HerdrWindow, column: f32, row: f32) -> gpui::Point<gpui::Pixels> {
+fn mouse_position(view: &HerdrWindow, column: f32, row: f32) -> gpui_kit::Point<gpui_kit::Pixels> {
     view.bounds.origin
         + point(
             px(column * 10.),
@@ -318,7 +322,7 @@ fn image_popup(view: &mut HerdrWindow, id: &str) {
     }));
 }
 
-fn wait_image_finished(view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext) {
+fn wait_image_finished(view: &gpui_kit::Entity<HerdrWindow>, cx: &mut gpui_kit::VisualTestContext) {
     // GPUI tasks publish the frame; only the socket worker can finish its FIFO slot.
     wait_until(|| {
         view.update(cx, |view, _| {
@@ -330,16 +334,17 @@ fn wait_image_finished(view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::VisualTe
 
 /// Navigation leaves its acknowledged activation recorded. Cmd-V must still
 /// paste afterwards, and only a navigation still in flight may drop it.
-#[gpui::test]
-fn text_paste_survives_a_settled_navigation(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn text_paste_survives_a_settled_navigation(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("image");
-    let paste = gpui::KeyDownEvent {
-        keystroke: gpui::Keystroke::parse("cmd-v").unwrap(),
+    let paste = gpui_kit::KeyDownEvent {
+        keystroke: gpui_kit::Keystroke::parse("cmd-v").unwrap(),
         is_held: false,
+        prefer_character_input: false,
     };
     let settled = |view: &HerdrWindow| crate::state::SurfaceActivation {
         request: "activate-1".into(),
@@ -398,18 +403,19 @@ fn text_paste_survives_a_settled_navigation(cx: &mut gpui::TestAppContext) {
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_captures_pane_before_immediate_text_and_enter(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:image");
-    let enter = gpui::KeyDownEvent {
-        keystroke: gpui::Keystroke::parse("enter").unwrap(),
+    let enter = gpui_kit::KeyDownEvent {
+        keystroke: gpui_kit::Keystroke::parse("enter").unwrap(),
         is_held: false,
+        prefer_character_input: false,
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
@@ -448,9 +454,9 @@ fn connected_image_paste_captures_pane_before_immediate_text_and_enter(
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
-fn connected_image_paste_popup_never_reaches_underlying_pane(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_popup_never_reaches_underlying_pane(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -481,9 +487,9 @@ fn connected_image_paste_popup_never_reaches_underlying_pane(cx: &mut gpui::Test
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
-fn connected_image_paste_image_only_preserves_text(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_image_only_preserves_text(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -523,11 +529,11 @@ fn connected_image_paste_image_only_preserves_text(cx: &mut gpui::TestAppContext
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_local_bridges_clipboard_image_but_not_paths(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -566,9 +572,11 @@ fn connected_image_paste_local_bridges_clipboard_image_but_not_paths(
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
-fn connected_image_paste_missing_path_falls_back_in_reserved_order(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_missing_path_falls_back_in_reserved_order(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -604,11 +612,11 @@ fn connected_image_paste_missing_path_falls_back_in_reserved_order(cx: &mut gpui
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_cancels_stale_preparation_without_blocking_fifo(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -682,9 +690,9 @@ fn connected_image_paste_cancels_stale_preparation_without_blocking_fifo(
     }
 }
 
-#[gpui::test]
-fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -727,13 +735,13 @@ fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui::Tes
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_reconnect_cancels_old_task_and_keeps_single_preparation(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
     use std::io::Read as _;
 
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -787,9 +795,9 @@ fn connected_image_paste_reconnect_cancels_old_task_and_keeps_single_preparation
     wait_image_finished(&view, cx);
 }
 
-#[gpui::test]
-fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -797,9 +805,10 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
         for key in ["ctrl-v", "cmd-v"] {
             for image in [false, true] {
                 let (endpoint, mut server) = connected_endpoint("image");
-                let event = gpui::KeyDownEvent {
-                    keystroke: gpui::Keystroke::parse(key).unwrap(),
+                let event = gpui_kit::KeyDownEvent {
+                    keystroke: gpui_kit::Keystroke::parse(key).unwrap(),
                     is_held: false,
+                    prefer_character_input: false,
                 };
                 cx.update(|window, cx| {
                     view.update(cx, |view, cx| {
@@ -865,9 +874,9 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
     }
 }
 
-#[gpui::test]
-fn connected_image_paste_native_text_reservations_preserve_fifo(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_image_paste_native_text_reservations_preserve_fifo(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -900,11 +909,11 @@ fn connected_image_paste_native_text_reservations_preserve_fifo(cx: &mut gpui::T
     view.read_with(cx, |view, _| assert!(view.local_error.is_none()));
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -981,11 +990,11 @@ fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
     wait_image_finished(&view, cx);
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_native_preparations_stay_bounded_across_reset(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1048,11 +1057,11 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_queued_upload_remains_cancellable_after_preparation(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1137,11 +1146,11 @@ fn connected_image_paste_queued_upload_remains_cancellable_after_preparation(
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_image_paste_snapshot_surface_gap_preserves_existing_target(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1223,11 +1232,11 @@ fn connected_image_paste_snapshot_surface_gap_preserves_existing_target(
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_focused_pane_preserves_drag_target_and_immediate_text(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1292,11 +1301,11 @@ fn connected_mouse_focused_pane_preserves_drag_target_and_immediate_text(
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_inactive_pane_receives_first_click_before_focus_fence(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1378,11 +1387,11 @@ fn connected_mouse_inactive_pane_receives_first_click_before_focus_fence(
     );
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_popup_uses_popup_relative_pixel_coordinates_and_blocks_covered_panes(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1424,7 +1433,7 @@ fn connected_mouse_popup_uses_popup_relative_pixel_coordinates_and_blocks_covere
                 },
                 cx
             ));
-            let modifiers = gpui::Modifiers {
+            let modifiers = gpui_kit::Modifiers {
                 control: true,
                 alt: true,
                 platform: true,
@@ -1509,9 +1518,11 @@ fn connected_mouse_popup_uses_popup_relative_pixel_coordinates_and_blocks_covere
     );
 }
 
-#[gpui::test]
-fn connected_mouse_cancels_stale_gestures_before_drag_or_release(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn connected_mouse_cancels_stale_gestures_before_drag_or_release(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1646,11 +1657,11 @@ fn connected_mouse_cancels_stale_gestures_before_drag_or_release(cx: &mut gpui::
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_external_drag_cleans_up_once_without_forwarding_synthetic_input(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1676,9 +1687,9 @@ fn connected_mouse_external_drag_cleans_up_once_without_forwarding_synthetic_inp
                 })
             });
             // Use GPUI's real external-drag state; the nonrendering Fixture keeps resize out.
-            cx.simulate_event(gpui::FileDropEvent::Entered {
+            cx.simulate_event(gpui_kit::FileDropEvent::Entered {
                 position,
-                paths: gpui::ExternalPaths::default(),
+                paths: gpui_kit::ExternalPaths::default(),
             });
             cx.update(|window, cx| {
                 view.update(cx, |view, cx| {
@@ -1729,7 +1740,7 @@ fn connected_mouse_external_drag_cleans_up_once_without_forwarding_synthetic_inp
                         .unwrap();
                 });
             });
-            cx.simulate_event(gpui::FileDropEvent::Exited);
+            cx.simulate_event(gpui_kit::FileDropEvent::Exited);
             if pressed {
                 assert_eq!(
                     server.receive(),
@@ -1762,11 +1773,11 @@ fn connected_mouse_external_drag_cleans_up_once_without_forwarding_synthetic_inp
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_deactivation_releases_last_sent_position_once_without_focusing(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1840,11 +1851,11 @@ fn connected_mouse_deactivation_releases_last_sent_position_once_without_focusin
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn connected_mouse_hover_is_separate_from_capture_and_obeys_input_guards(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1867,7 +1878,7 @@ fn connected_mouse_hover_is_separate_from_capture_and_obeys_input_guards(
             );
             view.terminal_mouse_hover(
                 &MouseMoveEvent {
-                    modifiers: gpui::Modifiers {
+                    modifiers: gpui_kit::Modifiers {
                         shift: true,
                         ..Default::default()
                     },
@@ -1915,11 +1926,11 @@ fn connected_mouse_hover_is_separate_from_capture_and_obeys_input_guards(
     );
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn startup_focus_waits_for_the_first_surface_without_flapping_on_later_updates(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1967,9 +1978,9 @@ fn startup_focus_waits_for_the_first_surface_without_flapping_on_later_updates(
     ));
 }
 
-#[gpui::test]
-fn workspace_menu_keeps_immediate_and_deferred_navigation(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn workspace_menu_keeps_immediate_and_deferred_navigation(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -1995,7 +2006,7 @@ fn workspace_menu_keeps_immediate_and_deferred_navigation(cx: &mut gpui::TestApp
                 assert!(view.pending_navigation.is_none());
                 assert!(!view.input_ready());
                 assert_eq!(view.menu.page, Some(crate::menu::Page::Workspace));
-                assert!(view.menu.focus.is_focused(window));
+                assert!(!view.focus.is_focused(window));
                 // New input is still blocked while the menu owns focus.
                 assert!(!view.navigate(NavigationTarget::Workspace("other"), cx));
             });
@@ -2045,9 +2056,9 @@ fn workspace_menu_keeps_immediate_and_deferred_navigation(cx: &mut gpui::TestApp
     }
 }
 
-#[gpui::test]
-fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2088,7 +2099,7 @@ fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui::TestApp
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
                 view.reset_selected();
-                window.focus(&view.focus);
+                window.focus(&view.focus, cx);
                 view.marked = "composition".into();
                 assert!(view.input_ready());
                 view.tick_toasts(false, Instant::now());
@@ -2108,11 +2119,11 @@ fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui::TestApp
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2200,9 +2211,10 @@ fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
     assert_eq!(request["params"]["pane_id"], "w1:p1");
 }
 
-#[gpui::test]
-fn toast_click_uses_origin_and_close_never_navigates(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn toast_click_uses_origin_and_close_never_navigates(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
     let (mut remote, _server) = connected_endpoint("ssh:toast");
     remote.initial_surface = false;
     let mut wire = crate::notifications::tests::notification("Remote target");
@@ -2213,18 +2225,23 @@ fn toast_click_uses_origin_and_close_never_navigates(cx: &mut gpui::TestAppConte
     remote.toasts.receive([notice.clone(), notice]);
     cx.simulate_resize(size(px(1000.), px(600.)));
     cx.update(|window, cx| {
-        view.update(cx, |view, _| {
+        view.update(cx, |view, cx| {
             // The same IDs on Local must not win over the notification's origin.
             view.endpoints[0].live.snapshot = remote.live.snapshot.clone();
             view.endpoints[0].detached = true;
             view.endpoints.push(remote);
-            window.focus(&view.focus);
+            window.focus(&view.focus, cx);
             view.marked = "composition".into();
         });
-        window.draw(cx).clear();
+        window.draw(cx).clear(cx);
     });
-    let dismiss = cx.debug_bounds("toast-dismiss-ssh:toast-0").unwrap();
-    cx.simulate_click(dismiss.center(), Default::default());
+    // Closing the kit card is what its close button does.
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let card = view.toast_cards[0].clone();
+            view.toast_closed(&card, cx);
+        })
+    });
     cx.update(|window, cx| {
         let view = view.read(cx);
         assert_eq!(view.selected_endpoint, 0);
@@ -2233,7 +2250,7 @@ fn toast_click_uses_origin_and_close_never_navigates(cx: &mut gpui::TestAppConte
         assert!(view.focus.is_focused(window));
         assert_eq!(view.endpoints[1].toasts.entries.len(), 1);
     });
-    cx.update(|window, cx| window.draw(cx).clear());
+    cx.update(|window, cx| window.draw(cx).clear(cx));
     let card = cx.debug_bounds("toast-ssh:toast-1").unwrap();
     cx.simulate_click(card.center(), Default::default());
     view.update(cx, |view, _| {
@@ -2256,11 +2273,12 @@ fn toast_click_uses_origin_and_close_never_navigates(cx: &mut gpui::TestAppConte
     });
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn toast_rendered_clicks_reject_replaced_removed_and_disabled_origins(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
     cx.simulate_resize(size(px(1000.), px(600.)));
     for change in 0..4 {
         let (mut remote, _server) = connected_endpoint("ssh:toast");
@@ -2276,7 +2294,7 @@ fn toast_rendered_clicks_reject_replaced_removed_and_disabled_origins(
                 view.endpoints.truncate(1);
                 view.endpoints.push(remote);
             });
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
         assert!(cx.debug_bounds("toast-ssh:toast-0").is_some());
         let (generation, inbox) = view.read_with(cx, |view, _| {
@@ -2309,9 +2327,9 @@ fn toast_rendered_clicks_reject_replaced_removed_and_disabled_origins(
     }
 }
 
-#[gpui::test]
-fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2418,11 +2436,11 @@ fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui::T
     assert_eq!(pane_id, "new-pane");
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn toast_handoff_retains_busy_validation_and_revalidates_before_queueing(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2525,9 +2543,9 @@ fn toast_handoff_retains_busy_validation_and_revalidates_before_queueing(
     }
 }
 
-#[gpui::test]
-fn accepted_toast_survives_expiry_but_not_invalidation(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn accepted_toast_survives_expiry_but_not_invalidation(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2642,11 +2660,11 @@ fn accepted_toast_survives_expiry_but_not_invalidation(cx: &mut gpui::TestAppCon
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn toast_handoff_defers_a_contended_source_without_activating_destination(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2739,9 +2757,9 @@ fn toast_handoff_defers_a_contended_source_without_activating_destination(
     assert_eq!(request["params"]["active"], true);
 }
 
-#[gpui::test]
-fn deferred_release_is_generation_fenced_and_local_can_escape(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn deferred_release_is_generation_fenced_and_local_can_escape(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2804,9 +2822,9 @@ fn deferred_release_is_generation_fenced_and_local_can_escape(cx: &mut gpui::Tes
     }
 }
 
-#[gpui::test]
-fn toast_queue_failure_retains_notice(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn toast_queue_failure_retains_notice(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2839,11 +2857,11 @@ fn toast_queue_failure_retains_notice(cx: &mut gpui::TestAppContext) {
     });
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn notification_command_rejects_ineligible_cards_without_selection_or_requests(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -2902,10 +2920,11 @@ fn notification_command_rejects_ineligible_cards_without_selection_or_requests(
     }
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 #[cfg(feature = "qa-menu")]
-fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
     let (sound, played) = crate::sound::Service::recording();
     view.update(cx, |view, _| {
         view.sound = sound;
@@ -2915,8 +2934,9 @@ fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext
         }
     });
     cx.update(|window, cx| {
-        view.read(cx).focus.focus(window);
-        window.draw(cx).clear();
+        let focus = view.read(cx).focus.clone();
+        focus.focus(window, cx);
+        window.draw(cx).clear(cx);
         let menus = crate::menus();
         let qa = menus
             .iter()
@@ -2926,7 +2946,9 @@ fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext
             .items
             .iter()
             .find_map(|item| match item {
-                gpui::MenuItem::Action { name, action, .. } if name.as_ref() == "Play Sound" => {
+                gpui_kit::MenuItem::Action { name, action, .. }
+                    if name.as_ref() == "Play Sound" =>
+                {
                     Some(action)
                 }
                 _ => None,
@@ -2952,9 +2974,9 @@ fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext
     ));
 }
 
-#[gpui::test]
-fn inactive_endpoint_semantic_sound_reaches_worker_once(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn inactive_endpoint_semantic_sound_reaches_worker_once(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -3012,11 +3034,11 @@ fn inactive_endpoint_semantic_sound_reaches_worker_once(cx: &mut gpui::TestAppCo
     });
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn saved_selection_waits_for_snapshot_without_overwriting_preference(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -3057,9 +3079,10 @@ fn saved_selection_waits_for_snapshot_without_overwriting_preference(
     });
 }
 
-#[gpui::test]
-fn dialog_response_survives_initial_surface_activation(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+#[gpui_kit::test]
+fn dialog_response_survives_initial_surface_activation(cx: &mut gpui_kit::TestAppContext) {
+    let (view, cx) =
+        crate::test_support::add_window_view(cx, crate::sidebar::layout_tests::fixture_window);
     let (mut endpoint, _server) = connected_endpoint("ssh:fixture");
     endpoint.initial_surface = false;
     let response = serde_json::json!({"result":{"type":"worktree_list","worktrees":[]}});
@@ -3091,11 +3114,11 @@ fn dialog_response_survives_initial_surface_activation(cx: &mut gpui::TestAppCon
     });
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn every_focus_changing_command_fences_immediate_input_until_ack_and_surface(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -3160,22 +3183,14 @@ fn every_focus_changing_command_fences_immediate_input_until_ack_and_surface(
                 } else {
                     view.command(command, window, cx);
                 }
-                let key = |key: &str| gpui::KeyDownEvent {
-                    keystroke: gpui::Keystroke::parse(key).unwrap(),
-                    is_held: false,
-                };
                 match command {
                     Command::ClosePane | Command::CloseTab if confirm_close_tab => {
-                        view.close_confirmation_key(&key("tab"), window, cx);
-                        view.close_confirmation_key(&key("enter"), window, cx);
+                        view.confirm_close(window, cx);
                     }
-                    Command::WorkspacePicker => view.palette_key(&key("enter"), window, cx),
+                    Command::WorkspacePicker => view.confirm_palette_row(0, window, cx),
                     Command::Palette => {
                         // The configured entry follows all native entries except Palette.
-                        for _ in 0..crate::controls::COMMANDS.len() - 1 {
-                            view.palette_key(&key("down"), window, cx);
-                        }
-                        view.palette_key(&key("enter"), window, cx);
+                        view.confirm_palette_row(crate::controls::COMMANDS.len() - 1, window, cx);
                     }
                     _ => {}
                 }
@@ -3297,9 +3312,11 @@ fn every_focus_changing_command_fences_immediate_input_until_ack_and_surface(
     }
 }
 
-#[gpui::test]
-fn unconfirmed_tab_close_rejects_invalid_targets_and_unready_input(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn unconfirmed_tab_close_rejects_invalid_targets_and_unready_input(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -3361,11 +3378,11 @@ fn unconfirmed_tab_close_rejects_invalid_targets_and_unready_input(cx: &mut gpui
     ));
 }
 
-#[gpui::test]
+#[gpui_kit::test]
 fn retiring_release_source_unblocks_destination_without_waiting_for_timeout(
-    cx: &mut gpui::TestAppContext,
+    cx: &mut gpui_kit::TestAppContext,
 ) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
@@ -3527,9 +3544,9 @@ fn brief_success_preserves_backoff_and_disconnect_restarts_stability_window() {
     assert!(endpoint.online_since.is_none());
 }
 
-#[gpui::test]
-fn changed_target_and_manual_reconnect_reset_retry_history(cx: &mut gpui::TestAppContext) {
-    let (fixture, cx) = cx.add_window_view(|window, cx| {
+#[gpui_kit::test]
+fn changed_target_and_manual_reconnect_reset_retry_history(cx: &mut gpui_kit::TestAppContext) {
+    let (fixture, cx) = crate::test_support::add_window_view(cx, |window, cx| {
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());

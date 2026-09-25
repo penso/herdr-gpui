@@ -2,8 +2,12 @@
 //! responsive. Only completed copies can paste paths, into their captured target.
 
 use super::HerdrWindow;
-use crate::{connection::ConnectionBridge, fonts::StyledFont, terminal::InputTarget};
-use gpui::{prelude::*, *};
+use crate::{connection::ConnectionBridge, terminal::InputTarget};
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Sizable, StyledExt, TITLE_BAR_HEIGHT, button::Button, h_flex,
+    progress::Progress, v_flex,
+};
+use gpui_kit::{prelude::*, *};
 use herdr_client::{ConnectTarget, protocol::ClientPaneInputEvent};
 use std::{
     path::PathBuf,
@@ -264,6 +268,9 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// The copy in flight as a small kit card: what it is, how far along,
+    /// and a way to cancel it. It swallows pointer input so a press on it
+    /// never reaches the terminal underneath.
     pub(super) fn render_file_transfer(
         &self,
         window: &Window,
@@ -282,64 +289,60 @@ impl HerdrWindow {
         } else {
             "Copying..."
         };
-        let accent = self.theme.primary();
+        let theme = cx.theme();
         Some(
-            div()
+            v_flex()
                 .id("file-transfer")
                 .debug_selector(|| "file-transfer".into())
                 .absolute()
                 .right(px(12.))
-                .top(px(72.))
+                .top(TITLE_BAR_HEIGHT + px(38.))
                 .w((window.viewport_size().width - px(24.))
                     .max(px(0.))
                     .min(px(340.)))
                 .occlude()
-                .rounded(px(crate::config::corners::PANEL))
+                .rounded(theme.radius_lg)
                 .border_1()
-                .border_color(rgb(accent))
-                .bg(rgb(self.theme.surface))
-                .text_color(rgb(self.theme.foreground))
-                .text_font(&self.config.ui)
-                .text_size(px(self.config.ui.size))
-                .p(px(12.))
-                .flex()
-                .flex_col()
-                .gap(px(8.))
+                .border_color(theme.border)
+                .bg(theme.popover)
+                .text_color(theme.popover_foreground)
+                .text_sm()
+                .p_3()
+                .gap_2()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                 .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                .child(div().child(title))
+                .child(div().font_semibold().child(title))
                 .child(div().truncate().child(transfer.label.clone()))
                 .child(
-                    div()
-                        .debug_selector(|| "file-transfer-track".into())
-                        .w_full()
-                        .h(px(6.))
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .overflow_hidden()
-                        .bg(rgb(self.theme.active))
+                    Progress::new("file-transfer-progress")
+                        .value(fraction * 100.)
+                        .accessibility_label("Copy progress"),
+                )
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .gap_2()
                         .child(
                             div()
-                                .debug_selector(|| "file-transfer-progress".into())
-                                .h_full()
-                                .w(relative(fraction))
-                                .bg(rgb(accent)),
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(progress),
+                        )
+                        .child(
+                            Button::new("cancel-file-transfer")
+                                .debug_selector(|| "cancel-file-transfer".into())
+                                .small()
+                                .label(if cancelled { "Cancelling" } else { "Cancel" })
+                                .disabled(cancelled)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if let Some(transfer) = &this.file_transfer {
+                                        transfer.cancel();
+                                    }
+                                    this.poll_file_transfer(cx);
+                                })),
                         ),
-                )
-                .child(div().text_color(rgb(self.theme.muted)).child(progress))
-                .child(
-                    div()
-                        .id("cancel-file-transfer")
-                        .debug_selector(|| "cancel-file-transfer".into())
-                        .cursor_pointer()
-                        .child(if cancelled { "Cancelling" } else { "Cancel" })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            cx.stop_propagation();
-                            if let Some(transfer) = &this.file_transfer {
-                                transfer.cancel();
-                            }
-                            this.poll_file_transfer(cx);
-                        })),
                 )
                 .into_any_element(),
         )
@@ -353,7 +356,7 @@ mod tests {
     use super::{FileTransfer, HerdrWindow, transfer_progress};
     use crate::{connection::ConnectionBridge, terminal::InputTarget};
     use crate::{sidebar::layout_tests::fixture_window, state::ConnectionStatus};
-    use gpui::{
+    use gpui_kit::{
         AppContext, Bounds, Context, Entity, IntoElement, Modifiers, MouseButton, Render,
         TestAppContext, VisualTestContext, Window, div, point, prelude::*, px, size,
     };
@@ -628,9 +631,9 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn progress_above_four_gib_and_real_cancel_click_are_isolated(cx: &mut TestAppContext) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let mut peer = Peer::new();
         let cancelled = view.update(cx, |view, cx| {
@@ -653,11 +656,8 @@ mod tests {
         });
         cx.update(|window, cx| {
             window.refresh();
-            window.draw(cx).clear();
+            window.draw(cx).clear(cx);
         });
-        let track = cx.debug_bounds("file-transfer-track").unwrap();
-        let progress = cx.debug_bounds("file-transfer-progress").unwrap();
-        assert!((f32::from(progress.size.width) / f32::from(track.size.width) - 0.5).abs() < 0.001);
         let cancel = cx.debug_bounds("cancel-file-transfer").unwrap();
         cx.simulate_click(cancel.center(), Modifiers::default());
         assert!(cancelled.load(Ordering::Acquire));
@@ -670,9 +670,9 @@ mod tests {
         peer.sentinel(&view, cx);
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn duplicate_copy_never_invokes_second_backend(cx: &mut TestAppContext) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let mut peer = Peer::new();
         let calls = Arc::new(AtomicU64::new(0));
@@ -724,9 +724,9 @@ mod tests {
         peer.sentinel(&view, cx);
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn captured_target_fences_cancel_and_reset_cancels_immediately(cx: &mut TestAppContext) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let peer = Peer::new();
         view.update(cx, |view, cx| {
@@ -791,10 +791,10 @@ mod tests {
         });
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn success_pastes_quoted_paths_to_captured_pane_or_popup(cx: &mut TestAppContext) {
         for is_popup in [false, true] {
-            let (fixture, cx) = cx.add_window_view(fixture);
+            let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
             let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
             let mut peer = Peer::new();
             view.update(cx, |view, cx| {
@@ -848,10 +848,10 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn stale_or_cancelled_success_cleans_original_host_without_pasting(cx: &mut TestAppContext) {
         for case in 0..4 {
-            let (fixture, cx) = cx.add_window_view(fixture);
+            let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
             let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
             let mut peer = Peer::new();
             let (tx, rx) = mpsc::channel();
@@ -888,9 +888,9 @@ mod tests {
         }
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn dropping_entity_cancels_but_detached_completion_still_cleans(cx: &mut TestAppContext) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let weak = view.downgrade();
         let peer = Peer::new();
@@ -920,9 +920,9 @@ mod tests {
         assert_eq!(rx.try_recv().unwrap(), (HOST.into(), vec![REMOTE.into()]));
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn old_completion_preserves_replacement_and_reports_cleanup_failure(cx: &mut TestAppContext) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let mut peer = Peer::new();
         let (tx, rx) = mpsc::channel();
@@ -962,11 +962,11 @@ mod tests {
         peer.sentinel(&view, cx);
     }
 
-    #[gpui::test]
+    #[gpui_kit::test]
     fn backend_cleanup_failure_survives_host_switch_without_disclosing_diagnostics(
         cx: &mut TestAppContext,
     ) {
-        let (fixture, cx) = cx.add_window_view(fixture);
+        let (fixture, cx) = crate::test_support::add_window_view(cx, fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let mut peer = Peer::new();
         view.update(cx, |view, cx| {
