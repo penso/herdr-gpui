@@ -7,6 +7,8 @@ use crate::{
     config::{Layout, LayoutMode},
     controls::Command,
 };
+#[cfg(target_os = "macos")]
+use crate::{Hide, HideOthers, Minimize, ShowAll};
 #[cfg(feature = "qa-menu")]
 use crate::{
     PlaySound, ShowHerdrNotDetected, ShowUpdatePreview,
@@ -72,6 +74,16 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::action("Check for Updates...", CheckForUpdates),
+                // macOS reserves Hide for every app; without these items
+                // Cmd-H has no key equivalent and does nothing.
+                #[cfg(target_os = "macos")]
+                MenuItem::separator(),
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Hide Herdr", Hide),
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Hide Others", HideOthers),
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Show All", ShowAll),
                 MenuItem::separator(),
                 MenuItem::action("Quit Herdr", Quit),
             ],
@@ -225,6 +237,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
             name: "Window".into(),
             disabled: false,
             items: vec![
+                // Without this item Cmd-M has no key equivalent and does
+                // nothing; the pane zoom above is unrelated to the window.
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Minimize", Minimize),
+                #[cfg(target_os = "macos")]
+                MenuItem::separator(),
                 MenuItem::action(
                     "New Window",
                     RunCommand {
@@ -591,5 +609,99 @@ mod tests {
         }
         // Reset is a different kind of act from stepping, so it sits apart.
         assert!(matches!(view.items[2], MenuItem::Separator));
+    }
+
+    fn action_names(menu: &Menu) -> Vec<&str> {
+        menu.items
+            .iter()
+            .filter_map(|item| match item {
+                MenuItem::Action { name, .. } => Some(name.as_ref()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// macOS reserves Hide and Minimize for every app: without these items
+    /// Cmd-H and Cmd-M have no key equivalent and do nothing.
+    #[cfg(target_os = "macos")]
+    #[gpui::test]
+    fn macos_menus_carry_hide_and_minimize(cx: &mut gpui::TestAppContext) {
+        let menus = menus(Layout::default());
+        let herdr = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Herdr")
+            .unwrap();
+        assert_eq!(
+            action_names(herdr),
+            [
+                "About Herdr",
+                "Command Palette",
+                "Settings",
+                "Keyboard Shortcuts",
+                "Check for Updates...",
+                "Hide Herdr",
+                "Hide Others",
+                "Show All",
+                "Quit Herdr",
+            ]
+        );
+        // Hiding sits apart from quitting.
+        assert!(matches!(
+            herdr.items[herdr.items.len() - 2],
+            MenuItem::Separator
+        ));
+        let window = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Window")
+            .unwrap();
+        assert_eq!(action_names(window)[0], "Minimize");
+        assert!(matches!(window.items[1], MenuItem::Separator));
+
+        cx.update(|cx| {
+            crate::bind_keys(cx);
+            let bound = |action: &dyn gpui::Action| {
+                let keymap = cx.key_bindings();
+                let keymap = keymap.borrow();
+                keymap
+                    .bindings_for_action(action)
+                    .map(|binding| binding.keystrokes()[0].inner().clone())
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(bound(&Hide), [gpui::Keystroke::parse("cmd-h").unwrap()]);
+            assert_eq!(
+                bound(&HideOthers),
+                [gpui::Keystroke::parse("cmd-alt-h").unwrap()]
+            );
+            assert_eq!(bound(&Minimize), [gpui::Keystroke::parse("cmd-m").unwrap()]);
+            // Show All carries the standard no-shortcut.
+            assert!(bound(&ShowAll).is_empty());
+        });
+    }
+
+    /// Hide and Minimize are macOS conventions, not cross-platform menus.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn hide_and_minimize_are_macos_only() {
+        let menus = menus(Layout::default());
+        let herdr = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Herdr")
+            .unwrap();
+        assert_eq!(
+            action_names(herdr),
+            [
+                "About Herdr",
+                "Command Palette",
+                "Settings",
+                "Keyboard Shortcuts",
+                "Check for Updates...",
+                "Quit Herdr",
+            ]
+        );
+        let window = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Window")
+            .unwrap();
+        assert_eq!(action_names(window), ["New Window", "Logs"]);
     }
 }

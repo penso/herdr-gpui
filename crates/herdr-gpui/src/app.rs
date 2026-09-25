@@ -3,7 +3,8 @@
 //! ever creating a window.
 
 use crate::{
-    APP_VERSION, HerdrWindow, Quit, ShowLogs, WINDOW_TITLE, app_icon, bind_keys, cli,
+    APP_VERSION, HerdrWindow, Hide, HideOthers, Quit, ShowAll, ShowLogs, WINDOW_TITLE, app_icon,
+    bind_keys, cli,
     config::{Config, Theme},
     diagnostics, icons, log_window, menus, titlebar, updater,
 };
@@ -186,6 +187,9 @@ pub(crate) fn run() -> std::process::ExitCode {
             #[cfg(target_os = "macos")]
             crate::app_badge::install(cx);
             cx.on_action(|_: &Quit, cx| cx.quit());
+            cx.on_action(|_: &Hide, cx| cx.hide());
+            cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
+            cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
             cx.on_action(|_: &ShowLogs, cx| log_window::open(cx));
             bind_keys(cx);
             menus::install(cx);
