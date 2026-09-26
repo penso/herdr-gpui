@@ -675,6 +675,14 @@ impl HerdrWindow {
     // A coherent surface permits the deferred navigation attempt, not terminal
     // input while its toast target is still waiting for inbox validation.
     pub(crate) fn navigation_ready(&self) -> bool {
+        self.surface_activation_ready()
+            && self.live.surface.as_ref().is_some_and(|surface| {
+                surface.frame.width == self.options.surface_size.cols
+                    && surface.frame.height == self.options.surface_size.rows
+            })
+    }
+
+    pub(crate) fn surface_activation_ready(&self) -> bool {
         self.endpoints[self.selected_endpoint]
             .connection
             .handle
@@ -682,10 +690,6 @@ impl HerdrWindow {
             && self.endpoints[self.selected_endpoint].surface_requested()
             && self.pending_releases.is_empty()
             && self.live.surface_ready()
-            && self.live.surface.as_ref().is_some_and(|surface| {
-                surface.frame.width == self.options.surface_size.cols
-                    && surface.frame.height == self.options.surface_size.rows
-            })
     }
 
     pub(super) fn poll_endpoints(&mut self, cx: &mut Context<Self>) {
