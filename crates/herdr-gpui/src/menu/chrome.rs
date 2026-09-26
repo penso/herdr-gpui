@@ -40,6 +40,7 @@ impl HerdrWindow {
     }
 
     pub(crate) fn open_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.finish_font_size_edit(true, cx);
         if !self.cancel_theme_preview(cx) {
             return false;
         }
@@ -56,6 +57,7 @@ impl HerdrWindow {
     }
 
     pub(crate) fn dismiss_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_font_size_edit(true, cx);
         if !self.cancel_theme_preview(cx) {
             return;
         }
@@ -364,6 +366,7 @@ impl HerdrWindow {
                     page,
                     Page::Keybinds
                         | Page::Themes
+                        | Page::Fonts
                         | Page::Palette
                         | Page::Preferences
                         | Page::AppUpdate
@@ -383,7 +386,7 @@ impl HerdrWindow {
             .when(
                 matches!(
                     page,
-                    Page::Keybinds | Page::Themes | Page::Palette | Page::Preferences
+                    Page::Keybinds | Page::Themes | Page::Fonts | Page::Palette | Page::Preferences
                 ),
                 |panel| {
                     panel
@@ -573,6 +576,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_keybinds(cx));
         } else if page == Page::Themes {
             panel = panel.child(self.render_theme_picker(cx));
+        } else if page == Page::Fonts {
+            panel = panel.child(self.render_font_picker(cx));
         } else if page == Page::Palette {
             panel = panel.child(self.render_palette(cx));
         } else if page == Page::ConfirmClose {
@@ -822,6 +827,27 @@ impl HerdrWindow {
                 if this.menu.page == Some(Page::Themes) {
                     this.theme_picker_key(event, window, cx);
                     return;
+                }
+                if this.menu.page == Some(Page::Fonts) {
+                    this.font_picker_key(event, window, cx);
+                    return;
+                }
+                if this.menu.page == Some(Page::Preferences) && this.menu.font_size_editor.is_some()
+                {
+                    let editor = this.menu.font_size_editor.as_ref();
+                    if editor.is_some_and(|editor| editor.input.read(cx).is_composing()) {
+                        return;
+                    }
+                    match event.keystroke.key.as_str() {
+                        "enter" | "escape" => {
+                            cx.stop_propagation();
+                            window.prevent_default();
+                            this.finish_font_size_edit(event.keystroke.key == "enter", cx);
+                            window.focus(&this.menu.focus, cx);
+                            return;
+                        }
+                        _ => return, // Native text editing and IME handle printable input.
+                    }
                 }
                 if this.menu.page == Some(Page::Keybinds)
                     && (this

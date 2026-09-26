@@ -19,6 +19,8 @@ mod diagnostics;
 mod dialog_input;
 mod endpoint;
 mod error;
+mod font_picker;
+mod font_sizes;
 mod fonts;
 mod git;
 mod github;

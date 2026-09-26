@@ -1,7 +1,9 @@
 use crate::{
     HerdrWindow,
-    config::{Config, Features},
+    config::{Config, FONT_SIZE_RANGE, Features, FontFace},
+    font_picker::{FontTarget, shared_family},
     fonts::StyledFont,
+    search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 use std::env;
@@ -22,7 +24,61 @@ pub(crate) fn feature_rows(features: &Features) -> [(&'static str, &'static str,
     )]
 }
 
+pub(crate) struct FontSizeEditor {
+    face: FontFace,
+    pub(crate) input: Entity<SearchInput>,
+    _blur: Subscription,
+}
+
+fn parse_font_size(text: &str) -> Option<f32> {
+    let text = text.trim();
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let value = text.parse::<u8>().ok()?;
+    FONT_SIZE_RANGE
+        .contains(&f32::from(value))
+        .then_some(f32::from(value))
+}
+
 impl HerdrWindow {
+    fn begin_font_size_edit(
+        &mut self,
+        face: FontFace,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = cx.new(SearchInput::new);
+        input.update(cx, |input, cx| {
+            input.set_text_selected(&format!("{}", face.size(&self.config)), cx);
+            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+        });
+        let focus = input.read(cx).focus.clone();
+        let blur = cx.on_blur(&focus, window, |this, _, cx| {
+            this.finish_font_size_edit(true, cx);
+        });
+        self.menu.font_size_editor = Some(FontSizeEditor {
+            face,
+            input: input.clone(),
+            _blur: blur,
+        });
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(super) fn finish_font_size_edit(&mut self, save: bool, cx: &mut Context<Self>) {
+        let Some(editor) = self.menu.font_size_editor.take() else {
+            return;
+        };
+        if save
+            && !editor.input.read(cx).is_composing()
+            && let Some(size) = parse_font_size(editor.input.read(cx).text())
+        {
+            self.set_font_size(editor.face, size, cx);
+        }
+        cx.notify();
+    }
+
     pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
@@ -86,6 +142,15 @@ impl HerdrWindow {
             .min_w_0()
             .overflow_y_scroll()
             .track_scroll(&self.menu.preferences_scroll)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    if this.menu.font_size_editor.is_some() {
+                        this.finish_font_size_edit(true, cx);
+                        window.focus(&this.menu.focus, cx);
+                    }
+                }),
+            )
             .px(px(16.))
             .py(px(8.))
             .child(section("APPEARANCE"))
@@ -124,21 +189,158 @@ impl HerdrWindow {
                 )),
             ))
             .child(section("FONTS"));
-        for (id, label, value) in [
-            ("preferences-font-sidebar", "Sidebar", &self.config.sidebar),
-            ("preferences-font-tabs", "Tabs", &self.config.tabs),
+        body = body.child(
+            div()
+                .debug_selector(|| "preferences-font-all".into())
+                .flex()
+                .items_center()
+                .min_w_0()
+                .gap(px(12.))
+                .py(px(7.))
+                .border_b_1()
+                .border_color(rgb(theme.active))
+                .child(
+                    div()
+                        .w(relative(0.3))
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child("All fonts"),
+                )
+                .child(
+                    div()
+                        .id("preferences-font-all-choose")
+                        .debug_selector(|| "preferences-font-all-choose".into())
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_right()
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(theme.active)))
+                        .child(format!(
+                            "{} ▾",
+                            shared_family(&self.config).unwrap_or("Mixed")
+                        ))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_font_picker(FontTarget::All, window, cx);
+                        })),
+                ),
+        );
+        for (face, id, label, value) in [
             (
+                FontFace::Sidebar,
+                "preferences-font-sidebar",
+                "Sidebar",
+                &self.config.sidebar,
+            ),
+            (
+                FontFace::Tabs,
+                "preferences-font-tabs",
+                "Tabs",
+                &self.config.tabs,
+            ),
+            (
+                FontFace::Terminal,
                 "preferences-font-terminal",
                 "Terminal",
                 &self.config.terminal,
             ),
-            ("preferences-font-ui", "UI", &self.config.ui),
+            (FontFace::Ui, "preferences-font-ui", "UI", &self.config.ui),
         ] {
-            body = body.child(row(
-                id,
-                label,
-                format!("{}, {} px", value.family, value.size),
-            ));
+            let control =
+                |suffix: &'static str, symbol: &'static str, direction: f32, enabled: bool| {
+                    div()
+                        .id(format!("{id}-{suffix}"))
+                        .debug_selector(move || format!("{id}-{suffix}"))
+                        .px(px(8.))
+                        .py(px(3.))
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(theme.active))
+                        .bg(rgb(theme.background))
+                        .when(enabled, |button| {
+                            button
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(theme.active)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.change_font_size(face, direction, cx);
+                                }))
+                        })
+                        .when(!enabled, |button| button.text_color(rgb(theme.muted)))
+                        .child(symbol)
+                };
+            body = body.child(
+                div()
+                    .debug_selector(move || id.into())
+                    .flex()
+                    .items_center()
+                    .min_w_0()
+                    .gap(px(12.))
+                    .py(px(7.))
+                    .border_b_1()
+                    .border_color(rgb(theme.active))
+                    .child(
+                        div()
+                            .w(relative(0.3))
+                            .flex_none()
+                            .min_w_0()
+                            .text_color(rgb(theme.muted))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .id(format!("{id}-choose"))
+                            .debug_selector(move || format!("{id}-choose"))
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_right()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .child(format!("{} ▾", value.family))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.open_font_picker(FontTarget::Face(face), window, cx);
+                            })),
+                    )
+                    .child(control(
+                        "decrease",
+                        "−",
+                        -1.,
+                        value.size > *FONT_SIZE_RANGE.start(),
+                    ))
+                    .child(
+                        if let Some(editor) = &self.menu.font_size_editor
+                            && editor.face == face
+                        {
+                            div()
+                                .w(px(55.))
+                                .flex_none()
+                                .child(editor.input.clone())
+                                .into_any_element()
+                        } else {
+                            div()
+                                .id(format!("{id}-size"))
+                                .debug_selector(move || format!("{id}-size"))
+                                .flex_none()
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(theme.active)))
+                                .child(format!("{} px", value.size))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.begin_font_size_edit(face, window, cx);
+                                }))
+                                .into_any_element()
+                        },
+                    )
+                    .child(control(
+                        "increase",
+                        "+",
+                        1.,
+                        value.size < *FONT_SIZE_RANGE.end(),
+                    )),
+            );
         }
         body = body
             .child(section("NOTIFICATIONS"))
@@ -147,7 +349,7 @@ impl HerdrWindow {
             .child(row("preferences-notifications-position", "Corner", format!("{:?}", self.config.notifications.position)))
             .child(note("Edit [notifications] in the local GUI config file; saved changes reload automatically. In-app notifications default off; QA previews always work. No sounds or OS notifications."))
             .child(note(
-                "Font families and sizes are read-only here. Sizes are logical pixels, independent of display scaling.",
+                "Font families and sizes save to local GUI overrides and reload in every window. Click a size to type 8–48; Enter or leaving the field saves, Escape cancels. Sizes are logical pixels.",
             ))
             .child(section("FEATURES"));
         for (id, label, enabled) in feature_rows(&self.config.features) {
@@ -282,7 +484,12 @@ impl HerdrWindow {
                     .border_t_1()
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
-                    .child("Esc to close  /  click outside to dismiss"),
+                    .child(
+                        self.font_size_saves
+                            .status()
+                            .unwrap_or("Esc to close  /  click outside to dismiss")
+                            .to_owned(),
+                    ),
             )
     }
 }
@@ -553,6 +760,25 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[core::prelude::v1::test]
+    fn font_size_input_accepts_only_whole_values_in_range() {
+        for (input, expected) in [
+            ("8", Some(8.)),
+            ("48", Some(48.)),
+            (" 24 ", Some(24.)),
+            ("7", None),
+            ("49", None),
+            ("14.5", None),
+            ("-8", None),
+            ("+12", None),
+            ("12px", None),
+            ("", None),
+            ("999999", None),
+        ] {
+            assert_eq!(parse_font_size(input), expected, "{input:?}");
+        }
+    }
 
     struct TestDirectory(PathBuf);
 

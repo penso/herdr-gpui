@@ -38,7 +38,9 @@ pub(crate) struct MenuState {
     pub(crate) keybinds_search: Option<Entity<crate::search_input::SearchInput>>,
     pub(super) _keybinds_subscription: Option<Subscription>,
     pub(crate) preferences_scroll: ScrollHandle,
+    pub(crate) font_size_editor: Option<crate::preferences::FontSizeEditor>,
     pub(crate) themes: Option<crate::theme_picker::ThemePicker>,
+    pub(crate) fonts: Option<crate::font_picker::FontPicker>,
     pub(crate) palette: Option<crate::palette::Palette>,
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
@@ -201,7 +203,9 @@ impl MenuState {
             keybinds_search: None,
             _keybinds_subscription: None,
             preferences_scroll: ScrollHandle::new(),
+            font_size_editor: None,
             themes: None,
+            fonts: None,
             palette: None,
             close: None,
             pr: Default::default(),
@@ -236,6 +240,8 @@ impl MenuState {
             self.github.cancel();
         }
         self.page = None;
+        self.fonts = None;
+        self.font_size_editor = None;
         self.selected = None;
         self.workspace_selected = None;
         self.git_selected = None;

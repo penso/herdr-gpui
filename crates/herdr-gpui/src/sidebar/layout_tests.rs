@@ -992,6 +992,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         },
         theme: Default::default(),
         config_load: None,
+        font_size_saves: Default::default(),
         config_watch: None,
         config_load_revision: 0,
         git: Default::default(),

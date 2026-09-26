@@ -32,6 +32,43 @@ pub const FONT_SIZE_RANGE: RangeInclusive<f32> = 8.0..=48.0;
 /// One logical pixel: the smallest step that can move the terminal cell grid.
 pub const FONT_SIZE_STEP: f32 = 1.0;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FontFace {
+    Sidebar,
+    Tabs,
+    Terminal,
+    Ui,
+}
+
+impl FontFace {
+    pub(crate) fn set_size(self, config: &mut Config, size: f32) {
+        match self {
+            Self::Sidebar => config.sidebar.size = size,
+            Self::Tabs => config.tabs.size = size,
+            Self::Terminal => config.terminal.size = size,
+            Self::Ui => config.ui.size = size,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Sidebar => "sidebar",
+            Self::Tabs => "tabs",
+            Self::Terminal => "terminal",
+            Self::Ui => "ui",
+        }
+    }
+
+    pub(crate) fn size(self, config: &Config) -> f32 {
+        match self {
+            Self::Sidebar => config.sidebar.size,
+            Self::Tabs => config.tabs.size,
+            Self::Terminal => config.terminal.size,
+            Self::Ui => config.ui.size,
+        }
+    }
+}
+
 /// Shared logical-pixel radii for native-style chrome, independent of the
 /// terminal grid. Small badges/keycaps retain a tighter curve than controls.
 pub(crate) mod corners {
@@ -1052,6 +1089,101 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
+    /// Persist a batch of logical pixel sizes without replacing other overrides.
+    /// The lock also serializes this edit with migration and other GUI saves.
+    pub(crate) fn save_font_sizes(sizes: &[(FontFace, f32)]) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_font_sizes_path(sizes, &local)
+    }
+
+    /// `None` removes the local override, inheriting the platform's managed default.
+    pub(crate) fn save_font_family(face: FontFace, family: Option<&str>) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_font_family_path(face, family, &local)
+    }
+
+    pub(crate) fn save_all_font_families(family: Option<&str>) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_font_families_path(
+            &[
+                FontFace::Sidebar,
+                FontFace::Tabs,
+                FontFace::Terminal,
+                FontFace::Ui,
+            ],
+            family,
+            &local,
+        )
+    }
+
+    fn save_font_family_path(face: FontFace, family: Option<&str>, path: &Path) -> Result<()> {
+        Self::save_font_families_path(&[face], family, path)
+    }
+
+    fn save_font_families_path(
+        faces: &[FontFace],
+        family: Option<&str>,
+        path: &Path,
+    ) -> Result<()> {
+        if family.is_some_and(|name| name.trim().is_empty()) {
+            return Err(Error::EmptyFontFamily("fonts"));
+        }
+        let result = (|| -> Result<()> {
+            let text = fs::read_to_string(path)?;
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            for face in faces {
+                if let Some(family) = family {
+                    let font = document
+                        .entry(face.name())
+                        .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+                    let table = font
+                        .as_table_like_mut()
+                        .ok_or(Error::EmptyFontFamily(face.name()))?;
+                    let mut value = toml_edit::Value::from(family);
+                    if let Some(previous) = table.get("family").and_then(toml_edit::Item::as_value)
+                    {
+                        *value.decor_mut() = previous.decor().clone();
+                    }
+                    table.insert("family", toml_edit::Item::Value(value));
+                } else if let Some(table) = document
+                    .get_mut(face.name())
+                    .and_then(toml_edit::Item::as_table_like_mut)
+                {
+                    table.remove("family");
+                }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    fn save_font_sizes_path(sizes: &[(FontFace, f32)], path: &Path) -> Result<()> {
+        for &(face, size) in sizes {
+            if !size.is_finite() || !FONT_SIZE_RANGE.contains(&size) {
+                return Err(Error::InvalidFontSize(face.name()));
+            }
+        }
+        let result = (|| -> Result<()> {
+            let text = fs::read_to_string(path)?;
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            for &(face, size) in sizes {
+                let font = document
+                    .entry(face.name())
+                    .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+                let table = font
+                    .as_table_like_mut()
+                    .ok_or(Error::InvalidFontSize(face.name()))?;
+                let mut value = toml_edit::Value::from(size as f64);
+                if let Some(previous) = table.get("size").and_then(toml_edit::Item::as_value) {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                table.insert("size", toml_edit::Item::Value(value));
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
     pub fn theme(&self) -> Result<Theme> {
         self.theme_with_directories(theme_directories)
     }
@@ -1730,6 +1862,137 @@ mod tests {
                     .is_ok()
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn font_family_saves_and_reset_preserve_other_overrides() -> anyhow::Result<()> {
+        let directory = TempDirectory::new()?;
+        let path = directory.0.join("config-gpui.local.toml");
+        let original = "# keep me\ntheme = 'Nord'\n\n[terminal]\nsize = 18 # size comment\nfamily = 'Old' # family comment\n";
+        fs::write(&path, original)?;
+        for face in [
+            FontFace::Sidebar,
+            FontFace::Tabs,
+            FontFace::Terminal,
+            FontFace::Ui,
+        ] {
+            Config::save_font_family_path(face, Some("Any Installed Font"), &path)?;
+            let text = fs::read_to_string(&path)?;
+            let document = text.parse::<toml_edit::DocumentMut>()?;
+            assert_eq!(
+                document[face.name()]["family"].as_str(),
+                Some("Any Installed Font")
+            );
+            assert!(text.contains("# keep me"));
+            assert!(text.contains("size = 18 # size comment"));
+            Config::save_font_family_path(face, None, &path)?;
+            let text = fs::read_to_string(&path)?;
+            let document = text.parse::<toml_edit::DocumentMut>()?;
+            assert!(
+                document
+                    .get(face.name())
+                    .and_then(|item| item.get("family"))
+                    .is_none()
+            );
+            assert!(text.contains("# keep me"));
+            assert!(text.contains("size = 18 # size comment"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn all_font_families_save_and_reset_in_one_document() -> anyhow::Result<()> {
+        let directory = TempDirectory::new()?;
+        let path = directory.0.join("config-gpui.local.toml");
+        fs::write(
+            &path,
+            "# keep\n[terminal]\nsize = 18 # keep size\nfamily = 'Old'\n",
+        )?;
+        let faces = [
+            FontFace::Sidebar,
+            FontFace::Tabs,
+            FontFace::Terminal,
+            FontFace::Ui,
+        ];
+        Config::save_font_families_path(&faces, Some("Shared"), &path)?;
+        let document = fs::read_to_string(&path)?;
+        let parsed = document.parse::<toml_edit::DocumentMut>()?;
+        for face in faces {
+            assert_eq!(parsed[face.name()]["family"].as_str(), Some("Shared"));
+        }
+        Config::save_font_family_path(FontFace::Tabs, Some("Independent"), &path)?;
+        let parsed = fs::read_to_string(&path)?.parse::<toml_edit::DocumentMut>()?;
+        assert_eq!(parsed["tabs"]["family"].as_str(), Some("Independent"));
+        assert_eq!(parsed["terminal"]["family"].as_str(), Some("Shared"));
+        Config::save_font_families_path(&faces, None, &path)?;
+        let text = fs::read_to_string(&path)?;
+        let parsed = text.parse::<toml_edit::DocumentMut>()?;
+        for face in faces {
+            assert!(
+                parsed
+                    .get(face.name())
+                    .and_then(|item| item.get("family"))
+                    .is_none()
+            );
+        }
+        assert!(text.contains("# keep"));
+        assert!(text.contains("size = 18 # keep size"));
+        Ok(())
+    }
+
+    #[test]
+    fn font_size_saves_preserve_other_overrides_and_comments() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config.toml");
+        let original = "# user settings\ntheme = 'Nord'\nfuture = true\n\n[tabs] # keep table\nsize = 19 # keep size\nfamily = 'Custom'\n";
+        fs::write(&path, original)?;
+        for (face, size) in [
+            (FontFace::Sidebar, 8.),
+            (FontFace::Tabs, 20.),
+            (FontFace::Terminal, 48.),
+            (FontFace::Ui, 14.),
+        ] {
+            Config::save_font_sizes_path(&[(face, size)], &path)?;
+            let text = fs::read_to_string(&path)?;
+            let known = text.replace("future = true\n", "");
+            assert_eq!(
+                face.size(&Config::parse_layers(
+                    [DEFAULT_CONFIG, &known],
+                    ClipboardToast::default()
+                )?),
+                size
+            );
+            assert!(text.contains("future = true"));
+            assert!(text.contains("family = 'Custom'"));
+            assert!(text.contains("[tabs] # keep table"));
+            assert!(text.contains("size = 20.0 # keep size") || face != FontFace::Tabs);
+        }
+        let before = fs::read_to_string(&path)?;
+        for invalid in [7., 49., f32::NAN, f32::INFINITY] {
+            assert!(Config::save_font_sizes_path(&[(FontFace::Tabs, invalid)], &path).is_err());
+            assert_eq!(fs::read_to_string(&path)?, before);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn font_size_batches_validate_every_change_before_writing() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        let original = "# retained\ntheme = 'Nord'\n[sidebar]\nsize = 12 # retained size\n";
+        fs::write(&path, original)?;
+        assert!(matches!(
+            Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 49.)], &path),
+            Err(Error::InvalidFontSize("ui"))
+        ));
+        assert_eq!(fs::read_to_string(&path)?, original);
+        Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 20.)], &path)?;
+        let saved = fs::read_to_string(&path)?;
+        let config = Config::parse(&saved)?;
+        assert_eq!((config.sidebar.size, config.ui.size), (14., 20.));
+        assert!(saved.contains("size = 14.0 # retained size"));
+        assert!(saved.contains("theme = 'Nord'"));
         Ok(())
     }
 
