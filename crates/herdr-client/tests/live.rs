@@ -25,6 +25,80 @@ use std::{
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Verify the CLI contract used by the picker against an explicitly selected
+/// installation. Every command has the sandbox's cleared, private environment.
+#[test]
+#[ignore = "requires HERDR_TEST_BINARY; creates only an isolated named session"]
+fn named_session_create_and_delete_cli_contract() {
+    let binary = daemon_binary();
+    let mut daemon = Daemon {
+        sandbox: Sandbox::new(),
+        child: None,
+    };
+    let name = "picker-test";
+    let socket = daemon
+        .sandbox
+        .dir
+        .join("config/herdr/sessions")
+        .join(name)
+        .join("herdr-client.sock");
+    daemon.child = Some(
+        daemon
+            .sandbox
+            .command(&binary, "daemon.log")
+            .args(["--session", name, "server"])
+            .spawn()
+            .unwrap(),
+    );
+    let deadline = Instant::now() + TIMEOUT;
+    while herdr_client::Stream::connect(&socket).is_err() {
+        assert!(daemon.child.as_mut().unwrap().try_wait().unwrap().is_none());
+        assert!(Instant::now() < deadline, "named session never started");
+        thread::sleep(Duration::from_millis(20));
+    }
+    let delete = |name: &str| {
+        daemon
+            .sandbox
+            .command(&binary, "delete.log")
+            .args(["session", "delete", "--json", "--", name])
+            .status()
+            .unwrap()
+    };
+    assert!(!delete("default").success());
+    assert!(
+        !delete(name).success(),
+        "a running session must be preserved"
+    );
+    assert!(socket.parent().unwrap().is_dir());
+    // Exercise the GUI's explicit stop of this test-owned named session only.
+    // Drop still kills/reaps the exact child on every failure path.
+    let stop = || {
+        daemon
+            .sandbox
+            .command(&binary, "stop.log")
+            .args(["session", "stop", "--json", "--", name])
+            .status()
+            .unwrap()
+    };
+    assert!(stop().success());
+    let deadline = Instant::now() + TIMEOUT;
+    while daemon.child.as_mut().unwrap().try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "stopped daemon did not exit");
+        thread::sleep(Duration::from_millis(20));
+    }
+    daemon.child = None;
+    assert!(
+        !stop().success(),
+        "stopping an already-stopped session is a CLI refusal"
+    );
+    assert!(delete(name).success());
+    assert!(!socket.parent().unwrap().exists());
+    assert!(
+        delete(name).success(),
+        "deletion of a missing name is idempotent"
+    );
+}
+
 struct Daemon {
     sandbox: Sandbox,
     child: Option<Child>,

@@ -16,14 +16,10 @@ use serde::Deserialize;
 use std::{
     fs, io,
     path::{Path, PathBuf},
-};
-#[cfg(unix)]
-use std::{
-    io::Read,
-    os::fd::OwnedFd,
-    process::Stdio,
     time::{Duration, Instant},
 };
+#[cfg(unix)]
+use std::{io::Read, os::fd::OwnedFd, process::Stdio};
 
 /// One scan reports at most this many sessions, like the endpoint catalog's
 /// profile cap. More than this is refused rather than silently truncated.
@@ -32,6 +28,112 @@ const LIMIT: usize = 64;
 /// The root session, which upstream keeps in the configuration directory itself
 /// rather than in a subdirectory of `sessions/`.
 const DEFAULT: &str = "default";
+
+/// Stop and delete a named session through Herdr after explicit confirmation.
+/// This terminates its pane processes. Call only from a background worker.
+pub fn delete_local_session(executable: &Path, name: &str) -> Result<()> {
+    validate_delete(name)?;
+    let command = |operation| {
+        let mut command = std::process::Command::new(executable);
+        command.args(["session", operation, "--json", "--", name]);
+        command
+    };
+    stop_then_delete(
+        || delete_command(command("stop"), Duration::from_secs(20)),
+        || delete_command(command("delete"), Duration::from_secs(15)),
+    )
+}
+
+/// Stop and delete a named session on a saved POSIX device after confirmation.
+pub fn delete_remote_session(target: &str, name: &str) -> Result<()> {
+    validate_target(target)?;
+    validate_delete(name)?;
+    #[cfg(unix)]
+    {
+        delete_command(
+            script_command(target, &delete_script(name))?,
+            Duration::from_secs(45),
+        )
+    }
+    #[cfg(not(unix))]
+    {
+        Err(Error::SshUnsupported)
+    }
+}
+
+fn stop_then_delete(
+    stop: impl FnOnce() -> Result<()>,
+    delete: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    match stop() {
+        Ok(()) | Err(Error::SessionDeleteFailed(_)) => {
+            // `session stop` refuses an already-stopped/missing session. The
+            // delete command is authoritative: it refuses any still-live daemon,
+            // including one restarted concurrently by another client.
+            delete()
+        }
+        // Do not continue an uncertain operation or replay it automatically.
+        Err(error) => Err(error),
+    }
+}
+
+fn validate_delete(name: &str) -> Result<()> {
+    if !valid_session_name(name) {
+        return Err(Error::InvalidSession);
+    }
+    if name == DEFAULT {
+        return Err(Error::DefaultSession);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn delete_script(name: &str) -> String {
+    // Choose the same first CLI that can list sessions. A mutation is never
+    // retried with another installation after a refusal or ambiguous result.
+    format!(
+        r#"{CANDIDATES}
+    if [ -n "$path" ] && [ -x "$path" ]; then
+        "$path" session list --json >/dev/null 2>&1 || continue
+        "$path" session stop --json -- {} >/dev/null 2>&1
+        exec "$path" session delete --json -- {}
+    fi
+done
+exit 127"#,
+        crate::ssh::quote(name),
+        crate::ssh::quote(name)
+    )
+}
+
+fn delete_command(mut command: std::process::Command, timeout: Duration) -> Result<()> {
+    use std::process::Stdio;
+    // No terminal, inherited pipes, or unbounded remote diagnostics. Status is
+    // authoritative; a successful spawn is not a successful deletion.
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = command.spawn()?;
+    let started = Instant::now();
+    let result = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                break if status.success() {
+                    Ok(())
+                } else {
+                    Err(Error::SessionDeleteFailed(status))
+                };
+            }
+            Err(error) => break Err(Error::Io(error)),
+            Ok(None) if started.elapsed() >= timeout => break Err(Error::SessionDeleteTimeout),
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    // Only this exact CLI/SSH child is ours to kill and reap, never the daemon.
+    let _ = child.kill();
+    let _ = child.wait();
+    result
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionState {
@@ -324,6 +426,114 @@ mod tests {
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+    #[test]
+    fn deletion_rejects_default_and_invalid_names_before_spawning() {
+        let missing = Path::new("/no-such-session-test-executable");
+        assert!(matches!(
+            delete_local_session(missing, "default"),
+            Err(Error::DefaultSession)
+        ));
+        for name in [
+            "",
+            ".",
+            "..",
+            "../work",
+            "work space",
+            "x;exit",
+            &"a".repeat(65),
+        ] {
+            assert!(
+                matches!(
+                    delete_local_session(missing, name),
+                    Err(Error::InvalidSession)
+                ),
+                "{name}"
+            );
+        }
+        let error = delete_local_session(missing, "work").unwrap_err();
+        assert!(matches!(error, Error::Io(_)));
+        assert!(std::error::Error::source(&error).is_some());
+        assert!(matches!(
+            delete_remote_session("-oProxyCommand=bad", "work"),
+            Err(Error::InvalidSshTarget)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn deletion_reports_exit_status_and_times_out_without_a_daemon() {
+        let command = |script: &str| {
+            let mut command = std::process::Command::new("/bin/sh");
+            command.args(["-c", script]);
+            command
+        };
+        assert!(delete_command(command("exit 0"), Duration::from_secs(1)).is_ok());
+        assert!(
+            matches!(delete_command(command("exit 17"), Duration::from_secs(1)),
+            Err(Error::SessionDeleteFailed(status)) if status.code() == Some(17))
+        );
+        // exec keeps the sleeping process the exact child the runner owns.
+        assert!(matches!(
+            delete_command(command("exec sleep 30"), Duration::ZERO),
+            Err(Error::SessionDeleteTimeout)
+        ));
+    }
+
+    #[test]
+    fn confirmed_deletion_orders_stop_before_delete_and_aborts_uncertain_stops() {
+        let calls = RefCell::new(Vec::new());
+        stop_then_delete(
+            || {
+                calls.borrow_mut().push("stop");
+                Ok(())
+            },
+            || {
+                calls.borrow_mut().push("delete");
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(*calls.borrow(), ["stop", "delete"]);
+        assert!(matches!(
+            stop_then_delete(
+                || Err(Error::SessionDeleteTimeout),
+                || panic!("a timed-out stop must not continue"),
+            ),
+            Err(Error::SessionDeleteTimeout)
+        ));
+        let error = stop_then_delete(
+            || Err(Error::Io(io::Error::from(io::ErrorKind::PermissionDenied))),
+            || panic!("a failed spawn must not continue"),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(std::error::Error::source(&error).is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_already_stopped_session_can_be_deleted_but_a_live_one_is_still_refused() {
+        use std::os::unix::process::ExitStatusExt;
+        let refused = || Error::SessionDeleteFailed(std::process::ExitStatus::from_raw(256));
+        assert!(stop_then_delete(|| Err(refused()), || Ok(())).is_ok());
+        assert!(matches!(
+            stop_then_delete(|| Err(refused()), || Err(refused())),
+            Err(Error::SessionDeleteFailed(_))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remote_delete_is_noninteractive_and_never_retries_a_mutation() {
+        let script = delete_script("--json");
+        assert!(script.contains("exec \"$path\" session delete --json -- '--json'"));
+        assert!(script.contains("session list --json >/dev/null 2>&1 || continue"));
+        let command = script_command("host", &script).unwrap();
+        assert!(command.get_args().any(|arg| arg == "BatchMode=yes"));
+        assert!(script.contains("session stop --json -- '--json' >/dev/null 2>&1"));
+        assert!(script.find("session stop").unwrap() < script.find("session delete").unwrap());
+    }
+
     /// A private configuration directory; its build is idempotent so one test can
     /// add entries to it after the first assertion.
     fn fixture() -> PathBuf {
@@ -570,6 +780,7 @@ mod tests {
     /// closing, the way a host that answered leaves one.
     struct Answered(std::collections::VecDeque<u8>);
 
+    #[cfg(unix)]
     impl Read for Answered {
         fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
             if self.0.is_empty() {
@@ -582,6 +793,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_host_that_answered_is_read_without_waiting_for_the_channel_to_close() {
         let listing = br#"{"sessions":[{"name":"default","running":true}]}"#;
@@ -598,6 +810,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_child_that_finished_ends_the_read_instead_of_the_deadline() {
         // A host with no usable Herdr prints nothing and exits, which is a failure
@@ -617,6 +830,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_channel_that_never_prints_a_listing_still_times_out() {
         let mut stream = Answered(std::collections::VecDeque::new());
@@ -626,6 +840,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_complete_listing_ends_the_read_before_any_eof() {
         // The command that prints a listing leaves a process holding the SSH
@@ -641,6 +856,7 @@ mod tests {
         assert!(!listed_sessions(b""));
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_host_that_prints_nothing_is_a_closed_bridge() {
         assert!(matches!(parse_session_list(b""), Err(Error::SshClosed)));

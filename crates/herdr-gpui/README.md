@@ -133,6 +133,48 @@ seconds while the popup is open; until it answers, and if it never does, the
 device still offers the session it was saved with. Choosing a session attaches
 this window to it on that device.
 
+The current session has an accent highlight; status dots and delete icons stay
+aligned across rows. The **Add session…** row has no status dot.
+Session and worktree context-menu actions share right-aligned 14-pixel icons
+in 24-pixel slots. Trash buttons have a separate high-contrast hover background,
+including on highlighted session rows.
+
+Each section offers **Add session…**, opening a centered modal. Enter a name and choose **Create and connect**
+to start a named headless server locally, or attach through the saved device's
+SSH bridge (which starts its named server if absent). This never opens a nested
+interactive Herdr TUI. Names use 1–64 ASCII letters, digits, dots, underscores or
+hyphens, excluding `.` and `..`. Names already in the cached list are refused;
+if another client creates that name meanwhile, Herdr connects to it rather than
+overwriting it. Startup failures appear in the connection status.
+
+Choose a row's **trash icon**, or select it with the arrow keys and press Delete /
+Backspace, then confirm **Delete permanently** in the centered approval modal.
+Confirmation stops the named session, terminates its running processes, and
+deletes its saved state. Matching endpoints in this window move to `default`
+before the operation, including when deleting the currently displayed session.
+Cancel does not stop or switch anything. Herdr cannot delete `default`.
+The picker stays visible beneath the confirmation modal. After successful
+deletion, the row fades over 260 ms without moving or resizing the picker;
+it is removed after the fade finishes. Progress stays inside the row rather
+than adding a header. Failed deletions keep the row and show the error.
+A remote session still
+referenced by a saved device profile must have that profile removed or
+reconfigured first, so a later launch cannot silently recreate it.
+
+Deletion runs `herdr session stop --json -- NAME` followed by
+`herdr session delete --json -- NAME`, locally or over noninteractive SSH.
+Local stopping has a 20-second deadline and deletion a 15-second deadline; the
+whole SSH operation has a 45-second deadline. There are no automatic retries.
+An already-stopped session can still be deleted: the delete command rechecks
+running state and refuses any daemon that remains live or restarted meanwhile.
+The picker refreshes after success or
+failure, including timeouts whose result is uncertain. File, process and SSH
+work runs off the UI thread, with one deletion outstanding per window.
+Local add/delete is unavailable with explicit sockets or development catalogs;
+saved-device management is unavailable on Windows or for disabled devices.
+Remote hosts need an installed Herdr supporting the session commands and
+noninteractive SSH authentication. The GUI does not install or update it.
+
 **Add Device…** accepts an SSH target, label, and optional remote session (default:
 `default`). Herdr's `machine add` saves a new profile every time and takes no
 lock, so the dialog keeps a host from being saved twice itself. A host counts as

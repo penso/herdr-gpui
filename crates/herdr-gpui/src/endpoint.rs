@@ -413,6 +413,46 @@ impl Catalog {
 }
 
 impl HerdrWindow {
+    /// Move every matching live target in this window away from a session that
+    /// the user confirmed for deletion. This retires transports without I/O on
+    /// the UI thread. The caller reconnects the selected endpoint if it moved.
+    pub(super) fn retarget_session_for_deletion(&mut self, target: &ConnectTarget) -> bool {
+        let mut selected_changed = false;
+        for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+            let replacement = match target {
+                ConnectTarget::Session {
+                    name,
+                    development: false,
+                } if name != "default"
+                    && index == 0
+                    && target.socket_path().ok().is_some_and(|path| {
+                        endpoint.connection.target.socket_path().ok() == Some(path)
+                    }) =>
+                {
+                    Some(ConnectTarget::Session {
+                        name: "default".into(),
+                        development: false,
+                    })
+                }
+                ConnectTarget::Ssh {
+                    target: host,
+                    session,
+                } if session != "default" && endpoint.connection.target == *target => {
+                    Some(ConnectTarget::Ssh {
+                        target: host.clone(),
+                        session: "default".into(),
+                    })
+                }
+                _ => None,
+            };
+            if let Some(replacement) = replacement {
+                endpoint.retarget(replacement);
+                selected_changed |= index == self.selected_endpoint;
+            }
+        }
+        selected_changed
+    }
+
     pub(super) fn reconnect(&mut self) {
         let index = self.selected_endpoint;
         if !self.endpoints[index].enabled {
@@ -843,8 +883,17 @@ impl HerdrWindow {
         let development = self.local_development();
         let open = self.menu.page == Some(crate::menu::Page::Sessions);
         let now = Instant::now();
-        let mut changed = self.sessions.poll(development, open, now);
         let targets = self.probe_targets();
+        self.sessions.devices.forget_replaced(&targets);
+        // Hold the catalog steady through the mutation and its successful exit
+        // animation. Workers stay bounded; finished answers wait in their inbox.
+        if self.sessions.mutation.is_some() {
+            if open && self.sessions.departure.is_some() {
+                cx.notify();
+            }
+            return;
+        }
+        let mut changed = self.sessions.poll(development, open, now);
         if self.sessions.devices.poll(&targets, open, now) {
             changed = true;
         }

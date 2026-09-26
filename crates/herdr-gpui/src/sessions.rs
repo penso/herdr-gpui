@@ -3,7 +3,9 @@
 //! themselves. Only the sessions popup asks for either: probing is I/O, so it
 //! runs on a worker thread and an idle window never touches the disk or a host.
 use crate::Error;
-use herdr_client::{LocalSession, RemoteSession, list_local_sessions, list_remote_sessions};
+use herdr_client::{
+    ConnectTarget, LocalSession, RemoteSession, list_local_sessions, list_remote_sessions,
+};
 use std::{
     collections::HashMap,
     sync::mpsc,
@@ -19,6 +21,30 @@ const REFRESH: Duration = Duration::from_secs(5);
 /// answer costs an SSH connection, so the popup does not redial at the local
 /// probe's rate.
 const DEVICE_REFRESH: Duration = Duration::from_secs(30);
+
+pub(super) const DELETION_ANIMATION: Duration = Duration::from_millis(260);
+
+pub(super) struct Departure {
+    pub(super) target: ConnectTarget,
+    started: Instant,
+}
+
+impl Departure {
+    pub(super) fn new(target: ConnectTarget, now: Instant) -> Self {
+        Self {
+            target,
+            started: now,
+        }
+    }
+
+    /// Fade without changing layout, driven by the window's existing frame poll.
+    pub(super) fn remaining(&self, now: Instant) -> f32 {
+        let progress = (now.saturating_duration_since(self.started).as_secs_f32()
+            / DELETION_ANIMATION.as_secs_f32())
+        .clamp(0., 1.);
+        1. - progress
+    }
+}
 
 /// What the last probe of one saved device found.
 pub(super) enum DeviceScan {
@@ -40,6 +66,11 @@ pub(super) struct Sessions {
     /// about to change.
     pub(super) scanning: bool,
     pub(super) error: Option<String>,
+    pub(super) mutation: Option<gpui::Task<()>>,
+    pub(super) mutation_error: Option<String>,
+    pub(super) mutation_target: Option<ConnectTarget>,
+    pub(super) departure: Option<Departure>,
+    refresh_after_scan: bool,
     pending: Option<mpsc::Receiver<Result<Vec<LocalSession>, Error>>>,
     /// `None` means the next open scans immediately.
     next_scan: Option<Instant>,
@@ -62,17 +93,52 @@ pub(super) struct Devices {
     /// host that cannot answer is not redialled on every refresh, and a device
     /// whose host changed is asked again rather than answered for the old one.
     asked: HashMap<String, (String, Instant)>,
+    discard_pending: bool,
 }
 
 impl Sessions {
+    pub(super) fn finish_departure(&mut self) {
+        let Some(departure) = self.departure.take() else {
+            return;
+        };
+        match departure.target {
+            ConnectTarget::Session { name, .. } => {
+                self.entries.retain(|session| session.name != name)
+            }
+            ConnectTarget::Ssh { target, session } => {
+                for (id, answer) in &mut self.devices.answers {
+                    if self
+                        .devices
+                        .asked
+                        .get(id)
+                        .is_some_and(|(host, _)| *host == target)
+                        && let DeviceScan::Sessions(sessions) = answer
+                    {
+                        sessions.retain(|entry| entry.name != session);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     /// Probe again as soon as the popup is on screen, including when a scan is
     /// still running: the newest answer is the one worth showing.
     pub(super) fn refresh(&mut self) {
         self.next_scan = None;
+        self.refresh_after_scan = self.pending.is_some();
     }
 }
 
 impl Devices {
+    pub(super) fn refresh(&mut self) {
+        // Keep the visible catalog while refreshing, but never accept an answer
+        // started before the mutation. Track old workers until they finish.
+        self.discard_pending = self.pending.is_some();
+        let stale_at = Instant::now() - DEVICE_REFRESH;
+        for (_, asked_at) in self.asked.values_mut() {
+            *asked_at = stale_at;
+        }
+    }
     /// Apply a finished pass, and start one for every device whose answer has
     /// aged out. `targets` is the endpoint id and SSH target of each device this
     /// window may ask. Reports whether the popup should repaint. Opening the
@@ -97,10 +163,11 @@ impl Devices {
             Some(Ok(answers)) => {
                 self.pending = None;
                 self.asking.clear();
+                let discard = std::mem::take(&mut self.discard_pending);
                 for (id, host, answer) in answers {
                     // A device replaced while its probe was in flight keeps what
                     // its new host says, not what the old one said.
-                    if self.asked.get(&id).is_some_and(|(asked, _)| *asked == host) {
+                    if !discard && self.asked.get(&id).is_some_and(|(asked, _)| *asked == host) {
                         self.answers.insert(id, answer);
                     }
                 }
@@ -110,8 +177,9 @@ impl Devices {
             // asking unknown: an answer already in hand still stands.
             Some(Err(mpsc::TryRecvError::Disconnected)) => {
                 self.pending = None;
+                let discard = std::mem::take(&mut self.discard_pending);
                 for (id, host) in std::mem::take(&mut self.asking) {
-                    if self.asked.get(&id).is_some_and(|(asked, _)| *asked == host) {
+                    if !discard && self.asked.get(&id).is_some_and(|(asked, _)| *asked == host) {
                         self.answers.insert(
                             id,
                             DeviceScan::Failed("the device scan stopped unexpectedly".to_owned()),
@@ -141,7 +209,7 @@ impl Devices {
 
     /// Forget a device's answer and its age when it is no longer one of this
     /// window's devices, or when its host changed under the same id.
-    fn forget_replaced(&mut self, targets: &[(String, String)]) {
+    pub(super) fn forget_replaced(&mut self, targets: &[(String, String)]) {
         let still_here = |id: &String, host: &String| {
             targets
                 .iter()
@@ -240,8 +308,10 @@ impl Sessions {
             Some(Ok(result)) => {
                 self.pending = None;
                 self.scanning = false;
-                self.next_scan = Some(now + REFRESH);
+                let discard = std::mem::take(&mut self.refresh_after_scan);
+                self.next_scan = if discard { None } else { Some(now + REFRESH) };
                 match result {
+                    _ if discard => {}
                     Ok(entries) => {
                         self.entries = entries;
                         self.error = None;
@@ -257,7 +327,11 @@ impl Sessions {
             Some(Err(mpsc::TryRecvError::Disconnected)) => {
                 self.pending = None;
                 self.scanning = false;
-                self.next_scan = Some(now + REFRESH);
+                self.next_scan = if std::mem::take(&mut self.refresh_after_scan) {
+                    None
+                } else {
+                    Some(now + REFRESH)
+                };
                 self.error = Some("the session scan stopped unexpectedly".to_owned());
                 changed = true;
             }
@@ -412,6 +486,120 @@ mod tests {
         // Opening again must not wait out the interval the previous open left.
         sessions.refresh();
         assert!(sessions.poll_with(true, scanned_at, || Ok(vec![])));
+    }
+
+    #[test]
+    fn mutation_refresh_survives_an_older_local_scan() {
+        let mut sessions = Sessions::default();
+        let (tx, rx) = mpsc::sync_channel(1);
+        sessions.pending = Some(rx);
+        sessions.refresh();
+        tx.send(Ok(vec![])).unwrap();
+        sessions.poll_with(false, now(), || unreachable!("closed"));
+        assert!(
+            sessions.next_scan.is_none(),
+            "the old answer must not delay the post-mutation scan"
+        );
+        assert!(sessions.poll_with(true, now(), || Ok(vec![])));
+    }
+
+    #[test]
+    fn mutation_refresh_rejects_an_older_remote_answer() {
+        let mut devices = Devices::default();
+        let targets = [device("build")];
+        devices
+            .asked
+            .insert(targets[0].0.clone(), (targets[0].1.clone(), now()));
+        let (tx, rx) = mpsc::sync_channel(1);
+        devices.pending = Some(rx);
+        devices.refresh();
+        tx.send(vec![(
+            targets[0].0.clone(),
+            targets[0].1.clone(),
+            DeviceScan::Sessions(vec![]),
+        )])
+        .unwrap();
+        devices.poll_with(&targets, false, now(), |_| unreachable!("closed"));
+        assert!(devices.answers.is_empty());
+        assert!(stale(&devices.asked, &targets[0].0, &targets[0].1, now()));
+    }
+
+    #[test]
+    fn departure_is_bounded_and_an_old_scan_cannot_restore_a_deleted_row() {
+        let started = now();
+        let target = ConnectTarget::Session {
+            name: "old".into(),
+            development: false,
+        };
+        let departure = Departure::new(target, started);
+        assert_eq!(departure.remaining(started), 1.);
+        assert_eq!(departure.remaining(started + DELETION_ANIMATION / 2), 0.5);
+        assert_eq!(departure.remaining(started + DELETION_ANIMATION), 0.);
+        assert_eq!(departure.remaining(started + DELETION_ANIMATION * 2), 0.);
+        let mut sessions = Sessions {
+            entries: vec![
+                session("old", SessionState::Stopped),
+                session("keep", SessionState::Running),
+            ],
+            departure: Some(departure),
+            ..Default::default()
+        };
+        let (tx, rx) = mpsc::sync_channel(1);
+        sessions.pending = Some(rx);
+        tx.send(Ok(vec![session("old", SessionState::Stopped)]))
+            .unwrap();
+        sessions.finish_departure();
+        sessions.refresh();
+        sessions.poll_with(false, now(), || unreachable!("closed"));
+        assert_eq!(
+            sessions
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            ["keep"]
+        );
+        assert!(sessions.departure.is_none());
+        assert!(sessions.next_scan.is_none());
+    }
+
+    #[test]
+    fn remote_departure_keeps_other_rows_and_refresh_keeps_the_updated_catalog() {
+        let mut sessions = Sessions::default();
+        for (id, host) in [("device", "host"), ("other", "elsewhere")] {
+            sessions
+                .devices
+                .asked
+                .insert(id.into(), (host.into(), now()));
+            sessions.devices.answers.insert(
+                id.into(),
+                DeviceScan::Sessions(vec![
+                    RemoteSession {
+                        name: "old".into(),
+                        running: false,
+                    },
+                    RemoteSession {
+                        name: "keep".into(),
+                        running: true,
+                    },
+                ]),
+            );
+        }
+        sessions.departure = Some(Departure::new(
+            ConnectTarget::Ssh {
+                target: "host".into(),
+                session: "old".into(),
+            },
+            now(),
+        ));
+        sessions.finish_departure();
+        sessions.devices.refresh();
+        assert!(
+            matches!(&sessions.devices.answers["device"], DeviceScan::Sessions(rows) if rows.len() == 1 && rows[0].name == "keep")
+        );
+        assert!(
+            matches!(&sessions.devices.answers["other"], DeviceScan::Sessions(rows) if rows.len() == 2)
+        );
     }
 
     /// One saved device as the window's endpoint list describes it.

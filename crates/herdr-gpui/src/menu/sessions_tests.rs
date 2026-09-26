@@ -226,13 +226,12 @@ fn the_device_this_window_is_on_leads_with_all_of_its_sessions(cx: &mut TestAppC
     let second = bounds(cx, "sessions-row-1");
     assert!(current.top() < first.top() && second.top() < local.top());
     // The session this window is on is marked, and the host's other one is not.
-    assert!(cx.debug_bounds("sessions-check-0").is_some());
+    assert!(cx.debug_bounds("sessions-current-0").is_some());
     assert!(cx.debug_bounds("sessions-dot-1").is_some());
-    assert!(cx.debug_bounds("sessions-check-1").is_none());
-    // Two rows for that device, two for this machine, one for the device nothing
-    // has been heard from yet.
-    assert!(cx.debug_bounds("sessions-row-4").is_some());
-    assert!(cx.debug_bounds("sessions-row-5").is_none());
+    assert!(cx.debug_bounds("sessions-current-1").is_none());
+    // Five session rows and one Add row per section.
+    assert!(cx.debug_bounds("sessions-row-7").is_some());
+    assert!(cx.debug_bounds("sessions-row-8").is_none());
     assert!(cx.debug_bounds("sessions-device-note-ssh:prod").is_some());
 }
 
@@ -375,7 +374,7 @@ fn a_window_on_this_machine_leads_with_its_own_sessions(cx: &mut TestAppContext)
     assert!(local.top() < devices.top());
     // Nothing marks a device as current while the window is on this machine.
     assert!(cx.debug_bounds("sessions-current-device").is_none());
-    assert!(cx.debug_bounds("sessions-check-0").is_some());
+    assert!(cx.debug_bounds("sessions-current-0").is_some());
 }
 
 #[gpui::test]
@@ -400,8 +399,26 @@ fn local_rows_paint_a_dot_and_mark_the_current_session(cx: &mut TestAppContext) 
         assert!(cx.debug_bounds(selector).is_some(), "{selector} is missing");
     }
     // Scan order puts `default` first, and it is the session this window dials.
-    assert!(cx.debug_bounds("sessions-check-0").is_some());
-    assert!(cx.debug_bounds("sessions-check-1").is_none());
+    assert!(cx.debug_bounds("sessions-current-0").is_some());
+    assert!(cx.debug_bounds("sessions-current-1").is_none());
+    assert!(cx.debug_bounds("sessions-check-0").is_none());
+    assert!(
+        cx.debug_bounds("sessions-dot-2").is_none(),
+        "Add has no status dot"
+    );
+    assert_eq!(
+        bounds(cx, "sessions-dot-0").left(),
+        bounds(cx, "sessions-dot-1").left()
+    );
+    assert_eq!(
+        bounds(cx, "sessions-delete-0").left(),
+        bounds(cx, "sessions-delete-1").left()
+    );
+    assert_eq!(bounds(cx, "sessions-delete-0").size, size(px(24.), px(24.)));
+    assert_eq!(
+        bounds(cx, "sessions-delete-icon-0").size,
+        size(px(14.), px(14.))
+    );
     // A stopped session says what selecting it does, and the fixture has no
     // saved devices to list.
     assert!(cx.debug_bounds("sessions-stopped").is_some());
@@ -418,8 +435,8 @@ fn the_mark_follows_the_session_this_window_dials(cx: &mut TestAppContext) {
         ],
         development("work"),
     );
-    assert!(cx.debug_bounds("sessions-check-1").is_some());
-    assert!(cx.debug_bounds("sessions-check-0").is_none());
+    assert!(cx.debug_bounds("sessions-current-1").is_some());
+    assert!(cx.debug_bounds("sessions-current-0").is_none());
 }
 
 #[gpui::test]
@@ -485,10 +502,10 @@ fn choosing_a_local_session_leaves_a_remote_endpoint(cx: &mut TestAppContext) {
     draw(cx);
     click(cx, "device-sessions");
     draw(cx);
-    // Row zero is the device this window is on; the local sessions follow it.
-    assert!(cx.debug_bounds("sessions-row-2").is_some());
-    assert!(cx.debug_bounds("sessions-row-3").is_none());
-    click(cx, "sessions-row-2");
+    // The device's session and Add row precede the two local sessions and Add.
+    assert!(cx.debug_bounds("sessions-row-4").is_some());
+    assert!(cx.debug_bounds("sessions-row-5").is_none());
+    click(cx, "sessions-row-3");
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.menu.page, None, "choosing closes the list");
@@ -536,6 +553,128 @@ fn keys_walk_the_rows_and_enter_chooses(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn deleted_row_selection_does_not_transfer_to_add_session(cx: &mut TestAppContext) {
+    let (view, cx) = open_list(
+        cx,
+        vec![
+            session("default", SessionState::Running),
+            session("old", SessionState::Stopped),
+        ],
+        development("default"),
+    );
+    cx.simulate_keystrokes("down");
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            assert_eq!(view.menu.selected, Some(1));
+            // A failed deletion has no departing row and keeps the selection.
+            view.finish_session_departure();
+            assert_eq!(view.menu.selected, Some(1));
+            view.sessions.departure = Some(crate::sessions::Departure::new(
+                development("old"),
+                std::time::Instant::now(),
+            ));
+            view.finish_session_departure();
+            assert_eq!(view.menu.selected, None);
+        })
+    });
+    draw(cx);
+    // Add now occupies ordinal 1, but neither its highlight nor its action may
+    // inherit the deleted session's keyboard selection.
+    cx.simulate_keystrokes("enter");
+    cx.update(|_, cx| {
+        let view = view.read(cx);
+        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert!(view.menu.session_edit.is_none());
+        assert_eq!(view.menu.selected, None);
+    });
+    cx.simulate_keystrokes("down");
+    cx.update(|_, cx| assert_eq!(view.read(cx).menu.selected, Some(0)));
+    cx.simulate_keystrokes("up");
+    cx.update(|_, cx| assert_eq!(view.read(cx).menu.selected, Some(1)));
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            view.menu.page = Some(Page::Devices);
+            view.sessions.departure = Some(crate::sessions::Departure::new(
+                development("old"),
+                std::time::Instant::now(),
+            ));
+            view.finish_session_departure();
+            assert_eq!(
+                view.menu.selected,
+                Some(1),
+                "completion must not change another menu's selection"
+            );
+        })
+    });
+}
+
+#[gpui::test]
+fn clicking_delete_never_selects_or_starts_the_session(cx: &mut TestAppContext) {
+    let (view, cx) = open_list(
+        cx,
+        vec![
+            session("default", SessionState::Running),
+            session("old", SessionState::Stopped),
+        ],
+        development("default"),
+    );
+    click(cx, "sessions-delete-1");
+    cx.update(|_, cx| {
+        let view = view.read(cx);
+        assert_eq!(view.endpoints[0].connection.target, development("default"));
+        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert!(
+            view.sessions.mutation_error.is_some(),
+            "development management is refused"
+        );
+    });
+}
+
+#[gpui::test]
+fn deletion_keeps_picker_geometry_stable_until_the_fade_finishes(cx: &mut TestAppContext) {
+    let (view, cx) = open_list(
+        cx,
+        vec![
+            session("default", SessionState::Running),
+            session("old", SessionState::Stopped),
+        ],
+        development("default"),
+    );
+    let original = bounds(cx, "sessions-row-1").size.height;
+    let panel = bounds(cx, "menu-panel");
+    let kept = bounds(cx, "sessions-row-0");
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            view.sessions.mutation_target = Some(development("old"));
+        })
+    });
+    draw(cx);
+    assert_eq!(
+        bounds(cx, "menu-panel"),
+        panel,
+        "progress must not insert a header or resize the picker"
+    );
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            view.sessions.departure = Some(crate::sessions::Departure::new(
+                development("old"),
+                std::time::Instant::now() - crate::sessions::DELETION_ANIMATION / 2,
+            ));
+        })
+    });
+    draw(cx);
+    let fading = bounds(cx, "sessions-departing-1");
+    assert_eq!(fading.size.height, original);
+    assert_eq!(bounds(cx, "menu-panel"), panel);
+    assert_eq!(bounds(cx, "sessions-row-0"), kept);
+    assert!(cx.debug_bounds("sessions-departing-0").is_none());
+    cx.update(|_, cx| view.update(cx, |view, _| view.sessions.finish_departure()));
+    draw(cx);
+    assert!(cx.debug_bounds("sessions-departing-1").is_none());
+    cx.update(|_, cx| assert_eq!(view.read(cx).sessions.entries.len(), 1));
+}
+
+#[gpui::test]
 fn choosing_a_remote_row_selects_that_device(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(move |window, cx| {
         let mut view = fixture_window(window, cx);
@@ -557,11 +696,11 @@ fn choosing_a_remote_row_selects_that_device(cx: &mut TestAppContext) {
     draw(cx);
     click(cx, "device-sessions");
     draw(cx);
-    // Row zero is the one local session; row one is the saved device.
-    assert!(cx.debug_bounds("sessions-row-1").is_some());
-    assert!(cx.debug_bounds("sessions-dot-1").is_some());
-    assert!(cx.debug_bounds("sessions-check-1").is_none());
-    click(cx, "sessions-row-1");
+    // The local session and Add row precede the saved device.
+    assert!(cx.debug_bounds("sessions-row-2").is_some());
+    assert!(cx.debug_bounds("sessions-dot-2").is_some());
+    assert!(cx.debug_bounds("sessions-current-2").is_none());
+    click(cx, "sessions-row-2");
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.selected_endpoint, 1, "the device became current");

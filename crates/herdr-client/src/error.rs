@@ -73,6 +73,14 @@ pub enum Error {
     GeometryLimit,
     #[error("invalid session name")]
     InvalidSession,
+    #[error("The default session cannot be deleted")]
+    DefaultSession,
+    #[error("Session deletion timed out; refresh the list before trying again")]
+    SessionDeleteTimeout,
+    #[error(
+        "Herdr refused session deletion ({0}); the session may be running, inaccessible, or unsupported by the installed CLI"
+    )]
+    SessionDeleteFailed(std::process::ExitStatus),
     #[error("SSH has no local socket path")]
     NoLocalSocket,
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
@@ -230,9 +238,10 @@ impl Error {
             } else {
                 io::ErrorKind::InvalidData
             }),
-            Self::InvalidSession | Self::NoLocalSocket | Self::InvalidSshTarget => {
-                io::ErrorKind::InvalidInput
-            }
+            Self::InvalidSession
+            | Self::DefaultSession
+            | Self::NoLocalSocket
+            | Self::InvalidSshTarget => io::ErrorKind::InvalidInput,
             Self::SshUnsupported | Self::ClipboardImageUnsupported => io::ErrorKind::Unsupported,
             Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
             Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
@@ -241,7 +250,9 @@ impl Error {
             Self::Cancelled | Self::SshCancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
             Self::SocketClosed | Self::SshClosed => io::ErrorKind::UnexpectedEof,
-            Self::HealthTimeout | Self::SshTimeout => io::ErrorKind::TimedOut,
+            Self::HealthTimeout | Self::SshTimeout | Self::SessionDeleteTimeout => {
+                io::ErrorKind::TimedOut
+            }
             Self::Full | Self::ClipboardImageBusy => io::ErrorKind::WouldBlock,
             _ => io::ErrorKind::InvalidData,
         }

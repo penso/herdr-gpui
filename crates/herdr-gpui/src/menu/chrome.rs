@@ -182,10 +182,92 @@ impl HerdrWindow {
     }
 
     pub(crate) fn render_menu(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        if self.menu.page == Some(Page::Sessions) && self.menu.session_edit.is_some() {
+            let theme = &self.theme;
+            let font = &self.config.ui;
+            let picker = self
+                .anchor_footer_panel(
+                    div()
+                        .id("session-picker-underlay")
+                        .debug_selector(|| "session-picker-underlay".into()),
+                    window.viewport_size(),
+                    Page::Sessions,
+                )
+                .overflow_y_scroll()
+                .p(px(6.))
+                .rounded(px(crate::config::corners::PANEL))
+                .border_1()
+                .border_color(rgb(theme.active))
+                .bg(rgb(theme.surface))
+                .text_color(rgb(theme.foreground))
+                .text_font(font)
+                .text_size(px(font.size))
+                .line_height(px(font.line_height()))
+                .child(self.render_session_list(cx));
+            // The picker remains visible in its original position beneath the
+            // modal's dimmed, input-occluding layer. Only that top layer owns focus.
+            return div()
+                .id("session-menu-stack")
+                .absolute()
+                .inset_0()
+                .child(picker)
+                .child(self.render_menu_layer(window, cx));
+        }
+        self.render_menu_layer(window, cx)
+    }
+
+    fn anchor_footer_panel(
+        &self,
+        panel: Stateful<Div>,
+        viewport: Size<Pixels>,
+        page: Page,
+    ) -> Stateful<Div> {
+        let chrome = px(crate::titlebar::HEIGHT
+            + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1"));
+        let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
+        let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
+        let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
+        let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
+        let list = matches!(page, Page::Devices | Page::Sessions);
+        let width = if list {
+            super::devices::MENU_WIDTH
+        } else {
+            180.
+        };
+        let left = match page {
+            Page::Devices => self.menu.anchor.x,
+            Page::Sessions => self
+                .menu
+                .anchor
+                .x
+                .min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
+            _ => px(56.),
+        };
+        let panel = panel
+            .absolute()
+            .left(left)
+            .w(px(width).min((viewport.width - px(16.)).max(px(0.))));
+        if above >= below {
+            panel
+                .bottom(
+                    (viewport.height - self.menu.anchor.y
+                        + px(if list { super::devices::MENU_GAP } else { 12. }))
+                    .max(px(MENU_MARGIN)),
+                )
+                .max_h(above)
+        } else {
+            panel.top(self.menu.anchor.y + px(12.)).max_h(below)
+        }
+    }
+
+    fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let page = self.menu.page.unwrap_or(Page::Menu);
         let font = &self.config.ui;
         let theme = &self.theme;
         let viewport = window.viewport_size();
+        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
+        let footer_anchored =
+            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
         // A GitHub tab of the new worktree dialog is a picker, not a form.
         let listing =
             self.worktree_listing() || page == Page::Dialog(WorkspaceAction::OpenWorktree);
@@ -239,53 +321,9 @@ impl HerdrWindow {
                     // Lift the popup off the terminal behind it, as the pickers do.
                     .shadow_lg()
             })
-            .when(
-                matches!(page, Page::Menu | Page::Devices | Page::Sessions),
-                |panel| {
-                    // Open on whichever side of the anchor has room, and keep a
-                    // margin from the window chrome and the bottom edge: a clamped
-                    // list then reads as scrollable rather than clipped.
-                    let chrome = px(crate::titlebar::HEIGHT
-                        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1"));
-                    let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
-                    let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
-                    let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
-                    let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
-                    // Both footer buttons open lists of the same width. The
-                    // sessions button sits at the sidebar's right edge, so its
-                    // popup is pulled back to stay inside the window.
-                    let list = matches!(page, Page::Devices | Page::Sessions);
-                    let width = if list {
-                        super::devices::MENU_WIDTH
-                    } else {
-                        180.
-                    };
-                    let left = match page {
-                        Page::Devices => self.menu.anchor.x,
-                        Page::Sessions => self
-                            .menu
-                            .anchor
-                            .x
-                            .min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
-                        _ => px(56.),
-                    };
-                    let panel = panel
-                        .absolute()
-                        .left(left)
-                        .w(px(width).min((viewport.width - px(16.)).max(px(0.))));
-                    if above >= below {
-                        panel
-                            .bottom(
-                                (viewport.height - self.menu.anchor.y
-                                    + px(if list { super::devices::MENU_GAP } else { 12. }))
-                                .max(px(MENU_MARGIN)),
-                            )
-                            .max_h(above)
-                    } else {
-                        panel.top(self.menu.anchor.y + px(12.)).max_h(below)
-                    }
-                },
-            )
+            .when(footer_anchored, |panel| {
+                self.anchor_footer_panel(panel, viewport, page)
+            })
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside
                 // the window and clear of the titlebar.
@@ -348,10 +386,9 @@ impl HerdrWindow {
                 },
             )
             .when(
-                !matches!(
-                    page,
-                    Page::Menu | Page::Devices | Page::Sessions | Page::Usage(_)
-                ) && !pointer_anchored
+                !footer_anchored
+                    && !matches!(page, Page::Usage(_))
+                    && !pointer_anchored
                     && !matches!(page, Page::Dialog(_)),
                 |panel| {
                     panel
@@ -534,17 +571,26 @@ impl HerdrWindow {
                             }
                             cx.notify();
                         }))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .debug_selector(move || format!("workspace-menu-label-{label}"))
+                                .child(label),
+                        )
                         .when_some(action.icon(), |row, icon| {
-                            row.child(
-                                svg()
-                                    .path(icon)
-                                    .debug_selector(move || format!("workspace-menu-icon-{label}"))
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .text_color(rgb(theme.muted)),
-                            )
+                            row.child(super::action_icon(
+                                icon,
+                                format!("workspace-menu-icon-{label}"),
+                                rgb(if Some(action) == self.menu.workspace_selected {
+                                    theme.foreground
+                                } else {
+                                    theme.muted
+                                }),
+                                rgb(theme.foreground),
+                            ))
                         })
-                        .child(label)
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             this.activate_workspace_menu(action, window, cx);
@@ -666,10 +712,7 @@ impl HerdrWindow {
             .absolute()
             .inset_0()
             .when(
-                !matches!(
-                    page,
-                    Page::Menu | Page::Devices | Page::Sessions | Page::Usage(_)
-                ) && !pointer_anchored,
+                !footer_anchored && !matches!(page, Page::Usage(_)) && !pointer_anchored,
                 |overlay| {
                     overlay
                         .flex()

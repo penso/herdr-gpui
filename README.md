@@ -102,8 +102,9 @@ just run
 Without `just`: `cargo run --locked --release -p herdr-gpui --features qa-menu`.
 
 Install the Herdr daemon separately. The app starts an already-installed local
-`herdr server` when the target session is absent, but never installs, stops, or
-upgrades a daemon; removing the GUI leaves daemon sessions and shared Herdr
+`herdr server` when the target session is absent, but never installs or upgrades
+a daemon. Explicitly confirming session deletion stops that named session first;
+closing or removing the GUI leaves daemon sessions and shared Herdr
 configuration intact.
 
 ### Linux Builds

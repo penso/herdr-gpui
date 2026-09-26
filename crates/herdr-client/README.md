@@ -45,8 +45,23 @@ ConnectTarget::Ssh { target: String, session: String }
 ConnectTarget::socket_path(&self) -> Result<PathBuf>
 Stream  // std::os::unix::net::UnixStream, or a named-pipe wrapper on Windows
 session_socket(config_dir: &Path, name: &str) -> Result<PathBuf>
+list_local_sessions(development: bool) -> Result<Vec<LocalSession>>
+list_remote_sessions(target: &str) -> Result<Vec<RemoteSession>>
+delete_local_session(executable: &Path, name: &str) -> Result<()>
+delete_remote_session(target: &str, name: &str) -> Result<()>
 ConnectOptions { surface_size: ClientSurfaceSize, cell_width_px: u32, cell_height_px: u32 }
 ```
+
+Session listing and deletion are blocking worker-only functions. Deletion
+requires explicit user confirmation: it delegates stopping the named session
+and deleting its saved state to the installed CLI. `default` is refused before
+spawning. The client never removes session directories itself. It validates
+names, bounds local stopping to 20 seconds and deletion to 15 seconds (45 seconds
+for the complete SSH operation), discards remote diagnostics, and kills/reaps
+only its CLI or SSH child on failure. A
+timeout is an uncertain result: refresh rather than replay. SSH functions are
+unavailable on Windows. Creating a session is the connection/startup layer's
+responsibility, not an interactive `session attach` command.
 
 `ClientHandle` is cloneable. Its exact methods are:
 

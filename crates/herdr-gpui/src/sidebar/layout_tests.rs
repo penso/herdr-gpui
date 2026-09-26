@@ -1437,28 +1437,39 @@ fn check_sidebar(fixture: Entity<SidebarFixture>, cx: &mut gpui::VisualTestConte
     });
     assert!(cx.debug_bounds("workspace-menu-Close group").is_some());
     assert!(cx.debug_bounds("workspace-menu-New worktree").is_some());
-    // Every action is labelled and pictured, with the icon left of its label.
-    for (row, icon) in [
-        ("workspace-menu-Rename", "workspace-menu-icon-Rename"),
+    // Actions share the session picker's trailing 14px icon in a 24px slot.
+    for (row, icon, text) in [
+        (
+            "workspace-menu-Rename",
+            "workspace-menu-icon-Rename",
+            "workspace-menu-label-Rename",
+        ),
         (
             "workspace-menu-Close group",
             "workspace-menu-icon-Close group",
+            "workspace-menu-label-Close group",
         ),
         (
             "workspace-menu-New worktree",
             "workspace-menu-icon-New worktree",
+            "workspace-menu-label-New worktree",
         ),
         (
             "workspace-menu-Open worktree...",
             "workspace-menu-icon-Open worktree...",
+            "workspace-menu-label-Open worktree...",
         ),
     ] {
         let label = row;
         let row = cx.debug_bounds(row).unwrap();
         let icon = cx.debug_bounds(icon).unwrap();
         assert_eq!(icon.size, size(px(14.), px(14.)), "{label}");
-        assert!(icon.left() >= row.left(), "{label}");
-        assert!(icon.right() <= row.right(), "{label}");
+        assert_eq!(row.right() - icon.right(), px(13.), "{label}");
+        let text = cx.debug_bounds(text).unwrap();
+        assert!(
+            text.right() <= icon.left(),
+            "{label}: label must precede icon"
+        );
         assert!(
             (icon.center().y - row.center().y).abs() <= px(1.),
             "{label}"
