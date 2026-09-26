@@ -1051,6 +1051,13 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         wheel: WheelAccumulator::default(),
         sidebar_width: None,
         sidebar_drag: None,
+        opacity_drag: false,
+        blur_drag: false,
+        background_save: None,
+        pending_background_save: None,
+        last_window_background: None,
+        #[cfg(target_os = "macos")]
+        native_blur: None,
         workspace_drag: None,
         sidebar_split: None,
         sidebar_split_modified: false,

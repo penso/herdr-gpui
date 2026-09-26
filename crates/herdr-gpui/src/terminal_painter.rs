@@ -73,6 +73,7 @@ pub(crate) struct TerminalPainter {
     font_size: f32,
     cell_height: f32,
     theme: Theme,
+    pub(crate) background_opacity: u8,
     config: Option<Font>,
     // Resolved foreground includes reverse, dim and hidden; only bold/italic
     // affect shaping. Decorations remain at exact cell-grid coordinates.
@@ -89,6 +90,7 @@ impl Default for TerminalPainter {
             font_size: FONT_SIZE,
             cell_height: CELL_HEIGHT,
             theme: Theme::default(),
+            background_opacity: 100,
             config: None,
             glyphs: GlyphCache::default(),
             cell_width: None,
@@ -139,6 +141,29 @@ fn paint_glyphs(
         }
     }
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum FrameBackground {
+    Window,
+    Popup,
+}
+
+fn cell_background_opacity(
+    color: u32,
+    theme: &Theme,
+    opacity: u8,
+    background: FrameBackground,
+) -> u8 {
+    // The terminal container already paints the default background; a second
+    // layer of the same tint would make the grid nearly opaque.
+    if matches!(background, FrameBackground::Popup) {
+        100
+    } else if color == theme.background {
+        0
+    } else {
+        opacity
+    }
 }
 
 fn background_spans<'a>(
@@ -284,6 +309,7 @@ impl TerminalPainter {
     pub fn paint_frame(
         &mut self,
         frame: &FrameData,
+        background: FrameBackground,
         origin: Point<Pixels>,
         cell_width: f32,
         font: &Font,
@@ -335,7 +361,15 @@ impl TerminalPainter {
                                 ),
                             size(px((end - start) as f32 * cell_width), px(self.cell_height)),
                         ),
-                        rgb(color),
+                        crate::config::background(
+                            color,
+                            cell_background_opacity(
+                                color,
+                                &self.theme,
+                                self.background_opacity,
+                                background,
+                            ),
+                        ),
                     ));
                     #[cfg(feature = "integration-test")]
                     {
@@ -627,6 +661,94 @@ mod tests {
     use core::prelude::v1::test;
 
     #[test]
+    fn terminal_default_cells_do_not_compound_container_opacity() {
+        let theme = Theme::default();
+        let opacity = crate::config::readable_opacity(&theme, 0);
+        assert!(opacity < 100);
+        assert_eq!(
+            cell_background_opacity(theme.background, &theme, opacity, FrameBackground::Window),
+            0
+        );
+        assert_eq!(
+            cell_background_opacity(theme.palette[1], &theme, opacity, FrameBackground::Window),
+            opacity
+        );
+    }
+
+    #[gpui::test]
+    #[allow(clippy::unwrap_used)]
+    fn popup_cells_cover_underlying_pane_at_every_window_opacity(cx: &mut TestAppContext) {
+        let (_, cx) = cx.add_window_view(|_, _| Empty);
+        for opacity in [0, 80, 100] {
+            cx.draw(Point::default(), size(px(800.), px(600.)), |_, _| {
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, cx| {
+                        let mut painter = TerminalPainter {
+                            background_opacity: opacity,
+                            ..Default::default()
+                        };
+                        let mut frame = FrameData {
+                            width: 2,
+                            height: 1,
+                            cells: vec![cell("X"), cell("Y")],
+                            cursor: None,
+                            hyperlinks: vec![],
+                            graphics: vec![],
+                        };
+                        painter.paint_frame(
+                            &frame,
+                            FrameBackground::Window,
+                            bounds.origin,
+                            10.,
+                            &font("Menlo"),
+                            &[],
+                            &[],
+                            window,
+                            cx,
+                        );
+                        frame.cells = vec![
+                            cell(" "),
+                            CellData {
+                                bg: 0x02123456,
+                                skip: true,
+                                ..cell("")
+                            },
+                        ];
+                        painter.paint_frame(
+                            &frame,
+                            FrameBackground::Popup,
+                            bounds.origin,
+                            10.,
+                            &font("Menlo"),
+                            &[],
+                            &[],
+                            window,
+                            cx,
+                        );
+                    },
+                )
+                .size_full()
+            });
+            cx.update(|window, _| {
+                let quads = window.painted_quads();
+                for (x, color) in [(0., Theme::default().background), (10., 0x123456)] {
+                    let quad = quads
+                        .iter()
+                        .rev()
+                        .find(|quad| quad.bounds.origin.x == px(x).scale(window.scale_factor()))
+                        .unwrap();
+                    assert_eq!(
+                        quad.background,
+                        solid_background(rgb(color)),
+                        "opacity {opacity}"
+                    );
+                }
+            });
+        }
+    }
+
+    #[test]
     #[allow(clippy::unwrap_used)]
     fn paint_timing_threshold_interval_and_reset() {
         let start = Instant::now();
@@ -757,6 +879,7 @@ mod tests {
                             .decorations;
                         painter.paint_frame(
                             &frame,
+                            FrameBackground::Window,
                             bounds.origin,
                             8.5,
                             &font("Menlo"),
@@ -862,6 +985,7 @@ mod tests {
                         let before = *cx.default_global::<crate::performance::Counts>();
                         painter.paint_frame(
                             &frame,
+                            FrameBackground::Window,
                             bounds.origin,
                             12.81,
                             &font(family),
@@ -881,6 +1005,7 @@ mod tests {
                     frame.cells[0] = cell("a");
                     painter.paint_frame(
                         &frame,
+                        FrameBackground::Window,
                         bounds.origin,
                         12.81,
                         &font("Menlo"),
@@ -930,6 +1055,7 @@ mod tests {
                         let cell_width = painter.borrow_mut().cell_width(&font, window, cx);
                         painter.borrow_mut().paint_frame(
                             &frame,
+                            FrameBackground::Window,
                             bounds.origin,
                             cell_width,
                             &font,

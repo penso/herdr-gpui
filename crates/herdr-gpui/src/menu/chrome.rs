@@ -43,6 +43,7 @@ impl HerdrWindow {
         if !self.cancel_theme_preview(cx) {
             return false;
         }
+        self.finish_background_drag(cx);
         self.menu.reset();
         self.menu.endpoint_target = (
             self.selection_epoch,
@@ -63,6 +64,7 @@ impl HerdrWindow {
         self.hover = None;
         self.hover_menu = None;
         self.update_preview = None;
+        self.finish_background_drag(cx);
         self.menu.reset();
         window.focus(&self.focus, cx);
         cx.notify();
@@ -418,6 +420,8 @@ impl HerdrWindow {
             .rounded(px(crate::config::corners::PANEL))
             .border_1()
             .border_color(rgb(theme.active))
+            // Popup pages (preferences, pickers, dialogs, about and update)
+            // must remain legible even when the terminal window is transparent.
             .bg(rgb(theme.surface))
             .text_color(rgb(theme.foreground))
             .text_font(font)

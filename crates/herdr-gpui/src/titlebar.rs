@@ -34,7 +34,8 @@ impl HerdrWindow {
     /// without one shows what a commit would include right now.
     fn render_git_button(&self, cx: &mut Context<Self>) -> Option<Div> {
         self.git.tracked()?;
-        let theme = &self.theme;
+        let readable_theme = self.theme.readable_chrome(self.paint_opacity());
+        let theme = &readable_theme;
         let font = &self.config.ui;
         let background = rgb(theme.surface).blend(rgba(0xffffff1a));
         let status = self.git.status();
@@ -208,7 +209,7 @@ impl HerdrWindow {
 
     pub(super) fn render_titlebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let image = self.pr_profile().and_then(|p| p.avatar.clone());
-        render(self.theme.surface)
+        render(self.theme.surface, self.paint_opacity())
             .children(self.render_git_button(cx))
             .child(
                 div()
@@ -276,7 +277,7 @@ impl HerdrWindow {
     }
 }
 
-pub(super) fn render(surface: u32) -> Stateful<Div> {
+pub(super) fn render(surface: u32, opacity: u8) -> Stateful<Div> {
     // AppKit owns dragging; GPUI's macOS backend cannot start a custom move.
     div()
         .id("titlebar")
@@ -285,7 +286,7 @@ pub(super) fn render(surface: u32) -> Stateful<Div> {
         .flex_none()
         .w_full()
         .h(px(HEIGHT))
-        .bg(rgb(surface).blend(rgba(0xffffff1a)))
+        .bg(crate::config::background(surface, opacity))
         .child(div().flex_none().w(px(80.)).h_full())
         .child(
             div()

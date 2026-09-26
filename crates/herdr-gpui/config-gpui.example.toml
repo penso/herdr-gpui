@@ -17,6 +17,16 @@
 # Also accepts a Ghostty theme name, an absolute path, or a ~/ path.
 theme = "Default"
 
+# Window, sidebar, tab and terminal backgrounds only; text remains opaque.
+# 0 = most translucent while retaining readable text, 100 = opaque.
+# The safe minimum is theme-dependent; Settings offers a live opacity slider.
+background_opacity = 100
+# On Linux, transparency needs a compositor (Wayland, or a compositing X11 WM).
+# macOS only: tint-free window-server backdrop blur, 0–100 strength.
+# No effect at 100% opacity; background_blur = true is accepted as 40.
+# Ignored on other platforms, where Settings hides the Blur slider.
+# background_blur_radius = 0
+
 # Ask before closing a tab (closing terminates its terminal processes).
 # Pane close confirmation is independent and remains enabled.
 confirm_close_tab = true

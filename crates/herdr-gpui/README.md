@@ -224,8 +224,30 @@ Font sizes use logical pixels (finite 8..48), not typographic points. Saving
 `config-gpui.local.toml` automatically reloads every open GUI window, usually
 within half a second. Font family, font size, theme, and layout changes apply
 together; invalid edits keep the last valid settings and show a load error.
-Reload waits while a theme preview/save is active. The manual GUI config reload
-action remains available; daemon config reload is separate.
+Reload waits while a theme preview/save or background slider drag/save is active.
+The manual GUI config reload action remains available; daemon config reload is separate.
+
+Window background opacity defaults to 100% (opaque). Adjust the 0–100% slider
+in Settings for live transparency, or set top-level `background_opacity = 80`
+in `config-gpui.local.toml`. The slider spans the theme's readable opacity
+range: at 0, backgrounds remain translucent but retain enough of their theme
+color to keep foreground text legible over light or dark desktop content.
+Muted sidebar and chrome labels brighten only as needed for legibility on those
+backdrops; the terminal palette and theme backgrounds are unchanged.
+Only backgrounds become transparent; terminal glyphs and UI text stay opaque.
+Settings saves to the local overrides file and all open windows reload it
+automatically. Opacity uses GPUI's transparent window background on every
+platform; on Linux it needs a compositor (any Wayland compositor, or a
+compositing window manager on X11), otherwise the window stays opaque. Native
+transparency has been exercised on macOS only.
+
+Blur is macOS only. Set `background_blur_radius = 0..100` there or use the Blur
+slider in Settings for tint-free behind-window blur when opacity is below 100%.
+It uses the private window-server call `CGSSetWindowBackgroundBlurRadius`,
+resolved at runtime; the slider appears only when macOS exposes it, and if the
+symbol is missing blur simply stays off. The older `background_blur = true` form
+is accepted as strength 40. On other platforms the Blur slider is hidden and
+both keys are accepted but ignored, so one config file works everywhere.
 
 The terminal face can also be resized for the current session from the View menu,
 the in-app menu, the command palette, or `cmd-=` / `cmd--` / `cmd-0`. Adjustments
@@ -745,6 +767,8 @@ Windows setup) nothing is saved and the window says so.
   information, and detach/reconnect. Styled Preferences include Appearance,
   Fonts, Configuration, and Connection sections, with theme selection and GUI
   config reload; font values remain read-only and are edited in the config file.
+  Preferences, pickers, dialogs, and the log window stay opaque even when the
+  terminal window background is transparent.
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.

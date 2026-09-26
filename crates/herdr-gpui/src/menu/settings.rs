@@ -31,6 +31,7 @@ impl HerdrWindow {
                         && this.config_load.is_none()
                         && this.menu.page != Some(Page::Themes)
                         && !this.theme_save_in_flight()
+                        && !this.background_edit_in_flight()
                     {
                         this.load_gui_config(cx);
                         pending = Some((sample, this.config_load_revision));
@@ -75,7 +76,7 @@ impl HerdrWindow {
     }
 
     pub(crate) fn reload_gui_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.theme_save_in_flight() {
+        if self.theme_save_in_flight() || self.background_edit_in_flight() {
             return;
         }
         self.load_gui_config(cx);
@@ -97,12 +98,12 @@ impl HerdrWindow {
         );
     }
 
-    pub(super) fn load_gui_config_with(
+    pub(crate) fn load_gui_config_with(
         &mut self,
         load: impl FnOnce() -> crate::Result<(Config, crate::config::Theme)> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() {
+        if self.config_load.is_some() || self.background_edit_in_flight() {
             return;
         }
         let load = cx.background_executor().spawn(async move { load() });

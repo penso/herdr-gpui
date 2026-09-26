@@ -7,7 +7,8 @@ use crate::{
     APP_VERSION, CheckForUpdates, Minimize, PlaySound, RunCommand, ShowHerdrNotDetected,
     ShowUpdatePreview, TAB_HEIGHT, TAB_WIDTH, actions::ShowToastPreview,
     config::ClipboardToastPosition, controls::Command, fonts::StyledFont,
-    navigation::NavigationTarget, state::ConnectionStatus, terminal::*, worktree_banner,
+    navigation::NavigationTarget, state::ConnectionStatus, terminal::*,
+    terminal_painter::FrameBackground, worktree_banner,
 };
 use gpui::{prelude::*, *};
 use herdr_client::ConnectOptions;
@@ -16,6 +17,23 @@ use std::time::Duration;
 impl Render for HerdrWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.restore_menu_focus(window, cx);
+        let opacity = self.paint_opacity();
+        let muted = self.theme.readable_chrome(opacity).muted;
+        let appearance = crate::config::window_background(opacity);
+        if self.last_window_background != Some(appearance) {
+            window.set_background_appearance(appearance);
+            self.last_window_background = Some(appearance);
+        }
+        #[cfg(target_os = "macos")]
+        super::blur::NativeBlur::update(
+            &mut self.native_blur,
+            window,
+            if opacity < 100 {
+                self.config.background_blur_radius
+            } else {
+                0
+            },
+        );
         let font = self.config.terminal.font();
         let cell_height = self.config.terminal.line_height();
         self.painter.borrow_mut().set_appearance(
@@ -23,6 +41,7 @@ impl Render for HerdrWindow {
             cell_height,
             self.theme.clone(),
         );
+        self.painter.borrow_mut().background_opacity = opacity;
         self.cell_width = self.painter.borrow_mut().cell_width(&font, window, cx);
         // Registers the window for surface-only redraws; see `redraw_terminal`.
         self.surface_signal.read(cx);
@@ -41,7 +60,6 @@ impl Render for HerdrWindow {
             .text_font(&self.config.tabs)
             .text_size(px(self.config.tabs.size))
             .overflow_x_scroll()
-            .bg(rgb(self.theme.surface))
             .text_color(rgb(self.theme.foreground))
             .items_center();
         if let Some(snapshot) = &self.live.snapshot {
@@ -60,7 +78,7 @@ impl Render for HerdrWindow {
                     let background = self.theme.primary_wash();
                     (background, self.theme.text_on(background))
                 } else {
-                    (self.theme.surface, self.theme.muted)
+                    (self.theme.surface, muted)
                 };
                 tabs = tabs.child(
                     div()
@@ -83,7 +101,7 @@ impl Render for HerdrWindow {
                         .items_center()
                         .gap(px(10.))
                         .cursor_pointer()
-                        .bg(rgb(background))
+                        .bg(crate::config::background(background, opacity))
                         .text_color(rgb(text))
                         .child(tab.label.clone())
                         .child(
@@ -207,7 +225,7 @@ impl Render for HerdrWindow {
             .min_h_0()
             .min_w_0()
             .overflow_hidden()
-            .bg(rgb(self.theme.background))
+            .bg(crate::config::background(self.theme.background, opacity))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
             // A selection is copied when it is released, so the terminal has
@@ -374,6 +392,7 @@ impl Render for HerdrWindow {
                             );
                             painter.borrow_mut().paint_frame(
                                 &surface.frame,
+                                FrameBackground::Window,
                                 bounds.origin,
                                 cell_width,
                                 &font,
@@ -395,6 +414,7 @@ impl Render for HerdrWindow {
                                     }));
                                 painter.borrow_mut().paint_frame(
                                     &popup.frame,
+                                    FrameBackground::Popup,
                                     bounds.origin + offset,
                                     cell_width,
                                     &font,
@@ -457,7 +477,7 @@ impl Render for HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .border_1()
                                 .border_color(rgb(flash.accent(&self.theme)))
-                                .bg(rgb(self.theme.surface))
+                                .bg(crate::config::background(self.theme.surface, opacity))
                                 .text_color(rgb(self.theme.foreground))
                                 .child(
                                     div()
@@ -518,7 +538,8 @@ impl Render for HerdrWindow {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgb(self.theme.background))
+            // Child regions each paint their own readable background. A full-
+            // window fill would compound their alpha and hide the desktop.
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
@@ -546,7 +567,6 @@ impl Render for HerdrWindow {
                                 div()
                                     .flex()
                                     .flex_none()
-                                    .bg(rgb(self.theme.surface))
                                     .text_color(rgb(self.theme.foreground))
                                     // Tabs size to their content and shrink when the
                                     // row is full, so the button sits after the last
@@ -556,6 +576,7 @@ impl Render for HerdrWindow {
                                         div()
                                             .id("new-tab")
                                             .debug_selector(|| "new-tab".into())
+                                            .bg(crate::config::background(self.theme.surface, opacity))
                                             .w(px(34.))
                                             .min_h(px(TAB_HEIGHT))
                                             .border_r_1()
@@ -572,11 +593,20 @@ impl Render for HerdrWindow {
                                                     .debug_selector(|| "new-tab-icon".into())
                                                     .size(px(14.))
                                                     // Quiet like the unselected tabs beside it.
-                                                    .text_color(rgb(self.theme.muted)),
+                                                    .text_color(rgb(muted)),
                                             )
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.command(Command::Tab, window, cx)
                                             })),
+                                    )
+                                    // Each region owns one background; filling the
+                                    // wrapper too would compound translucent tabs.
+                                    .child(
+                                        div()
+                                            .debug_selector(|| "tab-strip-remainder".into())
+                                            .flex_1()
+                                            .h_full()
+                                            .bg(crate::config::background(self.theme.surface, opacity)),
                                     ),
                             )
                             .child(terminal)
@@ -591,7 +621,7 @@ impl Render for HerdrWindow {
                     .items_center()
                     .gap(px(6.))
                     .px_3()
-                    .bg(rgb(self.theme.surface))
+                    .bg(crate::config::background(self.theme.surface, opacity))
                     .text_color(rgb(self.theme.foreground))
                     .children(self.render_usage(cx))
                     .when(!self.live.status.is_connected(), |bar| bar.child(
@@ -729,7 +759,7 @@ impl Render for HerdrWindow {
                             .text_color(rgb(if self.updater.update_available() {
                                 self.theme.primary()
                             } else {
-                                self.theme.muted
+                                muted
                             }))
                             .child(if self.updater.update_available() {
                                 "Update available"
@@ -748,5 +778,53 @@ impl Render for HerdrWindow {
             .when(self.menu.page.is_some(), |root| {
                 root.child(self.render_menu(window, cx))
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use core::prelude::v1::test;
+
+    #[gpui::test]
+    fn tab_regions_paint_exactly_one_background(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        for setting in [0, 50, 100] {
+            view.update(cx, |view, cx| {
+                view.config.background_opacity = setting;
+                std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap())
+                    .focused_workspace_id = Some("w0".into());
+                cx.notify();
+            });
+            cx.update(|window, cx| {
+                window.resize(size(px(1200.), px(780.)));
+                window.draw(cx).clear(cx);
+            });
+            for selector in ["tab-t0", "tab-t1", "new-tab", "tab-strip-remainder"] {
+                let bounds = cx.debug_bounds(selector).unwrap();
+                // Below the text/icons and clear of the right-hand border.
+                let sample = point(bounds.left() + px(2.), bounds.bottom() - px(2.));
+                cx.update(|window, cx| {
+                    let sample = sample.scale(window.scale_factor());
+                    let backgrounds: Vec<_> = window
+                        .painted_quads()
+                        .into_iter()
+                        .filter(|quad| {
+                            quad.bounds.contains(&sample)
+                                && quad.content_mask.bounds.contains(&sample)
+                                && quad.background.as_solid().is_some_and(|color| color.a > 0.)
+                        })
+                        .collect();
+                    assert_eq!(
+                        backgrounds.len(),
+                        1,
+                        "{selector} at {setting}%: {backgrounds:?}"
+                    );
+                    let expected = crate::config::background(0, view.read(cx).paint_opacity()).a;
+                    assert_eq!(backgrounds[0].background.as_solid().unwrap().a, expected);
+                });
+            }
+        }
     }
 }

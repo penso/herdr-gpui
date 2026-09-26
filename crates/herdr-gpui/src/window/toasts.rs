@@ -267,7 +267,10 @@ impl HerdrWindow {
                         .rounded(px(crate::config::corners::PANEL))
                         .border_1()
                         .border_color(rgb(accent))
-                        .bg(rgb(self.theme.surface))
+                        .bg(crate::config::background(
+                            self.theme.surface,
+                            self.paint_opacity(),
+                        ))
                         .text_color(rgb(self.theme.foreground))
                         .text_font(&self.config.ui)
                         .text_size(px(self.config.ui.size))
@@ -305,7 +308,10 @@ impl HerdrWindow {
                                 .child(
                                     div()
                                         .truncate()
-                                        .text_color(rgb(self.theme.muted))
+                                        .text_color(rgb(self
+                                            .theme
+                                            .readable_chrome(self.paint_opacity())
+                                            .muted))
                                         .child(safe_text(&endpoint.label, 80)),
                                 )
                                 .child(div().truncate().child(notice.title.clone()))

@@ -46,7 +46,8 @@ impl HerdrWindow {
         .max(0.);
         let view = cx.entity().downgrade();
         let font = &self.config.sidebar;
-        let theme = &self.theme;
+        let readable_theme = self.theme.readable_chrome(self.paint_opacity());
+        let theme = &readable_theme;
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -542,7 +543,10 @@ impl HerdrWindow {
             .text_size(px(font.size))
             .line_height(px(line_height(font)))
             .text_color(rgb(theme.foreground))
-            .bg(rgb(theme.surface))
+            .bg(crate::config::background(
+                theme.surface,
+                self.paint_opacity(),
+            ))
             .border_r_1()
             .border_color(rgb(theme.active))
             // Zero flex bases keep long workspace lists from displacing agents.
