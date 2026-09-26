@@ -7,6 +7,8 @@ use super::{Page, colors, devices};
 use crate::{HerdrWindow, endpoint::Endpoint, sessions::DeviceScan};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, LocalSession};
+mod management;
+pub(super) use management::Edit;
 
 /// A line in the popup, in the order it is painted. Only a row can be selected,
 /// so navigation walks the `Row` entries and skips headers and notes.
@@ -36,9 +38,10 @@ enum Entry {
 /// so a catalog change between paint and click cannot pick the wrong one, and it
 /// names the session itself, because a device has many.
 #[derive(Clone)]
-enum Row {
+pub(super) enum Row {
     Local(String),
     Device { id: String, session: String },
+    Add(management::Target),
 }
 
 /// What one row paints. Both kinds share one shape so they cannot drift apart.
@@ -79,6 +82,15 @@ fn state_word(running: bool) -> &'static str {
 }
 
 impl HerdrWindow {
+    pub(super) fn finish_session_departure(&mut self) {
+        // Selection is an ordinal shared with keyboard navigation. Once a row
+        // disappears it must not transfer to the action now occupying its slot.
+        if self.sessions.departure.is_some() && self.menu.page == Some(Page::Sessions) {
+            self.menu.selected = None;
+        }
+        self.sessions.finish_departure();
+    }
+
     /// Open the local and remote session list above the footer button.
     pub(crate) fn open_sessions(
         &mut self,
@@ -110,6 +122,9 @@ impl HerdrWindow {
     fn session_entries(&self) -> Vec<Entry> {
         let current = self.selected_endpoint;
         let mut entries = Vec::new();
+        if let Some(error) = &self.sessions.mutation_error {
+            entries.push(Entry::Error(error.clone()));
+        }
         // The device this window is on leads with its own sessions, which is what
         // makes the list worth opening from there.
         if let Some(endpoint) = self.endpoints.get(current).filter(|_| current != 0) {
@@ -232,6 +247,15 @@ impl HerdrWindow {
                 text: note,
             });
         }
+        if let ConnectTarget::Ssh { target, .. } = &endpoint.connection.target {
+            entries.push(Self::add_session_entry(
+                management::Target::Device {
+                    id: endpoint.id.clone(),
+                    host: target.clone(),
+                },
+                endpoint.enabled && !cfg!(windows),
+            ));
+        }
     }
 
     /// This machine's sessions, with the notes that explain an empty list and what
@@ -264,6 +288,10 @@ impl HerdrWindow {
             row: Row::Local(session.name.clone()),
             spec: self.local_session_spec(session),
         }));
+        entries.push(Self::add_session_entry(
+            management::Target::Local,
+            self.local_management_available(),
+        ));
     }
 
     /// The child index of each selectable row, which is what navigation and the
@@ -296,19 +324,54 @@ impl HerdrWindow {
         selected: bool,
         spec: &Spec,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let theme = &self.theme;
         let font = &self.config.ui;
-        div()
+        let matches_target = |target: &ConnectTarget| {
+            match (&choice, target) {
+                (Row::Local(name), ConnectTarget::Session { name: deleted, .. }) => name == deleted,
+                (Row::Device { id, session }, ConnectTarget::Ssh { target, session: deleted }) => {
+                    session == deleted && self.endpoints.iter().any(|endpoint| endpoint.id == *id
+                        && matches!(&endpoint.connection.target, ConnectTarget::Ssh { target: host, .. } if host == target))
+                }
+                _ => false,
+            }
+        };
+        let deleting = self
+            .sessions
+            .mutation_target
+            .as_ref()
+            .is_some_and(&matches_target);
+        let remaining = self
+            .sessions
+            .departure
+            .as_ref()
+            .filter(|departure| matches_target(&departure.target))
+            .map(|departure| departure.remaining(std::time::Instant::now()));
+        let height = font.line_height() * 2. + 16.;
+        let removal = choice.clone();
+        let removal_target = self.management_target(&choice);
+        let removable = !matches!(choice, Row::Add(_));
+        let deletion_color = if self.session_delete_reason(&choice).is_none() {
+            colors::danger(theme)
+        } else if selected || spec.checked {
+            rgb(theme.foreground)
+        } else {
+            rgb(theme.muted)
+        };
+        let view = div()
             .id(("session-entry", row))
             .debug_selector(move || format!("sessions-row-{row}"))
             .p(px(8.))
+            .h(px(height))
+            .line_height(px(font.line_height()))
             .rounded(px(crate::config::corners::CONTROL))
             .flex_none()
             .flex()
             .items_center()
             .gap(px(8.))
             .when(selected, |s| s.bg(rgb(theme.active)))
+            .when(spec.checked, |s| s.bg(rgb(theme.primary_wash())))
             .when(spec.enabled, |s| s.cursor_pointer())
             .text_color(rgb(if spec.enabled {
                 theme.foreground
@@ -319,32 +382,63 @@ impl HerdrWindow {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(div().min_w_0().truncate().child(spec.label.clone()))
                     .child(
                         div()
+                            .min_w_0()
+                            .truncate()
+                            .when(spec.checked, |label| {
+                                label
+                                    .debug_selector(move || format!("sessions-current-{row}"))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                            })
+                            .child(spec.label.clone()),
+                    )
+                    .child(
+                        div()
+                            .truncate()
                             .text_size(px(font.size * 0.85))
                             .text_color(rgb(theme.muted))
-                            .child(spec.detail.clone()),
+                            .child(if deleting {
+                                "Deleting…".into()
+                            } else {
+                                spec.detail.clone()
+                            }),
                     ),
             )
-            .child(
-                div()
-                    .debug_selector(move || format!("sessions-dot-{row}"))
-                    .size(px(7.))
-                    .flex_none()
-                    .rounded_full()
-                    .bg(rgb(if spec.online {
-                        colors::ONLINE
-                    } else {
-                        theme.muted
-                    })),
-            )
-            .when(spec.checked, |container| {
+            .when(removable, |container| {
                 container.child(
                     div()
-                        .debug_selector(move || format!("sessions-check-{row}"))
+                        .debug_selector(move || format!("sessions-dot-{row}"))
+                        .size(px(7.))
                         .flex_none()
-                        .child("✓"),
+                        .rounded_full()
+                        .bg(rgb(if spec.online {
+                            colors::ONLINE
+                        } else {
+                            theme.muted
+                        })),
+                )
+            })
+            .when(removable, |container| {
+                container.child(
+                    super::action_icon(
+                        "icons/trash.svg",
+                        format!("sessions-delete-icon-{row}"),
+                        deletion_color,
+                        rgb(theme.foreground),
+                    )
+                    .id(("session-delete", row))
+                    .debug_selector(move || format!("sessions-delete-{row}"))
+                    .hover(|s| s.bg(colors::action_hover(theme)))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.confirm_session_delete(
+                            removal.clone(),
+                            removal_target.clone(),
+                            window,
+                            cx,
+                        );
+                    })),
                 )
             })
             .on_hover(cx.listener(move |this, hovered, _, cx| {
@@ -354,19 +448,38 @@ impl HerdrWindow {
                 }
             }))
             .on_click(cx.listener(move |this, _, window, cx| {
-                // The row that painted, not an ordinal recomputed at click time: a
-                // device list that refreshed in between must not move the click to
-                // another session.
+                // Keep the painted identity even if the catalog refreshes.
                 this.choose_session(choice.clone(), window, cx);
-            }))
+            }));
+        if let Some(remaining) = remaining {
+            div()
+                .debug_selector(move || format!("sessions-departing-{row}"))
+                // Keep the anchored popup's height and every row position stable
+                // until the fade finishes; then remove the row in one update.
+                .h(px(height))
+                .flex_none()
+                .overflow_hidden()
+                .opacity(remaining)
+                .child(view)
+                .into_any_element()
+        } else {
+            view.into_any_element()
+        }
     }
 
-    pub(super) fn render_sessions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_sessions(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.menu.session_edit.is_some() {
+            return self.render_session_edit(cx).into_any_element();
+        }
+        self.render_session_list(cx)
+    }
+
+    pub(super) fn render_session_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
         let font = &self.config.ui;
         let entries = self.session_entries();
         let children = Self::row_children(&entries);
-        let selected = self.menu.selected.unwrap_or(0);
+        let selected = self.menu.selected;
         let mut view = div()
             .id("sessions-scroll")
             .debug_selector(|| "sessions-list".into())
@@ -413,20 +526,24 @@ impl HerdrWindow {
                 Entry::Row { row, spec } => view.child(self.sessions_row(
                     ordinal.unwrap_or_default(),
                     row.clone(),
-                    ordinal == Some(selected),
+                    ordinal == selected,
                     spec,
                     cx,
                 )),
             };
         }
-        view
+        view.into_any_element()
     }
 
     /// Attach to a row's session. The row is what the caller painted, not an
     /// index into a list computed again here: a device list that refreshed in
     /// between would otherwise have the click name a different session.
     fn choose_session(&mut self, row: Row, window: &mut Window, cx: &mut Context<Self>) {
+        if self.sessions.mutation.is_some() {
+            return;
+        }
         match row {
+            Row::Add(target) => self.open_session_create(target, window, cx),
             Row::Local(name) => {
                 self.dismiss_menu(window, cx);
                 self.select_local_session(&name, cx);
@@ -475,28 +592,37 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if matches!(&self.menu.session_edit, Some(Edit::Create { input, .. })
+            if input.read(cx).is_composing() || !matches!(event.keystroke.key.as_str(), "enter" | "escape"))
+        {
+            return;
+        }
         cx.stop_propagation();
         window.prevent_default();
+        if self.menu.session_edit.is_some() {
+            self.session_edit_key(event, window, cx);
+            return;
+        }
         let entries = self.session_entries();
         let children = Self::row_children(&entries);
         match event.keystroke.key.as_str() {
             "up" | "down" if !children.is_empty() => {
                 let count = children.len();
-                let index = self.menu.selected.unwrap_or(0).min(count - 1);
-                let index = (index
-                    + if event.keystroke.key == "up" {
-                        count - 1
-                    } else {
-                        1
-                    })
-                    % count;
+                let up = event.keystroke.key == "up";
+                let index = match self.menu.selected {
+                    Some(index) => (index.min(count - 1) + if up { count - 1 } else { 1 }) % count,
+                    None if up => count - 1,
+                    None => 0,
+                };
                 self.menu.selected = Some(index);
                 self.menu.sessions_scroll.scroll_to_item(children[index]);
                 cx.notify();
             }
             "enter" if !children.is_empty() => {
-                let row = children
-                    .get(self.menu.selected.unwrap_or(0))
+                let row = self
+                    .menu
+                    .selected
+                    .and_then(|selected| children.get(selected))
                     .and_then(|child| entries.get(*child))
                     .and_then(Entry::row)
                     .cloned();
@@ -505,6 +631,19 @@ impl HerdrWindow {
                 }
             }
             "escape" => self.dismiss_menu(window, cx),
+            "backspace" | "delete" => {
+                if let Some(row) = self
+                    .menu
+                    .selected
+                    .and_then(|selected| children.get(selected))
+                    .and_then(|child| entries.get(*child))
+                    .and_then(Entry::row)
+                    .cloned()
+                {
+                    let target = self.management_target(&row);
+                    self.confirm_session_delete(row, target, window, cx);
+                }
+            }
             _ => {}
         }
     }

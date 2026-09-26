@@ -43,7 +43,8 @@ pub use handle::{Client, ClientHandle};
 pub use method::Method;
 pub use options::ConnectOptions;
 pub use sessions::{
-    LocalSession, RemoteSession, SessionState, list_local_sessions, list_remote_sessions,
+    LocalSession, RemoteSession, SessionState, delete_local_session, delete_remote_session,
+    list_local_sessions, list_remote_sessions,
 };
 #[cfg(unix)]
 pub use ssh::script_command;
