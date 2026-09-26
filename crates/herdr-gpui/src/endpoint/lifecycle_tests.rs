@@ -225,6 +225,54 @@ fn connected_endpoint(id: &str) -> (Endpoint, Server) {
     (endpoint, server)
 }
 
+#[gpui::test]
+fn first_focus_claims_geometry_without_a_window_resize(cx: &mut gpui::TestAppContext) {
+    let (endpoint, mut server) = connected_endpoint("resize");
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.read_with(cx, |fixture, _| fixture.0.clone());
+    view.update(cx, |view, _| {
+        view.endpoints = vec![endpoint];
+        view.selected_endpoint = 0;
+        view.reset_selected();
+        view.active = true;
+        view.options.surface_size = ClientSurfaceSize {
+            cols: 150,
+            rows: 50,
+        };
+        // The initial size was queued before the surface became focusable.
+        view.last_queued_options = Some(view.options);
+        view.sent_focus = Some(false);
+        assert!(
+            !view.input_ready(),
+            "the initial surface still has the old size"
+        );
+        view.report_focus();
+        assert!(matches!(
+            server.receive(),
+            ClientMessage::ClientShellFocus { focused: true }
+        ));
+        assert_eq!(view.last_queued_options, Some(view.options));
+        assert!(!view.input_ready(), "focus alone does not enable input");
+        let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
+        surface.frame.width = 150;
+        surface.frame.height = 50;
+        assert!(view.input_ready(), "the resized surface enables input");
+
+        // Repeated polls must not keep resizing the terminal. A focus-loss
+        // message acts as an ordered sentinel after these no-op calls.
+        view.report_focus();
+        view.resize();
+        view.active = false;
+        view.report_focus();
+        assert!(matches!(
+            server.receive(),
+            ClientMessage::ClientShellFocus { focused: false }
+        ));
+    });
+}
+
 fn prepare_mouse(view: &mut HerdrWindow, endpoint: Endpoint) {
     view.endpoints.truncate(1);
     view.endpoints.push(endpoint);
