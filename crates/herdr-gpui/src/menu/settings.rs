@@ -32,6 +32,7 @@ impl HerdrWindow {
                     }
                     if watch.observe(sample)
                         && this.config_load.is_none()
+                        && !this.font_size_saves.is_busy()
                         && !matches!(this.menu.page, Some(Page::Themes | Page::Fonts))
                         && !this.theme_save_in_flight()
                     {
@@ -83,30 +84,10 @@ impl HerdrWindow {
         direction: f32,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() {
-            return;
-        }
         let current = face.size(&self.config);
         let size = (current + direction * FONT_SIZE_STEP)
             .clamp(*FONT_SIZE_RANGE.start(), *FONT_SIZE_RANGE.end());
         self.set_font_size(face, size, cx);
-    }
-
-    pub(crate) fn set_font_size(&mut self, face: FontFace, size: f32, cx: &mut Context<Self>) {
-        if self.config_load.is_some() || face.size(&self.config) == size {
-            return;
-        }
-        let text_system = cx.text_system().clone();
-        self.load_gui_config_with(
-            move || {
-                Config::save_font_size(face, size)?;
-                let mut config = Config::load()?;
-                config.resolve_font_fallbacks(|| text_system.all_font_names());
-                let theme = config.theme()?;
-                Ok((config, theme))
-            },
-            cx,
-        );
     }
 
     pub(crate) fn reload_gui_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -137,7 +118,7 @@ impl HerdrWindow {
         load: impl FnOnce() -> crate::Result<(Config, crate::config::Theme)> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() {
+        if self.config_load.is_some() || self.font_size_saves.is_busy() {
             return;
         }
         let load = cx.background_executor().spawn(async move { load() });
@@ -148,7 +129,10 @@ impl HerdrWindow {
                 this.config_load_revision = this.config_load_revision.wrapping_add(1);
                 // Apply a coherent pair only after both have loaded successfully.
                 match loaded {
-                    Ok((config, theme)) => {
+                    Ok((mut config, theme)) => {
+                        // A reload discards session zoom; queued Settings edits
+                        // remain visible but do not become the saved baseline yet.
+                        this.configured_terminal_size = config.terminal.size;
                         cx.set_global(crate::app::InitialAppearance {
                             config: config.clone(),
                             theme: theme.clone(),
@@ -166,9 +150,7 @@ impl HerdrWindow {
                                 endpoint.toasts.enabled_since = Some(cutoff);
                             }
                         }
-                        // Replacing the config also discards any session font
-                        // adjustment, so the baseline follows the file again.
-                        this.configured_terminal_size = config.terminal.size;
+                        this.font_size_saves.apply_pending(&mut config);
                         this.config = config;
                         this.tick_toasts(
                             this.menu.page.is_some() || this.toasts_hidden,
@@ -200,6 +182,7 @@ impl HerdrWindow {
                     this.menu.pr.clear();
                     this.menu.pr_connection = None;
                 }
+                this.flush_font_sizes(cx);
                 cx.notify();
             });
         }));

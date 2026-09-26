@@ -79,7 +79,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() || !self.open_menu(window, cx) {
+        if self.config_load.is_some()
+            || self.font_size_saves.is_busy()
+            || !self.open_menu(window, cx)
+        {
             return;
         }
         self.menu.page = Some(Page::Fonts);
@@ -163,6 +166,7 @@ impl HerdrWindow {
         };
         if picker.loading
             || self.config_load.is_some()
+            || self.font_size_saves.is_busy()
             || (family
                 .as_ref()
                 .is_some_and(|name| !picker.names.contains(name)))

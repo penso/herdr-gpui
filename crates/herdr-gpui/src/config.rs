@@ -41,6 +41,15 @@ pub(crate) enum FontFace {
 }
 
 impl FontFace {
+    pub(crate) fn set_size(self, config: &mut Config, size: f32) {
+        match self {
+            Self::Sidebar => config.sidebar.size = size,
+            Self::Tabs => config.tabs.size = size,
+            Self::Terminal => config.terminal.size = size,
+            Self::Ui => config.ui.size = size,
+        }
+    }
+
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Sidebar => "sidebar",
@@ -1080,11 +1089,11 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
-    /// Persist one font's logical pixel size without replacing other overrides.
+    /// Persist a batch of logical pixel sizes without replacing other overrides.
     /// The lock also serializes this edit with migration and other GUI saves.
-    pub(crate) fn save_font_size(face: FontFace, size: f32) -> Result<()> {
+    pub(crate) fn save_font_sizes(sizes: &[(FontFace, f32)]) -> Result<()> {
         let (_lock, local) = Self::prepare_files(&Self::path()?)?;
-        Self::save_font_size_path(face, size, &local)
+        Self::save_font_sizes_path(sizes, &local)
     }
 
     /// `None` removes the local override, inheriting the platform's managed default.
@@ -1148,24 +1157,28 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
-    fn save_font_size_path(face: FontFace, size: f32, path: &Path) -> Result<()> {
-        if !size.is_finite() || !FONT_SIZE_RANGE.contains(&size) {
-            return Err(Error::InvalidFontSize(face.name()));
+    fn save_font_sizes_path(sizes: &[(FontFace, f32)], path: &Path) -> Result<()> {
+        for &(face, size) in sizes {
+            if !size.is_finite() || !FONT_SIZE_RANGE.contains(&size) {
+                return Err(Error::InvalidFontSize(face.name()));
+            }
         }
         let result = (|| -> Result<()> {
             let text = fs::read_to_string(path)?;
             let mut document = text.parse::<toml_edit::DocumentMut>()?;
-            let font = document
-                .entry(face.name())
-                .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
-            let table = font
-                .as_table_like_mut()
-                .ok_or(Error::InvalidFontSize(face.name()))?;
-            let mut value = toml_edit::Value::from(size as f64);
-            if let Some(previous) = table.get("size").and_then(toml_edit::Item::as_value) {
-                *value.decor_mut() = previous.decor().clone();
+            for &(face, size) in sizes {
+                let font = document
+                    .entry(face.name())
+                    .or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+                let table = font
+                    .as_table_like_mut()
+                    .ok_or(Error::InvalidFontSize(face.name()))?;
+                let mut value = toml_edit::Value::from(size as f64);
+                if let Some(previous) = table.get("size").and_then(toml_edit::Item::as_value) {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                table.insert("size", toml_edit::Item::Value(value));
             }
-            table.insert("size", toml_edit::Item::Value(value));
             write_config(path, &document.to_string())
         })();
         result.map_err(|error| error.at_path(path))
@@ -1940,7 +1953,7 @@ mod tests {
             (FontFace::Terminal, 48.),
             (FontFace::Ui, 14.),
         ] {
-            Config::save_font_size_path(face, size, &path)?;
+            Config::save_font_sizes_path(&[(face, size)], &path)?;
             let text = fs::read_to_string(&path)?;
             let known = text.replace("future = true\n", "");
             assert_eq!(
@@ -1957,9 +1970,29 @@ mod tests {
         }
         let before = fs::read_to_string(&path)?;
         for invalid in [7., 49., f32::NAN, f32::INFINITY] {
-            assert!(Config::save_font_size_path(FontFace::Tabs, invalid, &path).is_err());
+            assert!(Config::save_font_sizes_path(&[(FontFace::Tabs, invalid)], &path).is_err());
             assert_eq!(fs::read_to_string(&path)?, before);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn font_size_batches_validate_every_change_before_writing() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        let original = "# retained\ntheme = 'Nord'\n[sidebar]\nsize = 12 # retained size\n";
+        fs::write(&path, original)?;
+        assert!(matches!(
+            Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 49.)], &path),
+            Err(Error::InvalidFontSize("ui"))
+        ));
+        assert_eq!(fs::read_to_string(&path)?, original);
+        Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 20.)], &path)?;
+        let saved = fs::read_to_string(&path)?;
+        let config = Config::parse(&saved)?;
+        assert_eq!((config.sidebar.size, config.ui.size), (14., 20.));
+        assert!(saved.contains("size = 14.0 # retained size"));
+        assert!(saved.contains("theme = 'Nord'"));
         Ok(())
     }
 

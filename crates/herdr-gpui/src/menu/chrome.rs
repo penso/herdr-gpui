@@ -40,9 +40,8 @@ impl HerdrWindow {
     }
 
     pub(crate) fn open_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let editing_size = self.menu.font_size_editor.is_some();
         self.finish_font_size_edit(true, cx);
-        if (editing_size && self.config_load.is_some()) || !self.cancel_theme_preview(cx) {
+        if !self.cancel_theme_preview(cx) {
             return false;
         }
         self.menu.reset();

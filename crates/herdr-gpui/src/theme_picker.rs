@@ -46,6 +46,7 @@ impl HerdrWindow {
         }
         // A pending reload must not replace this newer interactive appearance.
         self.config_load = None;
+        self.flush_font_sizes(cx);
         self.menu.page = Some(Page::Themes);
         let mut picker = if let Some(picker) = self.menu.themes.take() {
             picker.search.update(cx, |input, cx| input.clear(cx));

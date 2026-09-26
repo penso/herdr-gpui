@@ -741,7 +741,10 @@ Windows setup) nothing is saved and the window says so.
   config reload; a searchable installed-font picker can set all four families
   together or each independently (including Platform default), while sizes have
   −/+ controls and editable whole-number fields (8–48; Enter or leave to save,
-  Escape to cancel). Both save to the local GUI overrides file and reload in all windows.
+  Escape to cancel). Size changes appear immediately; repeated clicks stay enabled
+  while a background writer coalesces the latest size for each font. Save failures
+  appear in the Preferences footer and restore the previous size. Both families
+  and sizes save to the local GUI overrides file and reload in all windows.
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.

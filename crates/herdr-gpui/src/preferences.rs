@@ -48,9 +48,6 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() {
-            return;
-        }
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_text_selected(&format!("{}", face.size(&self.config)), cx);
@@ -273,7 +270,6 @@ impl HerdrWindow {
                         .when(!enabled, |button| button.text_color(rgb(theme.muted)))
                         .child(symbol)
                 };
-            let ready = self.config_load.is_none();
             body = body.child(
                 div()
                     .debug_selector(move || id.into())
@@ -312,7 +308,7 @@ impl HerdrWindow {
                         "decrease",
                         "−",
                         -1.,
-                        ready && value.size > *FONT_SIZE_RANGE.start(),
+                        value.size > *FONT_SIZE_RANGE.start(),
                     ))
                     .child(
                         if let Some(editor) = &self.menu.font_size_editor
@@ -342,7 +338,7 @@ impl HerdrWindow {
                         "increase",
                         "+",
                         1.,
-                        ready && value.size < *FONT_SIZE_RANGE.end(),
+                        value.size < *FONT_SIZE_RANGE.end(),
                     )),
             );
         }
@@ -488,7 +484,12 @@ impl HerdrWindow {
                     .border_t_1()
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
-                    .child("Esc to close  /  click outside to dismiss"),
+                    .child(
+                        self.font_size_saves
+                            .status()
+                            .unwrap_or("Esc to close  /  click outside to dismiss")
+                            .to_owned(),
+                    ),
             )
     }
 }

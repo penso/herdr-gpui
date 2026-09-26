@@ -212,6 +212,7 @@ fn a_font_at_the_limit_cannot_be_increased_or_start_a_save(cx: &mut gpui::TestAp
             *crate::config::FONT_SIZE_RANGE.end()
         );
         assert!(view.config_load.is_none());
+        assert!(!view.font_size_saves.is_busy());
         assert_eq!(view.menu.page, Some(super::Page::Preferences));
     });
 }
