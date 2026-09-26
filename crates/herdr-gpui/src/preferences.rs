@@ -147,9 +147,10 @@ impl HerdrWindow {
             .track_scroll(&self.menu.preferences_scroll)
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this, _, window, cx| {
                     if this.menu.font_size_editor.is_some() {
                         this.finish_font_size_edit(true, cx);
+                        window.focus(&this.menu.focus, cx);
                     }
                 }),
             )

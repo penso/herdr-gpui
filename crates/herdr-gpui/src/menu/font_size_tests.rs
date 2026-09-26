@@ -152,6 +152,44 @@ fn editable_font_size_cancels_on_escape_and_rejects_invalid_input(cx: &mut gpui:
 }
 
 #[gpui::test]
+fn leaving_font_size_field_restores_menu_keyboard_focus(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_preferences(window, cx);
+            view.menu
+                .preferences_scroll
+                .set_offset(point(px(0.), px(-120.)));
+        });
+        window.draw(cx).clear(cx);
+    });
+    let size = cx.debug_bounds("preferences-font-sidebar-size").unwrap();
+    cx.simulate_click(size.center(), Modifiers::default());
+    view.read_with(cx, |view, _| {
+        assert!(view.menu.font_size_editor.is_some());
+    });
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let label = cx.debug_bounds("preferences-font-sidebar").unwrap();
+    cx.simulate_click(
+        point(label.left() + px(15.), label.center().y),
+        Modifiers::default(),
+    );
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    view.read_with(cx, |view, _| {
+        assert!(view.menu.font_size_editor.is_none());
+        assert!(view.config_load.is_none());
+        assert_eq!(view.menu.page, Some(super::Page::Preferences));
+    });
+    cx.simulate_keystrokes("escape");
+    view.read_with(cx, |view, _| {
+        assert!(
+            view.menu.page.is_none(),
+            "Escape should dismiss Preferences"
+        );
+    });
+}
+
+#[gpui::test]
 fn a_font_at_the_limit_cannot_be_increased_or_start_a_save(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|window, cx| {
