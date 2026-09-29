@@ -1,6 +1,6 @@
-//! Laying out the sidebar: the two lists, their headings, and the drag handle
-//! that resizes the panel. Render works from prepared state and the bounded
-//! caches only.
+//! Laying out the sidebar: the Spaces, Projects and Agents lists, their
+//! headings, and the drag handle that resizes the panel. Render works from
+//! prepared state and the bounded caches only.
 
 use super::{
     DEVICE_FOOTER_HEIGHT, HOST_ARROW_WIDTH, HOST_GAP, STATUS_WIDTH, SidebarDrag, agent_name,
@@ -59,14 +59,27 @@ impl HerdrWindow {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll();
+        // Project spaces, split out of Spaces when `projects_root` is set. It
+        // stays empty, and is not rendered, without a configured root.
+        let mut projects = div()
+            .id("projects-scroll")
+            .debug_selector(|| "projects-scroll".into())
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll();
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
+        projects = projects.track_scroll(&self.sidebar_scroll[2]);
         let multi = self.endpoints.len() > 1;
         let mut agent_count = 0;
         // Child positions of the highlighted rows, for the one-time reveal below.
-        // Agent rows are counted by `agent_count`, which indexes that list.
+        // Agent rows are counted by `agent_count`, and project rows by
+        // `project_rows`; both index their own list.
         let mut space_rows = 0usize;
-        let mut highlighted = [None; 2];
+        let mut project_rows = 0usize;
+        let mut highlighted = [None; 3];
         // A lifted workspace row: each drop unit's rows in the spaces list, and
         // the move every gap makes, for the pointer handler below.
         let mut drop_rows = Vec::new();
@@ -217,13 +230,24 @@ impl HerdrWindow {
                     .collect();
                 drop_dragged = plan.dragged();
                 let mut heights = vec![0.; plan.len()];
-                for (position, entry) in entries.iter().enumerate() {
+                // Project rows live in their own list, so they occupy no slot
+                // in the Spaces one; advance the child index only for the rows
+                // that do.
+                let mut space_child = base;
+                for entry in entries.iter() {
+                    if self
+                        .config
+                        .is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
+                    {
+                        continue;
+                    }
                     if let (Some(unit), Some(bounds)) = (
                         plan.unit_of(entry.0),
-                        self.sidebar_scroll[0].bounds_for_item(base + position),
+                        self.sidebar_scroll[0].bounds_for_item(space_child),
                     ) {
                         heights[unit] += f32::from(bounds.size.height);
                     }
+                    space_child += 1;
                 }
                 let slot = drag
                     .and_then(|drag| drag.target.as_ref())
@@ -241,10 +265,19 @@ impl HerdrWindow {
                     break;
                 }
                 let workspace = &snapshot.workspaces[index];
+                let project = self.config.is_project_cwd(&workspace.new_workspace_cwd);
                 if selected && workspace.focused {
-                    highlighted[0] = Some(space_rows);
+                    if project {
+                        highlighted[2] = Some(project_rows);
+                    } else {
+                        highlighted[0] = Some(space_rows);
+                    }
                 }
-                let unit = plan.as_ref().and_then(|plan| plan.unit_of(index));
+                // Projects have their own list, so a Spaces drag neither
+                // carries nor shifts them; they keep the daemon's order.
+                let unit = (!project)
+                    .then(|| plan.as_ref().and_then(|plan| plan.unit_of(index)))
+                    .flatten();
                 // The lifted row and the rows it carries, such as its group's
                 // children, follow the pointer together while it floats.
                 let carried = unit.is_some_and(|unit| unit == drop_dragged) && floating;
@@ -263,7 +296,11 @@ impl HerdrWindow {
                 if let Some(unit) = unit {
                     drop_rows.push((unit, space_rows, shift));
                 }
-                space_rows += 1;
+                if project {
+                    project_rows += 1;
+                } else {
+                    space_rows += 1;
+                }
                 let id = workspace.workspace_id.clone();
                 let press_id = id.clone();
                 let context_id = id.clone();
@@ -431,8 +468,9 @@ impl HerdrWindow {
                     }))
                 })
                 // Holding a press lifts the row for reordering. Another
-                // endpoint's rows would have to select it first.
-                .when(selected, |row| {
+                // endpoint's rows would have to select it first, and a project
+                // row is not in the Spaces list the drag reorders.
+                .when(selected && !project, |row| {
                     row.on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, _, cx| {
@@ -443,13 +481,15 @@ impl HerdrWindow {
                     )
                 })
                 .when(shift != px(0.), |row| row.top(shift));
-                spaces = if carried {
+                if project {
+                    projects = projects.child(element);
+                } else if carried {
                     // Painted last so it floats over the rows it passes, while
                     // its layout slot keeps the others' positions stable.
-                    spaces.child(deferred(element.cursor_grabbing()).with_priority(1))
+                    spaces = spaces.child(deferred(element.cursor_grabbing()).with_priority(1));
                 } else {
-                    spaces.child(element)
-                };
+                    spaces = spaces.child(element);
+                }
             }
             if !self.config.show_agents {
                 continue;
@@ -560,6 +600,13 @@ impl HerdrWindow {
                     .overflow_hidden()
                     .child(header("spaces", font, theme, look))
                     .child(spaces)
+                    // Only shown once a project was classified: without a root,
+                    // or with none of its spaces listed, the section is absent.
+                    .when(project_rows > 0, |section| {
+                        section
+                            .child(header("projects", font, theme, look))
+                            .child(projects)
+                    })
                     .child(
                         div()
                             .flex_none()

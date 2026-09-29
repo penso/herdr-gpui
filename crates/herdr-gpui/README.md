@@ -281,6 +281,18 @@ once. Set top-level `confirm_close_tab = false` to never ask for tabs
 section and give Spaces the full sidebar height. Both default to `true`. Pane
 closures still ask for confirmation. Saved edits apply automatically.
 
+Set top-level `projects_root` to the folder that holds your Herdr project
+spaces (for the `herdr-projects` plugin, `~/.herdr-projects`). Every space whose
+working directory lies inside that folder is listed in a separate **Projects**
+section below Spaces instead of in Spaces, so a plugin project is no longer
+confused with a plain checkout of the same repository. Unset (the default), the
+section is absent and every space stays in Spaces. The value accepts an absolute
+path or a `~/` path; the root folder itself is not a project.
+
+```toml
+projects_root = "~/.herdr-projects"
+```
+
 `[notifications]` controls GUI-local in-app delivery, independently of the daemon:
 
 ```toml
@@ -1071,10 +1083,15 @@ Windows setup) nothing is saved and the window says so.
 - Agents panel header ends with its sort, `grouped` or `priority`, which a
   click flips; an active agent view names itself there instead. Client-local
   and persisted beside the sidebar width, as in the terminal client.
+- Projects section for `herdr-projects`-style spaces: with `projects_root` set,
+  spaces working inside that folder are listed apart from Spaces with the same
+  selection, focus, click, icon, status, and right-click/hover menus as a space
+  row. They keep the daemon's order, and drag-reorder stays a Spaces gesture.
+  Unset, the section does not render and nothing changes.
 - Resizable sidebar with width persisted per local daemon socket, shared across
-  host groups. Drag the divider between Spaces and Agents up or down to resize
-  their sections; double-click it to restore an even split. The split is saved
-  across launches and retained while Agents is hidden.
+  host groups. Drag the divider between the Spaces/Projects group and Agents up
+  or down to resize their sections; double-click it to restore an even split.
+  The split is saved across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour

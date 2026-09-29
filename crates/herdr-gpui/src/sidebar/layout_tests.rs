@@ -2435,6 +2435,104 @@ fn the_sidebar_follows_the_selection_without_undoing_manual_scrolling(
 }
 
 #[gpui::test]
+fn projects_root_moves_matching_spaces_into_their_own_section(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].label = "project-alpha".into();
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    let spaces = cx.debug_bounds("spaces-scroll").unwrap();
+    let projects = cx.debug_bounds("projects-scroll").unwrap();
+    assert!(cx.debug_bounds("header-projects").is_some());
+    let moved = cx.debug_bounds("row-project-alpha").unwrap();
+    let stayed = cx.debug_bounds("row-herdr").unwrap();
+    assert!(
+        projects.contains(&moved.center()),
+        "{moved:?} is not in {projects:?}"
+    );
+    assert!(
+        !spaces.contains(&moved.center()),
+        "a project row must leave Spaces"
+    );
+    assert!(spaces.contains(&stayed.center()));
+    assert!(
+        cx.debug_bounds("row-another workspace").is_some(),
+        "a non-project space stays in Spaces"
+    );
+}
+
+#[gpui::test]
+fn projects_section_is_absent_without_a_root(cx: &mut gpui::TestAppContext) {
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.snapshot = Some(Arc::new(snapshot(4)));
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The window never rendered the section, so its absence is real.
+    assert!(cx.debug_bounds("header-projects").is_none());
+    assert!(cx.debug_bounds("projects-scroll").is_none());
+    assert!(cx.debug_bounds("header-spaces").is_some());
+    assert!(cx.debug_bounds("row-herdr").is_some());
+}
+
+#[gpui::test]
+fn a_focused_project_row_reveals_in_the_projects_list(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        for (index, workspace) in snapshot.workspaces.iter_mut().enumerate() {
+            if index % 2 == 0 {
+                workspace.new_workspace_cwd = format!("{root}/w{index}");
+            }
+        }
+        snapshot.focused_workspace_id = Some("w38".into());
+        for workspace in &mut snapshot.workspaces {
+            workspace.focused = workspace.workspace_id == "w38";
+        }
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(640.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The focused project scrolled its own list into view, leaving Spaces alone.
+    cx.update(|_, cx| {
+        let view = view.read(cx);
+        assert!(
+            view.sidebar_scroll[2].offset().y < px(0.),
+            "the focused project must scroll into view"
+        );
+        assert_eq!(view.sidebar_scroll[0].offset().y, px(0.));
+        assert_eq!(view.sidebar_scroll[1].offset().y, px(0.));
+    });
+}
+
+#[gpui::test]
 fn worktree_rows_wear_their_cached_pull_request(cx: &mut gpui::TestAppContext) {
     let (fixture, cx) = cx.add_window_view(|window, cx| {
         let view = cx.new(|cx| fixture_window(window, cx));

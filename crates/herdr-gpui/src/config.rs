@@ -85,6 +85,10 @@ pub struct Config {
     pub show_agents: bool,
     /// How far the app's own marks and labels stand off its chrome.
     pub contrast: Contrast,
+    /// Spaces whose working directory lies inside this folder are listed in the
+    /// sidebar's Projects section instead of Spaces. `None` keeps every space
+    /// in Spaces, which is the default.
+    pub projects_root: Option<PathBuf>,
     /// Show each agent's status word beside it, following the daemon's
     /// `[ui.sidebar.agents]` rows when they name the `state_text` token.
     pub agent_status_text: AgentStatusText,
@@ -584,6 +588,7 @@ impl Default for Config {
             confirm_close_tab: true,
             show_agents: true,
             contrast: Contrast::default(),
+            projects_root: None,
             agent_status_text: AgentStatusText::default(),
             usage: crate::usage::UsageConfig::default(),
             option_as_alt: OptionAsAlt::default(),
@@ -610,6 +615,7 @@ struct Settings {
     confirm_close_tab: Option<bool>,
     show_agents: Option<bool>,
     contrast: Contrast,
+    projects_root: Option<String>,
     usage: crate::usage::UsageConfig,
     option_as_alt: OptionAsAlt,
     open_links_in: LinkTarget,
@@ -664,6 +670,25 @@ pub(crate) fn home() -> Result<PathBuf> {
         })
         .map(PathBuf::from)
         .ok_or(Error::MissingHome)
+}
+
+/// Resolves the configured `projects_root`. An empty value disables the
+/// section, as does omitting the key. `~/` expands to the home directory; a
+/// still-relative path is rejected rather than silently matching nothing.
+fn projects_root(raw: &str) -> Result<Option<PathBuf>> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    let path = if let Some(relative) = raw.strip_prefix("~/") {
+        home()?.join(relative)
+    } else {
+        PathBuf::from(raw)
+    };
+    if !path.is_absolute() {
+        return Err(Error::InvalidProjectsRoot);
+    }
+    Ok(Some(path))
 }
 
 /// The directory holding this app's `herdr` configuration directory. Upstream
@@ -873,6 +898,18 @@ impl Config {
         Ok(Self::path()?.with_extension("local.toml"))
     }
 
+    /// Whether a workspace working in `cwd` belongs to the configured Projects
+    /// root. The comparison is lexical and component-based, so a root written
+    /// with a trailing separator still matches and a sibling directory that
+    /// merely shares a prefix does not. The root itself is not a project.
+    pub(crate) fn is_project_cwd(&self, cwd: &str) -> bool {
+        let Some(root) = self.projects_root.as_deref() else {
+            return false;
+        };
+        let cwd = Path::new(cwd);
+        cwd.starts_with(root) && cwd != root
+    }
+
     /// Gives every face the config left alone an automatic icon-font cascade.
     /// `installed` is consulted only when some face still needs one, because
     /// enumerating system fonts is slow enough to keep off the UI thread.
@@ -1061,6 +1098,10 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.contrast = settings.contrast;
+        config.projects_root = match settings.projects_root {
+            Some(raw) => projects_root(&raw)?,
+            None => None,
+        };
         settings.usage.validate()?;
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
@@ -2500,6 +2541,42 @@ mod tests {
         assert!(!config.show_agents);
         assert!(Config::parse("confirm_close_tab = 'false'").is_err());
         assert!(Config::parse("show_agents = 0").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn projects_root_classifies_only_descendants() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        // A trailing separator is the same root.
+        for setting in [root.to_owned(), format!("{root}/")] {
+            let config = Config::parse(&format!("projects_root = {setting:?}"))?;
+            assert!(config.is_project_cwd(&format!("{root}/one")));
+            assert!(config.is_project_cwd(&format!("{root}/one/deeper")));
+            assert!(
+                !config.is_project_cwd(root),
+                "the root itself is not a project"
+            );
+            assert!(!config.is_project_cwd(&format!("{root}-two/one")));
+            assert!(!config.is_project_cwd(""));
+        }
+        // Omitting the key, an empty value, or the shipped example all disable
+        // the section, so existing behavior is unchanged.
+        for config in [
+            Config::default(),
+            Config::parse("")?,
+            Config::parse("projects_root = ''")?,
+            Config::parse(DEFAULT_CONFIG)?,
+        ] {
+            assert!(config.projects_root.is_none());
+            assert!(!config.is_project_cwd(&format!("{root}/one")));
+        }
+        // A relative or non-string value is rejected, not silently unmatched.
+        assert!(Config::parse("projects_root = 'relative/projects'").is_err());
+        assert!(Config::parse("projects_root = 42").is_err());
         Ok(())
     }
 

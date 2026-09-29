@@ -145,11 +145,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) avatars: Option<avatars::Avatars>,
     #[cfg(feature = "integration-test")]
     pub(crate) input_probe: smoke::InputProbe,
-    /// Spaces and agents lists, in that order.
-    pub(crate) sidebar_scroll: [ScrollHandle; 2],
+    /// Spaces, agents, and projects lists, in that order.
+    pub(crate) sidebar_scroll: [ScrollHandle; 3],
     /// The row each list has scrolled into view, so a new selection is revealed
     /// while the user's own scrolling of an unchanged one is left alone.
-    pub(crate) sidebar_revealed: [std::cell::Cell<Option<usize>>; 2],
+    pub(crate) sidebar_revealed: [std::cell::Cell<Option<usize>>; 3],
     pub(crate) _poll: Task<()>,
     pub(crate) _activation: Subscription,
     /// The sidebar as a cached view; see `sidebar::SidebarView`.
