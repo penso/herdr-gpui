@@ -45,6 +45,7 @@ impl HerdrWindow {
 
     pub(crate) fn open_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.finish_font_size_edit(true, cx);
+        self.finish_projects_root_edit(true, cx);
         if !self.cancel_theme_preview(cx) {
             return false;
         }
@@ -62,6 +63,7 @@ impl HerdrWindow {
 
     pub(crate) fn dismiss_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.finish_font_size_edit(true, cx);
+        self.finish_projects_root_edit(true, cx);
         if !self.cancel_theme_preview(cx) {
             return;
         }
@@ -932,6 +934,24 @@ impl HerdrWindow {
                             cx.stop_propagation();
                             window.prevent_default();
                             this.finish_font_size_edit(event.keystroke.key == "enter", cx);
+                            window.focus(&this.menu.focus, cx);
+                            return;
+                        }
+                        _ => return, // Native text editing and IME handle printable input.
+                    }
+                }
+                if this.menu.page == Some(Page::Preferences)
+                    && this.menu.projects_root_editor.is_some()
+                {
+                    let editor = this.menu.projects_root_editor.as_ref();
+                    if editor.is_some_and(|editor| editor.input.read(cx).is_composing()) {
+                        return;
+                    }
+                    match event.keystroke.key.as_str() {
+                        "enter" | "escape" => {
+                            cx.stop_propagation();
+                            window.prevent_default();
+                            this.finish_projects_root_edit(event.keystroke.key == "enter", cx);
                             window.focus(&this.menu.focus, cx);
                             return;
                         }

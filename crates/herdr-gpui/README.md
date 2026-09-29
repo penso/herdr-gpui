@@ -293,6 +293,12 @@ path or a `~/` path; the root folder itself is not a project.
 projects_root = "~/.herdr-projects"
 ```
 
+The same setting can be typed in **Preferences**, under Appearance → **Projects
+folder**: click the value, type a path, and press Enter (Escape cancels). The
+same rules apply, and an empty value clears it. It is written to
+`config-gpui.local.toml` beside the other overrides, preserving comments and
+unrelated keys.
+
 `[notifications]` controls GUI-local in-app delivery, independently of the daemon:
 
 ```toml
@@ -1087,6 +1093,8 @@ Windows setup) nothing is saved and the window says so.
   spaces working inside that folder are listed apart from Spaces with the same
   selection, focus, click, icon, status, and right-click/hover menus as a space
   row. They keep the daemon's order, and drag-reorder stays a Spaces gesture.
+  The folder is editable in Preferences (Appearance → Projects folder), which
+  validates it with the config-file rules before writing it.
   Unset, the section does not render and nothing changes.
 - Resizable sidebar with width persisted per local daemon socket, shared across
   host groups. Drag the divider between the Spaces/Projects group and Agents up

@@ -31,6 +31,40 @@ pub(crate) struct FontSizeEditor {
     _blur: Subscription,
 }
 
+/// The inline editor for `projects_root`. It closes on blur or Enter, exactly
+/// like the font size field, but has no live preview: the sidebar only reads
+/// the setting, so applying it is the save.
+pub(crate) struct ProjectsRootEditor {
+    pub(crate) input: Entity<SearchInput>,
+    _blur: Subscription,
+}
+
+/// The queued write of `projects_root`, kept apart from the font size writer so
+/// a slow font save never drops this one.
+#[derive(Default)]
+pub(crate) struct ProjectsRootSave {
+    pending: Option<Pending>,
+    task: Option<Task<()>>,
+    error: Option<String>,
+}
+
+struct Pending {
+    value: String,
+    previous: Option<PathBuf>,
+}
+
+impl ProjectsRootSave {
+    fn is_busy(&self) -> bool {
+        self.task.is_some() || self.pending.is_some()
+    }
+
+    pub(crate) fn status(&self) -> Option<&str> {
+        self.error
+            .as_deref()
+            .or_else(|| self.is_busy().then_some("Saving projects folder…"))
+    }
+}
+
 fn parse_font_size(text: &str) -> Option<f32> {
     let text = text.trim();
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -49,6 +83,7 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.finish_projects_root_edit(true, cx);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_text_selected(&format!("{}", face.size(&self.config)), cx);
@@ -98,6 +133,100 @@ impl HerdrWindow {
             },
             cx,
         );
+    }
+
+    fn begin_projects_root_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_font_size_edit(true, cx);
+        let input = cx.new(SearchInput::new);
+        let current = self
+            .config
+            .projects_root
+            .as_ref()
+            .map(|root| root.display().to_string())
+            .unwrap_or_default();
+        input.update(cx, |input, cx| {
+            input.set_text_selected(&current, cx);
+            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+        });
+        let focus = input.read(cx).focus.clone();
+        let blur = cx.on_blur(&focus, window, |this, _, cx| {
+            this.finish_projects_root_edit(true, cx);
+        });
+        self.menu.projects_root_editor = Some(ProjectsRootEditor { input, _blur: blur });
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(super) fn finish_projects_root_edit(&mut self, save: bool, cx: &mut Context<Self>) {
+        let Some(editor) = self.menu.projects_root_editor.take() else {
+            return;
+        };
+        if save && !editor.input.read(cx).is_composing() {
+            let value = editor.input.read(cx).text().to_owned();
+            self.set_projects_root(value, cx);
+        }
+        cx.notify();
+    }
+
+    /// Applies a committed `projects_root`: the same validation as the config
+    /// file, an immediate in-memory update, then one background write. An
+    /// invalid value changes nothing and is reported in the footer.
+    fn set_projects_root(&mut self, value: String, cx: &mut Context<Self>) {
+        let resolved = match Config::resolve_projects_root(&value) {
+            Ok(root) => root,
+            Err(error) => {
+                self.projects_root_save.error =
+                    Some(format!("Could not save projects folder: {error}"));
+                cx.notify();
+                return;
+            }
+        };
+        let previous = self.config.projects_root.clone();
+        self.config.projects_root = resolved;
+        self.projects_root_save.error = None;
+        self.projects_root_save.pending = Some(Pending { value, previous });
+        cx.notify();
+        self.flush_projects_root(cx);
+    }
+
+    fn flush_projects_root(&mut self, cx: &mut Context<Self>) {
+        self.flush_projects_root_with(Config::save_projects_root, cx);
+    }
+
+    fn flush_projects_root_with(
+        &mut self,
+        save: impl Fn(&str) -> crate::Result<()> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_load.is_some() || self.projects_root_save.task.is_some() {
+            return;
+        }
+        let Some(pending) = self.projects_root_save.pending.take() else {
+            return;
+        };
+        let previous = pending.previous;
+        let value = pending.value;
+        let saved = cx.background_executor().spawn(async move {
+            let result = save(&value);
+            (result, save)
+        });
+        self.projects_root_save.task = Some(cx.spawn(async move |this, cx| {
+            let (result, save) = saved.await;
+            let _ = this.update(cx, |this, cx| {
+                this.projects_root_save.task = None;
+                if let Err(error) = result {
+                    tracing::warn!(%error, "Could not save projects folder");
+                    // A newer edit already owns the value; never roll it back.
+                    if this.projects_root_save.pending.is_none() {
+                        this.config.projects_root = previous;
+                    }
+                    this.projects_root_save.error =
+                        Some(format!("Could not save projects folder: {error}"));
+                }
+                this.flush_projects_root_with(save, cx);
+                cx.notify();
+            });
+        }));
     }
 
     pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
@@ -175,6 +304,48 @@ impl HerdrWindow {
                 .hover(|style| style.bg(rgb(theme.active)))
                 .child(label)
         };
+        let projects_root_value = match &self.config.projects_root {
+            Some(root) => root.display().to_string(),
+            None => "Not set".into(),
+        };
+        let projects_root_row = div()
+            .debug_selector(|| "preferences-projects-root".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Projects folder"),
+            )
+            .child(match &self.menu.projects_root_editor {
+                Some(editor) => div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(editor.input.clone())
+                    .into_any_element(),
+                None => div()
+                    .id("preferences-projects-root-edit")
+                    .debug_selector(|| "preferences-projects-root-edit".into())
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_right()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(theme.active)))
+                    .child(projects_root_value)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.begin_projects_root_edit(window, cx);
+                    }))
+                    .into_any_element(),
+            });
         let mut body = div()
             .id("preferences-body")
             .debug_selector(|| "preferences-body".into())
@@ -188,6 +359,10 @@ impl HerdrWindow {
                 cx.listener(|this, _, window, cx| {
                     if this.menu.font_size_editor.is_some() {
                         this.finish_font_size_edit(true, cx);
+                        window.focus(&this.menu.focus, cx);
+                    }
+                    if this.menu.projects_root_editor.is_some() {
+                        this.finish_projects_root_edit(true, cx);
                         window.focus(&this.menu.focus, cx);
                     }
                 }),
@@ -242,6 +417,7 @@ impl HerdrWindow {
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
+            .child(projects_root_row)
             .child(row("preferences-theme", "Theme", self.config.theme.clone()))
             .child(div().py(px(10.)).child(
                 button("preferences-choose-theme", "Choose theme").on_click(cx.listener(
@@ -575,8 +751,9 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
                     .child(
-                        self.font_size_saves
+                        self.projects_root_save
                             .status()
+                            .or_else(|| self.font_size_saves.status())
                             .unwrap_or("Esc to close  /  click outside to dismiss")
                             .to_owned(),
                     ),

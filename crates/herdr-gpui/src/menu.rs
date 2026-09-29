@@ -23,6 +23,8 @@ mod worktree_source;
 #[cfg(test)]
 mod font_size_tests;
 #[cfg(test)]
+mod preferences_tests;
+#[cfg(test)]
 mod sessions_tests;
 #[cfg(test)]
 pub(crate) mod workspace_tests;

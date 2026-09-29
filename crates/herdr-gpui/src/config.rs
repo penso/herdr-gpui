@@ -898,6 +898,13 @@ impl Config {
         Ok(Self::path()?.with_extension("local.toml"))
     }
 
+    /// The Projects root a raw setting value resolves to, with the same rules
+    /// the config file itself applies. Preferences edits settings through this
+    /// so an invalid value is rejected before anything is written.
+    pub(crate) fn resolve_projects_root(value: &str) -> Result<Option<PathBuf>> {
+        projects_root(value)
+    }
+
     /// Whether a workspace working in `cwd` belongs to the configured Projects
     /// root. The comparison is lexical and component-based, so a root written
     /// with a trailing separator still matches and a sibling directory that
@@ -1242,6 +1249,42 @@ impl Config {
                 _ => {
                     document.insert("layout", toml_edit::value(mode.name()));
                 }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `projects_root`, retaining the latest on-disk settings.
+    /// An empty value removes the key, disabling the Projects section. The
+    /// value is validated with the same rules as the config file before the
+    /// file is touched.
+    pub(crate) fn save_projects_root(value: &str) -> Result<()> {
+        Self::resolve_projects_root(value)?;
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_projects_root_path(value, &local)
+    }
+
+    fn save_projects_root_path(value: &str, path: &Path) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                document.remove("projects_root");
+            } else {
+                let mut value = toml_edit::Value::from(trimmed);
+                if let Some(previous) = document
+                    .get("projects_root")
+                    .and_then(toml_edit::Item::as_value)
+                {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                document["projects_root"] = toml_edit::Item::Value(value);
             }
             write_config(path, &document.to_string())
         })();
@@ -2367,6 +2410,49 @@ mod tests {
     }
 
     #[test]
+    fn projects_root_saves_clears_and_preserves_other_overrides() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        let (first, second) = if cfg!(windows) {
+            ("C:/srv/projects", "C:/srv/other")
+        } else {
+            ("/srv/projects", "/srv/other")
+        };
+        fs::write(&path, "# retained\ntheme = 'Nord'\nfuture = true\n")?;
+
+        // `future = true` stands in for a key this build does not know; parsing
+        // strips it so the strict deserializer is not asked about it.
+        let parsed = |text: &str| Config::parse(&text.replace("future = true\n", ""));
+
+        Config::save_projects_root_path(first, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(saved.contains("# retained"));
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(saved.contains("future = true"));
+        assert_eq!(
+            parsed(&saved)?.projects_root.as_deref(),
+            Some(Path::new(first))
+        );
+
+        // Updating replaces the one value in place, keeping other keys.
+        Config::save_projects_root_path(second, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert_eq!(saved.matches("projects_root").count(), 1);
+        assert!(saved.contains("future = true"));
+        assert_eq!(
+            parsed(&saved)?.projects_root.as_deref(),
+            Some(Path::new(second))
+        );
+
+        // An empty value removes the key, which disables the section.
+        Config::save_projects_root_path("  ", &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("projects_root"));
+        assert!(parsed(&saved)?.projects_root.is_none());
+        Ok(())
+    }
+
+    #[test]
     fn high_contrast_parts_selected_rows_and_lifts_dim_labels_on_every_theme() {
         let ratio = crate::contrast::ratio;
         for name in Theme::BUILTIN_NAMES {
@@ -2391,6 +2477,32 @@ mod tests {
                 assert!(ratio(high.foreground, background) >= 4.5, "{name} text");
             }
         }
+    }
+
+    #[test]
+    fn projects_root_resolution_matches_the_config_file_rules() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        assert_eq!(Config::resolve_projects_root("")?, None);
+        assert_eq!(Config::resolve_projects_root("   ")?, None);
+        assert_eq!(
+            Config::resolve_projects_root(root)?,
+            Some(PathBuf::from(root))
+        );
+        // A trailing separator resolves to the same root.
+        assert_eq!(
+            Config::resolve_projects_root(&format!("{root}/"))?,
+            Some(PathBuf::from(root))
+        );
+        // A relative path is rejected before anything is written.
+        assert!(matches!(
+            Config::resolve_projects_root("relative/projects"),
+            Err(Error::InvalidProjectsRoot)
+        ));
+        Ok(())
     }
 
     #[test]
