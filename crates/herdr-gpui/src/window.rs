@@ -61,8 +61,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) theme: config::Theme,
     pub(crate) config_load: Option<Task<()>>,
     pub(crate) font_size_saves: crate::font_sizes::FontSizeSaves,
-    /// The queued `projects_root` write behind the Preferences field.
-    pub(crate) projects_root_save: preferences::ProjectsRootSave,
+    /// The queued settings writes behind the Preferences fields.
+    pub(crate) settings_saves: preferences::SettingsSaves,
+    /// The optional `herdr-projects` integration: plugin detection, install,
+    /// and project creation.
+    pub(crate) herdr_projects: crate::herdr_projects::State,
     pub(crate) config_watch: Option<Task<()>>,
     pub(crate) config_load_revision: u64,
     pub(crate) endpoints: Vec<endpoint::Endpoint>,
@@ -374,7 +377,8 @@ impl HerdrWindow {
             theme,
             config_load: None,
             font_size_saves: Default::default(),
-            projects_root_save: Default::default(),
+            settings_saves: Default::default(),
+            herdr_projects: Default::default(),
             config_watch: None,
             config_load_revision: 0,
             catalog: endpoint::Catalog::new(&target),

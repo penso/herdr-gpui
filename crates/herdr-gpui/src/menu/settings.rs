@@ -82,6 +82,8 @@ impl HerdrWindow {
         }
         self.menu.page = Some(Page::Preferences);
         self.menu.preferences_scroll.set_offset(Point::default());
+        // The plugin may have been installed or removed since the last check.
+        self.refresh_herdr_projects(cx);
     }
 
     pub(crate) fn change_font_size(

@@ -31,6 +31,7 @@ mod git;
 mod github;
 mod group_menu;
 mod group_terminals;
+mod herdr_projects;
 mod icons;
 mod input;
 mod keymap;

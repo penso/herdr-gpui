@@ -281,23 +281,28 @@ once. Set top-level `confirm_close_tab = false` to never ask for tabs
 section and give Spaces the full sidebar height. Both default to `true`. Pane
 closures still ask for confirmation. Saved edits apply automatically.
 
-Set top-level `projects_root` to the folder that holds your Herdr project
-spaces (for the `herdr-projects` plugin, `~/.herdr-projects`). Every space whose
-working directory lies inside that folder is listed in a separate **Projects**
-section below Spaces instead of in Spaces, so a plugin project is no longer
-confused with a plain checkout of the same repository. Unset (the default), the
-section is absent and every space stays in Spaces. The value accepts an absolute
-path or a `~/` path; the root folder itself is not a project.
+The optional `herdr-projects` integration is switched on in **Preferences →
+Herdr Projects → Use herdr-projects**, together with a projects folder (for the
+plugin, `~/.herdr-projects`). Both are required: with the switch on and a folder
+set, every space whose working directory lies inside that folder is listed in a
+separate **Projects** section below the Spaces footer instead of in Spaces, and
+each Spaces row gets a small `+` that creates a project from that folder with
+`herdr-projects new <name> --repo <folder>`. Off (the default), the sidebar is
+unchanged. The preferences page checks whether the plugin is installed and
+offers to install it when it is missing.
+
+The same settings can be written by hand as top-level lines (before any table
+headers); the folder accepts an absolute path or a `~/` path, and the root
+folder itself is not a project:
 
 ```toml
+use_herdr_projects = true
 projects_root = "~/.herdr-projects"
 ```
 
-The same setting can be typed in **Preferences**, under Appearance → **Projects
-folder**: click the value, type a path, and press Enter (Escape cancels). The
-same rules apply, and an empty value clears it. It is written to
-`config-gpui.local.toml` beside the other overrides, preserving comments and
-unrelated keys.
+Edits made in Preferences are written to `config-gpui.local.toml` beside the
+other overrides, preserving comments and unrelated keys; the folder is a text
+field (click, type, Enter saves, Escape cancels).
 
 `[notifications]` controls GUI-local in-app delivery, independently of the daemon:
 
@@ -1089,13 +1094,15 @@ Windows setup) nothing is saved and the window says so.
 - Agents panel header ends with its sort, `grouped` or `priority`, which a
   click flips; an active agent view names itself there instead. Client-local
   and persisted beside the sidebar width, as in the terminal client.
-- Projects section for `herdr-projects`-style spaces: with `projects_root` set,
-  spaces working inside that folder are listed apart from Spaces with the same
-  selection, focus, click, icon, status, and right-click/hover menus as a space
-  row. They keep the daemon's order, and drag-reorder stays a Spaces gesture.
-  The folder is editable in Preferences (Appearance → Projects folder), which
-  validates it with the config-file rules before writing it.
-  Unset, the section does not render and nothing changes.
+- Optional `herdr-projects` integration, off by default: Preferences → Herdr
+  Projects has a switch (which checks whether the plugin is installed and offers
+  to install it), the projects folder, and the plugin status. With both the
+  switch and folder set, spaces working inside the folder move to a Projects
+  section below the Spaces footer with the same selection, focus, click, icon,
+  status, and right-click/hover menus as a space row, and every Spaces row gets
+  a `+` that creates a project from that folder. Project rows keep the daemon's
+  order, and drag-reorder stays a Spaces gesture. Both settings are validated
+  with the config-file rules before writing.
 - Resizable sidebar with width persisted per local daemon socket, shared across
   host groups. Drag the divider between the Spaces/Projects group and Agents up
   or down to resize their sections; double-click it to restore an even split.

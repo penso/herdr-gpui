@@ -28,6 +28,11 @@ contrast = "standard"
 confirm_close_tab = true
 # Show the Agents section below Spaces in the sidebar.
 show_agents = true
+# Opt in to the herdr-projects integration: a Projects section in the sidebar
+# and a + button on each space to create a project from that folder. It also
+# needs projects_root below. Off by default; turn it on in Preferences, which
+# checks the plugin and offers to install it.
+# use_herdr_projects = true
 # Spaces whose working directory is inside this folder move from Spaces into a
 # separate Projects section, beside the ones that still work on the repository
 # itself. Commented out (the default) lists every space under Spaces.

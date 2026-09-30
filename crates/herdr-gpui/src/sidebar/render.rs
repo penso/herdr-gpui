@@ -235,9 +235,10 @@ impl HerdrWindow {
                 // that do.
                 let mut space_child = base;
                 for entry in entries.iter() {
-                    if self
-                        .config
-                        .is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
+                    if self.config.herdr_projects_enabled()
+                        && self
+                            .config
+                            .is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
                     {
                         continue;
                     }
@@ -265,7 +266,8 @@ impl HerdrWindow {
                     break;
                 }
                 let workspace = &snapshot.workspaces[index];
-                let project = self.config.is_project_cwd(&workspace.new_workspace_cwd);
+                let project = self.config.herdr_projects_enabled()
+                    && self.config.is_project_cwd(&workspace.new_workspace_cwd);
                 if selected && workspace.focused {
                     if project {
                         highlighted[2] = Some(project_rows);
@@ -305,6 +307,8 @@ impl HerdrWindow {
                 let press_id = id.clone();
                 let context_id = id.clone();
                 let hover_id = id.clone();
+                let project_new_id = id.clone();
+                let project_cwd = workspace.new_workspace_cwd.clone();
                 let context_endpoint = endpoint_id.clone();
                 let navigate_endpoint = endpoint_id.clone();
                 let collapse_endpoint = endpoint_id.clone();
@@ -487,6 +491,32 @@ impl HerdrWindow {
                     // Painted last so it floats over the rows it passes, while
                     // its layout slot keeps the others' positions stable.
                     spaces = spaces.child(deferred(element.cursor_grabbing()).with_priority(1));
+                } else if self.config.herdr_projects_enabled() {
+                    // A small + that creates a project from this folder. It is
+                    // an overlay so every layout gets it without touching row
+                    // internals; it never selects the space.
+                    let create = element;
+                    spaces = spaces.child(
+                        div().relative().w_full().child(create).child(
+                            div()
+                                .id(SharedString::from(format!("project-new-{project_new_id}")))
+                                .debug_selector(|| format!("project-new-{project_new_id}"))
+                                .absolute()
+                                .right(px(content_x + STATUS_WIDTH))
+                                .top_0()
+                                .h_full()
+                                .flex()
+                                .items_center()
+                                .cursor_pointer()
+                                .text_color(rgb(theme.muted))
+                                .hover(|style| style.text_color(rgb(theme.foreground)))
+                                .child("+")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.create_project_from_space(project_cwd.clone(), cx);
+                                })),
+                        ),
+                    );
                 } else {
                     spaces = spaces.child(element);
                 }
@@ -600,13 +630,6 @@ impl HerdrWindow {
                     .overflow_hidden()
                     .child(header("spaces", font, theme, look))
                     .child(spaces)
-                    // Only shown once a project was classified: without a root,
-                    // or with none of its spaces listed, the section is absent.
-                    .when(project_rows > 0, |section| {
-                        section
-                            .child(header("projects", font, theme, look))
-                            .child(projects)
-                    })
                     .child(
                         div()
                             .flex_none()
@@ -642,7 +665,15 @@ impl HerdrWindow {
                                         },
                                     )),
                             ),
-                    ),
+                    )
+                    // The Spaces footer comes first; Projects sits below it.
+                    // Shown only once a project was classified: without the
+                    // feature on, or with no matching spaces, it is absent.
+                    .when(project_rows > 0, |section| {
+                        section
+                            .child(header("projects", font, theme, look))
+                            .child(projects)
+                    }),
             )
             .when(self.config.show_agents, |sidebar| {
                 sidebar

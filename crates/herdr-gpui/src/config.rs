@@ -85,6 +85,9 @@ pub struct Config {
     pub show_agents: bool,
     /// How far the app's own marks and labels stand off its chrome.
     pub contrast: Contrast,
+    /// Master switch for the `herdr-projects` integration: the Projects section
+    /// and the per-space create button. Off by default.
+    pub use_herdr_projects: bool,
     /// Spaces whose working directory lies inside this folder are listed in the
     /// sidebar's Projects section instead of Spaces. `None` keeps every space
     /// in Spaces, which is the default.
@@ -588,6 +591,7 @@ impl Default for Config {
             confirm_close_tab: true,
             show_agents: true,
             contrast: Contrast::default(),
+            use_herdr_projects: false,
             projects_root: None,
             agent_status_text: AgentStatusText::default(),
             usage: crate::usage::UsageConfig::default(),
@@ -615,6 +619,7 @@ struct Settings {
     confirm_close_tab: Option<bool>,
     show_agents: Option<bool>,
     contrast: Contrast,
+    use_herdr_projects: Option<bool>,
     projects_root: Option<String>,
     usage: crate::usage::UsageConfig,
     option_as_alt: OptionAsAlt,
@@ -898,6 +903,13 @@ impl Config {
         Ok(Self::path()?.with_extension("local.toml"))
     }
 
+    /// Whether the `herdr-projects` integration is active: its switch is on and
+    /// a projects folder is set. Everything the integration touches in the
+    /// sidebar is gated on this.
+    pub(crate) fn herdr_projects_enabled(&self) -> bool {
+        self.use_herdr_projects && self.projects_root.is_some()
+    }
+
     /// The Projects root a raw setting value resolves to, with the same rules
     /// the config file itself applies. Preferences edits settings through this
     /// so an invalid value is rejected before anything is written.
@@ -1105,6 +1117,7 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.contrast = settings.contrast;
+        config.use_herdr_projects = settings.use_herdr_projects.unwrap_or(false);
         config.projects_root = match settings.projects_root {
             Some(raw) => projects_root(&raw)?,
             None => None,
@@ -1285,6 +1298,31 @@ impl Config {
                     *value.decor_mut() = previous.decor().clone();
                 }
                 document["projects_root"] = toml_edit::Item::Value(value);
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `use_herdr_projects`. Turning it off removes the key, so it
+    /// inherits the managed default (off).
+    pub(crate) fn save_use_herdr_projects(enabled: bool) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_use_herdr_projects_path(enabled, &local)
+    }
+
+    fn save_use_herdr_projects_path(enabled: bool, path: &Path) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            if enabled {
+                document["use_herdr_projects"] = toml_edit::value(true);
+            } else {
+                document.remove("use_herdr_projects");
             }
             write_config(path, &document.to_string())
         })();
@@ -2502,6 +2540,47 @@ mod tests {
             Config::resolve_projects_root("relative/projects"),
             Err(Error::InvalidProjectsRoot)
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn herdr_projects_is_off_until_the_switch_and_folder_are_set() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        assert!(!Config::default().herdr_projects_enabled());
+        // The folder alone is not enough.
+        let folder_only = Config::parse(&format!("projects_root = {root:?}"))?;
+        assert!(!folder_only.herdr_projects_enabled());
+        // The switch alone is not enough.
+        let switch_only = Config::parse("use_herdr_projects = true")?;
+        assert!(!switch_only.herdr_projects_enabled());
+        // Both turn it on.
+        let both = Config::parse(&format!(
+            "use_herdr_projects = true\nprojects_root = {root:?}"
+        ))?;
+        assert!(both.herdr_projects_enabled());
+        assert!(Config::parse("use_herdr_projects = 'yes'").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn use_herdr_projects_saves_and_clears() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        fs::write(&path, "# kept\ntheme = 'Nord'\n")?;
+        Config::save_use_herdr_projects_path(true, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(saved.contains("use_herdr_projects = true"));
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(Config::parse(&saved)?.use_herdr_projects);
+        // Turning it off removes the key and inherits the managed default.
+        Config::save_use_herdr_projects_path(false, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("use_herdr_projects"));
+        assert!(!Config::parse(&saved)?.use_herdr_projects);
         Ok(())
     }
 

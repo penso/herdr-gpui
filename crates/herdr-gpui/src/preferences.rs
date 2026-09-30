@@ -39,29 +39,61 @@ pub(crate) struct ProjectsRootEditor {
     _blur: Subscription,
 }
 
-/// The queued write of `projects_root`, kept apart from the font size writer so
-/// a slow font save never drops this one.
+/// The queued writes behind the Preferences fields, kept apart from the font
+/// size writer so a slow font save never drops one of these. At most one edit
+/// per setting is queued; the latest wins.
 #[derive(Default)]
-pub(crate) struct ProjectsRootSave {
-    pending: Option<Pending>,
+pub(crate) struct SettingsSaves {
+    root: Option<RootEdit>,
+    flag: Option<(bool, bool)>,
     task: Option<Task<()>>,
     error: Option<String>,
 }
 
-struct Pending {
+struct RootEdit {
     value: String,
     previous: Option<PathBuf>,
 }
 
-impl ProjectsRootSave {
+/// One queued settings write, with the value to restore if it fails.
+#[derive(Clone)]
+enum Edit {
+    Root {
+        value: String,
+        previous: Option<PathBuf>,
+    },
+    Flag {
+        value: bool,
+        previous: bool,
+    },
+}
+
+impl SettingsSaves {
     fn is_busy(&self) -> bool {
-        self.task.is_some() || self.pending.is_some()
+        self.task.is_some() || self.root.is_some() || self.flag.is_some()
     }
 
     pub(crate) fn status(&self) -> Option<&str> {
         self.error
             .as_deref()
-            .or_else(|| self.is_busy().then_some("Saving projects folder…"))
+            .or_else(|| self.is_busy().then_some("Saving settings…"))
+    }
+
+    fn queue_root(&mut self, value: String, previous: Option<PathBuf>) {
+        self.root = Some(RootEdit { value, previous });
+        self.error = None;
+    }
+
+    fn queue_flag(&mut self, value: bool, previous: bool) {
+        self.flag = Some((value, previous));
+        self.error = None;
+    }
+}
+
+fn save_setting(edit: &Edit) -> crate::Result<()> {
+    match edit {
+        Edit::Root { value, .. } => Config::save_projects_root(value),
+        Edit::Flag { value, .. } => Config::save_use_herdr_projects(*value),
     }
 }
 
@@ -175,7 +207,7 @@ impl HerdrWindow {
         let resolved = match Config::resolve_projects_root(&value) {
             Ok(root) => root,
             Err(error) => {
-                self.projects_root_save.error =
+                self.settings_saves.error =
                     Some(format!("Could not save projects folder: {error}"));
                 cx.notify();
                 return;
@@ -183,47 +215,97 @@ impl HerdrWindow {
         };
         let previous = self.config.projects_root.clone();
         self.config.projects_root = resolved;
-        self.projects_root_save.error = None;
-        self.projects_root_save.pending = Some(Pending { value, previous });
+        self.settings_saves.queue_root(value, previous);
         cx.notify();
-        self.flush_projects_root(cx);
+        self.flush_settings_saves(cx);
     }
 
-    fn flush_projects_root(&mut self, cx: &mut Context<Self>) {
-        self.flush_projects_root_with(Config::save_projects_root, cx);
+    /// Turns the `herdr-projects` integration on or off. Turning it on fills and
+    /// saves the plugin's default projects folder when none was chosen, and
+    /// re-checks that the plugin is installed.
+    pub(super) fn toggle_use_herdr_projects(&mut self, cx: &mut Context<Self>) {
+        let enabled = !self.config.use_herdr_projects;
+        let previous_root = self.config.projects_root.clone();
+        self.config.use_herdr_projects = enabled;
+        self.herdr_projects.error = None;
+        if enabled {
+            if self.config.projects_root.is_none() {
+                match crate::herdr_projects::default_projects_root() {
+                    Ok(root) => {
+                        self.settings_saves
+                            .queue_root(root.display().to_string(), previous_root);
+                        self.config.projects_root = Some(root);
+                    }
+                    Err(error) => {
+                        self.herdr_projects.error =
+                            Some(format!("Could not default the projects folder: {error}"));
+                    }
+                }
+            }
+            self.refresh_herdr_projects(cx);
+        }
+        self.settings_saves.queue_flag(enabled, !enabled);
+        cx.notify();
+        self.flush_settings_saves(cx);
     }
 
-    fn flush_projects_root_with(
+    fn flush_settings_saves(&mut self, cx: &mut Context<Self>) {
+        self.flush_settings_saves_with(save_setting, cx);
+    }
+
+    fn flush_settings_saves_with(
         &mut self,
-        save: impl Fn(&str) -> crate::Result<()> + Send + 'static,
+        save: impl Fn(&Edit) -> crate::Result<()> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        if self.config_load.is_some() || self.projects_root_save.task.is_some() {
+        if self.config_load.is_some() || self.settings_saves.task.is_some() {
             return;
         }
-        let Some(pending) = self.projects_root_save.pending.take() else {
+        let mut edits = Vec::new();
+        if let Some(root) = self.settings_saves.root.take() {
+            edits.push(Edit::Root {
+                value: root.value,
+                previous: root.previous,
+            });
+        }
+        if let Some((value, previous)) = self.settings_saves.flag.take() {
+            edits.push(Edit::Flag { value, previous });
+        }
+        if edits.is_empty() {
             return;
-        };
-        let previous = pending.previous;
-        let value = pending.value;
+        }
+        let background_edits = edits.clone();
         let saved = cx.background_executor().spawn(async move {
-            let result = save(&value);
+            let mut result = Ok(());
+            for edit in &background_edits {
+                if let Err(error) = save(edit) {
+                    result = Err(error);
+                    break;
+                }
+            }
             (result, save)
         });
-        self.projects_root_save.task = Some(cx.spawn(async move |this, cx| {
+        self.settings_saves.task = Some(cx.spawn(async move |this, cx| {
             let (result, save) = saved.await;
             let _ = this.update(cx, |this, cx| {
-                this.projects_root_save.task = None;
+                this.settings_saves.task = None;
                 if let Err(error) = result {
-                    tracing::warn!(%error, "Could not save projects folder");
-                    // A newer edit already owns the value; never roll it back.
-                    if this.projects_root_save.pending.is_none() {
-                        this.config.projects_root = previous;
+                    tracing::warn!(%error, "Could not save settings");
+                    // A newer edit already owns its setting; never roll it back.
+                    for edit in &edits {
+                        match edit {
+                            Edit::Root { previous, .. } if this.settings_saves.root.is_none() => {
+                                this.config.projects_root = previous.clone();
+                            }
+                            Edit::Flag { previous, .. } if this.settings_saves.flag.is_none() => {
+                                this.config.use_herdr_projects = *previous;
+                            }
+                            _ => {}
+                        }
                     }
-                    this.projects_root_save.error =
-                        Some(format!("Could not save projects folder: {error}"));
+                    this.settings_saves.error = Some(format!("Could not save settings: {error}"));
                 }
-                this.flush_projects_root_with(save, cx);
+                this.flush_settings_saves_with(save, cx);
                 cx.notify();
             });
         }));
@@ -346,6 +428,83 @@ impl HerdrWindow {
                     }))
                     .into_any_element(),
             });
+        let use_toggle_row = div()
+            .debug_selector(|| "preferences-use-herdr-projects".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Use herdr-projects"),
+            )
+            .child(
+                div()
+                    .id("preferences-use-herdr-projects-toggle")
+                    .debug_selector(|| "preferences-use-herdr-projects-toggle".into())
+                    .flex_1()
+                    .min_w_0()
+                    .text_right()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(theme.active)))
+                    .child(if self.config.use_herdr_projects {
+                        "On"
+                    } else {
+                        "Off"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_use_herdr_projects(cx);
+                    })),
+            );
+        let plugin_status = self
+            .herdr_projects
+            .error
+            .clone()
+            .unwrap_or_else(|| self.herdr_projects.plugin_status());
+        let plugin_row = div()
+            .debug_selector(|| "preferences-herdr-projects-plugin".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Plugin"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_right()
+                    .child(plugin_status),
+            );
+        let show_install = self.herdr_projects.checked
+            && self.herdr_projects.installed.is_none()
+            && !self.herdr_projects.installing();
+        let install_row = div().py(px(8.)).child(
+            button(
+                "preferences-install-herdr-projects",
+                "Install herdr-projects",
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.install_herdr_projects(cx);
+            })),
+        );
         let mut body = div()
             .id("preferences-body")
             .debug_selector(|| "preferences-body".into())
@@ -417,7 +576,6 @@ impl HerdrWindow {
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
-            .child(projects_root_row)
             .child(row("preferences-theme", "Theme", self.config.theme.clone()))
             .child(div().py(px(10.)).child(
                 button("preferences-choose-theme", "Choose theme").on_click(cx.listener(
@@ -426,6 +584,14 @@ impl HerdrWindow {
                         this.open_theme_picker(window, cx);
                     },
                 )),
+            ))
+            .child(section("HERDR PROJECTS"))
+            .child(use_toggle_row)
+            .child(plugin_row)
+            .when(show_install, |body| body.child(install_row))
+            .child(projects_root_row)
+            .child(note(
+                "Optional integration with the herdr-projects plugin. With the switch on and a projects folder set, Spaces get a + for creating a project from that folder, and spaces inside the folder move to a Projects section. Install the plugin first if it is missing.",
             ))
             .child(section("FONTS"));
         body = body.child(
@@ -751,7 +917,7 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
                     .child(
-                        self.projects_root_save
+                        self.settings_saves
                             .status()
                             .or_else(|| self.font_size_saves.status())
                             .unwrap_or("Esc to close  /  click outside to dismiss")

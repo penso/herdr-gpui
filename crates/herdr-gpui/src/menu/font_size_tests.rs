@@ -103,7 +103,7 @@ fn editable_font_size_cancels_on_escape_and_rejects_invalid_input(cx: &mut gpui:
             view.open_preferences(window, cx);
             view.menu
                 .preferences_scroll
-                .set_offset(point(px(0.), px(-120.)));
+                .set_offset(point(px(0.), px(-300.)));
         });
         window.draw(cx).clear(cx);
     });
@@ -159,7 +159,7 @@ fn leaving_font_size_field_restores_menu_keyboard_focus(cx: &mut gpui::TestAppCo
             view.open_preferences(window, cx);
             view.menu
                 .preferences_scroll
-                .set_offset(point(px(0.), px(-120.)));
+                .set_offset(point(px(0.), px(-300.)));
         });
         window.draw(cx).clear(cx);
     });
@@ -198,7 +198,7 @@ fn a_font_at_the_limit_cannot_be_increased_or_start_a_save(cx: &mut gpui::TestAp
             view.open_preferences(window, cx);
             view.menu
                 .preferences_scroll
-                .set_offset(point(px(0.), px(-120.)));
+                .set_offset(point(px(0.), px(-300.)));
         });
         window.draw(cx).clear(cx);
     });

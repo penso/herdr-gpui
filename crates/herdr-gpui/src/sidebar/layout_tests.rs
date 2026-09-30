@@ -1125,7 +1125,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         theme: Default::default(),
         config_load: None,
         font_size_saves: Default::default(),
-        projects_root_save: Default::default(),
+        settings_saves: Default::default(),
+        herdr_projects: Default::default(),
         config_watch: None,
         config_load_revision: 0,
         git: Default::default(),
@@ -2444,6 +2445,7 @@ fn projects_root_moves_matching_spaces_into_their_own_section(cx: &mut gpui::Tes
     };
     let (_view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
         view.config.projects_root = Some(std::path::PathBuf::from(root));
         let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
         snapshot.workspaces[1].label = "project-alpha".into();
@@ -2495,6 +2497,44 @@ fn projects_section_is_absent_without_a_root(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+fn the_switch_gates_projects_and_the_create_button(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.snapshot = Some(Arc::new(snapshot(4)));
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].label = "project-alpha".into();
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // A projects folder alone changes nothing without the switch.
+    assert!(cx.debug_bounds("header-projects").is_none());
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+
+    view.update(cx, |view, cx| {
+        view.config.use_herdr_projects = true;
+        cx.notify();
+    });
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("header-projects").is_some());
+    // Spaces rows offer creation; the project row does not.
+    assert!(cx.debug_bounds("project-new-w0").is_some());
+    assert!(cx.debug_bounds("project-new-w1").is_none());
+}
+
+#[gpui::test]
 fn a_focused_project_row_reveals_in_the_projects_list(cx: &mut gpui::TestAppContext) {
     let root = if cfg!(windows) {
         "C:/fixture/projects"
@@ -2503,6 +2543,7 @@ fn a_focused_project_row_reveals_in_the_projects_list(cx: &mut gpui::TestAppCont
     };
     let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
         view.config.projects_root = Some(std::path::PathBuf::from(root));
         let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
         for (index, workspace) in snapshot.workspaces.iter_mut().enumerate() {

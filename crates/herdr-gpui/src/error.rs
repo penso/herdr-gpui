@@ -466,6 +466,10 @@ pub enum Error {
     InvalidThemePath,
     #[error("projects_root must be an absolute path or a ~/ path")]
     InvalidProjectsRoot,
+    #[error("Failed to install the herdr-projects plugin: {detail}")]
+    HerdrProjectsInstall { detail: String },
+    #[error("Failed to create the project: {detail}")]
+    HerdrProjectsCreate { detail: String },
     #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]
     UnknownKeybinding(String),
     #[error("keybindings.{command}: invalid keystroke {keystroke:?}")]
