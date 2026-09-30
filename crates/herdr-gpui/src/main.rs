@@ -54,6 +54,7 @@ mod reorder;
 mod repo_items;
 mod search_input;
 mod sessions;
+mod shell;
 mod sidebar;
 mod sound;
 mod state;

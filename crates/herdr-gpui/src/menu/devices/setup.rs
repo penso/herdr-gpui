@@ -308,9 +308,7 @@ impl Request {
 
 // The command is typed into a terminal shell.
 // Single-quote each argument so labels/SSH aliases never become shell syntax.
-fn quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+use crate::shell::quote;
 
 fn shell_command(executable: &str, request: &Request, environment: &[(String, String)]) -> String {
     let mut args = vec!["env".to_owned()];

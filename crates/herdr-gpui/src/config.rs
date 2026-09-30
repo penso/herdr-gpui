@@ -92,6 +92,9 @@ pub struct Config {
     /// sidebar's Projects section instead of Spaces. `None` keeps every space
     /// in Spaces, which is the default.
     pub projects_root: Option<PathBuf>,
+    /// The same setting as typed, before `~/` was resolved against this
+    /// machine's home. Remote devices resolve it against their own home.
+    pub projects_root_raw: Option<String>,
     /// Show each agent's status word beside it, following the daemon's
     /// `[ui.sidebar.agents]` rows when they name the `state_text` token.
     pub agent_status_text: AgentStatusText,
@@ -608,6 +611,7 @@ impl Default for Config {
             contrast: Contrast::default(),
             use_herdr_projects: false,
             projects_root: None,
+            projects_root_raw: None,
             agent_status_text: AgentStatusText::default(),
             usage: crate::usage::UsageConfig::default(),
             option_as_alt: OptionAsAlt::default(),
@@ -936,6 +940,7 @@ impl Config {
     /// root. The comparison is lexical and component-based, so a root written
     /// with a trailing separator still matches and a sibling directory that
     /// merely shares a prefix does not. The root itself is not a project.
+    #[cfg(test)]
     pub(crate) fn is_project_cwd(&self, cwd: &str) -> bool {
         let Some(root) = self.projects_root.as_deref() else {
             return false;
@@ -1138,6 +1143,12 @@ impl Config {
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.contrast = settings.contrast;
         config.use_herdr_projects = settings.use_herdr_projects.unwrap_or(false);
+        config.projects_root_raw = settings
+            .projects_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
         config.projects_root = match settings.projects_root {
             Some(raw) => projects_root(&raw)?,
             None => None,

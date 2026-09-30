@@ -271,9 +271,7 @@ impl HerdrWindow {
                 let mut space_child = base;
                 for entry in entries.iter() {
                     if self.config.herdr_projects_enabled()
-                        && self
-                            .config
-                            .is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
+                        && self.is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
                     {
                         continue;
                     }
@@ -302,7 +300,7 @@ impl HerdrWindow {
                 }
                 let workspace = &snapshot.workspaces[index];
                 let project = self.config.herdr_projects_enabled()
-                    && self.config.is_project_cwd(&workspace.new_workspace_cwd);
+                    && self.is_project_cwd(&workspace.new_workspace_cwd);
                 if project
                     && let Some(root) = self.config.projects_root.as_deref()
                     && let Ok(relative) =
@@ -353,8 +351,9 @@ impl HerdrWindow {
                 let hover_id = id.clone();
                 let project_new_id = id.clone();
                 let project_cwd = workspace.new_workspace_cwd.clone();
-                // The + only appears for a real local space whose folder is not
-                // already a project, so a second click has nothing to press.
+                // The + only appears for a space whose folder is not already a
+                // project, so a second click has nothing to press. A remote
+                // device creates its project through its own CLI.
                 let folder_slug = std::path::Path::new(&project_cwd)
                     .file_name()
                     .and_then(|name| name.to_str())
@@ -362,7 +361,6 @@ impl HerdrWindow {
                     .unwrap_or_default();
                 let can_create = self.config.herdr_projects_enabled()
                     && !project
-                    && endpoint_id.as_str() == crate::endpoint::LOCAL
                     && !folder_slug.is_empty()
                     && !project_slugs.contains(folder_slug.as_str());
                 let context_endpoint = endpoint_id.clone();
@@ -617,11 +615,10 @@ impl HerdrWindow {
                 );
             }
         }
-        // Projects with no space yet: rows read from the projects folder on
-        // disk, drawn through the same workspace row so they match Spaces.
-        if self.config.herdr_projects_enabled()
-            && self.endpoints[self.selected_endpoint].id.as_str() == crate::endpoint::LOCAL
-        {
+        // Projects with no space yet: rows read from the selected device's
+        // projects folder, drawn through the same workspace row so they match
+        // Spaces. On a remote device the paths name its own filesystem.
+        if self.config.herdr_projects_enabled() {
             let selected = &self.endpoints[self.selected_endpoint];
             let disk_cx = RowContext {
                 font,

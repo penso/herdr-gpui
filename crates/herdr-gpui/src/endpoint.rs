@@ -663,6 +663,10 @@ impl HerdrWindow {
             self.device_filter = Some(id.to_owned());
         }
         self.reset_selected();
+        // The Projects section reads the selected device's own filesystem, so
+        // a device switch re-detects the plugin and re-reads its projects.
+        self.refresh_herdr_projects(cx);
+        self.refresh_projects(cx);
         self.activation_deadline =
             (!self.endpoints[index].detached).then(|| Instant::now() + ACTIVATION_TIMEOUT);
         cx.notify();

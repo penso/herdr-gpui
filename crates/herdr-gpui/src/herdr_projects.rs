@@ -5,7 +5,7 @@
 //! reads only the cached [`State`]. Commands are built by pure helpers so their
 //! argv can be tested without executing anything.
 
-use crate::{Error, HerdrWindow, Result, config::Config};
+use crate::{Error, HerdrWindow, Result, config::Config, shell::quote};
 use gpui::{Context, Task};
 use std::{
     path::{Path, PathBuf},
@@ -19,6 +19,18 @@ pub(crate) const PLUGIN_SOURCE: &str = "eliasstravik/herdr-projects";
 /// This crate's own contract with `command -v`: the plugin's binary name, used
 /// as a fallback when the install location is not known yet.
 pub(crate) const PLUGIN_BINARY: &str = "herdr-projects";
+
+/// Where herdr-projects operations run: this machine, or a saved SSH device.
+/// A device's projects live under *its* home, so every operation that reads
+/// or writes the projects root must know which host it belongs to.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Host {
+    #[default]
+    Local,
+    Ssh {
+        target: String,
+    },
+}
 
 /// The plugin as the daemon's registry reports it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,6 +67,12 @@ pub(crate) struct State {
     pub(crate) projects: Vec<Project>,
     /// A folder scan finished; before it, an empty list means "not read yet".
     pub(crate) projects_checked: bool,
+    /// The device this state was collected for; results for another device are
+    /// dropped rather than applied.
+    pub(crate) host: Host,
+    /// The selected remote device's home directory, for resolving a `~/` root
+    /// the way the device itself would. Only used while `host` is `Ssh`.
+    pub(crate) home: Option<String>,
     pub(crate) detect: Option<Task<()>>,
     pub(crate) install: Option<Task<()>>,
     pub(crate) create: Option<Task<()>>,
@@ -254,6 +272,208 @@ pub(crate) fn install_command() -> Command {
     command
 }
 
+/// A configured root path typed for a remote shell: `~/` belongs to the remote
+/// device's `$HOME`, not this machine's. Anything else is quoted verbatim.
+pub(crate) fn remote_path(raw: &str) -> String {
+    if let Some(relative) = raw.strip_prefix("~/") {
+        return format!("\"$HOME/{}\"", relative.replace('"', "\\\""));
+    }
+    quote(raw)
+}
+
+/// The remote script that prints the daemon's plugin registry. `|| true` keeps
+/// a missing file a plain "not installed" answer; only an SSH failure errors.
+pub(crate) fn remote_detect_script() -> String {
+    "cat \"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins.json\" 2>/dev/null || true".to_owned()
+}
+
+/// The remote script that prints the device's own home directory.
+pub(crate) fn remote_home_script() -> String {
+    "printf '%s' \"$HOME\"".to_owned()
+}
+
+/// The remote script that installs the plugin. A noninteractive SSH session has
+/// no login PATH, so known daemon CLI locations are probed before `command -v`.
+pub(crate) fn remote_install_script() -> String {
+    let candidates = [
+        "/opt/homebrew/bin/herdr",
+        "/usr/local/bin/herdr",
+        "$HOME/.herdr/bin/herdr",
+        "$HOME/.local/bin/herdr",
+        "$HOME/.cargo/bin/herdr",
+    ];
+    let probe = candidates
+        .iter()
+        .map(|candidate| format!("[ -x {candidate} ] && herdr_bin={candidate}"))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    format!(
+        "herdr_bin=; {probe} || herdr_bin=$(command -v herdr 2>/dev/null); \
+         [ -n \"$herdr_bin\" ] || {{ printf '%s\\n' 'herdr: command not found on this machine' >&2; exit 127; }}; \
+         \"$herdr_bin\" plugin install {PLUGIN_SOURCE} --yes"
+    )
+}
+
+/// The remote script that prints one project path per line: every directory
+/// directly under the root that contains a `PROJECT.md`.
+pub(crate) fn remote_scan_script(root: &str) -> String {
+    format!(
+        "root={root}; for f in \"$root\"/*/PROJECT.md; do [ -f \"$f\" ] || continue; \
+         d=${{f%/PROJECT.md}}; printf '%s\\n' \"$d\"; done",
+        root = remote_path(root),
+    )
+}
+
+/// The remote script that creates a project, driven by the plugin's own CLI.
+pub(crate) fn remote_create_script(binary: &str, name: &str, repo: &str, root: &str) -> String {
+    format!(
+        "{} new {} --repo {} --root {}",
+        quote(binary),
+        quote(name),
+        quote(repo),
+        remote_path(root),
+    )
+}
+
+/// The remote script that opens a project, driven by the plugin's own CLI.
+pub(crate) fn remote_open_script(binary: &str, slug: &str, root: &str) -> String {
+    format!(
+        "{} open {} --root {}",
+        quote(binary),
+        quote(slug),
+        remote_path(root),
+    )
+}
+
+/// Projects from a remote scan's output: one absolute project path per line.
+/// Malformed or empty lines are skipped, matching the local scan's tolerance.
+fn projects_from_lines(text: &str) -> Vec<Project> {
+    let mut projects: Vec<Project> = text
+        .lines()
+        .filter_map(|line| {
+            let path = Path::new(line.trim());
+            let slug = path.file_name().and_then(|name| name.to_str())?;
+            (!slug.is_empty()).then(|| Project {
+                slug: slug.to_owned(),
+                path: path.to_path_buf(),
+            })
+        })
+        .collect();
+    projects.sort_by(|a, b| a.slug.cmp(&b.slug));
+    projects
+}
+
+/// Runs `script` on the remote device through the bridge's noninteractive SSH
+/// policy. Blocking; runs on a background task.
+fn run_remote(target: &str, script: &str) -> Result<Output> {
+    let mut command = herdr_client::script_command(target, script).map_err(|error| {
+        Error::HerdrProjectsRemote {
+            detail: error.to_string(),
+        }
+    })?;
+    let output = command
+        .output()
+        .map_err(|error| Error::HerdrProjectsRemote {
+            detail: error.to_string(),
+        })?;
+    if output.status.success() {
+        Ok(output)
+    } else {
+        Err(Error::HerdrProjectsRemote {
+            detail: output_tail(&output),
+        })
+    }
+}
+
+/// The remote device's home directory, needed to resolve a `~/` root the way
+/// the device itself would. Blocking; runs on a background task.
+pub(crate) fn remote_home(target: &str) -> Result<Option<String>> {
+    let output = run_remote(target, &remote_home_script())?;
+    let home = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    Ok((!home.is_empty()).then_some(home))
+}
+
+/// Detects the plugin on `host`. Blocking; runs on a background task.
+pub(crate) fn detect_on(host: &Host) -> Result<Option<Installed>> {
+    match host {
+        Host::Local => detect(),
+        Host::Ssh { target } => {
+            let output = run_remote(target, &remote_detect_script())?;
+            installed_in(&String::from_utf8_lossy(&output.stdout))
+        }
+    }
+}
+
+/// Installs the plugin on `host`. Blocking; runs on a background task.
+pub(crate) fn install_plugin_on(host: &Host) -> Result<()> {
+    match host {
+        Host::Local => install_plugin(),
+        Host::Ssh { target } => {
+            run_remote(target, &remote_install_script())?;
+            Ok(())
+        }
+    }
+}
+
+/// Lists the projects on `host`, from the filesystem (locally) or a remote
+/// scan. Blocking; runs on a background task.
+pub(crate) fn scan_projects_on(host: &Host, root: &str) -> Result<Vec<Project>> {
+    match host {
+        Host::Local => scan_projects(Path::new(root)),
+        Host::Ssh { target } => {
+            let output = run_remote(target, &remote_scan_script(root))?;
+            Ok(projects_from_lines(&String::from_utf8_lossy(
+                &output.stdout,
+            )))
+        }
+    }
+}
+
+/// Creates a project from `cwd` on `host`. Blocking; runs on a background task.
+pub(crate) fn create_project_on(
+    host: &Host,
+    binary: Option<&Path>,
+    cwd: &str,
+    root: &str,
+) -> Result<()> {
+    let Some(name) = Path::new(cwd).file_name().and_then(|name| name.to_str()) else {
+        return Err(Error::HerdrProjectsCreate {
+            detail: format!("{cwd} has no folder name to use as a project name"),
+        });
+    };
+    match host {
+        Host::Local => create_project(binary, cwd, Path::new(root)),
+        Host::Ssh { target } => {
+            let program = binary.map_or_else(|| PathBuf::from(PLUGIN_BINARY), Path::to_path_buf);
+            run_remote(
+                target,
+                &remote_create_script(&program.to_string_lossy(), name, cwd, root),
+            )?;
+            Ok(())
+        }
+    }
+}
+
+/// Opens a project by slug on `host`. Blocking; runs on a background task.
+pub(crate) fn open_project_on(
+    host: &Host,
+    binary: Option<&Path>,
+    slug: &str,
+    root: &str,
+) -> Result<()> {
+    match host {
+        Host::Local => open_project(binary, slug, Path::new(root)),
+        Host::Ssh { target } => {
+            let program = binary.map_or_else(|| PathBuf::from(PLUGIN_BINARY), Path::to_path_buf);
+            run_remote(
+                target,
+                &remote_open_script(&program.to_string_lossy(), slug, root),
+            )?;
+            Ok(())
+        }
+    }
+}
+
 /// Parses a `plugins.json` body for the plugin's entry. Missing is not an
 /// error; malformed JSON is.
 pub(crate) fn installed_in(text: &str) -> Result<Option<Installed>> {
@@ -357,33 +577,98 @@ fn output_tail(output: &Output) -> String {
 }
 
 impl HerdrWindow {
-    /// Re-checks the plugin, off the UI thread.
-    pub(crate) fn refresh_herdr_projects(&mut self, cx: &mut Context<Self>) {
-        self.refresh_herdr_projects_with(detect, cx);
+    /// The device the Projects section serves: the selected endpoint, local or
+    /// its saved SSH target.
+    pub(crate) fn projects_host(&self) -> Host {
+        let endpoint = &self.endpoints[self.selected_endpoint];
+        if endpoint.id.as_str() == crate::endpoint::LOCAL {
+            return Host::Local;
+        }
+        match endpoint.saved_ssh() {
+            Some((target, _)) => Host::Ssh {
+                target: target.to_owned(),
+            },
+            None => Host::Local,
+        }
     }
 
-    pub(crate) fn refresh_herdr_projects_with(
-        &mut self,
-        detect: impl FnOnce() -> Result<Option<Installed>> + Send + 'static,
-        cx: &mut Context<Self>,
-    ) {
+    /// The projects root as typed in settings. Kept as text so a remote device
+    /// resolves `~/` against its own home instead of this machine's.
+    pub(crate) fn projects_root_setting(&self) -> Option<String> {
+        self.config.projects_root_raw.clone().or_else(|| {
+            self.config
+                .projects_root
+                .as_ref()
+                .map(|root| root.to_string_lossy().into_owned())
+        })
+    }
+
+    /// Whether `cwd` lies inside the projects root of the selected device.
+    /// Remote roots resolve `~/` against the device's own home, so one setting
+    /// matches both machines.
+    pub(crate) fn is_project_cwd(&self, cwd: &str) -> bool {
+        if !self.config.herdr_projects_enabled() {
+            return false;
+        }
+        let Some(setting) = self.projects_root_setting() else {
+            return false;
+        };
+        let root = match self.projects_host() {
+            Host::Ssh { .. } => {
+                if let Some(relative) = setting.strip_prefix("~/") {
+                    let home = if self.herdr_projects.host == self.projects_host() {
+                        self.herdr_projects.home.as_deref()
+                    } else {
+                        None
+                    };
+                    let Some(home) = home else {
+                        return false;
+                    };
+                    format!("{home}/{relative}")
+                } else {
+                    // An absolute path: the same spelling works on the device.
+                    setting
+                }
+            }
+            Host::Local => self
+                .config
+                .projects_root
+                .as_ref()
+                .map_or(setting, |root| root.to_string_lossy().into_owned()),
+        };
+        let root = Path::new(&root);
+        let cwd = Path::new(cwd);
+        cwd.starts_with(root) && cwd != root
+    }
+
+    /// Re-checks the plugin on the selected device, off the UI thread.
+    pub(crate) fn refresh_herdr_projects(&mut self, cx: &mut Context<Self>) {
         if self.herdr_projects.detect.is_some() {
             return;
         }
-        let detection = cx.background_executor().spawn(async move { detect() });
+        let host = self.projects_host();
+        self.herdr_projects.host = host.clone();
+        self.herdr_projects.checked = false;
+        let detection = cx.background_executor().spawn({
+            let host = host.clone();
+            async move { detect_on(&host) }
+        });
         self.herdr_projects.detect = Some(cx.spawn(async move |this, cx| {
             let result = detection.await;
             let _ = this.update(cx, |this, cx| {
                 this.herdr_projects.detect = None;
-                this.herdr_projects.checked = true;
-                match result {
-                    Ok(installed) => {
-                        this.herdr_projects.installed = installed;
-                        this.herdr_projects.error = None;
-                    }
-                    Err(error) => {
-                        this.herdr_projects.error =
-                            Some(format!("Could not check for herdr-projects: {error}"));
+                // A device switch mid-flight must not apply stale results.
+                if this.projects_host() == host {
+                    this.herdr_projects.checked = true;
+                    match result {
+                        Ok(installed) => {
+                            this.herdr_projects.installed = installed;
+                            this.herdr_projects.error = None;
+                        }
+                        Err(error) => {
+                            this.herdr_projects.error =
+                                Some(format!("Could not check for herdr-projects: {error}"));
+                        }
                     }
                 }
                 cx.notify();
@@ -391,38 +676,38 @@ impl HerdrWindow {
         }));
     }
 
-    /// Installs the plugin, off the UI thread, then re-detects it.
+    /// Installs the plugin on the selected device, off the UI thread, then
+    /// re-detects it.
     pub(crate) fn install_herdr_projects(&mut self, cx: &mut Context<Self>) {
-        self.install_herdr_projects_with(install_plugin, cx);
-    }
-
-    pub(crate) fn install_herdr_projects_with(
-        &mut self,
-        install: impl FnOnce() -> Result<()> + Send + 'static,
-        cx: &mut Context<Self>,
-    ) {
         if self.herdr_projects.install.is_some() {
             return;
         }
         self.herdr_projects.error = None;
-        let installing = cx.background_executor().spawn(async move { install() });
+        let host = self.projects_host();
+        let installing = cx.background_executor().spawn({
+            let host = host.clone();
+            async move { install_plugin_on(&host) }
+        });
         self.herdr_projects.install = Some(cx.spawn(async move |this, cx| {
             let result = installing.await;
             let _ = this.update(cx, |this, cx| {
                 this.herdr_projects.install = None;
-                match result {
-                    Ok(()) => this.refresh_herdr_projects(cx),
-                    // The error already names the one thing that failed.
-                    Err(error) => this.herdr_projects.error = Some(error.to_string()),
+                if this.projects_host() == host {
+                    match result {
+                        Ok(()) => this.refresh_herdr_projects(cx),
+                        // The error already names the one thing that failed.
+                        Err(error) => this.herdr_projects.error = Some(error.to_string()),
+                    }
                 }
                 cx.notify();
             });
         }));
     }
 
-    /// Creates a project from a space's folder, off the UI thread.
+    /// Creates a project from a space's folder on the selected device, off the
+    /// UI thread.
     pub(crate) fn create_project_from_space(&mut self, cwd: String, cx: &mut Context<Self>) {
-        let Some(root) = self.config.projects_root.clone() else {
+        let Some(root) = self.projects_root_setting() else {
             self.local_error = Some("Choose a projects folder before creating a project.".into());
             cx.notify();
             return;
@@ -432,8 +717,9 @@ impl HerdrWindow {
             .installed
             .as_ref()
             .map(|installed| plugin_binary(&installed.root));
+        let host = self.projects_host();
         self.create_project_from_space_with(
-            move |cwd| create_project(binary.as_deref(), cwd, &root),
+            move |cwd| create_project_on(&host, binary.as_deref(), cwd, &root),
             cwd,
             cx,
         );
@@ -464,38 +750,63 @@ impl HerdrWindow {
         }));
     }
 
-    /// Re-reads the projects folder, off the UI thread, so the Projects section
-    /// and the per-space buttons reflect what is on disk.
+    /// Re-reads the projects folder on the selected device, off the UI thread,
+    /// so the Projects section and the per-space buttons reflect what is there.
     pub(crate) fn refresh_projects(&mut self, cx: &mut Context<Self>) {
         if self.herdr_projects.scan.is_some() {
             return;
         }
-        let Some(root) = self.config.projects_root.clone() else {
+        let host = self.projects_host();
+        let root: Option<String> = match &host {
+            Host::Local => self
+                .config
+                .projects_root
+                .as_ref()
+                .map(|root| root.to_string_lossy().into_owned()),
+            Host::Ssh { .. } => self.projects_root_setting(),
+        };
+        let Some(root) = root else {
             self.herdr_projects.projects.clear();
             self.herdr_projects.projects_checked = true;
+            self.herdr_projects.host = host;
             cx.notify();
             return;
         };
-        let scanning = cx
-            .background_executor()
-            .spawn(async move { scan_projects(&root) });
+        let scanning = cx.background_executor().spawn({
+            let host = host.clone();
+            async move {
+                // The remote home resolves `~/` roots for the row
+                // classification; a failure to learn it leaves the scan
+                // working, just unclassified.
+                let home = match &host {
+                    Host::Ssh { target } => remote_home(target).ok().flatten(),
+                    Host::Local => None,
+                };
+                let projects = scan_projects_on(&host, &root);
+                (home, projects)
+            }
+        });
         self.herdr_projects.scan = Some(cx.spawn(async move |this, cx| {
-            let result = scanning.await;
+            let (home, result) = scanning.await;
             let _ = this.update(cx, |this, cx| {
                 this.herdr_projects.scan = None;
-                this.herdr_projects.projects_checked = true;
-                match result {
-                    Ok(projects) => this.herdr_projects.projects = projects,
-                    Err(error) => this.local_error = Some(error.to_string()),
+                if this.projects_host() == host {
+                    this.herdr_projects.projects_checked = true;
+                    this.herdr_projects.home = home;
+                    match result {
+                        Ok(projects) => this.herdr_projects.projects = projects,
+                        Err(error) => this.local_error = Some(error.to_string()),
+                    }
                 }
                 cx.notify();
             });
         }));
     }
 
-    /// Opens a project that has no space yet, off the UI thread.
+    /// Opens a project that has no space yet, on the selected device, off the
+    /// UI thread.
     pub(crate) fn open_disk_project(&mut self, slug: String, cx: &mut Context<Self>) {
-        let Some(root) = self.config.projects_root.clone() else {
+        let Some(root) = self.projects_root_setting() else {
             self.local_error = Some("Choose a projects folder before opening a project.".into());
             cx.notify();
             return;
@@ -505,8 +816,9 @@ impl HerdrWindow {
             .installed
             .as_ref()
             .map(|installed| plugin_binary(&installed.root));
+        let host = self.projects_host();
         self.open_disk_project_with(
-            move |slug| open_project(binary.as_deref(), slug, &root),
+            move |slug| open_project_on(&host, binary.as_deref(), slug, &root),
             slug,
             cx,
         );
@@ -614,6 +926,85 @@ mod tests {
             Some(PathBuf::from(existing))
         );
         assert_eq!(first_existing(&["/no/such/herdr", "/also/missing"]), None);
+    }
+
+    #[test]
+    fn remote_paths_resolve_the_tilde_against_the_remote_home() {
+        assert_eq!(
+            remote_path("~/.herdr-projects"),
+            "\"$HOME/.herdr-projects\""
+        );
+        assert_eq!(remote_path("/data/projects"), "'/data/projects'");
+        assert_eq!(
+            remote_path("/data/projects with space"),
+            "'/data/projects with space'"
+        );
+        assert_eq!(
+            remote_path("~/.proj/\"quoted\""),
+            "\"$HOME/.proj/\\\"quoted\\\"\""
+        );
+    }
+
+    #[test]
+    fn remote_scripts_cover_detect_home_and_scan() {
+        let detect = remote_detect_script();
+        assert!(detect.contains("plugins.json"));
+        assert!(detect.ends_with("|| true"));
+        assert_eq!(remote_home_script(), "printf '%s' \"$HOME\"");
+        let scan = remote_scan_script("~/.herdr-projects");
+        assert!(scan.starts_with("root=\"$HOME/.herdr-projects\";"));
+        assert!(scan.contains("for f in \"$root\"/*/PROJECT.md"));
+        assert!(scan.contains("printf '%s\\n' \"$d\""));
+    }
+
+    #[test]
+    fn remote_install_probes_known_locations_then_names_the_source() {
+        let install = remote_install_script();
+        assert!(install.contains("[ -x /opt/homebrew/bin/herdr ]"));
+        assert!(install.contains("command -v herdr"));
+        assert!(install.contains("exit 127"));
+        assert!(install.ends_with(&format!(
+            "\"$herdr_bin\" plugin install {PLUGIN_SOURCE} --yes"
+        )));
+    }
+
+    #[test]
+    fn remote_create_and_open_quote_every_argument() {
+        let create = remote_create_script(
+            "/bin/herdr-projects",
+            "my project",
+            "/data/repo",
+            "~/.herdr-projects",
+        );
+        assert_eq!(
+            create,
+            "'/bin/herdr-projects' new 'my project' --repo '/data/repo' \
+             --root \"$HOME/.herdr-projects\""
+        );
+        let open = remote_open_script("/bin/herdr-projects", "my-project", "~/.herdr-projects");
+        assert_eq!(
+            open,
+            "'/bin/herdr-projects' open 'my-project' --root \"$HOME/.herdr-projects\""
+        );
+    }
+
+    #[test]
+    fn projects_from_lines_skips_blanks_and_sorts_by_slug() {
+        assert_eq!(projects_from_lines(""), Vec::<Project>::new());
+        let projects = projects_from_lines("/h/.herdr-projects/beta\n\n/h/.herdr-projects/alpha\n");
+        assert_eq!(
+            projects,
+            vec![
+                Project {
+                    slug: "alpha".into(),
+                    path: PathBuf::from("/h/.herdr-projects/alpha"),
+                },
+                Project {
+                    slug: "beta".into(),
+                    path: PathBuf::from("/h/.herdr-projects/beta"),
+                },
+            ]
+        );
     }
 
     fn temp_root(tag: &str) -> PathBuf {

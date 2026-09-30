@@ -470,6 +470,8 @@ pub enum Error {
     InvalidProjectsRoot,
     #[error("Failed to install the herdr-projects plugin: {detail}")]
     HerdrProjectsInstall { detail: String },
+    #[error("herdr-projects on the remote device failed: {detail}")]
+    HerdrProjectsRemote { detail: String },
     #[error("Failed to create the project: {detail}")]
     HerdrProjectsCreate { detail: String },
     #[error("Failed to open the project: {detail}")]

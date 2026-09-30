@@ -54,6 +54,7 @@ pub(crate) struct SettingsSaves {
 struct RootEdit {
     value: String,
     previous: Option<PathBuf>,
+    previous_raw: Option<String>,
 }
 
 /// One queued settings write, with the value to restore if it fails.
@@ -62,6 +63,7 @@ enum Edit {
     Root {
         value: String,
         previous: Option<PathBuf>,
+        previous_raw: Option<String>,
     },
     Flag {
         value: bool,
@@ -87,8 +89,17 @@ impl SettingsSaves {
             .or_else(|| self.is_busy().then_some("Saving settings…"))
     }
 
-    fn queue_root(&mut self, value: String, previous: Option<PathBuf>) {
-        self.root = Some(RootEdit { value, previous });
+    fn queue_root(
+        &mut self,
+        value: String,
+        previous: Option<PathBuf>,
+        previous_raw: Option<String>,
+    ) {
+        self.root = Some(RootEdit {
+            value,
+            previous,
+            previous_raw,
+        });
         self.error = None;
     }
 
@@ -228,8 +239,12 @@ impl HerdrWindow {
             }
         };
         let previous = self.config.projects_root.clone();
+        let previous_raw = self.config.projects_root_raw.clone();
+        let raw = (!value.trim().is_empty()).then(|| value.trim().to_owned());
         self.config.projects_root = resolved;
-        self.settings_saves.queue_root(value, previous);
+        self.config.projects_root_raw = raw;
+        self.settings_saves
+            .queue_root(value, previous, previous_raw);
         cx.notify();
         self.flush_settings_saves(cx);
     }
@@ -260,9 +275,16 @@ impl HerdrWindow {
             if self.config.projects_root.is_none() {
                 match crate::herdr_projects::default_projects_root() {
                     Ok(root) => {
-                        self.settings_saves
-                            .queue_root(root.display().to_string(), previous_root);
+                        let previous_raw = self.config.projects_root_raw.clone();
+                        self.settings_saves.queue_root(
+                            root.display().to_string(),
+                            previous_root,
+                            previous_raw,
+                        );
                         self.config.projects_root = Some(root);
+                        // The plugin's documented default, kept as text so a
+                        // remote device resolves it against its own home.
+                        self.config.projects_root_raw = Some("~/.herdr-projects".into());
                     }
                     Err(error) => {
                         self.herdr_projects.error =
@@ -295,6 +317,7 @@ impl HerdrWindow {
             edits.push(Edit::Root {
                 value: root.value,
                 previous: root.previous,
+                previous_raw: root.previous_raw,
             });
         }
         if let Some((value, previous)) = self.settings_saves.flag.take() {
@@ -326,8 +349,13 @@ impl HerdrWindow {
                     // A newer edit already owns its setting; never roll it back.
                     for edit in &edits {
                         match edit {
-                            Edit::Root { previous, .. } if this.settings_saves.root.is_none() => {
+                            Edit::Root {
+                                previous,
+                                previous_raw,
+                                ..
+                            } if this.settings_saves.root.is_none() => {
                                 this.config.projects_root = previous.clone();
+                                this.config.projects_root_raw = previous_raw.clone();
                             }
                             Edit::Flag { previous, .. } if this.settings_saves.flag.is_none() => {
                                 this.config.use_herdr_projects = *previous;
