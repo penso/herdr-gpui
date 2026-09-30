@@ -208,10 +208,24 @@ pub(crate) fn open_project(binary: Option<&Path>, slug: &str, root: &Path) -> Re
 
 /// The `herdr` CLI the Install button runs, preferring the daemon's own answer.
 pub(crate) fn herdr_binary() -> PathBuf {
-    std::env::var_os("HERDR_BIN_PATH")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("herdr"))
+    if let Some(path) = std::env::var_os("HERDR_BIN_PATH").filter(|value| !value.is_empty()) {
+        return PathBuf::from(path);
+    }
+    // A GUI launched from Finder has a minimal PATH (`/usr/bin:/bin:...`) that
+    // misses Homebrew, so an existing standard install wins over bare "herdr".
+    first_existing(&HERDR_BINARY_CANDIDATES).unwrap_or_else(|| PathBuf::from("herdr"))
+}
+
+/// Absolute locations where package managers put the daemon CLI on macOS.
+const HERDR_BINARY_CANDIDATES: [&str; 2] = ["/opt/homebrew/bin/herdr", "/usr/local/bin/herdr"];
+
+/// The first candidate that exists as a file, in order.
+fn first_existing(candidates: &[&str]) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .map(Path::new)
+        .find(|path| path.is_file())
+        .map(Path::to_path_buf)
 }
 
 /// `herdr-projects new <name> --repo <folder> --root <root>` — the same command
@@ -589,6 +603,17 @@ mod tests {
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert_eq!(args, ["plugin", "install", PLUGIN_SOURCE, "--yes"]);
+    }
+
+    #[test]
+    fn first_existing_prefers_the_earlier_candidate() {
+        let existing = std::env::current_exe().unwrap();
+        let existing = existing.to_str().unwrap();
+        assert_eq!(
+            first_existing(&["/no/such/herdr", existing]),
+            Some(PathBuf::from(existing))
+        );
+        assert_eq!(first_existing(&["/no/such/herdr", "/also/missing"]), None);
     }
 
     fn temp_root(tag: &str) -> PathBuf {
