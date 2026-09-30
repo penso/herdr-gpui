@@ -27,6 +27,21 @@ pub(crate) struct Installed {
     pub(crate) root: PathBuf,
 }
 
+/// A project folder found under the projects root: a directory with a
+/// `PROJECT.md`, which is what the plugin itself creates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Project {
+    pub(crate) slug: String,
+    pub(crate) path: PathBuf,
+}
+
+impl Project {
+    /// How the row is named, matching the plugin's humanized slug.
+    pub(crate) fn label(&self) -> String {
+        humanize(&self.slug)
+    }
+}
+
 /// Cached detection and in-flight work for the plugin.
 #[derive(Default)]
 pub(crate) struct State {
@@ -36,9 +51,15 @@ pub(crate) struct State {
     pub(crate) checked: bool,
     /// The last detection, install, or creation failure, for Preferences.
     pub(crate) error: Option<String>,
+    /// Project folders found under the projects root, by slug.
+    pub(crate) projects: Vec<Project>,
+    /// A folder scan finished; before it, an empty list means "not read yet".
+    pub(crate) projects_checked: bool,
     pub(crate) detect: Option<Task<()>>,
     pub(crate) install: Option<Task<()>>,
     pub(crate) create: Option<Task<()>>,
+    pub(crate) scan: Option<Task<()>>,
+    pub(crate) open: Option<Task<()>>,
 }
 
 impl State {
@@ -81,6 +102,108 @@ pub(crate) fn plugin_binary(root: &Path) -> PathBuf {
 /// before a folder was chosen.
 pub(crate) fn default_projects_root() -> Result<PathBuf> {
     Ok(crate::config::home()?.join(".herdr-projects"))
+}
+
+/// The plugin's slug rule: lower-case; each run of other characters becomes one
+/// hyphen; at most 40 characters; no trailing hyphen.
+pub(crate) fn slugify(text: &str) -> String {
+    let mut slug = String::new();
+    for c in text.chars().flat_map(char::to_lowercase) {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            slug.push(c);
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    let mut slug: String = slug.chars().take(40).collect();
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+    slug
+}
+
+/// Words split on `-` and `_`, each capitalized, as the plugin names a project
+/// that has no explicit `name` in `PROJECT.md`.
+pub(crate) fn humanize(slug: &str) -> String {
+    slug.split(['-', '_'])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect::<String>())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The project folders under `root`: real directories containing a
+/// `PROJECT.md`. A missing root is an empty list; hidden entries such as
+/// `.machines.json`, `.progress` and `.ticker.lock` are ignored.
+pub(crate) fn scan_projects(root: &Path) -> Result<Vec<Project>> {
+    let entries = match std::fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(Error::HerdrProjectsFolder {
+                detail: error.to_string(),
+            });
+        }
+    };
+    let mut projects = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| Error::HerdrProjectsFolder {
+            detail: error.to_string(),
+        })?;
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        let is_dir = entry
+            .file_type()
+            .map_err(|error| Error::HerdrProjectsFolder {
+                detail: error.to_string(),
+            })?
+            .is_dir();
+        if !is_dir || !entry.path().join("PROJECT.md").is_file() {
+            continue;
+        }
+        projects.push(Project {
+            slug: name,
+            path: entry.path(),
+        });
+    }
+    projects.sort_by(|a, b| a.slug.cmp(&b.slug));
+    Ok(projects)
+}
+
+/// `herdr-projects open <slug> --root <root>` — the plugin's standard way to
+/// open an existing project.
+pub(crate) fn open_project_command(program: &Path, slug: &str, root: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.arg("open").arg(slug).arg("--root").arg(root);
+    command
+}
+
+/// Opens a project by slug with the plugin binary at `binary`, or the one on
+/// `PATH`. Blocking; runs on a background task.
+pub(crate) fn open_project(binary: Option<&Path>, slug: &str, root: &Path) -> Result<()> {
+    let program = binary.map_or_else(|| PathBuf::from(PLUGIN_BINARY), Path::to_path_buf);
+    let output = open_project_command(&program, slug, root)
+        .output()
+        .map_err(|error| Error::HerdrProjectsOpen {
+            detail: error.to_string(),
+        })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(Error::HerdrProjectsOpen {
+            detail: output_tail(&output),
+        })
+    }
 }
 
 /// The `herdr` CLI the Install button runs, preferring the daemon's own answer.
@@ -153,7 +276,11 @@ pub(crate) fn detect() -> Result<Option<Installed>> {
 
 /// Runs the plugin installer. Blocking; runs on a background task.
 pub(crate) fn install_plugin() -> Result<()> {
-    let output = install_command().output()?;
+    let output = install_command()
+        .output()
+        .map_err(|error| Error::HerdrProjectsInstall {
+            detail: error.to_string(),
+        })?;
     if output.status.success() {
         Ok(())
     } else {
@@ -171,8 +298,18 @@ pub(crate) fn create_project(binary: Option<&Path>, cwd: &str, root: &Path) -> R
             detail: format!("{cwd} has no folder name to use as a project name"),
         });
     };
+    // A project for this folder already exists: nothing to create, and the
+    // refreshed list shows its row instead of surfacing an "already exists"
+    // failure.
+    if root.join(slugify(name)).is_dir() {
+        return Ok(());
+    }
     let program = binary.map_or_else(|| PathBuf::from(PLUGIN_BINARY), Path::to_path_buf);
-    let output = new_project_command(&program, name, Path::new(cwd), root).output()?;
+    let output = new_project_command(&program, name, Path::new(cwd), root)
+        .output()
+        .map_err(|error| Error::HerdrProjectsCreate {
+            detail: error.to_string(),
+        })?;
     if output.status.success() {
         Ok(())
     } else {
@@ -261,10 +398,8 @@ impl HerdrWindow {
                 this.herdr_projects.install = None;
                 match result {
                     Ok(()) => this.refresh_herdr_projects(cx),
-                    Err(error) => {
-                        this.herdr_projects.error =
-                            Some(format!("Could not install herdr-projects: {error}"));
-                    }
+                    // The error already names the one thing that failed.
+                    Err(error) => this.herdr_projects.error = Some(error.to_string()),
                 }
                 cx.notify();
             });
@@ -304,8 +439,81 @@ impl HerdrWindow {
             let result = creating.await;
             let _ = this.update(cx, |this, cx| {
                 this.herdr_projects.create = None;
+                match result {
+                    // The folder exists now; show it at once, without waiting
+                    // for the daemon to open a space for it.
+                    Ok(()) => this.refresh_projects(cx),
+                    Err(error) => this.local_error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        }));
+    }
+
+    /// Re-reads the projects folder, off the UI thread, so the Projects section
+    /// and the per-space buttons reflect what is on disk.
+    pub(crate) fn refresh_projects(&mut self, cx: &mut Context<Self>) {
+        if self.herdr_projects.scan.is_some() {
+            return;
+        }
+        let Some(root) = self.config.projects_root.clone() else {
+            self.herdr_projects.projects.clear();
+            self.herdr_projects.projects_checked = true;
+            cx.notify();
+            return;
+        };
+        let scanning = cx
+            .background_executor()
+            .spawn(async move { scan_projects(&root) });
+        self.herdr_projects.scan = Some(cx.spawn(async move |this, cx| {
+            let result = scanning.await;
+            let _ = this.update(cx, |this, cx| {
+                this.herdr_projects.scan = None;
+                this.herdr_projects.projects_checked = true;
+                match result {
+                    Ok(projects) => this.herdr_projects.projects = projects,
+                    Err(error) => this.local_error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        }));
+    }
+
+    /// Opens a project that has no space yet, off the UI thread.
+    pub(crate) fn open_disk_project(&mut self, slug: String, cx: &mut Context<Self>) {
+        let Some(root) = self.config.projects_root.clone() else {
+            self.local_error = Some("Choose a projects folder before opening a project.".into());
+            cx.notify();
+            return;
+        };
+        let binary = self
+            .herdr_projects
+            .installed
+            .as_ref()
+            .map(|installed| plugin_binary(&installed.root));
+        self.open_disk_project_with(
+            move |slug| open_project(binary.as_deref(), slug, &root),
+            slug,
+            cx,
+        );
+    }
+
+    pub(crate) fn open_disk_project_with(
+        &mut self,
+        open: impl FnOnce(&str) -> Result<()> + Send + 'static,
+        slug: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.herdr_projects.open.is_some() {
+            return;
+        }
+        let opening = cx.background_executor().spawn(async move { open(&slug) });
+        self.herdr_projects.open = Some(cx.spawn(async move |this, cx| {
+            let result = opening.await;
+            let _ = this.update(cx, |this, cx| {
+                this.herdr_projects.open = None;
                 if let Err(error) = result {
-                    this.local_error = Some(format!("Could not create the project: {error}"));
+                    this.local_error = Some(error.to_string());
                 }
                 cx.notify();
             });
@@ -381,6 +589,94 @@ mod tests {
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert_eq!(args, ["plugin", "install", PLUGIN_SOURCE, "--yes"]);
+    }
+
+    fn temp_root(tag: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("herdr-projects-test-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn scan_projects_keeps_only_directories_with_project_md() {
+        let root = temp_root("scan");
+        std::fs::create_dir_all(root.join("alpha")).unwrap();
+        std::fs::write(root.join("alpha").join("PROJECT.md"), "# alpha").unwrap();
+        std::fs::create_dir_all(root.join("empty")).unwrap();
+        std::fs::write(root.join("file"), "x").unwrap();
+        std::fs::write(root.join(".machines.json"), "{}").unwrap();
+        std::fs::create_dir_all(root.join(".progress")).unwrap();
+        assert_eq!(
+            scan_projects(&root).unwrap(),
+            vec![Project {
+                slug: "alpha".into(),
+                path: root.join("alpha"),
+            }]
+        );
+        let missing = root.join("missing");
+        std::fs::remove_dir_all(&root).unwrap();
+        // A missing folder is an empty list, not an error.
+        assert_eq!(scan_projects(&missing).unwrap(), Vec::<Project>::new());
+    }
+
+    #[test]
+    fn slug_and_label_match_the_plugins_rules() {
+        assert_eq!(slugify("WeatherDashboard"), "weatherdashboard");
+        assert_eq!(slugify("all_gis_services_next"), "all-gis-services-next");
+        assert_eq!(slugify("  My Project!  "), "my-project");
+        assert_eq!(slugify("--"), "");
+        assert_eq!(humanize("weatherdashboard"), "Weatherdashboard");
+        assert_eq!(humanize("all-gis-services-next"), "All Gis Services Next");
+    }
+
+    #[test]
+    fn create_project_does_nothing_when_the_folder_already_exists() {
+        let root = temp_root("exists");
+        std::fs::create_dir_all(root.join("weatherdashboard")).unwrap();
+        // Reaching a missing binary would fail, so Ok means it was never run.
+        assert!(
+            create_project(
+                Some(Path::new("/nonexistent/herdr-projects")),
+                "/repos/WeatherDashboard",
+                &root
+            )
+            .is_ok()
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn open_project_argv_matches_the_documented_cli() {
+        let command = open_project_command(
+            Path::new("/bin/herdr-projects"),
+            "weatherdashboard",
+            Path::new("/home/me/.herdr-projects"),
+        );
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "open",
+                "weatherdashboard",
+                "--root",
+                "/home/me/.herdr-projects"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_create_failure_reads_as_one_phrase() {
+        let message = Error::HerdrProjectsCreate {
+            detail: "boom".into(),
+        }
+        .to_string();
+        assert_eq!(message, "Failed to create the project: boom");
+        assert!(!message.contains("Could not"));
     }
 
     #[test]

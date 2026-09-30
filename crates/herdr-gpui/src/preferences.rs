@@ -271,6 +271,7 @@ impl HerdrWindow {
                 }
             }
             self.refresh_herdr_projects(cx);
+            self.refresh_projects(cx);
         }
         self.settings_saves.queue_flag(enabled, !enabled);
         cx.notify();

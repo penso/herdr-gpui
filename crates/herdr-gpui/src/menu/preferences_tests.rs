@@ -213,9 +213,9 @@ fn clicking_the_space_button_attempts_a_project_creation(cx: &mut gpui::TestAppC
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         assert!(
-            view.local_error
-                .as_deref()
-                .is_some_and(|error| error.contains("Could not create the project")),
+            view.local_error.as_deref().is_some_and(|error| {
+                error.starts_with("Failed to create the project:") && !error.contains("Could not")
+            }),
             "unexpected error: {:?}",
             view.local_error
         );

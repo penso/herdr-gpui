@@ -113,6 +113,15 @@ impl HerdrWindow {
         let mut drop_dragged = 0;
         let now = std::time::Instant::now();
         let mut sliding = false;
+        // Slugs of the projects already shown as a space row. A project is
+        // listed once: a space stands in for it, otherwise the disk row does.
+        let mut represented = std::collections::HashSet::new();
+        let project_slugs: std::collections::HashSet<&str> = self
+            .herdr_projects
+            .projects
+            .iter()
+            .map(|project| project.slug.as_str())
+            .collect();
         for (endpoint_index, endpoint) in self.endpoints.iter().enumerate() {
             if !self.device_visible(&endpoint.id) {
                 continue;
@@ -294,6 +303,15 @@ impl HerdrWindow {
                 let workspace = &snapshot.workspaces[index];
                 let project = self.config.herdr_projects_enabled()
                     && self.config.is_project_cwd(&workspace.new_workspace_cwd);
+                if project
+                    && let Some(root) = self.config.projects_root.as_deref()
+                    && let Ok(relative) =
+                        std::path::Path::new(&workspace.new_workspace_cwd).strip_prefix(root)
+                    && let Some(std::path::Component::Normal(name)) = relative.components().next()
+                    && let Some(name) = name.to_str()
+                {
+                    represented.insert(name.to_owned());
+                }
                 if selected && workspace.focused {
                     if project {
                         highlighted[2] = Some(project_rows);
@@ -335,6 +353,18 @@ impl HerdrWindow {
                 let hover_id = id.clone();
                 let project_new_id = id.clone();
                 let project_cwd = workspace.new_workspace_cwd.clone();
+                // The + only appears for a real local space whose folder is not
+                // already a project, so a second click has nothing to press.
+                let folder_slug = std::path::Path::new(&project_cwd)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(crate::herdr_projects::slugify)
+                    .unwrap_or_default();
+                let can_create = self.config.herdr_projects_enabled()
+                    && !project
+                    && endpoint_id.as_str() == crate::endpoint::LOCAL
+                    && !folder_slug.is_empty()
+                    && !project_slugs.contains(folder_slug.as_str());
                 let context_endpoint = endpoint_id.clone();
                 let navigate_endpoint = endpoint_id.clone();
                 let collapse_endpoint = endpoint_id.clone();
@@ -517,7 +547,7 @@ impl HerdrWindow {
                     // Painted last so it floats over the rows it passes, while
                     // its layout slot keeps the others' positions stable.
                     spaces = spaces.child(deferred(element.cursor_grabbing()).with_priority(1));
-                } else if self.config.herdr_projects_enabled() {
+                } else if can_create {
                     // A small + that creates a project from this folder. It is
                     // an overlay so every layout gets it without touching row
                     // internals; it never selects the space.
@@ -585,6 +615,67 @@ impl HerdrWindow {
                         window.focus(&this.focus, cx);
                     })),
                 );
+            }
+        }
+        // Projects with no space yet: rows read from the projects folder on
+        // disk, drawn through the same workspace row so they match Spaces.
+        if self.config.herdr_projects_enabled()
+            && self.endpoints[self.selected_endpoint].id.as_str() == crate::endpoint::LOCAL
+        {
+            let selected = &self.endpoints[self.selected_endpoint];
+            let disk_cx = RowContext {
+                font,
+                theme,
+                look,
+                width,
+                host: (multi && selected.id.as_str() != crate::endpoint::LOCAL)
+                    .then_some(selected.label.as_str()),
+            };
+            for project in &self.herdr_projects.projects {
+                if represented.contains(&project.slug) {
+                    continue;
+                }
+                let label = project.label();
+                let workspace = herdr_client::protocol::ClientShellWorkspace {
+                    workspace_id: format!("project:{}", project.slug),
+                    active_tab_id: String::new(),
+                    new_workspace_cwd: project.path.display().to_string(),
+                    number: 0,
+                    label: label.clone(),
+                    custom_label: true,
+                    branch: None,
+                    git_ahead_behind: None,
+                    tokens: Vec::new(),
+                    worktree: None,
+                    focused: false,
+                    agent_status: herdr_client::protocol::AgentStatus::Idle,
+                };
+                let debug_id = format!("project-disk-{}", project.slug);
+                let click_slug = project.slug.clone();
+                projects = projects.child(
+                    Cell::new(
+                        rows,
+                        RowData::Workspace(WorkspaceRow {
+                            workspace: &workspace,
+                            label: &label,
+                            tree: RowTree::None,
+                            icon: RowIcon::Mark,
+                            fold: None,
+                            grouped: false,
+                            badge: None,
+                            removing: false,
+                        }),
+                        &disk_cx,
+                    )
+                    .row()
+                    .id(SharedString::from(debug_id.clone()))
+                    .debug_selector(move || debug_id)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.open_disk_project(click_slug.clone(), cx);
+                    })),
+                );
+                project_rows += 1;
             }
         }
         if sliding {

@@ -2704,6 +2704,147 @@ fn projects_split_drag_moves_clamps_and_resets(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+fn projects_section_lists_disk_projects_and_deduplicates(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let repo = if cfg!(windows) {
+        "C:/fixture/repos/WeatherDashboard"
+    } else {
+        "/fixture/repos/WeatherDashboard"
+    };
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        view.herdr_projects.projects = vec![
+            crate::herdr_projects::Project {
+                slug: "weatherdashboard".into(),
+                path: std::path::PathBuf::from(format!("{root}/weatherdashboard")),
+            },
+            crate::herdr_projects::Project {
+                slug: "solo".into(),
+                path: std::path::PathBuf::from(format!("{root}/solo")),
+            },
+        ];
+        view.herdr_projects.projects_checked = true;
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        // w1 is the space for the `solo` project.
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/solo");
+        // w0 is a plain repo checkout whose folder already is a project.
+        snapshot.workspaces[0].new_workspace_cwd = repo.into();
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(700.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("header-projects").is_some());
+    // A project without a space gets a disk row; a project with a space does
+    // not, so it is listed once.
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_some());
+    assert!(cx.debug_bounds("project-disk-solo").is_none());
+    // The + is gone for a folder that already is a project, and stays for one
+    // that is not.
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+    assert!(cx.debug_bounds("project-new-w2").is_some());
+}
+
+#[gpui::test]
+fn creating_a_project_shows_its_row_at_once(cx: &mut gpui::TestAppContext) {
+    let root = std::env::temp_dir().join(format!("herdr-gpui-projects-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(root.clone());
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[0].new_workspace_cwd = "/fixture/repos/WeatherDashboard".into();
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("project-new-w0").is_some());
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_none());
+
+    let create_root = root.clone();
+    view.update(cx, |view, cx| {
+        view.create_project_from_space_with(
+            move |_cwd| {
+                std::fs::create_dir_all(create_root.join("weatherdashboard")).unwrap();
+                std::fs::write(
+                    create_root.join("weatherdashboard").join("PROJECT.md"),
+                    "# weatherdashboard",
+                )
+                .unwrap();
+                Ok(())
+            },
+            "/fixture/repos/WeatherDashboard".into(),
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The row appears from the folder read, without a daemon round-trip, and
+    // the + disappears.
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_some());
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[gpui::test]
+fn clicking_a_disk_project_runs_the_open_command(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        view.herdr_projects.projects = vec![crate::herdr_projects::Project {
+            slug: "solo".into(),
+            path: std::path::PathBuf::from(format!("{root}/solo")),
+        }];
+        view.herdr_projects.projects_checked = true;
+        // A binary that cannot exist, so the spawn fails without touching the
+        // real plugin.
+        view.herdr_projects.installed = Some(crate::herdr_projects::Installed {
+            version: "1.0".into(),
+            root: std::path::PathBuf::from("/nonexistent-plugin-root"),
+        });
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    let row = cx.debug_bounds("project-disk-solo").unwrap();
+    cx.simulate_click(row.center(), Modifiers::default());
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        assert!(
+            view.local_error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Failed to open the project:")),
+            "unexpected error: {:?}",
+            view.local_error
+        );
+    });
+}
+
+#[gpui::test]
 fn a_focused_project_row_reveals_in_the_projects_list(cx: &mut gpui::TestAppContext) {
     let root = if cfg!(windows) {
         "C:/fixture/projects"
