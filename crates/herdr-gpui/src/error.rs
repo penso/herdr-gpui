@@ -462,6 +462,8 @@ pub enum Error {
     TooManyFontFallbacks(&'static str),
     #[error("layout.sidebar_gap must be finite and between 0 and 64 logical pixels")]
     InvalidSidebarGap,
+    #[error("layout.sidebar_header_height must be finite and between 0 and 128 logical pixels")]
+    InvalidSidebarHeaderHeight,
     #[error("theme must be a name, absolute path, or ~/ path")]
     InvalidThemePath,
     #[error("projects_root must be an absolute path or a ~/ path")]

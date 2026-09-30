@@ -2497,6 +2497,30 @@ fn projects_section_is_absent_without_a_root(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+fn the_header_height_setting_tallens_the_section_headings(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.simulate_resize(size(px(800.), px(700.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    let base = cx.debug_bounds("header-spaces").unwrap().size.height;
+    view.update(cx, |view, cx| {
+        view.config.layout.sidebar_header_height = 24.;
+        cx.notify();
+    });
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert_eq!(
+        cx.debug_bounds("header-spaces").unwrap().size.height,
+        base + px(24.)
+    );
+    // The Agents heading shares the same setting.
+    assert!(cx.debug_bounds("header-agents").is_some());
+}
+
+#[gpui::test]
 fn the_switch_gates_projects_and_the_create_button(cx: &mut gpui::TestAppContext) {
     let root = if cfg!(windows) {
         "C:/fixture/projects"

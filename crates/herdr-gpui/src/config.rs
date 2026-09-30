@@ -243,6 +243,10 @@ pub struct Layout {
     /// only while the sidebar is on screen, and narrows the terminal, so the
     /// daemon is told about the columns it actually has.
     pub sidebar_gap: f32,
+    /// Extra vertical padding above and below each sidebar section heading
+    /// (Spaces, Projects, Agents), in logical pixels. Zero keeps the density's
+    /// own padding; the minimum makes headings read as dividers.
+    pub sidebar_header_height: f32,
 }
 
 impl Default for Layout {
@@ -250,6 +254,7 @@ impl Default for Layout {
         Self {
             mode: LayoutMode::default(),
             sidebar_gap: DEFAULT_SIDEBAR_GAP,
+            sidebar_header_height: 0.,
         }
     }
 }
@@ -425,6 +430,7 @@ impl<'de> Deserialize<'de> for Layout {
                 #[serde(default)]
                 mode: LayoutMode,
                 sidebar_gap: Option<f32>,
+                sidebar_header_height: Option<f32>,
             },
         }
         Ok(match Setting::deserialize(deserializer)? {
@@ -432,9 +438,14 @@ impl<'de> Deserialize<'de> for Layout {
                 mode,
                 ..Self::default()
             },
-            Setting::Options { mode, sidebar_gap } => Self {
+            Setting::Options {
+                mode,
+                sidebar_gap,
+                sidebar_header_height,
+            } => Self {
                 mode,
                 sidebar_gap: sidebar_gap.unwrap_or(DEFAULT_SIDEBAR_GAP),
+                sidebar_header_height: sidebar_header_height.unwrap_or(0.),
             },
         })
     }
@@ -495,6 +506,10 @@ const DEFAULT_SIDEBAR_GAP: f32 = 0.;
 /// A gap wider than this stops reading as spacing and starts eating columns the
 /// terminal needs, so the config file is held to a band a window can afford.
 const MAX_SIDEBAR_GAP: f32 = 64.;
+
+/// The heading height band Preferences' stepper moves within. Taller headings
+/// cost list space, so the cap stays modest.
+pub(crate) const MAX_SIDEBAR_HEADER_HEIGHT: f32 = 128.;
 
 /// The daemon's config is read for a handful of keys, so a file far larger
 /// than any hand-written config is skipped rather than parsed on every load.
@@ -1106,6 +1121,11 @@ impl Config {
         {
             return Err(Error::InvalidSidebarGap);
         }
+        if !settings.layout.sidebar_header_height.is_finite()
+            || !(0.0..=MAX_SIDEBAR_HEADER_HEIGHT).contains(&settings.layout.sidebar_header_height)
+        {
+            return Err(Error::InvalidSidebarHeaderHeight);
+        }
         config.layout = settings.layout;
         config.keybindings = Keymap::with_overrides(&settings.keybindings, &base.keys)?;
         if let Some(theme) = settings.theme {
@@ -1261,6 +1281,70 @@ impl Config {
                 }
                 _ => {
                     document.insert("layout", toml_edit::value(mode.name()));
+                }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `layout.sidebar_header_height`, retaining other overrides.
+    /// A named `layout = "..."` string is reopened as a `[layout]` table so it
+    /// can carry the extra key; zero removes the key again.
+    pub(crate) fn save_sidebar_header_height(value: f32) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_sidebar_header_height_path(value, &local)
+    }
+
+    fn save_sidebar_header_height_path(value: f32, path: &Path) -> Result<()> {
+        if !value.is_finite() || !(0.0..=MAX_SIDEBAR_HEADER_HEIGHT).contains(&value) {
+            return Err(Error::InvalidSidebarHeaderHeight);
+        }
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            if value <= 0. {
+                // Removing: only a table can carry the key.
+                if let Some(item) = document.get_mut("layout")
+                    && let Some(table) = item.as_table_like_mut()
+                {
+                    table.remove("sidebar_header_height");
+                }
+                return write_config(path, &document.to_string());
+            }
+            match document.get_mut("layout") {
+                Some(item) => {
+                    // Replace the value in place so the key keeps its comment.
+                    let existing = std::mem::replace(item, toml_edit::Item::None);
+                    let mut table = match existing {
+                        toml_edit::Item::Table(table) => table,
+                        toml_edit::Item::Value(toml_edit::Value::InlineTable(inline)) => {
+                            let mut table = toml_edit::Table::new();
+                            for (key, value) in inline.iter() {
+                                table.insert(key, toml_edit::Item::Value(value.clone()));
+                            }
+                            table
+                        }
+                        toml_edit::Item::Value(named) => {
+                            let mut table = toml_edit::Table::new();
+                            if let Some(mode) = named.as_str() {
+                                table.insert("mode", toml_edit::value(mode));
+                            }
+                            table
+                        }
+                        other => other.into_table().unwrap_or_default(),
+                    };
+                    table.insert("sidebar_header_height", toml_edit::value(f64::from(value)));
+                    *item = toml_edit::Item::Table(table);
+                }
+                None => {
+                    let mut table = toml_edit::Table::new();
+                    table.insert("sidebar_header_height", toml_edit::value(f64::from(value)));
+                    document.insert("layout", toml_edit::Item::Table(table));
                 }
             }
             write_config(path, &document.to_string())
@@ -2964,6 +3048,81 @@ mod tests {
             Config::parse("[layout]\nsidebar_gap = nan"),
             Err(Error::InvalidSidebarGap)
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn sidebar_header_height_defaults_to_zero_and_accepts_its_band() -> anyhow::Result<()> {
+        for config in [
+            Config::default(),
+            Config::parse("")?,
+            Config::parse(DEFAULT_CONFIG)?,
+        ] {
+            assert_eq!(config.layout.sidebar_header_height, 0.);
+        }
+        assert_eq!(Config::parse("[layout]")?.layout.sidebar_header_height, 0.);
+        for (text, height) in [
+            ("[layout]\nsidebar_header_height = 0", 0.),
+            ("[layout]\nsidebar_header_height = 12", 12.),
+            ("[layout]\nsidebar_header_height = 127.5", 127.5),
+            ("[layout]\nsidebar_header_height = 128", 128.),
+        ] {
+            let config = Config::parse(text)?;
+            assert_eq!(config.layout.sidebar_header_height, height);
+            // The heading height alone leaves the gap at its default.
+            assert_eq!(config.layout.sidebar_gap, Layout::default().sidebar_gap);
+        }
+        for text in [
+            "[layout]\nsidebar_header_height = 128.1",
+            "[layout]\nsidebar_header_height = -1",
+            "[layout]\nsidebar_header_height = nan",
+        ] {
+            assert!(matches!(
+                Config::parse(text),
+                Err(Error::InvalidSidebarHeaderHeight)
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn sidebar_header_height_saves_into_a_layout_table_and_clears() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        // A named layout string reopens as a table so it can carry the key.
+        fs::write(&path, "# kept\nlayout = 'compact'\ntheme = 'Nord'\n")?;
+        Config::save_sidebar_header_height_path(20., &path)?;
+        let saved = fs::read_to_string(&path)?;
+        let config = Config::parse(&saved)?;
+        assert_eq!(config.layout.mode, LayoutMode::try_from("compact")?);
+        assert_eq!(config.layout.sidebar_header_height, 20.);
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(saved.contains("# kept"));
+
+        // Zero removes the key again, keeping the table's mode.
+        Config::save_sidebar_header_height_path(0., &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("sidebar_header_height"));
+        assert_eq!(
+            Config::parse(&saved)?.layout.mode,
+            LayoutMode::try_from("compact")?
+        );
+
+        // An existing table keeps its other keys.
+        fs::write(&path, "[layout]\nmode = 'compact'\nsidebar_gap = 4\n")?;
+        Config::save_sidebar_header_height_path(8., &path)?;
+        let config = Config::parse(&fs::read_to_string(&path)?)?;
+        assert_eq!(config.layout.sidebar_header_height, 8.);
+        assert_eq!(config.layout.sidebar_gap, 4.);
+        assert_eq!(config.layout.mode, LayoutMode::try_from("compact")?);
+
+        // Out of band is refused before the file is touched.
+        let before = fs::read_to_string(&path)?;
+        assert!(matches!(
+            Config::save_sidebar_header_height_path(129., &path),
+            Err(Error::InvalidSidebarHeaderHeight)
+        ));
+        assert_eq!(fs::read_to_string(&path)?, before);
         Ok(())
     }
 

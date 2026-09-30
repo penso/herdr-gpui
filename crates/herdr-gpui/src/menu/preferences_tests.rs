@@ -164,6 +164,34 @@ fn preferences_switch_defaults_the_projects_folder(cx: &mut gpui::TestAppContext
 }
 
 #[gpui::test]
+fn preferences_header_height_stepper_changes_and_saves(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    view.update(cx, |view, cx| {
+        // Keep the write queued instead of touching the user's config file.
+        view.config_load = Some(cx.spawn(async |_, _| std::future::pending().await));
+    });
+    open(&view, cx, 0.);
+    let before = view.read_with(cx, |view, _| view.config.layout.sidebar_header_height);
+    let increase = cx
+        .debug_bounds("preferences-sidebar-header-height-increase")
+        .unwrap();
+    cx.simulate_click(increase.center(), Modifiers::default());
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.config.layout.sidebar_header_height, before + 1.);
+        assert!(view.settings_saves.status().is_some());
+    });
+
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let decrease = cx
+        .debug_bounds("preferences-sidebar-header-height-decrease")
+        .unwrap();
+    cx.simulate_click(decrease.center(), Modifiers::default());
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.config.layout.sidebar_header_height, before)
+    });
+}
+
+#[gpui::test]
 fn clicking_the_space_button_attempts_a_project_creation(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|window, cx| {

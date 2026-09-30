@@ -46,6 +46,7 @@ pub(crate) struct ProjectsRootEditor {
 pub(crate) struct SettingsSaves {
     root: Option<RootEdit>,
     flag: Option<(bool, bool)>,
+    header_height: Option<(f32, f32)>,
     task: Option<Task<()>>,
     error: Option<String>,
 }
@@ -66,11 +67,18 @@ enum Edit {
         value: bool,
         previous: bool,
     },
+    HeaderHeight {
+        value: f32,
+        previous: f32,
+    },
 }
 
 impl SettingsSaves {
     fn is_busy(&self) -> bool {
-        self.task.is_some() || self.root.is_some() || self.flag.is_some()
+        self.task.is_some()
+            || self.root.is_some()
+            || self.flag.is_some()
+            || self.header_height.is_some()
     }
 
     pub(crate) fn status(&self) -> Option<&str> {
@@ -88,12 +96,18 @@ impl SettingsSaves {
         self.flag = Some((value, previous));
         self.error = None;
     }
+
+    fn queue_header_height(&mut self, value: f32, previous: f32) {
+        self.header_height = Some((value, previous));
+        self.error = None;
+    }
 }
 
 fn save_setting(edit: &Edit) -> crate::Result<()> {
     match edit {
         Edit::Root { value, .. } => Config::save_projects_root(value),
         Edit::Flag { value, .. } => Config::save_use_herdr_projects(*value),
+        Edit::HeaderHeight { value, .. } => Config::save_sidebar_header_height(*value),
     }
 }
 
@@ -220,6 +234,20 @@ impl HerdrWindow {
         self.flush_settings_saves(cx);
     }
 
+    /// Moves the sidebar heading height by one step and saves it. The layout is
+    /// read on every render, so the change shows at once.
+    pub(super) fn change_sidebar_header_height(&mut self, delta: f32, cx: &mut Context<Self>) {
+        let current = self.config.layout.sidebar_header_height;
+        let value = (current + delta).clamp(0., crate::config::MAX_SIDEBAR_HEADER_HEIGHT);
+        if value == current {
+            return;
+        }
+        self.config.layout.sidebar_header_height = value;
+        self.settings_saves.queue_header_height(value, current);
+        cx.notify();
+        self.flush_settings_saves(cx);
+    }
+
     /// Turns the `herdr-projects` integration on or off. Turning it on fills and
     /// saves the plugin's default projects folder when none was chosen, and
     /// re-checks that the plugin is installed.
@@ -271,6 +299,9 @@ impl HerdrWindow {
         if let Some((value, previous)) = self.settings_saves.flag.take() {
             edits.push(Edit::Flag { value, previous });
         }
+        if let Some((value, previous)) = self.settings_saves.header_height.take() {
+            edits.push(Edit::HeaderHeight { value, previous });
+        }
         if edits.is_empty() {
             return;
         }
@@ -299,6 +330,11 @@ impl HerdrWindow {
                             }
                             Edit::Flag { previous, .. } if this.settings_saves.flag.is_none() => {
                                 this.config.use_herdr_projects = *previous;
+                            }
+                            Edit::HeaderHeight { previous, .. }
+                                if this.settings_saves.header_height.is_none() =>
+                            {
+                                this.config.layout.sidebar_header_height = *previous;
                             }
                             _ => {}
                         }
@@ -428,6 +464,61 @@ impl HerdrWindow {
                     }))
                     .into_any_element(),
             });
+        let header_height = self.config.layout.sidebar_header_height;
+        let header_step =
+            |suffix: &'static str, symbol: &'static str, delta: f32, enabled: bool| {
+                div()
+                    .id(format!("preferences-sidebar-header-height-{suffix}"))
+                    .debug_selector(move || format!("preferences-sidebar-header-height-{suffix}"))
+                    .px(px(8.))
+                    .py(px(3.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(rgb(theme.active))
+                    .bg(rgb(theme.background))
+                    .when(enabled, |button| {
+                        button
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.change_sidebar_header_height(delta, cx);
+                            }))
+                    })
+                    .when(!enabled, |button| button.text_color(rgb(theme.muted)))
+                    .child(symbol)
+            };
+        let header_height_row = div()
+            .debug_selector(|| "preferences-sidebar-header-height".into())
+            .flex()
+            .items_center()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Section headers"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_right()
+                    .child(format!("{header_height} px")),
+            )
+            .child(header_step("decrease", "−", -1., header_height > 0.))
+            .child(header_step(
+                "increase",
+                "+",
+                1.,
+                header_height < crate::config::MAX_SIDEBAR_HEADER_HEIGHT,
+            ));
         let use_toggle_row = div()
             .debug_selector(|| "preferences-use-herdr-projects".into())
             .flex()
@@ -576,6 +667,7 @@ impl HerdrWindow {
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
+            .child(header_height_row)
             .child(row("preferences-theme", "Theme", self.config.theme.clone()))
             .child(div().py(px(10.)).child(
                 button("preferences-choose-theme", "Choose theme").on_click(cx.listener(

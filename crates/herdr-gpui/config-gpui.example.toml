@@ -83,6 +83,10 @@ position = "bottom-right"
 # The terminal keeps the remaining width, so a wide gap costs columns.
 # Ignored while the sidebar is hidden. Set 0 to sit against the divider.
 # sidebar_gap = 8
+# Extra height above and below the Spaces, Projects and Agents headings,
+# 0 to 128 logical pixels. 0 keeps the density's own padding. Editable with
+# the stepper in Preferences (Appearance, "Section headers").
+# sidebar_header_height = 0
 
 # Native shortcuts. Each key is a command; the value is one keystroke or a list,
 # primary first. "" or [] unbinds it. Assigning a keystroke here takes it away

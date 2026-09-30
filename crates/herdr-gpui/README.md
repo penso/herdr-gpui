@@ -418,6 +418,7 @@ file with both. Existing spacing-only tables remain supported and use normal mod
 [layout]
 mode = "compact"
 sidebar_gap = 8
+sidebar_header_height = 0
 ```
 
 `sidebar_gap` (finite 0..64 logical pixels, default `0`) is optional blank space between the sidebar and the terminal beside it.
@@ -425,6 +426,13 @@ The default keeps the first column flush with the divider; an explicit value suc
 The terminal keeps the remaining width, so the daemon is resized to the columns
 it actually has, and the gap is ignored while the sidebar is hidden.
 Any space smaller than one character cell at the right or bottom edge takes the adjacent terminal cells' background colors, without stretching text or changing input coordinates.
+
+`sidebar_header_height` (finite 0..128 logical pixels, default `0`) is extra
+height above and below each section heading — Spaces, Projects, and Agents —
+on top of the layout's own padding, so headings can read as dividers. It is
+also a **−/+ stepper** in Preferences (Appearance → **Section headers**), which
+writes the `[layout]` table for you (reopening a named `layout = "..."` string
+as a table when needed).
 
 The `[clipboard_toast]` table controls the `copied to clipboard` flash shown
 after a terminal selection is copied. Like the keymap (see the daemon `[keys]`

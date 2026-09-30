@@ -628,7 +628,13 @@ impl HerdrWindow {
                     })
                     .min_h_0()
                     .overflow_hidden()
-                    .child(header("spaces", font, theme, look))
+                    .child(header(
+                        "spaces",
+                        font,
+                        theme,
+                        look,
+                        self.config.layout.sidebar_header_height,
+                    ))
                     .child(spaces)
                     .child(
                         div()
@@ -671,7 +677,13 @@ impl HerdrWindow {
                     // feature on, or with no matching spaces, it is absent.
                     .when(project_rows > 0, |section| {
                         section
-                            .child(header("projects", font, theme, look))
+                            .child(header(
+                                "projects",
+                                font,
+                                theme,
+                                look,
+                                self.config.layout.sidebar_header_height,
+                            ))
                             .child(projects)
                     }),
             )
@@ -716,9 +728,15 @@ impl HerdrWindow {
                             .min_h_0()
                             .overflow_hidden()
                             .child(
-                                header("agents", font, theme, look)
-                                    .justify_between()
-                                    .child(agents_sort(self, cx)),
+                                header(
+                                    "agents",
+                                    font,
+                                    theme,
+                                    look,
+                                    self.config.layout.sidebar_header_height,
+                                )
+                                .justify_between()
+                                .child(agents_sort(self, cx)),
                             )
                             .child(agents),
                     )
@@ -839,16 +857,24 @@ pub(super) fn header(
     font: &FontConfig,
     theme: &Theme,
     look: SidebarLook,
+    extra_height: f32,
 ) -> Div {
     div()
         .debug_selector(|| format!("header-{label}"))
         .flex_none()
-        .h(px(line_height(font) + 2. * look.density.header_padding()))
+        .h(px(line_height(font)
+            + 2. * look.density.header_padding()
+            + extra_height))
         .px(px(look.content_x()))
         .flex()
         .items_center()
         .text_size(px(font.size))
-        .text_color(rgb(theme.muted))
+        // Headings read as section dividers: a full-width rule under a
+        // brighter, semibold label, unlike the muted body text.
+        .text_color(rgb(theme.foreground))
+        .font_weight(FontWeight::SEMIBOLD)
+        .border_b_1()
+        .border_color(rgb(theme.active))
         .child(
             div()
                 .debug_selector(|| format!("header-label-{label}"))
