@@ -30,6 +30,8 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let width = sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width));
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
+        // The Projects share of the Spaces+Projects region, set by its divider.
+        let projects_split = self.sidebar_projects_split.unwrap_or(0.5).clamp(0.1, 0.9);
         let look = layout::for_mode(self.config.layout.mode);
         let rows = layout_for(self.config.layout.mode);
         // The row a workspace menu was opened for keeps looking hovered while
@@ -80,6 +82,19 @@ impl HerdrWindow {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll();
+        // Inside the top region Spaces and Projects share the height by the
+        // divider's ratio; without the integration the Projects list is absent
+        // and Spaces keeps everything.
+        if self.config.herdr_projects_enabled() {
+            spaces = spaces.map(|mut list| {
+                list.style().flex_grow = Some(1. - projects_split);
+                list
+            });
+            projects = projects.map(|mut list| {
+                list.style().flex_grow = Some(projects_split);
+                list
+            });
+        }
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
         projects = projects.track_scroll(&self.sidebar_scroll[2]);
@@ -681,7 +696,39 @@ impl HerdrWindow {
                     // Shown only once a project was classified: without the
                     // feature on, or with no matching spaces, it is absent.
                     .when(project_rows > 0, |section| {
-                        section.child(heading("projects")).child(projects)
+                        section
+                            // The same divider as the Agents boundary, so the
+                            // Spaces and Projects lists can be resized against
+                            // each other. Shown only with a real Projects list.
+                            .child(
+                                div()
+                                    .id("projects-split-resize")
+                                    .debug_selector(|| "projects-split-resize".into())
+                                    .h(px(6.))
+                                    .flex_none()
+                                    .cursor(CursorStyle::ResizeUpDown)
+                                    .border_t_1()
+                                    .border_color(rgb(theme.active))
+                                    .hover(|s| s.bg(rgba(0x78a9ff44)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                                            cx.stop_propagation();
+                                            this.sidebar_projects_split_modified = true;
+                                            if event.click_count == 2 {
+                                                this.sidebar_drag = None;
+                                                this.sidebar_projects_split = None;
+                                                this.save_chrome();
+                                            } else {
+                                                this.sidebar_drag =
+                                                    Some(SidebarDrag::ProjectsSplit);
+                                            }
+                                            cx.notify();
+                                        }),
+                                    ),
+                            )
+                            .child(heading("projects"))
+                            .child(projects)
                     }),
             )
             .when(self.config.show_agents, |sidebar| {
@@ -811,6 +858,31 @@ impl HerdrWindow {
                                                         / height)
                                                         .clamp(0.1, 0.9),
                                                 );
+                                            }
+                                            SidebarDrag::ProjectsSplit => {
+                                                // The pointer's place inside the
+                                                // top region, which the Agents
+                                                // split already sized.
+                                                let region = (f32::from(bounds.size.height)
+                                                    - DEVICE_FOOTER_HEIGHT
+                                                    - if this.config.show_agents {
+                                                        6.
+                                                    } else {
+                                                        0.
+                                                    })
+                                                .max(1.)
+                                                    * if this.config.show_agents {
+                                                        this.sidebar_split
+                                                            .unwrap_or(0.5)
+                                                            .clamp(0.1, 0.9)
+                                                    } else {
+                                                        1.
+                                                    };
+                                                let region = region.max(1.);
+                                                let above =
+                                                    f32::from(event.position.y - bounds.origin.y);
+                                                this.sidebar_projects_split =
+                                                    Some((1. - above / region).clamp(0.1, 0.9));
                                             }
                                         }
                                         cx.stop_propagation();

@@ -142,6 +142,10 @@ pub(crate) struct HerdrWindow {
     pub(crate) tab_drag: Option<tab_drag::TabDrag>,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
+    /// The Spaces/Projects split inside the top region: the share given to
+    /// Projects, 0.1..=0.9. `None` splits them evenly.
+    pub(crate) sidebar_projects_split: Option<f32>,
+    pub(crate) sidebar_projects_split_modified: bool,
     pub(crate) sidebar_preferences: Option<preferences::Preferences>,
     pub(crate) sidebar_modified: bool,
     pub(crate) agent_sort: preferences::AgentSort,
@@ -229,6 +233,9 @@ impl HerdrWindow {
             }
             if !self.sidebar_split_modified {
                 self.sidebar_split = chrome.sidebar_split;
+            }
+            if !self.sidebar_projects_split_modified {
+                self.sidebar_projects_split = chrome.sidebar_projects_split;
             }
             if !self.agent_sort_modified {
                 self.agent_sort = chrome.agent_sort;
@@ -443,6 +450,8 @@ impl HerdrWindow {
             tab_drag: None,
             sidebar_split: None,
             sidebar_split_modified: false,
+            sidebar_projects_split: None,
+            sidebar_projects_split_modified: false,
             sidebar_preferences: None,
             sidebar_modified: false,
             agent_sort: preferences::AgentSort::default(),

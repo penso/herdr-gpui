@@ -46,6 +46,11 @@ pub(crate) const DEVICE_FOOTER_HEIGHT: f32 = 40.;
 
 #[derive(Clone, Copy)]
 pub(crate) enum SidebarDrag {
-    Width { start: f32, width: f32 },
+    Width {
+        start: f32,
+        width: f32,
+    },
     Split,
+    /// The divider between the Spaces and Projects lists.
+    ProjectsSplit,
 }

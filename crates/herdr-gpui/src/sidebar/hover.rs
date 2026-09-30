@@ -43,6 +43,7 @@ impl HerdrWindow {
             preferences.save(crate::preferences::Chrome {
                 sidebar_width: self.sidebar_width,
                 sidebar_split: self.sidebar_split,
+                sidebar_projects_split: self.sidebar_projects_split,
                 agent_sort: self.agent_sort,
             });
         }

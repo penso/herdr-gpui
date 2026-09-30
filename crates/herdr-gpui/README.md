@@ -1109,8 +1109,11 @@ Windows setup) nothing is saved and the window says so.
   section below the Spaces footer with the same selection, focus, click, icon,
   status, and right-click/hover menus as a space row, and every Spaces row gets
   a `+` that creates a project from that folder. Project rows keep the daemon's
-  order, and drag-reorder stays a Spaces gesture. Both settings are validated
-  with the config-file rules before writing.
+  order, and drag-reorder stays a Spaces gesture. Spaces and Projects can be
+  resized against each other by dragging the divider above the Projects heading
+  (double-click resets it); that split is remembered per local daemon socket,
+  like the Agents split. Both settings are validated with the config-file rules
+  before writing.
 - Resizable sidebar with width persisted per local daemon socket, shared across
   host groups. Drag the divider between the Spaces/Projects group and Agents up
   or down to resize their sections; double-click it to restore an even split.

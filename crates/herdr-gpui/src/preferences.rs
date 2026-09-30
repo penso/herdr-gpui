@@ -1074,6 +1074,7 @@ impl AgentSort {
 pub struct Chrome {
     pub sidebar_width: Option<f32>,
     pub sidebar_split: Option<f32>,
+    pub sidebar_projects_split: Option<f32>,
     pub agent_sort: AgentSort,
 }
 
@@ -1226,9 +1227,15 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         .and_then(serde_json::Value::as_f64)
         .map(|split| split as f32)
         .filter(|split| split.is_finite() && (0.1..=0.9).contains(split));
+    let sidebar_projects_split = object
+        .get("sidebar_projects_split")
+        .and_then(serde_json::Value::as_f64)
+        .map(|split| split as f32)
+        .filter(|split| split.is_finite() && (0.1..=0.9).contains(split));
     Ok(Chrome {
         sidebar_width,
         sidebar_split,
+        sidebar_projects_split,
         agent_sort,
     })
 }
@@ -1262,6 +1269,9 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
             &serde_json::json!({
                 "sidebar_width_px": width,
                 "sidebar_split": chrome.sidebar_split.filter(|split| {
+                    split.is_finite() && (0.1..=0.9).contains(split)
+                }),
+                "sidebar_projects_split": chrome.sidebar_projects_split.filter(|split| {
                     split.is_finite() && (0.1..=0.9).contains(split)
                 }),
                 "agent_sort": chrome.agent_sort.to_string(),
@@ -1352,6 +1362,7 @@ mod tests {
             preferences.save(Chrome {
                 sidebar_width: Some(width as f32),
                 sidebar_split: Some(0.4),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             });
         }
@@ -1365,6 +1376,7 @@ mod tests {
             Chrome {
                 sidebar_width: Some(100.0),
                 sidebar_split: Some(0.4),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             }
         );
@@ -1389,6 +1401,7 @@ mod tests {
                 Chrome {
                     sidebar_width: Some(240.0),
                     sidebar_split: None,
+                    sidebar_projects_split: None,
                     agent_sort: AgentSort::Grouped,
                 },
             ),
@@ -1401,6 +1414,7 @@ mod tests {
                 Chrome {
                     sidebar_width: Some(200.0),
                     sidebar_split: None,
+                    sidebar_projects_split: None,
                     agent_sort: AgentSort::Priority,
                 },
             ),
@@ -1412,6 +1426,7 @@ mod tests {
         let chrome = Chrome {
             sidebar_width: Some(321.0),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::Priority,
         };
         write_chrome(&path, chrome).unwrap();
@@ -1440,11 +1455,13 @@ mod tests {
             Chrome {
                 sidebar_width: Some(160.),
                 sidebar_split: None,
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Grouped,
             },
             Chrome {
                 sidebar_width: Some(400.),
                 sidebar_split: Some(0.6),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             },
             Chrome::default(),
@@ -1499,6 +1516,7 @@ mod tests {
                     Chrome {
                         sidebar_width: Some(width),
                         sidebar_split: None,
+                        sidebar_projects_split: None,
                         agent_sort: AgentSort::default(),
                     }
                 )
@@ -1508,6 +1526,7 @@ mod tests {
         let chrome = Chrome {
             sidebar_width: Some(237.5),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::default(),
         };
         write_chrome(&path, chrome).unwrap();
@@ -1522,6 +1541,7 @@ mod tests {
         let expected = Chrome {
             sidebar_width: Some(240.0),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::Priority,
         };
         for split in [
@@ -1548,6 +1568,7 @@ mod tests {
                 &path,
                 Chrome {
                     sidebar_split: Some(split),
+                    sidebar_projects_split: None,
                     ..expected
                 },
             )
@@ -1564,6 +1585,7 @@ mod tests {
             let chrome = Chrome {
                 sidebar_width: Some(240.0),
                 sidebar_split,
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             };
             write_chrome(&path, chrome).unwrap();
@@ -1572,6 +1594,35 @@ mod tests {
             assert_eq!(stored["sidebar_split"], serde_json::json!(sidebar_split));
             assert_eq!(read_chrome(&path).unwrap(), chrome);
         }
+    }
+
+    #[core::prelude::v1::test]
+    fn sidebar_projects_split_roundtrips_including_boundaries_and_reset() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("preferences.json");
+        for projects_split in [Some(0.1), Some(0.35), Some(0.9), None] {
+            let chrome = Chrome {
+                sidebar_width: Some(240.0),
+                sidebar_split: Some(0.5),
+                sidebar_projects_split: projects_split,
+                agent_sort: AgentSort::Priority,
+            };
+            write_chrome(&path, chrome).unwrap();
+            let stored: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            assert_eq!(
+                stored["sidebar_projects_split"],
+                serde_json::json!(projects_split)
+            );
+            assert_eq!(read_chrome(&path).unwrap(), chrome);
+        }
+        // Out-of-band stored values are ignored, not clamped.
+        fs::write(
+            &path,
+            r#"{"sidebar_width_px":240.0,"sidebar_projects_split":5.0,"sidebar_split":0.5,"agent_sort":"priority"}"#,
+        )
+        .unwrap();
+        assert_eq!(read_chrome(&path).unwrap().sidebar_projects_split, None);
     }
 
     #[core::prelude::v1::test]
