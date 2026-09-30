@@ -2497,14 +2497,35 @@ fn projects_section_is_absent_without_a_root(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
-fn the_header_height_setting_tallens_the_section_headings(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = cx.add_window_view(fixture_window);
-    cx.simulate_resize(size(px(800.), px(700.)));
+fn the_header_height_setting_tallens_every_section_heading(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        // Projects only renders with the integration on and a matching space.
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(760.)));
     cx.run_until_parked();
     cx.update(|window, cx| {
         full_draw(window, cx).clear(cx);
     });
-    let base = cx.debug_bounds("header-spaces").unwrap().size.height;
+
+    // All three headings render through the shared `header` path, so they are
+    // the same height at rest.
+    let spaces = cx.debug_bounds("header-spaces").unwrap().size.height;
+    let projects = cx.debug_bounds("header-projects").unwrap().size.height;
+    let agents = cx.debug_bounds("header-agents").unwrap().size.height;
+    assert_eq!(projects, spaces, "Projects must match Spaces");
+    assert_eq!(agents, spaces, "Agents must match Spaces");
+
     view.update(cx, |view, cx| {
         view.config.layout.sidebar_header_height = 24.;
         cx.notify();
@@ -2512,12 +2533,18 @@ fn the_header_height_setting_tallens_the_section_headings(cx: &mut gpui::TestApp
     cx.update(|window, cx| {
         full_draw(window, cx).clear(cx);
     });
-    assert_eq!(
-        cx.debug_bounds("header-spaces").unwrap().size.height,
-        base + px(24.)
-    );
-    // The Agents heading shares the same setting.
-    assert!(cx.debug_bounds("header-agents").is_some());
+    // And every heading grows by exactly the same amount.
+    for (id, base) in [
+        ("header-spaces", spaces),
+        ("header-projects", projects),
+        ("header-agents", agents),
+    ] {
+        assert_eq!(
+            cx.debug_bounds(id).unwrap().size.height,
+            base + px(24.),
+            "{id} must honour sidebar_header_height"
+        );
+    }
 }
 
 #[gpui::test]

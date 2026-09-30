@@ -43,6 +43,17 @@ impl HerdrWindow {
         let view = cx.entity().downgrade();
         let font = &self.config.sidebar;
         let theme = &self.theme;
+        // One heading path for Spaces, Projects and Agents, so no section can
+        // drift from the shared rule, semibold label, and configured height.
+        let heading = |label: &'static str| {
+            header(
+                label,
+                font,
+                theme,
+                look,
+                self.config.layout.sidebar_header_height,
+            )
+        };
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -628,13 +639,7 @@ impl HerdrWindow {
                     })
                     .min_h_0()
                     .overflow_hidden()
-                    .child(header(
-                        "spaces",
-                        font,
-                        theme,
-                        look,
-                        self.config.layout.sidebar_header_height,
-                    ))
+                    .child(heading("spaces"))
                     .child(spaces)
                     .child(
                         div()
@@ -676,15 +681,7 @@ impl HerdrWindow {
                     // Shown only once a project was classified: without the
                     // feature on, or with no matching spaces, it is absent.
                     .when(project_rows > 0, |section| {
-                        section
-                            .child(header(
-                                "projects",
-                                font,
-                                theme,
-                                look,
-                                self.config.layout.sidebar_header_height,
-                            ))
-                            .child(projects)
+                        section.child(heading("projects")).child(projects)
                     }),
             )
             .when(self.config.show_agents, |sidebar| {
@@ -728,15 +725,9 @@ impl HerdrWindow {
                             .min_h_0()
                             .overflow_hidden()
                             .child(
-                                header(
-                                    "agents",
-                                    font,
-                                    theme,
-                                    look,
-                                    self.config.layout.sidebar_header_height,
-                                )
-                                .justify_between()
-                                .child(agents_sort(self, cx)),
+                                heading("agents")
+                                    .justify_between()
+                                    .child(agents_sort(self, cx)),
                             )
                             .child(agents),
                     )
