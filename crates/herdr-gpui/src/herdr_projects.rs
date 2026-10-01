@@ -576,6 +576,25 @@ fn output_tail(output: &Output) -> String {
     }
 }
 
+/// The projects root to hand to command helpers for `host`, given the raw
+/// setting and its local expansion. The local machine must get the expanded
+/// path: the plugin CLI runs without a shell in between, so a literal `~`
+/// would create `<cwd>/~/.herdr-projects` instead of resolving to home. A
+/// device keeps the configured text, so `~/` resolves against its own `$HOME`
+/// rather than this machine's.
+pub(crate) fn projects_root_for(
+    host: &Host,
+    raw: Option<&str>,
+    expanded: Option<&Path>,
+) -> Option<String> {
+    match host {
+        Host::Ssh { .. } => raw
+            .map(str::to_owned)
+            .or_else(|| expanded.map(|root| root.to_string_lossy().into_owned())),
+        Host::Local => expanded.map(|root| root.to_string_lossy().into_owned()),
+    }
+}
+
 impl HerdrWindow {
     /// The device the Projects section serves: the selected endpoint, local or
     /// its saved SSH target.
@@ -592,15 +611,15 @@ impl HerdrWindow {
         }
     }
 
-    /// The projects root as typed in settings. Kept as text so a remote device
-    /// resolves `~/` against its own home instead of this machine's.
-    pub(crate) fn projects_root_setting(&self) -> Option<String> {
-        self.config.projects_root_raw.clone().or_else(|| {
-            self.config
-                .projects_root
-                .as_ref()
-                .map(|root| root.to_string_lossy().into_owned())
-        })
+    /// The projects root resolved for `host`. A remote device keeps the
+    /// configured text so `~/` resolves against its own home; the local host
+    /// gets the already-expanded path (see [`projects_root_for`]).
+    pub(crate) fn projects_root_for_host(&self, host: &Host) -> Option<String> {
+        projects_root_for(
+            host,
+            self.config.projects_root_raw.as_deref(),
+            self.config.projects_root.as_deref(),
+        )
     }
 
     /// Whether `cwd` lies inside the projects root of the selected device.
@@ -610,7 +629,7 @@ impl HerdrWindow {
         if !self.config.herdr_projects_enabled() {
             return false;
         }
-        let Some(setting) = self.projects_root_setting() else {
+        let Some(setting) = self.projects_root_for_host(&self.projects_host()) else {
             return false;
         };
         let root = match self.projects_host() {
@@ -630,11 +649,8 @@ impl HerdrWindow {
                     setting
                 }
             }
-            Host::Local => self
-                .config
-                .projects_root
-                .as_ref()
-                .map_or(setting, |root| root.to_string_lossy().into_owned()),
+            // `projects_root_for_host` already expanded `~/` for this machine.
+            Host::Local => setting,
         };
         let root = Path::new(&root);
         let cwd = Path::new(cwd);
@@ -707,7 +723,8 @@ impl HerdrWindow {
     /// Creates a project from a space's folder on the selected device, off the
     /// UI thread.
     pub(crate) fn create_project_from_space(&mut self, cwd: String, cx: &mut Context<Self>) {
-        let Some(root) = self.projects_root_setting() else {
+        let host = self.projects_host();
+        let Some(root) = self.projects_root_for_host(&host) else {
             self.local_error = Some("Choose a projects folder before creating a project.".into());
             cx.notify();
             return;
@@ -717,7 +734,6 @@ impl HerdrWindow {
             .installed
             .as_ref()
             .map(|installed| plugin_binary(&installed.root));
-        let host = self.projects_host();
         self.create_project_from_space_with(
             move |cwd| create_project_on(&host, binary.as_deref(), cwd, &root),
             cwd,
@@ -757,14 +773,7 @@ impl HerdrWindow {
             return;
         }
         let host = self.projects_host();
-        let root: Option<String> = match &host {
-            Host::Local => self
-                .config
-                .projects_root
-                .as_ref()
-                .map(|root| root.to_string_lossy().into_owned()),
-            Host::Ssh { .. } => self.projects_root_setting(),
-        };
+        let root = self.projects_root_for_host(&host);
         let Some(root) = root else {
             self.herdr_projects.projects.clear();
             self.herdr_projects.projects_checked = true;
@@ -806,7 +815,8 @@ impl HerdrWindow {
     /// Opens a project that has no space yet, on the selected device, off the
     /// UI thread.
     pub(crate) fn open_disk_project(&mut self, slug: String, cx: &mut Context<Self>) {
-        let Some(root) = self.projects_root_setting() else {
+        let host = self.projects_host();
+        let Some(root) = self.projects_root_for_host(&host) else {
             self.local_error = Some("Choose a projects folder before opening a project.".into());
             cx.notify();
             return;
@@ -816,7 +826,6 @@ impl HerdrWindow {
             .installed
             .as_ref()
             .map(|installed| plugin_binary(&installed.root));
-        let host = self.projects_host();
         self.open_disk_project_with(
             move |slug| open_project_on(&host, binary.as_deref(), slug, &root),
             slug,
@@ -943,6 +952,33 @@ mod tests {
             remote_path("~/.proj/\"quoted\""),
             "\"$HOME/.proj/\\\"quoted\\\"\""
         );
+    }
+
+    #[test]
+    fn projects_root_for_expands_the_tilde_only_on_the_local_host() {
+        let raw = Some("~/.herdr-projects");
+        let expanded = Some(Path::new("/home/me/.herdr-projects"));
+        let device = Host::Ssh {
+            target: "host".into(),
+        };
+        // Locally the plugin argv has no shell, so a literal `~` must not
+        // survive or it creates `<cwd>/~/.herdr-projects`.
+        assert_eq!(
+            projects_root_for(&Host::Local, raw, expanded).as_deref(),
+            Some("/home/me/.herdr-projects")
+        );
+        // A device keeps the text so `~/` resolves against its own `$HOME`.
+        assert_eq!(
+            projects_root_for(&device, raw, expanded).as_deref(),
+            Some("~/.herdr-projects")
+        );
+        // Without the raw text a device falls back to the local expansion.
+        assert_eq!(
+            projects_root_for(&device, None, expanded).as_deref(),
+            Some("/home/me/.herdr-projects")
+        );
+        assert_eq!(projects_root_for(&Host::Local, raw, None), None);
+        assert_eq!(projects_root_for(&Host::Local, None, None), None);
     }
 
     #[test]
