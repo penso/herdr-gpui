@@ -68,6 +68,7 @@ pub(crate) struct MenuState {
     pub(super) _keybinds_subscription: Option<Subscription>,
     pub(crate) preferences_scroll: ScrollHandle,
     pub(crate) font_size_editor: Option<crate::preferences::FontSizeEditor>,
+    pub(crate) projects_root_editor: Option<crate::preferences::ProjectsRootEditor>,
     pub(crate) themes: Option<crate::theme_picker::ThemePicker>,
     pub(crate) fonts: Option<crate::font_picker::FontPicker>,
     pub(crate) palette: Option<crate::palette::Palette>,
@@ -236,6 +237,7 @@ impl MenuState {
             _keybinds_subscription: None,
             preferences_scroll: ScrollHandle::new(),
             font_size_editor: None,
+            projects_root_editor: None,
             themes: None,
             fonts: None,
             palette: None,
@@ -278,6 +280,7 @@ impl MenuState {
         self.page = None;
         self.fonts = None;
         self.font_size_editor = None;
+        self.projects_root_editor = None;
         self.selected = None;
         self.workspace_selected = None;
         self.git_selected = None;

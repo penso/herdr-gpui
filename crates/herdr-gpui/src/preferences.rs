@@ -31,6 +31,97 @@ pub(crate) struct FontSizeEditor {
     _blur: Subscription,
 }
 
+/// The inline editor for `projects_root`. It closes on blur or Enter, exactly
+/// like the font size field, but has no live preview: the sidebar only reads
+/// the setting, so applying it is the save.
+pub(crate) struct ProjectsRootEditor {
+    pub(crate) input: Entity<SearchInput>,
+    _blur: Subscription,
+}
+
+/// The queued writes behind the Preferences fields, kept apart from the font
+/// size writer so a slow font save never drops one of these. At most one edit
+/// per setting is queued; the latest wins.
+#[derive(Default)]
+pub(crate) struct SettingsSaves {
+    root: Option<RootEdit>,
+    flag: Option<(bool, bool)>,
+    header_height: Option<(f32, f32)>,
+    task: Option<Task<()>>,
+    error: Option<String>,
+}
+
+struct RootEdit {
+    value: String,
+    previous: Option<PathBuf>,
+    previous_raw: Option<String>,
+}
+
+/// One queued settings write, with the value to restore if it fails.
+#[derive(Clone)]
+enum Edit {
+    Root {
+        value: String,
+        previous: Option<PathBuf>,
+        previous_raw: Option<String>,
+    },
+    Flag {
+        value: bool,
+        previous: bool,
+    },
+    HeaderHeight {
+        value: f32,
+        previous: f32,
+    },
+}
+
+impl SettingsSaves {
+    fn is_busy(&self) -> bool {
+        self.task.is_some()
+            || self.root.is_some()
+            || self.flag.is_some()
+            || self.header_height.is_some()
+    }
+
+    pub(crate) fn status(&self) -> Option<&str> {
+        self.error
+            .as_deref()
+            .or_else(|| self.is_busy().then_some("Saving settings…"))
+    }
+
+    fn queue_root(
+        &mut self,
+        value: String,
+        previous: Option<PathBuf>,
+        previous_raw: Option<String>,
+    ) {
+        self.root = Some(RootEdit {
+            value,
+            previous,
+            previous_raw,
+        });
+        self.error = None;
+    }
+
+    fn queue_flag(&mut self, value: bool, previous: bool) {
+        self.flag = Some((value, previous));
+        self.error = None;
+    }
+
+    fn queue_header_height(&mut self, value: f32, previous: f32) {
+        self.header_height = Some((value, previous));
+        self.error = None;
+    }
+}
+
+fn save_setting(edit: &Edit) -> crate::Result<()> {
+    match edit {
+        Edit::Root { value, .. } => Config::save_projects_root(value),
+        Edit::Flag { value, .. } => Config::save_use_herdr_projects(*value),
+        Edit::HeaderHeight { value, .. } => Config::save_sidebar_header_height(*value),
+    }
+}
+
 fn parse_font_size(text: &str) -> Option<f32> {
     let text = text.trim();
     if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -49,6 +140,7 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.finish_projects_root_edit(true, cx);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_text_selected(&format!("{}", face.size(&self.config)), cx);
@@ -98,6 +190,190 @@ impl HerdrWindow {
             },
             cx,
         );
+    }
+
+    fn begin_projects_root_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_font_size_edit(true, cx);
+        let input = cx.new(SearchInput::new);
+        let current = self
+            .config
+            .projects_root
+            .as_ref()
+            .map(|root| root.display().to_string())
+            .unwrap_or_default();
+        input.update(cx, |input, cx| {
+            input.set_text_selected(&current, cx);
+            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+        });
+        let focus = input.read(cx).focus.clone();
+        let blur = cx.on_blur(&focus, window, |this, _, cx| {
+            this.finish_projects_root_edit(true, cx);
+        });
+        self.menu.projects_root_editor = Some(ProjectsRootEditor { input, _blur: blur });
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(super) fn finish_projects_root_edit(&mut self, save: bool, cx: &mut Context<Self>) {
+        let Some(editor) = self.menu.projects_root_editor.take() else {
+            return;
+        };
+        if save && !editor.input.read(cx).is_composing() {
+            let value = editor.input.read(cx).text().to_owned();
+            self.set_projects_root(value, cx);
+        }
+        cx.notify();
+    }
+
+    /// Applies a committed `projects_root`: the same validation as the config
+    /// file, an immediate in-memory update, then one background write. An
+    /// invalid value changes nothing and is reported in the footer.
+    fn set_projects_root(&mut self, value: String, cx: &mut Context<Self>) {
+        let resolved = match Config::resolve_projects_root(&value) {
+            Ok(root) => root,
+            Err(error) => {
+                self.settings_saves.error =
+                    Some(format!("Could not save projects folder: {error}"));
+                cx.notify();
+                return;
+            }
+        };
+        let previous = self.config.projects_root.clone();
+        let previous_raw = self.config.projects_root_raw.clone();
+        let raw = (!value.trim().is_empty()).then(|| value.trim().to_owned());
+        self.config.projects_root = resolved;
+        self.config.projects_root_raw = raw;
+        self.settings_saves
+            .queue_root(value, previous, previous_raw);
+        cx.notify();
+        self.flush_settings_saves(cx);
+    }
+
+    /// Moves the sidebar heading height by one step and saves it. The layout is
+    /// read on every render, so the change shows at once.
+    pub(super) fn change_sidebar_header_height(&mut self, delta: f32, cx: &mut Context<Self>) {
+        let current = self.config.layout.sidebar_header_height;
+        let value = (current + delta).clamp(0., crate::config::MAX_SIDEBAR_HEADER_HEIGHT);
+        if value == current {
+            return;
+        }
+        self.config.layout.sidebar_header_height = value;
+        self.settings_saves.queue_header_height(value, current);
+        cx.notify();
+        self.flush_settings_saves(cx);
+    }
+
+    /// Turns the `herdr-projects` integration on or off. Turning it on fills and
+    /// saves the plugin's default projects folder when none was chosen, and
+    /// re-checks that the plugin is installed.
+    pub(super) fn toggle_use_herdr_projects(&mut self, cx: &mut Context<Self>) {
+        let enabled = !self.config.use_herdr_projects;
+        let previous_root = self.config.projects_root.clone();
+        self.config.use_herdr_projects = enabled;
+        self.herdr_projects.error = None;
+        if enabled {
+            if self.config.projects_root.is_none() {
+                match crate::herdr_projects::default_projects_root() {
+                    Ok(root) => {
+                        let previous_raw = self.config.projects_root_raw.clone();
+                        self.settings_saves.queue_root(
+                            root.display().to_string(),
+                            previous_root,
+                            previous_raw,
+                        );
+                        self.config.projects_root = Some(root);
+                        // The plugin's documented default, kept as text so a
+                        // remote device resolves it against its own home.
+                        self.config.projects_root_raw = Some("~/.herdr-projects".into());
+                    }
+                    Err(error) => {
+                        self.herdr_projects.error =
+                            Some(format!("Could not default the projects folder: {error}"));
+                    }
+                }
+            }
+            self.refresh_herdr_projects(cx);
+            self.refresh_projects(cx);
+        }
+        self.settings_saves.queue_flag(enabled, !enabled);
+        cx.notify();
+        self.flush_settings_saves(cx);
+    }
+
+    fn flush_settings_saves(&mut self, cx: &mut Context<Self>) {
+        self.flush_settings_saves_with(save_setting, cx);
+    }
+
+    fn flush_settings_saves_with(
+        &mut self,
+        save: impl Fn(&Edit) -> crate::Result<()> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config_load.is_some() || self.settings_saves.task.is_some() {
+            return;
+        }
+        let mut edits = Vec::new();
+        if let Some(root) = self.settings_saves.root.take() {
+            edits.push(Edit::Root {
+                value: root.value,
+                previous: root.previous,
+                previous_raw: root.previous_raw,
+            });
+        }
+        if let Some((value, previous)) = self.settings_saves.flag.take() {
+            edits.push(Edit::Flag { value, previous });
+        }
+        if let Some((value, previous)) = self.settings_saves.header_height.take() {
+            edits.push(Edit::HeaderHeight { value, previous });
+        }
+        if edits.is_empty() {
+            return;
+        }
+        let background_edits = edits.clone();
+        let saved = cx.background_executor().spawn(async move {
+            let mut result = Ok(());
+            for edit in &background_edits {
+                if let Err(error) = save(edit) {
+                    result = Err(error);
+                    break;
+                }
+            }
+            (result, save)
+        });
+        self.settings_saves.task = Some(cx.spawn(async move |this, cx| {
+            let (result, save) = saved.await;
+            let _ = this.update(cx, |this, cx| {
+                this.settings_saves.task = None;
+                if let Err(error) = result {
+                    tracing::warn!(%error, "Could not save settings");
+                    // A newer edit already owns its setting; never roll it back.
+                    for edit in &edits {
+                        match edit {
+                            Edit::Root {
+                                previous,
+                                previous_raw,
+                                ..
+                            } if this.settings_saves.root.is_none() => {
+                                this.config.projects_root = previous.clone();
+                                this.config.projects_root_raw = previous_raw.clone();
+                            }
+                            Edit::Flag { previous, .. } if this.settings_saves.flag.is_none() => {
+                                this.config.use_herdr_projects = *previous;
+                            }
+                            Edit::HeaderHeight { previous, .. }
+                                if this.settings_saves.header_height.is_none() =>
+                            {
+                                this.config.layout.sidebar_header_height = *previous;
+                            }
+                            _ => {}
+                        }
+                    }
+                    this.settings_saves.error = Some(format!("Could not save settings: {error}"));
+                }
+                this.flush_settings_saves_with(save, cx);
+                cx.notify();
+            });
+        }));
     }
 
     pub(super) fn render_preferences(&self, cx: &mut Context<Self>) -> Div {
@@ -175,6 +451,180 @@ impl HerdrWindow {
                 .hover(|style| style.bg(rgb(theme.active)))
                 .child(label)
         };
+        let projects_root_value = match &self.config.projects_root {
+            Some(root) => root.display().to_string(),
+            None => "Not set".into(),
+        };
+        let projects_root_row = div()
+            .debug_selector(|| "preferences-projects-root".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Projects folder"),
+            )
+            .child(match &self.menu.projects_root_editor {
+                Some(editor) => div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(editor.input.clone())
+                    .into_any_element(),
+                None => div()
+                    .id("preferences-projects-root-edit")
+                    .debug_selector(|| "preferences-projects-root-edit".into())
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_right()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(theme.active)))
+                    .child(projects_root_value)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.begin_projects_root_edit(window, cx);
+                    }))
+                    .into_any_element(),
+            });
+        let header_height = self.config.layout.sidebar_header_height;
+        let header_step =
+            |suffix: &'static str, symbol: &'static str, delta: f32, enabled: bool| {
+                div()
+                    .id(format!("preferences-sidebar-header-height-{suffix}"))
+                    .debug_selector(move || format!("preferences-sidebar-header-height-{suffix}"))
+                    .px(px(8.))
+                    .py(px(3.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(rgb(theme.active))
+                    .bg(rgb(theme.background))
+                    .when(enabled, |button| {
+                        button
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.change_sidebar_header_height(delta, cx);
+                            }))
+                    })
+                    .when(!enabled, |button| button.text_color(rgb(theme.muted)))
+                    .child(symbol)
+            };
+        let header_height_row = div()
+            .debug_selector(|| "preferences-sidebar-header-height".into())
+            .flex()
+            .items_center()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Section headers"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_right()
+                    .child(format!("{header_height} px")),
+            )
+            .child(header_step("decrease", "−", -1., header_height > 0.))
+            .child(header_step(
+                "increase",
+                "+",
+                1.,
+                header_height < crate::config::MAX_SIDEBAR_HEADER_HEIGHT,
+            ));
+        let use_toggle_row = div()
+            .debug_selector(|| "preferences-use-herdr-projects".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Use herdr-projects"),
+            )
+            .child(
+                div()
+                    .id("preferences-use-herdr-projects-toggle")
+                    .debug_selector(|| "preferences-use-herdr-projects-toggle".into())
+                    .flex_1()
+                    .min_w_0()
+                    .text_right()
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(theme.active)))
+                    .child(if self.config.use_herdr_projects {
+                        "On"
+                    } else {
+                        "Off"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_use_herdr_projects(cx);
+                    })),
+            );
+        let plugin_status = self
+            .herdr_projects
+            .error
+            .clone()
+            .unwrap_or_else(|| self.herdr_projects.plugin_status());
+        let plugin_row = div()
+            .debug_selector(|| "preferences-herdr-projects-plugin".into())
+            .flex()
+            .min_w_0()
+            .gap(px(12.))
+            .py(px(7.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .w(relative(0.3))
+                    .flex_none()
+                    .min_w_0()
+                    .text_color(rgb(theme.muted))
+                    .child("Plugin"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_right()
+                    .child(plugin_status),
+            );
+        let show_install = self.herdr_projects.checked
+            && self.herdr_projects.installed.is_none()
+            && !self.herdr_projects.installing();
+        let install_row = div().py(px(8.)).child(
+            button(
+                "preferences-install-herdr-projects",
+                "Install herdr-projects",
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.install_herdr_projects(cx);
+            })),
+        );
         let mut body = div()
             .id("preferences-body")
             .debug_selector(|| "preferences-body".into())
@@ -188,6 +638,10 @@ impl HerdrWindow {
                 cx.listener(|this, _, window, cx| {
                     if this.menu.font_size_editor.is_some() {
                         this.finish_font_size_edit(true, cx);
+                        window.focus(&this.menu.focus, cx);
+                    }
+                    if this.menu.projects_root_editor.is_some() {
+                        this.finish_projects_root_edit(true, cx);
                         window.focus(&this.menu.focus, cx);
                     }
                 }),
@@ -242,6 +696,7 @@ impl HerdrWindow {
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
+            .child(header_height_row)
             .child(row("preferences-theme", "Theme", self.config.theme.clone()))
             .child(div().py(px(10.)).child(
                 button("preferences-choose-theme", "Choose theme").on_click(cx.listener(
@@ -250,6 +705,14 @@ impl HerdrWindow {
                         this.open_theme_picker(window, cx);
                     },
                 )),
+            ))
+            .child(section("HERDR PROJECTS"))
+            .child(use_toggle_row)
+            .child(plugin_row)
+            .when(show_install, |body| body.child(install_row))
+            .child(projects_root_row)
+            .child(note(
+                "Optional integration with the herdr-projects plugin. With the switch on and a projects folder set, Spaces get a + for creating a project from that folder, and spaces inside the folder move to a Projects section. Install the plugin first if it is missing.",
             ))
             .child(section("FONTS"));
         body = body.child(
@@ -575,8 +1038,9 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
                     .child(
-                        self.font_size_saves
+                        self.settings_saves
                             .status()
+                            .or_else(|| self.font_size_saves.status())
                             .unwrap_or("Esc to close  /  click outside to dismiss")
                             .to_owned(),
                     ),
@@ -639,6 +1103,7 @@ impl AgentSort {
 pub struct Chrome {
     pub sidebar_width: Option<f32>,
     pub sidebar_split: Option<f32>,
+    pub sidebar_projects_split: Option<f32>,
     pub agent_sort: AgentSort,
 }
 
@@ -791,9 +1256,15 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         .and_then(serde_json::Value::as_f64)
         .map(|split| split as f32)
         .filter(|split| split.is_finite() && (0.1..=0.9).contains(split));
+    let sidebar_projects_split = object
+        .get("sidebar_projects_split")
+        .and_then(serde_json::Value::as_f64)
+        .map(|split| split as f32)
+        .filter(|split| split.is_finite() && (0.1..=0.9).contains(split));
     Ok(Chrome {
         sidebar_width,
         sidebar_split,
+        sidebar_projects_split,
         agent_sort,
     })
 }
@@ -827,6 +1298,9 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
             &serde_json::json!({
                 "sidebar_width_px": width,
                 "sidebar_split": chrome.sidebar_split.filter(|split| {
+                    split.is_finite() && (0.1..=0.9).contains(split)
+                }),
+                "sidebar_projects_split": chrome.sidebar_projects_split.filter(|split| {
                     split.is_finite() && (0.1..=0.9).contains(split)
                 }),
                 "agent_sort": chrome.agent_sort.to_string(),
@@ -917,6 +1391,7 @@ mod tests {
             preferences.save(Chrome {
                 sidebar_width: Some(width as f32),
                 sidebar_split: Some(0.4),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             });
         }
@@ -930,6 +1405,7 @@ mod tests {
             Chrome {
                 sidebar_width: Some(100.0),
                 sidebar_split: Some(0.4),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             }
         );
@@ -954,6 +1430,7 @@ mod tests {
                 Chrome {
                     sidebar_width: Some(240.0),
                     sidebar_split: None,
+                    sidebar_projects_split: None,
                     agent_sort: AgentSort::Grouped,
                 },
             ),
@@ -966,6 +1443,7 @@ mod tests {
                 Chrome {
                     sidebar_width: Some(200.0),
                     sidebar_split: None,
+                    sidebar_projects_split: None,
                     agent_sort: AgentSort::Priority,
                 },
             ),
@@ -977,6 +1455,7 @@ mod tests {
         let chrome = Chrome {
             sidebar_width: Some(321.0),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::Priority,
         };
         write_chrome(&path, chrome).unwrap();
@@ -1005,11 +1484,13 @@ mod tests {
             Chrome {
                 sidebar_width: Some(160.),
                 sidebar_split: None,
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Grouped,
             },
             Chrome {
                 sidebar_width: Some(400.),
                 sidebar_split: Some(0.6),
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             },
             Chrome::default(),
@@ -1064,6 +1545,7 @@ mod tests {
                     Chrome {
                         sidebar_width: Some(width),
                         sidebar_split: None,
+                        sidebar_projects_split: None,
                         agent_sort: AgentSort::default(),
                     }
                 )
@@ -1073,6 +1555,7 @@ mod tests {
         let chrome = Chrome {
             sidebar_width: Some(237.5),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::default(),
         };
         write_chrome(&path, chrome).unwrap();
@@ -1087,6 +1570,7 @@ mod tests {
         let expected = Chrome {
             sidebar_width: Some(240.0),
             sidebar_split: None,
+            sidebar_projects_split: None,
             agent_sort: AgentSort::Priority,
         };
         for split in [
@@ -1113,6 +1597,7 @@ mod tests {
                 &path,
                 Chrome {
                     sidebar_split: Some(split),
+                    sidebar_projects_split: None,
                     ..expected
                 },
             )
@@ -1129,6 +1614,7 @@ mod tests {
             let chrome = Chrome {
                 sidebar_width: Some(240.0),
                 sidebar_split,
+                sidebar_projects_split: None,
                 agent_sort: AgentSort::Priority,
             };
             write_chrome(&path, chrome).unwrap();
@@ -1137,6 +1623,35 @@ mod tests {
             assert_eq!(stored["sidebar_split"], serde_json::json!(sidebar_split));
             assert_eq!(read_chrome(&path).unwrap(), chrome);
         }
+    }
+
+    #[core::prelude::v1::test]
+    fn sidebar_projects_split_roundtrips_including_boundaries_and_reset() {
+        let directory = TestDirectory::new();
+        let path = directory.0.join("preferences.json");
+        for projects_split in [Some(0.1), Some(0.35), Some(0.9), None] {
+            let chrome = Chrome {
+                sidebar_width: Some(240.0),
+                sidebar_split: Some(0.5),
+                sidebar_projects_split: projects_split,
+                agent_sort: AgentSort::Priority,
+            };
+            write_chrome(&path, chrome).unwrap();
+            let stored: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            assert_eq!(
+                stored["sidebar_projects_split"],
+                serde_json::json!(projects_split)
+            );
+            assert_eq!(read_chrome(&path).unwrap(), chrome);
+        }
+        // Out-of-band stored values are ignored, not clamped.
+        fs::write(
+            &path,
+            r#"{"sidebar_width_px":240.0,"sidebar_projects_split":5.0,"sidebar_split":0.5,"agent_sort":"priority"}"#,
+        )
+        .unwrap();
+        assert_eq!(read_chrome(&path).unwrap().sidebar_projects_split, None);
     }
 
     #[core::prelude::v1::test]

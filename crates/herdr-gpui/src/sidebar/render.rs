@@ -1,6 +1,6 @@
-//! Laying out the sidebar: the two lists, their headings, and the drag handle
-//! that resizes the panel. Render works from prepared state and the bounded
-//! caches only.
+//! Laying out the sidebar: the Spaces, Projects and Agents lists, their
+//! headings, and the drag handle that resizes the panel. Render works from
+//! prepared state and the bounded caches only.
 
 use super::{
     DEVICE_FOOTER_HEIGHT, HOST_ARROW_WIDTH, HOST_GAP, STATUS_WIDTH, SidebarDrag, agent_name,
@@ -30,6 +30,8 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let width = sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width));
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
+        // The Projects share of the Spaces+Projects region, set by its divider.
+        let projects_split = self.sidebar_projects_split.unwrap_or(0.5).clamp(0.1, 0.9);
         let look = layout::for_mode(self.config.layout.mode);
         let rows = layout_for(self.config.layout.mode);
         // The row a workspace menu was opened for keeps looking hovered while
@@ -43,6 +45,17 @@ impl HerdrWindow {
         let view = cx.entity().downgrade();
         let font = &self.config.sidebar;
         let theme = &self.theme;
+        // One heading path for Spaces, Projects and Agents, so no section can
+        // drift from the shared rule, semibold label, and configured height.
+        let heading = |label: &'static str| {
+            header(
+                label,
+                font,
+                theme,
+                look,
+                self.config.layout.sidebar_header_height,
+            )
+        };
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -59,14 +72,40 @@ impl HerdrWindow {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll();
+        // Project spaces, split out of Spaces when `projects_root` is set. It
+        // stays empty, and is not rendered, without a configured root.
+        let mut projects = div()
+            .id("projects-scroll")
+            .debug_selector(|| "projects-scroll".into())
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll();
+        // Inside the top region Spaces and Projects share the height by the
+        // divider's ratio; without the integration the Projects list is absent
+        // and Spaces keeps everything.
+        if self.config.herdr_projects_enabled() {
+            spaces = spaces.map(|mut list| {
+                list.style().flex_grow = Some(1. - projects_split);
+                list
+            });
+            projects = projects.map(|mut list| {
+                list.style().flex_grow = Some(projects_split);
+                list
+            });
+        }
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
+        projects = projects.track_scroll(&self.sidebar_scroll[2]);
         let multi = self.endpoints.len() > 1;
         let mut agent_count = 0;
         // Child positions of the highlighted rows, for the one-time reveal below.
-        // Agent rows are counted by `agent_count`, which indexes that list.
+        // Agent rows are counted by `agent_count`, and project rows by
+        // `project_rows`; both index their own list.
         let mut space_rows = 0usize;
-        let mut highlighted = [None; 2];
+        let mut project_rows = 0usize;
+        let mut highlighted = [None; 3];
         // A lifted workspace row: each drop unit's rows in the spaces list, and
         // the move every gap makes, for the pointer handler below.
         let mut drop_rows = Vec::new();
@@ -74,6 +113,15 @@ impl HerdrWindow {
         let mut drop_dragged = 0;
         let now = std::time::Instant::now();
         let mut sliding = false;
+        // Slugs of the projects already shown as a space row. A project is
+        // listed once: a space stands in for it, otherwise the disk row does.
+        let mut represented = std::collections::HashSet::new();
+        let project_slugs: std::collections::HashSet<&str> = self
+            .herdr_projects
+            .projects
+            .iter()
+            .map(|project| project.slug.as_str())
+            .collect();
         for (endpoint_index, endpoint) in self.endpoints.iter().enumerate() {
             if !self.device_visible(&endpoint.id) {
                 continue;
@@ -217,13 +265,23 @@ impl HerdrWindow {
                     .collect();
                 drop_dragged = plan.dragged();
                 let mut heights = vec![0.; plan.len()];
-                for (position, entry) in entries.iter().enumerate() {
+                // Project rows live in their own list, so they occupy no slot
+                // in the Spaces one; advance the child index only for the rows
+                // that do.
+                let mut space_child = base;
+                for entry in entries.iter() {
+                    if self.config.herdr_projects_enabled()
+                        && self.is_project_cwd(&snapshot.workspaces[entry.0].new_workspace_cwd)
+                    {
+                        continue;
+                    }
                     if let (Some(unit), Some(bounds)) = (
                         plan.unit_of(entry.0),
-                        self.sidebar_scroll[0].bounds_for_item(base + position),
+                        self.sidebar_scroll[0].bounds_for_item(space_child),
                     ) {
                         heights[unit] += f32::from(bounds.size.height);
                     }
+                    space_child += 1;
                 }
                 let slot = drag
                     .and_then(|drag| drag.target.as_ref())
@@ -241,10 +299,29 @@ impl HerdrWindow {
                     break;
                 }
                 let workspace = &snapshot.workspaces[index];
-                if selected && workspace.focused {
-                    highlighted[0] = Some(space_rows);
+                let project = self.config.herdr_projects_enabled()
+                    && self.is_project_cwd(&workspace.new_workspace_cwd);
+                if project
+                    && let Some(root) = self.config.projects_root.as_deref()
+                    && let Ok(relative) =
+                        std::path::Path::new(&workspace.new_workspace_cwd).strip_prefix(root)
+                    && let Some(std::path::Component::Normal(name)) = relative.components().next()
+                    && let Some(name) = name.to_str()
+                {
+                    represented.insert(name.to_owned());
                 }
-                let unit = plan.as_ref().and_then(|plan| plan.unit_of(index));
+                if selected && workspace.focused {
+                    if project {
+                        highlighted[2] = Some(project_rows);
+                    } else {
+                        highlighted[0] = Some(space_rows);
+                    }
+                }
+                // Projects have their own list, so a Spaces drag neither
+                // carries nor shifts them; they keep the daemon's order.
+                let unit = (!project)
+                    .then(|| plan.as_ref().and_then(|plan| plan.unit_of(index)))
+                    .flatten();
                 // The lifted row and the rows it carries, such as its group's
                 // children, follow the pointer together while it floats.
                 let carried = unit.is_some_and(|unit| unit == drop_dragged) && floating;
@@ -263,11 +340,29 @@ impl HerdrWindow {
                 if let Some(unit) = unit {
                     drop_rows.push((unit, space_rows, shift));
                 }
-                space_rows += 1;
+                if project {
+                    project_rows += 1;
+                } else {
+                    space_rows += 1;
+                }
                 let id = workspace.workspace_id.clone();
                 let press_id = id.clone();
                 let context_id = id.clone();
                 let hover_id = id.clone();
+                let project_new_id = id.clone();
+                let project_cwd = workspace.new_workspace_cwd.clone();
+                // The + only appears for a space whose folder is not already a
+                // project, so a second click has nothing to press. A remote
+                // device creates its project through its own CLI.
+                let folder_slug = std::path::Path::new(&project_cwd)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(crate::herdr_projects::slugify)
+                    .unwrap_or_default();
+                let can_create = self.config.herdr_projects_enabled()
+                    && !project
+                    && !folder_slug.is_empty()
+                    && !project_slugs.contains(folder_slug.as_str());
                 let context_endpoint = endpoint_id.clone();
                 let navigate_endpoint = endpoint_id.clone();
                 let collapse_endpoint = endpoint_id.clone();
@@ -431,8 +526,9 @@ impl HerdrWindow {
                     }))
                 })
                 // Holding a press lifts the row for reordering. Another
-                // endpoint's rows would have to select it first.
-                .when(selected, |row| {
+                // endpoint's rows would have to select it first, and a project
+                // row is not in the Spaces list the drag reorders.
+                .when(selected && !project, |row| {
                     row.on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, _, cx| {
@@ -443,13 +539,41 @@ impl HerdrWindow {
                     )
                 })
                 .when(shift != px(0.), |row| row.top(shift));
-                spaces = if carried {
+                if project {
+                    projects = projects.child(element);
+                } else if carried {
                     // Painted last so it floats over the rows it passes, while
                     // its layout slot keeps the others' positions stable.
-                    spaces.child(deferred(element.cursor_grabbing()).with_priority(1))
+                    spaces = spaces.child(deferred(element.cursor_grabbing()).with_priority(1));
+                } else if can_create {
+                    // A small + that creates a project from this folder. It is
+                    // an overlay so every layout gets it without touching row
+                    // internals; it never selects the space.
+                    let create = element;
+                    spaces = spaces.child(
+                        div().relative().w_full().child(create).child(
+                            div()
+                                .id(SharedString::from(format!("project-new-{project_new_id}")))
+                                .debug_selector(|| format!("project-new-{project_new_id}"))
+                                .absolute()
+                                .right(px(content_x + STATUS_WIDTH))
+                                .top_0()
+                                .h_full()
+                                .flex()
+                                .items_center()
+                                .cursor_pointer()
+                                .text_color(rgb(theme.muted))
+                                .hover(|style| style.text_color(rgb(theme.foreground)))
+                                .child("+")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.create_project_from_space(project_cwd.clone(), cx);
+                                })),
+                        ),
+                    );
                 } else {
-                    spaces.child(element)
-                };
+                    spaces = spaces.child(element);
+                }
             }
             if !self.config.show_agents {
                 continue;
@@ -489,6 +613,66 @@ impl HerdrWindow {
                         window.focus(&this.focus, cx);
                     })),
                 );
+            }
+        }
+        // Projects with no space yet: rows read from the selected device's
+        // projects folder, drawn through the same workspace row so they match
+        // Spaces. On a remote device the paths name its own filesystem.
+        if self.config.herdr_projects_enabled() {
+            let selected = &self.endpoints[self.selected_endpoint];
+            let disk_cx = RowContext {
+                font,
+                theme,
+                look,
+                width,
+                host: (multi && selected.id.as_str() != crate::endpoint::LOCAL)
+                    .then_some(selected.label.as_str()),
+            };
+            for project in &self.herdr_projects.projects {
+                if represented.contains(&project.slug) {
+                    continue;
+                }
+                let label = project.label();
+                let workspace = herdr_client::protocol::ClientShellWorkspace {
+                    workspace_id: format!("project:{}", project.slug),
+                    active_tab_id: String::new(),
+                    new_workspace_cwd: project.path.display().to_string(),
+                    number: 0,
+                    label: label.clone(),
+                    custom_label: true,
+                    branch: None,
+                    git_ahead_behind: None,
+                    tokens: Vec::new(),
+                    worktree: None,
+                    focused: false,
+                    agent_status: herdr_client::protocol::AgentStatus::Idle,
+                };
+                let debug_id = format!("project-disk-{}", project.slug);
+                let click_slug = project.slug.clone();
+                projects = projects.child(
+                    Cell::new(
+                        rows,
+                        RowData::Workspace(WorkspaceRow {
+                            workspace: &workspace,
+                            label: &label,
+                            tree: RowTree::None,
+                            icon: RowIcon::Mark,
+                            fold: None,
+                            grouped: false,
+                            badge: None,
+                            removing: false,
+                        }),
+                        &disk_cx,
+                    )
+                    .row()
+                    .id(SharedString::from(debug_id.clone()))
+                    .debug_selector(move || debug_id)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.open_disk_project(click_slug.clone(), cx);
+                    })),
+                );
+                project_rows += 1;
             }
         }
         if sliding {
@@ -558,7 +742,7 @@ impl HerdrWindow {
                     })
                     .min_h_0()
                     .overflow_hidden()
-                    .child(header("spaces", font, theme, look))
+                    .child(heading("spaces"))
                     .child(spaces)
                     .child(
                         div()
@@ -595,7 +779,45 @@ impl HerdrWindow {
                                         },
                                     )),
                             ),
-                    ),
+                    )
+                    // The Spaces footer comes first; Projects sits below it.
+                    // Shown only once a project was classified: without the
+                    // feature on, or with no matching spaces, it is absent.
+                    .when(project_rows > 0, |section| {
+                        section
+                            // The same divider as the Agents boundary, so the
+                            // Spaces and Projects lists can be resized against
+                            // each other. Shown only with a real Projects list.
+                            .child(
+                                div()
+                                    .id("projects-split-resize")
+                                    .debug_selector(|| "projects-split-resize".into())
+                                    .h(px(6.))
+                                    .flex_none()
+                                    .cursor(CursorStyle::ResizeUpDown)
+                                    .border_t_1()
+                                    .border_color(rgb(theme.active))
+                                    .hover(|s| s.bg(rgba(0x78a9ff44)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                                            cx.stop_propagation();
+                                            this.sidebar_projects_split_modified = true;
+                                            if event.click_count == 2 {
+                                                this.sidebar_drag = None;
+                                                this.sidebar_projects_split = None;
+                                                this.save_chrome();
+                                            } else {
+                                                this.sidebar_drag =
+                                                    Some(SidebarDrag::ProjectsSplit);
+                                            }
+                                            cx.notify();
+                                        }),
+                                    ),
+                            )
+                            .child(heading("projects"))
+                            .child(projects)
+                    }),
             )
             .when(self.config.show_agents, |sidebar| {
                 sidebar
@@ -638,7 +860,7 @@ impl HerdrWindow {
                             .min_h_0()
                             .overflow_hidden()
                             .child(
-                                header("agents", font, theme, look)
+                                heading("agents")
                                     .justify_between()
                                     .child(agents_sort(self, cx)),
                             )
@@ -725,6 +947,31 @@ impl HerdrWindow {
                                                         .clamp(0.1, 0.9),
                                                 );
                                             }
+                                            SidebarDrag::ProjectsSplit => {
+                                                // The pointer's place inside the
+                                                // top region, which the Agents
+                                                // split already sized.
+                                                let region = (f32::from(bounds.size.height)
+                                                    - DEVICE_FOOTER_HEIGHT
+                                                    - if this.config.show_agents {
+                                                        6.
+                                                    } else {
+                                                        0.
+                                                    })
+                                                .max(1.)
+                                                    * if this.config.show_agents {
+                                                        this.sidebar_split
+                                                            .unwrap_or(0.5)
+                                                            .clamp(0.1, 0.9)
+                                                    } else {
+                                                        1.
+                                                    };
+                                                let region = region.max(1.);
+                                                let above =
+                                                    f32::from(event.position.y - bounds.origin.y);
+                                                this.sidebar_projects_split =
+                                                    Some((1. - above / region).clamp(0.1, 0.9));
+                                            }
                                         }
                                         cx.stop_propagation();
                                         cx.notify();
@@ -761,16 +1008,24 @@ pub(super) fn header(
     font: &FontConfig,
     theme: &Theme,
     look: SidebarLook,
+    extra_height: f32,
 ) -> Div {
     div()
         .debug_selector(|| format!("header-{label}"))
         .flex_none()
-        .h(px(line_height(font) + 2. * look.density.header_padding()))
+        .h(px(line_height(font)
+            + 2. * look.density.header_padding()
+            + extra_height))
         .px(px(look.content_x()))
         .flex()
         .items_center()
         .text_size(px(font.size))
-        .text_color(rgb(theme.muted))
+        // Headings read as section dividers: a full-width rule under a
+        // brighter, semibold label, unlike the muted body text.
+        .text_color(rgb(theme.foreground))
+        .font_weight(FontWeight::SEMIBOLD)
+        .border_b_1()
+        .border_color(rgb(theme.active))
         .child(
             div()
                 .debug_selector(|| format!("header-label-{label}"))

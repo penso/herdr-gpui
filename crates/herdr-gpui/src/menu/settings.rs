@@ -82,6 +82,8 @@ impl HerdrWindow {
         }
         self.menu.page = Some(Page::Preferences);
         self.menu.preferences_scroll.set_offset(Point::default());
+        // The plugin may have been installed or removed since the last check.
+        self.refresh_herdr_projects(cx);
     }
 
     pub(crate) fn change_font_size(
@@ -158,6 +160,11 @@ impl HerdrWindow {
                         }
                         this.font_size_saves.apply_pending(&mut config);
                         this.config = config;
+                        if this.config.herdr_projects_enabled() {
+                            // The Projects section mirrors the folder on disk,
+                            // which may have changed since the last load.
+                            this.refresh_projects(cx);
+                        }
                         this.tick_toasts(
                             this.menu.page.is_some() || this.toasts_hidden,
                             std::time::Instant::now(),

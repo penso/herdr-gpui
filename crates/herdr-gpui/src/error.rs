@@ -462,8 +462,22 @@ pub enum Error {
     TooManyFontFallbacks(&'static str),
     #[error("layout.sidebar_gap must be finite and between 0 and 64 logical pixels")]
     InvalidSidebarGap,
+    #[error("layout.sidebar_header_height must be finite and between 0 and 128 logical pixels")]
+    InvalidSidebarHeaderHeight,
     #[error("theme must be a name, absolute path, or ~/ path")]
     InvalidThemePath,
+    #[error("projects_root must be an absolute path or a ~/ path")]
+    InvalidProjectsRoot,
+    #[error("Failed to install the herdr-projects plugin: {detail}")]
+    HerdrProjectsInstall { detail: String },
+    #[error("herdr-projects on the remote device failed: {detail}")]
+    HerdrProjectsRemote { detail: String },
+    #[error("Failed to create the project: {detail}")]
+    HerdrProjectsCreate { detail: String },
+    #[error("Failed to open the project: {detail}")]
+    HerdrProjectsOpen { detail: String },
+    #[error("Could not read the projects folder: {detail}")]
+    HerdrProjectsFolder { detail: String },
     #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]
     UnknownKeybinding(String),
     #[error("keybindings.{command}: invalid keystroke {keystroke:?}")]

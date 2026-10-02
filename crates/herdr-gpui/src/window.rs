@@ -61,6 +61,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) theme: config::Theme,
     pub(crate) config_load: Option<Task<()>>,
     pub(crate) font_size_saves: crate::font_sizes::FontSizeSaves,
+    /// The queued settings writes behind the Preferences fields.
+    pub(crate) settings_saves: preferences::SettingsSaves,
+    /// The optional `herdr-projects` integration: plugin detection, install,
+    /// and project creation.
+    pub(crate) herdr_projects: crate::herdr_projects::State,
     pub(crate) config_watch: Option<Task<()>>,
     pub(crate) config_load_revision: u64,
     pub(crate) endpoints: Vec<endpoint::Endpoint>,
@@ -137,6 +142,10 @@ pub(crate) struct HerdrWindow {
     pub(crate) tab_drag: Option<tab_drag::TabDrag>,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
+    /// The Spaces/Projects split inside the top region: the share given to
+    /// Projects, 0.1..=0.9. `None` splits them evenly.
+    pub(crate) sidebar_projects_split: Option<f32>,
+    pub(crate) sidebar_projects_split_modified: bool,
     pub(crate) sidebar_preferences: Option<preferences::Preferences>,
     pub(crate) sidebar_modified: bool,
     pub(crate) agent_sort: preferences::AgentSort,
@@ -145,11 +154,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) avatars: Option<avatars::Avatars>,
     #[cfg(feature = "integration-test")]
     pub(crate) input_probe: smoke::InputProbe,
-    /// Spaces and agents lists, in that order.
-    pub(crate) sidebar_scroll: [ScrollHandle; 2],
+    /// Spaces, agents, and projects lists, in that order.
+    pub(crate) sidebar_scroll: [ScrollHandle; 3],
     /// The row each list has scrolled into view, so a new selection is revealed
     /// while the user's own scrolling of an unchanged one is left alone.
-    pub(crate) sidebar_revealed: [std::cell::Cell<Option<usize>>; 2],
+    pub(crate) sidebar_revealed: [std::cell::Cell<Option<usize>>; 3],
     pub(crate) _poll: Task<()>,
     pub(crate) _activation: Subscription,
     /// The sidebar as a cached view; see `sidebar::SidebarView`.
@@ -224,6 +233,9 @@ impl HerdrWindow {
             }
             if !self.sidebar_split_modified {
                 self.sidebar_split = chrome.sidebar_split;
+            }
+            if !self.sidebar_projects_split_modified {
+                self.sidebar_projects_split = chrome.sidebar_projects_split;
             }
             if !self.agent_sort_modified {
                 self.agent_sort = chrome.agent_sort;
@@ -372,6 +384,8 @@ impl HerdrWindow {
             theme,
             config_load: None,
             font_size_saves: Default::default(),
+            settings_saves: Default::default(),
+            herdr_projects: Default::default(),
             config_watch: None,
             config_load_revision: 0,
             catalog: endpoint::Catalog::new(&target),
@@ -436,6 +450,8 @@ impl HerdrWindow {
             tab_drag: None,
             sidebar_split: None,
             sidebar_split_modified: false,
+            sidebar_projects_split: None,
+            sidebar_projects_split_modified: false,
             sidebar_preferences: None,
             sidebar_modified: false,
             agent_sort: preferences::AgentSort::default(),

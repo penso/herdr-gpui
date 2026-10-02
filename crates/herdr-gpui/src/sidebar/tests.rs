@@ -32,6 +32,7 @@ fn section_headings_use_the_configured_sidebar_font_size() {
                 &font,
                 &Theme::default(),
                 super::layout::for_mode(Default::default()),
+                0.,
             );
             assert_eq!(heading.text_style().font_size, Some(px(size).into()));
         }

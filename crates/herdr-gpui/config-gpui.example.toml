@@ -28,6 +28,16 @@ contrast = "standard"
 confirm_close_tab = true
 # Show the Agents section below Spaces in the sidebar.
 show_agents = true
+# Opt in to the herdr-projects integration: a Projects section in the sidebar
+# and a + button on each space to create a project from that folder. It also
+# needs projects_root below. Off by default; turn it on in Preferences, which
+# checks the plugin and offers to install it.
+# use_herdr_projects = true
+# Spaces whose working directory is inside this folder move from Spaces into a
+# separate Projects section, beside the ones that still work on the repository
+# itself. Commented out (the default) lists every space under Spaces.
+# Accepts an absolute path or a ~/ path.
+# projects_root = "~/.herdr-projects"
 # macOS only: whether Option-letter reaches a pane as an Alt shortcut (Alt-P
 # for Option-P) or types the character the keyboard layout puts there. "auto"
 # sends Alt on the U.S. and ABC layouts and types elsewhere, so layouts that
@@ -73,6 +83,10 @@ position = "bottom-right"
 # The terminal keeps the remaining width, so a wide gap costs columns.
 # Ignored while the sidebar is hidden. Set 0 to sit against the divider.
 # sidebar_gap = 8
+# Extra height above and below the Spaces, Projects and Agents headings,
+# 0 to 128 logical pixels. 0 keeps the density's own padding. Editable with
+# the stepper in Preferences (Appearance, "Section headers").
+# sidebar_header_height = 0
 
 # Native shortcuts. Each key is a command; the value is one keystroke or a list,
 # primary first. "" or [] unbinds it. Assigning a keystroke here takes it away

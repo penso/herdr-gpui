@@ -281,6 +281,29 @@ once. Set top-level `confirm_close_tab = false` to never ask for tabs
 section and give Spaces the full sidebar height. Both default to `true`. Pane
 closures still ask for confirmation. Saved edits apply automatically.
 
+The optional `herdr-projects` integration is switched on in **Preferences →
+Herdr Projects → Use herdr-projects**, together with a projects folder (for the
+plugin, `~/.herdr-projects`). Both are required: with the switch on and a folder
+set, every space whose working directory lies inside that folder is listed in a
+separate **Projects** section below the Spaces footer instead of in Spaces, and
+each Spaces row gets a small `+` that creates a project from that folder with
+`herdr-projects new <name> --repo <folder>`. Off (the default), the sidebar is
+unchanged. The preferences page checks whether the plugin is installed and
+offers to install it when it is missing.
+
+The same settings can be written by hand as top-level lines (before any table
+headers); the folder accepts an absolute path or a `~/` path, and the root
+folder itself is not a project:
+
+```toml
+use_herdr_projects = true
+projects_root = "~/.herdr-projects"
+```
+
+Edits made in Preferences are written to `config-gpui.local.toml` beside the
+other overrides, preserving comments and unrelated keys; the folder is a text
+field (click, type, Enter saves, Escape cancels).
+
 `[notifications]` controls GUI-local in-app delivery, independently of the daemon:
 
 ```toml
@@ -395,6 +418,7 @@ file with both. Existing spacing-only tables remain supported and use normal mod
 [layout]
 mode = "compact"
 sidebar_gap = 8
+sidebar_header_height = 0
 ```
 
 `sidebar_gap` (finite 0..64 logical pixels, default `0`) is optional blank space between the sidebar and the terminal beside it.
@@ -402,6 +426,13 @@ The default keeps the first column flush with the divider; an explicit value suc
 The terminal keeps the remaining width, so the daemon is resized to the columns
 it actually has, and the gap is ignored while the sidebar is hidden.
 Any space smaller than one character cell at the right or bottom edge takes the adjacent terminal cells' background colors, without stretching text or changing input coordinates.
+
+`sidebar_header_height` (finite 0..128 logical pixels, default `0`) is extra
+height above and below each section heading — Spaces, Projects, and Agents —
+on top of the layout's own padding, so headings can read as dividers. It is
+also a **−/+ stepper** in Preferences (Appearance → **Section headers**), which
+writes the `[layout]` table for you (reopening a named `layout = "..."` string
+as a table when needed).
 
 The `[clipboard_toast]` table controls the `copied to clipboard` flash shown
 after a terminal selection is copied. Like the keymap (see the daemon `[keys]`
@@ -1071,10 +1102,25 @@ Windows setup) nothing is saved and the window says so.
 - Agents panel header ends with its sort, `grouped` or `priority`, which a
   click flips; an active agent view names itself there instead. Client-local
   and persisted beside the sidebar width, as in the terminal client.
+- Optional `herdr-projects` integration, off by default: Preferences → Herdr
+  Projects has a switch (which checks whether the plugin is installed and offers
+  to install it), the projects folder, and the plugin status. With both the
+  switch and folder set, spaces working inside the folder move to a Projects
+  section below the Spaces footer with the same selection, focus, click, icon,
+  status, and right-click/hover menus as a space row, and every Spaces row gets
+  a `+` that creates a project from that folder. Projects that exist on disk but
+  have no space yet are listed too (a directory with a `PROJECT.md`), so a
+  freshly created project appears at once; a project is listed once, and the `+`
+  is hidden for a folder that already is a project. Project rows keep the
+  daemon's order, and drag-reorder stays a Spaces gesture. Spaces and Projects
+  can be resized against each other by dragging the divider above the Projects
+  heading (double-click resets it); that split is remembered per local daemon
+  socket, like the Agents split. Both settings are validated with the
+  config-file rules before writing.
 - Resizable sidebar with width persisted per local daemon socket, shared across
-  host groups. Drag the divider between Spaces and Agents up or down to resize
-  their sections; double-click it to restore an even split. The split is saved
-  across launches and retained while Agents is hidden.
+  host groups. Drag the divider between the Spaces/Projects group and Agents up
+  or down to resize their sections; double-click it to restore an even split.
+  The split is saved across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour

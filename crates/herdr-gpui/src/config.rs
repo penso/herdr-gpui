@@ -85,6 +85,16 @@ pub struct Config {
     pub show_agents: bool,
     /// How far the app's own marks and labels stand off its chrome.
     pub contrast: Contrast,
+    /// Master switch for the `herdr-projects` integration: the Projects section
+    /// and the per-space create button. Off by default.
+    pub use_herdr_projects: bool,
+    /// Spaces whose working directory lies inside this folder are listed in the
+    /// sidebar's Projects section instead of Spaces. `None` keeps every space
+    /// in Spaces, which is the default.
+    pub projects_root: Option<PathBuf>,
+    /// The same setting as typed, before `~/` was resolved against this
+    /// machine's home. Remote devices resolve it against their own home.
+    pub projects_root_raw: Option<String>,
     /// Show each agent's status word beside it, following the daemon's
     /// `[ui.sidebar.agents]` rows when they name the `state_text` token.
     pub agent_status_text: AgentStatusText,
@@ -236,6 +246,10 @@ pub struct Layout {
     /// only while the sidebar is on screen, and narrows the terminal, so the
     /// daemon is told about the columns it actually has.
     pub sidebar_gap: f32,
+    /// Extra vertical padding above and below each sidebar section heading
+    /// (Spaces, Projects, Agents), in logical pixels. Zero keeps the density's
+    /// own padding; the minimum makes headings read as dividers.
+    pub sidebar_header_height: f32,
 }
 
 impl Default for Layout {
@@ -243,6 +257,7 @@ impl Default for Layout {
         Self {
             mode: LayoutMode::default(),
             sidebar_gap: DEFAULT_SIDEBAR_GAP,
+            sidebar_header_height: 0.,
         }
     }
 }
@@ -418,6 +433,7 @@ impl<'de> Deserialize<'de> for Layout {
                 #[serde(default)]
                 mode: LayoutMode,
                 sidebar_gap: Option<f32>,
+                sidebar_header_height: Option<f32>,
             },
         }
         Ok(match Setting::deserialize(deserializer)? {
@@ -425,9 +441,14 @@ impl<'de> Deserialize<'de> for Layout {
                 mode,
                 ..Self::default()
             },
-            Setting::Options { mode, sidebar_gap } => Self {
+            Setting::Options {
+                mode,
+                sidebar_gap,
+                sidebar_header_height,
+            } => Self {
                 mode,
                 sidebar_gap: sidebar_gap.unwrap_or(DEFAULT_SIDEBAR_GAP),
+                sidebar_header_height: sidebar_header_height.unwrap_or(0.),
             },
         })
     }
@@ -488,6 +509,10 @@ const DEFAULT_SIDEBAR_GAP: f32 = 0.;
 /// A gap wider than this stops reading as spacing and starts eating columns the
 /// terminal needs, so the config file is held to a band a window can afford.
 const MAX_SIDEBAR_GAP: f32 = 64.;
+
+/// The heading height band Preferences' stepper moves within. Taller headings
+/// cost list space, so the cap stays modest.
+pub(crate) const MAX_SIDEBAR_HEADER_HEIGHT: f32 = 128.;
 
 /// The daemon's config is read for a handful of keys, so a file far larger
 /// than any hand-written config is skipped rather than parsed on every load.
@@ -584,6 +609,9 @@ impl Default for Config {
             confirm_close_tab: true,
             show_agents: true,
             contrast: Contrast::default(),
+            use_herdr_projects: false,
+            projects_root: None,
+            projects_root_raw: None,
             agent_status_text: AgentStatusText::default(),
             usage: crate::usage::UsageConfig::default(),
             option_as_alt: OptionAsAlt::default(),
@@ -610,6 +638,8 @@ struct Settings {
     confirm_close_tab: Option<bool>,
     show_agents: Option<bool>,
     contrast: Contrast,
+    use_herdr_projects: Option<bool>,
+    projects_root: Option<String>,
     usage: crate::usage::UsageConfig,
     option_as_alt: OptionAsAlt,
     open_links_in: LinkTarget,
@@ -664,6 +694,25 @@ pub(crate) fn home() -> Result<PathBuf> {
         })
         .map(PathBuf::from)
         .ok_or(Error::MissingHome)
+}
+
+/// Resolves the configured `projects_root`. An empty value disables the
+/// section, as does omitting the key. `~/` expands to the home directory; a
+/// still-relative path is rejected rather than silently matching nothing.
+fn projects_root(raw: &str) -> Result<Option<PathBuf>> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    let path = if let Some(relative) = raw.strip_prefix("~/") {
+        home()?.join(relative)
+    } else {
+        PathBuf::from(raw)
+    };
+    if !path.is_absolute() {
+        return Err(Error::InvalidProjectsRoot);
+    }
+    Ok(Some(path))
 }
 
 /// The directory holding this app's `herdr` configuration directory. Upstream
@@ -873,6 +922,33 @@ impl Config {
         Ok(Self::path()?.with_extension("local.toml"))
     }
 
+    /// Whether the `herdr-projects` integration is active: its switch is on and
+    /// a projects folder is set. Everything the integration touches in the
+    /// sidebar is gated on this.
+    pub(crate) fn herdr_projects_enabled(&self) -> bool {
+        self.use_herdr_projects && self.projects_root.is_some()
+    }
+
+    /// The Projects root a raw setting value resolves to, with the same rules
+    /// the config file itself applies. Preferences edits settings through this
+    /// so an invalid value is rejected before anything is written.
+    pub(crate) fn resolve_projects_root(value: &str) -> Result<Option<PathBuf>> {
+        projects_root(value)
+    }
+
+    /// Whether a workspace working in `cwd` belongs to the configured Projects
+    /// root. The comparison is lexical and component-based, so a root written
+    /// with a trailing separator still matches and a sibling directory that
+    /// merely shares a prefix does not. The root itself is not a project.
+    #[cfg(test)]
+    pub(crate) fn is_project_cwd(&self, cwd: &str) -> bool {
+        let Some(root) = self.projects_root.as_deref() else {
+            return false;
+        };
+        let cwd = Path::new(cwd);
+        cwd.starts_with(root) && cwd != root
+    }
+
     /// Gives every face the config left alone an automatic icon-font cascade.
     /// `installed` is consulted only when some face still needs one, because
     /// enumerating system fonts is slow enough to keep off the UI thread.
@@ -1050,6 +1126,11 @@ impl Config {
         {
             return Err(Error::InvalidSidebarGap);
         }
+        if !settings.layout.sidebar_header_height.is_finite()
+            || !(0.0..=MAX_SIDEBAR_HEADER_HEIGHT).contains(&settings.layout.sidebar_header_height)
+        {
+            return Err(Error::InvalidSidebarHeaderHeight);
+        }
         config.layout = settings.layout;
         config.keybindings = Keymap::with_overrides(&settings.keybindings, &base.keys)?;
         if let Some(theme) = settings.theme {
@@ -1061,6 +1142,17 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.contrast = settings.contrast;
+        config.use_herdr_projects = settings.use_herdr_projects.unwrap_or(false);
+        config.projects_root_raw = settings
+            .projects_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        config.projects_root = match settings.projects_root {
+            Some(raw) => projects_root(&raw)?,
+            None => None,
+        };
         settings.usage.validate()?;
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
@@ -1201,6 +1293,131 @@ impl Config {
                 _ => {
                     document.insert("layout", toml_edit::value(mode.name()));
                 }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `layout.sidebar_header_height`, retaining other overrides.
+    /// A named `layout = "..."` string is reopened as a `[layout]` table so it
+    /// can carry the extra key; zero removes the key again.
+    pub(crate) fn save_sidebar_header_height(value: f32) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_sidebar_header_height_path(value, &local)
+    }
+
+    fn save_sidebar_header_height_path(value: f32, path: &Path) -> Result<()> {
+        if !value.is_finite() || !(0.0..=MAX_SIDEBAR_HEADER_HEIGHT).contains(&value) {
+            return Err(Error::InvalidSidebarHeaderHeight);
+        }
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            if value <= 0. {
+                // Removing: only a table can carry the key.
+                if let Some(item) = document.get_mut("layout")
+                    && let Some(table) = item.as_table_like_mut()
+                {
+                    table.remove("sidebar_header_height");
+                }
+                return write_config(path, &document.to_string());
+            }
+            match document.get_mut("layout") {
+                Some(item) => {
+                    // Replace the value in place so the key keeps its comment.
+                    let existing = std::mem::replace(item, toml_edit::Item::None);
+                    let mut table = match existing {
+                        toml_edit::Item::Table(table) => table,
+                        toml_edit::Item::Value(toml_edit::Value::InlineTable(inline)) => {
+                            let mut table = toml_edit::Table::new();
+                            for (key, value) in inline.iter() {
+                                table.insert(key, toml_edit::Item::Value(value.clone()));
+                            }
+                            table
+                        }
+                        toml_edit::Item::Value(named) => {
+                            let mut table = toml_edit::Table::new();
+                            if let Some(mode) = named.as_str() {
+                                table.insert("mode", toml_edit::value(mode));
+                            }
+                            table
+                        }
+                        other => other.into_table().unwrap_or_default(),
+                    };
+                    table.insert("sidebar_header_height", toml_edit::value(f64::from(value)));
+                    *item = toml_edit::Item::Table(table);
+                }
+                None => {
+                    let mut table = toml_edit::Table::new();
+                    table.insert("sidebar_header_height", toml_edit::value(f64::from(value)));
+                    document.insert("layout", toml_edit::Item::Table(table));
+                }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `projects_root`, retaining the latest on-disk settings.
+    /// An empty value removes the key, disabling the Projects section. The
+    /// value is validated with the same rules as the config file before the
+    /// file is touched.
+    pub(crate) fn save_projects_root(value: &str) -> Result<()> {
+        Self::resolve_projects_root(value)?;
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_projects_root_path(value, &local)
+    }
+
+    fn save_projects_root_path(value: &str, path: &Path) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                document.remove("projects_root");
+            } else {
+                let mut value = toml_edit::Value::from(trimmed);
+                if let Some(previous) = document
+                    .get("projects_root")
+                    .and_then(toml_edit::Item::as_value)
+                {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                document["projects_root"] = toml_edit::Item::Value(value);
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
+    /// Persist only `use_herdr_projects`. Turning it off removes the key, so it
+    /// inherits the managed default (off).
+    pub(crate) fn save_use_herdr_projects(enabled: bool) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_use_herdr_projects_path(enabled, &local)
+    }
+
+    fn save_use_herdr_projects_path(enabled: bool, path: &Path) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            if enabled {
+                document["use_herdr_projects"] = toml_edit::value(true);
+            } else {
+                document.remove("use_herdr_projects");
             }
             write_config(path, &document.to_string())
         })();
@@ -2326,6 +2543,49 @@ mod tests {
     }
 
     #[test]
+    fn projects_root_saves_clears_and_preserves_other_overrides() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        let (first, second) = if cfg!(windows) {
+            ("C:/srv/projects", "C:/srv/other")
+        } else {
+            ("/srv/projects", "/srv/other")
+        };
+        fs::write(&path, "# retained\ntheme = 'Nord'\nfuture = true\n")?;
+
+        // `future = true` stands in for a key this build does not know; parsing
+        // strips it so the strict deserializer is not asked about it.
+        let parsed = |text: &str| Config::parse(&text.replace("future = true\n", ""));
+
+        Config::save_projects_root_path(first, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(saved.contains("# retained"));
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(saved.contains("future = true"));
+        assert_eq!(
+            parsed(&saved)?.projects_root.as_deref(),
+            Some(Path::new(first))
+        );
+
+        // Updating replaces the one value in place, keeping other keys.
+        Config::save_projects_root_path(second, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert_eq!(saved.matches("projects_root").count(), 1);
+        assert!(saved.contains("future = true"));
+        assert_eq!(
+            parsed(&saved)?.projects_root.as_deref(),
+            Some(Path::new(second))
+        );
+
+        // An empty value removes the key, which disables the section.
+        Config::save_projects_root_path("  ", &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("projects_root"));
+        assert!(parsed(&saved)?.projects_root.is_none());
+        Ok(())
+    }
+
+    #[test]
     fn high_contrast_parts_selected_rows_and_lifts_dim_labels_on_every_theme() {
         let ratio = crate::contrast::ratio;
         for name in Theme::BUILTIN_NAMES {
@@ -2350,6 +2610,73 @@ mod tests {
                 assert!(ratio(high.foreground, background) >= 4.5, "{name} text");
             }
         }
+    }
+
+    #[test]
+    fn projects_root_resolution_matches_the_config_file_rules() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        assert_eq!(Config::resolve_projects_root("")?, None);
+        assert_eq!(Config::resolve_projects_root("   ")?, None);
+        assert_eq!(
+            Config::resolve_projects_root(root)?,
+            Some(PathBuf::from(root))
+        );
+        // A trailing separator resolves to the same root.
+        assert_eq!(
+            Config::resolve_projects_root(&format!("{root}/"))?,
+            Some(PathBuf::from(root))
+        );
+        // A relative path is rejected before anything is written.
+        assert!(matches!(
+            Config::resolve_projects_root("relative/projects"),
+            Err(Error::InvalidProjectsRoot)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn herdr_projects_is_off_until_the_switch_and_folder_are_set() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        assert!(!Config::default().herdr_projects_enabled());
+        // The folder alone is not enough.
+        let folder_only = Config::parse(&format!("projects_root = {root:?}"))?;
+        assert!(!folder_only.herdr_projects_enabled());
+        // The switch alone is not enough.
+        let switch_only = Config::parse("use_herdr_projects = true")?;
+        assert!(!switch_only.herdr_projects_enabled());
+        // Both turn it on.
+        let both = Config::parse(&format!(
+            "use_herdr_projects = true\nprojects_root = {root:?}"
+        ))?;
+        assert!(both.herdr_projects_enabled());
+        assert!(Config::parse("use_herdr_projects = 'yes'").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn use_herdr_projects_saves_and_clears() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        fs::write(&path, "# kept\ntheme = 'Nord'\n")?;
+        Config::save_use_herdr_projects_path(true, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(saved.contains("use_herdr_projects = true"));
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(Config::parse(&saved)?.use_herdr_projects);
+        // Turning it off removes the key and inherits the managed default.
+        Config::save_use_herdr_projects_path(false, &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("use_herdr_projects"));
+        assert!(!Config::parse(&saved)?.use_herdr_projects);
+        Ok(())
     }
 
     #[test]
@@ -2500,6 +2827,42 @@ mod tests {
         assert!(!config.show_agents);
         assert!(Config::parse("confirm_close_tab = 'false'").is_err());
         assert!(Config::parse("show_agents = 0").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn projects_root_classifies_only_descendants() -> anyhow::Result<()> {
+        let root = if cfg!(windows) {
+            "C:/root/projects"
+        } else {
+            "/root/projects"
+        };
+        // A trailing separator is the same root.
+        for setting in [root.to_owned(), format!("{root}/")] {
+            let config = Config::parse(&format!("projects_root = {setting:?}"))?;
+            assert!(config.is_project_cwd(&format!("{root}/one")));
+            assert!(config.is_project_cwd(&format!("{root}/one/deeper")));
+            assert!(
+                !config.is_project_cwd(root),
+                "the root itself is not a project"
+            );
+            assert!(!config.is_project_cwd(&format!("{root}-two/one")));
+            assert!(!config.is_project_cwd(""));
+        }
+        // Omitting the key, an empty value, or the shipped example all disable
+        // the section, so existing behavior is unchanged.
+        for config in [
+            Config::default(),
+            Config::parse("")?,
+            Config::parse("projects_root = ''")?,
+            Config::parse(DEFAULT_CONFIG)?,
+        ] {
+            assert!(config.projects_root.is_none());
+            assert!(!config.is_project_cwd(&format!("{root}/one")));
+        }
+        // A relative or non-string value is rejected, not silently unmatched.
+        assert!(Config::parse("projects_root = 'relative/projects'").is_err());
+        assert!(Config::parse("projects_root = 42").is_err());
         Ok(())
     }
 
@@ -2696,6 +3059,81 @@ mod tests {
             Config::parse("[layout]\nsidebar_gap = nan"),
             Err(Error::InvalidSidebarGap)
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn sidebar_header_height_defaults_to_zero_and_accepts_its_band() -> anyhow::Result<()> {
+        for config in [
+            Config::default(),
+            Config::parse("")?,
+            Config::parse(DEFAULT_CONFIG)?,
+        ] {
+            assert_eq!(config.layout.sidebar_header_height, 0.);
+        }
+        assert_eq!(Config::parse("[layout]")?.layout.sidebar_header_height, 0.);
+        for (text, height) in [
+            ("[layout]\nsidebar_header_height = 0", 0.),
+            ("[layout]\nsidebar_header_height = 12", 12.),
+            ("[layout]\nsidebar_header_height = 127.5", 127.5),
+            ("[layout]\nsidebar_header_height = 128", 128.),
+        ] {
+            let config = Config::parse(text)?;
+            assert_eq!(config.layout.sidebar_header_height, height);
+            // The heading height alone leaves the gap at its default.
+            assert_eq!(config.layout.sidebar_gap, Layout::default().sidebar_gap);
+        }
+        for text in [
+            "[layout]\nsidebar_header_height = 128.1",
+            "[layout]\nsidebar_header_height = -1",
+            "[layout]\nsidebar_header_height = nan",
+        ] {
+            assert!(matches!(
+                Config::parse(text),
+                Err(Error::InvalidSidebarHeaderHeight)
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn sidebar_header_height_saves_into_a_layout_table_and_clears() -> anyhow::Result<()> {
+        let temp = TempDirectory::new()?;
+        let path = temp.0.join("config-gpui.local.toml");
+        // A named layout string reopens as a table so it can carry the key.
+        fs::write(&path, "# kept\nlayout = 'compact'\ntheme = 'Nord'\n")?;
+        Config::save_sidebar_header_height_path(20., &path)?;
+        let saved = fs::read_to_string(&path)?;
+        let config = Config::parse(&saved)?;
+        assert_eq!(config.layout.mode, LayoutMode::try_from("compact")?);
+        assert_eq!(config.layout.sidebar_header_height, 20.);
+        assert!(saved.contains("theme = 'Nord'"));
+        assert!(saved.contains("# kept"));
+
+        // Zero removes the key again, keeping the table's mode.
+        Config::save_sidebar_header_height_path(0., &path)?;
+        let saved = fs::read_to_string(&path)?;
+        assert!(!saved.contains("sidebar_header_height"));
+        assert_eq!(
+            Config::parse(&saved)?.layout.mode,
+            LayoutMode::try_from("compact")?
+        );
+
+        // An existing table keeps its other keys.
+        fs::write(&path, "[layout]\nmode = 'compact'\nsidebar_gap = 4\n")?;
+        Config::save_sidebar_header_height_path(8., &path)?;
+        let config = Config::parse(&fs::read_to_string(&path)?)?;
+        assert_eq!(config.layout.sidebar_header_height, 8.);
+        assert_eq!(config.layout.sidebar_gap, 4.);
+        assert_eq!(config.layout.mode, LayoutMode::try_from("compact")?);
+
+        // Out of band is refused before the file is touched.
+        let before = fs::read_to_string(&path)?;
+        assert!(matches!(
+            Config::save_sidebar_header_height_path(129., &path),
+            Err(Error::InvalidSidebarHeaderHeight)
+        ));
+        assert_eq!(fs::read_to_string(&path)?, before);
         Ok(())
     }
 

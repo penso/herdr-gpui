@@ -1127,6 +1127,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         theme: Default::default(),
         config_load: None,
         font_size_saves: Default::default(),
+        settings_saves: Default::default(),
+        herdr_projects: Default::default(),
         config_watch: None,
         config_load_revision: 0,
         git: Default::default(),
@@ -1191,6 +1193,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         tab_drag: None,
         sidebar_split: None,
         sidebar_split_modified: false,
+        sidebar_projects_split: None,
+        sidebar_projects_split_modified: false,
         sidebar_preferences: None,
         sidebar_modified: false,
         agent_sort: Default::default(),
@@ -2434,6 +2438,452 @@ fn the_sidebar_follows_the_selection_without_undoing_manual_scrolling(
             }
         });
     }
+}
+
+#[gpui::test]
+fn projects_root_moves_matching_spaces_into_their_own_section(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].label = "project-alpha".into();
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    let spaces = cx.debug_bounds("spaces-scroll").unwrap();
+    let projects = cx.debug_bounds("projects-scroll").unwrap();
+    assert!(cx.debug_bounds("header-projects").is_some());
+    let moved = cx.debug_bounds("row-project-alpha").unwrap();
+    let stayed = cx.debug_bounds("row-herdr").unwrap();
+    assert!(
+        projects.contains(&moved.center()),
+        "{moved:?} is not in {projects:?}"
+    );
+    assert!(
+        !spaces.contains(&moved.center()),
+        "a project row must leave Spaces"
+    );
+    assert!(spaces.contains(&stayed.center()));
+    assert!(
+        cx.debug_bounds("row-another workspace").is_some(),
+        "a non-project space stays in Spaces"
+    );
+}
+
+#[gpui::test]
+fn projects_section_is_absent_without_a_root(cx: &mut gpui::TestAppContext) {
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.snapshot = Some(Arc::new(snapshot(4)));
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The window never rendered the section, so its absence is real.
+    assert!(cx.debug_bounds("header-projects").is_none());
+    assert!(cx.debug_bounds("projects-scroll").is_none());
+    assert!(cx.debug_bounds("header-spaces").is_some());
+    assert!(cx.debug_bounds("row-herdr").is_some());
+}
+
+#[gpui::test]
+fn the_header_height_setting_tallens_every_section_heading(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        // Projects only renders with the integration on and a matching space.
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(760.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+
+    // All three headings render through the shared `header` path, so they are
+    // the same height at rest.
+    let spaces = cx.debug_bounds("header-spaces").unwrap().size.height;
+    let projects = cx.debug_bounds("header-projects").unwrap().size.height;
+    let agents = cx.debug_bounds("header-agents").unwrap().size.height;
+    assert_eq!(projects, spaces, "Projects must match Spaces");
+    assert_eq!(agents, spaces, "Agents must match Spaces");
+
+    view.update(cx, |view, cx| {
+        view.config.layout.sidebar_header_height = 24.;
+        cx.notify();
+    });
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // And every heading grows by exactly the same amount.
+    for (id, base) in [
+        ("header-spaces", spaces),
+        ("header-projects", projects),
+        ("header-agents", agents),
+    ] {
+        assert_eq!(
+            cx.debug_bounds(id).unwrap().size.height,
+            base + px(24.),
+            "{id} must honour sidebar_header_height"
+        );
+    }
+}
+
+#[gpui::test]
+fn the_switch_gates_projects_and_the_create_button(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.snapshot = Some(Arc::new(snapshot(4)));
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[1].label = "project-alpha".into();
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/alpha");
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // A projects folder alone changes nothing without the switch.
+    assert!(cx.debug_bounds("header-projects").is_none());
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+    assert!(cx.debug_bounds("projects-split-resize").is_none());
+
+    view.update(cx, |view, cx| {
+        view.config.use_herdr_projects = true;
+        cx.notify();
+    });
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("header-projects").is_some());
+    // Spaces rows offer creation; the project row does not.
+    assert!(cx.debug_bounds("project-new-w0").is_some());
+    assert!(cx.debug_bounds("project-new-w1").is_none());
+    // The Projects divider appears with the section.
+    assert!(cx.debug_bounds("projects-split-resize").is_some());
+}
+
+#[gpui::test]
+fn projects_split_divider_is_absent_without_a_project(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        // The switch is on and a folder is set, but nothing lives inside it.
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("header-projects").is_none());
+    assert!(cx.debug_bounds("projects-split-resize").is_none());
+}
+
+#[gpui::test]
+fn projects_split_drag_moves_clamps_and_resets(cx: &mut gpui::TestAppContext) {
+    use gpui::{MouseButton, MouseDownEvent};
+
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        // Enough rows on both sides that neither list is degenerate.
+        for index in [1usize, 2, 6, 7, 8, 9] {
+            snapshot.workspaces[index].new_workspace_cwd = format!("{root}/w{index}");
+        }
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(700.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+
+    let divider = cx.debug_bounds("projects-split-resize").unwrap();
+    let section = cx.debug_bounds("spaces-section").unwrap();
+    let base_projects = cx.debug_bounds("projects-scroll").unwrap().size.height;
+    let base_spaces = cx.debug_bounds("spaces-scroll").unwrap().size.height;
+    assert!(
+        (base_projects - base_spaces).abs() <= px(1.),
+        "the default is an even split"
+    );
+    // The Agents divider still exists beside the new one.
+    assert!(cx.debug_bounds("sidebar-split-resize").is_some());
+
+    // Drag near the top of the top region: Projects takes most of it.
+    let high = point(divider.center().x, section.top() + px(8.));
+    cx.simulate_mouse_down(divider.center(), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(high, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert!(view.sidebar_drag.is_some());
+        assert!(view.sidebar_projects_split_modified);
+        assert!(view.sidebar_projects_split.unwrap() >= 0.85);
+    });
+    assert!(
+        cx.debug_bounds("projects-scroll").unwrap().size.height
+            > cx.debug_bounds("spaces-scroll").unwrap().size.height
+    );
+    cx.simulate_mouse_up(high, MouseButton::Left, Modifiers::default());
+
+    // Dragging past the region clamps Projects to its minimum.
+    let divider = cx.debug_bounds("projects-split-resize").unwrap();
+    let low = point(divider.center().x, section.bottom() + px(20.));
+    cx.simulate_mouse_down(divider.center(), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(low, MouseButton::Left, Modifiers::default());
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert!((view.sidebar_projects_split.unwrap() - 0.1).abs() < 0.0001);
+    });
+    cx.simulate_mouse_up(low, MouseButton::Left, Modifiers::default());
+
+    // Double-click resets the split to even.
+    let position = cx.debug_bounds("projects-split-resize").unwrap().center();
+    cx.simulate_event(MouseDownEvent {
+        position,
+        button: MouseButton::Left,
+        click_count: 2,
+        ..Default::default()
+    });
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.sidebar_projects_split, None);
+        assert!(view.sidebar_drag.is_none());
+        assert!(view.sidebar_projects_split_modified);
+    });
+    assert_eq!(
+        cx.debug_bounds("projects-scroll").unwrap().size.height,
+        base_projects
+    );
+}
+
+#[gpui::test]
+fn projects_section_lists_disk_projects_and_deduplicates(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let repo = if cfg!(windows) {
+        "C:/fixture/repos/WeatherDashboard"
+    } else {
+        "/fixture/repos/WeatherDashboard"
+    };
+    let (_view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        view.herdr_projects.projects = vec![
+            crate::herdr_projects::Project {
+                slug: "weatherdashboard".into(),
+                path: std::path::PathBuf::from(format!("{root}/weatherdashboard")),
+            },
+            crate::herdr_projects::Project {
+                slug: "solo".into(),
+                path: std::path::PathBuf::from(format!("{root}/solo")),
+            },
+        ];
+        view.herdr_projects.projects_checked = true;
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        // w1 is the space for the `solo` project.
+        snapshot.workspaces[1].new_workspace_cwd = format!("{root}/solo");
+        // w0 is a plain repo checkout whose folder already is a project.
+        snapshot.workspaces[0].new_workspace_cwd = repo.into();
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(700.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("header-projects").is_some());
+    // A project without a space gets a disk row; a project with a space does
+    // not, so it is listed once.
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_some());
+    assert!(cx.debug_bounds("project-disk-solo").is_none());
+    // The + is gone for a folder that already is a project, and stays for one
+    // that is not.
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+    assert!(cx.debug_bounds("project-new-w2").is_some());
+}
+
+#[gpui::test]
+fn creating_a_project_shows_its_row_at_once(cx: &mut gpui::TestAppContext) {
+    let root = std::env::temp_dir().join(format!("herdr-gpui-projects-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(root.clone());
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.workspaces[0].new_workspace_cwd = "/fixture/repos/WeatherDashboard".into();
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("project-new-w0").is_some());
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_none());
+
+    let create_root = root.clone();
+    view.update(cx, |view, cx| {
+        view.create_project_from_space_with(
+            move |_cwd| {
+                std::fs::create_dir_all(create_root.join("weatherdashboard")).unwrap();
+                std::fs::write(
+                    create_root.join("weatherdashboard").join("PROJECT.md"),
+                    "# weatherdashboard",
+                )
+                .unwrap();
+                Ok(())
+            },
+            "/fixture/repos/WeatherDashboard".into(),
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The row appears from the folder read, without a daemon round-trip, and
+    // the + disappears.
+    assert!(cx.debug_bounds("project-disk-weatherdashboard").is_some());
+    assert!(cx.debug_bounds("project-new-w0").is_none());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[gpui::test]
+fn clicking_a_disk_project_runs_the_open_command(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        view.herdr_projects.projects = vec![crate::herdr_projects::Project {
+            slug: "solo".into(),
+            path: std::path::PathBuf::from(format!("{root}/solo")),
+        }];
+        view.herdr_projects.projects_checked = true;
+        // A binary that cannot exist, so the spawn fails without touching the
+        // real plugin.
+        view.herdr_projects.installed = Some(crate::herdr_projects::Installed {
+            version: "1.0".into(),
+            root: std::path::PathBuf::from("/nonexistent-plugin-root"),
+        });
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    let row = cx.debug_bounds("project-disk-solo").unwrap();
+    cx.simulate_click(row.center(), Modifiers::default());
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        assert!(
+            view.local_error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Failed to open the project:")),
+            "unexpected error: {:?}",
+            view.local_error
+        );
+    });
+}
+
+#[gpui::test]
+fn a_focused_project_row_reveals_in_the_projects_list(cx: &mut gpui::TestAppContext) {
+    let root = if cfg!(windows) {
+        "C:/fixture/projects"
+    } else {
+        "/fixture/projects"
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.config.use_herdr_projects = true;
+        view.config.projects_root = Some(std::path::PathBuf::from(root));
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        for (index, workspace) in snapshot.workspaces.iter_mut().enumerate() {
+            if index % 2 == 0 {
+                workspace.new_workspace_cwd = format!("{root}/w{index}");
+            }
+        }
+        snapshot.focused_workspace_id = Some("w38".into());
+        for workspace in &mut snapshot.workspaces {
+            workspace.focused = workspace.workspace_id == "w38";
+        }
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(640.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        full_draw(window, cx).clear(cx);
+    });
+    // The focused project scrolled its own list into view, leaving Spaces alone.
+    cx.update(|_, cx| {
+        let view = view.read(cx);
+        assert!(
+            view.sidebar_scroll[2].offset().y < px(0.),
+            "the focused project must scroll into view"
+        );
+        assert_eq!(view.sidebar_scroll[0].offset().y, px(0.));
+        assert_eq!(view.sidebar_scroll[1].offset().y, px(0.));
+    });
 }
 
 #[gpui::test]

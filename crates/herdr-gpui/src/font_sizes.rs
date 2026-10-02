@@ -152,7 +152,7 @@ mod tests {
                 view.open_preferences(window, cx);
                 view.menu
                     .preferences_scroll
-                    .set_offset(point(px(0.), px(-120.)));
+                    .set_offset(point(px(0.), px(-300.)));
                 view.font_size_saves.task =
                     Some(cx.spawn(async |_, _| std::future::pending().await));
             });
