@@ -35,7 +35,7 @@ struct Entry {
 }
 
 #[derive(Clone)]
-struct Target {
+pub(crate) struct Target {
     boot: String,
     workspace: Option<String>,
     tab: Option<String>,
@@ -43,7 +43,7 @@ struct Target {
 }
 
 impl Target {
-    fn capture(snapshot: &ClientShellSnapshot) -> Self {
+    pub(crate) fn capture(snapshot: &ClientShellSnapshot) -> Self {
         Self {
             boot: snapshot.boot_id.clone(),
             workspace: snapshot.focused_workspace_id.clone(),
@@ -67,7 +67,7 @@ impl Target {
         Ok(())
     }
 
-    fn invocation(
+    pub(crate) fn invocation(
         &self,
         snapshot: &ClientShellSnapshot,
         id: &str,

@@ -4432,3 +4432,76 @@ fn bell_and_window_title_follow_the_selected_endpoint(cx: &mut gpui::TestAppCont
         });
     });
 }
+
+#[gpui::test]
+fn plugin_action_invokes_its_command_on_the_focused_pane_and_fences_input(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, mut server) = connected_endpoint("ssh:plugins");
+    let expected = snapshot();
+    view.update(cx, |view, _| {
+        view.endpoints.truncate(1);
+        view.endpoints.push(endpoint);
+        view.selected_endpoint = 1;
+        view.options = ConnectOptions::default();
+        view.reset_selected();
+        view.activation_deadline = None;
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.commands.push(ClientShellCommand {
+            command_id: "plugin-v1".into(),
+            binding_label: String::new(),
+            binding_labels: vec!["prefix+p".into()],
+            action: ClientShellCommandAction::PluginAction,
+            description: Some("Open dashboard".into()),
+        });
+        assert!(view.input_ready());
+        assert_eq!(
+            view.plugin_hosts()[1].state,
+            crate::plugins::HostState::Selected { ready: true }
+        );
+        // Each refusal leaves the connection untouched and input open.
+        let changed = |error: &crate::Error| matches!(error, crate::Error::PluginActionChanged);
+        let elsewhere = |error: &crate::Error| matches!(error, crate::Error::PluginHostNotSelected);
+        for (endpoint, boot, command, expected) in [
+            (
+                "local",
+                "boot-v1",
+                "plugin-v1",
+                &elsewhere as &dyn Fn(&crate::Error) -> bool,
+            ),
+            ("ssh:plugins", "boot-old", "plugin-v1", &changed),
+            ("ssh:plugins", "boot-v1", "command-v1", &changed),
+            ("ssh:plugins", "boot-v1", "missing", &changed),
+        ] {
+            let error = view.run_plugin_action(endpoint, boot, command).unwrap_err();
+            assert!(expected(&error), "{endpoint}/{boot}/{command}: {error:?}");
+            assert!(view.input_ready());
+        }
+        view.run_plugin_action("ssh:plugins", "boot-v1", "plugin-v1")
+            .unwrap();
+        assert!(!view.input_ready(), "a plugin action must fence input");
+        assert!(view.activation_deadline.is_some());
+        assert!(matches!(
+            view.run_plugin_action("ssh:plugins", "boot-v1", "plugin-v1"),
+            Err(crate::Error::PluginHostNotReady)
+        ));
+    });
+    let ClientMessage::ClientShellEndpointRequest { request, .. } = server.receive() else {
+        panic!("missing command");
+    };
+    let request: serde_json::Value = serde_json::from_str(&request).unwrap();
+    assert_eq!(request["method"], Method::CommandInvoke.as_str());
+    assert_eq!(
+        request["params"],
+        serde_json::json!({
+            "command_id": "plugin-v1",
+            "workspace_id": expected.focused_workspace_id,
+            "tab_id": expected.focused_tab_id,
+            "pane_id": expected.focused_pane_id,
+        })
+    );
+}

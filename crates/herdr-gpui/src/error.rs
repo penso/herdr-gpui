@@ -563,6 +563,12 @@ pub enum Error {
     PaletteConnectionNotReady,
     #[error("No current daemon snapshot.")]
     NoSnapshot,
+    #[error("Switch to this host to run its plugin actions.")]
+    PluginHostNotSelected,
+    #[error("This host is not ready to run plugin actions yet.")]
+    PluginHostNotReady,
+    #[error("This plugin action changed or was removed on its host.")]
+    PluginActionChanged,
     #[error("No captured daemon session. Reopen the palette.")]
     NoPaletteSession,
     #[error("{}", daemon_error_message(.0))]

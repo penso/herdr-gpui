@@ -5,8 +5,11 @@ use crate::sidebar::native_tests::Target;
 use anyhow::{Context as _, Result, bail, ensure};
 use std::time::{Duration, Instant};
 
+/// Probe slot for the Sidebar layout card, after one slot per category.
+pub(super) const SIDEBAR_LAYOUT: usize = Section::ALL.len();
+
 #[derive(Default)]
-struct Layout([Option<Bounds<Pixels>>; 8]);
+struct Layout([Option<Bounds<Pixels>>; SIDEBAR_LAYOUT + 1]);
 impl Global for Layout {}
 
 pub(super) fn probe(index: usize) -> impl IntoElement {
@@ -545,8 +548,8 @@ pub(crate) async fn verify_native(
                 && std::env::var_os("HERDR_TEST_SETTINGS_CAPTURE").is_some()
             {
                 let offset = settings.update(cx, |view, _, cx| -> Result<_> {
-                    let card =
-                        cx.global::<Layout>().0[7].context("missing Sidebar layout paint")?;
+                    let card = cx.global::<Layout>().0[SIDEBAR_LAYOUT]
+                        .context("missing Sidebar layout paint")?;
                     Ok(f32::from(card.top() - view.body_scroll.bounds().top()) - 28.)
                 })??;
                 let captures: &[(f32, &str)] = if expected.width == px(960.) {

@@ -48,15 +48,17 @@ impl SettingsWindow {
 
     pub(in crate::settings_window) fn control_switch(
         &self,
-        id: &'static str,
-        label: &'static str,
+        id: impl Into<SharedString>,
+        label: impl IntoElement,
         checked: bool,
         enabled: bool,
     ) -> Stateful<Div> {
         let (track, thumb) = switch_colors(&self.theme, checked);
+        let id = id.into();
+        let selector = id.to_string();
         div()
             .id(id)
-            .debug_selector(move || id.into())
+            .debug_selector(move || selector)
             .flex()
             .items_center()
             .justify_between()

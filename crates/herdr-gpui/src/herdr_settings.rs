@@ -20,6 +20,7 @@ mod persistence;
 mod tests;
 
 pub(crate) use crate::config::ClipboardToastPosition as ClipboardPosition;
+use crate::config::SidebarScope;
 use herdr_client::protocol::AgentStatus;
 pub(crate) use herdr_client::protocol::ToastHerdrPosition as ToastPosition;
 use serde::Deserialize;
@@ -79,6 +80,8 @@ pub(crate) enum Error {
     Theme(String),
     #[error("cannot edit non-table config field {0}")]
     Table(&'static str),
+    #[error("invalid sidebar token")]
+    SidebarToken(#[from] crate::config::SidebarConfigError),
     #[cfg(unix)]
     #[error("could not remove shared config temporary file: {cleanup}")]
     Cleanup {
@@ -177,6 +180,13 @@ pub(crate) enum Edit {
     CopyOnSelect(bool),
     TabBarPosition(TabBarPosition),
     HideSingleTabBar(bool),
+    /// Adds `token` (config spelling, such as `$summary`) as its own row of
+    /// `[ui.sidebar.<scope>].rows`, or removes every occurrence of it there.
+    SidebarToken {
+        scope: SidebarScope,
+        token: String,
+        shown: bool,
+    },
 }
 
 #[derive(Clone)]
@@ -423,6 +433,7 @@ impl Settings {
                 .as_deref()
                 .unwrap_or("")
                 .parse::<DocumentMut>()?;
+            let sidebar = matches!(edit, Edit::SidebarToken { .. });
             match edit {
                 Edit::Theme(name) => {
                     let name =
@@ -459,6 +470,11 @@ impl Settings {
                     &["ui", "hide_tab_bar_when_single_tab"],
                     hide.into(),
                 )?,
+                Edit::SidebarToken {
+                    scope,
+                    token,
+                    shown,
+                } => sidebar_token(&mut document, scope, &token, shown)?,
                 Edit::Toasts(delivery) => {
                     set(
                         &mut document,
@@ -501,6 +517,12 @@ impl Settings {
             }
             let text = document.to_string();
             // Validate before performing any writes, including directory creation.
+            // The GUI falls back to default rows on a layout it cannot read, so
+            // a sidebar edit must leave one both it and Herdr accept. Other
+            // edits never touch the layout and must not fail on it.
+            if sidebar {
+                crate::config::SidebarLayout::from_daemon_config(&text.parse::<toml::Table>()?)?;
+            }
             let mut snapshot = self.original.clone();
             snapshot.text = Some(text.clone());
             let mut next = Self::parse(self.path.clone(), snapshot)?;
@@ -544,6 +566,96 @@ impl Settings {
     pub(crate) fn status_color(&self, status: AgentStatus, light: bool) -> u32 {
         self.colors(light).status(status)
     }
+}
+
+/// Shows or hides `token` in `[ui.sidebar.<scope>].rows`. Showing appends a
+/// row of its own, after writing out upstream's defaults when `rows` is absent
+/// so they are not lost; hiding drops rows the removal leaves empty. Styled
+/// inline-table occurrences count as the token, and per-agent overrides are
+/// never touched.
+fn sidebar_token(
+    document: &mut DocumentMut,
+    scope: SidebarScope,
+    token: &str,
+    shown: bool,
+) -> Result<(), Error> {
+    scope.check(token)?;
+    let mut item = document.as_item_mut();
+    for key in ["ui", "sidebar", scope.key()] {
+        let table = item.as_table_like_mut().ok_or(Error::Table(key))?;
+        if !table.contains_key(key) {
+            if !shown {
+                return Ok(());
+            }
+            table.insert(key, Item::Table(toml_edit::Table::new()));
+        }
+        item = table.get_mut(key).ok_or(Error::Table(key))?;
+    }
+    let table = item.as_table_like_mut().ok_or(Error::Table("sidebar"))?;
+    if !table.contains_key("rows") {
+        if !shown {
+            return Ok(());
+        }
+        let defaults = scope
+            .default_rows()
+            .iter()
+            .map(|row| row.iter().copied().collect::<toml_edit::Array>())
+            .collect::<toml_edit::Array>();
+        table.insert("rows", Item::Value(Value::Array(defaults)));
+    }
+    let rows = table
+        .get_mut("rows")
+        .and_then(Item::as_array_mut)
+        .ok_or(Error::Table("rows"))?;
+    let matches = |value: &Value| match value {
+        Value::String(name) => name.value() == token,
+        Value::InlineTable(styled) => styled.get("token").and_then(Value::as_str) == Some(token),
+        _ => false,
+    };
+    if shown {
+        if rows
+            .iter()
+            .any(|row| row.as_array().is_some_and(|row| row.iter().any(matches)))
+        {
+            return Ok(());
+        }
+        if rows.len() >= crate::config::MAX_SIDEBAR_ROWS {
+            return Err(crate::config::SidebarConfigError::TooManyRows.into());
+        }
+        rows.push(std::iter::once(token).collect::<toml_edit::Array>());
+        return Ok(());
+    }
+    for index in (0..rows.len()).rev() {
+        if let Some(Value::Array(row)) = rows.get_mut(index) {
+            let before = row.len();
+            row.retain(|value| !matches(value));
+            if before > 0 && row.is_empty() {
+                let removed = rows.remove(index);
+                // A comment before the dropped row stays with what follows it.
+                let comment = removed
+                    .decor()
+                    .prefix()
+                    .and_then(|raw| raw.as_str())
+                    .filter(|prefix| prefix.contains('#'))
+                    .map(str::to_owned);
+                if let Some(comment) = comment {
+                    match rows.get_mut(index) {
+                        Some(next) => {
+                            let rest = next.decor().prefix().and_then(|raw| raw.as_str());
+                            let prefix = format!("{comment}{}", rest.unwrap_or(""));
+                            next.decor_mut().set_prefix(prefix);
+                        }
+                        None => {
+                            let rest = rows.trailing().as_str().unwrap_or("");
+                            let trailing = format!("{comment}{rest}");
+                            rows.set_trailing(trailing);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn set(document: &mut DocumentMut, keys: &[&'static str], mut value: Value) -> Result<(), Error> {

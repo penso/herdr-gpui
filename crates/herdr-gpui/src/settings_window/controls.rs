@@ -185,6 +185,8 @@ impl SettingsWindow {
         self.controls.search.update(cx, |input, cx| {
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
+        self.plugins
+            .refresh_appearance(&self.config, &self.theme, cx);
         if let Some(editor) = &self.controls.size_editor {
             editor.input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
@@ -322,7 +324,7 @@ impl SettingsWindow {
         }
     }
 
-    fn control_card(&self, title: &'static str) -> Div {
+    pub(super) fn control_card(&self, title: impl Into<SharedString>) -> Div {
         div()
             .flex()
             .flex_col()
@@ -333,10 +335,10 @@ impl SettingsWindow {
             .border_1()
             .border_color(rgb(self.theme.active))
             .bg(rgb(self.theme.surface))
-            .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(title.into()))
     }
 
-    fn control_note(&self, text: impl Into<SharedString>) -> Div {
+    pub(super) fn control_note(&self, text: impl Into<SharedString>) -> Div {
         div()
             .min_w_0()
             .text_color(rgb(self.theme.muted))
@@ -386,7 +388,7 @@ impl SettingsWindow {
             .child(label)
     }
 
-    fn controls_shared_ready(&self) -> bool {
+    pub(super) fn controls_shared_ready(&self) -> bool {
         cfg!(unix) && self.shared.is_some() && !self.busy() && self.error.is_none()
     }
 
@@ -397,7 +399,7 @@ impl SettingsWindow {
             Section::Sound => self.render_sound_controls(cx),
             Section::Notifications => self.render_notification_controls(cx),
             Section::General => self.render_general_controls(cx),
-            Section::Appearance | Section::Integrations => div(),
+            Section::Appearance | Section::Integrations | Section::Plugins => div(),
         };
         div()
             .flex()
@@ -862,7 +864,7 @@ impl SettingsWindow {
             .debug_selector(|| "settings-sidebar-layout".into())
             .map(|card| {
                 #[cfg(all(feature = "integration-test", target_os = "macos"))]
-                let card = card.child(super::native::probe(7));
+                let card = card.child(super::native::probe(super::native::SIDEBAR_LAYOUT));
                 card
             })
             .child(chooser)

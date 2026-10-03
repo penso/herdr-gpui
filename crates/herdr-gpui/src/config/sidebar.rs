@@ -2,7 +2,7 @@
 use serde::Deserialize;
 use std::{collections::BTreeMap, str::FromStr};
 
-const MAX_ROWS: usize = 16;
+pub(crate) const MAX_ROWS: usize = 16;
 const MAX_TOKENS_PER_ROW: usize = 16;
 const MAX_RULES: usize = 16;
 const MAX_CUSTOM_TOKEN_LEN: usize = 32;
@@ -40,11 +40,59 @@ pub struct SidebarLayout {
 
 impl SidebarLayout {
     /// Defaults when `[ui.sidebar]` is absent; unrelated tables are ignored.
-    pub(super) fn from_daemon_config(table: &toml::Table) -> Result<Self, toml::de::Error> {
+    pub(crate) fn from_daemon_config(table: &toml::Table) -> Result<Self, toml::de::Error> {
         let Some(sidebar) = table.get("ui").and_then(|ui| ui.get("sidebar")) else {
             return Ok(Self::default());
         };
         Deserialize::deserialize(sidebar.clone())
+    }
+}
+
+impl SidebarLayout {
+    /// Whether `token`, spelled as in config, is in `scope`'s default `rows`.
+    /// Per-agent overrides are not counted: only `rows` is edited from Settings.
+    pub(crate) fn shows(&self, scope: SidebarScope, token: &str) -> bool {
+        match scope {
+            SidebarScope::Agents => token
+                .parse::<AgentToken>()
+                .is_ok_and(|token| self.agents.rows.iter().flatten().any(|t| t.token == token)),
+            SidebarScope::Spaces => token
+                .parse::<SpaceToken>()
+                .is_ok_and(|token| self.spaces.rows.iter().flatten().any(|t| t.token == token)),
+        }
+    }
+}
+
+/// Which `[ui.sidebar]` layout a token belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum SidebarScope {
+    Agents,
+    Spaces,
+}
+
+impl SidebarScope {
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::Agents => "agents",
+            Self::Spaces => "spaces",
+        }
+    }
+
+    /// Upstream's `rows` when the key is absent, spelled as in config. The
+    /// typed defaults below must stay equal to these.
+    pub(crate) fn default_rows(self) -> &'static [&'static [&'static str]] {
+        match self {
+            Self::Agents => &[&["state_icon", "machine", "workspace", "tab"], &["agent"]],
+            Self::Spaces => &[&["state_icon", "workspace"], &["branch", "git_status"]],
+        }
+    }
+
+    /// Rejects a token this layout would refuse when Herdr loads it.
+    pub(crate) fn check(self, token: &str) -> Result<(), SidebarConfigError> {
+        match self {
+            Self::Agents => token.parse::<AgentToken>().map(drop),
+            Self::Spaces => token.parse::<SpaceToken>().map(drop),
+        }
     }
 }
 
@@ -564,5 +612,46 @@ rules = [{ equals = "Local", bold = true }, { starts_with = "L", fg = "#222222" 
         for bad in ["abc", "#ab", "#abcd", "#ggg", "#1234567", "#"] {
             assert_eq!(parse_color(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn scope_defaults_spell_the_typed_defaults_and_shows_reads_rows_only() {
+        let rows = |scope: SidebarScope| {
+            let rows: Vec<String> = scope
+                .default_rows()
+                .iter()
+                .map(|row| format!("{row:?}"))
+                .collect();
+            format!(
+                "[ui.sidebar.{}]\nrows = [{}]\n",
+                scope.key(),
+                rows.join(", ")
+            )
+        };
+        let text = format!(
+            "{}{}",
+            rows(SidebarScope::Agents),
+            rows(SidebarScope::Spaces)
+        );
+        assert_eq!(
+            SidebarLayout::from_daemon_config(&text.parse().unwrap()).unwrap(),
+            SidebarLayout::default()
+        );
+
+        let layout = SidebarLayout::from_daemon_config(
+            &"[ui.sidebar.agents]\nrows = [[{ token = \"$model\", bold = true }]]\n[ui.sidebar.agents.rows_by_agent]\nclaude = [[\"$summary\"]]\n[ui.sidebar.spaces]\nrows = [[\"state_text\"]]\n"
+                .parse()
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(layout.shows(SidebarScope::Agents, "$model"));
+        assert!(!layout.shows(SidebarScope::Agents, "$summary"));
+        assert!(!layout.shows(SidebarScope::Agents, "state_text"));
+        assert!(layout.shows(SidebarScope::Spaces, "state_text"));
+        assert!(!layout.shows(SidebarScope::Spaces, "$model"));
+        assert!(!layout.shows(SidebarScope::Agents, "$bad name"));
+        assert!(SidebarScope::Agents.check("terminal_title").is_ok());
+        assert!(SidebarScope::Spaces.check("terminal_title").is_err());
+        assert!(SidebarScope::Spaces.check("$x y").is_err());
     }
 }

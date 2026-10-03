@@ -1,6 +1,7 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
 mod controls;
 mod layouts;
+mod plugins;
 pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 mod native;
@@ -44,17 +45,19 @@ pub(super) enum Section {
     Sound,
     Notifications,
     Integrations,
+    Plugins,
     General,
 }
 
 impl Section {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::Appearance,
         Self::Fonts,
         Self::Indicators,
         Self::Sound,
         Self::Notifications,
         Self::Integrations,
+        Self::Plugins,
         Self::General,
     ];
 
@@ -66,6 +69,7 @@ impl Section {
             Self::Sound => "Sound",
             Self::Notifications => "Notifications",
             Self::Integrations => "Integrations",
+            Self::Plugins => "Plugins",
             Self::General => "General",
         }
     }
@@ -78,8 +82,14 @@ impl Section {
             Self::Sound => "icons/chart.svg",
             Self::Notifications => "icons/bell.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            Self::Plugins => "icons/plug.svg",
             Self::General => "icons/settings.svg",
         }
+    }
+
+    /// Sections drawn from the source window's live daemon state.
+    fn follows_source(self) -> bool {
+        matches!(self, Self::Integrations | Self::Plugins)
     }
 
     fn description(self) -> &'static str {
@@ -90,6 +100,7 @@ impl Section {
             Self::Sound => "A little signal when something needs you.",
             Self::Notifications => "Stay informed without losing your place.",
             Self::Integrations => "Connect the agents you work with.",
+            Self::Plugins => "Run the actions your Herdr plugins provide.",
             Self::General => "The small details of your daily workflow.",
         }
     }
@@ -176,6 +187,7 @@ struct SettingsWindow {
     integration_updates: bool,
     themes: themes::ThemeBrowser,
     controls: controls::Controls,
+    plugins: plugins::Plugins,
     error: Option<String>,
     status: Option<String>,
     focus: FocusHandle,
@@ -277,6 +289,7 @@ impl SettingsWindow {
             integration_updates,
             themes: themes::ThemeBrowser::new(cx),
             controls: controls::Controls::new(cx),
+            plugins: plugins::Plugins::new(cx),
             error: appearance.error,
             status: None,
             focus: cx.focus_handle(),
@@ -336,7 +349,7 @@ impl SettingsWindow {
 
     fn source_changed(&mut self, source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
         let updates = source.read(cx).integration_updates_available();
-        if self.section == Section::Integrations || updates != self.integration_updates {
+        if self.section.follows_source() || updates != self.integration_updates {
             self.integration_updates = updates;
             cx.notify();
         }
@@ -985,6 +998,7 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            Section::Plugins => self.render_plugin_controls(cx),
             _ => self.render_controls(window, cx),
         };
         let navigation = self.navigation(cx);

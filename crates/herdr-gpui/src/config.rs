@@ -15,7 +15,8 @@ pub(crate) mod watch;
 use gpui::{Font, FontFallbacks};
 use serde::Deserialize;
 pub(crate) use sidebar::{
-    AgentLayout, AgentToken, Rows, SidebarLayout, SpaceLayout, SpaceToken, TokenStyle,
+    AgentLayout, AgentToken, MAX_ROWS as MAX_SIDEBAR_ROWS, Rows, SidebarConfigError, SidebarLayout,
+    SidebarScope, SpaceLayout, SpaceToken, TokenStyle,
 };
 use std::{
     collections::BTreeMap,
