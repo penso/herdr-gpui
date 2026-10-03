@@ -22,6 +22,7 @@ pub(crate) use links::PressedLink;
 mod mouse;
 mod pending_input;
 mod prefix;
+mod regions;
 mod render;
 mod selection;
 mod server_keys;
@@ -134,6 +135,8 @@ pub(crate) struct HerdrWindow {
     /// The frame on screen, kept across the gap between two projections.
     pub(crate) presentation: Presentation,
     pub(crate) painter: std::rc::Rc<std::cell::RefCell<terminal_painter::TerminalPainter>>,
+    /// The terminal grid's cached regions; see `regions`.
+    pub(crate) regions: Vec<Entity<regions::RegionView>>,
     pub(crate) marked: String,
     /// The sidebar row the pointer is resting on, waiting to open its menu.
     pub(crate) hover: Option<sidebar::HoverRest>,
@@ -579,6 +582,7 @@ impl HerdrWindow {
             flash: None,
             presentation: Default::default(),
             painter: Default::default(),
+            regions: Vec::new(),
             marked: String::new(),
             hover: None,
             hover_menu: None,

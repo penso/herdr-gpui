@@ -76,6 +76,67 @@ pub(crate) struct Highlight {
     pub(crate) tint: Tint,
 }
 
+/// Cells of one row that a paint covers, in the grid of the frame it paints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Span {
+    pub(crate) row: u16,
+    pub(crate) columns: std::ops::Range<u16>,
+}
+
+/// Every cell of `frame`, row by row.
+fn whole(frame: &FrameData) -> Vec<Span> {
+    (0..frame.height)
+        .map(|row| Span {
+            row,
+            columns: 0..frame.width,
+        })
+        .collect()
+}
+
+/// Whether `area` covers the cell at `x`, `y`.
+pub(crate) fn covers(area: &[Span], x: u16, y: u16) -> bool {
+    area.iter()
+        .any(|span| span.row == y && span.columns.contains(&x))
+}
+
+/// The non-empty runs of `area` inside `frame`, as ranges of its cell indices.
+/// A frame short of cells paints the ones it has.
+pub(crate) fn cell_ranges<'a>(
+    frame: &'a FrameData,
+    area: &'a [Span],
+) -> impl Iterator<Item = std::ops::Range<usize>> + 'a {
+    let width = usize::from(frame.width);
+    area.iter()
+        .filter(|span| span.row < frame.height)
+        .map(move |span| {
+            let start = usize::from(span.row) * width;
+            let end =
+                |column: u16| (start + usize::from(column.min(frame.width))).min(frame.cells.len());
+            end(span.columns.start)..end(span.columns.end)
+        })
+        .filter(|range| range.start < range.end)
+}
+
+/// The parts of `highlights` inside `area`.
+pub(crate) fn clip(highlights: &[Highlight], area: &[Span]) -> Vec<Highlight> {
+    highlights
+        .iter()
+        .flat_map(|highlight| {
+            area.iter()
+                .filter(move |span| span.row == highlight.row)
+                .filter_map(move |span| {
+                    let columns = highlight.columns.start.max(span.columns.start)
+                        ..highlight.columns.end.min(span.columns.end);
+                    (columns.start < columns.end).then_some(Highlight {
+                        row: highlight.row,
+                        columns,
+                        tint: highlight.tint,
+                    })
+                })
+        })
+        .collect()
+}
+
 #[derive(Default)]
 struct PaintTiming {
     count: u64,
@@ -234,6 +295,7 @@ fn paint_glyphs(
 
 fn background_spans<'a>(
     row: &'a [CellData],
+    columns: std::ops::Range<usize>,
     theme: &'a Theme,
 ) -> impl Iterator<Item = (usize, usize, u32)> + 'a {
     // A wide glyph's continuation cell shows the glyph's background, as a host
@@ -260,12 +322,13 @@ fn background_spans<'a>(
         };
         cell_colors(&row[x], theme).1
     };
-    let mut start = 0;
+    let mut start = columns.start;
+    let stop = columns.end.min(row.len());
     std::iter::from_fn(move || {
-        row.get(start)?;
+        (start < stop).then_some(())?;
         let color = bg(start);
         let mut end = start + 1;
-        while end < row.len() && bg(end) == color {
+        while end < stop && bg(end) == color {
             end += 1;
         }
         let span = (start, end, color);
@@ -442,9 +505,10 @@ impl TerminalPainter {
         });
     }
 
-    /// Paints one frame, tinting the cells `highlights` name in that frame's
-    /// own grid. Rows outside the frame are ignored: a selection or search was
-    /// made against the live surface, which a repaint may already have replaced.
+    /// Paints the cells of one frame that `area` covers, or all of them,
+    /// tinting the cells `highlights` name in that frame's own grid. Rows
+    /// outside the frame are ignored: a selection or search was made against
+    /// the live surface, which a repaint may already have replaced.
     #[allow(clippy::too_many_arguments)]
     pub fn paint_frame(
         &mut self,
@@ -455,6 +519,7 @@ impl TerminalPainter {
         font: &Font,
         highlights: &[Highlight],
         panes: &[PaneSurfacePane],
+        area: Option<&[Span]>,
         images: Option<PlacedImages<'_>>,
         window: &mut Window,
         cx: &mut App,
@@ -488,6 +553,14 @@ impl TerminalPainter {
                 size(px(cell_width), px(self.cell_height)),
             )
         });
+        let whole_area;
+        let area = match area {
+            Some(area) => area,
+            None => {
+                whole_area = whole(frame);
+                &whole_area
+            }
+        };
         // The daemon's cell scrollbar is replaced by the pixel thumb painted below.
         let bars: Vec<SurfaceRect> = panes.iter().filter_map(|p| p.scrollbar_rect).collect();
         let in_bar = |index: usize| {
@@ -513,7 +586,11 @@ impl TerminalPainter {
         // second layer above the text.
         window.paint_layer(Bounds::new(origin, background), |window| {
             // Backgrounds precede all glyphs, including wide graphemes' skip cells.
-            for (y, row) in frame.cells.chunks(usize::from(frame.width)).enumerate() {
+            let width = usize::from(frame.width);
+            for range in cell_ranges(frame, area) {
+                let y = range.start / width;
+                let row = &frame.cells[y * width..((y + 1) * width).min(frame.cells.len())];
+                let columns = range.start - y * width..range.end - y * width;
                 let mut paint = |start: usize, end: usize, color| {
                     let right = if end == usize::from(frame.width) {
                         background.width
@@ -545,18 +622,18 @@ impl TerminalPainter {
                     }
                 };
                 if cached {
-                    for (start, end, color) in background_spans(row, &self.theme) {
+                    for (start, end, color) in background_spans(row, columns, &self.theme) {
                         paint(start, end, color);
                     }
                 } else {
-                    for (x, cell) in row.iter().enumerate() {
-                        paint(x, x + 1, cell_colors(cell, &self.theme).1);
+                    for x in columns {
+                        paint(x, x + 1, cell_colors(&row[x], &self.theme).1);
                     }
                 }
             }
             // Between the backgrounds and the glyphs, so the tint reads as chosen
             // without hiding either.
-            for Highlight { row, columns, tint } in highlights {
+            for Highlight { row, columns, tint } in &clip(highlights, area) {
                 let (start, end) = (columns.start.min(frame.width), columns.end.min(frame.width));
                 if *row >= frame.height || start >= end {
                     continue;
@@ -583,6 +660,7 @@ impl TerminalPainter {
             if below.is_empty() {
                 paint_errors += self.paint_text(
                     frame,
+                    area,
                     origin,
                     cell_width,
                     font,
@@ -599,6 +677,7 @@ impl TerminalPainter {
             window.paint_layer(grid, |window| {
                 paint_errors += self.paint_text(
                     frame,
+                    area,
                     origin,
                     cell_width,
                     font,
@@ -614,7 +693,8 @@ impl TerminalPainter {
             // Box and block graphics are quads, so they share this layer to stay
             // above the backgrounds. Decorations cover the grid, including spaces
             // and wide-glyph continuation cells.
-            for (index, cell) in frame.cells.iter().enumerate() {
+            for index in cell_ranges(frame, area).flatten() {
+                let cell = &frame.cells[index];
                 if in_bar(index) {
                     continue;
                 }
@@ -654,11 +734,9 @@ impl TerminalPainter {
                     }
                 }
             }
-            if let Some(cursor) = frame
-                .cursor
-                .as_ref()
-                .filter(|c| c.visible && c.x < frame.width && c.y < frame.height)
-            {
+            if let Some(cursor) = frame.cursor.as_ref().filter(|c| {
+                c.visible && c.x < frame.width && c.y < frame.height && covers(area, c.x, c.y)
+            }) {
                 let position = origin + cursor_offset(cursor, cell_width, self.cell_height);
                 let (offset, dimensions) = match cursor.shape {
                     3 | 4 => (
@@ -680,8 +758,13 @@ impl TerminalPainter {
                     counts.decorations += 1;
                 }
             }
+            // A scrollbar paints with the cells at its top, so one paint owns it.
             for bar in panes
                 .iter()
+                .filter(|pane| {
+                    pane.scrollbar_rect
+                        .is_some_and(|rect| covers(area, rect.x, rect.y))
+                })
                 .filter_map(|pane| Scrollbar::new(pane, cell_width, self.cell_height))
             {
                 let width = (f32::from(bar.track.size.width) - 2. * SCROLLBAR_INSET).clamp(2., 6.);
@@ -765,11 +848,12 @@ impl TerminalPainter {
         failed
     }
 
-    /// Shapes and paints every visible glyph of `frame`, returning failures.
+    /// Shapes and paints every visible glyph `area` covers, returning failures.
     #[allow(clippy::too_many_arguments)]
     fn paint_text(
         &mut self,
         frame: &FrameData,
+        area: &[Span],
         origin: Point<Pixels>,
         cell_width: f32,
         font: &Font,
@@ -779,7 +863,8 @@ impl TerminalPainter {
         #[cfg(feature = "integration-test")] counts: &mut crate::performance::Counts,
     ) -> u64 {
         let mut paint_errors = 0;
-        for (index, cell) in frame.cells.iter().enumerate() {
+        for index in cell_ranges(frame, area).flatten() {
+            let cell = &frame.cells[index];
             if cell.skip
                 || cell.symbol.is_empty()
                 || cell.symbol == " "
@@ -958,6 +1043,7 @@ mod tests {
                             &font("Menlo"),
                             &[],
                             &[],
+                            None,
                             None,
                             window,
                             cx,
@@ -1154,6 +1240,7 @@ mod tests {
                             &[],
                             &[],
                             None,
+                            None,
                             window,
                             cx,
                         );
@@ -1180,12 +1267,12 @@ mod tests {
         row[2].modifier = 64;
         row[3].bg = 0x02123456;
         assert_eq!(
-            background_spans(&row, &theme).collect::<Vec<_>>(),
+            background_spans(&row, 0..row.len(), &theme).collect::<Vec<_>>(),
             vec![(0, 2, BACKGROUND), (2, 4, 0x123456)]
         );
-        assert_eq!(background_spans(&[], &theme).count(), 0);
+        assert_eq!(background_spans(&[], 0..0, &theme).count(), 0);
         for cells in row.chunks(2) {
-            let expanded: Vec<_> = background_spans(cells, &theme)
+            let expanded: Vec<_> = background_spans(cells, 0..cells.len(), &theme)
                 .flat_map(|(a, b, color)| (a..b).map(move |_| color))
                 .collect();
             assert_eq!(
@@ -1207,7 +1294,7 @@ mod tests {
         row[1].bg = 0x02000000;
         row[3].bg = 0x02000000;
         assert_eq!(
-            background_spans(&row, &theme).collect::<Vec<_>>(),
+            background_spans(&row, 0..row.len(), &theme).collect::<Vec<_>>(),
             vec![(0, 2, 0x373737), (2, 3, BACKGROUND), (3, 4, 0)]
         );
         // Halfwidth katakana with a voiced or semi-voiced mark is two columns
@@ -1218,7 +1305,7 @@ mod tests {
             row[1].bg = 0x02000000;
             row[3].bg = 0x02000000;
             assert_eq!(
-                background_spans(&row, &theme).collect::<Vec<_>>(),
+                background_spans(&row, 0..row.len(), &theme).collect::<Vec<_>>(),
                 vec![(0, 2, 0x373737), (2, 3, BACKGROUND), (3, 4, 0)],
                 "{kana}"
             );
@@ -1288,6 +1375,7 @@ mod tests {
                             &[],
                             &[],
                             None,
+                            None,
                             window,
                             cx,
                         );
@@ -1296,7 +1384,9 @@ mod tests {
                         assert_eq!(after.shapes, before.shapes);
                         assert_eq!(after.glyphs, before.glyphs);
                         assert_eq!(after.decorations - before.decorations, 2);
-                        let backgrounds = background_spans(&frame.cells, &painter.theme).count();
+                        let backgrounds =
+                            background_spans(&frame.cells, 0..frame.cells.len(), &painter.theme)
+                                .count();
                         assert_eq!(after.quads - before.quads, backgrounds + 7);
                     }
                     frame.cells[0] = cell("a");
@@ -1308,6 +1398,7 @@ mod tests {
                         &font("Menlo"),
                         &[],
                         &[],
+                        None,
                         None,
                         window,
                         cx,
@@ -1413,6 +1504,7 @@ mod tests {
                             &font("Menlo"),
                             &[],
                             &[],
+                            None,
                             Some(PlacedImages {
                                 placements: &placements,
                                 images: &images,
@@ -1477,6 +1569,7 @@ mod tests {
                             &font,
                             &[],
                             &[],
+                            None,
                             None,
                             window,
                             cx,
@@ -1700,7 +1793,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            background_spans(&row, &theme).collect::<Vec<_>>(),
+            background_spans(&row, 0..row.len(), &theme).collect::<Vec<_>>(),
             vec![(0, 2, theme.background)]
         );
         assert_eq!(cell_colors(&row[0], &theme).0, theme.foreground);

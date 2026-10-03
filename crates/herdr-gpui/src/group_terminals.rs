@@ -609,6 +609,7 @@ impl HerdrWindow {
                                 &font,
                                 &[],
                                 &surface.panes,
+                                None,
                                 Some(PlacedImages {
                                     placements: &surface.graphics.placements,
                                     images,
@@ -632,6 +633,7 @@ impl HerdrWindow {
                                     &font,
                                     &[],
                                     &[],
+                                    None,
                                     Some(PlacedImages {
                                         placements: &surface.graphics.placements,
                                         images,

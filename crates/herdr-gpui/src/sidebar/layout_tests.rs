@@ -1554,6 +1554,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         file_transfer: None,
         presentation: Default::default(),
         painter: Default::default(),
+        regions: Vec::new(),
         marked: String::new(),
         hover: None,
         hover_menu: None,
