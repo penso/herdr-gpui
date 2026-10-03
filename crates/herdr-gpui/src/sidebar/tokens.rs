@@ -8,6 +8,7 @@ use crate::config::{AgentLayout, AgentToken, Rows, SpaceLayout, SpaceToken, Toke
 use gpui::SharedString;
 use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
 use std::collections::HashMap;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ResolvedToken {
@@ -201,7 +202,7 @@ pub(super) fn budgets(
     let fixed: Vec<usize> = row.iter().map(|token| fixed_width(&token.kind)).collect();
     let flexible: Vec<usize> = row
         .iter()
-        .map(|token| token.kind.text().map_or(0, |text| text.chars().count()))
+        .map(|token| token.kind.text().map_or(0, |text| text.width()))
         .collect();
     let minimum = |active: &[bool]| -> usize {
         (0..row.len())
@@ -437,5 +438,15 @@ claude = [[{ token = "$pct", rules = [{ gt = 90, hide = true }, { gt = 80, fg = 
         assert_eq!(budgets(&row, fixed, 4), [Some(1), None, None, Some(2)]);
         assert_eq!(budgets(&row, fixed, 0), [Some(1), None, None, Some(2)]);
         assert_eq!(budgets(&[], fixed, 5), Vec::<Option<usize>>::new());
+    }
+
+    #[test]
+    fn budgets_give_wide_state_labels_their_display_width() {
+        // An emoji state label occupies two cells; a one-cell budget clips it to "…".
+        let row = [
+            ResolvedToken::unstyled(TokenKind::Text("🟡".into(), TextRole::Status)),
+            ResolvedToken::unstyled(TokenKind::Text("~".into(), TextRole::Workspace)),
+        ];
+        assert_eq!(budgets(&row, |_| 0, 30), [Some(2), Some(1)]);
     }
 }

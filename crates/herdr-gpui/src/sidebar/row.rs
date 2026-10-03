@@ -17,6 +17,7 @@ use crate::config::{FontConfig, Theme};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 use std::sync::Arc;
+use unicode_width::UnicodeWidthStr;
 
 /// What a row shows in its leading icon slot: a repository owner's avatar when
 /// one is cached, the GitHub mark while it is not, and nothing for the child
@@ -306,10 +307,7 @@ pub(super) fn name_line(
     let glyph = glyph_width(font);
     let separator = 3. * glyph;
     let separators = segments.len().saturating_sub(1);
-    let lengths: Vec<usize> = segments
-        .iter()
-        .map(|(text, _)| text.chars().count())
-        .collect();
+    let lengths: Vec<usize> = segments.iter().map(|(text, _)| text.width()).collect();
     let available = (width - separators as f32 * separator).max(0.);
     let budgets = segment_budgets(&lengths, (available / glyph).floor() as usize);
     // The last segment takes the rounding remainder, so one segment fills the
@@ -517,6 +515,14 @@ fn token_line(row: &[ResolvedToken], look: TokenLook, width: f32, cx: &RowContex
                             .child(label_text(&format!("{arrow}{count}")))
                     }),
             ),
+            // Only text the budget cuts short truncates. An emoji's font is wider
+            // than two estimated glyphs, so a label that fits by its display
+            // width may overhang its cell slightly rather than collapse to "…".
+            TokenKind::Text(text, _) if text.width() <= *budget => cell
+                .whitespace_nowrap()
+                .font_weight(weight)
+                .text_color(rgb(color))
+                .child(shared_label_text(text.clone())),
             TokenKind::Text(text, _) => cell
                 .truncate()
                 .font_weight(weight)
@@ -741,7 +747,7 @@ pub(super) fn row(
     // the same way it yields to a badge, and like the badge it is clipped to
     // the room left rather than painting past the row.
     let status_width = status_text.map_or(0., |text| {
-        (text.chars().count() as f32 * glyph_width(font))
+        (text.width() as f32 * glyph_width(font))
             .ceil()
             .min((available - pr_reserve - gap).max(0.))
     });
