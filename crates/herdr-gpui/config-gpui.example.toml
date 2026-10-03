@@ -147,6 +147,16 @@ project_roots = []
 # quit = "cmd-q"
 # Unbound by default: themes, reconnect, logs, about.
 
+# What the focused pane receives instead of a keystroke, as Ghostty's text:
+# binds do. The value is a key a terminal can receive (ctrl-a, home, alt-b,
+# shift-enter); an empty string removes a default. A keystroke here leaves its
+# default or daemon command, but naming it in [keybindings] too is an error.
+# On macOS these are the defaults:
+# [pane_keys]
+# "cmd-left" = "ctrl-a"
+# "cmd-right" = "ctrl-e"
+# "cmd-backspace" = "ctrl-u"
+
 # Saved SSH devices use the local keybindings above, as `herdr --remote` does.
 # "server" uses the [keys] profile that device's Herdr publishes instead, like
 # `herdr --remote-keybindings server`; [keybindings] still apply on top. Keyed

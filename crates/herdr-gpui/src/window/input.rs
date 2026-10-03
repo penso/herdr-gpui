@@ -5,7 +5,7 @@
 use super::HerdrWindow;
 use crate::{
     connection::ConnectionBridge,
-    terminal::{WheelAccumulator, key_input, wheel_target},
+    terminal::{WheelAccumulator, key_input, pane_key_input, wheel_target},
 };
 use gpui::{Context, KeyDownEvent, KeyUpEvent, ScrollWheelEvent, Window};
 
@@ -206,7 +206,10 @@ impl HerdrWindow {
             cx.stop_propagation();
             window.prevent_default();
         } else if self.marked.is_empty()
-            && let Some(input) = key_input(event, alt_keys)
+            && let Some(input) = match self.keymap().pane_key(&event.keystroke) {
+                Some(sent) => pane_key_input(event, sent),
+                None => key_input(event, alt_keys),
+            }
         {
             let input =
                 self.held_keys

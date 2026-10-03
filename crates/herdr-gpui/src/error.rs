@@ -515,6 +515,27 @@ pub enum Error {
         first: &'static str,
         second: &'static str,
     },
+    #[error("pane_keys: invalid keystroke {keystroke:?}")]
+    InvalidPaneKey {
+        keystroke: String,
+        #[source]
+        source: gpui::InvalidKeystrokeError,
+    },
+    #[error(
+        "pane_keys: {0:?} needs a cmd, ctrl, alt, or fn modifier so typing still reaches the terminal"
+    )]
+    PaneKeyWithoutModifier(String),
+    #[error("pane_keys.{from:?}: a pane cannot receive {to:?}")]
+    UnsendablePaneKey { from: String, to: String },
+    #[error("pane_keys: {0:?} is listed twice")]
+    DuplicatePaneKey(String),
+    #[error("pane_keys must list at most {0} keystrokes")]
+    TooManyPaneKeys(usize),
+    #[error("pane_keys: {keystroke:?} is also bound to keybindings.{command}")]
+    PaneKeyBound {
+        keystroke: String,
+        command: &'static str,
+    },
     #[error("the host did not publish its keybindings")]
     ServerKeybindingsMissing,
     #[error("the host's keybindings exceed {max} bytes")]

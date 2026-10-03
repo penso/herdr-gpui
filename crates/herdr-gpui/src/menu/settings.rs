@@ -990,6 +990,7 @@ mod tests {
                     let config = Config {
                         keybindings: Keymap::with_overrides(
                             &overrides,
+                            &Default::default(),
                             &crate::keymap::DaemonKeys::default(),
                         )?,
                         ..Config::default()

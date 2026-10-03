@@ -1756,6 +1756,17 @@ Windows setup) nothing is saved and the window says so.
   away from its default command, keystrokes need a cmd, ctrl, alt, or fn
   modifier, and unknown names, unparseable keys, or one key on two configured
   commands reject the config. Saved changes rebind the keymap and menu bar live.
+- `[pane_keys]` maps a keystroke to the key the focused pane receives instead,
+  like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
+  Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
+  prompts jump to the line's ends or delete back to its start as in every
+  other Mac terminal. A value is a key a terminal can receive (`ctrl-a`,
+  `home`, `alt-b`, `shift-enter`), and an empty string removes a default. A
+  pane key takes its keystroke from a default or daemon command, so
+  `"cmd-k" = "ctrl-l"` replaces Clear; listing it under `[keybindings]` as well
+  rejects the config, as do a bare character, an unknown key, or a target with
+  cmd. The find field and dialogs answer Cmd-Left, Cmd-Right, Cmd-Backspace,
+  and Cmd-Delete themselves.
 - The daemon's own `[keys]` table in `config.toml` (resolved like
   `[ui.toast.clipboard]` above) applies in the GUI too, Herdr's defaults
   included, so a TUI habit such as `prefix+v` or `alt+1..9` works in both

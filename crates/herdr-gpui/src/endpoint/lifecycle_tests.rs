@@ -4160,6 +4160,15 @@ fn keyboard_report_all_releases_sent_keys(cx: &mut gpui::TestAppContext) {
             view.key_up(&up("c"), window, cx);
             // A second key-up has nothing left to release.
             view.key_up(&up("c"), window, cx);
+            // A pane key presses and releases the key it sends instead.
+            view.config.keybindings = crate::keymap::Keymap::with_overrides(
+                &Default::default(),
+                &[("cmd-backspace".into(), "ctrl-u".into())].into(),
+                &crate::keymap::DaemonKeys::default(),
+            )
+            .unwrap();
+            view.key_down(&down("cmd-backspace"), window, cx);
+            view.key_up(&up("backspace"), window, cx);
             view.live.keyboard_report_all = false;
             view.key_down(&down("left"), window, cx);
             view.key_up(&up("left"), window, cx);
@@ -4175,6 +4184,12 @@ fn keyboard_report_all_releases_sent_keys(cx: &mut gpui::TestAppContext) {
         server.receive(),
         key(ClientKeyCode::Char('c'), 2, Release, true)
     );
+    for kind in [Press, Release] {
+        assert_eq!(
+            server.receive(),
+            key(ClientKeyCode::Char('u'), 2, kind, true)
+        );
+    }
     assert_eq!(server.receive(), key(ClientKeyCode::Left, 0, Press, false));
     assert_eq!(
         server.receive(),

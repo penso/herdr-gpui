@@ -1704,6 +1704,7 @@ fn reload_publishes_baseline_and_rebinds_only_changed_keys(cx: &mut TestAppConte
                         "settings".into(),
                         crate::keymap::Binding::One("ctrl-alt-p".into()),
                     )]),
+                    &Default::default(),
                     &crate::keymap::DaemonKeys::default(),
                 )
                 .unwrap();

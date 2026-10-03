@@ -169,9 +169,12 @@ mod tests {
             .parse()
             .unwrap();
         view.update(cx, |view, _| {
-            view.config.keybindings =
-                Keymap::with_overrides(&Default::default(), &DaemonKeys::from_table(Some(&table)))
-                    .unwrap();
+            view.config.keybindings = Keymap::with_overrides(
+                &Default::default(),
+                &Default::default(),
+                &DaemonKeys::from_table(Some(&table)),
+            )
+            .unwrap();
         });
         let state = |cx: &mut VisualTestContext| {
             view.read_with(cx, |view, _| (view.prefix_armed, view.sidebar_visible))

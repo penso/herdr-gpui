@@ -6,7 +6,7 @@ use crate::{
     Error, Result,
     contrast::Contrast,
     error::ThemeParseError,
-    keymap::{Binding, DaemonKeys, Keymap},
+    keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 pub(crate) mod preferences;
 pub(crate) mod sidebar;
@@ -118,6 +118,9 @@ pub struct Config {
     /// The `[keybindings]` table `keybindings` was built from, kept so a
     /// device's server keys can be layered under the same GUI overrides.
     pub(crate) keybinding_overrides: BTreeMap<String, Binding>,
+    /// The `[pane_keys]` table `keybindings` was built from, for the same
+    /// reason.
+    pub(crate) pane_keys: PaneKeys,
     /// Per saved device, by catalog profile ID.
     pub(crate) devices: BTreeMap<String, DeviceSettings>,
     pub palette: crate::palette::PaletteConfig,
@@ -751,6 +754,7 @@ impl Default for Config {
             sidebar_layout: SidebarLayout::default(),
             keybindings: Keymap::default(),
             keybinding_overrides: BTreeMap::new(),
+            pane_keys: PaneKeys::new(),
             devices: BTreeMap::new(),
             unknown_keys: Vec::new(),
             palette: crate::palette::PaletteConfig::default(),
@@ -787,6 +791,7 @@ struct Settings {
     bell: BellConfig,
     layout: Layout,
     keybindings: BTreeMap<String, Binding>,
+    pane_keys: PaneKeys,
     devices: BTreeMap<String, DeviceSettings>,
     palette: crate::palette::PaletteConfig,
 }
@@ -1216,8 +1221,10 @@ impl Config {
             return Err(Error::InvalidSidebarGap);
         }
         config.layout = settings.layout;
-        config.keybindings = Keymap::with_overrides(&settings.keybindings, &base.keys)?;
+        config.keybindings =
+            Keymap::with_overrides(&settings.keybindings, &settings.pane_keys, &base.keys)?;
         config.keybinding_overrides = settings.keybindings;
+        config.pane_keys = settings.pane_keys;
         if settings.devices.len() > MAX_DEVICES {
             return Err(Error::TooManyDevices(MAX_DEVICES));
         }
@@ -3123,6 +3130,35 @@ mod tests {
             LinkTarget::BrowserTab
         );
         assert!(Config::parse("open_links_in = \"tab\"").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn pane_keys_reach_the_keymap_as_written() -> anyhow::Result<()> {
+        let config = Config::parse(
+            "[pane_keys]\n\"cmd-k\" = \"ctrl-l\"\n\"cmd-.\" = \"alt-.\"\n\"cmd-left\" = \"\"\n",
+        )?;
+        let keymap = &config.keybindings;
+        let sent = |typed| {
+            keymap
+                .pane_key(&gpui::Keystroke::parse(typed).unwrap_or_default())
+                .map(|sent| sent.unparse())
+        };
+        assert_eq!(sent("cmd-k").as_deref(), Some("ctrl-l"));
+        assert_eq!(sent("cmd-.").as_deref(), Some("alt-."));
+        assert_eq!(sent("cmd-left"), None);
+        assert_eq!(keymap.primary(crate::controls::Command::ClearPane), "");
+        assert_eq!(config.pane_keys.len(), 3);
+        assert!(config.unknown_keys.is_empty(), "{:?}", config.unknown_keys);
+        assert!(matches!(
+            Config::parse(
+                "[pane_keys]\n\"cmd-k\" = \"ctrl-l\"\n[keybindings]\nclear_pane = \"cmd-k\"\n"
+            ),
+            Err(Error::PaneKeyBound {
+                command: "clear_pane",
+                ..
+            })
+        ));
         Ok(())
     }
 

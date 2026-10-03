@@ -8,7 +8,7 @@ use super::HerdrWindow;
 use crate::{
     Result,
     config::KeybindingSource,
-    keymap::{Binding, DaemonKeys, Keymap},
+    keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 use gpui::{App, Context, Global};
 use std::collections::BTreeMap;
@@ -20,15 +20,21 @@ pub(crate) struct ServerKeymap {
     endpoint: String,
     profile: Option<String>,
     overrides: BTreeMap<String, Binding>,
+    pane_keys: PaneKeys,
     /// An error leaves the window on its local keymap, as Herdr keeps the
     /// bindings it had when a profile cannot be applied.
     keymap: Result<Keymap>,
 }
 
 impl ServerKeymap {
-    fn build(endpoint: &str, profile: Option<&str>, overrides: &BTreeMap<String, Binding>) -> Self {
+    fn build(
+        endpoint: &str,
+        profile: Option<&str>,
+        overrides: &BTreeMap<String, Binding>,
+        pane_keys: &PaneKeys,
+    ) -> Self {
         let keymap = DaemonKeys::from_profile(profile)
-            .and_then(|keys| Keymap::with_overrides(overrides, &keys));
+            .and_then(|keys| Keymap::with_overrides(overrides, pane_keys, &keys));
         if let Err(error) = &keymap {
             tracing::warn!(endpoint, %error, "Using local keybindings for this device");
         }
@@ -36,6 +42,7 @@ impl ServerKeymap {
             endpoint: endpoint.to_owned(),
             profile: profile.map(str::to_owned),
             overrides: overrides.clone(),
+            pane_keys: pane_keys.clone(),
             keymap,
         }
     }
@@ -45,10 +52,12 @@ impl ServerKeymap {
         endpoint: &str,
         profile: Option<&str>,
         overrides: &BTreeMap<String, Binding>,
+        pane_keys: &PaneKeys,
     ) -> bool {
         self.endpoint == endpoint
             && self.profile.as_deref() == profile
             && self.overrides == *overrides
+            && self.pane_keys == *pane_keys
     }
 }
 
@@ -88,22 +97,22 @@ impl HerdrWindow {
     pub(crate) fn sync_server_keymap(&mut self, cx: &mut Context<Self>) {
         let endpoint = &self.endpoints[self.selected_endpoint].id;
         let wanted = self.config.keybinding_source(endpoint) == KeybindingSource::Server;
-        let next = match (wanted, &self.live.snapshot) {
-            (true, Some(snapshot)) => {
-                let profile = snapshot.server_keybindings_toml.as_deref();
-                let overrides = &self.config.keybinding_overrides;
-                if self
-                    .server_keys
-                    .as_ref()
-                    .is_some_and(|keys| keys.built_from(endpoint, profile, overrides))
-                {
-                    return;
+        let next =
+            match (wanted, &self.live.snapshot) {
+                (true, Some(snapshot)) => {
+                    let profile = snapshot.server_keybindings_toml.as_deref();
+                    let overrides = &self.config.keybinding_overrides;
+                    let pane_keys = &self.config.pane_keys;
+                    if self.server_keys.as_ref().is_some_and(|keys| {
+                        keys.built_from(endpoint, profile, overrides, pane_keys)
+                    }) {
+                        return;
+                    }
+                    Some(ServerKeymap::build(endpoint, profile, overrides, pane_keys))
                 }
-                Some(ServerKeymap::build(endpoint, profile, overrides))
-            }
-            _ if self.server_keys.is_none() => return,
-            _ => None,
-        };
+                _ if self.server_keys.is_none() => return,
+                _ => None,
+            };
         let before = self.server_keymap().cloned();
         self.server_keys = next;
         if self.server_keymap() == before.as_ref() {
