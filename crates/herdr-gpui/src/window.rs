@@ -421,7 +421,7 @@ impl HerdrWindow {
             .show
             .then(|| self.endpoints.get(self.selected_endpoint))
             .flatten()
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target));
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target));
         self.usage.poll(
             host,
             &self.config.usage,
@@ -451,7 +451,7 @@ impl HerdrWindow {
                     && (live.status.is_connected()
                         || !matches!(endpoint.connection.target, ConnectTarget::Ssh { .. }))
             })
-            .map(|(_, endpoint)| crate::usage::Host::from(&endpoint.connection.target));
+            .filter_map(|(_, endpoint)| crate::usage::Host::of(&endpoint.connection.target));
         self.system_load.poll(hosts)
     }
 
@@ -459,7 +459,7 @@ impl HerdrWindow {
     pub(crate) fn selected_host(&self) -> Option<crate::usage::Host> {
         self.endpoints
             .get(self.selected_endpoint)
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target))
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target))
     }
 
     pub(crate) fn new(

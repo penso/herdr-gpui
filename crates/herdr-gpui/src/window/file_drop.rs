@@ -30,6 +30,18 @@ impl HerdrWindow {
         if paths.paths().is_empty() {
             return;
         }
+        // Local paths mean nothing inside a Coder workspace, and file copies
+        // there would need `coder scp`; refuse rather than paste dead paths.
+        if matches!(
+            self.endpoints[self.selected_endpoint].connection.target,
+            herdr_client::ConnectTarget::Coder { .. }
+        ) {
+            self.local_error = Some(
+                "Files not pasted: file drops are not supported on Coder workspaces yet.".into(),
+            );
+            cx.notify();
+            return;
+        }
         let result = quote_paths(paths.paths()).and_then(|text| {
             if self.accepts_remote_images()
                 && let [path] = paths.paths()

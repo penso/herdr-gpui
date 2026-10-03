@@ -331,6 +331,8 @@ pub(super) struct Catalog {
 struct CatalogUpdate {
     hosts: Vec<SavedHost>,
     selection: Option<Option<String>>,
+    /// The GUI's saved Coder workspaces, or `None` when that list could not be read.
+    workspaces: Option<Vec<crate::coder::SavedWorkspace>>,
 }
 
 impl Catalog {
@@ -370,14 +372,24 @@ impl Catalog {
                             |(hosts, selection)| CatalogUpdate {
                                 hosts,
                                 selection: Some(selection),
+                                workspaces: None,
                             },
                         )
                     } else {
                         herdr_client::load_saved_hosts(development).map(|hosts| CatalogUpdate {
                             hosts,
                             selection: None,
+                            workspaces: None,
                         })
                     };
+                    let result = result.map(|mut update| {
+                        update.workspaces = crate::coder::load_workspaces()
+                            .inspect_err(|error| {
+                                tracing::warn!(category = "coder_catalog", %error, "Cannot read saved Coder workspaces");
+                            })
+                            .ok();
+                        update
+                    });
                     let _ = tx.send(result.map_err(Error::from));
                 })
             {
@@ -804,7 +816,7 @@ impl HerdrWindow {
             match result {
                 Ok(update) => {
                     self.catalog.accept(&update);
-                    self.reconcile_catalog(update.hosts, cx);
+                    self.reconcile_devices(update.hosts, update.workspaces, cx);
                 }
                 Err(error) => {
                     self.local_error = Some(format!("Host catalog: {error}"));
@@ -1026,7 +1038,45 @@ impl HerdrWindow {
         }
     }
 
+    /// SSH hosts only, keeping the current Coder endpoints; for fixtures.
+    #[cfg(test)]
     pub(super) fn reconcile_catalog(&mut self, hosts: Vec<SavedHost>, cx: &mut Context<Self>) {
+        self.reconcile_devices(hosts, None, cx);
+    }
+
+    /// Replace the remote endpoints with the saved SSH hosts followed by the
+    /// saved Coder workspaces. `None` keeps the current Coder endpoints, so a
+    /// failed read of the GUI's own list never drops their connections.
+    fn reconcile_devices(
+        &mut self,
+        hosts: Vec<SavedHost>,
+        workspaces: Option<Vec<crate::coder::SavedWorkspace>>,
+        cx: &mut Context<Self>,
+    ) {
+        let workspaces: Vec<CoderDevice> = match workspaces {
+            Some(workspaces) => workspaces
+                .into_iter()
+                .map(|workspace| CoderDevice {
+                    id: workspace.endpoint_id(),
+                    target: workspace.target(),
+                    label: workspace.label,
+                    enabled: workspace.enabled,
+                })
+                .collect(),
+            None => self
+                .endpoints
+                .iter()
+                .filter(|endpoint| {
+                    matches!(endpoint.connection.target, ConnectTarget::Coder { .. })
+                })
+                .map(|endpoint| CoderDevice {
+                    id: endpoint.id.clone(),
+                    label: endpoint.label.clone(),
+                    target: endpoint.connection.target.clone(),
+                    enabled: endpoint.enabled,
+                })
+                .collect(),
+        };
         let selected = &self.endpoints[self.selected_endpoint];
         let selected_id = selected.id.clone();
         let selected_retired = self.selected_endpoint != 0
@@ -1034,6 +1084,11 @@ impl HerdrWindow {
                 format!("{SAVED_PREFIX}{}", host.id) == selected_id
                     && host.enabled
                     && !entry_changed(selected, host)
+            })
+            && !workspaces.iter().any(|device| {
+                device.id == selected_id
+                    && device.enabled
+                    && device.target == selected.connection.target
             });
         if selected_retired {
             self.switch_endpoint(LOCAL, cx);
@@ -1072,6 +1127,27 @@ impl HerdrWindow {
             endpoint.saved_host = Some(host);
             next.push(endpoint);
         }
+        for device in workspaces {
+            let mut endpoint = match previous.iter().position(|e| e.id == device.id) {
+                Some(index) => previous.remove(index),
+                None => Endpoint::new(
+                    device.id,
+                    device.label.clone(),
+                    device.target.clone(),
+                    device.enabled,
+                ),
+            };
+            if endpoint.enabled != device.enabled || endpoint.connection.target != device.target {
+                endpoint.stop();
+                endpoint.attempts = 0;
+                endpoint.connection.target = device.target;
+                endpoint.enabled = device.enabled;
+                endpoint.detached = false;
+                endpoint.retry_at = Instant::now();
+            }
+            endpoint.label = device.label;
+            next.push(endpoint);
+        }
         self.endpoints = next;
         self.selected_endpoint = self
             .endpoints
@@ -1080,6 +1156,14 @@ impl HerdrWindow {
             .unwrap_or(0);
         cx.notify();
     }
+}
+
+/// A saved Coder workspace as the endpoint list wants it.
+struct CoderDevice {
+    id: String,
+    label: String,
+    target: ConnectTarget,
+    enabled: bool,
 }
 
 /// Whether a saved entry differs from the one this endpoint was last reconciled
@@ -1390,6 +1474,7 @@ mod tests {
         let update = |enabled, selection| CatalogUpdate {
             hosts: vec![host("a", enabled)],
             selection,
+            workspaces: None,
         };
         let mut first = Catalog::new(&ConnectTarget::Local);
         let mut second = Catalog::new(&ConnectTarget::Local);
@@ -1417,6 +1502,7 @@ mod tests {
         second.accept(&CatalogUpdate {
             hosts: vec![],
             selection: None,
+            workspaces: None,
         });
         assert_eq!(second.desired, None);
     }
@@ -1531,6 +1617,52 @@ mod tests {
                 &view.endpoints[1].connection.target,
                 ConnectTarget::Ssh { session, .. } if session == "other"
             ));
+        });
+    }
+
+    #[gpui::test]
+    fn coder_workspaces_follow_ssh_hosts_and_survive_an_unreadable_list(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let workspace = |id: &str, enabled| crate::coder::SavedWorkspace {
+            id: id.into(),
+            label: format!("Coder {id}"),
+            deployment: "https://coder.example.com".into(),
+            name: format!("herdr-{id}"),
+            session: "default".into(),
+            enabled,
+        };
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        view.update(cx, |view, cx| {
+            let ids = |view: &HerdrWindow| {
+                view.endpoints
+                    .iter()
+                    .map(|e| e.id.clone())
+                    .collect::<Vec<_>>()
+            };
+            view.reconcile_devices(
+                vec![host("a", false)],
+                Some(vec![workspace("w1", false), workspace("w2", false)]),
+                cx,
+            );
+            assert_eq!(ids(view), [LOCAL, "ssh:a", "coder:w1", "coder:w2"]);
+            assert_eq!(
+                view.endpoints[2].connection.target,
+                workspace("w1", false).target()
+            );
+            let inbox = view.endpoints[2].connection.inbox.clone();
+            // A failed read of the Coder list keeps its endpoints and connections.
+            view.reconcile_catalog(vec![host("a", false)], cx);
+            assert_eq!(ids(view), [LOCAL, "ssh:a", "coder:w1", "coder:w2"]);
+            assert!(Arc::ptr_eq(&inbox, &view.endpoints[2].connection.inbox));
+            let mut moved = workspace("w1", false);
+            moved.session = "work".into();
+            view.reconcile_devices(vec![], Some(vec![moved.clone()]), cx);
+            assert_eq!(ids(view), [LOCAL, "coder:w1"]);
+            assert_eq!(view.endpoints[1].connection.target, moved.target());
+            assert!(!Arc::ptr_eq(&inbox, &view.endpoints[1].connection.inbox));
+            view.reconcile_devices(vec![], Some(vec![]), cx);
+            assert_eq!(ids(view), [LOCAL]);
         });
     }
 

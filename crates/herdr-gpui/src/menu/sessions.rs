@@ -67,9 +67,9 @@ impl Entry {
 /// would be an SSH round trip this popup does not take.
 fn target_session(target: &ConnectTarget) -> String {
     match target {
-        ConnectTarget::Ssh { session, .. } | ConnectTarget::Session { name: session, .. } => {
-            session.clone()
-        }
+        ConnectTarget::Ssh { session, .. }
+        | ConnectTarget::Coder { session, .. }
+        | ConnectTarget::Session { name: session, .. } => session.clone(),
         ConnectTarget::Socket(path) => path.display().to_string(),
         ConnectTarget::Local => "default".to_owned(),
     }

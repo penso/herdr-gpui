@@ -178,7 +178,7 @@ fn disconnect_presentation_is_sanitized_and_bounded() {
         ConnectTarget::Local,
         ConnectOptions::default(),
         true,
-        |_, _| Err(io::Error::other("\u{1b}\n\r\t\0x".repeat(2048))),
+        |_, _| Err::<Stream, _>(io::Error::other("\u{1b}\n\r\t\0x".repeat(2048))),
     )
     .unwrap();
     let ClientEvent::Disconnected { reason } = event(&client) else {
@@ -1563,7 +1563,7 @@ fn host_theme_is_boot_fenced_and_a_failed_queue_resends_in_full() {
         ConnectTarget::Local,
         ConnectOptions::default(),
         true,
-        |_, _| Err(io::Error::other("offline")),
+        |_, _| Err::<Stream, _>(io::Error::other("offline")),
     )
     .unwrap();
     disconnected.handle.disconnect();

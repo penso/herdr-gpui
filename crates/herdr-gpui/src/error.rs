@@ -249,13 +249,13 @@ pub enum Error {
     #[error("Missing credential directory.")]
     CredentialDirectory,
     #[error(
-        "Cannot access private GitHub credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
+        "Cannot access private credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
     )]
     CredentialPermissions,
-    #[error("Cannot access private GitHub credential file.")]
+    #[error("Cannot access private credential file.")]
     CredentialIo(#[source] io::Error),
     #[error(
-        "No secure credential store configured. Explicitly opt in with [github] allow_plaintext_credentials = true, or use GH_TOKEN / GITHUB_TOKEN."
+        "No secure credential store configured. Explicitly opt in with allow_plaintext_credentials = true in the [github] or [coder] table, or use GH_TOKEN / GITHUB_TOKEN for GitHub."
     )]
     CredentialPolicy,
     #[error(
@@ -284,6 +284,8 @@ pub enum Error {
     GitHubTokenType,
     #[error("GitHub {0} worker stopped.")]
     GitHubWorker(&'static str),
+    #[error(transparent)]
+    Coder(#[from] crate::coder::Error),
     #[error("{0}")]
     Config(#[source] config_loader::ConfigError),
     #[error("{source}")]

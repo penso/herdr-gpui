@@ -10,7 +10,7 @@ use crate::{
     options::{ConnectOptions, validate_options},
     queue,
     session::run_connection,
-    ssh,
+    ssh::{self, Bridge},
     transport::Stream,
 };
 use crossbeam_channel::bounded;
@@ -44,19 +44,45 @@ pub fn connect_with_surface_active(
     })
 }
 
-/// Connect using application-specific local socket setup on the I/O worker.
-/// SSH targets always use the remote bridge, never the local connector.
-/// The connector should observe `stop` during waits so detach cancels setup.
-pub fn connect_with_connector(
+/// What an application connector produced: a local socket, or a remote bridge
+/// it spawned (see [`crate::connect_command`]) whose child the worker owns.
+pub enum Transport {
+    Local(Stream),
+    Bridge(Bridge),
+}
+
+impl From<Stream> for Transport {
+    fn from(stream: Stream) -> Self {
+        Self::Local(stream)
+    }
+}
+
+impl From<Bridge> for Transport {
+    fn from(bridge: Bridge) -> Self {
+        Self::Bridge(bridge)
+    }
+}
+
+/// Connect using application-specific setup on the I/O worker. SSH targets
+/// always use the built-in remote bridge; local and Coder targets use the
+/// connector. The connector should observe `stop` during waits so detach
+/// cancels setup.
+pub fn connect_with_connector<T: Into<Transport>>(
     target: ConnectTarget,
     options: ConnectOptions,
     surface_active: bool,
-    connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<Stream> + Send + 'static,
+    connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<T> + Send + 'static,
 ) -> Result<Client> {
     validate_options(options)?;
-    if let ConnectTarget::Ssh { target, session } = &target {
-        catalog::validate_target(target)?;
-        session_socket(std::path::Path::new(""), session)?;
+    match &target {
+        ConnectTarget::Ssh { target, session } => {
+            catalog::validate_target(target)?;
+            session_socket(std::path::Path::new(""), session)?;
+        }
+        ConnectTarget::Coder { session, .. } => {
+            session_socket(std::path::Path::new(""), session)?;
+        }
+        _ => {}
     }
     let (commands, rx) = queue::channel(COMMAND_CAPACITY)?;
     let (tx, events) = bounded(EVENT_CAPACITY);
@@ -65,7 +91,11 @@ pub fn connect_with_connector(
     thread::Builder::new()
         .name("herdr-client-io".into())
         .spawn(move || {
-            let transport = if matches!(target, ConnectTarget::Ssh { .. }) { "ssh" } else { "local" };
+            let transport = match target {
+                ConnectTarget::Ssh { .. } => "ssh",
+                ConnectTarget::Coder { .. } => "coder",
+                _ => "local",
+            };
             let span = tracing::info_span!("connection", transport);
             let _entered = span.enter();
             tracing::info!(transport, "connection starting");
@@ -75,7 +105,10 @@ pub fn connect_with_connector(
                         let (stream, child) = ssh::connect(target, session, &worker_stop)?;
                         (stream, Some(child))
                     }
-                    _ => (connector(&target, &worker_stop)?, None),
+                    _ => match connector(&target, &worker_stop)?.into() {
+                        Transport::Local(stream) => (stream, None),
+                        Transport::Bridge(Bridge { stream, child }) => (stream, Some(child)),
+                    },
                 };
                 run_connection(
                     stream,

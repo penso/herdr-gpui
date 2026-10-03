@@ -38,6 +38,7 @@ ed25519-dalek        = { default-features = false, features = ["std"], version =
 flate2               = "1"
 foreign-types        = "0.5"
 futures-lite         = "2"
+getrandom            = "0.3.4"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
 gpui-wry             = "=0.6.5"

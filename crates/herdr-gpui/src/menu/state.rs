@@ -41,6 +41,7 @@ pub(crate) struct MenuState {
     pub(crate) cover: std::rc::Rc<std::cell::Cell<Cover>>,
     pub(super) device_setup: Option<super::devices::Setup>,
     pub(super) session_edit: Option<super::sessions::Edit>,
+    pub(super) coder: Option<super::devices::coder::Wizard>,
     pub(super) devices_scroll: ScrollHandle,
     /// The sessions list scrolls its own way; the two popups never share one.
     pub(crate) sessions_scroll: ScrollHandle,
@@ -217,6 +218,7 @@ impl MenuState {
             cover: Default::default(),
             device_setup: None,
             session_edit: None,
+            coder: None,
             devices_scroll: ScrollHandle::new(),
             sessions_scroll: ScrollHandle::new(),
             usage_scroll: ScrollHandle::new(),
@@ -266,6 +268,7 @@ impl MenuState {
         self.cover.set(Cover::Unknown);
         self.device_setup = None;
         self.session_edit = None;
+        self.coder = None;
         self.devices_scroll.set_offset(Point::default());
         self.sessions_scroll.set_offset(Point::default());
         self.usage_scroll.set_offset(Point::default());

@@ -1,4 +1,5 @@
 //! Device scope is presentation state; connection ownership stays in `endpoint`.
+pub(super) mod coder;
 mod host_menu;
 mod setup;
 
@@ -334,6 +335,9 @@ impl HerdrWindow {
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
+                ConnectTarget::Coder {
+                    workspace, session, ..
+                } => format!("Coder {workspace} · {session}"),
                 ConnectTarget::Socket(path) => path.display().to_string(),
                 ConnectTarget::Session { name, .. } => format!("This device · {name}"),
                 ConnectTarget::Local => "This device".into(),
@@ -353,6 +357,16 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
+        if self.coder_configured() {
+            rows.push((
+                "Add Coder Workspace…".into(),
+                self.device_setup_unavailable()
+                    .unwrap_or("Create or attach a Coder workspace")
+                    .into(),
+                false,
+                self.device_setup_unavailable().is_none(),
+            ));
+        }
         let mut view = div()
             .id("devices-list")
             .max_h(list_height(self.menu.anchor.y))
@@ -410,7 +424,7 @@ impl HerdrWindow {
                                                 .text_color(rgb(self.theme.foreground)),
                                         )
                                     })
-                                    .when(index == self.endpoints.len() + 1, |row| {
+                                    .when(index > self.endpoints.len(), |row| {
                                         row.child(
                                             svg()
                                                 .path("icons/plus.svg")
@@ -474,6 +488,12 @@ impl HerdrWindow {
     }
 
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index == self.endpoints.len() + 2 {
+            if self.device_setup_unavailable().is_none() && self.coder_configured() {
+                self.open_coder_setup(window, cx);
+            }
+            return;
+        }
         if index == self.endpoints.len() + 1 {
             if self.device_setup_unavailable().is_some() {
                 return;
@@ -1079,7 +1099,7 @@ impl HerdrWindow {
                 _ => return,
             }
         } else {
-            let count = self.endpoints.len() + 2;
+            let count = self.endpoints.len() + 2 + usize::from(self.coder_configured());
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

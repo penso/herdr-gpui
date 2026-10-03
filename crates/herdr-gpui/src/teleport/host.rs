@@ -52,7 +52,9 @@ impl Host {
                 #[cfg(test)]
                 env: Vec::new(),
             }),
-            ConnectTarget::Socket(_) => Err(Error::UnsupportedHost),
+            // A Coder workspace is reached only through `coder ssh`, which
+            // Teleport's scripts cannot run over.
+            ConnectTarget::Socket(_) | ConnectTarget::Coder { .. } => Err(Error::UnsupportedHost),
         }
     }
 

@@ -14,6 +14,7 @@ mod browser;
 mod caffeine;
 mod cli;
 mod close_modal;
+mod coder;
 mod config;
 mod config_diagnostic;
 mod connection;

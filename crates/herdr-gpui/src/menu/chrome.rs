@@ -432,6 +432,7 @@ impl HerdrWindow {
                         | Page::AddDevice
                         | Page::Usage(_)
                         | Page::RenameDevice
+                        | Page::AddCoder
                 ),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
@@ -470,7 +471,10 @@ impl HerdrWindow {
                     .max_h((viewport.height - px(24.)).max(px(0.)))
             })
             .when(
-                matches!(page, Page::AppUpdate | Page::AddDevice | Page::RenameDevice),
+                matches!(
+                    page,
+                    Page::AppUpdate | Page::AddDevice | Page::RenameDevice | Page::AddCoder
+                ),
                 |panel| panel.flex().flex_col().overflow_hidden().shadow_lg(),
             )
             .when(page == Page::About, |panel| {
@@ -535,6 +539,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
             panel = panel.child(self.render_add_device(cx));
+        } else if page == Page::AddCoder {
+            panel = panel.child(self.render_add_coder(cx));
         } else if page == Page::GitHub {
             panel = panel.child(self.render_github_auth(cx));
         } else if page == Page::Workspace {
@@ -875,6 +881,13 @@ impl HerdrWindow {
                 }
                 if this.menu.page == Some(Page::Sessions) {
                     this.sessions_key(event, window, cx);
+                    return;
+                }
+                if this.menu.page == Some(Page::AddCoder) {
+                    if this.coder_key(event, window, cx) {
+                        cx.stop_propagation();
+                        window.prevent_default();
+                    }
                     return;
                 }
                 if this.menu.page == Some(Page::Palette) {

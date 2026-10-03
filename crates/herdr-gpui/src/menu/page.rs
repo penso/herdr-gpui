@@ -16,6 +16,8 @@ pub(crate) enum Page {
     Host,
     RenameDevice,
     RemoveDevice,
+    /// Sign in to Coder and add one of its workspaces as a device.
+    AddCoder,
     Keybinds,
     Themes,
     Fonts,

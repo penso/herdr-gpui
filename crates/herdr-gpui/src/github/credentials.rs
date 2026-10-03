@@ -36,6 +36,26 @@ pub(super) fn read(_path: &Path, _name: &CStr) -> Result<Option<SecretString>> {
 }
 
 #[cfg(not(unix))]
+pub(super) fn read_checked(
+    _path: &Path,
+    _name: &CStr,
+    _validate: fn(&SecretString) -> Result<()>,
+) -> Result<Option<SecretString>> {
+    Ok(None)
+}
+
+#[cfg(not(unix))]
+pub(super) fn store_checked(
+    path: &Path,
+    name: &CStr,
+    token: Option<&SecretString>,
+    plaintext: bool,
+    _validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
+    store(path, name, token, plaintext)
+}
+
+#[cfg(not(unix))]
 pub(super) fn store(
     _path: &Path,
     _name: &CStr,
@@ -92,6 +112,21 @@ fn existing(dir: &File, name: &CStr) -> Result<Option<File>> {
 
 #[cfg(unix)]
 pub(super) fn read(path: &Path, name: &CStr) -> Result<Option<SecretString>> {
+    read_checked(path, name, github_record)
+}
+
+#[cfg(unix)]
+fn github_record(value: &SecretString) -> Result<()> {
+    Credential::decode(value).map(drop)
+}
+
+/// `read` for a record another feature owns; `validate` must bound its size.
+#[cfg(unix)]
+pub(super) fn read_checked(
+    path: &Path,
+    name: &CStr,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<Option<SecretString>> {
     let dir = directory(path)?;
     let Some(file) = existing(&dir, name)? else {
         return Ok(None);
@@ -102,7 +137,7 @@ pub(super) fn read(path: &Path, name: &CStr) -> Result<Option<SecretString>> {
         .map_err(Error::CredentialIo)?;
     let text = std::str::from_utf8(&bytes).map_err(Error::GitHubEncoding)?;
     let value = SecretString::from(text);
-    Credential::decode(&value)?;
+    validate(&value)?;
     Ok(Some(value))
 }
 
@@ -120,8 +155,33 @@ pub(super) fn store(
     write(path, name, token)
 }
 
+/// `store` for a record another feature owns; `validate` must bound its size.
+#[cfg(unix)]
+pub(super) fn store_checked(
+    path: &Path,
+    name: &CStr,
+    token: Option<&SecretString>,
+    plaintext: bool,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
+    if token.is_some() && !plaintext {
+        return Err(Error::CredentialPolicy);
+    }
+    write_checked(path, name, token, validate)
+}
+
 #[cfg(unix)]
 fn write(path: &Path, target: &CStr, token: Option<&SecretString>) -> Result<()> {
+    write_checked(path, target, token, github_record)
+}
+
+#[cfg(unix)]
+fn write_checked(
+    path: &Path,
+    target: &CStr,
+    token: Option<&SecretString>,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
     let dir = directory(path)?;
     let present = existing(&dir, target)?.is_some();
     let Some(token) = token else {
@@ -131,7 +191,7 @@ fn write(path: &Path, target: &CStr, token: Option<&SecretString>) -> Result<()>
         }
         return dir.sync_all().map_err(Error::CredentialIo);
     };
-    Credential::decode(token)?;
+    validate(token)?;
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let name = format!(
         ".github-credentials-{}-{}",
@@ -168,6 +228,37 @@ mod tests {
     use std::os::unix::fs::{PermissionsExt, symlink};
 
     const NAME: &CStr = c"github-credentials";
+
+    #[test]
+    fn another_features_record_uses_its_own_check_and_file() {
+        let path = tempfile::tempdir().unwrap();
+        std::fs::set_permissions(path.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        let name = c"coder-credentials";
+        let check: fn(&SecretString) -> Result<()> = |value| {
+            if value.expose_secret().starts_with("{\"coder\"") {
+                Ok(())
+            } else {
+                Err(Error::CredentialPermissions)
+            }
+        };
+        let record: SecretString = r#"{"coder":1}"#.into();
+        // GitHub's own check would refuse this record; the feature's check decides.
+        assert!(store(path.path(), name, Some(&record), true).is_err());
+        store_checked(path.path(), name, Some(&record), true, check).unwrap();
+        assert_eq!(
+            read_checked(path.path(), name, check)
+                .unwrap()
+                .unwrap()
+                .expose_secret(),
+            record.expose_secret()
+        );
+        assert!(read(path.path(), name).is_err());
+        assert!(store_checked(path.path(), name, Some(&"other".into()), true, check).is_err());
+        assert!(store_checked(path.path(), name, Some(&record), false, check).is_err());
+        assert!(!path.path().join("github-credentials").exists());
+        store_checked(path.path(), name, None, false, check).unwrap();
+        assert!(read_checked(path.path(), name, check).unwrap().is_none());
+    }
 
     #[test]
     fn accounts_are_separate_files_and_removing_one_keeps_the_other() {

@@ -39,7 +39,7 @@ pub use catalog::{
     valid_profile_id,
 };
 pub use clipboard::{ClipboardImageCancellation, ClipboardImageUpload};
-pub use connect::{connect, connect_with_connector, connect_with_surface_active};
+pub use connect::{Transport, connect, connect_with_connector, connect_with_surface_active};
 pub use discovery::{ConnectTarget, session_socket};
 /// Error returned when queueing commands; also available as the crate's `Error`.
 pub use error::Error as SendError;
@@ -56,6 +56,7 @@ pub use sessions::{
 };
 #[cfg(unix)]
 pub use ssh::script_command;
+pub use ssh::{Bridge, connect_command};
 pub use ssh::{
     Destination, HostProbe, probe_host, remote_config_value, remote_origin_url, resolve_destination,
 };

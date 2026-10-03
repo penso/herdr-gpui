@@ -18,12 +18,16 @@ pub(crate) enum Host {
     Ssh(String),
 }
 
-impl From<&ConnectTarget> for Host {
-    fn from(target: &ConnectTarget) -> Self {
+impl Host {
+    /// The host whose sign-ins a device's usage comes from, or `None` for a
+    /// Coder workspace: it is reached only through `coder ssh`, and reading
+    /// this machine's sign-ins instead would misreport them as the workspace's.
+    pub(crate) fn of(target: &ConnectTarget) -> Option<Self> {
         match target {
-            ConnectTarget::Ssh { target, .. } => Self::Ssh(target.clone()),
+            ConnectTarget::Ssh { target, .. } => Some(Self::Ssh(target.clone())),
+            ConnectTarget::Coder { .. } => None,
             ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
-                Self::Local
+                Some(Self::Local)
             }
         }
     }

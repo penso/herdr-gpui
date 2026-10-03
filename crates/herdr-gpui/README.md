@@ -230,6 +230,40 @@ appears automatically on the next catalog refresh. No credentials are collected
 by the GUI. Explicit-socket and development-catalog windows do not offer setup,
 and saved SSH devices remain unsupported on Windows.
 
+### Coder workspaces
+
+With a `[coder]` table in the GUI config (see `config-gpui.example.toml`), the
+device picker also offers **Add Coder Workspace…**. It signs in with Coder's
+OAuth2 provider (authorization code with PKCE; the browser returns to the
+configured loopback redirect), then lists the account's templates, their presets,
+and existing workspaces. Choosing a template creates a workspace; choosing an
+existing one attaches it. The dialog waits until the workspace agent is ready.
+
+Templates need not include Herdr. When the workspace has none, the dialog asks
+before running Herdr's published installer (`curl -fsSL https://herdr.dev/install.sh | sh`)
+inside the workspace, which verifies the release checksum and installs to
+`~/.local/bin`. This is the only remote installation the GUI performs, and only
+after that explicit approval; reconnects never install anything. A workspace
+without `curl` must get Herdr another way.
+
+Coder devices are stored in the GUI's own `coder-workspaces.json` in its state
+directory, because Herdr's `endpoints.json` schema is SSH-only. They connect by
+running Herdr's remote bridge through `coder ssh`, with the deployment URL and
+access token passed only in that child's environment; Coder's tunnel
+authenticates the connection, so no SSH config or host key is involved. The
+`coder` CLI is required, found on PATH, in `/opt/homebrew/bin`, `/usr/local/bin`,
+`~/.local/bin`, or at `[coder] cli`. A stopped workspace (for example after
+autostop) is started before connecting. Selecting a saved workspace in the dialog
+offers **Remove device**, which forgets it without touching the workspace.
+
+The sign-in is saved under the same rules as the GitHub one: the Keychain in
+signed macOS release builds, the Secret Service on Linux, otherwise the private
+`coder-credentials` file beside the GUI config. It is tied
+to the deployment and OAuth client; changing either signs out. Tokens are renewed
+before expiry and on rejection. File drops are refused on Coder panes, and
+restoring the last selected device at startup covers SSH devices only. Coder
+devices are unavailable on Windows.
+
 Switching revokes the old host's focus before releasing its surface, then resizes
 and activates the selected host. Input waits for the activation acknowledgement
 and a coherent surface at the current viewport size. Handoffs time out after five

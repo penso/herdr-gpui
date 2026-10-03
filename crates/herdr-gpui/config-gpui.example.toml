@@ -178,6 +178,31 @@ size = 12
 # Other software running as you and backups can read it. Default is false.
 # allow_plaintext_credentials = false
 
+# A Coder deployment whose workspaces can be created and added as devices from
+# the device picker's "Add Coder Workspace…". Register an OAuth2 app in Coder
+# (the deployment must enable the `oauth2` experiment) with the redirect URI
+# below; Coder compares it as an exact string, so copy it verbatim. Requires the
+# `coder` CLI, which carries the connection. Each HERDR_CODER_URL,
+# HERDR_CODER_OAUTH_CLIENT_ID, HERDR_CODER_OAUTH_CLIENT_SECRET, and
+# HERDR_CODER_OAUTH_REDIRECT_URI variable overrides its field when set.
+# [coder]
+# url = "https://coder.example.com"
+# oauth_client_id = "YOUR_OAUTH2_APP_ID"
+# Coder requires a confidential client. Prefer the environment variable; the
+# secret identifies this app to Coder, it is not your account password.
+# oauth_client_secret = "YOUR_OAUTH2_APP_SECRET"
+# A loopback address with an explicit port the GUI can listen on while signing in.
+# oauth_redirect_uri = "http://127.0.0.1:47823/callback"
+# Create workspaces in this organization instead of your default one.
+# organization = "default"
+# New workspace names start with this prefix (lowercase, digits, hyphens).
+# workspace_prefix = "herdr"
+# Absolute path to the coder CLI when it is not on PATH or in a usual location.
+# cli = "/opt/homebrew/bin/coder"
+# Same meaning as [github] allow_plaintext_credentials, for the Coder sign-in,
+# which is saved in its own 0600 coder-credentials file. Default is false.
+# allow_plaintext_credentials = false
+
 # Optional behaviors, all off unless turned on here.
 # [features]
 # Open a space's menu when the pointer rests on its sidebar row, without a

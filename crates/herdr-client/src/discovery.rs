@@ -40,6 +40,14 @@ pub enum ConnectTarget {
     Socket(PathBuf),
     /// Noninteractive SSH attachment to an installed remote Herdr (POSIX hosts).
     Ssh { target: String, session: String },
+    /// A Coder workspace, reached through `coder ssh` by the application's
+    /// connector, which holds the deployment credential. `workspace` is the
+    /// `coder ssh` target (`name` or `name.agent`).
+    Coder {
+        deployment: String,
+        workspace: String,
+        session: String,
+    },
 }
 
 /// Whether a name may become a session directory. Both ends derive the same
@@ -101,7 +109,7 @@ impl ConnectTarget {
     }
 
     fn socket_path_with(&self, var: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf> {
-        if matches!(self, Self::Ssh { .. }) {
+        if matches!(self, Self::Ssh { .. } | Self::Coder { .. }) {
             return Err(Error::NoLocalSocket);
         }
         if let Self::Socket(path) = self {
