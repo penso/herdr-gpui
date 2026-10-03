@@ -961,8 +961,12 @@ impl Render for SettingsWindow {
         };
         let navigation = self.navigation(cx);
         let font_picker = self.render_control_font_picker(window, cx);
+        let this = cx.entity().downgrade();
+        let header = crate::titlebar::header(&self.theme, window, move |window, cx| {
+            let _ = this.update(cx, |view, cx| view.close(window, cx));
+        });
         let theme = &self.theme;
-        div()
+        let root = div()
             .key_context("SettingsWindow")
             .relative()
             .track_focus(&self.focus)
@@ -993,11 +997,7 @@ impl Render for SettingsWindow {
             .line_height(px(18.))
             .bg(rgb(theme.background))
             .text_color(rgb(theme.foreground))
-            .map(|root| {
-                #[cfg(target_os = "macos")]
-                let root = root.child(crate::titlebar::render(theme.surface, None));
-                root
-            })
+            .children(header)
             .child(
                 div().flex_1().min_h_0().flex().child(navigation).child(
                     div()
@@ -1068,7 +1068,9 @@ impl Render for SettingsWindow {
                             .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                     ),
             )
-            .children(font_picker)
+            .children(font_picker);
+        let border = self.theme.active;
+        crate::titlebar::frame(window, border, root)
     }
 }
 

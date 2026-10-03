@@ -463,7 +463,10 @@ impl Render for MockupWindow {
             .map(|index| self.render_card(index, window, cx))
             .collect();
         let empty = cards.is_empty();
-        div()
+        let header = crate::titlebar::header(&theme, window, |window, _| {
+            window.remove_window();
+        });
+        let root = div()
             .key_context("MockupWindow")
             .track_focus(&self.focus)
             .on_action(cx.listener(|_, _: &Close, window, _| window.remove_window()))
@@ -477,11 +480,7 @@ impl Render for MockupWindow {
             .text_font(&config.ui)
             .text_size(px(config.ui.size))
             .line_height(px(config.ui.line_height()))
-            .map(|root| {
-                #[cfg(target_os = "macos")]
-                let root = root.child(crate::titlebar::render(theme.surface, None));
-                root
-            })
+            .children(header)
             .child(self.render_toolbar(cx))
             .child(
                 div()
@@ -539,7 +538,8 @@ impl Render for MockupWindow {
                             .text_color(rgb(theme.muted))
                             .child(self.status.clone()),
                     ),
-            )
+            );
+        crate::titlebar::frame(window, theme.active, root)
     }
 }
 

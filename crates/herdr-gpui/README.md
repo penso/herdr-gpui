@@ -793,7 +793,21 @@ the theme foreground. This profile control opens native GitHub sign-in and shows
 the authenticated user's avatar when connected. It consumes clicks so
 double-clicking it does not invoke the title-bar action.
 The header and clearance remain in fullscreen so the body layout stays stable.
-Windows/Linux keep the existing native frame and do not render this header.
+On Windows and Linux the main window shows the same header below the native
+frame, with an 8px lead in place of the traffic-light clearance; Settings,
+Logs, and the mockup board rely on the native frame alone.
+
+Some Linux compositors, GNOME's Wayland session among them, draw no frame for
+other applications, and GPUI falls back to client-side decorations there.
+Every window then draws its own: pressing the header starts a compositor move
+(a double-click maximizes or restores instead), a right-click opens the compositor's window menu when it offers one, and the
+header ends in minimize, maximize/restore, and close buttons, each shown only
+when the compositor supports it, with close always present. Secondary windows
+show the header in this mode too. Close runs the window's own close path, so
+Settings still finishes pending preferences first. A 10px transparent band
+around the window carries a shadow and the resize handles; edges the
+compositor tiles lose both, so a maximized window fills the screen. X11 and
+compositors with server-side decorations keep their native frame.
 
 Linked-worktree builds add a full-width, 22px amber banner below
 the macOS header (above the body on Linux), with the compile-time branch or short
@@ -822,7 +836,11 @@ icon produces a nonempty mask. These do not verify AppKit behavior. Native QA re
 required for dragging across the header, traffic-light alignment and actions,
 double-click preferences (zoom/minimize/do nothing), fullscreen transitions and
 auto-hidden controls, theme changes, and modal/focus/IME behavior. Windows/Linux
-native-frame appearance also remains unverified by these macOS tests.
+native-frame appearance also remains unverified by these macOS tests. Headless
+tests check the client-decorated frame (inset, handles kept out of the content,
+tiled edges, and button order and support) with forced decorations. Native QA
+on GNOME Wayland remains required for dragging, resizing, the window menu,
+maximize/restore, and the shadow.
 
 ## Terminal Selection And Copy
 

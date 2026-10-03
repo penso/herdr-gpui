@@ -1,5 +1,9 @@
 //! Native chrome and GitHub account access.
+mod decorations;
 mod status;
+
+use decorations::controls;
+pub(crate) use decorations::frame;
 
 use crate::{HerdrWindow, fonts::StyledFont, menu::Page};
 use gpui::{prelude::*, *};
@@ -196,7 +200,11 @@ impl HerdrWindow {
         )
     }
 
-    pub(super) fn render_titlebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(super) fn render_titlebar(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let image = self.pr_profile().and_then(|p| p.avatar.clone());
         // The toggle leads the bar so it stays put whether or not the sidebar
         // below it is showing, and can always bring the sidebar back.
@@ -224,6 +232,7 @@ impl HerdrWindow {
                     .child(sidebar_glyph(self.sidebar_visible, &self.theme))
                     .into_any_element(),
             ),
+            window,
         )
         .child(
             div()
@@ -299,13 +308,17 @@ impl HerdrWindow {
                         ),
                 ),
         )
+        .children(controls(window, &self.theme, |window, _| {
+            window.remove_window();
+        }))
     }
 }
 
 /// `leading` sits right after the traffic lights, ahead of the draggable center.
-pub(super) fn render(surface: u32, leading: Option<AnyElement>) -> Stateful<Div> {
-    // AppKit owns dragging; GPUI's macOS backend cannot start a custom move.
-    div()
+pub(super) fn render(surface: u32, leading: Option<AnyElement>, window: &Window) -> Stateful<Div> {
+    // AppKit or the platform frame owns dragging unless the window draws its
+    // own decorations.
+    let bar = div()
         .id("titlebar")
         .debug_selector(|| "titlebar".into())
         .flex()
@@ -313,14 +326,50 @@ pub(super) fn render(surface: u32, leading: Option<AnyElement>) -> Stateful<Div>
         .w_full()
         .h(px(HEIGHT))
         .bg(rgb(surface).blend(rgba(0xffffff1a)))
-        .child(div().flex_none().w(px(80.)).h_full())
-        .children(leading)
-        .on_click(|event, window, _| {
+        .child(div().flex_none().w(px(LEADING)).h_full())
+        .children(leading);
+    if !decorations::client(window) {
+        return bar.on_click(|event, window, _| {
             if event.click_count() == 2 {
                 window.titlebar_double_click();
             }
+        });
+    }
+    // Nothing else moves a client-decorated window. The move starts on the
+    // press: pointer motion during a press is claimed by window-level drag
+    // handlers (selection, splits) before it bubbles up to the bar.
+    let supported = window.window_controls();
+    bar.on_mouse_down(MouseButton::Left, move |event, window, _| {
+        if event.click_count == 2 && supported.maximize {
+            window.zoom_window();
+        } else {
+            window.start_window_move();
+        }
+    })
+    .when(supported.window_menu, |bar| {
+        bar.on_mouse_down(MouseButton::Right, |event, window, _| {
+            window.show_window_menu(event.position);
         })
+    })
 }
+
+/// The bar a secondary window shows: macOS always draws one under its
+/// transparent titlebar, and a client-decorated window needs one to be moved
+/// and closed at all. Elsewhere the platform frame already provides both.
+pub(crate) fn header(
+    theme: &crate::config::Theme,
+    window: &Window,
+    close: impl Fn(&mut Window, &mut App) + 'static,
+) -> Option<Stateful<Div>> {
+    (cfg!(target_os = "macos") || decorations::client(window)).then(|| {
+        let buttons = controls(window, theme, close);
+        render(theme.surface, None, window).children(buttons)
+    })
+}
+
+/// Room before the first control: macOS keeps it clear for the traffic
+/// lights, which every other platform draws elsewhere or not at all.
+const LEADING: f32 = if cfg!(target_os = "macos") { 80. } else { 8. };
 
 pub(super) fn options(title: &str) -> TitlebarOptions {
     TitlebarOptions {
@@ -368,7 +417,7 @@ mod tests {
                 assert_eq!(view.read_with(cx, |view, _| view.sidebar_visible), visible);
                 assert_eq!(cx.debug_bounds("sidebar").is_some(), visible);
                 let button = cx.debug_bounds("toggle-sidebar").unwrap();
-                assert_eq!(button.origin.x, px(80.));
+                assert_eq!(button.origin.x, px(super::LEADING));
                 assert_eq!(button.size, size(px(28.), px(28.)));
                 cx.simulate_click(button.center(), Modifiers::default());
             }
