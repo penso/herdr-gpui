@@ -144,39 +144,84 @@ pub(crate) fn pane_at(
         .map(|pane| pane.pane_id.as_str())
 }
 
-#[derive(Default)]
-pub struct WheelAccumulator {
-    target: Option<InputTarget>,
-    remainder: f32,
+/// Whole wheel steps on each axis, signed as GPUI reports them: positive
+/// lines scroll up and positive columns scroll left.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WheelSteps {
+    pub lines: i16,
+    pub columns: i16,
 }
 
-impl WheelAccumulator {
-    pub fn lines(
-        &mut self,
-        target: &InputTarget,
-        event: &ScrollWheelEvent,
-        cell_height: f32,
-    ) -> i16 {
-        if self.target.as_ref() != Some(target) || matches!(event.touch_phase, TouchPhase::Started)
-        {
-            self.remainder = 0.;
-            self.target = Some(target.clone());
-        }
-        let delta = match event.delta {
-            ScrollDelta::Pixels(delta) => delta.y.to_f64() as f32 / cell_height,
-            ScrollDelta::Lines(delta) => delta.y,
-        };
+/// Sub-step motion kept between events on one axis.
+#[derive(Default)]
+struct WheelRemainder(f32);
+
+impl WheelRemainder {
+    fn add(&mut self, delta: f32) -> i16 {
         if !delta.is_finite() {
             return 0;
         }
-        if delta != 0. && delta.signum() != self.remainder.signum() {
-            self.remainder = 0.;
+        if delta != 0. && delta.signum() != self.0.signum() {
+            self.0 = 0.;
         }
         // Bound each event's work; keep sub-cell trackpad motion, not an input backlog.
-        let total = (self.remainder + delta).clamp(-128., 128.);
-        let lines = total.trunc() as i16;
-        self.remainder = total - f32::from(lines);
-        lines
+        let total = (self.0 + delta).clamp(-128., 128.);
+        let steps = total.trunc() as i16;
+        self.0 = total - f32::from(steps);
+        steps
+    }
+}
+
+/// Turns wheel and trackpad motion into whole lines and columns for one
+/// target, resetting when the target or the gesture changes.
+///
+/// GPUI's platforms already turn Shift with a vertical wheel into horizontal
+/// motion (macOS in the OS, X11 and Wayland in GPUI), so the axes are taken as
+/// reported and Shift is forwarded unchanged rather than swapped again.
+#[derive(Default)]
+pub struct WheelAccumulator {
+    target: Option<InputTarget>,
+    lines: WheelRemainder,
+    columns: WheelRemainder,
+}
+
+impl WheelAccumulator {
+    pub fn steps(
+        &mut self,
+        target: &WheelTarget,
+        event: &ScrollWheelEvent,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> WheelSteps {
+        if self.target.as_ref() != Some(&target.target)
+            || matches!(event.touch_phase, TouchPhase::Started)
+        {
+            *self = Self {
+                target: Some(target.target.clone()),
+                ..Self::default()
+            };
+        }
+        // Dominance compares the reported motion itself: cells are not square.
+        let (raw_x, raw_y, x, y) = match event.delta {
+            ScrollDelta::Pixels(delta) => {
+                let (x, y) = (delta.x.to_f64() as f32, delta.y.to_f64() as f32);
+                (x, y, x / cell_width, y / cell_height)
+            }
+            ScrollDelta::Lines(delta) => (delta.x, delta.y, delta.x, delta.y),
+        };
+        let lines = self.lines.add(y);
+        // Herdr turns a horizontal wheel only into a mouse report, so motion
+        // over a pane that does not report the mouse would do nothing. A
+        // mostly vertical swipe's sideways drift is not a column either.
+        let columns = if !target.mouse_reporting {
+            self.columns = WheelRemainder::default();
+            0
+        } else if raw_x.abs() > raw_y.abs() {
+            self.columns.add(x)
+        } else {
+            0
+        };
+        WheelSteps { lines, columns }
     }
 }
 
@@ -189,19 +234,40 @@ pub struct WheelTarget {
 }
 
 impl WheelTarget {
-    pub fn event(&self, lines: i16, modifiers: Modifiers) -> ClientPaneInputEvent {
-        let mut event = self.mouse_event(
-            if lines > 0 {
+    /// One event per moving axis, vertical first. Like a terminal wheel event,
+    /// each carries its whole count; Herdr reports one wheel button for it to
+    /// a mouse-reporting application and scrolls host scrollback by the count.
+    pub fn wheel_events(
+        &self,
+        steps: WheelSteps,
+        modifiers: Modifiers,
+    ) -> impl Iterator<Item = ClientPaneInputEvent> + '_ {
+        let vertical = (steps.lines != 0).then(|| {
+            let kind = if steps.lines > 0 {
                 ClientMouseKind::ScrollUp
             } else {
                 ClientMouseKind::ScrollDown
-            },
-            modifiers,
-        );
-        if let ClientPaneInputEvent::Mouse { lines: count, .. } = &mut event {
-            *count = lines.unsigned_abs();
-        }
-        event
+            };
+            (kind, steps.lines)
+        });
+        let horizontal = (steps.columns != 0).then(|| {
+            let kind = if steps.columns > 0 {
+                ClientMouseKind::ScrollLeft
+            } else {
+                ClientMouseKind::ScrollRight
+            };
+            (kind, steps.columns)
+        });
+        vertical
+            .into_iter()
+            .chain(horizontal)
+            .map(move |(kind, count)| {
+                let mut event = self.mouse_event(kind, modifiers);
+                if let ClientPaneInputEvent::Mouse { lines, .. } = &mut event {
+                    *lines = count.unsigned_abs();
+                }
+                event
+            })
     }
 
     pub(crate) fn mouse_event(
@@ -544,52 +610,190 @@ pub(crate) fn in_rect(rect: SurfaceRect, x: u16, y: u16) -> bool {
 mod tests {
     use super::*;
 
+    fn hit(target: InputTarget, mouse_reporting: bool) -> WheelTarget {
+        WheelTarget {
+            target,
+            mouse_reporting,
+            bounds: Bounds::default(),
+            position: ClientMousePosition::Cell { column: 2, row: 3 },
+            geometry: None,
+        }
+    }
+
+    fn lines(wheel: &mut WheelAccumulator, target: &WheelTarget, event: &ScrollWheelEvent) -> i16 {
+        wheel.steps(target, event, 10., CELL_HEIGHT).lines
+    }
+
     #[test]
     fn wheel_preserves_fractions_and_resets_on_target_direction_or_gesture_change() {
         let mut wheel = WheelAccumulator::default();
-        let pane = InputTarget::Pane("pane".into());
-        let other = InputTarget::Pane("other".into());
-        let popup = InputTarget::Popup("other".into());
+        let pane = hit(InputTarget::Pane("pane".into()), false);
+        let other = hit(InputTarget::Pane("other".into()), false);
+        let popup = hit(InputTarget::Popup("other".into()), false);
         let mut event = ScrollWheelEvent {
             delta: ScrollDelta::Pixels(point(px(0.), px(12.))),
             touch_phase: TouchPhase::Moved,
             ..Default::default()
         };
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
-        assert_eq!(wheel.lines(&other, &event, CELL_HEIGHT), 0);
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(lines(&mut wheel, &pane, &event), 0);
+        assert_eq!(lines(&mut wheel, &pane, &event), 1);
+        assert_eq!(lines(&mut wheel, &other, &event), 0);
+        assert_eq!(lines(&mut wheel, &popup, &event), 0);
         event.touch_phase = TouchPhase::Started;
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(lines(&mut wheel, &popup, &event), 0);
         event.touch_phase = TouchPhase::Moved;
         event.delta = ScrollDelta::Lines(point(0., -1.));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), -1);
+        assert_eq!(lines(&mut wheel, &popup, &event), -1);
         event.delta = ScrollDelta::Lines(point(0., 1e9));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 128);
+        assert_eq!(lines(&mut wheel, &popup, &event), 128);
         event.delta = ScrollDelta::Lines(point(10., 0.));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(lines(&mut wheel, &popup, &event), 0);
     }
 
     #[test]
     fn nonfinite_wheel_deltas_do_not_poison_fractional_motion() {
-        let pane = InputTarget::Pane("pane".into());
-        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-            let mut wheel = WheelAccumulator::default();
-            let mut event = ScrollWheelEvent {
-                delta: ScrollDelta::Lines(point(0., 0.75)),
-                touch_phase: TouchPhase::Moved,
-                ..Default::default()
-            };
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-            event.delta = ScrollDelta::Lines(point(0., invalid));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-            event.delta = ScrollDelta::Lines(point(0., 0.25));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
-            event.delta = ScrollDelta::Lines(point(0., -1e9));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), -128);
-            event.delta = ScrollDelta::Lines(point(0., 0.));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
+        for mouse_reporting in [false, true] {
+            let pane = hit(InputTarget::Pane("pane".into()), mouse_reporting);
+            for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                for vertical in [false, true] {
+                    let delta = |value: f32| {
+                        ScrollDelta::Lines(if vertical {
+                            point(0., value)
+                        } else {
+                            point(value, 0.)
+                        })
+                    };
+                    let step = |wheel: &mut WheelAccumulator, value: f32| {
+                        let event = ScrollWheelEvent {
+                            delta: delta(value),
+                            touch_phase: TouchPhase::Moved,
+                            ..Default::default()
+                        };
+                        let steps = wheel.steps(&pane, &event, 10., CELL_HEIGHT);
+                        if vertical { steps.lines } else { steps.columns }
+                    };
+                    // Columns exist only for a mouse-reporting target.
+                    let scale = i16::from(vertical || mouse_reporting);
+                    let mut wheel = WheelAccumulator::default();
+                    assert_eq!(step(&mut wheel, 0.75), 0);
+                    assert_eq!(step(&mut wheel, invalid), 0);
+                    assert_eq!(step(&mut wheel, 0.25), scale);
+                    assert_eq!(step(&mut wheel, -1e9), -128 * scale);
+                    assert_eq!(step(&mut wheel, 0.), 0);
+                }
+            }
         }
+    }
+
+    #[test]
+    fn horizontal_wheel_accumulates_columns_by_cell_width_for_mouse_reporting_targets() {
+        let mut wheel = WheelAccumulator::default();
+        let pane = hit(InputTarget::Pane("pane".into()), true);
+        let popup = hit(InputTarget::Popup("popup".into()), true);
+        let plain = hit(InputTarget::Pane("plain".into()), false);
+        let mut event = ScrollWheelEvent {
+            delta: ScrollDelta::Pixels(point(px(6.), px(0.))),
+            touch_phase: TouchPhase::Moved,
+            ..Default::default()
+        };
+        let mut steps = |target: &WheelTarget, event: &ScrollWheelEvent| {
+            wheel.steps(target, event, 10., CELL_HEIGHT)
+        };
+        // Pixel motion becomes columns by cell width, keeping the fraction.
+        assert_eq!(steps(&pane, &event), WheelSteps::default());
+        assert_eq!(
+            steps(&pane, &event),
+            WheelSteps {
+                lines: 0,
+                columns: 1
+            }
+        );
+        // Reversing direction drops the fraction left over from the other way.
+        event.delta = ScrollDelta::Pixels(point(px(-8.), px(0.)));
+        assert_eq!(steps(&pane, &event), WheelSteps::default());
+        assert_eq!(
+            steps(&pane, &event),
+            WheelSteps {
+                lines: 0,
+                columns: -1
+            }
+        );
+        // A mostly vertical swipe's sideways drift is not a column, even
+        // though cells are narrower than they are tall.
+        event.delta = ScrollDelta::Pixels(point(px(-19.), px(20.)));
+        assert_eq!(
+            steps(&pane, &event),
+            WheelSteps {
+                lines: 1,
+                columns: 0
+            }
+        );
+        // A mostly horizontal one still carries its vertical lines.
+        event.delta = ScrollDelta::Pixels(point(px(-30.), px(20.)));
+        assert_eq!(
+            steps(&pane, &event),
+            WheelSteps {
+                lines: 1,
+                columns: -3
+            }
+        );
+        // Discrete wheels report whole columns; a popup reports like a pane.
+        event.delta = ScrollDelta::Lines(point(2., 0.));
+        assert_eq!(
+            steps(&popup, &event),
+            WheelSteps {
+                lines: 0,
+                columns: 2
+            }
+        );
+        // Without mouse reporting, Herdr would drop a horizontal wheel, so
+        // nothing accumulates to leak out once reporting starts.
+        event.delta = ScrollDelta::Pixels(point(px(25.), px(0.)));
+        assert_eq!(steps(&plain, &event), WheelSteps::default());
+        assert_eq!(steps(&plain, &event), WheelSteps::default());
+        let plain = hit(InputTarget::Pane("plain".into()), true);
+        event.delta = ScrollDelta::Pixels(point(px(5.), px(0.)));
+        assert_eq!(steps(&plain, &event), WheelSteps::default());
+    }
+
+    #[test]
+    fn wheel_steps_become_one_event_per_axis_vertical_first() {
+        let target = hit(InputTarget::Pane("pane".into()), true);
+        let shift = Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        let events = |lines, columns| {
+            target
+                .wheel_events(WheelSteps { lines, columns }, shift)
+                .map(|event| match event {
+                    ClientPaneInputEvent::Mouse {
+                        kind,
+                        position,
+                        modifiers,
+                        lines,
+                        ..
+                    } => {
+                        assert_eq!(position, ClientMousePosition::Cell { column: 2, row: 3 });
+                        // Shift reaches the application as reported.
+                        assert_eq!(modifiers, 1);
+                        (kind, lines)
+                    }
+                    event => panic!("unexpected wheel event {event:?}"),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(events(0, 0).is_empty());
+        assert_eq!(events(2, 0), [(ClientMouseKind::ScrollUp, 2)]);
+        assert_eq!(events(0, 3), [(ClientMouseKind::ScrollLeft, 3)]);
+        assert_eq!(events(0, -128), [(ClientMouseKind::ScrollRight, 128)]);
+        assert_eq!(
+            events(-1, -2),
+            [
+                (ClientMouseKind::ScrollDown, 1),
+                (ClientMouseKind::ScrollRight, 2)
+            ]
+        );
     }
 
     #[test]
@@ -757,7 +961,16 @@ mod tests {
                 ClientMousePosition::Cell { column: 2, row: 2 }
             );
             assert!(matches!(
-                target.event(-3, Modifiers::default()),
+                target
+                    .wheel_events(
+                        WheelSteps {
+                            lines: -3,
+                            columns: 0
+                        },
+                        Modifiers::default()
+                    )
+                    .next()
+                    .unwrap(),
                 ClientPaneInputEvent::Mouse {
                     kind: ClientMouseKind::ScrollDown,
                     lines: 3,
@@ -1004,16 +1217,16 @@ mod tests {
     #[test]
     fn wheel_uses_configured_height_only_for_pixel_deltas() {
         let mut wheel = WheelAccumulator::default();
-        let pane = InputTarget::Pane("pane".into());
+        let pane = hit(InputTarget::Pane("pane".into()), true);
         let mut event = ScrollWheelEvent {
             delta: ScrollDelta::Pixels(point(px(0.), px(15.))),
             touch_phase: TouchPhase::Moved,
             ..Default::default()
         };
-        assert_eq!(wheel.lines(&pane, &event, 30.), 0);
-        assert_eq!(wheel.lines(&pane, &event, 30.), 1);
+        assert_eq!(wheel.steps(&pane, &event, 10., 30.).lines, 0);
+        assert_eq!(wheel.steps(&pane, &event, 10., 30.).lines, 1);
         event.delta = ScrollDelta::Lines(point(0., 2.));
-        assert_eq!(wheel.lines(&pane, &event, 30.), 2);
+        assert_eq!(wheel.steps(&pane, &event, 10., 30.).lines, 2);
     }
 
     #[test]

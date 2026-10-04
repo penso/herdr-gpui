@@ -106,16 +106,18 @@ impl HerdrWindow {
             self.wheel = WheelAccumulator::default();
             return;
         };
-        let lines = self.wheel.lines(&target.target, event, cell_height);
+        let steps = self
+            .wheel
+            .steps(&target, event, self.cell_width, cell_height);
         cx.stop_propagation();
-        if lines == 0 {
-            return;
-        }
-        let input = target.event(lines, event.modifiers);
-        let result = ConnectionBridge::send_input(handle, &snapshot.boot_id, &target.target, input);
-        if let Err(error) = result {
-            self.local_error = Some(format!("Wheel input not sent: {error}"));
-            cx.notify();
+        for input in target.wheel_events(steps, event.modifiers) {
+            let result =
+                ConnectionBridge::send_input(handle, &snapshot.boot_id, &target.target, input);
+            if let Err(error) = result {
+                self.local_error = Some(format!("Wheel input not sent: {error}"));
+                cx.notify();
+                return;
+            }
         }
     }
 
