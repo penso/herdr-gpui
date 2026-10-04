@@ -13,6 +13,7 @@ mod pr;
 mod sessions;
 mod settings;
 mod state;
+mod successor;
 mod teleport;
 mod whats_new;
 mod workspace;
@@ -41,6 +42,7 @@ pub(crate) use {
     colors::{accent, danger, online, teleported, tint},
     page::{Page, WorkspaceAction},
     state::{MenuState, Removal},
+    successor::Successor,
     worktree_source::WorktreeSource,
 };
 

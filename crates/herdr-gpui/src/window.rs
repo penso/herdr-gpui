@@ -142,6 +142,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) menu: menu::MenuState,
     /// A `worktree.remove` queued after its dialog closed.
     pub(crate) removal: Option<menu::Removal>,
+    /// Where focus goes once a closed focused workspace leaves the snapshot.
+    pub(crate) successor: Option<menu::Successor>,
     /// A teleport being set up or under way; a move outlives its dialog.
     pub(crate) teleport: Option<crate::teleport::Teleport>,
     /// Checkouts this client teleported away from, marked in the sidebar.
@@ -372,6 +374,7 @@ impl HerdrWindow {
         self.cancel_stale_image();
         self.poll_file_transfer(cx);
         self.update_workspace_dialog(window, cx);
+        self.follow_successor(cx);
         self.poll_teleport(window, cx);
         self.poll_device_setup(window, cx);
         self.poll_worktree_source(cx);
@@ -582,6 +585,7 @@ impl HerdrWindow {
             local_error: error,
             menu: menu::MenuState::new(cx),
             removal: None,
+            successor: None,
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,

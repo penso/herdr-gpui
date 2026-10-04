@@ -727,6 +727,7 @@ impl HerdrWindow {
                 ..removal
             });
         }
+        self.drop_successor();
         self.local_error = Some(format!("Remove worktree: {error}"));
         cx.notify();
     }
@@ -1020,6 +1021,8 @@ impl HerdrWindow {
                     pending: Some(pending),
                     force,
                 });
+                let (boot_id, closing) = (target.boot_id.clone(), [target.id.clone()]);
+                self.expect_successor(&boot_id, &closing);
                 return Ok(Submission::Queued {
                     focus_changed: true,
                 });
@@ -1047,17 +1050,21 @@ impl HerdrWindow {
                     focus_changed: true,
                 });
             }
+            let (boot_id, close_members) = (target.boot_id.clone(), target.close_members.clone());
             let handle = self.endpoints[self.selected_endpoint]
                 .connection
                 .handle
                 .as_ref()
                 .ok_or(crate::Error::NotConnected)?;
             handle
-                .request(&target.boot_id, method, params)
-                .map(|_| Submission::Queued {
-                    focus_changed: action != WorkspaceAction::Rename,
-                })
-                .map_err(|source| crate::Error::Request { method, source })
+                .request(&boot_id, method, params)
+                .map_err(|source| crate::Error::Request { method, source })?;
+            if action == WorkspaceAction::Close {
+                self.expect_successor(&boot_id, &close_members);
+            }
+            Ok(Submission::Queued {
+                focus_changed: action != WorkspaceAction::Rename,
+            })
         })();
         match result {
             Ok(submission) => {
