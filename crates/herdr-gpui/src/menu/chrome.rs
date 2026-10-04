@@ -299,6 +299,7 @@ impl HerdrWindow {
                 | Page::Group
                 | Page::Pane
                 | Page::RenamePane
+                | Page::MovePane
                 | Page::Host
                 | Page::RemoveDevice
                 | Page::Git
@@ -386,6 +387,7 @@ impl HerdrWindow {
                         | Page::Group
                         | Page::Pane
                         | Page::RenamePane
+                        | Page::MovePane
                         | Page::Host
                         | Page::RemoveDevice
                 ),
@@ -394,7 +396,7 @@ impl HerdrWindow {
                         .w((viewport.width - px(24.)).max(px(0.)).min(px(
                             if matches!(page, Page::Tab | Page::Pane | Page::Host) {
                                 180.
-                            } else if page == Page::Group {
+                            } else if matches!(page, Page::Group | Page::MovePane) {
                                 240.
                             } else {
                                 360.
@@ -642,7 +644,7 @@ impl HerdrWindow {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
             panel = panel.child(self.render_group_menu(cx));
-        } else if matches!(page, Page::Pane | Page::RenamePane) {
+        } else if matches!(page, Page::Pane | Page::RenamePane | Page::MovePane) {
             panel = panel.child(self.render_pane_menu(cx));
         } else if page == Page::Keybinds {
             panel = panel.child(self.render_keybinds(cx));
@@ -859,7 +861,10 @@ impl HerdrWindow {
                     this.group_menu_key(event, window, cx);
                     return;
                 }
-                if matches!(this.menu.page, Some(Page::Pane | Page::RenamePane)) {
+                if matches!(
+                    this.menu.page,
+                    Some(Page::Pane | Page::RenamePane | Page::MovePane)
+                ) {
                     this.pane_menu_key(event, window, cx);
                     return;
                 }

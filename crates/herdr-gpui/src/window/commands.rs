@@ -334,6 +334,10 @@ impl HerdrWindow {
                 self.rename_focused_pane(window, cx);
                 return;
             }
+            Command::MovePane => {
+                self.move_focused_pane(window, cx);
+                return;
+            }
             Command::RenameWorkspace | Command::CloseWorkspace => {
                 let action = if command == Command::RenameWorkspace {
                     WorkspaceAction::Rename

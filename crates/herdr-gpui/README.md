@@ -935,6 +935,27 @@ bridge files, they are not owned or deleted by Herdr on disconnect. Network loss
 can prevent cleanup, and kernel-blocked local filesystem operations cannot be
 forcibly interrupted. A copy stalls out after 30 seconds without progress.
 
+## Moving Panes
+
+Right-click a pane for **Move to New Tab** (in the pane's own workspace),
+**Move to New Workspace**, or **Move to Tab…**, which lists the other tabs of
+every workspace and a new tab in each other workspace. The command palette's
+**Move Pane…** (`move_pane`, unbound by default) opens the same list for the
+focused pane, with the new tab and new workspace first. Moving into an existing
+tab splits that tab's focused pane and puts the moved pane on its right. The
+terminal keeps running, and the move asks Herdr to focus the pane where it lands.
+
+Herdr does not offer `pane.move` to GUI clients, so the move runs
+`herdr [--session NAME] pane move` on the endpoint's host, locally or over SSH,
+the way Teleport does, on a background thread. The menu says **Moving pane…**
+until Herdr answers and closes when the move succeeds. Herdr's refusals appear
+in the menu: it will not move a pane out of or into a zoomed tab, and a missing
+`herdr` CLI is named as such. A failure that arrives after the menu was closed
+appears in the window's status instead. Moves are offered only on Linux and
+macOS clients and only for the local daemon, a named session, or an SSH
+device, not a custom socket endpoint. A tab or workspace that closed after the
+menu opened is refused before anything runs.
+
 ## Teleport
 
 Right-click a linked worktree and choose Teleport... to move it to another
@@ -1649,6 +1670,7 @@ Windows setup) nothing is saved and the window says so.
   always asks for confirmation with Cancel selected. Popups and stale retained
   terminal frames block pane context actions. Escape or an outside left/right
   click dismisses the menu without forwarding input to the terminal.
+  The pane menu also moves the pane; see [Moving Panes](#moving-panes).
 - Native File/Edit/Terminal menus and creation buttons: **+ New Workspace** in the
   sidebar and a persistent 18px SVG **+** in a 44px-wide button beside the horizontally
   scrolling tab strip. Each tab has a 16px SVG close cross in a 24px hit target;

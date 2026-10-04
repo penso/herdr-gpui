@@ -57,6 +57,7 @@ pub enum Command {
     ResizeDown,
     ResizeMode,
     RenamePane,
+    MovePane,
     PreviousWorkspace,
     NextWorkspace,
     WorkspaceNumber(u8),
@@ -334,6 +335,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         command: Command::RenamePane,
         name: "rename_pane",
         label: "Rename Pane",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::MovePane,
+        name: "move_pane",
+        label: "Move Pane\u{2026}",
         shortcuts: &[],
     },
     CommandInfo {
@@ -760,6 +767,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::LastPane
         | Command::ResizeMode
         | Command::RenamePane
+        | Command::MovePane
         | Command::PreviousWorkspace
         | Command::NextWorkspace
         | Command::WorkspaceNumber(_)
@@ -798,7 +806,7 @@ mod tests {
     #[test]
     fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         use Command::*;
-        let expected: [(Command, &[&str]); 87] = [
+        let expected: [(Command, &[&str]); 88] = [
             (OpenNotificationTarget, &["cmd-alt-n"]),
             (Logs, &[]),
             (NewWindow, &["cmd-alt-shift-n"]),
@@ -842,6 +850,7 @@ mod tests {
             (ResizeDown, &[]),
             (ResizeMode, &[]),
             (RenamePane, &[]),
+            (MovePane, &[]),
             (Zoom, &["cmd-shift-enter"]),
             (ClearPane, &["cmd-k"]),
             (Find, &["cmd-f"]),
@@ -959,6 +968,7 @@ mod tests {
             Command::LastPane,
             Command::ResizeMode,
             Command::RenamePane,
+            Command::MovePane,
             Command::PreviousWorkspace,
             Command::NextWorkspace,
             Command::WorkspaceNumber(1),

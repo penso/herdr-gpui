@@ -1,7 +1,18 @@
-use crate::{HerdrWindow, close_modal::CloseConfirmation, menu::Page, search_input::SearchInput};
+use crate::{
+    HerdrWindow,
+    close_modal::CloseConfirmation,
+    menu::Page,
+    pane_move::{self, Choice, Destination},
+    search_input::SearchInput,
+};
 use gpui::{prelude::*, *};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+/// Tells one pane move's result from another's, so a late answer never
+/// settles a menu reopened since.
+static NEXT_MOVE: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
 mod tests {
@@ -237,6 +248,156 @@ mod tests {
             cx.simulate_mouse_down(point(px(5.), px(5.)), button, Modifiers::default());
             assert!(view.read_with(cx, |v, _| v.menu.page.is_none()));
         }
+    }
+
+    /// Moves run the `herdr` CLI, so they are offered only where it can run,
+    /// list every destination, refuse a destination that vanished, and let
+    /// only the move a menu is waiting for settle it.
+    #[gpui::test]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn pane_moves_offer_destinations_and_settle_once(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            crate::bind_keys(cx);
+            let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
+            view.live.snapshot = Some(Arc::new(snapshot()));
+            view
+        });
+        cx.simulate_resize(size(px(800.), px(600.)));
+        let is_move = |action: &Action| {
+            matches!(
+                action,
+                Action::MoveToNewTab | Action::MoveToNewWorkspace | Action::MoveTo
+            )
+        };
+        cx.update(|window, cx| {
+            view.update(cx, |v, cx| {
+                // The fixture's custom socket has no host for the CLI.
+                v.open_pane_menu("inactive", Point::default(), window, cx);
+                let pane = v.menu.pane.as_ref().unwrap();
+                assert!(!pane.movable);
+                assert!(!pane.actions().iter().any(is_move));
+                v.dismiss_menu(window, cx);
+                v.move_focused_pane(window, cx);
+                assert_eq!(v.menu.page, Some(Page::Pane));
+                assert!(
+                    v.menu
+                        .pane
+                        .as_ref()
+                        .unwrap()
+                        .error
+                        .as_ref()
+                        .unwrap()
+                        .contains("custom socket")
+                );
+                v.dismiss_menu(window, cx);
+
+                v.endpoints[0].connection.target = herdr_client::ConnectTarget::Local;
+                v.open_pane_menu("inactive", Point::default(), window, cx);
+                // One tab in one workspace: only the new places.
+                let actions = v.menu.pane.as_ref().unwrap().actions();
+                assert_eq!(actions.iter().filter(|a| is_move(a)).count(), 2);
+                v.dismiss_menu(window, cx);
+
+                let mut snapshot = snapshot();
+                let mut logs = snapshot.tabs[0].clone();
+                logs.tab_id = "w1:t2".into();
+                logs.number = 2;
+                logs.label = "logs".into();
+                snapshot.tabs.push(logs);
+                v.live.snapshot = Some(Arc::new(snapshot));
+                v.open_pane_menu("inactive", Point::default(), window, cx);
+                assert_eq!(
+                    v.menu
+                        .pane
+                        .as_ref()
+                        .unwrap()
+                        .actions()
+                        .iter()
+                        .filter(|a| is_move(a))
+                        .count(),
+                    3
+                );
+                v.activate_pane_menu(Action::MoveTo, window, cx);
+                assert_eq!(v.menu.page, Some(Page::MovePane));
+                let labels: Vec<_> = v
+                    .menu
+                    .pane
+                    .as_ref()
+                    .unwrap()
+                    .target
+                    .destinations()
+                    .into_iter()
+                    .map(|choice| choice.label)
+                    .collect();
+                assert_eq!(labels, ["New Tab", "New Workspace", "repo \u{203a} logs"]);
+            });
+            window.draw(cx).clear(cx);
+        });
+        for selector in ["pane-move-0", "pane-move-1", "pane-move-2"] {
+            assert!(cx.debug_bounds(selector).is_some());
+        }
+        assert!(cx.debug_bounds("pane-move-3").is_none());
+        cx.simulate_keystrokes("down down up");
+        view.read_with(cx, |v, _| {
+            assert_eq!(v.menu.pane.as_ref().unwrap().selected, Some(0));
+        });
+        cx.update(|window, cx| {
+            view.update(cx, |v, cx| {
+                // The tab closed after the picker opened: nothing runs.
+                Arc::make_mut(v.live.snapshot.as_mut().unwrap())
+                    .tabs
+                    .retain(|tab| tab.tab_id != "w1:t2");
+                v.move_pane(
+                    Destination::Tab {
+                        tab_id: "w1:t2".into(),
+                    },
+                    window,
+                    cx,
+                );
+                let pane = v.menu.pane.as_ref().unwrap();
+                assert!(pane.moving.is_none());
+                assert_eq!(
+                    pane.error.as_deref(),
+                    Some(crate::Error::StaleTab.to_string().as_str())
+                );
+
+                // While a move runs, the menu starts no other.
+                v.menu.pane.as_mut().unwrap().moving = Some(7);
+                v.activate_pane_menu(Action::MoveToNewWorkspace, window, cx);
+                v.move_pane(Destination::NewWorkspace, window, cx);
+                assert_eq!(v.menu.pane.as_ref().unwrap().moving, Some(7));
+                // Another move's late failure reaches the window, not this menu.
+                v.local_error = None;
+                v.finish_pane_move(
+                    6,
+                    Err(pane_move::Error::Unchanged(pane_move::Unchanged::SameTab)),
+                    window,
+                    cx,
+                );
+                assert_eq!(v.menu.pane.as_ref().unwrap().moving, Some(7));
+                assert_eq!(
+                    v.local_error.as_deref(),
+                    Some("The pane is already in that tab.")
+                );
+                v.finish_pane_move(
+                    7,
+                    Err(pane_move::Error::Unchanged(pane_move::Unchanged::ZoomedTab)),
+                    window,
+                    cx,
+                );
+                let pane = v.menu.pane.as_ref().unwrap();
+                assert!(pane.moving.is_none());
+                assert!(pane.error.as_ref().unwrap().contains("Unzoom"));
+                assert_eq!(v.menu.page, Some(Page::MovePane));
+                v.menu.pane.as_mut().unwrap().moving = Some(8);
+                v.finish_pane_move(8, Ok(()), window, cx);
+                assert!(v.menu.page.is_none());
+                // A success after the menu closed changes nothing visible.
+                v.local_error = None;
+                v.finish_pane_move(9, Ok(()), window, cx);
+                assert!(v.local_error.is_none());
+            })
+        });
     }
 
     /// Shows the "inactive" pane over a cancelled connection, so input is
@@ -574,6 +735,8 @@ struct Target {
     /// Herdr routes this pane's right-clicks to its application, as seen when
     /// the menu opened; the toggle asks for the other routing.
     right_click_passthrough: bool,
+    /// Existing tabs, and new tabs in other workspaces, the pane can move to.
+    choices: Vec<Choice>,
 }
 
 impl Target {
@@ -600,6 +763,7 @@ impl Target {
             zoomed,
             focused: focused.cloned(),
             right_click_passthrough: pane.right_click_passthrough,
+            choices: pane_move::choices(snapshot, &pane.tab_id),
         };
         target.validate(snapshot).ok()?;
         Some(target)
@@ -627,6 +791,26 @@ impl Target {
     fn rename_params(&self, label: &str) -> Value {
         json!({"pane_id": self.pane, "label": label.trim()})
     }
+
+    /// The move picker's rows: a new tab here and a new workspace first, then
+    /// every other place the pane can go.
+    fn destinations(&self) -> Vec<Choice> {
+        [
+            Choice {
+                destination: Destination::NewTab {
+                    workspace_id: self.workspace.clone(),
+                },
+                label: "New Tab".into(),
+            },
+            Choice {
+                destination: Destination::NewWorkspace,
+                label: "New Workspace".into(),
+            },
+        ]
+        .into_iter()
+        .chain(self.choices.iter().cloned())
+        .collect()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -636,6 +820,10 @@ enum Action {
     SplitDown,
     Swap,
     Zoom,
+    MoveToNewTab,
+    MoveToNewWorkspace,
+    /// Opens the picker of every destination.
+    MoveTo,
     EditScrollback,
     RightClick,
     Close,
@@ -671,7 +859,12 @@ impl Action {
                     "right_click": if target.right_click_passthrough { "herdr" } else { "pane" },
                 }),
             ),
-            Self::Rename | Self::EditScrollback | Self::Close => return None,
+            Self::Rename
+            | Self::MoveToNewTab
+            | Self::MoveToNewWorkspace
+            | Self::MoveTo
+            | Self::EditScrollback
+            | Self::Close => return None,
         })
     }
 
@@ -683,6 +876,9 @@ impl Action {
             Self::Swap => "Swap with Focused Pane",
             Self::Zoom if target.zoomed => "Unzoom",
             Self::Zoom => "Zoom",
+            Self::MoveToNewTab => "Move to New Tab",
+            Self::MoveToNewWorkspace => "Move to New Workspace",
+            Self::MoveTo => "Move to Tab\u{2026}",
             Self::EditScrollback => "Open Scrollback in Editor",
             Self::RightClick if target.right_click_passthrough => "Open This Menu on Right-Click",
             Self::RightClick => "Send Right-Clicks to Pane",
@@ -691,24 +887,43 @@ impl Action {
     }
 }
 
-const ACTIONS: [Action; 8] = [
+const ACTIONS: [Action; 11] = [
     Action::Rename,
     Action::SplitRight,
     Action::SplitDown,
     Action::Swap,
     Action::Zoom,
+    Action::MoveToNewTab,
+    Action::MoveToNewWorkspace,
+    Action::MoveTo,
     Action::EditScrollback,
     Action::RightClick,
     Action::Close,
 ];
 
 impl PaneMenu {
-    /// The rows this menu offers: a swap needs another pane to trade with.
+    /// The rows this menu offers: a swap needs another pane to trade with,
+    /// moves need a host the `herdr` CLI can run on, and the tab picker
+    /// needs another tab or workspace.
     fn actions(&self) -> Vec<Action> {
         ACTIONS
             .into_iter()
-            .filter(|action| !matches!(action, Action::Swap) || self.target.focused.is_some())
+            .filter(|action| match action {
+                Action::Swap => self.target.focused.is_some(),
+                Action::MoveToNewTab | Action::MoveToNewWorkspace => self.movable,
+                Action::MoveTo => self.movable && !self.target.choices.is_empty(),
+                _ => true,
+            })
             .collect()
+    }
+
+    /// How many rows the current page lists.
+    fn rows(&self, page: Option<Page>) -> usize {
+        if page == Some(Page::MovePane) {
+            self.target.destinations().len()
+        } else {
+            self.actions().len()
+        }
     }
 }
 
@@ -718,6 +933,10 @@ pub(super) struct PaneMenu {
     input: Option<Entity<SearchInput>>,
     pending: Option<String>,
     error: Option<String>,
+    /// Whether this endpoint's host can run `herdr pane move`.
+    movable: bool,
+    /// The move in flight, which keeps the menu from starting another.
+    moving: Option<u64>,
 }
 
 impl HerdrWindow {
@@ -767,18 +986,45 @@ impl HerdrWindow {
         }
         self.menu.anchor = anchor;
         self.menu.page = Some(Page::Pane);
+        // Host scripts need a POSIX client; see `herdr_client::run_script`.
+        let movable = cfg!(any(target_os = "linux", target_os = "macos"))
+            && pane_move::host_for(&self.endpoints[self.selected_endpoint].connection.target)
+                .is_ok();
         self.menu.pane = Some(PaneMenu {
             target,
             selected: None,
             input: None,
             pending: None,
             error: None,
+            movable,
+            moving: None,
         });
+    }
+
+    /// Opens the focused pane's move picker, as its menu's "Move to Tab…" row
+    /// would, at the pane's top-left corner.
+    pub(super) fn move_focused_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_focused_pane_menu(window, cx);
+        if self.menu.page == Some(Page::Pane) {
+            if self.menu.pane.as_ref().is_some_and(|pane| !pane.movable) {
+                self.pane_error(pane_move::Error::UnsupportedHost, cx);
+                return;
+            }
+            self.activate_pane_menu(Action::MoveTo, window, cx);
+        }
     }
 
     /// Opens the focused pane's rename dialog, as its menu's "Rename" row
     /// would, at the pane's top-left corner.
     pub(super) fn rename_focused_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_focused_pane_menu(window, cx);
+        if self.menu.page == Some(Page::Pane) {
+            self.activate_pane_menu(Action::Rename, window, cx);
+        }
+    }
+
+    /// Opens the focused pane's menu at the pane's top-left corner.
+    fn open_focused_pane_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(id) = self
             .live
             .snapshot
@@ -800,9 +1046,6 @@ impl HerdrWindow {
                 )
             });
         self.open_pane_menu(&id, anchor, window, cx);
-        if self.menu.page == Some(Page::Pane) {
-            self.activate_pane_menu(Action::Rename, window, cx);
-        }
     }
 
     fn validate_pane_target(&self) -> crate::Result<&Target> {
@@ -832,6 +1075,14 @@ impl HerdrWindow {
     }
 
     fn activate_pane_menu(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .menu
+            .pane
+            .as_ref()
+            .is_some_and(|pane| pane.moving.is_some())
+        {
+            return;
+        }
         let target = match self.validate_pane_target() {
             Ok(target) => target.clone(),
             Err(error) => {
@@ -840,6 +1091,22 @@ impl HerdrWindow {
             }
         };
         match action {
+            Action::MoveToNewTab => self.move_pane(
+                Destination::NewTab {
+                    workspace_id: target.workspace,
+                },
+                window,
+                cx,
+            ),
+            Action::MoveToNewWorkspace => self.move_pane(Destination::NewWorkspace, window, cx),
+            Action::MoveTo => {
+                if let Some(pane) = &mut self.menu.pane {
+                    pane.selected = None;
+                    pane.error = None;
+                }
+                self.menu.page = Some(Page::MovePane);
+                cx.notify();
+            }
             Action::Rename => {
                 let input = cx.new(SearchInput::new);
                 input.update(cx, |input, cx| {
@@ -930,6 +1197,90 @@ impl HerdrWindow {
                     }
                     Err(error) => self.pane_error(error, cx),
                 }
+            }
+        }
+    }
+
+    /// Moves the menu's pane through the `herdr` CLI on a background thread.
+    /// The menu stays open, saying so, until Herdr answers; a failure shows
+    /// in the menu, or in the window's status once the menu has closed.
+    fn move_pane(&mut self, destination: Destination, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .menu
+            .pane
+            .as_ref()
+            .is_none_or(|pane| pane.moving.is_some())
+        {
+            return;
+        }
+        let started = (|| {
+            let target = self.validate_pane_target()?;
+            let snapshot = self
+                .live
+                .snapshot
+                .as_ref()
+                .ok_or(crate::Error::NotConnected)?;
+            if !destination.exists(snapshot) {
+                return Err(match destination {
+                    Destination::NewTab { .. } => crate::Error::StaleWorkspace,
+                    Destination::Tab { .. } | Destination::NewWorkspace => crate::Error::StaleTab,
+                });
+            }
+            let request = pane_move::Request::new(target.pane.clone(), destination)?;
+            let host =
+                pane_move::host_for(&self.endpoints[self.selected_endpoint].connection.target)?;
+            Ok::<_, crate::Error>((request, host))
+        })();
+        let (request, host) = match started {
+            Ok(started) => started,
+            Err(error) => {
+                self.pane_error(error, cx);
+                return;
+            }
+        };
+        let id = NEXT_MOVE.fetch_add(1, Ordering::Relaxed);
+        if let Some(pane) = &mut self.menu.pane {
+            pane.moving = Some(id);
+            pane.error = None;
+        }
+        // The CLI is a child process, possibly over SSH: never on this thread.
+        let job = cx
+            .background_executor()
+            .spawn(async move { request.run(&host, &AtomicBool::new(false)) });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = job.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.finish_pane_move(id, result, window, cx)
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn finish_pane_move(
+        &mut self,
+        id: u64,
+        result: pane_move::Result<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let open = self
+            .menu
+            .pane
+            .as_ref()
+            .is_some_and(|pane| pane.moving == Some(id));
+        match result {
+            Ok(()) if open => self.dismiss_menu(window, cx),
+            Ok(()) => {}
+            Err(error) if open => {
+                if let Some(pane) = &mut self.menu.pane {
+                    pane.moving = None;
+                }
+                self.pane_error(error, cx);
+            }
+            Err(error) => {
+                self.local_error = Some(error.to_string());
+                cx.notify();
             }
         }
     }
@@ -1047,8 +1398,11 @@ impl HerdrWindow {
             "enter" if self.menu.page == Some(Page::RenamePane) => {
                 self.submit_pane_rename(window, cx)
             }
-            "up" | "down" if self.menu.page == Some(Page::Pane) => {
-                let count = pane.actions().len();
+            "up" | "down" if matches!(self.menu.page, Some(Page::Pane | Page::MovePane)) => {
+                let count = pane.rows(self.menu.page);
+                if count == 0 {
+                    return;
+                }
                 pane.selected = Some(match (pane.selected, key) {
                     (None, "up") => count - 1,
                     (None, _) => 0,
@@ -1056,6 +1410,14 @@ impl HerdrWindow {
                     (Some(i), _) => (i + 1) % count,
                 });
                 cx.notify();
+            }
+            "enter" if self.menu.page == Some(Page::MovePane) => {
+                if let Some(choice) = pane
+                    .selected
+                    .and_then(|index| pane.target.destinations().into_iter().nth(index))
+                {
+                    self.move_pane(choice.destination, window, cx);
+                }
             }
             "enter" => {
                 if let Some(action) = pane
@@ -1074,7 +1436,51 @@ impl HerdrWindow {
             return div();
         };
         let mut body = div().flex().flex_col();
-        if self.menu.page == Some(Page::Pane) {
+        if pane.moving.is_some() {
+            body = body.child(
+                div()
+                    .debug_selector(|| "pane-move-pending".into())
+                    .p(px(8.))
+                    .text_color(rgb(self.theme.muted))
+                    .child("Moving pane\u{2026}"),
+            );
+        } else if self.menu.page == Some(Page::MovePane) {
+            body = body.child(
+                div()
+                    .px(px(8.))
+                    .py(px(4.))
+                    .text_color(rgb(self.theme.muted))
+                    .child("Move pane to"),
+            );
+            for (index, choice) in pane.target.destinations().into_iter().enumerate() {
+                let destination = choice.destination;
+                body = body.child(
+                    div()
+                        .id(("pane-move-destination", index))
+                        .debug_selector(move || format!("pane-move-{index}"))
+                        .min_h(px(self.config.ui.line_height() + 12.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .overflow_hidden()
+                        .cursor_pointer()
+                        .when(pane.selected == Some(index), |row| {
+                            row.bg(rgb(self.theme.active))
+                        })
+                        .hover(|row| row.bg(rgb(self.theme.active)))
+                        .child(div().truncate().child(choice.label))
+                        .on_hover(cx.listener(move |this, hovered, _, cx| {
+                            if *hovered && let Some(pane) = &mut this.menu.pane {
+                                pane.selected = Some(index);
+                                cx.notify();
+                            }
+                        }))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.move_pane(destination.clone(), window, cx)
+                        })),
+                );
+            }
+        } else if self.menu.page == Some(Page::Pane) {
             for (index, action) in pane.actions().into_iter().enumerate() {
                 body = body.child(
                     div()

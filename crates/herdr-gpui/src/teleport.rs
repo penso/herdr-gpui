@@ -23,14 +23,15 @@ mod ui;
 #[cfg(test)]
 pub(crate) use marks::Destination as MarkDestination;
 pub(crate) use {
+    host::Host,
     job::{HostRepositories, Place, Repository, Retired, Source},
     marks::{Mark, Marks},
     ui::{Follow, Teleport},
 };
 
 /// The host Teleport scripts for an endpoint, if it can script it at all.
-pub(crate) fn host_for(target: &herdr_client::ConnectTarget) -> error::Result<host::Host> {
-    host::Host::new(target)
+pub(crate) fn host_for(target: &herdr_client::ConnectTarget) -> error::Result<Host> {
+    Host::new(target)
 }
 
 // Host scripts need /bin/sh; Teleport is not offered on other clients.

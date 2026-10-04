@@ -11,8 +11,10 @@ use std::{
 };
 
 /// Output bound for queries; bulk transfers pass their own limits.
-const QUERY_OUTPUT: u64 = 32 * 1024 * 1024;
-const QUERY_IDLE: Duration = Duration::from_secs(60);
+const QUERY_LIMITS: ScriptLimits = ScriptLimits {
+    output: 32 * 1024 * 1024,
+    idle: Duration::from_secs(60),
+};
 
 /// Largest bundle, session, or archive Teleport will carry.
 pub(crate) const TRANSFER_OUTPUT: u64 = 4 * 1024 * 1024 * 1024;
@@ -92,12 +94,43 @@ herdr_cli() {{ herdr{session} "$@"; }}
         limits: ScriptLimits,
         cancelled: &AtomicBool,
     ) -> Result<u64> {
+        self.run_script(body, input, output, limits, cancelled)
+            .map_err(script(step))
+    }
+
+    /// [`Self::run`] without a Teleport step, for host work outside a move.
+    fn run_script(
+        &self,
+        body: &str,
+        input: impl Read + Send,
+        output: impl Write + Send,
+        limits: ScriptLimits,
+        cancelled: &AtomicBool,
+    ) -> herdr_client::Result<u64> {
         let host = self
             .ssh
             .as_deref()
             .map_or(ScriptHost::Local, ScriptHost::Ssh);
         let script_text = format!("{}{body}", self.prelude());
-        run_script(host, &script_text, input, output, limits, cancelled).map_err(script(step))
+        run_script(host, &script_text, input, output, limits, cancelled)
+    }
+
+    /// Run `herdr_cli` with `args` and collect its bounded stdout, keeping the
+    /// script's own failure. Blocking: call only on a background worker.
+    pub(crate) fn cli_output(
+        &self,
+        args: &[&str],
+        cancelled: &AtomicBool,
+    ) -> herdr_client::Result<Vec<u8>> {
+        let mut output = Vec::new();
+        self.run_script(
+            &format!("herdr_cli {}\n", cli_words(args)),
+            &[][..],
+            &mut output,
+            QUERY_LIMITS,
+            cancelled,
+        )?;
+        Ok(output)
     }
 
     /// Run `body` and collect its bounded stdout.
@@ -109,17 +142,7 @@ herdr_cli() {{ herdr{session} "$@"; }}
         cancelled: &AtomicBool,
     ) -> Result<Vec<u8>> {
         let mut output = Vec::new();
-        self.run(
-            step,
-            body,
-            input,
-            &mut output,
-            ScriptLimits {
-                output: QUERY_OUTPUT,
-                idle: QUERY_IDLE,
-            },
-            cancelled,
-        )?;
+        self.run(step, body, input, &mut output, QUERY_LIMITS, cancelled)?;
         Ok(output)
     }
 
@@ -130,11 +153,7 @@ herdr_cli() {{ herdr{session} "$@"; }}
         args: &[&str],
         cancelled: &AtomicBool,
     ) -> Result<T> {
-        let command = args
-            .iter()
-            .map(|arg| shell_quote(arg))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let command = cli_words(args);
         let output = self.query(step, &format!("herdr_cli {command}\n"), &[], cancelled)?;
         serde_json::from_slice::<super::snapshot::Envelope<T>>(&output)
             .map(|envelope| envelope.result)
@@ -143,11 +162,7 @@ herdr_cli() {{ herdr{session} "$@"; }}
 
     /// Run `herdr_cli` with `args`, ignoring its output.
     pub(crate) fn herdr_ok(&self, step: Step, args: &[&str], cancelled: &AtomicBool) -> Result<()> {
-        let command = args
-            .iter()
-            .map(|arg| shell_quote(arg))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let command = cli_words(args);
         self.query(
             step,
             &format!("herdr_cli {command} >/dev/null\n"),
@@ -189,6 +204,14 @@ done
             .map(str::to_owned)
             .collect())
     }
+}
+
+/// `args` as shell words for `herdr_cli`, each quoted on its own.
+fn cli_words(args: &[&str]) -> String {
+    args.iter()
+        .map(|arg| shell_quote(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]

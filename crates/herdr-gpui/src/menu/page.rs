@@ -32,6 +32,8 @@ pub(crate) enum Page {
     Group,
     Pane,
     RenamePane,
+    /// Where the pane menu's pane can move: new places, then other tabs.
+    MovePane,
     Workspace,
     GitHub,
     /// Titlebar Git actions for the focused checkout, and its commit dialog.
