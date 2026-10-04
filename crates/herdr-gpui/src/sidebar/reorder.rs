@@ -1,9 +1,11 @@
 //! Reordering workspaces by dragging their rows. Holding a press on a row, or
 //! moving it a few pixels, lifts the row; the rows around it shift as if it
 //! had already been dropped under the pointer, so the gap they open is where
-//! it lands. Releasing sends `workspace.move_block`. The daemon owns the order,
-//! so the preview holds until the next snapshot reorders the list, the same
-//! for every attached client.
+//! it lands. Releasing sends the move: a lone workspace as `workspace.move`,
+//! as Herdr's own TUI sends an ungrouped row, and a worktree group as one
+//! `workspace.move_block`. The daemon owns the order, so the preview holds
+//! until the next snapshot reorders the list, the same for every attached
+//! client.
 //!
 //! A top-level row carries its whole worktree group, collapsed children and
 //! the group's other parents included, and lands between other top-level
@@ -15,7 +17,10 @@ use crate::{
     reorder::{LIFT_DELAY, LIFT_DISTANCE, SETTLE_TIMEOUT, SLIDE, Slide, slot_for},
 };
 use gpui::{Context, Pixels, Point, Task};
-use herdr_client::{Method, protocol::ClientShellWorkspace};
+use herdr_client::{
+    protocol::ClientShellWorkspace,
+    workspaces::{WorkspaceMoveBlockParams, WorkspaceMoveParams, WorkspaceReorder},
+};
 use std::{cell::RefCell, collections::HashMap, time::Instant};
 
 use super::workspaces::{grouped_keys, workspace_entries};
@@ -102,8 +107,8 @@ impl Target {
     }
 }
 
-/// A `workspace.move_block` request: `workspace_ids` land, in that order,
-/// before `before`, or at the end of the list without one.
+/// Where a drop lands: `workspace_ids` land, in that order, before
+/// `before`, or at the end of the list without one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct MoveBlock {
     workspace_ids: Vec<String>,
@@ -111,10 +116,39 @@ pub(super) struct MoveBlock {
 }
 
 impl MoveBlock {
+    #[cfg(test)]
     fn params(&self) -> serde_json::Value {
         serde_json::json!({
             "workspace_ids": self.workspace_ids,
             "before_workspace_id": self.before,
+        })
+    }
+
+    /// The request that makes this move against `workspaces`, the daemon's
+    /// current order. A lone workspace goes as `workspace.move` when the
+    /// daemon offers it (`single`), so it announces `workspace.moved` as the
+    /// same drag in Herdr's TUI does. A group's members may sit apart in the
+    /// daemon's order, which only `workspace.move_block` gathers in one step.
+    fn reorder(&self, workspaces: &[ClientShellWorkspace], single: bool) -> WorkspaceReorder {
+        if single && let [workspace_id] = self.workspace_ids.as_slice() {
+            // The index counts the workspace still in place, so landing
+            // before `before` is `before`'s own index, and last is the length.
+            let insert_index = match &self.before {
+                Some(before) => workspaces
+                    .iter()
+                    .position(|workspace| &workspace.workspace_id == before),
+                None => Some(workspaces.len()),
+            };
+            if let Some(insert_index) = insert_index {
+                return WorkspaceReorder::Move(WorkspaceMoveParams {
+                    workspace_id: workspace_id.clone(),
+                    insert_index,
+                });
+            }
+        }
+        WorkspaceReorder::MoveBlock(WorkspaceMoveBlockParams {
+            workspace_ids: self.workspace_ids.clone(),
+            before_workspace_id: self.before.clone(),
         })
     }
 }
@@ -334,11 +368,10 @@ impl HerdrWindow {
         if snapshot.boot_id != drag.boot {
             return true;
         }
-        match handle.request(
-            &drag.boot,
-            Method::WorkspaceMoveBlock,
-            target.request.params(),
-        ) {
+        let reorder = target
+            .request
+            .reorder(&snapshot.workspaces, self.live.supports_workspace_move);
+        match handle.reorder_workspaces(&drag.boot, &reorder) {
             Ok(_) => {
                 drag.dropped = Some(
                     snapshot
@@ -534,6 +567,108 @@ mod tests {
         ];
         let plan = Plan::new(&list, "a1").unwrap();
         assert_eq!(plan.request(&list, 2), request(&["a1"], None));
+    }
+
+    /// The order Herdr leaves after `reorder`, by its own two algorithms.
+    fn apply(list: &[ClientShellWorkspace], reorder: &WorkspaceReorder) -> Vec<String> {
+        let mut ids: Vec<String> = list.iter().map(|w| w.workspace_id.clone()).collect();
+        match reorder {
+            WorkspaceReorder::Move(params) => {
+                let source = ids
+                    .iter()
+                    .position(|id| *id == params.workspace_id)
+                    .unwrap();
+                let target = if source < params.insert_index {
+                    params.insert_index - 1
+                } else {
+                    params.insert_index
+                };
+                let id = ids.remove(source);
+                ids.insert(target, id);
+            }
+            WorkspaceReorder::MoveBlock(params) => {
+                ids.retain(|id| !params.workspace_ids.contains(id));
+                let at = params
+                    .before_workspace_id
+                    .as_ref()
+                    .and_then(|before| ids.iter().position(|id| id == before))
+                    .unwrap_or(ids.len());
+                ids.splice(at..at, params.workspace_ids.iter().cloned());
+            }
+        }
+        ids
+    }
+
+    /// Every drop of a lone row, top-level or child, is a `workspace.move`
+    /// where offered, and leaves the order the block move would have.
+    #[test]
+    fn a_lone_workspace_moves_singly_to_the_same_place() {
+        let list = list();
+        for pressed in ["b", "c", "a1", "a2"] {
+            let plan = Plan::new(&list, pressed).unwrap();
+            for slot in 0..=plan.len() {
+                let Some(request) = plan.request(&list, slot) else {
+                    continue;
+                };
+                let single = request.reorder(&list, true);
+                let WorkspaceReorder::Move(params) = &single else {
+                    panic!("{pressed} to {slot} sent {single:?}");
+                };
+                assert_eq!(params.workspace_id, pressed);
+                let block = request.reorder(&list, false);
+                assert!(matches!(block, WorkspaceReorder::MoveBlock(_)));
+                assert_eq!(
+                    apply(&list, &single),
+                    apply(&list, &block),
+                    "{pressed} {slot}"
+                );
+            }
+        }
+        // Concretely: `c` before `a` counts from `a`, and `b` last is the length.
+        let plan = Plan::new(&list, "c").unwrap();
+        assert_eq!(
+            plan.request(&list, 0).unwrap().reorder(&list, true),
+            WorkspaceReorder::Move(WorkspaceMoveParams {
+                workspace_id: "c".into(),
+                insert_index: 0,
+            })
+        );
+        let plan = Plan::new(&list, "b").unwrap();
+        assert_eq!(
+            plan.request(&list, 3).unwrap().reorder(&list, true),
+            WorkspaceReorder::Move(WorkspaceMoveParams {
+                workspace_id: "b".into(),
+                insert_index: 5,
+            })
+        );
+    }
+
+    #[test]
+    fn a_group_always_moves_as_a_block() {
+        let list = list();
+        let plan = Plan::new(&list, "a").unwrap();
+        let request = plan.request(&list, 3).unwrap();
+        assert_eq!(
+            request.reorder(&list, true),
+            WorkspaceReorder::MoveBlock(WorkspaceMoveBlockParams {
+                workspace_ids: vec!["a".into(), "a1".into(), "a2".into()],
+                before_workspace_id: None,
+            })
+        );
+    }
+
+    /// An anchor the current order no longer holds cannot become an index,
+    /// so the daemon resolves it by name instead.
+    #[test]
+    fn an_anchor_missing_from_the_order_falls_back_to_the_block_move() {
+        let list = list();
+        let request = Plan::new(&list, "c").unwrap().request(&list, 0).unwrap();
+        let mut stale = list.clone();
+        stale.retain(|w| w.workspace_id != "a");
+        assert!(matches!(
+            request.reorder(&stale, true),
+            WorkspaceReorder::MoveBlock(_)
+        ));
     }
 
     #[test]

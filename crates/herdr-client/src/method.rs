@@ -43,6 +43,7 @@ pub enum Method {
     WorkspaceClose,
     WorkspaceCreate,
     WorkspaceFocus,
+    WorkspaceMove,
     WorkspaceMoveBlock,
     WorkspaceRename,
     WorktreeCreate,
@@ -87,6 +88,7 @@ impl Method {
             Self::WorkspaceClose => "workspace.close",
             Self::WorkspaceCreate => "workspace.create",
             Self::WorkspaceFocus => "workspace.focus",
+            Self::WorkspaceMove => "workspace.move",
             Self::WorkspaceMoveBlock => "workspace.move_block",
             Self::WorkspaceRename => "workspace.rename",
             Self::WorktreeCreate => "worktree.create",
@@ -197,6 +199,15 @@ mod tests {
     }
 
     #[test]
+    fn workspace_move_is_not_the_block_move() {
+        assert_eq!(Method::WorkspaceMove.as_str(), "workspace.move");
+        assert!(Method::WorkspaceMove.advertised_in(&["workspace.move".into()]));
+        // A daemon offering only the block move does not offer the single one.
+        assert!(!Method::WorkspaceMove.advertised_in(&["workspace.move_block".into()]));
+        assert!(!Method::WorkspaceMoveBlock.advertised_in(&["workspace.move".into()]));
+    }
+
+    #[test]
     fn split_ratio_wire_name() {
         assert_eq!(
             Method::LayoutSetSplitRatio.as_str(),
@@ -286,6 +297,7 @@ mod tests {
         Method::WorkspaceClose,
         Method::WorkspaceCreate,
         Method::WorkspaceFocus,
+        Method::WorkspaceMove,
         Method::WorkspaceMoveBlock,
         Method::WorkspaceRename,
         Method::WorktreeCreate,
@@ -331,6 +343,7 @@ mod tests {
                 | Method::WorkspaceClose
                 | Method::WorkspaceCreate
                 | Method::WorkspaceFocus
+                | Method::WorkspaceMove
                 | Method::WorkspaceMoveBlock
                 | Method::WorkspaceRename
                 | Method::WorktreeCreate

@@ -24,6 +24,7 @@ mod ssh;
 mod surface_images;
 mod transport;
 mod upload;
+pub mod workspaces;
 
 #[cfg(all(test, unix))]
 mod test_executable;
