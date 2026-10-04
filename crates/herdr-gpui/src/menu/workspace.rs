@@ -252,6 +252,83 @@ fn new_worktree_source(snapshot: &ClientShellSnapshot) -> Result<String, NewWork
     Ok(focused.workspace_id.clone())
 }
 
+/// Why the open or remove worktree shortcut found no workspace to act on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum WorktreeShortcutUnavailable {
+    Disconnected,
+    NoWorkspace,
+    NotGit,
+    MainCheckoutClosed,
+    NotLinkedWorktree,
+}
+
+impl WorktreeShortcutUnavailable {
+    pub(super) fn message(self) -> &'static str {
+        match self {
+            Self::Disconnected => "Not connected, so no worktree can be changed",
+            Self::NoWorkspace => "No workspace is focused",
+            Self::NotGit => "This workspace is not a Git repository",
+            Self::MainCheckoutClosed => "Open this repository's main checkout to open a worktree",
+            Self::NotLinkedWorktree => "This workspace is not a worktree checkout",
+        }
+    }
+}
+
+fn focused_workspace(
+    snapshot: &ClientShellSnapshot,
+) -> Result<&ClientShellWorkspace, WorktreeShortcutUnavailable> {
+    snapshot
+        .workspaces
+        .iter()
+        .find(|w| Some(&w.workspace_id) == snapshot.focused_workspace_id.as_ref())
+        .ok_or(WorktreeShortcutUnavailable::NoWorkspace)
+}
+
+/// The workspace whose "Open worktree..." row the open worktree shortcut
+/// opens. Herdr lists and opens checkouts through the repository's main
+/// checkout, so a focused linked checkout defers to it, as the new worktree
+/// shortcut does.
+pub(super) fn worktree_open_source(
+    snapshot: &ClientShellSnapshot,
+) -> Result<String, WorktreeShortcutUnavailable> {
+    let focused = focused_workspace(snapshot)?;
+    let Some(tree) = focused
+        .worktree
+        .as_ref()
+        .filter(|tree| tree.is_linked_worktree)
+    else {
+        return if WorkspaceTarget::new(snapshot, focused).can_create() {
+            Ok(focused.workspace_id.clone())
+        } else {
+            Err(WorktreeShortcutUnavailable::NotGit)
+        };
+    };
+    snapshot
+        .workspaces
+        .iter()
+        .find(|w| {
+            w.worktree
+                .as_ref()
+                .is_some_and(|other| other.key == tree.key && !other.is_linked_worktree)
+        })
+        .map(|main| main.workspace_id.clone())
+        .ok_or(WorktreeShortcutUnavailable::MainCheckoutClosed)
+}
+
+/// The workspace whose checkout the remove worktree shortcut offers to
+/// delete: the focused one, only when it is a linked worktree. A main
+/// checkout is never a candidate, as Herdr refuses to remove it too.
+pub(super) fn worktree_removal_target(
+    snapshot: &ClientShellSnapshot,
+) -> Result<String, WorktreeShortcutUnavailable> {
+    let focused = focused_workspace(snapshot)?;
+    if WorkspaceTarget::new(snapshot, focused).can_delete() {
+        Ok(focused.workspace_id.clone())
+    } else {
+        Err(WorktreeShortcutUnavailable::NotLinkedWorktree)
+    }
+}
+
 /// The name a new tab dialog proposes: the next number in its workspace, as
 /// Herdr numbers an unnamed tab.
 pub(super) fn suggested_tab_name(snapshot: &ClientShellSnapshot, workspace: &str) -> String {
@@ -386,6 +463,37 @@ impl HerdrWindow {
         self.open_workspace_menu(&id, Point::default(), window, cx);
         if self.menu.page == Some(Page::Workspace) {
             self.open_workspace_dialog(WorkspaceAction::NewWorktree, window, cx);
+        }
+    }
+
+    /// Opens the open or delete worktree dialog the focused workspace's menu
+    /// offers, as its row would, so deleting still asks for confirmation.
+    /// When the focused workspace has no such row, a flash says why rather
+    /// than the shortcut doing nothing visible.
+    pub(crate) fn open_focused_worktree_dialog(
+        &mut self,
+        action: WorkspaceAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = match &self.live.snapshot {
+            Some(snapshot) if self.live.status.is_connected() => match action {
+                WorkspaceAction::OpenWorktree => worktree_open_source(snapshot),
+                WorkspaceAction::DeleteWorktree => worktree_removal_target(snapshot),
+                _ => return,
+            },
+            _ => Err(WorktreeShortcutUnavailable::Disconnected),
+        };
+        let id = match target {
+            Ok(id) => id,
+            Err(reason) => {
+                self.show_flash(crate::window::Flash::warning(reason.message()), cx);
+                return;
+            }
+        };
+        self.open_workspace_menu(&id, Point::default(), window, cx);
+        if self.menu.page == Some(Page::Workspace) {
+            self.open_workspace_dialog(action, window, cx);
         }
     }
 

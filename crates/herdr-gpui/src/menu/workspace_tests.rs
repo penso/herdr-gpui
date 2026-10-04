@@ -1289,3 +1289,54 @@ fn proposed_names_match_herdr_without_touching_the_daemon_host() {
     assert_eq!(suggested_workspace_name("/"), "/");
     assert_eq!(suggested_workspace_name(""), "workspace");
 }
+
+/// The open and remove worktree shortcuts act on the focused workspace, as
+/// in the TUI. Opening goes through the repository's main checkout, which a
+/// linked checkout defers to; removal only ever names a linked checkout.
+#[test]
+fn worktree_shortcuts_target_the_focused_checkout() {
+    use super::workspace::{
+        WorktreeShortcutUnavailable::*, worktree_open_source, worktree_removal_target,
+    };
+    let mut snapshot = sidebar::layout_tests::snapshot(7);
+    let focus = |snapshot: &mut herdr_client::protocol::ClientShellSnapshot, id: &str| {
+        snapshot.focused_workspace_id = Some(id.into());
+    };
+    // w0 is a plain Git branch, w3 the main checkout, w4 its linked checkout.
+    for (focused, open, remove) in [
+        ("w0", Ok("w0"), Err(NotLinkedWorktree)),
+        ("w3", Ok("w3"), Err(NotLinkedWorktree)),
+        ("w4", Ok("w3"), Ok("w4")),
+        ("w5", Ok("w3"), Ok("w5")),
+    ] {
+        focus(&mut snapshot, focused);
+        assert_eq!(
+            worktree_open_source(&snapshot).as_deref(),
+            open,
+            "{focused}"
+        );
+        assert_eq!(
+            worktree_removal_target(&snapshot),
+            remove.map(str::to_owned),
+            "{focused}"
+        );
+    }
+
+    snapshot.workspaces[1].branch = None;
+    focus(&mut snapshot, "w1");
+    assert_eq!(worktree_open_source(&snapshot), Err(NotGit));
+    assert_eq!(worktree_removal_target(&snapshot), Err(NotLinkedWorktree));
+
+    snapshot.focused_workspace_id = None;
+    assert_eq!(worktree_open_source(&snapshot), Err(NoWorkspace));
+    assert_eq!(worktree_removal_target(&snapshot), Err(NoWorkspace));
+    focus(&mut snapshot, "missing");
+    assert_eq!(worktree_removal_target(&snapshot), Err(NoWorkspace));
+
+    // Without its main checkout, a linked checkout has nothing to open
+    // through, but can still be removed.
+    snapshot.workspaces.retain(|w| w.workspace_id != "w3");
+    focus(&mut snapshot, "w4");
+    assert_eq!(worktree_open_source(&snapshot), Err(MainCheckoutClosed));
+    assert_eq!(worktree_removal_target(&snapshot).as_deref(), Ok("w4"));
+}

@@ -306,6 +306,8 @@ impl HerdrWindow {
             let group = match info.command {
                 Command::Workspace
                 | Command::NewWorktree
+                | Command::OpenWorktree
+                | Command::RemoveWorktree
                 | Command::Tab
                 | Command::SplitRight
                 | Command::SplitDown
@@ -361,6 +363,7 @@ impl HerdrWindow {
                 | Command::Themes
                 | Command::Palette
                 | Command::Reconnect
+                | Command::Detach
                 | Command::Quit
                 | Command::Logs
                 | Command::About

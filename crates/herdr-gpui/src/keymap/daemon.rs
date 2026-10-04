@@ -4,13 +4,13 @@
 //! unparseable entry, a `hyper` modifier, an action with no GUI command) is
 //! skipped rather than turned into a GUI config error.
 //!
-//! Herdr actions with no GUI command, each for a reason:
-//! - `detach`: closing the window already leaves the daemon running, and a
-//!   window cannot stay open without a connection.
-//! - `open_worktree` and `remove_worktree`: the workspace menu offers both,
-//!   but each needs a menu row as the target, not just the focused one.
-//! - `navigate_pane_*`: the workspace picker is a search field here, with no
-//!   pane cursor to move.
+//! `open_worktree` and `remove_worktree` act on the focused workspace, as in
+//! the TUI, by opening the dialog its menu row would; `detach` lets go of the
+//! selected daemon, which keeps running, as the settings menu's row does.
+//!
+//! Herdr's `navigate_pane_*` keys have no GUI command: they move a pane
+//! cursor in the TUI's navigator, and the workspace picker here is a search
+//! field with no pane cursor to move.
 
 use crate::{Error, Result, controls::Command};
 use gpui::{Keystroke, Modifiers};
@@ -78,6 +78,12 @@ const ACTIONS: &[(&str, Target, &str)] = &[
         Target::Command(Command::NewWorktree),
         "prefix+shift+g",
     ),
+    ("open_worktree", Target::Command(Command::OpenWorktree), ""),
+    (
+        "remove_worktree",
+        Target::Command(Command::RemoveWorktree),
+        "",
+    ),
     (
         "workspace_picker",
         Target::Command(Command::WorkspacePicker),
@@ -98,6 +104,7 @@ const ACTIONS: &[(&str, Target, &str)] = &[
         Target::Command(Command::CloseWorkspace),
         "prefix+shift+d",
     ),
+    ("detach", Target::Command(Command::Detach), ""),
     (
         "reload_config",
         Target::Command(Command::ReloadConfig),
@@ -855,6 +862,50 @@ mod tests {
         assert_eq!(bound(&keys, Command::ResizeMode), [prefixed("r")]);
         let keymap = super::super::Keymap::with_overrides(&Default::default(), &keys).unwrap();
         assert_eq!(keymap.chord(&parsed("r")), Some(Command::ReloadConfig));
+    }
+
+    /// Herdr leaves the worktree and detach actions unbound, so they bind
+    /// only what the user writes, prefix chords and direct keys alike.
+    #[test]
+    fn worktree_and_detach_actions_bind_what_the_user_writes() {
+        let defaults = DaemonKeys::default();
+        for command in [
+            Command::OpenWorktree,
+            Command::RemoveWorktree,
+            Command::Detach,
+        ] {
+            assert!(bound(&defaults, command).is_empty(), "{command:?}");
+        }
+        let keys = keys(
+            r#"
+            [keys]
+            open_worktree = "prefix+shift+o"
+            remove_worktree = ["prefix+hyper+x", "prefix+alt+x"]
+            detach = "prefix+d"
+            "#,
+        );
+        assert_eq!(bound(&keys, Command::OpenWorktree), [prefixed("shift-o")]);
+        // `hyper` has no GPUI equivalent, so only the second entry binds.
+        assert_eq!(bound(&keys, Command::RemoveWorktree), [prefixed("alt-x")]);
+        assert_eq!(bound(&keys, Command::Detach), [prefixed("d")]);
+        let keymap = super::super::Keymap::with_overrides(&Default::default(), &keys).unwrap();
+        assert_eq!(keymap.chord(&parsed("d")), Some(Command::Detach));
+        assert_eq!(
+            keymap.chord(&parsed("shift-o")),
+            Some(Command::OpenWorktree)
+        );
+        assert_eq!(
+            keymap.chord(&parsed("alt-x")),
+            Some(Command::RemoveWorktree)
+        );
+        let direct = self::keys("[keys]\ndetach = \"ctrl+alt+q\"");
+        assert_eq!(
+            bound(&direct, Command::Detach),
+            [Trigger::Direct(parsed("ctrl-alt-q"))]
+        );
+        // Navigate mode's pane keys stay unmapped and bind nothing.
+        let navigate = self::keys("[keys]\nnavigate_pane_left = \"h\"");
+        assert_eq!(navigate, DaemonKeys::default());
     }
 
     #[test]

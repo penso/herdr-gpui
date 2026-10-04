@@ -6,6 +6,8 @@ pub enum Command {
     NewWindow,
     Workspace,
     NewWorktree,
+    OpenWorktree,
+    RemoveWorktree,
     Tab,
     SplitRight,
     SplitDown,
@@ -36,6 +38,7 @@ pub enum Command {
     WorkspacePicker,
     Palette,
     Reconnect,
+    Detach,
     Quit,
     Logs,
     About,
@@ -107,6 +110,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "new_worktree",
         label: "New Worktree",
         shortcuts: &["cmd-n"],
+    },
+    CommandInfo {
+        command: Command::OpenWorktree,
+        name: "open_worktree",
+        label: "Open Worktree",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::RemoveWorktree,
+        name: "remove_worktree",
+        label: "Delete Worktree Checkout",
+        shortcuts: &[],
     },
     CommandInfo {
         command: Command::PreviousWorkspace,
@@ -571,6 +586,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &[],
     },
     CommandInfo {
+        command: Command::Detach,
+        name: "detach",
+        label: "Detach",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::Quit,
         name: "quit",
         label: "Quit",
@@ -734,6 +755,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         }
         Command::NewWindow
         | Command::NewWorktree
+        | Command::OpenWorktree
+        | Command::RemoveWorktree
         | Command::Find
         | Command::CopyMode
         | Command::ToggleSidebar
@@ -747,6 +770,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::WorkspacePicker
         | Command::Palette
         | Command::Reconnect
+        | Command::Detach
         | Command::Quit
         | Command::Logs
         | Command::About
@@ -798,12 +822,14 @@ mod tests {
     #[test]
     fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         use Command::*;
-        let expected: [(Command, &[&str]); 87] = [
+        let expected: [(Command, &[&str]); 90] = [
             (OpenNotificationTarget, &["cmd-alt-n"]),
             (Logs, &[]),
             (NewWindow, &["cmd-alt-shift-n"]),
             (Workspace, &["cmd-shift-n"]),
             (NewWorktree, &["cmd-n"]),
+            (OpenWorktree, &[]),
+            (RemoveWorktree, &[]),
             (PreviousWorkspace, &[]),
             (NextWorkspace, &[]),
             (WorkspaceNumber(1), &[]),
@@ -881,6 +907,7 @@ mod tests {
             (WorkspacePicker, &["cmd-p"]),
             (Palette, &["cmd-shift-p"]),
             (Reconnect, &[]),
+            (Detach, &[]),
             (Quit, &["cmd-q"]),
             (About, &[]),
             (NewBrowserTab, &[]),
@@ -937,6 +964,8 @@ mod tests {
             Command::Logs,
             Command::NewWindow,
             Command::NewWorktree,
+            Command::OpenWorktree,
+            Command::RemoveWorktree,
             Command::Find,
             Command::CopyMode,
             Command::ToggleSidebar,
@@ -950,6 +979,7 @@ mod tests {
             Command::WorkspacePicker,
             Command::Palette,
             Command::Reconnect,
+            Command::Detach,
             Command::Quit,
             Command::About,
             Command::NewBrowserTab,

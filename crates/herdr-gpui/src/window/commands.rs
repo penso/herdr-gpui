@@ -260,6 +260,15 @@ impl HerdrWindow {
                 self.open_new_worktree(window, cx);
                 return;
             }
+            Command::OpenWorktree | Command::RemoveWorktree => {
+                let action = if command == Command::OpenWorktree {
+                    WorkspaceAction::OpenWorktree
+                } else {
+                    WorkspaceAction::DeleteWorktree
+                };
+                self.open_focused_worktree_dialog(action, window, cx);
+                return;
+            }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
             Command::Tab | Command::Workspace if self.open_name_prompt(command, window, cx) => {
@@ -322,6 +331,25 @@ impl HerdrWindow {
                 return;
             }
             Command::Reconnect => self.reconnect(),
+            // The settings menu's detach: this window lets go of the selected
+            // daemon, which keeps running with its terminals. Nothing to let
+            // go of without a connection, where the menu offers reconnect.
+            Command::Detach => {
+                if self.endpoints[self.selected_endpoint]
+                    .connection
+                    .handle
+                    .is_some()
+                {
+                    self.detach_endpoint();
+                } else {
+                    self.show_flash(
+                        Flash::warning("Not connected, so there is nothing to detach"),
+                        cx,
+                    );
+                }
+                cx.notify();
+                return;
+            }
             Command::Quit => {
                 cx.quit();
                 return;

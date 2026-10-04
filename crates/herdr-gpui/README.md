@@ -1764,10 +1764,16 @@ Windows setup) nothing is saved and the window says so.
   chord or, when nothing is bound to it, is dropped, as in the TUI. Typing the
   prefix twice sends it to the terminal, and Escape cancels. Chords work from
   a menu's or dialog's text field too: the chord closes it and runs. Every
-  daemon action has a GUI command except `detach` (closing the window already
-  detaches), `open_worktree` and
-  `remove_worktree` (offered from the workspace menu), and the
-  `navigate_pane_*` keys (Go To has no pane cursor). `workspace_picker` and
+  daemon action has a GUI command except the `navigate_pane_*` keys, which
+  move the TUI navigator's pane cursor (Go To is a search field with no pane
+  cursor). `open_worktree` opens the focused workspace's Open worktree...
+  dialog (a linked worktree's through its repository's main checkout), and
+  `remove_worktree` its Delete worktree checkout confirmation, only for a
+  linked worktree; when neither applies, a flash says why. `detach` lets go
+  of the selected daemon as the menu's Detach does, leaving it and its
+  terminals running until Reconnect. Herdr leaves all three unbound, and so
+  do the native `open_worktree`, `remove_worktree`, and `detach` commands,
+  which `[keybindings]` and the palette offer too. `workspace_picker` and
   `goto` open Go To, where `navigate_workspace_up`/`_down` move the selection
   when the key cannot be typed into its search. `split_vertical` and
   `split_horizontal` are Split Right and Split Down. As in the TUI,
