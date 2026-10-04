@@ -17,7 +17,7 @@ build_env=(env
     -u APPLE_API_KEY_ID -u APPLE_API_ISSUER_ID
     -u HERDR_UPDATE_SIGNING_KEY
     HERDR_RELEASE_VERSION="$version"
-    MACOSX_DEPLOYMENT_TARGET=15.0
+    MACOSX_DEPLOYMENT_TARGET=14.2
     # Apple strip can misalign host proc-macro dylibs during cross-compilation.
     CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_STRIP=none)
 # Public configuration must be supplied before loading any local signing helper.

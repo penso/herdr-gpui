@@ -280,6 +280,7 @@ impl MenuState {
             self.github.cancel();
         }
         self.page = None;
+        self.palette = None;
         self.fonts = None;
         self.font_size_editor = None;
         self.selected = None;

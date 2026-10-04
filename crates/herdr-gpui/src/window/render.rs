@@ -194,11 +194,35 @@ impl Render for HerdrWindow {
             .overflow_hidden()
             .bg(rgb(self.theme.background))
             .track_focus(&self.focus)
+            // Screen readers and selection tools read the rows on screen and
+            // the selection among them. The rows are built while GPUI
+            // prepaints, and only while an assistive client is listening.
+            .role(Role::Terminal)
+            .when(
+                window.is_a11y_active() && self.live.surface_ready(),
+                |terminal| {
+                    let surface = self.live.surface.clone();
+                    let selection = self.selection.clone();
+                    let cell_width = self.cell_width;
+                    let cell_height = self.config.terminal.line_height();
+                    let origin = (
+                        f32::from(self.bounds.origin.x),
+                        f32::from(self.bounds.origin.y),
+                    );
+                    let scale = window.scale_factor();
+                    terminal.a11y_synthetic_children(move |builder| {
+                        if let Some(transcript) = surface.as_deref().and_then(|surface| {
+                            Transcript::read(surface, selection.as_ref(), cell_width, cell_height)
+                        }) {
+                            transcript.expose(builder, origin, scale);
+                        }
+                    })
+                },
+            )
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))
-            // A selection is copied when it is released, so the terminal has
-            // nothing for Cut or Select All to act on, and Copy only while
-            // Herdr's `copy_on_select` is off and a released selection waits.
+            // The terminal has nothing for Cut or Select All to act on, and
+            // Copy only while a released selection is still highlighted.
             .on_action(cx.listener(|this, _: &crate::actions::Paste, _, cx| this.paste(cx)))
             .when(self.selection_retained(), |terminal| {
                 terminal.on_action(cx.listener(|this, _: &crate::actions::Copy, _, cx| {
@@ -552,6 +576,25 @@ impl Render for HerdrWindow {
             || self.live.error.is_some())
         .then(|| self.live.status_text(self.local_error.as_deref()));
         div()
+            .on_modifiers_changed(cx.listener(Self::double_shift_modifiers))
+            .capture_any_mouse_down(cx.listener(|this, _, _, _| this.shift_taps.cancel()))
+            .child({
+                let entity = cx.weak_entity();
+                canvas(|_, _, _| (), move |_, _, window, _| {
+                    let scroll_entity = entity.clone();
+                    window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
+                        if phase == DispatchPhase::Capture {
+                            let _ = scroll_entity.update(cx, |this, _| this.shift_taps.cancel());
+                        }
+                    });
+                    let entity = entity.clone();
+                    window.on_mouse_event(move |_: &MouseMoveEvent, phase, _, cx| {
+                        if phase == DispatchPhase::Capture {
+                            let _ = entity.update(cx, |this, _| this.shift_taps.cancel());
+                        }
+                    });
+                }).absolute().size_full()
+            })
             .on_action(cx.listener(|this, action: &crate::actions::SetLayout, _, cx| {
                 this.set_layout(action.mode, cx);
             }))

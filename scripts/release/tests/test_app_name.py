@@ -29,7 +29,7 @@ class AppNameTests(unittest.TestCase):
                 check=True, capture_output=True,
             ).stdout
             # Older assetutil releases list only the flattened renditions that
-            # macOS 15 reads, not the layered Icon Composer stack.
+            # macOS 14 and 15 read, not the layered Icon Composer stack.
             icons = {
                 item.get("Name") for item in json.loads(info)
                 if item.get("AssetType") in ("IconImageStack", "MultiSized Image", "Icon Image")

@@ -24,6 +24,22 @@ fn daemon_error_message(error: &serde_json::Value) -> &str {
 pub enum Error {
     #[error("Could not finish saving Settings: {0}")]
     SettingsSave(#[source] std::sync::Arc<Error>),
+    #[error("palette.project_roots must contain at most 16 nonempty paths of at most 8192 bytes")]
+    PaletteProjectRoots,
+    #[error("Project paths must be absolute UTF-8 paths without control characters")]
+    PaletteProjectPath,
+    #[error("Project path references an unset environment variable: {0}")]
+    PaletteProjectVariable(String),
+    #[error("Project discovery reached its directory limit; narrow palette.project_roots")]
+    PaletteProjectLimit,
+    #[error("Project directory is no longer available")]
+    PaletteProjectRemoved,
+    #[error("The local connection changed. Reopen the palette.")]
+    PaletteLocalChanged,
+    #[error("Unexpected workspace creation response. Review workspace state before retrying.")]
+    PaletteProjectResponse,
+    #[error("Workspace directories changed. Select the project again.")]
+    PaletteProjectStateChanged,
     #[error("Invalid saved window geometry or too many saved windows")]
     InvalidWindowState,
     #[error("Sound configuration exceeds 1 MiB")]
@@ -498,6 +514,27 @@ pub enum Error {
         keystroke: String,
         first: &'static str,
         second: &'static str,
+    },
+    #[error("pane_keys: invalid keystroke {keystroke:?}")]
+    InvalidPaneKey {
+        keystroke: String,
+        #[source]
+        source: gpui::InvalidKeystrokeError,
+    },
+    #[error(
+        "pane_keys: {0:?} needs a cmd, ctrl, alt, or fn modifier so typing still reaches the terminal"
+    )]
+    PaneKeyWithoutModifier(String),
+    #[error("pane_keys.{from:?}: a pane cannot receive {to:?}")]
+    UnsendablePaneKey { from: String, to: String },
+    #[error("pane_keys: {0:?} is listed twice")]
+    DuplicatePaneKey(String),
+    #[error("pane_keys must list at most {0} keystrokes")]
+    TooManyPaneKeys(usize),
+    #[error("pane_keys: {keystroke:?} is also bound to keybindings.{command}")]
+    PaneKeyBound {
+        keystroke: String,
+        command: &'static str,
     },
     #[error("the host did not publish its keybindings")]
     ServerKeybindingsMissing,

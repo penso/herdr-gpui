@@ -27,7 +27,7 @@ running another terminal emulator or wrapping the TUI.
 
 ### macOS with Homebrew
 
-Requires [Homebrew](https://brew.sh/) and macOS 15 Sequoia or newer, on Apple
+Requires [Homebrew](https://brew.sh/) and macOS 14.2 Sonoma or newer, on Apple
 Silicon or Intel. The cask installs the signed, notarized universal app.
 
 ```sh

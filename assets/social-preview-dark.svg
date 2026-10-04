@@ -37,7 +37,7 @@
       <rect x="166" y="438" width="70" height="34" rx="17" fill="#f4f1e9" fill-opacity="0.07" stroke="#4a5158"/>
       <text x="201" y="460" text-anchor="middle">GPUI</text>
       <rect x="248" y="438" width="110" height="34" rx="17" fill="#f4f1e9" fill-opacity="0.07" stroke="#4a5158"/>
-      <text x="303" y="460" text-anchor="middle">macOS 15+</text>
+      <text x="303" y="460" text-anchor="middle">macOS 14+</text>
     </g>
   </g>
 

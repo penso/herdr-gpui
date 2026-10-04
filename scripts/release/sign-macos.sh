@@ -79,7 +79,7 @@ app=$tmp/image/Herdr.app
 ditto "$2" "$app"
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App version mismatch'
 [[ $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App build version mismatch'
-[[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 15.0 ]] || fail 'App minimum OS mismatch'
+[[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 14.2 ]] || fail 'App minimum OS mismatch'
 for arch in arm64 x86_64; do
     lipo "$app/Contents/MacOS/Herdr" -verify_arch "$arch"
 done

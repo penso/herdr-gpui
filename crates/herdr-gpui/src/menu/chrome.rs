@@ -2,6 +2,8 @@
 //! the panes beneath, and painting the page the menu is currently on. Geometry
 //! here is the same geometry used for hit testing and IME placement.
 
+mod keys;
+
 use super::{MENU_MARGIN, Page, WorkspaceAction};
 use crate::{HerdrWindow, actions, fonts::StyledFont};
 use gpui::{prelude::*, *};
@@ -19,31 +21,8 @@ impl HerdrWindow {
         self.menu.page = Some(Page::Install);
     }
 
-    /// An Edit menu item while a menu page holds focus. Only the targets the
-    /// overlay's key handler gives these shortcuts to are reached: a dialog's
-    /// text draft, and the GitHub page's device code for Copy. Search fields
-    /// take the action themselves before it bubbles here. Handlers that act
-    /// without stopping propagation are never called, so a shortcut the
-    /// overlay leaves unhandled cannot run twice through the menu bar.
-    fn menu_edit(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let event = actions::edit_key(key);
-        if self.menu.page == Some(Page::Dialog(WorkspaceAction::OpenWorktree))
-            || self.worktree_listing()
-        {
-            return;
-        }
-        if let Some(input) = self.menu.input.as_mut() {
-            if input.key(&event.keystroke, cx) {
-                cx.notify();
-            }
-            return;
-        }
-        if self.menu.page == Some(Page::GitHub) {
-            self.github_key(&event, window, cx);
-        }
-    }
-
     pub(crate) fn open_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.shift_taps.cancel();
         self.finish_font_size_edit(true, cx);
         if !self.cancel_theme_preview(cx) {
             return false;
@@ -122,7 +101,7 @@ impl HerdrWindow {
             "increase font size",
             "decrease font size",
             "reset font size",
-            "commands",
+            "command palette",
             "workspaces",
             "reload GUI config",
             "app updates",
@@ -171,8 +150,8 @@ impl HerdrWindow {
                 self.set_terminal_font_size(size, cx);
                 self.dismiss_menu(window, cx);
             }
-            "commands" => self.open_palette(false, window, cx),
-            "workspaces" => self.open_palette(true, window, cx),
+            "command palette" => self.open_palette(crate::palette::Filter::All, window, cx),
+            "workspaces" => self.open_palette(crate::palette::Filter::Navigation, window, cx),
             "update ready" | "what's new" => self.menu.page = Some(Page::Update),
             "app updates" => self.open_app_update(false, window, cx),
             "preview app update" => self.open_app_update(true, window, cx),
@@ -774,266 +753,7 @@ impl HerdrWindow {
                     this.dismiss_menu(window, cx);
                 }),
             )
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if this.settings_key(event, window, cx) {
-                    return;
-                }
-                if this.menu.page == Some(Page::Dialog(WorkspaceAction::OpenWorktree))
-                    && (this
-                        .menu
-                        .worktree_open
-                        .as_ref()
-                        .is_some_and(|picker| picker.search.read(cx).is_composing())
-                        || !matches!(
-                            event.keystroke.key.as_str(),
-                            "escape" | "enter" | "up" | "down"
-                        ))
-                {
-                    // SearchInput and the platform own text editing and composition.
-                    return;
-                }
-                // A listing has its own search field, so the branch draft must
-                // not consume the keys typed into it.
-                if this.worktree_source_key(event, window, cx) {
-                    cx.stop_propagation();
-                    window.prevent_default();
-                    return;
-                }
-                let listing = this.worktree_listing() || this.worktree_search_focused(window, cx);
-                // The shared search owns its own typing, so everything the list
-                // itself does not own must reach the native text handler.
-                if listing
-                    && (this.worktree_source_composing(cx)
-                        || event.keystroke.key.as_str() != "escape")
-                {
-                    return;
-                }
-                // The name field edits itself; only Escape and Enter are left
-                // for the dialog, and neither may reach the branch draft.
-                let naming = this.worktree_name_focused(window, cx);
-                if naming
-                    && (this
-                        .menu
-                        .worktree
-                        .as_ref()
-                        .is_some_and(|source| source.name.read(cx).is_composing())
-                        || !matches!(event.keystroke.key.as_str(), "escape" | "enter"))
-                {
-                    return;
-                }
-                if let Some(input) = this.menu.input.as_mut().filter(|_| !listing && !naming) {
-                    if input.key(&event.keystroke, cx) {
-                        cx.stop_propagation();
-                        window.prevent_default();
-                        cx.notify();
-                        return;
-                    }
-                    // Let the platform deliver printable text and IME navigation/commit.
-                    if input.marked.is_some()
-                        || !matches!(event.keystroke.key.as_str(), "escape" | "enter")
-                    {
-                        return;
-                    }
-                }
-                if this.menu.page == Some(Page::Git) {
-                    this.git_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Teleport) {
-                    this.teleport_key(event, window, cx);
-                    return;
-                }
-                if matches!(
-                    this.menu.page,
-                    Some(Page::Host | Page::RenameDevice | Page::RemoveDevice)
-                ) {
-                    this.host_menu_key(event, window, cx);
-                    return;
-                }
-                if matches!(this.menu.page, Some(Page::Tab | Page::RenameTab)) {
-                    this.tab_menu_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Group) {
-                    this.group_menu_key(event, window, cx);
-                    return;
-                }
-                if matches!(this.menu.page, Some(Page::Pane | Page::RenamePane)) {
-                    this.pane_menu_key(event, window, cx);
-                    return;
-                }
-                if let Some(Page::Usage(provider)) = this.menu.page
-                    && this.usage_key(provider, event, cx)
-                {
-                    cx.stop_propagation();
-                    window.prevent_default();
-                    return;
-                }
-                if matches!(this.menu.page, Some(Page::Devices | Page::AddDevice)) {
-                    this.devices_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Sessions) {
-                    this.sessions_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Palette) {
-                    this.palette_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::ConfirmClose) {
-                    this.close_confirmation_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::GitHub) {
-                    this.github_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Themes) {
-                    this.theme_picker_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Fonts) {
-                    this.font_picker_key(event, window, cx);
-                    return;
-                }
-                if this.menu.page == Some(Page::Preferences) && this.menu.font_size_editor.is_some()
-                {
-                    let editor = this.menu.font_size_editor.as_ref();
-                    if editor.is_some_and(|editor| editor.input.read(cx).is_composing()) {
-                        return;
-                    }
-                    match event.keystroke.key.as_str() {
-                        "enter" | "escape" => {
-                            cx.stop_propagation();
-                            window.prevent_default();
-                            this.finish_font_size_edit(event.keystroke.key == "enter", cx);
-                            window.focus(&this.menu.focus, cx);
-                            return;
-                        }
-                        _ => return, // Native text editing and IME handle printable input.
-                    }
-                }
-                if this.menu.page == Some(Page::Keybinds)
-                    && (this
-                        .menu
-                        .keybinds_search
-                        .as_ref()
-                        .is_some_and(|search| search.read(cx).is_composing())
-                        || !matches!(
-                            event.keystroke.key.as_str(),
-                            "escape" | "up" | "down" | "pageup" | "pagedown"
-                        ))
-                {
-                    // Printable input and IME commands must reach the native text handler.
-                    return;
-                }
-                cx.stop_propagation();
-                window.prevent_default();
-                match event.keystroke.key.as_str() {
-                    "escape" => this.dismiss_menu(window, cx),
-                    "up" | "down"
-                        if this.menu.page == Some(Page::Dialog(WorkspaceAction::OpenWorktree)) =>
-                    {
-                        if let Some(picker) = &mut this.menu.worktree_open
-                            && !picker.filtered.is_empty()
-                            && this.menu.creation.is_none()
-                        {
-                            let count = picker.filtered.len();
-                            picker.selected = if event.keystroke.key == "up" {
-                                (picker.selected + count - 1) % count
-                            } else {
-                                (picker.selected + 1) % count
-                            };
-                            picker
-                                .scroll
-                                .scroll_to_item(picker.selected, ScrollStrategy::Top);
-                            cx.notify();
-                        }
-                    }
-                    "enter" if matches!(this.menu.page, Some(Page::Dialog(_))) => {
-                        this.submit_workspace_dialog(window, cx)
-                    }
-                    "enter" if this.menu.page == Some(Page::GitCommit) => {
-                        this.submit_git_commit(cx)
-                    }
-                    "up" | "down" if this.menu.page == Some(Page::Workspace) => {
-                        let actions = this.workspace_menu_actions();
-                        let selected = this.menu.workspace_selected.and_then(|selected| {
-                            actions.iter().position(|action| *action == selected)
-                        });
-                        if !actions.is_empty() {
-                            let index = match (selected, event.keystroke.key.as_str()) {
-                                (None, "up") => actions.len() - 1,
-                                (None, _) => 0,
-                                (Some(index), "up") => (index + actions.len() - 1) % actions.len(),
-                                (Some(index), _) => (index + 1) % actions.len(),
-                            };
-                            this.menu.workspace_selected = Some(actions[index]);
-                        }
-                        cx.notify();
-                    }
-                    "up" | "down" if this.menu.page == Some(Page::Menu) => {
-                        let count = this.menu_items().len();
-                        if count > 0 {
-                            this.menu.selected =
-                                Some(match (this.menu.selected, event.keystroke.key.as_str()) {
-                                    (None, "up") => count - 1,
-                                    (None, _) => 0,
-                                    (Some(index), "up") => (index + count - 1) % count,
-                                    (Some(index), _) => (index + 1) % count,
-                                });
-                        }
-                        cx.notify();
-                    }
-                    "enter" if this.menu.page == Some(Page::Workspace) => {
-                        if let Some(action) = this
-                            .menu
-                            .workspace_selected
-                            .filter(|action| this.workspace_menu_actions().contains(action))
-                        {
-                            this.activate_workspace_menu(action, window, cx);
-                        }
-                    }
-                    "up" | "down" | "pageup" | "pagedown"
-                        if matches!(this.menu.page, Some(Page::Keybinds | Page::Preferences)) =>
-                    {
-                        let scroll = if this.menu.page == Some(Page::Preferences) {
-                            &this.menu.preferences_scroll
-                        } else {
-                            &this.menu.keybinds_scroll
-                        };
-                        let key = event.keystroke.key.as_str();
-                        let distance = if key.starts_with("page") {
-                            scroll.bounds().size.height * 0.8
-                        } else {
-                            px(this.config.ui.line_height() * 3.)
-                        };
-                        let direction = if key.ends_with("up") { 1. } else { -1. };
-                        scroll.set_offset(scroll.offset() + point(px(0.), distance * direction));
-                        cx.notify();
-                    }
-                    "enter" if this.menu.page == Some(Page::AgentSkill) => {
-                        this.install_browser_skill(window, cx);
-                    }
-                    "enter" if this.menu.page == Some(Page::Install) => {
-                        cx.open_url(crate::about::WEBSITE);
-                    }
-                    "enter" if this.menu.page == Some(Page::About) => {
-                        this.dismiss_menu(window, cx);
-                    }
-                    "enter" if this.menu.page == Some(Page::Menu) => {
-                        if let Some(item) = this
-                            .menu
-                            .selected
-                            .and_then(|index| this.menu_items().get(index).copied())
-                        {
-                            this.activate_menu(item, window, cx);
-                        }
-                    }
-                    _ => {}
-                }
-            }))
+            .on_key_down(cx.listener(Self::menu_key_down))
             .child(if pointer_anchored {
                 anchored()
                     .position(if page == Page::Git {

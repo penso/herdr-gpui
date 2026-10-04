@@ -22,7 +22,7 @@ git-cliff --config cliff.toml --tag "$tag" --output "$out/CHANGELOG.md"
 # The release body keeps the platform and daemon facts every release states,
 # then lists what actually changed since the previous tag.
 cat > "$out/RELEASE_NOTES.md" <<NOTES
-GUI-only release. macOS 15+ universal signed/notarized DMG; experimental x86_64 and ARM64 Linux .deb, .rpm, Arch packages and tarballs (glibc 2.39+); experimental, unsigned Windows x86_64 and ARM64 zips without auto-update. Requires an existing Herdr daemon. Source: $source_sha.
+GUI-only release. macOS 14.2+ universal signed/notarized DMG; experimental x86_64 and ARM64 Linux .deb, .rpm, Arch packages and tarballs (glibc 2.39+); experimental, unsigned Windows x86_64 and ARM64 zips without auto-update. Requires an existing Herdr daemon. Source: $source_sha.
 
 NOTES
 git-cliff --config cliff.toml --tag "$tag" --unreleased --strip header >> "$out/RELEASE_NOTES.md"

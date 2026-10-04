@@ -245,7 +245,15 @@ impl HerdrWindow {
                 return;
             }
             Command::Palette | Command::WorkspacePicker => {
-                self.open_palette(command == Command::WorkspacePicker, window, cx);
+                self.open_palette(
+                    if command == Command::WorkspacePicker {
+                        crate::palette::Filter::Navigation
+                    } else {
+                        crate::palette::Filter::All
+                    },
+                    window,
+                    cx,
+                );
                 return;
             }
             Command::NewWorktree => {

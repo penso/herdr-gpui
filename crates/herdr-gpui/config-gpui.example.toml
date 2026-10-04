@@ -46,6 +46,11 @@ option_as_alt = "auto"
 # "browser-tab" (a browser tab beside the workspace's terminals, macOS and
 # Windows only). Alt-click (Option-click) opens a link in the other one.
 open_links_in = "system"
+# Keep a terminal selection highlighted after releasing the mouse copies it,
+# until the next click or keystroke. Cmd-C and Edit > Copy copy it again, and
+# selection tools and screen readers can still read it. false clears it on
+# release.
+keep_selection_after_copy = true
 # "normal" (TUI-like), "comfortable" (the previous roomy Normal), or "compact".
 # Compact hides workspace branch lines and PR change
 # counts, and tightens Spaces and Agents spacing without changing font sizes.
@@ -54,6 +59,18 @@ open_links_in = "system"
 # "superset" (single-line rows), "orca" (cards), and "minimal" (status and name
 # only) draw rows with a design of their own. View > Layout lists them all.
 layout = "normal"
+
+[palette]
+# Two short Shift taps open the unified palette in the focused GUI window.
+# Cmd-Shift-P opens All; Cmd-P starts on Navigation. Ordinary Shift typing and
+# selection do not count. Disable the gesture independently of keybindings.
+double_shift = true
+# Immediate non-hidden subdirectories, including folders without Git metadata.
+# Roots expand a leading ~ and $VAR / ${VAR}; unset variables show an error.
+# At most 16 roots. Child symlinks are skipped. Local folders open locally,
+# never on the selected SSH host. These settings do not read herdr-utils config.
+project_roots = []
+# Example override: project_roots = ["~/Code", "$HOME/Projects"]
 
 # Inherit shared [ui.toast] delivery, delay_seconds, and herdr.position.
 # Only delivery = "herdr" enables in-app toasts; "off", "terminal", and "system"
@@ -129,6 +146,16 @@ layout = "normal"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
 # Unbound by default: themes, reconnect, logs, about.
+
+# What the focused pane receives instead of a keystroke, as Ghostty's text:
+# binds do. The value is a key a terminal can receive (ctrl-a, home, alt-b,
+# shift-enter); an empty string removes a default. A keystroke here leaves its
+# default or daemon command, but naming it in [keybindings] too is an error.
+# On macOS these are the defaults:
+# [pane_keys]
+# "cmd-left" = "ctrl-a"
+# "cmd-right" = "ctrl-e"
+# "cmd-backspace" = "ctrl-u"
 
 # Saved SSH devices use the local keybindings above, as `herdr --remote` does.
 # "server" uses the [keys] profile that device's Herdr publishes instead, like

@@ -67,7 +67,7 @@ async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut Async
     ));
     for (case, kind, bytes) in fixtures {
         let name = format!("{endpoint}_{case}");
-        selection::wait(handle, cx, "clipboard input readiness", |view, _, cx| {
+        wait(handle, cx, "clipboard input readiness", |view, _, cx| {
             Ok(view.read(cx).input_ready().then_some(()))
         })
         .await?;
@@ -81,10 +81,10 @@ async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut Async
                 window,
                 cx,
             )?;
-            selection::key("enter", window, cx)
+            key("enter", window, cx)
         })??;
         let ready = format!("CLIP_READY_{name}");
-        let target = selection::wait(handle, cx, "raw clipboard receiver", |view, window, cx| {
+        let target = wait(handle, cx, "raw clipboard receiver", |view, window, cx| {
             if view
                 .read(cx)
                 .live
@@ -110,11 +110,11 @@ async fn cases(handle: WindowHandle<HerdrWindow>, endpoint: &str, cx: &mut Async
                 .downcast::<HerdrWindow>()
                 .map_err(|_| anyhow!("unexpected root"))?;
             type_text("!AFTER", &view, window, cx)?;
-            selection::key("enter", window, cx)
+            key("enter", window, cx)
         })??;
         let done = format!("CLIP_DONE_{name}");
         let failed = format!("CLIP_FAIL_{name}");
-        selection::wait(
+        wait(
             handle,
             cx,
             "exact clipboard byte verification",

@@ -7,7 +7,7 @@ cask "herdr-gpui" do
   desc "Native GUI client for an existing local Herdr daemon"
   homepage "https://github.com/penso/herdr-gpui"
 
-  depends_on macos: :sequoia
+  depends_on macos: :sonoma
 
   app "Herdr.app"
 end

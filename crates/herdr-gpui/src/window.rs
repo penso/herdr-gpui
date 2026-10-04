@@ -8,6 +8,7 @@ mod clipboard;
 mod commands;
 mod config_diagnostic;
 mod copy_mode;
+mod double_shift;
 mod file_drop;
 mod find;
 mod flash;
@@ -206,6 +207,7 @@ pub(crate) struct HerdrWindow {
     pub(crate) resize_mode: bool,
     /// The selected device's server keymap, when it opted into one.
     pub(crate) server_keys: Option<server_keys::ServerKeymap>,
+    pub(super) shift_taps: double_shift::ShiftTaps,
     pub(crate) _prefix_interceptor: Subscription,
 }
 
@@ -411,6 +413,7 @@ impl HerdrWindow {
             self.show_install_modal(window, cx);
         }
         self.resize();
+        self.refresh_palette(window, cx);
         self.report_focus();
         self.sync_window_title(window);
     }
@@ -624,12 +627,14 @@ impl HerdrWindow {
             prefix_armed: false,
             resize_mode: false,
             server_keys: None,
+            shift_taps: Default::default(),
             _prefix_interceptor: Self::intercept_prefix(window, cx),
             _activation: cx.observe_window_activation(window, |this, window, cx| {
                 this.active = window.is_window_active();
                 if this.active {
                     this.publish_server_keymap(cx);
                 } else {
+                    this.shift_taps.cancel();
                     this.disarm_prefix();
                     this.cancel_terminal_mouse(cx);
                     // A drag cut short is dropped; a selection kept for an

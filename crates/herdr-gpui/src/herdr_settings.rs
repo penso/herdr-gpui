@@ -16,7 +16,6 @@ mod persistence;
 #[path = "herdr_settings/persistence_windows.rs"]
 mod persistence;
 #[cfg(test)]
-#[path = "herdr_settings/tests.rs"]
 mod tests;
 
 pub(crate) use crate::config::ClipboardToastPosition as ClipboardPosition;

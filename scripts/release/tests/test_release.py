@@ -46,8 +46,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("penso/herdr-gpui/releases/download/v#{version}/Herdr-#{version}-universal-apple-darwin.dmg", first)
         # Symbol form, not the deprecated string comparison. Cask `depends_on
         # macos:` always parses with comparator ">=", so this still means
-        # "Sequoia or newer" and does not pin an exact release.
-        self.assertIn("depends_on macos: :sequoia", first)
+        # "Sonoma or newer" and does not pin an exact release.
+        self.assertIn("depends_on macos: :sonoma", first)
         for version in ["v20260920.3", "1.2", "020260920.3", "20260920.3-rc1", "20260920.3+build", "20260920.3\n", "$(id)"]:
             self.run_script("render-cask.sh", version, "ab" * 32, success=False)
         for sha in ["abc", "g" * 64, "a" * 65, "a" * 63 + "\n"]:

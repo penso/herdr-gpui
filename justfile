@@ -44,7 +44,7 @@ test-gui binary:
 # Explicit opt-in: reads the real code signature and Homebrew records of an
 # installed app. Never discovers an installation on its own.
 test-update bundle:
-    HERDR_TEST_BUNDLE="{{bundle}}" cargo test --locked -p herdr-gpui updater::install::tests::installed_bundle -- --ignored --nocapture
+    HERDR_TEST_BUNDLE="{{bundle}}" cargo test --locked -p herdr-gpui updater::install::tests::signing::installed_bundle -- --ignored --nocapture
     HERDR_TEST_BUNDLE="{{bundle}}" cargo test --locked -p herdr-gpui updater::brew::tests::the_real_cask -- --ignored --nocapture
 
 # Really upgrades the installed app through Homebrew; restart it afterwards.
@@ -123,7 +123,11 @@ bundle profile="release" features="":
 test-build: build-release
     cargo test --locked --release -p herdr-gpui --test cli
 
-ci: format-check lint test
+# Fail on source files over 1,000 lines.
+check-file-size:
+    bash scripts/check-file-size.sh
+
+ci: format-check check-file-size lint test
 
 # Cross type-check the Windows target without a Windows machine. CI lints the
 # MSVC target on a Windows runner; this uses the GNU target because a Mac or

@@ -5,7 +5,7 @@
 use super::HerdrWindow;
 use crate::{
     connection::ConnectionBridge,
-    terminal::{WheelAccumulator, key_input, wheel_target},
+    terminal::{WheelAccumulator, key_input, pane_key_input, wheel_target},
 };
 use gpui::{Context, KeyDownEvent, KeyUpEvent, ScrollWheelEvent, Window};
 
@@ -88,6 +88,7 @@ impl HerdrWindow {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.shift_taps.cancel();
         if self.menu.page.is_some() || !self.input_ready() {
             return;
         }
@@ -165,14 +166,21 @@ impl HerdrWindow {
             .option_as_alt
             .sends_alt(cx.keyboard_layout().id());
         let modifiers = event.keystroke.modifiers;
+        // Cmd-C copies a selection that is still highlighted. Ctrl-C does too
+        // only while Herdr's `copy_on_select` is off, as in Herdr, where the
+        // highlight is waiting for that copy; a selection the release already
+        // copied must not stop Ctrl-C from interrupting the pane.
+        let copy = if modifiers.platform {
+            !modifiers.control
+        } else {
+            modifiers.control && !self.copy_on_select()
+        };
         if event.keystroke.key.eq_ignore_ascii_case("c")
-            && (modifiers.platform != modifiers.control)
+            && copy
             && !modifiers.alt
             && !modifiers.shift
             && self.copy_retained_selection(cx)
         {
-            // Herdr's retained-selection copy: Ctrl-C copies instead of
-            // interrupting the pane while a kept selection is showing.
             cx.stop_propagation();
             window.prevent_default();
             return;
@@ -198,7 +206,10 @@ impl HerdrWindow {
             cx.stop_propagation();
             window.prevent_default();
         } else if self.marked.is_empty()
-            && let Some(input) = key_input(event, alt_keys)
+            && let Some(input) = match self.keymap().pane_key(&event.keystroke) {
+                Some(sent) => pane_key_input(event, sent),
+                None => key_input(event, alt_keys),
+            }
         {
             let input =
                 self.held_keys

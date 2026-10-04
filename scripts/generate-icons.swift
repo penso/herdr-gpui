@@ -147,7 +147,7 @@ func compileAssetCatalog(_ sourceName: String, name: String, isWorktree: Bool) t
   actool.arguments = [
     "actool", document.path, "--compile", output.path, "--app-icon", "Herdr",
     "--enable-on-demand-resources", "NO", "--development-region", "en",
-    "--target-device", "mac", "--platform", "macosx", "--minimum-deployment-target", "15.0",
+    "--target-device", "mac", "--platform", "macosx", "--minimum-deployment-target", "14.2",
     "--output-partial-info-plist", output.appendingPathComponent("partial.plist").path,
   ]
   actool.standardOutput = FileHandle.nullDevice

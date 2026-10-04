@@ -30,7 +30,7 @@ elif tool == "base64":
     assert args == ["-D"], args
     sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read(), validate=True))
 elif tool == "plutil" and args[0] == "-extract":
-    print("15.0" if args[1] == "LSMinimumSystemVersion" else "20260920.3")
+    print("14.2" if args[1] == "LSMinimumSystemVersion" else "20260920.3")
 elif tool == "lipo":
     if args[0] == "-archs":
         print(Path(args[1]).name)

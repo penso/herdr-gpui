@@ -101,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15, ubuntu-24.04, ubuntu-24.04-arm]
+        runner: [macos-14, macos-15, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -133,6 +133,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check formatting
         run: cargo fmt --all -- --check
+      - name: Check source file sizes
+        run: bash scripts/check-file-size.sh
       - name: Lint every target and feature
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test default features and executable CLI

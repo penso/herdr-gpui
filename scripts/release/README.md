@@ -65,11 +65,14 @@ macOS assembly requires Apple command-line tools. It produces unsigned
 `Herdr.app`, containing the universal GUI, plist, icon, root `LICENSE` and `NOTICE`,
 protocol license/attribution, Octicons license, and third-party notices.
 Both plist versions are set to the supplied version.
-The package floor is macOS 15 (`:sequoia` in Homebrew), conservatively matching
-both actual release CI runners in `.github/workflows/ci.yml`. The repository
-does not otherwise declare a deployment target or plist minimum; this is not a
-claim that older macOS versions were tested. Build release inputs with
-`MACOSX_DEPLOYMENT_TARGET=15.0`; do not supply binaries targeting a newer OS.
+The package floor is macOS 14.2 (`LSMinimumSystemVersion`; Homebrew can only
+express `:sonoma`). The binary strongly links CoreAudio's process-tap functions,
+introduced in 14.2, through rodio's cpal backend, so dyld refuses to launch it
+on 14.0 and 14.1. GPUI checks for macOS 15 at runtime before using its newer
+window behavior. The `macos-14` CI job runs the workspace tests on that floor;
+release builds still run on `macos-15` runners. Build release inputs with
+`MACOSX_DEPLOYMENT_TARGET=14.2` to match the plist; do not supply binaries
+targeting a newer OS.
 
 Signing requires macOS, Apple tools, `openssl`, `jq`, network access to Apple's
 notary service, and these environment variables:
@@ -294,7 +297,7 @@ just dmg 20260920.1
 
 Any valid `YYYYMMDD.COUNTER` version works locally; only the release workflow
 derives and publishes versions. Builds use `--locked`, `--target-dir target`, and
-`MACOSX_DEPLOYMENT_TARGET=15.0` and `HERDR_RELEASE_VERSION=VERSION` on both targets.
+`MACOSX_DEPLOYMENT_TARGET=14.2` and `HERDR_RELEASE_VERSION=VERSION` on both targets.
 The caller must supply a valid `HERDR_UPDATE_PUBLIC_KEY` before building. All six
 Apple signing variables listed above and `HERDR_UPDATE_SIGNING_KEY` are removed
 from Cargo's environment, including metadata queries. No local `.envrc` is sourced

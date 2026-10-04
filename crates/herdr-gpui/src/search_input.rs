@@ -201,8 +201,30 @@ impl SearchInput {
         if matches!(key, "up" | "down" | "enter" | "escape") {
             return;
         }
-        if modifiers.platform && !modifiers.control && !modifiers.alt && !modifiers.shift {
+        if modifiers.platform && !modifiers.control && !modifiers.alt {
             match key {
+                // As in every macOS text field: Cmd-Left and Cmd-Right go to
+                // the line's ends, Cmd-Backspace and Cmd-Delete delete to them.
+                "left" | "right" => {
+                    let offset = if key == "left" {
+                        0
+                    } else {
+                        self.edit.text.len()
+                    };
+                    self.edit.select_to(offset, modifiers.shift);
+                }
+                "backspace" | "delete" if !modifiers.shift => {
+                    if self.edit.selection().is_empty() {
+                        let offset = if key == "backspace" {
+                            0
+                        } else {
+                            self.edit.text.len()
+                        };
+                        self.edit.select_to(offset, true);
+                    }
+                    self.replace_text_in_range(None, "", window, cx);
+                }
+                _ if modifiers.shift => return,
                 "a" => {
                     self.edit.anchor = 0;
                     self.edit.cursor = self.edit.text.len();
@@ -610,6 +632,32 @@ mod tests {
         assert_eq!(edit.marked, None);
         assert_eq!(edit.selection(), 0..0);
         assert!(!edit.replace(None, "\r\n", false, None));
+    }
+
+    #[gpui::test]
+    fn cmd_arrows_and_cmd_backspace_reach_the_line_ends(cx: &mut gpui::TestAppContext) {
+        let (input, cx) = cx.add_window_view(|_, cx| SearchInput::new(cx));
+        cx.update(|window, cx| {
+            input.update(cx, |input, cx| {
+                input.edit.replace(None, "one two", false, None);
+                input.edit.select_to(3, false);
+                window.focus(&input.focus, cx);
+            });
+            window.draw(cx).clear(cx);
+        });
+        let edit = |cx: &mut gpui::VisualTestContext| {
+            input.read_with(cx, |input, _| {
+                (input.edit.text.clone(), input.edit.selection())
+            })
+        };
+        cx.simulate_keystrokes("cmd-shift-right");
+        assert_eq!(edit(cx), ("one two".into(), 3..7));
+        cx.simulate_keystrokes("cmd-left");
+        assert_eq!(edit(cx), ("one two".into(), 0..0));
+        cx.simulate_keystrokes("cmd-right left left cmd-backspace");
+        assert_eq!(edit(cx), ("wo".into(), 0..0));
+        cx.simulate_keystrokes("cmd-delete");
+        assert_eq!(edit(cx), (String::new(), 0..0));
     }
 
     #[test]

@@ -44,7 +44,7 @@ class BuildMacosTests(unittest.TestCase):
             "cargo": '\n'.join([
                 'set -eu',
                 *(f'[[ ${{{name}+present}} != present ]]' for name in SECRETS),
-                '[[ $MACOSX_DEPLOYMENT_TARGET == 15.0 ]]',
+                '[[ $MACOSX_DEPLOYMENT_TARGET == 14.2 ]]',
                 '[[ $CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_STRIP == none ]]',
                 '[[ $HERDR_RELEASE_VERSION == 20260920.3 ]]',
                 '[[ $HERDR_UPDATE_PUBLIC_KEY == ' + 'ab' * 32 + ' ]]',

@@ -307,10 +307,10 @@ fn future_encoded_surfaces_wait_for_their_snapshot() {
 #[test]
 fn herdr_fixtures_replay_through_the_session() {
     let fixtures: [&[u8]; 4] = [
-        include_bytes!("../../herdr-protocol/tests/fixtures/surface-scroll-up-v1.bin"),
-        include_bytes!("../../herdr-protocol/tests/fixtures/surface-scroll-down-v1.bin"),
-        include_bytes!("../../herdr-protocol/tests/fixtures/surface-delta-v1.bin"),
-        include_bytes!("../../herdr-protocol/tests/fixtures/surface-reuse-v1.bin"),
+        include_bytes!("../../../herdr-protocol/tests/fixtures/surface-scroll-up-v1.bin"),
+        include_bytes!("../../../herdr-protocol/tests/fixtures/surface-scroll-down-v1.bin"),
+        include_bytes!("../../../herdr-protocol/tests/fixtures/surface-delta-v1.bin"),
+        include_bytes!("../../../herdr-protocol/tests/fixtures/surface-reuse-v1.bin"),
     ];
     for bytes in fixtures {
         let mut reader = bytes;

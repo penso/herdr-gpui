@@ -60,7 +60,7 @@ class ReleaseTargets(unittest.TestCase):
         for name in ("checks", "windows", "checks-passed"):
             self.assertIn("github.event.pull_request.user.login == 'penso'", jobs[name])
             self.assertIn("github.event.pull_request.head.repo.full_name == 'penso/herdr-gpui'", jobs[name])
-        self.assertIn("runner: [macos-15, ubuntu-24.04, ubuntu-24.04-arm]", jobs["checks"])
+        self.assertIn("runner: [macos-14, macos-15, ubuntu-24.04, ubuntu-24.04-arm]", jobs["checks"])
         self.assertIn("    name: Format, lint, and test\n", jobs["checks-passed"])
         self.assertIn("always()", jobs["checks-passed"])
         self.assertIn('test "$RESULT" = success', jobs["checks-passed"])

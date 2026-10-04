@@ -841,10 +841,10 @@ Right-Click** switches the pane back. A routed pane whose application has mouse
 reporting off opens the menu, since nothing would receive the click. A
 mouse-aware popup has no pane menu and keeps its right-clicks.
 
-Drag across the terminal to select cells; releasing the button copies them, drops
-the highlight, and shows the `copied to clipboard` flash described under
+Drag across the terminal to select cells; releasing the button copies them and
+shows the `copied to clipboard` flash described under
 [Configuration](#configuration). Selection is client-local: it reads the surface
-the client already has, sends nothing to the daemon, and asks it for nothing.
+the client already has, and asks the daemon only for rows scrolled out of view.
 
 A program that copies with OSC 52 — many editors and agent CLIs do, especially
 when they own the mouse — is honored too: the daemon forwards the bytes to this
@@ -866,12 +866,29 @@ clipboard, and trailing blanks are dropped only from rows selected through to th
 pane's right edge, where a terminal pads short lines. A copy is bounded, and one
 too large to copy reports in the status bar instead.
 
-The highlight is cleared by the release that copies it, and by a reconnect,
-detach, or endpoint switch. Cmd-V still sends semantic paste; there is no copy
-keystroke, because the release has already copied and nothing stays selected.
-For the same reason, the native **Edit** menu enables only **Paste** while a
-terminal has focus. In dialogs and search fields, **Cut**, **Copy**, **Paste**,
-and **Select All** do the same as Cmd-X, Cmd-C, Cmd-V, and Cmd-A.
+The highlight stays after the release copies it, until the next click or
+keystroke, a reconnect, detach, or endpoint switch. While it shows, Cmd-C and
+**Edit > Copy** copy it again; Ctrl-C still reaches the pane, which interrupts
+the program there and clears the highlight. Set `keep_selection_after_copy =
+false` in `config-gpui.local.toml` to clear the highlight on release instead.
+
+With Herdr's `[ui] copy_on_select = false`, shared with the TUI, the release
+copies nothing: the highlight waits for Cmd-C, Ctrl-C, or **Edit > Copy**, and
+any other key drops it, as in Herdr.
+
+Cmd-V sends semantic paste. While a terminal has focus, the native **Edit** menu
+enables **Paste**, and **Copy** while a selection is highlighted. In dialogs and
+search fields, **Cut**, **Copy**, **Paste**, and **Select All** do the same as
+Cmd-X, Cmd-C, Cmd-V, and Cmd-A.
+
+The terminal is exposed to accessibility clients, such as VoiceOver and
+selection tools that read the focused element's selected text (PopClip,
+OpenClip, dictionary lookup). It reads as a text area holding the rows on
+screen of the pane with the selection, or, without one, of the focused pane
+or open popup. Each row reads as a copy would: concealed cells as blanks and
+no trailing padding. A selection reaching rows scrolled out of view exposes
+only its visible part, though the copy still includes all of it. Copy mode's
+keyboard selection is not exposed.
 
 ## File Drops
 
@@ -1694,11 +1711,44 @@ Windows setup) nothing is saved and the window says so.
   blocked, and never with `confirm_close_tab = false`). **Cancel is selected by default**: Enter alone cancels;
   Tab then Enter selects and confirms Close. Closing can terminate running
   processes, unlike quitting the GUI, which only detaches.
-- Cmd-Shift-P opens the command palette with native actions and configured daemon
-  command entries, including native Themes and Reconnect actions without dedicated
-  shortcuts. Cmd-P opens **Go To** instead: every workspace on every connected
-  host, each followed by one row per agent or terminal pane with its status,
-  tab, and directory. Choosing a row on another host switches to it first.
+- Double-tap Shift or press Cmd-Shift-P to open the unified **Command Palette**:
+  workspaces on connected hosts, agents and terminal panes, native GUI actions,
+  configured daemon commands, and local project folders. Cmd-P opens the same
+  palette on **Navigation**. Choose **All**, **Navigation**, **Commands**, or
+  **Projects**, or cycle filters with Tab / Shift-Tab without clearing the search.
+  Search ranks exact names, word prefixes, substrings, then fuzzy matches; host,
+  workspace, path, status, and command ID are searchable context. Up / Down selects,
+  Enter or a click activates, and Escape or an outside click dismisses without
+  sending terminal input. Choosing a destination on another host switches to it.
+  Double-Shift requires two short completed taps within 400 ms; shifted typing,
+  mouse interaction, held Shift, other modifiers, composition, and modal dialogs
+  do not trigger it. It is window-local, not a system-wide hotkey. Native browser
+  content may handle modifier events itself; use the native menu when needed.
+- Configure project discovery in `config-gpui.local.toml`:
+
+  ```toml
+  [palette]
+  double_shift = true # false disables only this gesture
+  project_roots = ["~/Code", "$HOME/Projects"]
+  ```
+
+  The palette lists immediate non-hidden folders, not just Git repositories.
+  A leading `~`, `$VAR`, and `${VAR}` expand without shell execution. Unset
+  variables, missing roots, or discovery limits show diagnostics while other
+  sources stay usable. Scans run in the background, visit at most 8192 directory
+  entries, and list at most 2048 projects across up to 16 roots. Roots may be
+  symlinks, but child symlinks are skipped; duplicate paths are listed once.
+  Selecting a folder focuses a workspace whose first surviving pane's launch directory
+  exactly matches it, or creates one with that directory and its basename label.
+  Foreground process directories and later splits do not claim a project while
+  that first pane remains. The snapshot does not identify an original root pane;
+  after it is closed, the first surviving pane supplies this directory.
+  Local folders always open on the local connection, even while viewing SSH;
+  an unavailable local connection produces an error, never a remote creation.
+  The palette waits for the daemon's creation response before following the new
+  workspace and does not automatically trust repositories. Dismissing a queued
+  creation does not undo it. The GUI owns these settings independently of
+  `herdr-utils`; use the same root paths in both configs if desired.
 - Every native shortcut can be rebound in `config-gpui.local.toml` under
   `[keybindings]`, keyed by command name (`new_tab`, `new_workspace`,
   `split_right`, `focus_tab_1`, `quit`, ...). A value is one keystroke or a list;
@@ -1706,6 +1756,17 @@ Windows setup) nothing is saved and the window says so.
   away from its default command, keystrokes need a cmd, ctrl, alt, or fn
   modifier, and unknown names, unparseable keys, or one key on two configured
   commands reject the config. Saved changes rebind the keymap and menu bar live.
+- `[pane_keys]` maps a keystroke to the key the focused pane receives instead,
+  like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
+  Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
+  prompts jump to the line's ends or delete back to its start as in every
+  other Mac terminal. A value is a key a terminal can receive (`ctrl-a`,
+  `home`, `alt-b`, `shift-enter`), and an empty string removes a default. A
+  pane key takes its keystroke from a default or daemon command, so
+  `"cmd-k" = "ctrl-l"` replaces Clear; listing it under `[keybindings]` as well
+  rejects the config, as do a bare character, an unknown key, or a target with
+  cmd. The find field and dialogs answer Cmd-Left, Cmd-Right, Cmd-Backspace,
+  and Cmd-Delete themselves.
 - The daemon's own `[keys]` table in `config.toml` (resolved like
   `[ui.toast.clipboard]` above) applies in the GUI too, Herdr's defaults
   included, so a TUI habit such as `prefix+v` or `alt+1..9` works in both
@@ -1760,7 +1821,7 @@ Windows setup) nothing is saved and the window says so.
   section, or key combination. Preferences, keybinds, theme/palette pickers, and
   close confirmations use themed centered modals and configured UI fonts;
   modal input does not reach the terminal.
-- Creation omits `cwd`, labels, environment overrides, and split ratio: the
+- Ordinary creation shortcuts omit `cwd`, labels, environment overrides, and split ratio: the
   daemon applies its existing defaults and directory policy. Workspace creation
   supplies the currently focused source workspace when available; tabs and splits
   target the current workspace/pane explicitly. An empty session can create a

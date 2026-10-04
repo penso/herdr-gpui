@@ -60,6 +60,7 @@ pub(super) mod neuralwatt;
 pub(super) mod notion;
 pub(super) mod nous;
 pub(super) mod ollama;
+mod oneconsole;
 pub(super) mod openai;
 pub(super) mod opencode;
 pub(super) mod opencodego;
