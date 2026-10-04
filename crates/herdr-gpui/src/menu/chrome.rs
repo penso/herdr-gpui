@@ -303,6 +303,9 @@ impl HerdrWindow {
                 | Page::RemoveDevice
                 | Page::Git
                 | Page::GitCommit
+                | Page::PrReview
+                | Page::PrComment
+                | Page::PrMerge
         );
         let mut panel = div()
             .id("menu-panel")
@@ -363,21 +366,31 @@ impl HerdrWindow {
                     .overflow_hidden()
                     .shadow_lg()
             })
-            .when(matches!(page, Page::Git | Page::GitCommit), |panel| {
-                panel
-                    .w((viewport.width - px(24.))
-                        .max(px(0.))
-                        .min(px(if page == Page::Git { 340. } else { 420. })))
-                    .max_h((viewport.height - px(24.)).max(px(0.)))
-                    .when(page == Page::Git, |panel| {
-                        let top = crate::titlebar::HEIGHT
-                            + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1")
-                            + 6.;
-                        panel
-                            .max_h((viewport.height - px(top + 12.)).max(px(0.)))
-                            .shadow_lg()
-                    })
-            })
+            .when(
+                matches!(
+                    page,
+                    Page::Git | Page::GitCommit | Page::PrReview | Page::PrComment | Page::PrMerge
+                ),
+                |panel| {
+                    panel
+                        .w((viewport.width - px(24.))
+                            .max(px(0.))
+                            .min(px(if page == Page::Git { 340. } else { 420. })))
+                        .max_h((viewport.height - px(24.)).max(px(0.)))
+                        .when(page == Page::Git, |panel| {
+                            let top = crate::titlebar::HEIGHT
+                                + crate::worktree_banner::reserved(
+                                    env!("HERDR_BUILD_WORKTREE") == "1",
+                                )
+                                + 6.;
+                            panel
+                                .max_h((viewport.height - px(top + 12.)).max(px(0.)))
+                                .shadow_lg()
+                        })
+                        // Its lists scroll inside; the panel never outgrows the window.
+                        .when(page == Page::PrReview, |panel| panel.overflow_hidden())
+                },
+            )
             .when(
                 matches!(
                     page,
@@ -636,6 +649,12 @@ impl HerdrWindow {
             panel = panel.child(self.render_git_menu(cx));
         } else if page == Page::GitCommit {
             panel = panel.child(self.render_git_commit(cx));
+        } else if page == Page::PrReview {
+            panel = panel.child(self.render_pr_review(cx));
+        } else if page == Page::PrComment {
+            panel = panel.child(self.render_pr_comment(cx));
+        } else if page == Page::PrMerge {
+            panel = panel.child(self.render_pr_merge(cx));
         } else if matches!(page, Page::Host | Page::RenameDevice | Page::RemoveDevice) {
             panel = panel.child(self.render_host_menu(cx));
         } else if matches!(page, Page::Tab | Page::RenameTab) {
@@ -957,6 +976,13 @@ impl HerdrWindow {
                     }
                     "enter" if this.menu.page == Some(Page::GitCommit) => {
                         this.submit_git_commit(cx)
+                    }
+                    "enter" if this.menu.page == Some(Page::PrComment) => {
+                        this.submit_pr_comment(cx)
+                    }
+                    "enter" if this.menu.page == Some(Page::PrMerge) => this.submit_pr_merge(cx),
+                    "up" | "down" if this.menu.page == Some(Page::PrMerge) => {
+                        this.cycle_merge_method(event.keystroke.key == "down", cx)
                     }
                     "up" | "down" if this.menu.page == Some(Page::Workspace) => {
                         let actions = this.workspace_menu_actions();

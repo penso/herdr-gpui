@@ -16,7 +16,7 @@ mod tests;
 pub(crate) use {
     auth::Auth,
     device::{Profile, VERIFY_URL},
-    http::graphql,
+    http::{graphql, mutation},
     store::{Account, Note, Store},
 };
 

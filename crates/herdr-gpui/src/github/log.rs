@@ -157,6 +157,7 @@ pub(super) fn kind(error: &Error) -> &'static str {
         Error::GitHubDenied => "denied",
         Error::GitHubAuthorization => "authorization",
         Error::GitHubQuery => "query",
+        Error::GitHubRejected(_) => "rejected",
         Error::GitHubWorker(_) => "worker",
         #[cfg(target_os = "macos")]
         Error::KeychainRead(_) => "keychain_read",

@@ -1,4 +1,5 @@
 //! Read-only PR prefetch. One worker, bounded memory, and no UI-thread I/O.
+//! Writes to a pull request live in `pr_actions`, behind explicit user actions.
 
 mod cache;
 mod fetch;
@@ -13,7 +14,7 @@ pub(crate) use {
     cache::Cache,
     fetch::{local_checkout, origin_repository, run},
     lookup::Lookup,
-    model::{Input, Origin, PullRequest, State, clean, repository_input},
+    model::{Input, MergeMethod, Origin, Outcome, PullRequest, State, clean, repository_input},
 };
 
 pub(crate) use fetch::local_repository;

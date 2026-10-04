@@ -54,6 +54,10 @@ pub(crate) struct MenuState {
     pub(super) selected: Option<usize>,
     pub(super) workspace_selected: Option<WorkspaceMenuAction>,
     pub(super) git_selected: Option<git::Row>,
+    /// The merge dialog's method, and the pull request (with its head) it
+    /// was opened for: a branch that moved since must be reviewed again.
+    pub(super) merge_method: Option<crate::pull_request::MergeMethod>,
+    pub(super) merge_target: Option<crate::pr_actions::Target>,
     pub(super) target: Option<WorkspaceTarget>,
     pub input: Option<DialogInput>,
     pub(super) error: Option<String>,
@@ -227,6 +231,8 @@ impl MenuState {
             selected: None,
             workspace_selected: None,
             git_selected: None,
+            merge_method: None,
+            merge_target: None,
             target: None,
             input: None,
             error: None,
@@ -286,6 +292,8 @@ impl MenuState {
         self.selected = None;
         self.workspace_selected = None;
         self.git_selected = None;
+        self.merge_method = None;
+        self.merge_target = None;
         self.target = None;
         self.input = None;
         self.error = None;

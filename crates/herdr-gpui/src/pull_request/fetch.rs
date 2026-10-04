@@ -18,16 +18,17 @@ pub(super) const OUTPUT_LIMIT: usize = 2 * 1024 * 1024;
 pub(super) const TIMEOUT: Duration = Duration::from_secs(15);
 const QUERY: &str = r#"query($owner: String!, $repo: String!, $branch: String!, $limit: Int!) {
   repository(owner: $owner, name: $repo) {
+    mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
     pullRequests(first: $limit, headRefName: $branch, orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage }
       nodes {
-        number url title state isDraft headRefName baseRefName additions deletions
+        id number url title state isDraft headRefName headRefOid baseRefName additions deletions
         changedFiles updatedAt mergeStateStatus reviewDecision headRepositoryOwner { login }
         headRepository { name }
         commits(last: 1) { nodes { commit { statusCheckRollup {
           contexts(first: 100) {
             pageInfo { hasNextPage }
-            nodes { __typename ... on CheckRun { status conclusion } ... on StatusContext { state } }
+            nodes { __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } }
           }
         } } } }
       }
