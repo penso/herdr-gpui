@@ -182,6 +182,34 @@ pub(crate) fn push_range(
     }
 }
 
+/// Appends every search match `pane` shows, the current one tinted more
+/// strongly, in the surface frame's grid.
+pub(crate) fn push_matches(
+    pane: &PaneSurfacePane,
+    matches: &[TextRange],
+    current: Option<usize>,
+    highlights: &mut Vec<Highlight>,
+) {
+    for (index, range) in matches.iter().enumerate() {
+        let tint = if current == Some(index) {
+            Tint::CurrentMatch
+        } else {
+            Tint::Match
+        };
+        push_range(pane, *range, tint, highlights);
+    }
+}
+
+/// The count shown beside a search: "3 of 17", "17 found" while no match is
+/// current, or "No results".
+pub(crate) fn match_count(total: u64, current_global: Option<u64>) -> String {
+    match (total, current_global) {
+        (0, _) => "No results".into(),
+        (total, Some(index)) => format!("{} of {total}", index.saturating_add(1)),
+        (total, None) => format!("{total} found"),
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {

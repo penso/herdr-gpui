@@ -62,7 +62,7 @@ impl EntityInputHandler for HerdrWindow {
         &mut self,
         range: Option<Range<usize>>,
         text: &str,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.shift_taps.cancel();
@@ -74,7 +74,7 @@ impl EntityInputHandler for HerdrWindow {
             return;
         }
         if self.copy_mode_active() {
-            self.copy_mode_text(text, cx);
+            self.copy_mode_text(text, window, cx);
             return;
         }
         #[cfg(feature = "integration-test")]

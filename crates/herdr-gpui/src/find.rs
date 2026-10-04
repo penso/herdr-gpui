@@ -7,8 +7,8 @@
 //! once the answer arrives. Nothing here touches the window or the socket.
 
 use crate::{
-    scrollback::{push_range, viewport_top},
-    terminal_painter::{Highlight, Tint},
+    scrollback::{match_count, push_matches, viewport_top},
+    terminal_painter::Highlight,
 };
 use herdr_client::{
     protocol::PaneSurfacePane,
@@ -292,11 +292,7 @@ impl Search {
         let Some(results) = self.results.as_ref().filter(|r| r.query == self.query) else {
             return String::new();
         };
-        match (results.total, results.current_global) {
-            (0, _) => "No results".into(),
-            (total, Some(index)) => format!("{} of {total}", index.saturating_add(1)),
-            (total, None) => format!("{total} found"),
-        }
+        match_count(results.total, results.current_global)
     }
 
     /// Whether the shown answer has any match to move between.
@@ -318,14 +314,7 @@ impl Search {
             return Vec::new();
         };
         let mut highlights = Vec::new();
-        for (index, range) in results.matches.iter().enumerate() {
-            let tint = if results.current == Some(index) {
-                Tint::CurrentMatch
-            } else {
-                Tint::Match
-            };
-            push_range(pane, *range, tint, &mut highlights);
-        }
+        push_matches(pane, &results.matches, results.current, &mut highlights);
         highlights
     }
 }
@@ -347,7 +336,7 @@ fn before(point: TextPoint) -> TextPoint {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::scrollback::reveal_offset;
+    use crate::{scrollback::reveal_offset, terminal_painter::Tint};
     use herdr_client::protocol::{PaneSurfaceScrollMetrics, SurfaceRect};
 
     fn pane(content_revision: u64, offset: u64, max: u64) -> PaneSurfacePane {

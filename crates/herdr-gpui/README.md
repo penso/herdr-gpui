@@ -1694,10 +1694,18 @@ Windows setup) nothing is saved and the window says so.
   start, `g`/`G` to the top of history or the last row, and Ctrl-U/D/B/F or
   Page Up/Down page. The text-aware motions `w` `b` `e` `W` `B` `E` `$` `^`
   `{` `}` come from the daemon's `pane.copy_motion`, so words and paragraphs
-  mean what they mean in Herdr. `v` or Space marks by cell and `V` by line.
-  `y` or Enter copies the selection through `pane.selection.read`. Escape
-  clears a selection or leaves, as does `q`. Leaving scrolls the pane back to
-  where it was.
+  mean what they mean in Herdr. `/` searches toward newer output and `?`
+  toward older, through the daemon's `pane.copy_search`: type the query in the
+  prompt that opens over the pane's corner and press Enter, or Escape to close
+  the prompt and stay in copy mode. The query is literal; lowercase ignores
+  case and any uppercase letter makes it case-sensitive, as in Herdr. The
+  cursor moves to the match, matches are tinted, and the corner badge shows
+  the query and "2 of 5". `n` repeats the search the way it was entered and
+  `N` the opposite way. `v` or Space marks by cell and `V` by line, from
+  wherever the cursor is, a match included. `y` or Enter copies the selection,
+  or with nothing marked the current match, through `pane.selection.read`.
+  Escape clears a selection and the search, or leaves when there is neither,
+  as does `q`. Leaving scrolls the pane back to where it was.
 - A mouse selection dragged past a pane's top or bottom edge scrolls the
   pane, and the selection stays with its text as the pane moves. A selection
   that reaches rows off the screen is copied through `pane.selection.read`;

@@ -143,14 +143,15 @@ impl HerdrWindow {
         // A new press goes wherever this decides; only the pane branch at the
         // end holds it again for its release.
         self.held_keys.forget(&event.keystroke.key);
-        // A keystroke bubbling out of the find field is the field's: an
-        // unhandled one is still on its way to the field's IME.
-        if self.find_focused(window, cx) {
+        // A keystroke bubbling out of the find field or the copy-mode search
+        // prompt is the field's: an unhandled one is still on its way to the
+        // field's IME.
+        if self.find_focused(window, cx) || self.copy_search_focused(window, cx) {
             return;
         }
         // Copy mode owns the keyboard: its keys run and nothing else is typed.
         if self.copy_mode_active() {
-            self.copy_mode_key(event, cx);
+            self.copy_mode_key(event, window, cx);
             if !event.keystroke.modifiers.platform {
                 cx.stop_propagation();
                 window.prevent_default();

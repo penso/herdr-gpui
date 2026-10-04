@@ -368,7 +368,7 @@ impl HerdrWindow {
         self.flush_split(cx);
         self.poll_find(window, cx);
         self.follow_selection(cx);
-        self.poll_copy_mode(cx);
+        self.poll_copy_mode(window, cx);
         #[cfg(target_os = "macos")]
         crate::app_badge::sync(window.window_handle().window_id(), &self.endpoints, cx);
         self.cancel_stale_image();

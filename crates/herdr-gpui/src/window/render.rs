@@ -146,7 +146,7 @@ impl Render for HerdrWindow {
             .map(|(slot, _)| *slot);
         let terminal_gap = terminal_slot.map_or(sidebar_gap, slot_gap);
         let find_bar = self.render_find_bar(surface.as_deref(), terminal_gap, cx);
-        let copy_badge = self.render_copy_mode_badge(surface.as_deref(), terminal_gap);
+        let copy_badge = self.render_copy_mode_badge(surface.as_deref(), terminal_gap, cx);
         let terminal = div()
             .id("terminal")
             .debug_selector(|| "terminal".into())
