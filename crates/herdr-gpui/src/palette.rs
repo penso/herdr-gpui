@@ -11,6 +11,9 @@ use herdr_client::{
 };
 use serde_json::{Value, json};
 
+pub(crate) use agent_filter::AgentFilter;
+
+mod agent_filter;
 #[cfg(test)]
 mod interaction_tests;
 mod project_open;
@@ -100,6 +103,8 @@ struct Entry {
     /// Index of the row this one nests under, indented only while that row
     /// is visible so a search never leaves it hanging beneath nothing.
     parent: Option<usize>,
+    /// The daemon-reported status of a Go To row's agent, if it has one.
+    status: Option<AgentStatus>,
     fields: search::Fields,
 }
 
@@ -123,6 +128,7 @@ impl Entry {
             badge,
             action,
             parent,
+            status: None,
             fields,
         }
     }
@@ -347,7 +353,7 @@ fn go_to_entries(
                 .filter(|text| !text.is_empty())
                 .collect::<Vec<_>>()
                 .join("  ");
-            entries.push(Entry::new(
+            let mut entry = Entry::new(
                 name.to_owned(),
                 detail,
                 agent.map_or(SharedString::new_static("Terminal"), |agent| {
@@ -357,7 +363,9 @@ fn go_to_entries(
                 }),
                 go(NavigationTarget::Pane(pane.pane_id.clone())),
                 Some(parent),
-            ));
+            );
+            entry.status = agent.map(|agent| agent.agent_status);
+            entries.push(entry);
         }
     }
 }
@@ -385,6 +393,8 @@ pub(super) struct Palette {
     scroll: UniformListScrollHandle,
     target: Option<Target>,
     filter: Filter,
+    /// Narrows Navigation to agents in one status; other filters ignore it.
+    agent_filter: AgentFilter,
     query: String,
     error: Option<String>,
     projects: projects::Collection,
@@ -437,17 +447,50 @@ impl Palette {
             .map(|index| self.entries[*index].action.identity())
     }
 
+    /// The status filter in effect, which only Navigation applies.
+    fn active_agent_filter(&self) -> AgentFilter {
+        if self.filter == Filter::Navigation {
+            self.agent_filter
+        } else {
+            AgentFilter::All
+        }
+    }
+
+    fn set_agent_filter(&mut self, agent_filter: AgentFilter) {
+        self.filter = Filter::Navigation;
+        self.agent_filter = agent_filter;
+        self.refilter(None);
+    }
+
     fn refilter(&mut self, selected: Option<Identity>) {
         let query = self.query.to_lowercase();
         let terms: Vec<_> = query.split_whitespace().collect();
+        let agent_filter = self.active_agent_filter();
         let mut ranked: Vec<_> = self
             .entries
             .iter()
             .enumerate()
             .filter(|(_, entry)| self.filter.accepts(&entry.action))
+            .filter(|(_, entry)| agent_filter.accepts(entry.status))
             .filter_map(|(index, entry)| entry.fields.score(&terms).map(|score| (index, score)))
             .collect();
-        ranked.sort_by(|(_, a), (_, b)| b.cmp(a));
+        if agent_filter != AgentFilter::All {
+            // As in Herdr's navigator, a workspace stays as the heading of its
+            // matching agents and ranks with the best of them.
+            let mut parents = std::collections::BTreeMap::new();
+            for (index, score) in &ranked {
+                if let Some(parent) = self.entries[*index].parent {
+                    let best = parents.entry(parent).or_insert(*score);
+                    *best = (*best).max(*score);
+                }
+            }
+            ranked.extend(parents.into_iter().map(|(parent, score)| {
+                let own = self.entries[parent].fields.score(&terms);
+                (parent, own.map_or(score, |own| own.max(score)))
+            }));
+        }
+        // Ties keep list order, so a workspace still precedes its panes.
+        ranked.sort_by(|(i, a), (j, b)| b.cmp(a).then(i.cmp(j)));
         self.filtered = ranked.into_iter().map(|(index, _)| index).collect();
         self.selected = selected
             .and_then(|selected| {
@@ -516,6 +559,7 @@ impl HerdrWindow {
             scroll: UniformListScrollHandle::new(),
             target,
             filter,
+            agent_filter: AgentFilter::All,
             query: String::new(),
             error: None,
             projects: projects::Collection::default(),
@@ -860,6 +904,17 @@ impl HerdrWindow {
             return;
         };
         if palette.search.read(cx).is_composing() {
+            return;
+        }
+        // A Go To navigation binding keeps its key; otherwise Alt and a
+        // navigator letter filter by agent status without typing the letter.
+        if step.is_none()
+            && let Some(agent_filter) = AgentFilter::from_keystroke(&event.keystroke)
+        {
+            cx.stop_propagation();
+            window.prevent_default();
+            palette.set_agent_filter(agent_filter);
+            cx.notify();
             return;
         }
         match event.keystroke.key.as_str() {

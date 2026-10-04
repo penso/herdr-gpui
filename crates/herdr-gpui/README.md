@@ -1717,7 +1717,18 @@ Windows setup) nothing is saved and the window says so.
   palette on **Navigation**. Choose **All**, **Navigation**, **Commands**, or
   **Projects**, or cycle filters with Tab / Shift-Tab without clearing the search.
   Search ranks exact names, word prefixes, substrings, then fuzzy matches; host,
-  workspace, path, status, and command ID are searchable context. Up / Down selects,
+  workspace, path, status, and command ID are searchable context. Navigation
+  (Go To) also filters agents by the status the daemon reports, like Herdr's
+  navigator: click **All agents**, **Blocked**, **Working**, **Idle**, or
+  **Done**, or press Alt with Herdr's letters (`alt-b`, `alt-w`, `alt-i`,
+  `alt-d`, `alt-a` for all) from any filter, which switches to Navigation. Plain
+  letters stay search text, the search still narrows within a status, and
+  while a status is chosen a workspace is listed only as the heading of its
+  matching agents. Each new palette starts on **All agents**. Terminals
+  without an agent appear only under **All agents**, and the other filters
+  ignore the status. A keystroke already bound by `[keybindings]`, the
+  daemon's `[keys]`, or `navigate_workspace_up`/`_down` stays with that
+  binding. Up / Down selects,
   Enter or a click activates, and Escape or an outside click dismisses without
   sending terminal input. Choosing a destination on another host switches to it.
   Double-Shift requires two short completed taps within 400 ms; shifted typing,
