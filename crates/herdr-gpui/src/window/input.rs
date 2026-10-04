@@ -82,6 +82,15 @@ impl HerdrWindow {
         )
     }
 
+    /// Herdr's shared `ui.mouse_scroll_lines`, its default until the shared
+    /// config loads.
+    fn mouse_scroll_lines(&self) -> std::num::NonZeroU16 {
+        self.settings.shared.as_ref().map_or(
+            crate::herdr_settings::DEFAULT_MOUSE_SCROLL_LINES,
+            |shared| shared.mouse_scroll_lines,
+        )
+    }
+
     pub(crate) fn scroll_wheel(
         &mut self,
         event: &ScrollWheelEvent,
@@ -106,7 +115,12 @@ impl HerdrWindow {
             self.wheel = WheelAccumulator::default();
             return;
         };
-        let lines = self.wheel.lines(&target.target, event, cell_height);
+        let lines = self.wheel.lines(
+            &target.target,
+            event,
+            cell_height,
+            self.mouse_scroll_lines(),
+        );
         cx.stop_propagation();
         if lines == 0 {
             return;

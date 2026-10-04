@@ -20,10 +20,11 @@ mod persistence;
 mod tests;
 
 pub(crate) use crate::config::ClipboardToastPosition as ClipboardPosition;
+use gpui::Modifiers;
 use herdr_client::protocol::AgentStatus;
 pub(crate) use herdr_client::protocol::ToastHerdrPosition as ToastPosition;
-use serde::Deserialize;
-use std::{env, path::PathBuf};
+use serde::{Deserialize, Deserializer};
+use std::{env, num::NonZeroU16, path::PathBuf};
 use toml_edit::{DocumentMut, Item, Value};
 
 pub(crate) const THEME_NAMES: &[&str] = &[
@@ -154,6 +155,59 @@ pub(crate) enum SidebarCollapsedMode {
     Hidden,
 }
 
+/// Herdr's default for `ui.mouse_scroll_lines`.
+pub(crate) const DEFAULT_MOUSE_SCROLL_LINES: NonZeroU16 = NonZeroU16::MIN.saturating_add(2);
+
+/// Herdr's `ui.right_click_passthrough_modifier`: the exact modifier
+/// combination that sends a right-click to a mouse-aware pane application
+/// instead of opening the pane menu. `None` disables it: unset, empty, `off`,
+/// `none`, `disabled`, or a combination naming `meta` or `hyper`, which GPUI
+/// cannot report, so such a combination could never be held.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RightClickPassthrough(Option<Modifiers>);
+
+impl RightClickPassthrough {
+    /// Herdr's grammar: `+`-separated `ctrl`/`control`, `alt`/`option`,
+    /// `cmd`/`command`/`super`, `meta` and `hyper`, case-insensitive. `None`
+    /// for a value Herdr rejects, including any combination with `shift`.
+    fn parse(value: &str) -> Option<Self> {
+        let value = value.trim();
+        if value.is_empty()
+            || ["off", "none", "disabled"]
+                .iter()
+                .any(|off| value.eq_ignore_ascii_case(off))
+        {
+            return Some(Self(None));
+        }
+        let mut modifiers = Modifiers::default();
+        let mut unreportable = false;
+        for token in value.split('+') {
+            match token.trim().to_ascii_lowercase().as_str() {
+                "ctrl" | "control" => modifiers.control = true,
+                "alt" | "option" => modifiers.alt = true,
+                "cmd" | "command" | "super" => modifiers.platform = true,
+                "meta" | "hyper" => unreportable = true,
+                _ => return None,
+            }
+        }
+        Some(Self((!unreportable).then_some(modifiers)))
+    }
+
+    /// Whether `held` is exactly the configured combination. The application
+    /// then receives the click without it, as Herdr strips it.
+    pub(crate) fn matches(self, held: Modifiers) -> bool {
+        self.0 == Some(held)
+    }
+}
+
+impl<'de> Deserialize<'de> for RightClickPassthrough {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value)
+            .ok_or_else(|| serde::de::Error::custom("unsupported right_click_passthrough_modifier"))
+    }
+}
+
 // Playback paths and per-agent policy are parsed by the sound backend, not this editor.
 #[derive(Deserialize)]
 #[serde(default)]
@@ -199,6 +253,9 @@ pub(crate) struct Settings {
     pub sidebar_collapsed_mode: SidebarCollapsedMode,
     pub sidebar_start_collapsed: bool,
     pub name_prompts: NamePrompts,
+    /// Lines one wheel notch scrolls, Herdr's `ui.mouse_scroll_lines`.
+    pub mouse_scroll_lines: NonZeroU16,
+    pub right_click_passthrough: RightClickPassthrough,
     palettes: [palette::Palette; 2],
     original: persistence::Snapshot,
 }
@@ -226,6 +283,8 @@ impl std::fmt::Debug for Settings {
             .field("sidebar_collapsed_mode", &self.sidebar_collapsed_mode)
             .field("sidebar_start_collapsed", &self.sidebar_start_collapsed)
             .field("name_prompts", &self.name_prompts)
+            .field("mouse_scroll_lines", &self.mouse_scroll_lines)
+            .field("right_click_passthrough", &self.right_click_passthrough)
             .finish_non_exhaustive()
     }
 }
@@ -267,6 +326,11 @@ struct Ui {
     prompt_new_tab_name: Option<bool>,
     #[serde(deserialize_with = "crate::lenient::or_default")]
     prompt_new_workspace_name: Option<bool>,
+    // Zero, negative, and oversized counts keep Herdr's default.
+    #[serde(deserialize_with = "crate::lenient::or_default")]
+    mouse_scroll_lines: Option<NonZeroU16>,
+    #[serde(deserialize_with = "crate::lenient::or_default")]
+    right_click_passthrough_modifier: RightClickPassthrough,
 }
 
 #[derive(Default, Deserialize)]
@@ -291,9 +355,7 @@ struct HerdrToast {
     position: ToastPosition,
 }
 
-fn bottom_right<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<ToastPosition, D::Error> {
+fn bottom_right<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ToastPosition, D::Error> {
     Ok(crate::lenient::value(deserializer)?.unwrap_or(ToastPosition::BottomRight))
 }
 
@@ -408,6 +470,11 @@ impl Settings {
             sidebar_collapsed_mode: parsed.ui.sidebar_collapsed_mode,
             sidebar_start_collapsed: parsed.ui.sidebar_start_collapsed,
             name_prompts,
+            mouse_scroll_lines: parsed
+                .ui
+                .mouse_scroll_lines
+                .unwrap_or(DEFAULT_MOUSE_SCROLL_LINES),
+            right_click_passthrough: parsed.ui.right_click_passthrough_modifier,
             palettes,
             original,
         })

@@ -1,6 +1,7 @@
 //! Application mouse gestures take precedence over local selection and links.
 //! Shift keeps a gesture local; a forwarded drag stays with its pressed target.
-//! A pane's right-click reaches the application only when Herdr routes it there.
+//! A pane's right-click reaches the application only when Herdr routes it there,
+//! or when it is held with Herdr's `ui.right_click_passthrough_modifier`.
 
 use super::HerdrWindow;
 use crate::{
@@ -21,6 +22,9 @@ use serde_json::json;
 pub(crate) struct Gesture {
     hit: WheelTarget,
     button: MouseButton,
+    /// Modifiers the application never sees for this gesture: the
+    /// passthrough combination that sent a right-click to it.
+    strip: Modifiers,
     boot: String,
     epoch: u64,
     generation: u64,
@@ -49,6 +53,17 @@ pub(crate) struct SplitDrag {
     held: bool,
     want: Option<f32>,
     sent: Option<f32>,
+}
+
+/// `held` without the modifiers in `strip`.
+fn without(held: Modifiers, strip: Modifiers) -> Modifiers {
+    Modifiers {
+        control: held.control && !strip.control,
+        alt: held.alt && !strip.alt,
+        shift: held.shift && !strip.shift,
+        platform: held.platform && !strip.platform,
+        function: held.function && !strip.function,
+    }
 }
 
 fn button(button: MouseButton) -> Option<ClientMouseButton> {
@@ -147,21 +162,38 @@ impl HerdrWindow {
         }
     }
 
-    /// A pane's right-click opens its menu unless Herdr routes that pane's
-    /// right-clicks to the application, as every client of the daemon does. A
-    /// modifier always reaches the menu, so a routed pane can be switched back.
-    /// A popup has no menu, so a mouse-aware one keeps its right-clicks.
-    fn right_click_to_application(&self, target: &InputTarget, modifiers: Modifiers) -> bool {
+    /// The modifiers a right-click loses on its way to the application, or
+    /// `None` when it opens the pane menu instead. A pane's right-click opens
+    /// its menu unless Herdr routes that pane's right-clicks to the
+    /// application, as every client of the daemon does; otherwise a modifier
+    /// always reaches the menu, so a routed pane can be switched back. Holding
+    /// exactly the configured `right_click_passthrough_modifier` sends it to
+    /// the application without that modifier, as Herdr's TUI does. A popup
+    /// has no menu, so a mouse-aware one keeps its right-clicks.
+    fn right_click_to_application(
+        &self,
+        target: &InputTarget,
+        modifiers: Modifiers,
+    ) -> Option<Modifiers> {
+        if self
+            .settings
+            .shared
+            .as_ref()
+            .is_some_and(|shared| shared.right_click_passthrough.matches(modifiers))
+        {
+            return Some(modifiers);
+        }
         let InputTarget::Pane(id) = target else {
-            return true;
+            return Some(Modifiers::default());
         };
-        !modifiers.modified()
+        (!modifiers.modified()
             && self.live.snapshot.as_ref().is_some_and(|snapshot| {
                 snapshot
                     .panes
                     .iter()
                     .any(|pane| pane.pane_id == *id && pane.right_click_passthrough)
-            })
+            }))
+        .then_some(Modifiers::default())
     }
 
     /// Returns ownership, not queue success: an unavailable application must not
@@ -173,12 +205,20 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> bool {
         self.cancel_terminal_mouse(cx);
-        let Some(hit) = self.terminal_mouse_at(event.position).filter(|hit| {
-            hit.mouse_reporting
-                && !self.link_modifier_held(event.position, event.modifiers)
-                && (event.button != MouseButton::Right
-                    || self.right_click_to_application(&hit.target, event.modifiers))
-        }) else {
+        let Some((hit, strip)) = self
+            .terminal_mouse_at(event.position)
+            .filter(|hit| {
+                hit.mouse_reporting && !self.link_modifier_held(event.position, event.modifiers)
+            })
+            .and_then(|hit| {
+                let strip = if event.button == MouseButton::Right {
+                    self.right_click_to_application(&hit.target, event.modifiers)?
+                } else {
+                    Modifiers::default()
+                };
+                Some((hit, strip))
+            })
+        else {
             return false;
         };
         self.pressed_terminal_link = None;
@@ -187,12 +227,18 @@ impl HerdrWindow {
         cx.stop_propagation();
         if let Some(button) = button(event.button)
             && !cx.has_active_drag()
-            && self.send_mouse(&hit, ClientMouseKind::Down(button), event.modifiers, cx)
+            && self.send_mouse(
+                &hit,
+                ClientMouseKind::Down(button),
+                without(event.modifiers, strip),
+                cx,
+            )
             && let Some(snapshot) = &self.live.snapshot
         {
             self.terminal_mouse = Some(Gesture {
                 hit,
                 button: event.button,
+                strip,
                 boot: snapshot.boot_id.clone(),
                 epoch: self.selection_epoch,
                 generation: self.selected_generation,
@@ -249,8 +295,9 @@ impl HerdrWindow {
             }
             let hit = self.gesture_hit(gesture, event.position);
             let kind = button(gesture.button).map(ClientMouseKind::Drag);
+            let modifiers = without(event.modifiers, gesture.strip);
             if let (Some(hit), Some(kind)) = (hit, kind) {
-                if self.send_mouse(&hit, kind, event.modifiers, cx)
+                if self.send_mouse(&hit, kind, modifiers, cx)
                     && let Some(gesture) = &mut self.terminal_mouse
                 {
                     gesture.hit = hit;
@@ -298,6 +345,10 @@ impl HerdrWindow {
             .terminal_mouse
             .as_ref()
             .and_then(|gesture| self.gesture_hit(gesture, event.position));
+        let strip = self
+            .terminal_mouse
+            .as_ref()
+            .map_or_else(Modifiers::default, |gesture| gesture.strip);
         if hit.is_none() {
             self.cancel_terminal_mouse(cx);
             return true;
@@ -305,7 +356,12 @@ impl HerdrWindow {
         self.terminal_mouse = None;
         if let Some(hit) = hit
             && let Some(button) = button(event.button)
-            && self.send_mouse(&hit, ClientMouseKind::Up(button), event.modifiers, cx)
+            && self.send_mouse(
+                &hit,
+                ClientMouseKind::Up(button),
+                without(event.modifiers, strip),
+                cx,
+            )
             && let InputTarget::Pane(id) = &hit.target
         {
             // Finish targeted input before navigation fences the surface. This

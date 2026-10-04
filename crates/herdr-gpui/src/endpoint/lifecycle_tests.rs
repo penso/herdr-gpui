@@ -1372,6 +1372,146 @@ fn connected_mouse_focused_pane_preserves_drag_target_and_immediate_text(
     }
 }
 
+/// Herdr's `ui.right_click_passthrough_modifier` sends a right-click held
+/// with exactly that combination to the application, stripped of it for the
+/// whole gesture, while any other combination still opens the pane menu.
+#[gpui::test]
+fn connected_right_click_passthrough_modifier_reaches_the_application_stripped(
+    cx: &mut gpui::TestAppContext,
+) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, mut server) = connected_endpoint("ssh:mouse");
+    let control = gpui::Modifiers {
+        control: true,
+        ..Default::default()
+    };
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            prepare_mouse(view, endpoint);
+            let right = |view: &HerdrWindow, modifiers| MouseDownEvent {
+                position: mouse_position(view, 3.5, 4.5),
+                button: MouseButton::Right,
+                modifiers,
+                ..Default::default()
+            };
+            // Unconfigured, a modified right-click opens the menu.
+            assert!(!view.terminal_mouse_down(&right(view, control), window, cx));
+            view.settings.shared = Some(
+                crate::herdr_settings::Settings::parse_text(
+                    "[ui]\nright_click_passthrough_modifier = 'ctrl'",
+                )
+                .unwrap(),
+            );
+            for other in [
+                gpui::Modifiers::default(),
+                gpui::Modifiers {
+                    alt: true,
+                    ..Default::default()
+                },
+                gpui::Modifiers {
+                    control: true,
+                    alt: true,
+                    ..Default::default()
+                },
+            ] {
+                assert!(!view.terminal_mouse_down(&right(view, other), window, cx));
+                assert!(view.terminal_mouse.is_none());
+            }
+            assert!(view.terminal_mouse_down(&right(view, control), window, cx));
+            assert!(view.terminal_mouse_move(
+                &MouseMoveEvent {
+                    position: mouse_position(view, 5.5, 6.5),
+                    pressed_button: Some(MouseButton::Right),
+                    modifiers: gpui::Modifiers {
+                        control: true,
+                        alt: true,
+                        ..Default::default()
+                    },
+                },
+                cx
+            ));
+            assert!(view.terminal_mouse_up(
+                &MouseUpEvent {
+                    position: mouse_position(view, 5.5, 6.5),
+                    button: MouseButton::Right,
+                    modifiers: control,
+                    ..Default::default()
+                },
+                cx
+            ));
+        });
+    });
+    let mut drag = mouse_event(ClientMouseKind::Drag(ClientMouseButton::Right), 4, 5);
+    if let ClientPaneInputEvent::Mouse { modifiers, .. } = &mut drag {
+        // Alt, pressed after the gesture began, still reaches the application.
+        *modifiers = 1 << 2;
+    }
+    for event in [
+        mouse_event(ClientMouseKind::Down(ClientMouseButton::Right), 2, 3),
+        drag,
+        mouse_event(ClientMouseKind::Up(ClientMouseButton::Right), 4, 5),
+    ] {
+        assert_eq!(
+            server.receive(),
+            ClientMessage::ClientShellPaneInput {
+                pane_id: "w1:p1".into(),
+                events: vec![event],
+            }
+        );
+    }
+}
+
+/// Herdr's `ui.mouse_scroll_lines` sets how far one wheel notch scrolls.
+#[gpui::test]
+fn connected_wheel_notch_scrolls_the_shared_mouse_scroll_lines(cx: &mut gpui::TestAppContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, mut server) = connected_endpoint("ssh:wheel");
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            prepare_mouse(view, endpoint);
+            let notch = |view: &HerdrWindow, notches: f32| gpui::ScrollWheelEvent {
+                position: mouse_position(view, 3.5, 4.5),
+                delta: gpui::ScrollDelta::Lines(point(
+                    0.,
+                    notches * f32::from(crate::terminal::PLATFORM_NOTCH_LINES),
+                )),
+                touch_phase: gpui::TouchPhase::Moved,
+                ..Default::default()
+            };
+            // Herdr's default of three before the shared config loads.
+            view.settings.shared = None;
+            view.scroll_wheel(&notch(view, 1.), window, cx);
+            view.settings.shared = Some(
+                crate::herdr_settings::Settings::parse_text("[ui]\nmouse_scroll_lines = 5")
+                    .unwrap(),
+            );
+            view.scroll_wheel(&notch(view, -1.), window, cx);
+        });
+    });
+    for (kind, lines) in [
+        (ClientMouseKind::ScrollUp, 3),
+        (ClientMouseKind::ScrollDown, 5),
+    ] {
+        let mut event = mouse_event(kind, 2, 3);
+        if let ClientPaneInputEvent::Mouse { lines: count, .. } = &mut event {
+            *count = lines;
+        }
+        assert_eq!(
+            server.receive(),
+            ClientMessage::ClientShellPaneInput {
+                pane_id: "w1:p1".into(),
+                events: vec![event],
+            }
+        );
+    }
+}
+
 #[gpui::test]
 fn connected_mouse_inactive_pane_receives_first_click_before_focus_fence(
     cx: &mut gpui::TestAppContext,

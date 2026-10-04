@@ -11,6 +11,8 @@ use gpui::{
     Bounds, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent,
     TouchPhase, point, px, size,
 };
+use std::num::NonZeroU16;
+
 use herdr_client::protocol::{
     CellData, ClientKeyCode, ClientKeyKind, ClientMouseGeometry, ClientMouseKind,
     ClientMousePosition, ClientPaneInputEvent, ClientSurfaceSize, CursorState, FrameData,
@@ -144,6 +146,14 @@ pub(crate) fn pane_at(
         .map(|pane| pane.pane_id.as_str())
 }
 
+/// Lines GPUI already reports for one discrete wheel notch. Linux and FreeBSD
+/// use GPUI's fixed three; Windows applies the system wheel setting, assumed
+/// at its default of three; macOS reports about one, with acceleration.
+#[cfg(target_os = "macos")]
+pub(crate) const PLATFORM_NOTCH_LINES: u16 = 1;
+#[cfg(not(target_os = "macos"))]
+pub(crate) const PLATFORM_NOTCH_LINES: u16 = 3;
+
 #[derive(Default)]
 pub struct WheelAccumulator {
     target: Option<InputTarget>,
@@ -151,11 +161,15 @@ pub struct WheelAccumulator {
 }
 
 impl WheelAccumulator {
+    /// Discrete wheel notches scroll `notch_lines` each, as Herdr's
+    /// `ui.mouse_scroll_lines` asks; precise (trackpad) pixel motion keeps
+    /// following the pointer one cell height per line.
     pub fn lines(
         &mut self,
         target: &InputTarget,
         event: &ScrollWheelEvent,
         cell_height: f32,
+        notch_lines: NonZeroU16,
     ) -> i16 {
         if self.target.as_ref() != Some(target) || matches!(event.touch_phase, TouchPhase::Started)
         {
@@ -164,7 +178,10 @@ impl WheelAccumulator {
         }
         let delta = match event.delta {
             ScrollDelta::Pixels(delta) => delta.y.to_f64() as f32 / cell_height,
-            ScrollDelta::Lines(delta) => delta.y,
+            // Multiply before dividing so the common equal counts stay exact.
+            ScrollDelta::Lines(delta) => {
+                delta.y * f32::from(notch_lines.get()) / f32::from(PLATFORM_NOTCH_LINES)
+            }
         };
         if !delta.is_finite() {
             return 0;
@@ -544,6 +561,45 @@ pub(crate) fn in_rect(rect: SurfaceRect, x: u16, y: u16) -> bool {
 mod tests {
     use super::*;
 
+    /// The scroll count that leaves the platform's own notch size unchanged.
+    const NEUTRAL: NonZeroU16 = NonZeroU16::new(PLATFORM_NOTCH_LINES).unwrap();
+
+    #[test]
+    fn wheel_notches_scroll_the_configured_lines_and_pixels_do_not() {
+        let pane = InputTarget::Pane("pane".into());
+        let notch = |count: f32| ScrollWheelEvent {
+            delta: ScrollDelta::Lines(point(0., count * f32::from(PLATFORM_NOTCH_LINES))),
+            touch_phase: TouchPhase::Moved,
+            ..Default::default()
+        };
+        for lines in [1, 3, 5, 7] {
+            let lines = NonZeroU16::new(lines).unwrap();
+            let mut wheel = WheelAccumulator::default();
+            let expected = lines.get() as i16;
+            assert_eq!(wheel.lines(&pane, &notch(1.), CELL_HEIGHT, lines), expected);
+            assert_eq!(
+                wheel.lines(&pane, &notch(-2.), CELL_HEIGHT, lines),
+                -2 * expected
+            );
+        }
+        // Half a notch at five lines keeps its remainder for the next half.
+        let mut wheel = WheelAccumulator::default();
+        let five = NonZeroU16::new(5).unwrap();
+        assert_eq!(wheel.lines(&pane, &notch(0.5), CELL_HEIGHT, five), 2);
+        assert_eq!(wheel.lines(&pane, &notch(0.5), CELL_HEIGHT, five), 3);
+        // Large counts stay within the per-event bound.
+        let huge = NonZeroU16::new(u16::MAX).unwrap();
+        assert_eq!(wheel.lines(&pane, &notch(1.), CELL_HEIGHT, huge), 128);
+        // Trackpad pixels map one cell height to one line whatever the count.
+        let pixels = ScrollWheelEvent {
+            delta: ScrollDelta::Pixels(point(px(0.), px(CELL_HEIGHT * 2.))),
+            touch_phase: TouchPhase::Started,
+            ..Default::default()
+        };
+        let mut wheel = WheelAccumulator::default();
+        assert_eq!(wheel.lines(&pane, &pixels, CELL_HEIGHT, five), 2);
+    }
+
     #[test]
     fn wheel_preserves_fractions_and_resets_on_target_direction_or_gesture_change() {
         let mut wheel = WheelAccumulator::default();
@@ -555,19 +611,19 @@ mod tests {
             touch_phase: TouchPhase::Moved,
             ..Default::default()
         };
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
-        assert_eq!(wheel.lines(&other, &event, CELL_HEIGHT), 0);
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 0);
+        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 1);
+        assert_eq!(wheel.lines(&other, &event, CELL_HEIGHT, NEUTRAL), 0);
+        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT, NEUTRAL), 0);
         event.touch_phase = TouchPhase::Started;
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT, NEUTRAL), 0);
         event.touch_phase = TouchPhase::Moved;
         event.delta = ScrollDelta::Lines(point(0., -1.));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), -1);
+        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT, NEUTRAL), -1);
         event.delta = ScrollDelta::Lines(point(0., 1e9));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 128);
+        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT, NEUTRAL), 128);
         event.delta = ScrollDelta::Lines(point(10., 0.));
-        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
+        assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT, NEUTRAL), 0);
     }
 
     #[test]
@@ -580,15 +636,15 @@ mod tests {
                 touch_phase: TouchPhase::Moved,
                 ..Default::default()
             };
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
+            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 0);
             event.delta = ScrollDelta::Lines(point(0., invalid));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
+            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 0);
             event.delta = ScrollDelta::Lines(point(0., 0.25));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
+            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 1);
             event.delta = ScrollDelta::Lines(point(0., -1e9));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), -128);
+            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), -128);
             event.delta = ScrollDelta::Lines(point(0., 0.));
-            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
+            assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT, NEUTRAL), 0);
         }
     }
 
@@ -1010,10 +1066,10 @@ mod tests {
             touch_phase: TouchPhase::Moved,
             ..Default::default()
         };
-        assert_eq!(wheel.lines(&pane, &event, 30.), 0);
-        assert_eq!(wheel.lines(&pane, &event, 30.), 1);
+        assert_eq!(wheel.lines(&pane, &event, 30., NEUTRAL), 0);
+        assert_eq!(wheel.lines(&pane, &event, 30., NEUTRAL), 1);
         event.delta = ScrollDelta::Lines(point(0., 2.));
-        assert_eq!(wheel.lines(&pane, &event, 30.), 2);
+        assert_eq!(wheel.lines(&pane, &event, 30., NEUTRAL), 2);
     }
 
     #[test]
