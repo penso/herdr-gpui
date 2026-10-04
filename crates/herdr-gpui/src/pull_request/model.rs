@@ -48,6 +48,56 @@ pub(crate) struct PullRequest {
     #[serde(default)]
     pub(super) status_check_rollup: Option<Vec<Check>>,
     pub(super) head_repository_owner: Owner,
+    /// GitHub's opaque node ID, the subject of comment and merge mutations.
+    /// Empty when absent or malformed, which leaves those actions unavailable.
+    #[serde(default)]
+    pub id: String,
+    /// The head commit the shown checks belong to. A merge names it, so
+    /// GitHub refuses one if the branch moved after the user looked.
+    #[serde(default)]
+    pub head_ref_oid: String,
+    /// The merge methods the repository allows, in GitHub's own order.
+    #[serde(skip)]
+    pub merge_methods: Vec<MergeMethod>,
+}
+
+/// How a pull request is merged: GitHub's `PullRequestMergeMethod`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MergeMethod {
+    Merge,
+    Squash,
+    Rebase,
+}
+
+impl MergeMethod {
+    pub(crate) const ALL: [Self; 3] = [Self::Merge, Self::Squash, Self::Rebase];
+
+    /// The enum value the `mergePullRequest` mutation takes.
+    pub(crate) fn graphql(self) -> &'static str {
+        match self {
+            Self::Merge => "MERGE",
+            Self::Squash => "SQUASH",
+            Self::Rebase => "REBASE",
+        }
+    }
+
+    /// The repository setting that allows this method.
+    pub(super) fn setting(self) -> &'static str {
+        match self {
+            Self::Merge => "mergeCommitAllowed",
+            Self::Squash => "squashMergeAllowed",
+            Self::Rebase => "rebaseMergeAllowed",
+        }
+    }
+
+    /// The confirming button's label, as GitHub words it.
+    pub(crate) fn action(self) -> &'static str {
+        match self {
+            Self::Merge => "Create a merge commit",
+            Self::Squash => "Squash and merge",
+            Self::Rebase => "Rebase and merge",
+        }
+    }
 }
 
 /// GitHub's `PullRequestState`. A value this client does not know is not a
@@ -168,6 +218,9 @@ pub(super) struct Owner {
 pub(super) struct Check {
     #[serde(rename = "__typename")]
     kind: CheckKind,
+    /// A check run's `name` or a status context's `context`; cleaned on parse.
+    #[serde(default, alias = "context")]
+    pub(super) name: String,
     #[serde(default)]
     state: Outcome,
     #[serde(default)]
@@ -225,7 +278,7 @@ impl From<Option<String>> for CheckStatus {
 /// the summary reads in, and indexes the tally in `checks`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(from = "Option<String>")]
-pub(super) enum Outcome {
+pub(crate) enum Outcome {
     Passed,
     Failed,
     #[default]
@@ -314,6 +367,14 @@ impl PullRequest {
         }
     }
 
+    /// Each reported check by name, in GitHub's order, for the checks list.
+    pub fn check_list(&self) -> impl Iterator<Item = (&str, Outcome)> {
+        self.status_check_rollup
+            .iter()
+            .flatten()
+            .map(|check| (check.name.as_str(), check.outcome()))
+    }
+
     pub fn checks(&self) -> String {
         let mut counts = [0usize; Outcome::ALL.len()];
         for check in self.status_check_rollup.iter().flatten() {
@@ -386,10 +447,16 @@ pub(crate) fn fixture() -> crate::Result<PullRequest> {
         "additions": 1730, "deletions": 31, "changedFiles": 16,
         "updatedAt": "2026-09-20T12:00:00Z", "mergeStateStatus": "BLOCKED", "reviewDecision": "REVIEW_REQUIRED",
         "headRepositoryOwner": {"login": "example"},
+        "id": "PR_kwDOfixture8", "headRefOid": "0123456789abcdef0123456789abcdef01234567",
         "statusCheckRollup": [
-            {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "SUCCESS"},
-            {"__typename": "StatusContext", "state": "FAILURE"},
-            {"__typename": "CheckRun", "status": "IN_PROGRESS", "conclusion": null}
+            {"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"__typename": "StatusContext", "context": "ci/lint", "state": "FAILURE"},
+            {"__typename": "CheckRun", "name": "build", "status": "IN_PROGRESS", "conclusion": null}
         ]
-    }]).to_string(), "example", "project", "feature")?.ok_or(Error::PrRepository)
+    }]).to_string(), "example", "project", "feature")?
+    .map(|mut pr| {
+        pr.merge_methods = MergeMethod::ALL.to_vec();
+        pr
+    })
+    .ok_or(Error::PrRepository)
 }

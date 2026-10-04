@@ -286,6 +286,28 @@ pub enum Error {
     GitHubNetwork(#[source] ureq::Error),
     #[error("GitHub query failed. Check token repository permissions and rate limits.")]
     GitHubQuery,
+    /// GitHub's own refusal of a requested change, cleaned and bounded.
+    #[error("GitHub refused the request: {0}")]
+    GitHubRejected(String),
+    #[error("A pull request action is already running.")]
+    PrActionBusy,
+    #[error(
+        "This pull request cannot be acted on here: it is not open, or its details are incomplete. Refresh and try again."
+    )]
+    PrActionTarget,
+    #[error("Enter a comment of at most 4096 characters.")]
+    PrCommentBody,
+    #[error("The branch changed since this dialog opened. Review the pull request again.")]
+    PrMergeChanged,
+    #[error("The repository does not allow this merge method.")]
+    PrMergeMethod,
+    #[error("Pull request worker stopped. Check the pull request on GitHub before retrying.")]
+    PrActionWorker,
+    #[error("Could not start the pull request worker.")]
+    PrActionProcess {
+        #[source]
+        source: io::Error,
+    },
     #[error("Invalid GitHub authorization header.")]
     GitHubHeader(#[source] ureq::http::header::InvalidHeaderValue),
     #[error("Invalid GitHub device authorization response.")]

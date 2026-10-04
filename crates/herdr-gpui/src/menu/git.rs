@@ -1,5 +1,6 @@
 //! The titlebar's Git actions popup: commit, push, and pull request creation
-//! for the focused local checkout.
+//! for the focused local checkout, plus review, comment, and merge for its
+//! open pull request.
 use super::{Page, accent, danger};
 use crate::{
     HerdrWindow,
@@ -14,14 +15,20 @@ pub(super) enum Row {
     Commit,
     Push,
     PullRequest,
+    Review,
+    Comment,
+    Merge,
 }
 
 impl Row {
-    fn icon(self) -> &'static str {
+    pub(super) fn icon(self) -> &'static str {
         match self {
             Self::Commit => "icons/pencil.svg",
             Self::Push => "icons/chevron-up.svg",
             Self::PullRequest => "icons/git-branch.svg",
+            Self::Review => "icons/pulse.svg",
+            Self::Comment => "icons/plus.svg",
+            Self::Merge => "icons/arrow-right.svg",
         }
     }
 }
@@ -58,6 +65,7 @@ impl HerdrWindow {
         self.git
             .track_listed(self.listed_git_inputs(), self.active, now);
         changed |= self.git.poll(now);
+        changed |= self.update_pr_actions(now);
         changed
     }
 
@@ -91,7 +99,7 @@ impl HerdrWindow {
 
     /// The checkout the chrome acts on: the focused workspace's, when it is one
     /// this client may run Git in.
-    fn git_input(&self) -> Option<crate::pull_request::Input> {
+    pub(super) fn git_input(&self) -> Option<crate::pull_request::Input> {
         if !self.local_git_endpoint() {
             return None;
         }
@@ -164,7 +172,7 @@ impl HerdrWindow {
 
     /// Only an open pull request can be opened; a merged or closed one leaves
     /// creating the next one as the action.
-    fn git_open_pull_request(&self) -> Option<&crate::pull_request::PullRequest> {
+    pub(super) fn git_open_pull_request(&self) -> Option<&crate::pull_request::PullRequest> {
         self.git_pull_request()
             .filter(|pr| pr.state == PrState::Open)
     }
@@ -173,7 +181,7 @@ impl HerdrWindow {
         if self.git.tracked().is_none() {
             return Vec::new();
         }
-        vec![
+        let mut rows = vec![
             (Row::Commit, "Commit...".into()),
             (Row::Push, "Push".into()),
             match self.git_open_pull_request() {
@@ -183,7 +191,20 @@ impl HerdrWindow {
                 ),
                 None => (Row::PullRequest, "Create pull request".into()),
             },
-        ]
+        ];
+        // Acting on a pull request needs its identity, which only an open,
+        // fully reported one carries.
+        if let Some(pr) = self.git_open_pull_request()
+            && self.pr_actions.target().is_some()
+        {
+            rows.push((Row::Review, "Checks and comments".into()));
+            rows.push((Row::Comment, "Comment...".into()));
+            // GitHub refuses to merge a draft; the repository may allow nothing.
+            if !pr.is_draft && !pr.merge_methods.is_empty() {
+                rows.push((Row::Merge, "Merge...".into()));
+            }
+        }
+        rows
     }
 
     pub(super) fn activate_git_row(
@@ -192,7 +213,8 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.git.running().is_some() {
+        // One explicit operation at a time, Git or GitHub.
+        if self.git.running().is_some() || self.pr_actions.running().is_some() {
             return;
         }
         match row {
@@ -209,6 +231,9 @@ impl HerdrWindow {
                 }
                 self.start_git(Action::CreatePullRequest);
             }
+            Row::Review => self.open_pr_review(),
+            Row::Comment => self.open_pr_comment(),
+            Row::Merge => self.open_pr_merge(),
         }
         cx.notify();
     }
@@ -479,7 +504,7 @@ impl HerdrWindow {
                 .border_t_1()
                 .border_color(rgb(theme.active)),
         );
-        let running = self.git.running().is_some();
+        let running = self.git.running().is_some() || self.pr_actions.running().is_some();
         for (row, label) in self.git_rows() {
             let selected = self.menu.git_selected == Some(row);
             panel = panel.child(
@@ -554,6 +579,7 @@ impl HerdrWindow {
                 );
             }
         }
+        panel = self.render_pr_action_status(panel, cx);
         for error in self
             .git
             .error()

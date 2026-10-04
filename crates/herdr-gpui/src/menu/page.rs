@@ -37,6 +37,11 @@ pub(crate) enum Page {
     /// Titlebar Git actions for the focused checkout, and its commit dialog.
     Git,
     GitCommit,
+    /// The open pull request's checks and review conversation.
+    PrReview,
+    PrComment,
+    /// Choosing a merge method, and confirming it.
+    PrMerge,
     Dialog(WorkspaceAction),
     /// Moving a linked worktree to another host.
     Teleport,

@@ -10,6 +10,7 @@ mod git;
 mod github;
 mod page;
 mod pr;
+mod pr_actions;
 mod sessions;
 mod settings;
 mod state;

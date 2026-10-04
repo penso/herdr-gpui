@@ -4,7 +4,7 @@ use super::{Auth, Device, Note, Profile, Reply, SETUP_MESSAGE, Store, VERIFY_URL
 use super::{
     credentials,
     device::TokenResponse,
-    http::{LIMIT, authorization, graphql, pr_cooldown, response},
+    http::{LIMIT, authorization, graphql, pr_cooldown, rejection, response},
     log::{header, kind, public_sso, token_kind},
     store,
     store::{KEYRING, credential_bytes, resolve_token},
@@ -987,5 +987,27 @@ fn token_kind_names_the_credential_without_exposing_it() {
         ("fixture", "unknown"),
     ] {
         assert_eq!(token_kind(&SecretString::from(token)), expected);
+    }
+}
+
+#[test]
+fn a_refusal_shows_github_reason_cleaned_and_bounded() {
+    let errors = serde_json::json!([
+        {"type": "UNPROCESSABLE", "message": "Head branch\nwas modified.\u{202e} Review and try again."},
+        {"message": "second"}
+    ]);
+    assert_eq!(
+        rejection(&errors).as_deref(),
+        Some("Head branch was modified.  Review and try again.")
+    );
+    let long = serde_json::json!([{"message": "x".repeat(5000)}]);
+    assert_eq!(rejection(&long).unwrap().chars().count(), 240);
+    for errors in [
+        serde_json::json!([]),
+        serde_json::json!([{"message": "   "}]),
+        serde_json::json!([{"message": 7}]),
+        serde_json::json!({"message": "not a list"}),
+    ] {
+        assert_eq!(rejection(&errors), None, "{errors}");
     }
 }
