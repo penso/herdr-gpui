@@ -6,17 +6,25 @@
 use super::layout_tests;
 use super::{
     ARROW_RESERVE, ICON_RESERVE, STATUS_WIDTH,
-    agents::{Indicators, status_indicator, status_mark},
+    agents::{Indicators, status_indicator},
     cell::{RowContext, RowState},
-    glyph_width,
-    layout::SidebarDensity,
-    line_height, segment_budgets,
-    tokens::{ResolvedToken, TextRole, TokenKind, budgets, separator},
+    glyph_width, line_height, segment_budgets,
+    tokens::ResolvedToken,
 };
 use crate::config::{FontConfig, Theme};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 use std::sync::Arc;
+
+mod badge;
+mod configured;
+
+pub(crate) use badge::compact;
+pub(super) use badge::{PrBadge, RowBadge, Upstream};
+use configured::configured_lines;
+pub(super) use configured::{
+    TokenLook, configured_status, configured_status_style, leading_status, token_column,
+};
 
 /// What a row shows in its leading icon slot: a repository owner's avatar when
 /// one is cached, the GitHub mark while it is not, and nothing for the child
@@ -164,134 +172,6 @@ pub(super) fn tree_lines(
     ]
 }
 
-/// What a row shows on its right edge: the cached pull request, and whether
-/// the checkout has work that is not committed yet.
-pub(super) struct RowBadge {
-    pub(super) pr: Option<PrBadge>,
-    pub(super) dirty: bool,
-    /// The work moved to another host; this checkout stays behind.
-    pub(super) teleported: bool,
-}
-
-impl RowBadge {
-    pub(super) fn lines(&self, layout: &dyn SidebarDensity) -> usize {
-        1 + usize::from(self.pr.is_some() && layout.pr_counts())
-    }
-
-    /// Nothing to draw is nothing to reserve, so a row with neither keeps its
-    /// full label width.
-    pub(super) fn new(pr: Option<PrBadge>, dirty: bool, teleported: bool) -> Option<Self> {
-        (pr.is_some() || dirty || teleported).then_some(Self {
-            pr,
-            dirty,
-            teleported,
-        })
-    }
-
-    pub(super) fn width(&self, font: &FontConfig, layout: &dyn SidebarDensity) -> f32 {
-        let pr = self.pr.as_ref().map_or(0., |pr| pr.width(font, layout));
-        // Reserve the icon and the gap before the PR number, even at small fonts.
-        let mark = line_height(font).min(18.) + glyph_width(font);
-        pr + mark * f32::from(u8::from(self.dirty) + u8::from(self.teleported))
-    }
-}
-
-/// Cached pull request state for a worktree row: the number carries the
-/// lifecycle/readiness color, the counts sit under it.
-pub(super) struct PrBadge {
-    pub(super) number: String,
-    pub(super) color: u32,
-    pub(super) additions: String,
-    pub(super) deletions: String,
-}
-
-impl PrBadge {
-    pub(super) fn new(pr: &crate::pull_request::PullRequest, theme: &Theme) -> Self {
-        Self {
-            number: format!("#{}", pr.number),
-            color: pr.color(theme),
-            additions: format!("+{}", compact(pr.additions)),
-            deletions: format!("-{}", compact(pr.deletions)),
-        }
-    }
-
-    /// Reserved width. Sidebar labels are monospace by default and digits are
-    /// near-uniform elsewhere, so an em-fraction per glyph bounds both lines;
-    /// a wider face truncates the counts rather than eating the label.
-    pub(super) fn width(&self, font: &FontConfig, layout: &dyn SidebarDensity) -> f32 {
-        let mut glyphs = self.number.chars().count();
-        if layout.pr_counts() {
-            glyphs =
-                glyphs.max(self.additions.chars().count() + self.deletions.chars().count() + 1);
-        }
-        (glyph_width(font) * glyphs as f32).ceil()
-    }
-}
-
-/// How far the checked-out branch has drifted from its upstream, as the
-/// daemon's `git_status` token reports it: `↑` commits to push in green, `↓`
-/// commits to pull in red, painted the way the TUI paints them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Upstream {
-    ahead: usize,
-    behind: usize,
-}
-
-impl Upstream {
-    /// Nothing while the branch is in sync, has no upstream, or the daemon's
-    /// sidebar config leaves `git_status` out and so never computes it.
-    pub(super) fn new(counts: Option<(usize, usize)>) -> Option<Self> {
-        let (ahead, behind) = counts?;
-        (ahead > 0 || behind > 0).then_some(Self { ahead, behind })
-    }
-
-    /// `↑ahead` and `↓behind`, each only when nonzero.
-    fn parts(self) -> impl Iterator<Item = (String, bool)> {
-        [
-            (self.ahead, '\u{2191}', true),
-            (self.behind, '\u{2193}', false),
-        ]
-        .into_iter()
-        .filter(|(count, _, _)| *count > 0)
-        .map(|(count, arrow, ahead)| (format!("{arrow}{count}"), ahead))
-    }
-
-    /// Width at `glyph`, the two counts a glyph apart as in `↑2 ↓18`.
-    pub(super) fn width(self, glyph: f32) -> f32 {
-        let (glyphs, parts) = self.parts().fold((0, 0), |(glyphs, parts), (text, _)| {
-            (glyphs + text.chars().count(), parts + 1)
-        });
-        ((glyphs + parts - 1) as f32 * glyph).ceil()
-    }
-
-    pub(super) fn element(self, key: &str, glyph: f32, theme: &Theme) -> Div {
-        let (ahead, behind) = (theme.ink(theme.palette[2]), theme.ink(theme.palette[1]));
-        div()
-            .debug_selector(|| format!("upstream-{key}"))
-            .w(px(self.width(glyph)))
-            .flex_none()
-            .flex()
-            .gap(px(glyph))
-            .overflow_hidden()
-            .children(self.parts().map(|(text, is_ahead)| {
-                div()
-                    .flex_none()
-                    .text_color(rgb(if is_ahead { ahead } else { behind }))
-                    .child(label_text(&text))
-            }))
-    }
-}
-
-/// Four digits of churn is already a big diff; abbreviate past that so the
-/// column stays narrow enough to leave the branch readable. The titlebar's Git
-/// badge reuses it so one PR reads the same in both places.
-pub(crate) fn compact(lines: u64) -> String {
-    match lines {
-        0..=9999 => lines.to_string(),
-        _ => format!("{}k", lines / 1000),
-    }
-}
-
 /// A row's first line: segments joined by upstream's separator, the primary one
 /// carrying the row's weight and color while the rest stay muted. Segments are
 /// placed at measured offsets rather than flexed, because GPUI 0.2.2 only
@@ -388,269 +268,6 @@ pub(super) fn removing_dot(selector: &'static str, theme: &Theme) -> Div {
                     |dot, delta| dot.opacity(0.3 + 0.7 * (delta * std::f32::consts::PI).sin()),
                 ),
         )
-}
-
-/// What colors a configured row's tokens: the row they paint and its state.
-#[derive(Clone, Copy)]
-pub(super) struct TokenLook {
-    pub(super) kind: RowKind,
-    pub(super) status: AgentStatus,
-    pub(super) focused: bool,
-    /// A teleported checkout fades its name, as the native rows do.
-    pub(super) teleported: bool,
-}
-
-fn token_appearance(kind: &TokenKind, look: TokenLook, cx: &RowContext<'_>) -> (u32, FontWeight) {
-    let theme = cx.theme;
-    let (name, weight, secondary) = row_text(look.kind, look.focused, theme);
-    match kind {
-        TokenKind::StateIcon | TokenKind::Text(_, TextRole::Status) => {
-            (cx.indicators.color(look.status), FontWeight::NORMAL)
-        }
-        TokenKind::Text(_, TextRole::Workspace) if look.teleported => {
-            (left_behind(name, theme), weight)
-        }
-        TokenKind::Text(_, TextRole::Workspace) => (name, weight),
-        TokenKind::Text(_, TextRole::Secondary | TextRole::Agent) => {
-            (secondary, FontWeight::NORMAL)
-        }
-        _ => (theme.muted, FontWeight::NORMAL),
-    }
-}
-
-fn styled(
-    (color, weight): (u32, FontWeight),
-    style: crate::config::TokenStyle,
-    theme: &Theme,
-) -> (u32, FontWeight) {
-    let color = style.fg.unwrap_or(color);
-    let color = if style.dim == Some(true) {
-        theme.dimmed(color)
-    } else {
-        color
-    };
-    let weight = match style.bold {
-        Some(true) => FontWeight::BOLD,
-        Some(false) => FontWeight::NORMAL,
-        None => weight,
-    };
-    (color, weight)
-}
-
-/// Status icons and git counters retain their full width when text truncates.
-fn fixed_glyphs(kind: &TokenKind, glyph: f32, status_width: f32) -> usize {
-    match kind {
-        TokenKind::StateIcon => (status_width / glyph).ceil() as usize,
-        TokenKind::GitStatus { ahead, behind } => {
-            let count = |n: &usize| format!("{n}").chars().count() + 1;
-            usize::from(*ahead > 0) * count(ahead)
-                + usize::from(*behind > 0) * count(behind)
-                + usize::from(*ahead > 0 && *behind > 0)
-        }
-        _ => 0,
-    }
-}
-
-/// Fixed token widths preserve GPUI's text truncation during layout.
-fn token_line(row: &[ResolvedToken], look: TokenLook, width: f32, cx: &RowContext<'_>) -> Div {
-    let status = look.status;
-    let (font, theme) = (cx.font, cx.theme);
-    let glyph = glyph_width(font);
-    let budgets = budgets(
-        row,
-        |kind| fixed_glyphs(kind, glyph, cx.indicators.width(font)),
-        (width / glyph).floor() as usize,
-    );
-    let visible: Vec<_> = row
-        .iter()
-        .zip(budgets)
-        .filter_map(|(token, width)| Some((token, width?)))
-        .collect();
-    let used = visible.iter().map(|(_, width)| width).sum::<usize>()
-        + visible
-            .windows(2)
-            .map(|pair| separator(pair[0].0, pair[1].0).chars().count())
-            .sum::<usize>();
-    let slack = (width - used as f32 * glyph).max(0.);
-    let last_text = visible
-        .iter()
-        .rposition(|(token, _)| token.kind.text().is_some());
-    let parts = visible.iter().enumerate().map(|(index, (token, budget))| {
-        let gap = if index == 0 {
-            ""
-        } else {
-            separator(visible[index - 1].0, token)
-        };
-        let advance = *budget as f32 * glyph + if last_text == Some(index) { slack } else { 0. };
-        let (color, weight) = styled(token_appearance(&token.kind, look, cx), token.style, theme);
-        let cell = div();
-        let cell = match &token.kind {
-            TokenKind::StateIcon => cell
-                .h(px(line_height(font)))
-                .flex()
-                .justify_center()
-                .debug_selector(|| "inline-status-cell".into())
-                .child(
-                    status_mark(
-                        status,
-                        font,
-                        cx.indicators,
-                        color,
-                        weight == FontWeight::BOLD,
-                    )
-                    .debug_selector(|| "inline-status-mark".into()),
-                ),
-            TokenKind::GitStatus { ahead, behind } => cell.flex().gap(px(glyph)).children(
-                [("↑", *ahead, 2), ("↓", *behind, 1)]
-                    .into_iter()
-                    .filter(|(_, count, _)| *count > 0)
-                    .map(|(arrow, count, palette)| {
-                        let (color, weight) = styled(
-                            (theme.ink(theme.palette[palette]), FontWeight::NORMAL),
-                            token.style,
-                            theme,
-                        );
-                        div()
-                            .flex_none()
-                            .text_color(rgb(color))
-                            .font_weight(weight)
-                            .child(label_text(&format!("{arrow}{count}")))
-                    }),
-            ),
-            TokenKind::Text(text, _) => cell
-                .truncate()
-                .font_weight(weight)
-                .text_color(rgb(color))
-                .child(shared_label_text(text.clone())),
-        };
-        (gap, advance, cell)
-    });
-    place_line(parts, width, font, theme.muted)
-}
-
-/// The `state_icon` leading a configured row's first line. It takes the row's
-/// status slot; a configured row without one shows no status of its own.
-pub(super) fn leading_status(lines: &[Vec<ResolvedToken>]) -> Option<&ResolvedToken> {
-    lines
-        .first()
-        .and_then(|line| line.first())
-        .filter(|token| matches!(token.kind, TokenKind::StateIcon))
-}
-
-/// The color, and whether bold, a leading `state_icon` paints the status in.
-pub(super) fn configured_status_style(
-    token: &ResolvedToken,
-    status: AgentStatus,
-    cx: &RowContext<'_>,
-) -> (u32, bool) {
-    let (color, weight) = styled(
-        (cx.indicators.color(status), FontWeight::NORMAL),
-        token.style,
-        cx.theme,
-    );
-    (color, weight == FontWeight::BOLD)
-}
-
-/// The status mark a leading `state_icon` styles, offset onto the first line.
-pub(super) fn configured_status(
-    token: &ResolvedToken,
-    status: AgentStatus,
-    cx: &RowContext<'_>,
-) -> Div {
-    let (color, bold) = configured_status_style(token, status, cx);
-    status_mark(status, cx.font, cx.indicators, color, bold)
-}
-
-/// A line's tokens, less the leading `state_icon` the status slot draws.
-fn line_tokens(index: usize, line: &[ResolvedToken]) -> &[ResolvedToken] {
-    match line.split_first() {
-        Some((first, rest)) if index == 0 && matches!(first.kind, TokenKind::StateIcon) => rest,
-        _ => line,
-    }
-}
-
-fn line_selector(key: &str, index: usize) -> String {
-    match index {
-        0 => format!("name-{key}"),
-        1 => format!("detail-{key}"),
-        index => format!("line-{key}-{index}"),
-    }
-}
-
-/// Configured lines stacked at `width`, for layouts that draw their own
-/// status and icons beside the text.
-pub(super) fn token_column(
-    key: &str,
-    lines: &[Vec<ResolvedToken>],
-    look: TokenLook,
-    width: f32,
-    cx: &RowContext<'_>,
-) -> Div {
-    lines.iter().enumerate().fold(
-        div().w(px(width)).flex_none().flex().flex_col(),
-        |column, (index, line)| {
-            column.child(
-                token_line(line_tokens(index, line), look, width, cx)
-                    .debug_selector(|| line_selector(key, index)),
-            )
-        },
-    )
-}
-
-fn configured_lines(
-    mut column: Div,
-    key: &str,
-    lines: &[Vec<ResolvedToken>],
-    look: TokenLook,
-    label_width: f32,
-    mut workspace_icon: RowIcon,
-    cx: &RowContext<'_>,
-) -> Div {
-    let (font, theme) = (cx.font, cx.theme);
-    let agent_icon = match look.kind {
-        RowKind::Agent(icon) => Some(icon),
-        RowKind::Workspace => None,
-    };
-    let agent_at = lines.iter().position(|line| {
-        line.iter()
-            .any(|token| matches!(token.kind, TokenKind::Text(_, TextRole::Agent)))
-    });
-    let (agent_size, agent_reserve) = agent_icon_size(font);
-    let workspace_reserve = if matches!(workspace_icon, RowIcon::None) {
-        0.
-    } else {
-        ICON_RESERVE
-    };
-    for (index, line) in lines.iter().enumerate() {
-        let agent_here = agent_at == Some(index);
-        let reserve = if index == 0 { workspace_reserve } else { 0. }
-            + if agent_here { agent_reserve } else { 0. };
-        let text_width = (label_width - reserve).max(0.);
-        let selector = line_selector(key, index);
-        let icon_color = line
-            .iter()
-            .find(|token| matches!(token.kind, TokenKind::Text(_, TextRole::Agent)))
-            .map(|token| styled(token_appearance(&token.kind, look, cx), token.style, theme).0)
-            .unwrap_or(theme.muted);
-        let mut text = div().relative().w(px(label_width)).h(px(line_height(font)));
-        if agent_here && let Some(icon) = agent_icon {
-            text = text.child(agent_mark(key, icon, agent_size, icon_color, font));
-        }
-        if index == 0 && !matches!(workspace_icon, RowIcon::None) {
-            text = text.child(std::mem::replace(&mut workspace_icon, RowIcon::None).slot(
-                key,
-                font,
-                theme.muted,
-            ));
-        }
-        text = text.child(
-            token_line(line_tokens(index, line), look, text_width, cx)
-                .debug_selector(|| selector.clone())
-                .ml(px(reserve.min(label_width))),
-        );
-        column = column.child(text);
-    }
-    column
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1127,9 +744,12 @@ pub(super) fn first_text<'a>(
 mod tests {
     use super::{
         super::{agents::Indicators, cell::RowContext, layout},
-        RowKind, TextRole, TokenKind, TokenLook, left_behind, token_appearance,
+        RowKind, TokenLook,
+        configured::token_appearance,
+        left_behind,
     };
     use crate::config::{FontConfig, LayoutMode, Theme};
+    use crate::sidebar::tokens::{TextRole, TokenKind};
     use herdr_client::protocol::AgentStatus;
 
     #[core::prelude::v1::test]
