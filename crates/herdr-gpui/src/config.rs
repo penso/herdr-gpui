@@ -88,6 +88,8 @@ pub struct Config {
     pub features: Features,
     pub notifications: NotificationConfig,
     pub(crate) notification_overrides: NotificationSettings,
+    /// `[phone]`: forwarding agent notices to ntfy or Pushover.
+    pub phone: crate::notifications::phone::PhoneConfig,
     pub clipboard_toast: ClipboardToast,
     pub bell: BellConfig,
     pub layout: Layout,
@@ -289,6 +291,7 @@ impl Default for Config {
             features: Features::default(),
             notifications: NotificationConfig::default(),
             notification_overrides: NotificationSettings::default(),
+            phone: Default::default(),
             clipboard_toast: ClipboardToast::default(),
             bell: BellConfig::default(),
             layout: Layout::default(),
@@ -332,6 +335,7 @@ struct Settings {
     github: GitHubConfig,
     features: Features,
     notifications: NotificationSettings,
+    phone: crate::notifications::phone::PhoneConfig,
     clipboard_toast: ClipboardToastSettings,
     bell: BellConfig,
     layout: Layout,
@@ -607,9 +611,12 @@ impl Config {
         config.github = settings.github;
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
-        config.notifications = settings
-            .notifications
-            .resolve(NotificationConfig::default());
+        settings.phone.validate()?;
+        config.notifications = settings.notifications.resolve(NotificationConfig {
+            phone: settings.phone.events(),
+            ..NotificationConfig::default()
+        });
+        config.phone = settings.phone;
         config.clipboard_toast = settings.clipboard_toast.resolve(base.clipboard_toast);
         config.bell = settings.bell;
         config.sidebar_layout = base.sidebar_layout.clone();

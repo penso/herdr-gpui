@@ -1,5 +1,6 @@
 //! Prepared controls for the standalone window; persistence belongs to its serial save path.
 mod fonts;
+mod phone;
 mod preferences;
 
 use super::{Section, SettingsWindow, remote_history::HostState};
@@ -40,6 +41,9 @@ pub(super) struct Controls {
     saving_sizes: Vec<(FontFace, f32)>,
     size_editor: Option<SizeEditor>,
     local_path: String,
+    phone_test: Option<phone::PhoneTest>,
+    #[cfg(test)]
+    phone_send: Option<phone::PhoneSend>,
     _search_changed: Subscription,
 }
 
@@ -102,6 +106,9 @@ impl Controls {
             local_path: Config::local_path()
                 .map(|path| path.display().to_string())
                 .unwrap_or_else(|error| format!("Unavailable ({error})")),
+            phone_test: None,
+            #[cfg(test)]
+            phone_send: None,
             _search_changed: subscription,
         }
     }
@@ -605,6 +612,7 @@ impl SettingsWindow {
             .gap(px(24.))
             .child(delivery)
             .child(self.native_notification_controls(cx))
+            .child(self.phone_controls(cx))
     }
 
     fn save_skill(&mut self, choice: Choice, cx: &mut Context<Self>) {

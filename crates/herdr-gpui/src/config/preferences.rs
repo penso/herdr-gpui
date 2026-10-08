@@ -15,6 +15,9 @@ pub(crate) enum Preference {
     ClipboardEnabled(Option<bool>),
     ClipboardPosition(Option<ClipboardToastPosition>),
     SidebarGap(f32),
+    PhoneEnabled(bool),
+    PhoneBlocked(bool),
+    PhoneDone(bool),
 }
 
 impl Config {
@@ -87,6 +90,9 @@ impl Config {
                         })
                     }),
                 ),
+                Preference::PhoneEnabled(value) => (Some("phone"), "enabled", Some(value.into())),
+                Preference::PhoneBlocked(value) => (Some("phone"), "blocked", Some(value.into())),
+                Preference::PhoneDone(value) => (Some("phone"), "done", Some(value.into())),
                 Preference::SidebarGap(value) => {
                     if !value.is_finite() || !(0.0..=MAX_SIDEBAR_GAP).contains(&value) {
                         return Err(Error::InvalidSidebarGap);
@@ -156,6 +162,9 @@ mod tests {
             Preference::ClipboardEnabled(Some(false)),
             Preference::ClipboardPosition(Some(ClipboardToastPosition::TopCenter)),
             Preference::SidebarGap(7.5),
+            Preference::PhoneEnabled(true),
+            Preference::PhoneBlocked(false),
+            Preference::PhoneDone(true),
         ] {
             Config::save_preference_path(edit, &path)?;
         }
@@ -186,6 +195,9 @@ mod tests {
             table["clipboard_toast"]["position"].as_str(),
             Some("top-center")
         );
+        assert_eq!(table["phone"]["enabled"].as_bool(), Some(true));
+        assert_eq!(table["phone"]["blocked"].as_bool(), Some(false));
+        assert_eq!(table["phone"]["done"].as_bool(), Some(true));
         for edit in [
             Preference::NotificationEnabled(None),
             Preference::NotificationDelay(None),

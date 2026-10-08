@@ -68,6 +68,10 @@ pub struct NotificationConfig {
     #[serde(deserialize_with = "notification_delay")]
     pub delay_seconds: u64,
     pub position: herdr_client::protocol::ToastHerdrPosition,
+    /// What `[phone]` forwards, kept here so the shared policy can clear a
+    /// notice for the phone without seeing any secret.
+    #[serde(skip)]
+    pub phone: crate::notifications::phone::PhoneEvents,
 }
 
 impl Default for NotificationConfig {
@@ -77,6 +81,7 @@ impl Default for NotificationConfig {
             system: false,
             delay_seconds: 1,
             position: herdr_client::protocol::ToastHerdrPosition::BottomRight,
+            phone: Default::default(),
         }
     }
 }
@@ -136,6 +141,7 @@ impl NotificationSettings {
             system: base.system,
             delay_seconds: self.delay_seconds.unwrap_or(base.delay_seconds),
             position: self.position.unwrap_or(base.position),
+            phone: base.phone,
         }
     }
 }
@@ -166,6 +172,7 @@ impl Config {
             system: shared.toast_delivery == crate::herdr_settings::ToastDelivery::System,
             delay_seconds: shared.toast_delay_seconds,
             position: shared.toast_position,
+            phone: self.notifications.phone,
         });
     }
 }

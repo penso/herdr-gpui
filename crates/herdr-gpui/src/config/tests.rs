@@ -11,6 +11,7 @@ mod keybindings;
 mod line_height;
 mod loading;
 mod notification_settings;
+mod phone_settings;
 mod preferences;
 mod sidebar_settings;
 mod sidebar_style;

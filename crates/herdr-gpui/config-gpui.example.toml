@@ -99,6 +99,24 @@ project_roots = []
 # top-left, top-right, bottom-left, bottom-right. Explicit wire corners win.
 # position = "bottom-right"
 
+# Forward agent alerts to your phone through ntfy (https://ntfy.sh, or your own
+# server) or Pushover. Off until enabled. Alerts follow the delay and evidence
+# rules above, go out only while this window is not focused, and carry just the
+# title and a short summary. At most 6 per minute. Settings > Notifications has
+# the switches and a test button; keep the keys below in config-gpui.local.toml.
+# [phone]
+# enabled = false
+# blocked = true    # an agent needs attention
+# done = true       # an agent finished
+# service = "ntfy"  # or "pushover"; needed only when both are filled in
+# [phone.ntfy]
+# server = "https://ntfy.sh"
+# topic = ""        # anyone who knows a public topic can read it
+# token = ""        # optional access token
+# [phone.pushover]
+# token = ""        # application API token
+# user = ""         # user or group key
+
 # The "copied to clipboard" flash shown after a terminal selection is copied.
 # Left commented out, this follows the daemon config's [ui.toast.clipboard], so
 # setting it there covers both clients. Uncomment a key to override that one

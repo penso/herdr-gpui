@@ -17,7 +17,7 @@ use herdr_client::{
 };
 use std::sync::Arc;
 
-fn endpoints() -> [Endpoint; 2] {
+pub(super) fn endpoints() -> [Endpoint; 2] {
     ["local", "remote"].map(|id| {
         let mut endpoint = Endpoint::new(id.into(), id.into(), ConnectTarget::Local, true);
         endpoint.live.snapshot = Some(Arc::new(
@@ -30,7 +30,7 @@ fn endpoints() -> [Endpoint; 2] {
     })
 }
 
-fn config(delay_seconds: u64) -> NotificationConfig {
+pub(super) fn config(delay_seconds: u64) -> NotificationConfig {
     NotificationConfig {
         enabled: true,
         delay_seconds,
@@ -38,7 +38,7 @@ fn config(delay_seconds: u64) -> NotificationConfig {
     }
 }
 
-fn wire(kind: Kind) -> SemanticNotification {
+pub(super) fn wire(kind: Kind) -> SemanticNotification {
     let mut wire = tests::notification("event");
     wire.kind = kind;
     wire.workspace_id = Some("w1".into());
@@ -47,13 +47,13 @@ fn wire(kind: Kind) -> SemanticNotification {
     wire
 }
 
-fn receive(endpoint: &mut Endpoint, wire: SemanticNotification, now: Instant) {
+pub(super) fn receive(endpoint: &mut Endpoint, wire: SemanticNotification, now: Instant) {
     endpoint
         .toasts
         .receive([Notice::new(wire, now).with_snapshot(endpoint.live.snapshot.as_deref())]);
 }
 
-fn visible(endpoints: &[Endpoint]) -> Vec<&str> {
+pub(super) fn visible(endpoints: &[Endpoint]) -> Vec<&str> {
     endpoints
         .iter()
         .flat_map(|e| e.toasts.entries.iter())

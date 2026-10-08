@@ -1682,6 +1682,49 @@ while the GUI runs: a click cannot reopen a closed window.
   it happens only once system delivery posts. Native Windows behavior has not been
   verified.
 
+## Phone Notifications
+
+Agent alerts can also go to your phone through [ntfy](https://ntfy.sh) (the
+public server or a self-hosted one) or [Pushover](https://pushover.net). It is
+off until enabled, and works with any shared delivery setting, including Off.
+Only "needs attention" (blocked) and "finished" (done) notices are forwarded,
+each with its own switch. They wait for the same delay and Done/Blocked evidence
+as toasts. A push goes out only while the window is not focused, including for
+the active tab. The phone receives the notice's title and a summary of at most
+160 characters, with the host name when the window has several. Terminal output
+is never sent.
+
+Put the service in `config-gpui.local.toml`:
+
+```toml
+[phone]
+enabled = true
+blocked = true
+done = true
+
+[phone.ntfy]
+server = "https://ntfy.sh"   # optional; your own server works too
+topic = "a-long-random-topic"
+token = ""                    # optional access token
+
+# or
+# [phone.pushover]
+# token = "application API token"
+# user = "user or group key"
+```
+
+Set `service = "ntfy"` or `"pushover"` when both tables are filled in. A
+malformed server URL or topic stops the config from loading, so the mistake is
+reported right away. Anyone who knows a topic on a public ntfy server can read
+it, so pick a long random one or use a token. Keys stay in the config file:
+Settings never shows them, and logs and errors never include them.
+
+**Settings > Notifications > Phone notifications** has the switches, shows which
+service is configured, and has **Send test** to check it. Pushes are sent on a
+background thread with a 10-second timeout. At most 6 go out per minute and the
+rest are dropped. After an HTTP 429 the app pauses for a minute. When several
+windows show the same event, it is pushed once.
+
 ## macOS Dock Badge
 
 The Dock icon shows the number of agents reporting `Done` (finished) or `Blocked`

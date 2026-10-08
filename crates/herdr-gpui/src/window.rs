@@ -22,6 +22,7 @@ mod links;
 pub(crate) use links::PressedLink;
 mod mouse;
 mod pending_input;
+mod phone_notifications;
 mod prefix;
 mod regions;
 mod render;
@@ -369,6 +370,7 @@ impl HerdrWindow {
         let old_tab = focused_tab(&self.live);
         self.poll_endpoints(cx);
         self.post_system_notifications(window, cx);
+        self.post_phone_notifications(cx);
         self.ring_bell(window);
         self.poll_integrations(cx);
         self.poll_links(window, cx);

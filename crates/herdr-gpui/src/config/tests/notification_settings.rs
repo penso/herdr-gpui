@@ -35,7 +35,8 @@ fn shared_notifications_inherit_without_resetting_session() -> anyhow::Result<()
                     enabled,
                     system,
                     delay_seconds: 7,
-                    position: ToastHerdrPosition::TopLeft
+                    position: ToastHerdrPosition::TopLeft,
+                    phone: Default::default(),
                 }
             );
             for (font, original) in [
@@ -93,7 +94,8 @@ fn shared_notifications_respect_each_explicit_native_override() -> anyhow::Resul
                     enabled,
                     system: false,
                     delay_seconds,
-                    position
+                    position,
+                    phone: Default::default(),
                 },
                 "{text}"
             );
@@ -357,7 +359,8 @@ fn notification_settings_defaults_bounds_corners_and_strict_types() -> anyhow::R
                     enabled: true,
                     system: false,
                     delay_seconds: delay,
-                    position
+                    position,
+                    phone: Default::default(),
                 }
             );
         }

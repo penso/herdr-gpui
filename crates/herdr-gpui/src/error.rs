@@ -402,6 +402,29 @@ pub enum Error {
     SystemLoadUnsupported(String),
     #[error("CPU and memory output was not understood.")]
     SystemLoadOutput,
+    #[error(
+        "Phone notifications are not set up. Add [phone.ntfy] or [phone.pushover] to the config."
+    )]
+    PhoneNotConfigured,
+    #[error("Both [phone.ntfy] and [phone.pushover] are set. Choose one with phone.service.")]
+    PhoneServiceAmbiguous,
+    #[error(
+        "phone.ntfy.server must be an http or https URL without credentials, query, or fragment"
+    )]
+    PhoneServer,
+    /// The topic is a secret on a public server, so it is never echoed.
+    #[error("phone.ntfy.topic must be 1-64 ASCII letters, digits, '-' or '_'")]
+    PhoneTopic,
+    #[error("Phone notification credential cannot be sent as a header.")]
+    PhoneHeader(#[source] ureq::http::header::InvalidHeaderValue),
+    #[error("Phone notification request failed or timed out.")]
+    PhoneNetwork(#[source] ureq::Error),
+    #[error("Phone notification credentials were rejected (HTTP {0}).")]
+    PhoneRejected(u16),
+    #[error("Phone notification service is rate limiting. Retrying later.")]
+    PhoneRateLimited,
+    #[error("Phone notification service returned HTTP {0}.")]
+    PhoneStatus(u16),
     #[error("No checkout of this branch was found on its host.")]
     CheckpointCheckout,
     #[error("This checkout has no commit yet, so it has no checkpoints.")]
