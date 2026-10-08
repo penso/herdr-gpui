@@ -79,10 +79,12 @@ pub(crate) fn set_lid_closed(lid_closed: bool, window: WeakEntity<HerdrWindow>, 
 }
 
 /// Shows a failure in `window`; a refused hold also turns the preference off,
-/// so the switch never claims a mode that is not running.
+/// so the switch never claims a mode that is not running. A closed window
+/// still gets the preference written, which the config watcher then reloads.
 fn warn_in(window: WeakEntity<HerdrWindow>) -> impl Fn(lid::Failure, &mut App) + Clone + 'static {
     move |failure, cx| {
-        let _ = window.update(cx, |window, cx| {
+        let refused = matches!(failure, lid::Failure::Hold(_));
+        let shown = window.update(cx, |window, cx| {
             let error = match failure {
                 lid::Failure::Hold(error) => {
                     if window.config.keep_awake_lid_closed {
@@ -97,6 +99,17 @@ fn warn_in(window: WeakEntity<HerdrWindow>) -> impl Fn(lid::Failure, &mut App) +
             };
             window.show_flash(crate::window::Flash::warning(error.to_string()), cx);
         });
+        if refused && shown.is_err() {
+            cx.background_executor()
+                .spawn(async {
+                    if let Err(error) =
+                        Config::save_preference(Preference::KeepAwakeLidClosed(false))
+                    {
+                        tracing::warn!(%error, "Could not turn off the closed-lid preference");
+                    }
+                })
+                .detach();
+        }
     }
 }
 

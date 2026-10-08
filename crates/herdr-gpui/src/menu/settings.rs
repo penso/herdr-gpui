@@ -205,6 +205,7 @@ impl HerdrWindow {
                 // Apply a coherent pair only after both have loaded successfully.
                 match loaded {
                     Ok((mut config, mut theme)) => {
+                        let lid_closed = this.config.keep_awake_lid_closed;
                         crate::settings_window::apply_loaded_layout(&mut config, layout_revision, cx);
                         crate::settings_window::apply_loaded_theme(&mut config, &mut theme, theme_revision, cx);
                         if let Some(shared) = &this.settings.shared {
@@ -249,11 +250,15 @@ impl HerdrWindow {
                         });
                         this.font_size_saves.apply_pending(&mut config);
                         this.config = config;
-                        crate::caffeine::set_lid_closed(
-                            this.config.keep_awake_lid_closed,
-                            cx.entity().downgrade(),
-                            cx,
-                        );
+                        // Only a changed preference moves the lid: a refused
+                        // hold must not prompt again on an unrelated reload.
+                        if this.config.keep_awake_lid_closed != lid_closed {
+                            crate::caffeine::set_lid_closed(
+                                this.config.keep_awake_lid_closed,
+                                cx.entity().downgrade(),
+                                cx,
+                            );
+                        }
                         this.gui_config_diagnostic.sync(this.config.diagnostic().as_deref());
                         crate::settings_window::apply_loaded_theme(&mut this.config, &mut this.theme, theme_revision, cx);
                         this.tick_toasts(

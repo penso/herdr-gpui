@@ -6,6 +6,9 @@
 //! process, so a watcher child owns undoing it: it runs `pmset disablesleep 0`
 //! once its stdin closes. Turning the cup off closes it, and so do quitting
 //! and crashing, because the kernel closes the pipe with the process.
+//!
+//! `disablesleep` is one system-wide flag, so a flag something else already
+//! set is left as found: Herdr neither claims it nor clears it.
 
 use super::Caffeine;
 use crate::{Error, Result};
@@ -35,7 +38,7 @@ pub(super) enum Failure {
 
 impl Lid {
     pub(super) fn held(&self) -> bool {
-        matches!(self.state, State::Held(_))
+        matches!(self.state, State::Held(_) | State::Found)
     }
 }
 
@@ -47,12 +50,19 @@ enum State {
     Busy,
     /// Sleep is disabled, and the watcher undoes it when its stdin closes.
     Held(Child),
+    /// Sleep was already disabled when the cup wanted it; whoever disabled it
+    /// owns restoring it.
+    Found,
 }
 
 /// The programs and arguments run for each step, so tests substitute
 /// harmless ones.
 #[derive(Clone)]
 struct Commands {
+    /// Prints the power settings, `SleepDisabled 1` among them when set.
+    sleep_settings: Vec<String>,
+    /// Succeeds only when the sudoers rule lets `disable_sleep` run.
+    allowed: Vec<String>,
     disable_sleep: Vec<String>,
     install_rule: Vec<String>,
     watcher: Vec<String>,
@@ -66,6 +76,17 @@ impl Default for Commands {
             rule = rule(uid()),
         );
         Self {
+            sleep_settings: ["/usr/bin/pmset", "-g"].map(String::from).into(),
+            allowed: [
+                "/usr/bin/sudo",
+                "-n",
+                "-l",
+                "/usr/bin/pmset",
+                "disablesleep",
+                "1",
+            ]
+            .map(String::from)
+            .into(),
             disable_sleep: ["/usr/bin/sudo", "-n", "/usr/bin/pmset", "disablesleep", "1"]
                 .map(String::from)
                 .into(),
@@ -104,12 +125,20 @@ fn sync(report: impl Fn(Failure, &mut App) + Clone + 'static, cx: &mut App) {
     let lid = &mut cx.default_global::<Caffeine>().lid;
     let commands = lid.commands.clone();
     let work = match (std::mem::take(&mut lid.state), lid.wanted) {
-        (State::Allowed, true) => cx
-            .background_executor()
-            .spawn(async move { hold(&commands).map(Some).map_err(Failure::Hold) }),
-        (State::Held(watcher), false) => cx
-            .background_executor()
-            .spawn(async move { release(watcher).map(|()| None).map_err(Failure::Release) }),
+        (State::Allowed, true) => cx.background_executor().spawn(async move {
+            hold(&commands)
+                .map(|watcher| watcher.map_or(State::Found, State::Held))
+                .map_err(Failure::Hold)
+        }),
+        (State::Held(watcher), false) => cx.background_executor().spawn(async move {
+            release(watcher)
+                .map(|()| State::Allowed)
+                .map_err(Failure::Release)
+        }),
+        (State::Found, false) => {
+            cx.refresh_windows();
+            return;
+        }
         (state, _) => {
             lid.state = state;
             return;
@@ -121,12 +150,8 @@ fn sync(report: impl Fn(Failure, &mut App) + Clone + 'static, cx: &mut App) {
         cx.update(|cx| {
             let lid = &mut cx.default_global::<Caffeine>().lid;
             let failure = match outcome {
-                Ok(Some(watcher)) => {
-                    lid.state = State::Held(watcher);
-                    None
-                }
-                Ok(None) => {
-                    lid.state = State::Allowed;
+                Ok(state) => {
+                    lid.state = state;
                     None
                 }
                 Err(failure) => {
@@ -149,10 +174,14 @@ fn sync(report: impl Fn(Failure, &mut App) + Clone + 'static, cx: &mut App) {
     .detach();
 }
 
-/// Disables sleep, installing the sudoers rule first if `sudo` refuses. The
-/// watcher starts before anything changes, so a crash at any point still
-/// restores sleep.
-fn hold(commands: &Commands) -> Result<Child> {
+/// Disables sleep, installing the sudoers rule first if it does not allow
+/// `pmset` yet, and returns the watcher that restores it. Sleep that is
+/// already disabled returns no watcher and is left alone. The watcher starts
+/// before anything changes, so a crash at any point still restores sleep.
+fn hold(commands: &Commands) -> Result<Option<Child>> {
+    if sleep_disabled(&commands.sleep_settings)? {
+        return Ok(None);
+    }
     let watcher = command(&commands.watcher)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -162,25 +191,57 @@ fn hold(commands: &Commands) -> Result<Child> {
             operation: "start the closed-lid watcher",
             source,
         })?;
-    let held = run(
-        &commands.disable_sleep,
-        "keep the Mac running with the lid closed",
-    )
-    .or_else(|_| {
-        run(&commands.install_rule, "allow Herdr to change lid sleep").map_err(cancelled)?;
+    let held = allow(commands).and_then(|()| {
         run(
             &commands.disable_sleep,
             "keep the Mac running with the lid closed",
         )
     });
     match held {
-        Ok(()) => Ok(watcher),
+        Ok(()) => Ok(Some(watcher)),
         Err(error) => {
             // Restoring sleep that was never disabled is harmless.
             let _ = release(watcher);
             Err(error)
         }
     }
+}
+
+/// Installs the sudoers rule unless `sudo` already allows `pmset`. Only a
+/// refusal asks for the password; a `sudo` that cannot run at all fails here
+/// instead of prompting for a rule that would not help.
+fn allow(commands: &Commands) -> Result<()> {
+    match run(&commands.allowed, "check the closed-lid sudoers rule") {
+        Err(Error::LidCommandFailed { .. }) => {
+            run(&commands.install_rule, "allow Herdr to change lid sleep").map_err(cancelled)
+        }
+        checked => checked,
+    }
+}
+
+/// Whether `pmset -g` reports `SleepDisabled 1`; the line is absent while
+/// sleep is allowed.
+fn sleep_disabled(argv: &[String]) -> Result<bool> {
+    const OPERATION: &str = "read the Mac's sleep settings";
+    let output = command(argv)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .map_err(|source| Error::LidCommand {
+            operation: OPERATION,
+            source,
+        })?;
+    if !output.status.success() {
+        return Err(Error::LidCommandFailed {
+            operation: OPERATION,
+            status: output.status,
+            detail: String::new(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).lines().any(|line| {
+        let mut fields = line.split_whitespace();
+        fields.next() == Some("SleepDisabled") && fields.next() == Some("1")
+    }))
 }
 
 /// The password dialog's Cancel button exits `osascript` with AppleScript's
