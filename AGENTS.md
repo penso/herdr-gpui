@@ -185,5 +185,15 @@ just test-perf
   guidance from the agent harness; add such lines only when the user asks for
   them in the current request.
 - Before creating a PR, review every included commit and the full diff from its base. Include a summary, exact validation commands/results, and remaining manual/native QA.
+- Include screenshots in any PR that changes something visible: before and
+  after images of the real native window, showing the changed area. Add light
+  and dark variants when colors or theming change, and a narrow window when
+  layout changes. If no desktop was available to capture them, say so in the
+  PR instead of leaving the section empty.
+- Give every PR description a QA checklist. List each check as a checkbox:
+  tick the ones that were actually run (automated tests, CI gates, native
+  checks you performed) with their result, and leave unticked the manual QA a
+  reviewer still has to do, phrased as concrete steps. Never tick a box for a
+  check that did not run.
 - Keep user-facing docs and public API examples synchronized with behavior changes. Do not copy another repository's release, issue-tracker, or mandatory-push workflow into this one.
 - Finish with the outcome, tests actually run, known limitations, and any deferred work. Never claim unrun checks passed.

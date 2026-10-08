@@ -102,7 +102,7 @@ impl HerdrWindow {
             move || {
                 save()?;
                 let mut config = Config::load()?;
-                config.resolve_font_fallbacks(|| text_system.all_font_names());
+                config.resolve_fonts(|| text_system.all_font_names());
                 let theme = if config.theme == "Follow Herdr" {
                     Default::default()
                 } else {
@@ -315,7 +315,12 @@ impl HerdrWindow {
                 "Sidebar gap",
                 format!("{} px", self.config.layout.sidebar_gap),
             ))
-            .child(note("Edit [layout] mode and sidebar_gap (0-64 logical pixels) in the local override file below; saved changes reload automatically."));
+            .child(row(
+                "preferences-sidebar-style",
+                "Sidebar style",
+                sidebar_style_summary(&self.config.sidebar_style),
+            ))
+            .child(note("Edit [layout] mode and sidebar_gap (0-64 logical pixels), and [sidebar] indent, row_padding, gap, host_gap, select, and hosts, in the local override file below; saved changes reload automatically."));
         }
         if self.settings.tab == crate::settings_panel::Tab::Font {
             body = body.child(section("FONTS"));
@@ -634,6 +639,10 @@ pub struct Chrome {
     /// The sort the user picked with the panel toggle, like upstream's
     /// `agent_panel_sort` preference. `None` follows the daemon's config.
     pub agent_sort: Option<AgentSort>,
+    /// The notes panel's width, once dragged; `None` is its default.
+    pub notes_width: Option<f32>,
+    /// The review's file list's width, once dragged.
+    pub review_files_width: Option<f32>,
 }
 
 pub struct Preferences {
@@ -788,10 +797,23 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         .and_then(serde_json::Value::as_f64)
         .map(|split| split as f32)
         .filter(|split| split.is_finite() && (0.1..=0.9).contains(split));
+    // A damaged panel width is forgotten rather than failing the whole file.
+    let notes_width = object
+        .get("notes_width_px")
+        .and_then(serde_json::Value::as_f64)
+        .map(|width| width as f32)
+        .filter(|width| width.is_finite() && *width > 0.0);
+    let review_files_width = object
+        .get("review_files_width_px")
+        .and_then(serde_json::Value::as_f64)
+        .map(|width| width as f32)
+        .filter(|width| width.is_finite() && *width > 0.0);
     Ok(Chrome {
         sidebar_width,
         sidebar_split,
         agent_sort,
+        notes_width,
+        review_files_width,
     })
 }
 
@@ -827,6 +849,10 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                     split.is_finite() && (0.1..=0.9).contains(split)
                 }),
                 "agent_sort_manual": chrome.agent_sort.map(|sort| sort.to_string()),
+                "notes_width_px": chrome.notes_width.filter(|width| width.is_finite() && *width > 0.0),
+                "review_files_width_px": chrome
+                    .review_files_width
+                    .filter(|width| width.is_finite() && *width > 0.0),
             }),
         )?;
         file.write_all(b"\n")?;
@@ -846,6 +872,37 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
 mod tests;
 
 // A sibling of `tests`: its glob import shadows `#[test]` with GPUI's macro.
+/// One line for the Preferences panel: the spacing keys the file set, the
+/// selection mode, and how many hosts have a colour.
+fn sidebar_style_summary(style: &crate::config::SidebarStyle) -> String {
+    let overrides = style.overrides;
+    let mut parts: Vec<String> = crate::config::SidebarOverrides::BANDS
+        .into_iter()
+        .map(|(key, _)| key)
+        .zip([
+            overrides.indent,
+            overrides.row_padding,
+            overrides.gap,
+            overrides.host_gap,
+        ])
+        .filter_map(|(key, value)| value.map(|value| format!("{key} {value} px")))
+        .collect();
+    parts.push(format!(
+        "select {}",
+        match style.select {
+            crate::config::SelectMode::Row => "row",
+            crate::config::SelectMode::Group => "group",
+            crate::config::SelectMode::GroupDim => "group-dim",
+        }
+    ));
+    match style.hosts.len() {
+        0 => {}
+        1 => parts.push("1 host colour".into()),
+        n => parts.push(format!("{n} host colours")),
+    }
+    parts.join(", ")
+}
+
 #[cfg(test)]
 mod busy_load_tests {
     #[gpui::test]

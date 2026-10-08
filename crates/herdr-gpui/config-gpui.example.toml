@@ -40,6 +40,13 @@ show_agents = true
 # on its sidebar row. Connected remote hosts are read over SSH every couple of
 # seconds; false stops all sampling. Also under Settings > General.
 show_system_load = true
+# Checkpoint a worktree each time one of its agents starts or finishes a turn,
+# locally or over SSH, so its files can be rolled back from the workspace
+# menu's Checkpoints. Snapshots include untracked (not ignored) files, live in
+# hidden refs/herdr-gpui/checkpoints/ refs, and the newest 50 per branch are
+# kept. Taking one never changes the index or files. Also under
+# Settings > General.
+agent_checkpoints = true
 # Show the TCP ports each workspace's servers listen on, under its sidebar row
 # and in the status bar; click one to open it in a browser tab. Hosts are
 # scanned every five seconds with ss or lsof, a remote one over SSH; false
@@ -194,25 +201,59 @@ project_roots = []
 # Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.
 [sidebar]
-# Default: "Menlo" on macOS, "DejaVu Sans Mono" on Linux.
+# Default: "Menlo" on macOS, "Cascadia Mono" on Windows (Consolas when
+# missing), "DejaVu Sans Mono" on Linux (or an installed monospace family such
+# as JetBrains Mono when DejaVu is missing).
 # family = "DejaVu Sans Mono"
 size = 12
 # fallback = ["Symbols Nerd Font Mono"]
+# Spacing written over the layout chosen above, in logical pixels. Each key
+# left out keeps the layout's own value. The indent is how far each nesting
+# level steps in: workspaces under their host, worktrees under their
+# repository. Bands: indent 0..=48, row_padding 0..=16, gap 0..=32,
+# host_gap 0..=48. The superset and orca layouts copy another app's rows,
+# so row_padding does not reach them: superset spaces its rows by gap, and
+# orca keeps its own gap and padding. Both take indent and host_gap.
+# indent = 14
+# row_padding = 2
+# gap = 6
+# host_gap = 10
+# What selecting a workspace marks besides its own row: "row" (only the row),
+# "group" (a stronger wash over the whole host group), or "group-dim" (that,
+# and the other hosts' rows dimmed). Hosts without a colour below use the
+# theme's active colour for the wash.
+# select = "row"
+
+# A colour per host, keyed by the host's name in the sidebar, as #rgb or
+# #rrggbb. It washes the host's header, its workspace rows, and its agents'
+# rows faintly, so a long list reads by colour. Names with spaces go in quotes.
+# [sidebar.hosts]
+# Personal = "#3a4a6b"
+# "Mac mini" = "#5a3a3a"
 
 [tabs]
-# Default: "Menlo" on macOS, "DejaVu Sans Mono" on Linux.
+# Default: "Menlo" on macOS, "Cascadia Mono" on Windows (Consolas when
+# missing), "DejaVu Sans Mono" on Linux (or an installed monospace family such
+# as JetBrains Mono when DejaVu is missing).
 # family = "DejaVu Sans Mono"
 size = 12
 # fallback = ["Symbols Nerd Font Mono"]
 
 [terminal]
-# Default: "Menlo" on macOS, "DejaVu Sans Mono" on Linux.
+# Default: "Menlo" on macOS, "Cascadia Mono" on Windows (Consolas when
+# missing), "DejaVu Sans Mono" on Linux (or an installed monospace family such
+# as JetBrains Mono when DejaVu is missing).
 # family = "DejaVu Sans Mono"
 size = 14
 # fallback = ["Symbols Nerd Font Mono"]
+# Row height as a multiple of size, 1 to 2. Default 20/14 (about 1.43), which
+# is 20 logical pixels at size 14. Lower it for tighter rows. Only [terminal]
+# takes this key.
+# line_height = 1.3
 
 [ui]
-# Default: ".SystemUIFont" on macOS, "DejaVu Sans" on Linux.
+# Default: ".SystemUIFont" on macOS and Windows, "DejaVu Sans" on Linux (or an installed
+# sans family such as Noto Sans when DejaVu is missing).
 # family = "DejaVu Sans"
 size = 12
 # fallback = ["Symbols Nerd Font Mono"]
@@ -431,6 +472,8 @@ size = 12
 # [usage.providers.antigravity]
 #   The agy executable on the probed host when it is not on the PATH (install it
 #   with `brew install --cask antigravity-cli`, run `agy` once, and sign in).
+#   agy runs only when this is set or antigravity is in show_providers, as a
+#   signed-out agy opens a browser to sign in.
 # cli_path = ""  # or ANTIGRAVITY_CLI_PATH
 #
 # Copilot (copilot)

@@ -42,10 +42,10 @@ fn session_negotiates_remote_health_without_extending_snapshot_deadline() {
                 },
             );
             if remote && !health_supported {
-                assert_eq!(
-                    result.unwrap_err().to_string(),
-                    "SSH endpoint lacks health_check capability"
-                );
+                assert!(matches!(
+                    result.unwrap_err(),
+                    Error::MissingHealthCheck { server_version } if server_version == "0.8.2"
+                ));
                 assert!(events.is_empty());
                 assert!(session.welcome.is_none());
                 continue;

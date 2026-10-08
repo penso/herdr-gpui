@@ -1,6 +1,6 @@
 //! The palette paints prepared entries; input and daemon operations live elsewhere.
 
-use super::{Filter, Palette, is_nested};
+use super::{Filter, Palette};
 use crate::HerdrWindow;
 use gpui::{prelude::*, *};
 
@@ -55,12 +55,10 @@ impl HerdrWindow {
                         .hover(|tab| tab.bg(rgb(theme.active)))
                         .child(filter.label())
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            if let Some(palette) = &mut this.menu.palette {
-                                palette.filter = filter;
-                                palette.refilter(None);
+                            this.set_palette_filter(filter, cx);
+                            if let Some(palette) = &this.menu.palette {
                                 let focus = palette.search.read(cx).focus.clone();
                                 window.focus(&focus, cx);
-                                cx.notify();
                             }
                         }))
                 }),
@@ -78,9 +76,25 @@ impl HerdrWindow {
         index: usize,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let entry = &palette.entries[palette.filtered[index]];
-        let nested = palette.query.trim().is_empty() && is_nested(entry, &palette.filtered);
+        let hit = &palette.filtered[index];
+        let entry = &palette.entries[hit.index];
+        // Ranked results need not keep entry order, so only an empty query nests.
+        let depth = if palette.query.trim().is_empty() {
+            hit.depth
+        } else {
+            0
+        };
         let action = entry.action.clone();
+        // Matched characters were found while ranking; painting only styles them.
+        let matched = HighlightStyle {
+            color: Some(rgb(self.theme.primary()).into()),
+            font_weight: Some(FontWeight::BOLD),
+            ..Default::default()
+        };
+        let styled = |text: &SharedString, ranges: &[std::ops::Range<usize>]| {
+            StyledText::new(text.clone())
+                .with_highlights(ranges.iter().map(|range| (range.clone(), matched)))
+        };
         div()
             .id(index)
             .debug_selector(move || format!("palette-row-{index}"))
@@ -101,13 +115,17 @@ impl HerdrWindow {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .when(nested, |column| column.pl(px(16.)))
-                    .child(div().truncate().child(entry.label.clone()))
+                    .pl(px(16. * depth as f32))
+                    .child(
+                        div()
+                            .truncate()
+                            .child(styled(&entry.label, &hit.highlights.label)),
+                    )
                     .child(
                         div()
                             .truncate()
                             .text_color(rgb(self.theme.muted))
-                            .child(entry.detail.clone()),
+                            .child(styled(&entry.detail, &hit.highlights.detail)),
                     ),
             )
             .when(!entry.badge.is_empty(), |row| {

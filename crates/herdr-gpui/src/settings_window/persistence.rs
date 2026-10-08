@@ -17,6 +17,61 @@ pub(super) struct Loaded {
 pub(super) type SaveCompletion =
     std::result::Result<Option<herdr_settings::Settings>, std::sync::Arc<crate::Error>>;
 
+/// The watched GUI-local and daemon config files, read together.
+pub(super) type Sample = [crate::config::watch::Fingerprint; 2];
+
+fn watched_paths() -> Option<[std::path::PathBuf; 2]> {
+    let local = Config::local_path().ok()?;
+    Some([
+        local,
+        crate::config::daemon_config_path(|key| std::env::var_os(key)),
+    ])
+}
+
+fn sample(paths: &[std::path::PathBuf; 2]) -> Sample {
+    paths
+        .each_ref()
+        .map(|path| crate::config::watch::fingerprint(path))
+}
+
+/// Decides when the watched files need a reload, acknowledging both the
+/// watcher's own completed reloads and this window's saves.
+#[derive(Default)]
+pub(super) struct ConfigWatch {
+    watch: crate::config::watch::Watch<Sample>,
+    /// The sample a started reload will reflect, and the load revision then.
+    pending: Option<(Sample, u64)>,
+}
+
+impl ConfigWatch {
+    /// `saved` is the state this window's last save wrote and reloaded, and
+    /// `revision` the window's current load revision. `true` means reload now.
+    pub(super) fn observe(
+        &mut self,
+        sample: Sample,
+        saved: Option<Sample>,
+        revision: u64,
+        busy: bool,
+    ) -> bool {
+        if let Some((pending, started)) = self.pending
+            && started != revision
+        {
+            self.watch.accept(pending);
+            self.pending = None;
+        }
+        // After `pending`: a save always follows the watcher reload it waited
+        // on, so its sample is the newer one.
+        if let Some(saved) = saved {
+            self.watch.accept(saved);
+        }
+        let due = self.watch.observe(sample) && !busy;
+        if due {
+            self.pending = Some((sample, revision));
+        }
+        due
+    }
+}
+
 #[cfg(test)]
 type SizeWriter = dyn Fn(Vec<(FontFace, f32)>) -> crate::Result<()> + Send + Sync;
 
@@ -29,32 +84,21 @@ pub(super) struct SizeIo {
 
 impl SettingsWindow {
     pub(super) fn watch_config(&mut self, cx: &mut Context<Self>) {
-        let Ok(path) = Config::local_path() else {
+        let Some(paths) = watched_paths() else {
             return;
         };
-        let daemon = crate::config::daemon_config_path(|key| std::env::var_os(key));
         self._watch = Some(cx.spawn(async move |this, cx| {
-            let mut watch = crate::config::watch::Watch::default();
-            let mut pending = None;
+            let mut watch = ConfigWatch::default();
             loop {
-                let (path, daemon) = (path.clone(), daemon.clone());
+                let paths = paths.clone();
                 let sample = cx
                     .background_executor()
-                    .spawn(async move {
-                        use crate::config::watch::fingerprint;
-                        [fingerprint(&path), fingerprint(&daemon)]
-                    })
+                    .spawn(async move { sample(&paths) })
                     .await;
                 if this
                     .update(cx, |this, cx| {
-                        if let Some((sample, revision)) = pending
-                            && revision != this.load_revision
-                        {
-                            watch.accept(sample);
-                            pending = None;
-                        }
-                        if watch.observe(sample) && !this.busy() {
-                            pending = Some((sample, this.load_revision));
+                        let saved = this.saved_sample.take();
+                        if watch.observe(sample, saved, this.load_revision, this.busy()) {
                             this.reload(cx);
                         }
                     })
@@ -139,15 +183,24 @@ impl SettingsWindow {
         self.save_native(move || Config::save_font_sizes(&sizes), cx);
     }
 
-    pub(super) fn loader(cx: &App) -> impl FnOnce() -> crate::Result<Loaded> + Send + 'static {
+    pub(super) fn loader(
+        &self,
+        cx: &App,
+    ) -> impl FnOnce() -> crate::Result<Loaded> + Send + 'static + use<> {
         let light = matches!(
             cx.window_appearance(),
             WindowAppearance::Light | WindowAppearance::VibrantLight
         );
         let text_system = cx.text_system().clone();
+        let installed = self.installed_fonts.clone();
         move || {
             let mut config = Config::load()?;
-            config.resolve_font_fallbacks(|| text_system.all_font_names());
+            config.resolve_fonts(|| {
+                installed
+                    .get_or_init(|| text_system.all_font_names())
+                    .iter()
+                    .cloned()
+            });
             let (shared, error, theme) = match herdr_settings::Settings::load() {
                 Ok(shared) => {
                     config.apply_shared_notifications(&shared);
@@ -212,10 +265,15 @@ impl SettingsWindow {
     }
 
     pub(super) fn reload(&mut self, cx: &mut Context<Self>) {
+        // Buttons stay clickable while busy; the remote re-read must not start
+        // for a reload `reload_with` would then refuse.
+        if self.busy() {
+            return;
+        }
         if self.section == Section::General {
             self.sync_remote_history(true, cx);
         }
-        self.reload_with(Self::loader(cx), cx);
+        self.reload_with(self.loader(cx), cx);
     }
 
     pub(super) fn reload_with(
@@ -252,7 +310,7 @@ impl SettingsWindow {
         operation: impl FnOnce() -> crate::Result<()> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        self.save_with(operation, Self::loader(cx), false, cx);
+        self.save_with(operation, self.loader(cx), false, cx);
     }
 
     pub(super) fn save_shared(&mut self, edit: Edit, cx: &mut Context<Self>) {
@@ -261,7 +319,7 @@ impl SettingsWindow {
         };
         self.save_with(
             move || shared.save(edit).map(|_| ()),
-            Self::loader(cx),
+            self.loader(cx),
             true,
             cx,
         );
@@ -290,12 +348,16 @@ impl SettingsWindow {
         }
         self.saving = true;
         self.error = None;
-        self.status = Some("Saving...".into());
         let retained = cx.entity();
         let (finished, completion) = std::sync::mpsc::sync_channel(1);
         self.save_completion = Some(completion);
+        // Only a watched window needs its own write fingerprinted.
+        let watched = self._watch.is_some().then(watched_paths).flatten();
         let work = cx.background_executor().spawn(async move {
             let saved = operation().map_err(std::sync::Arc::new);
+            // Fingerprint before loading: the load then reflects at least this
+            // state, and any later edit still differs for the watcher.
+            let written = watched.as_ref().map(sample);
             // A persistence error can occur after replacement. Always reconcile.
             let loaded = load();
             // Only our successful, reconciled write may advance the queued
@@ -309,13 +371,14 @@ impl SettingsWindow {
                 None
             };
             let _ = finished.send(saved.clone().map(|()| shared));
-            (saved, loaded)
+            (saved, loaded, written)
         });
         cx.spawn(async move |_, cx| {
-            let (saved, loaded) = work.await;
+            let (saved, loaded, written) = work.await;
             retained.update(cx, |this, cx| {
                 this.saving = false;
                 this.save_completion = None;
+                this.saved_sample = written;
                 if saved.is_ok() {
                     on_saved(cx);
                 }
@@ -344,16 +407,15 @@ impl SettingsWindow {
                     this.broadcast_layout(cx);
                 }
                 this.finish_close(cx);
+                // Success is visible in the controls themselves; only problems
+                // earn a footer line.
                 if !this.saving {
-                    this.status = Some(
-                        match (saved.is_ok(), reloaded) {
-                            (true, true) => "Saved",
-                            (true, false) => "Saved; could not reload current preferences",
-                            (false, true) => "Save failed; reloaded current preferences",
-                            (false, false) => "Save failed; reload before editing again",
-                        }
-                        .into(),
-                    );
+                    this.status = match (saved.is_ok(), reloaded) {
+                        (true, true) => None,
+                        (true, false) => Some("Saved; could not reload current preferences".into()),
+                        (false, true) => Some("Save failed; reloaded current preferences".into()),
+                        (false, false) => Some("Save failed; reload before editing again".into()),
+                    };
                 }
                 if let Err(error) = &saved {
                     this.error = Some(format!("Save settings: {error}"));
@@ -363,28 +425,21 @@ impl SettingsWindow {
                     // Direct loads here can overwrite its active picker preview.
                     if shared && saved.is_ok() {
                         // Use the existing connection, without stealing its response lane.
-                        if let Some(endpoint) = source.endpoints.iter().find(|endpoint| {
-                            !matches!(
-                                endpoint.connection.target,
-                                herdr_client::ConnectTarget::Ssh { .. }
-                            )
-                        }) && let (Some(handle), Some(snapshot)) =
-                            (&endpoint.connection.handle, &endpoint.live.snapshot)
+                        if let Some(endpoint) = source
+                            .endpoints
+                            .iter()
+                            .find(|endpoint| !endpoint.connection.target.is_remote())
+                            && let (Some(handle), Some(snapshot)) =
+                                (&endpoint.connection.handle, &endpoint.live.snapshot)
                             && endpoint.live.status.is_connected()
-                        {
-                            let status = match handle.request(
+                            && let Err(error) = handle.request(
                                 &snapshot.boot_id,
                                 herdr_client::Method::ServerReloadConfig,
                                 serde_json::json!({}),
-                            ) {
-                                Ok(_) => "Saved; daemon reload queued (not acknowledged)".into(),
-                                Err(error) => {
-                                    format!("Saved; daemon reload not queued: {error}")
-                                }
-                            };
-                            if !this.saving {
-                                this.status = Some(status);
-                            }
+                            )
+                            && !this.saving
+                        {
+                            this.status = Some(format!("Saved; daemon reload not queued: {error}"));
                         }
                     }
                 });

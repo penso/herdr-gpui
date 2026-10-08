@@ -195,10 +195,7 @@ fn departure_is_bounded_and_an_old_scan_cannot_restore_a_deleted_row() {
 fn remote_departure_keeps_other_rows_and_refresh_keeps_the_updated_catalog() {
     let mut sessions = Sessions::default();
     for (id, host) in [("device", "host"), ("other", "elsewhere")] {
-        sessions
-            .devices
-            .asked
-            .insert(id.into(), (host.into(), now()));
+        sessions.devices.asked.insert(id.into(), (ssh(host), now()));
         sessions.devices.answers.insert(
             id.into(),
             DeviceScan::Sessions(vec![
@@ -231,12 +228,16 @@ fn remote_departure_keeps_other_rows_and_refresh_keeps_the_updated_catalog() {
 }
 
 /// One saved device as the window's endpoint list describes it.
-fn device(name: &str) -> (String, String) {
-    (format!("ssh:{name}"), format!("{name}.invalid"))
+fn device(name: &str) -> (String, RemoteHost) {
+    (format!("ssh:{name}"), ssh(&format!("{name}.invalid")))
+}
+
+fn ssh(target: &str) -> RemoteHost {
+    RemoteHost::Ssh(target.to_owned())
 }
 
 /// Wait for the pass the popup started, counting nothing it never began.
-fn settle(devices: &mut Devices, targets: &[(String, String)]) {
+fn settle(devices: &mut Devices, targets: &[(String, RemoteHost)]) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while devices.pending.is_some() {
         assert!(Instant::now() < deadline, "the device pass never reported");
@@ -248,11 +249,14 @@ fn settle(devices: &mut Devices, targets: &[(String, String)]) {
 }
 
 /// A probe that records each target it was handed.
-fn recorder() -> (std::sync::Arc<std::sync::Mutex<Vec<String>>>, Box<Probe>) {
+fn recorder() -> (
+    std::sync::Arc<std::sync::Mutex<Vec<RemoteHost>>>,
+    Box<Probe>,
+) {
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let recorded = seen.clone();
-    let probe: Box<Probe> = Box::new(move |target: &str| {
-        recorded.lock().unwrap().push(target.to_owned());
+    let probe: Box<Probe> = Box::new(move |target: &RemoteHost| {
+        recorded.lock().unwrap().push(target.clone());
         Ok(Vec::new())
     });
     (seen, probe)
@@ -269,10 +273,10 @@ fn a_closed_popup_never_probes_a_device_but_still_applies_a_finished_pass() {
     devices.pending = Some(rx);
     devices
         .asked
-        .insert("ssh:build".to_owned(), ("build.invalid".to_owned(), now()));
+        .insert("ssh:build".to_owned(), (ssh("build.invalid"), now()));
     tx.send(vec![(
         "ssh:build".to_owned(),
-        "build.invalid".to_owned(),
+        ssh("build.invalid"),
         DeviceScan::Sessions(vec![RemoteSession {
             name: "agents".into(),
             running: true,
@@ -295,13 +299,13 @@ fn a_pass_asks_every_due_device_and_leaves_the_others_alone() {
     // `prod` was asked a moment ago; `build` never has been.
     devices
         .asked
-        .insert("ssh:prod".to_owned(), ("prod.invalid".to_owned(), asked_at));
+        .insert("ssh:prod".to_owned(), (ssh("prod.invalid"), asked_at));
     let (seen, probe) = recorder();
     assert!(devices.poll_with(&targets, true, asked_at, probe));
     settle(&mut devices, &targets);
     assert_eq!(
         *seen.lock().unwrap(),
-        ["build.invalid"],
+        [ssh("build.invalid")],
         "only the device whose answer has aged out is asked"
     );
     assert_eq!(devices.answers.len(), 1);
@@ -316,7 +320,7 @@ fn a_pass_asks_every_due_device_and_leaves_the_others_alone() {
     settle(&mut devices, &targets);
     let mut both = seen.lock().unwrap().clone();
     both.sort();
-    assert_eq!(both, ["build.invalid", "prod.invalid"]);
+    assert_eq!(both, [ssh("build.invalid"), ssh("prod.invalid")]);
 }
 
 #[test]
@@ -353,14 +357,13 @@ fn a_worker_that_dies_fails_only_the_devices_it_was_asking() {
         asking: vec![device("build")],
         ..Default::default()
     };
-    devices.asked.insert(
-        "ssh:build".to_owned(),
-        ("build.invalid".to_owned(), asked_at),
-    );
+    devices
+        .asked
+        .insert("ssh:build".to_owned(), (ssh("build.invalid"), asked_at));
     // `prod` answered a moment ago: it is not part of this pass.
     devices
         .asked
-        .insert("ssh:prod".to_owned(), ("prod.invalid".to_owned(), asked_at));
+        .insert("ssh:prod".to_owned(), (ssh("prod.invalid"), asked_at));
     devices.answers.insert(
         "ssh:prod".to_owned(),
         DeviceScan::Sessions(vec![RemoteSession {
@@ -368,7 +371,7 @@ fn a_worker_that_dies_fails_only_the_devices_it_was_asking() {
             running: true,
         }]),
     );
-    let (tx, rx) = mpsc::sync_channel::<Vec<(String, String, DeviceScan)>>(1);
+    let (tx, rx) = mpsc::sync_channel::<Vec<(String, RemoteHost, DeviceScan)>>(1);
     devices.pending = Some(rx);
     drop(tx);
     assert!(devices.poll_with(&targets, false, now(), |_| {
@@ -392,7 +395,7 @@ fn a_device_whose_host_changed_is_asked_again_at_once() {
     let mut devices = Devices::default();
     devices
         .asked
-        .insert("ssh:build".to_owned(), ("old.invalid".to_owned(), asked_at));
+        .insert("ssh:build".to_owned(), (ssh("old.invalid"), asked_at));
     devices.answers.insert(
         "ssh:build".to_owned(),
         DeviceScan::Sessions(vec![RemoteSession {
@@ -401,13 +404,13 @@ fn a_device_whose_host_changed_is_asked_again_at_once() {
         }]),
     );
     // The same endpoint id now points at another host, inside the interval.
-    let targets = [("ssh:build".to_owned(), "new.invalid".to_owned())];
+    let targets = [("ssh:build".to_owned(), ssh("new.invalid"))];
     let (seen, probe) = recorder();
     assert!(devices.poll_with(&targets, true, asked_at + Duration::from_secs(1), probe));
     settle(&mut devices, &targets);
     assert_eq!(
         *seen.lock().unwrap(),
-        ["new.invalid"],
+        [ssh("new.invalid")],
         "a changed host is asked at once rather than after the old host's interval"
     );
     assert!(devices.answers.contains_key("ssh:build"));
@@ -417,17 +420,17 @@ fn a_device_whose_host_changed_is_asked_again_at_once() {
 fn an_answer_from_a_host_the_device_no_longer_points_at_is_dropped() {
     let asked_at = now();
     let mut devices = Devices {
-        asking: vec![("ssh:build".to_owned(), "old.invalid".to_owned())],
+        asking: vec![("ssh:build".to_owned(), ssh("old.invalid"))],
         ..Default::default()
     };
     devices
         .asked
-        .insert("ssh:build".to_owned(), ("old.invalid".to_owned(), asked_at));
-    let (tx, rx) = mpsc::sync_channel::<Vec<(String, String, DeviceScan)>>(1);
+        .insert("ssh:build".to_owned(), (ssh("old.invalid"), asked_at));
+    let (tx, rx) = mpsc::sync_channel::<Vec<(String, RemoteHost, DeviceScan)>>(1);
     devices.pending = Some(rx);
     tx.send(vec![(
         "ssh:build".to_owned(),
-        "old.invalid".to_owned(),
+        ssh("old.invalid"),
         DeviceScan::Sessions(vec![RemoteSession {
             name: "agents".into(),
             running: true,
@@ -435,7 +438,7 @@ fn an_answer_from_a_host_the_device_no_longer_points_at_is_dropped() {
     )])
     .unwrap();
     // The device moved to another host while that probe was in flight.
-    let targets = [("ssh:build".to_owned(), "new.invalid".to_owned())];
+    let targets = [("ssh:build".to_owned(), ssh("new.invalid"))];
     assert!(devices.poll_with(&targets, false, asked_at, |_| {
         unreachable!("the pass is already outstanding")
     }));

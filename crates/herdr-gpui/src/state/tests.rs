@@ -1,6 +1,7 @@
 use super::*;
 use herdr_client::protocol::FrameData;
 
+mod agent_recency;
 mod agent_status;
 mod announcements;
 mod connection_status;
@@ -8,6 +9,7 @@ mod daemon_messages;
 mod focus_acks;
 mod requests;
 mod surfaces;
+mod version_mismatch;
 
 fn snapshot() -> Arc<ClientShellSnapshot> {
     Arc::new(

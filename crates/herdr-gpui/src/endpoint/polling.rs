@@ -3,7 +3,7 @@
 use super::{ACTIVATION_TIMEOUT, LOCAL, Redraw};
 use crate::{HerdrWindow, state::ConnectionStatus};
 use gpui::{ClipboardItem, Context};
-use herdr_client::ConnectTarget;
+use herdr_client::RemoteHost;
 use std::time::Instant;
 
 impl HerdrWindow {
@@ -40,7 +40,7 @@ impl HerdrWindow {
             match result {
                 Ok(update) => {
                     self.catalog.accept(&update);
-                    self.reconcile_catalog(update.hosts, cx);
+                    self.reconcile_catalog(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
                     self.local_error = Some(format!("Host catalog: {error}"));
@@ -222,16 +222,18 @@ impl HerdrWindow {
     }
 
     /// The devices this window may ask for their sessions: every enabled saved
-    /// device reachable over SSH. One the user disabled is never dialled, and the
-    /// local endpoint has no host to ask.
-    pub(crate) fn probe_targets(&self) -> Vec<(String, String)> {
+    /// device on an SSH host or in a WSL distribution. One the user disabled is
+    /// never dialled, and the local endpoint has no host to ask.
+    pub(crate) fn probe_targets(&self) -> Vec<(String, RemoteHost)> {
         self.endpoints
             .iter()
             .skip(1)
             .filter(|endpoint| endpoint.enabled)
-            .filter_map(|endpoint| match &endpoint.connection.target {
-                ConnectTarget::Ssh { target, .. } => Some((endpoint.id.clone(), target.clone())),
-                _ => None,
+            .filter_map(|endpoint| {
+                Some((
+                    endpoint.id.clone(),
+                    endpoint.connection.target.remote_host()?,
+                ))
             })
             .collect()
     }

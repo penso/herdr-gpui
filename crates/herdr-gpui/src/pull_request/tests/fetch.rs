@@ -134,7 +134,7 @@ fn local_git_verification_rejects_wrong_checkout_branch_and_remote_before_gh() {
     ]);
     let mut input = Input {
         checkout: Some(directory.0.to_str().unwrap().into()),
-        repo_key: directory.0.join(".git").to_str().unwrap().into(),
+        repo_key: Some(directory.0.join(".git").to_str().unwrap().into()),
         branch: "feature".into(),
     };
     assert!(
@@ -175,7 +175,7 @@ fn local_git_verification_rejects_wrong_checkout_branch_and_remote_before_gh() {
             .to_string()
             .contains("branch changed")
     );
-    input.repo_key = directory.0.to_str().unwrap().into();
+    input.repo_key = Some(directory.0.to_str().unwrap().into());
     assert!(
         fetch(&input, &"fixture".into(), || false)
             .unwrap_err()

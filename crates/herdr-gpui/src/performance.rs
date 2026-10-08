@@ -16,6 +16,8 @@ pub(crate) struct Counts {
     pub shapes: usize,
     pub quads: usize,
     pub glyphs: usize,
+    /// Cell-geometry paths, such as prompt separators.
+    pub paths: usize,
     pub decorations: usize,
     pub paint_errors: usize,
     pub metric_shapes: usize,

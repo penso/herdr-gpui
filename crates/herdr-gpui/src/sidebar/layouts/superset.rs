@@ -61,6 +61,7 @@ fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContex
         .py(px(gap))
         .pl(px(cx.look.content_x() + indent))
         .cursor_pointer();
+    let row = cx.mark.apply(row, key, &cx.look);
     parts::mark(
         row,
         state,
@@ -86,7 +87,9 @@ fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContex
 }
 
 /// The icon slot, with the status as a dot pinned to its top right corner in
-/// `dot`'s color, bold where symbols allow. `None` draws no dot.
+/// `dot`'s color, bold where symbols allow. `None` draws no dot. The dot stays
+/// inside the slot: the slot sets the line's height and the line clips, so a
+/// dot that overhangs the slot loses its top.
 fn slot(
     key: &str,
     glyph: impl IntoElement,
@@ -99,16 +102,18 @@ fn slot(
         if cx.indicators.style == crate::herdr_settings::IndicatorStyle::Symbols {
             return status_mark(status, cx.font, cx.indicators, color, bold)
                 .mt_0()
+                .debug_selector(|| format!("dot-{key}"))
                 .absolute()
-                .top(px(-2.))
-                .right(px(-2.))
+                .top_0()
+                .right_0()
                 .bg(rgb(theme.sidebar_background()));
         }
         let (diameter, filled, _) = status_style(status, theme);
         div()
+            .debug_selector(|| format!("dot-{key}"))
             .absolute()
-            .top(px(-2.))
-            .right(px(-2.))
+            .top_0()
+            .right_0()
             .size(px(diameter))
             .rounded_full()
             .border_1()
@@ -172,11 +177,12 @@ impl RowLayout for Superset {
         let theme = cx.theme;
         let m = Metrics::new(cx);
         let slot_dot = dot(&lines, status, cx);
-        let indent = if tree == RowTree::None {
-            0.
-        } else {
-            cx.look.density.padding()
-        };
+        let indent = cx.nest
+            + if tree == RowTree::None {
+                0.
+            } else {
+                cx.look.density.card_indent()
+            };
         let pr = badge.as_ref().and_then(|badge| badge.pr.as_ref());
         let dirty = badge.as_ref().is_some_and(|badge| badge.dirty);
         let teleported = badge.as_ref().is_some_and(|badge| badge.teleported);
@@ -345,6 +351,7 @@ mod tests {
             family: "Menlo".into(),
             size: 12.,
             fallbacks: None,
+            line_height_multiple: None,
         };
         let theme = Theme::default();
         let indicators = Indicators::new(None, false, &theme);
@@ -354,6 +361,8 @@ mod tests {
             theme: &theme,
             look: layout::for_mode(LayoutMode::Superset),
             width: 232.,
+            nest: 0.,
+            mark: Default::default(),
             host: None,
         };
         let working = AgentStatus::Working;

@@ -1,5 +1,5 @@
-//! Notes the user sent that no terminal took: kept for the agent to fetch
-//! with `browser feedback`. A batch goes one way only. When its agent is
+//! Notes the user sent that no terminal took, on a page or on the agent's
+//! changes: kept for the agent to fetch with `browser feedback`. A batch goes one way only. When its agent is
 //! waiting in `browser feedback --wait`, the batch is handed there; otherwise
 //! it is pasted into the agent's pane, and only a pane that no longer exists
 //! leaves it here. Only the Unix control socket fetches or waits, so the
@@ -8,7 +8,6 @@ use gpui::Global;
 use std::collections::VecDeque;
 
 /// Batches kept at once; the oldest goes first.
-#[cfg(any(target_os = "macos", windows, test))]
 const MAX_KEPT: usize = 16;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,7 +32,6 @@ impl Feedback {
         &self.waiting
     }
 
-    #[cfg(any(target_os = "macos", windows, test))]
     pub(crate) fn is_waiting(&self, pane_id: &str) -> bool {
         self.waiting.iter().any(|pane| pane == pane_id)
     }
@@ -44,7 +42,6 @@ impl Feedback {
         self.waiting = panes;
     }
 
-    #[cfg(any(target_os = "macos", windows, test))]
     pub(crate) fn keep(&mut self, batch: Batch) {
         if self.kept.len() >= MAX_KEPT {
             self.kept.pop_front();

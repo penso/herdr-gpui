@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use herdr_client::protocol::*;
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 
 fn frame(text: &str, width: u16, height: u16) -> FrameData {
     let mut symbols = text.chars();
@@ -173,8 +173,12 @@ fn plain_links_do_not_cross_panes_or_guess_wrapped_destinations() {
     }
     let unicode = frame("界 https://example.com ", 40, 1);
     assert_eq!(
-        frame_link(&unicode, 3, 0, 0, 40).as_deref(),
-        Some("https://example.com/")
+        frame_link(&unicode, 3, 0, 0, 40),
+        Some(RowLink {
+            target: RowTarget::Web("https://example.com/".into()),
+            row: 0,
+            columns: 2..21,
+        })
     );
 }
 
@@ -236,6 +240,7 @@ fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::Te
             view.pressed_terminal_link = Some(crate::window::PressedLink {
                 url: Some("https://example.com/click".into()),
                 cell: None,
+                file: None,
                 position,
             });
             view.open_terminal_link(&gpui::ClickEvent::Mouse(event.clone()), window, cx);
@@ -243,6 +248,7 @@ fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::Te
             view.pressed_terminal_link = Some(crate::window::PressedLink {
                 url: Some("https://different.example/".into()),
                 cell: None,
+                file: None,
                 position,
             });
             view.open_terminal_link(&gpui::ClickEvent::Mouse(event), window, cx);
@@ -276,3 +282,5 @@ fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::Te
         assert!(view.terminal_link_at(position).is_none());
     });
 }
+
+mod paths;

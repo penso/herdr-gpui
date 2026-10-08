@@ -80,9 +80,9 @@ fn changed_target_and_manual_reconnect_reset_retry_history(cx: &mut gpui::TestAp
             session: "default".into(),
             enabled: true,
         };
-        view.reconcile_catalog(vec![host.clone()], cx);
+        view.reconcile_catalog(vec![host.clone()], Vec::new(), cx);
         view.endpoints[1].attempts = 8;
-        view.reconcile_catalog(vec![host.clone()], cx);
+        view.reconcile_catalog(vec![host.clone()], Vec::new(), cx);
         assert_eq!(
             view.endpoints[1].attempts, 8,
             "unchanged catalog preserves backoff"
@@ -92,6 +92,7 @@ fn changed_target_and_manual_reconnect_reset_retry_history(cx: &mut gpui::TestAp
                 session: "changed".into(),
                 ..host
             }],
+            Vec::new(),
             cx,
         );
         assert_eq!(view.endpoints[1].attempts, 0);

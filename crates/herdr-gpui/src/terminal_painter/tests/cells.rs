@@ -28,9 +28,9 @@ fn link_underlines_stay_inside_the_frame() {
 }
 
 #[gpui::test]
-fn edge_backgrounds_reach_the_canvas_without_stretching_popups(cx: &mut TestAppContext) {
+fn edge_backgrounds_reach_the_canvas_without_stretching_popups_or_prompts(cx: &mut TestAppContext) {
     let (_, cx) = cx.add_window_view(|_, _| Empty);
-    for extend in [false, true] {
+    for (extend, prompt) in [(false, false), (true, false), (false, true), (true, true)] {
         cx.draw(Point::default(), size(px(100.), px(100.)), |_, _| {
             canvas(
                 |_, _, _| (),
@@ -40,9 +40,14 @@ fn edge_backgrounds_reach_the_canvas_without_stretching_popups(cx: &mut TestAppC
                         height: 2,
                         cells: [0x123456, 0x654321, 0xabcdef, 0xfedcba]
                             .into_iter()
-                            .map(|bg| CellData {
+                            .enumerate()
+                            .map(|(index, bg)| CellData {
                                 bg: 0x02000000 | bg,
-                                ..cell(" ")
+                                ..cell(if prompt && index == 3 {
+                                    "\u{e0b0}"
+                                } else {
+                                    " "
+                                })
                             })
                             .collect(),
                         cursor: None,
@@ -70,25 +75,24 @@ fn edge_backgrounds_reach_the_canvas_without_stretching_popups(cx: &mut TestAppC
         });
         cx.update(|window, _| {
             let quads = window.painted_quads();
-            assert_eq!(quads.len(), 4);
-            for (x, y, width, height, color) in [
+            let right = if extend { 13. } else { 10. };
+            // A separator cap stays cell-high, so its row does not continue below.
+            let bottom = if extend && !prompt { 27. } else { 20. };
+            let expected = [
                 (17., 23., 10., 20., 0x123456),
-                (27., 23., if extend { 13. } else { 10. }, 20., 0x654321),
-                (17., 43., 10., if extend { 27. } else { 20. }, 0xabcdef),
-                (
-                    27.,
-                    43.,
-                    if extend { 13. } else { 10. },
-                    if extend { 27. } else { 20. },
-                    0xfedcba,
-                ),
-            ] {
+                (27., 23., right, 20., 0x654321),
+                (17., 43., 10., bottom, 0xabcdef),
+                (27., 43., right, bottom, 0xfedcba),
+            ];
+            assert_eq!(quads.len(), expected.len());
+            for (x, y, width, height, color) in expected {
                 let bounds = Bounds::new(point(px(x), px(y)), size(px(width), px(height)))
                     .scale(window.scale_factor());
                 assert!(
                     quads
                         .iter()
-                        .any(|quad| quad.bounds == bounds && quad.background == rgb(color).into())
+                        .any(|quad| quad.bounds == bounds && quad.background == rgb(color).into()),
+                    "extend={extend} prompt={prompt} {bounds:?}"
                 );
             }
         });

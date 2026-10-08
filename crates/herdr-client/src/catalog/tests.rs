@@ -78,9 +78,12 @@ fn storage_errors_retain_operation_paths_sources_and_redacted_display() {
     let error = store_selection(&catalog, None).unwrap_err();
     assert!(
         matches!(&error, Error::Storage { operation: StorageOperation::Validate, path, source }
-        if path == &selection && matches!(source.as_ref(), Error::SelectionDestinationNotFile))
+        if path == &selection && matches!(source.as_ref(), Error::StorageDestinationNotFile))
     );
-    assert_eq!(error.to_string(), "selection path is not a regular file");
+    assert_eq!(
+        error.to_string(),
+        "storage destination is not a regular file"
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

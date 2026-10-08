@@ -22,7 +22,7 @@ mkdir -p "$root/bin" "$root/share/applications" "$root/${icon_path%/*}" "$root/s
 cp "$3" "$root/bin/herdr-gpui"
 chmod 755 "$root/bin/herdr-gpui"
 cp "$icon" "$root/$icon_path"
-cp "$release_root/scripts/release/herdr-gpui.desktop" "$root/share/applications/"
+cp "$release_root/scripts/release/so.pen.herdr-gpui.desktop" "$root/share/applications/"
 cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$release_root/crates/herdr-protocol/NOTICE.md" "$root/share/licenses/herdr-gpui/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$root/share/licenses/herdr-gpui/"
 cp "$5" "$root/share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt"

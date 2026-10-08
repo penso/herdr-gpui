@@ -14,7 +14,8 @@ ABOUT_VERSION = "cargo-about 0.9.2"
 INSTALL = "cargo install cargo-about --version 0.9.2 --locked --features cli"
 # cargo-about package exceptions are name-scoped; require a new version review.
 MPL_VERSIONS = {
-    "cbindgen": "0.28.0", "dwrote": "0.11.5", "option-ext": "0.2.0",
+    "cbindgen": "0.28.0", "dwrote": "0.11.5", "nucleo-matcher": "0.3.1",
+    "option-ext": "0.2.0",
     "symphonia": "0.5.5", "symphonia-bundle-mp3": "0.5.5",
     "symphonia-core": "0.5.5", "symphonia-metadata": "0.5.5",
 }

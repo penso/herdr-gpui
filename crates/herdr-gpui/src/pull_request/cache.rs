@@ -220,7 +220,7 @@ impl Cache {
             .iter()
             .find(|entry| {
                 entry.input.checkout.is_none()
-                    && entry.input.repo_key == repo_key
+                    && entry.input.repo_key.as_deref() == Some(repo_key)
                     && entry.input.branch == branch
             })
             .and_then(|entry| entry.value.as_ref())

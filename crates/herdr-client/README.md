@@ -1,7 +1,8 @@
 # Native Client API
 
-Local and SSH client for Herdr's stable generation 1 endpoint. Local connections
-work on Unix and on Windows; SSH endpoints are Unix-only. This crate
+Local, SSH, and WSL client for Herdr's stable generation 1 endpoint. Local
+connections work on Unix and on Windows; SSH endpoints are Unix-only, and WSL
+distributions are Windows-only. This crate
 does not link Herdr, GPUI, ratatui, crossterm, Tokio, or a PTY implementation.
 The workspace centralizes the pinned GPUI dependency (`gpui-pre` 0.3.6) for the GUI member.
 
@@ -132,7 +133,9 @@ The peek is the crate's only `unsafe`, a single `PeekNamedPipe` call with no
 safe wrapper available, matching what the daemon's own Windows client does; no
 extra threads are involved. `set_write_timeout` is accepted and not enforced,
 because a named pipe has no send timeout: a peer that stops reading can block a
-write until it exits.
+write until it exits. A WSL bridge's stream is the same wrapper around the
+`wsl.exe` child's anonymous stdin and stdout pipes, which `PeekNamedPipe` also
+accepts, with the same limits.
 If adapting a typed error to that callback, use
 `io::Error::new(error.kind(), error)`, not `error.to_string()`, to retain sources.
 
@@ -265,8 +268,20 @@ SurfaceImages(Arc<SurfaceImages>)
 Response { request_id: String, response: serde_json::Value }
 CommandRejected { request_id: Option<String>, reason: Error }
 Message(ServerMessage)
+VersionMismatch(VersionMismatch)
 Disconnected { reason: String }
 ```
+
+`VersionMismatch` precedes the `Disconnected` of a connection refused because one
+side must be updated: `DaemonOutdated` for a local daemon that closes after the
+hello without any welcome (as releases before `MIN_HERDR_VERSION`, 0.9.0, do
+when they cannot decode it), one that answers with a pre-endpoint welcome,
+reports an older generation, or lacks a required
+capability, or, over SSH or WSL, has no installed Herdr able to serve this client;
+`ClientOutdated` for a newer generation. Each carries the daemon's reported
+version, stripped of controls and capped at 64 characters, when it gave one.
+`Error::version_mismatch` applies the same classification to an error. Other
+failures, including an SSH host with no Herdr at all, are not mismatches.
 
 The receiver is `crossbeam_channel::Receiver`, re-exported as `Receiver`.
 Responses preserve either the endpoint's `{id,result}` or `{id,error}` object;
@@ -425,6 +440,37 @@ install scanning, or retry/replay.
 Shell-initialized PATH entries unavailable to `/bin/sh` are not discovered unless
 covered by the known roots. The remote bridge itself can start the named daemon,
 as upstream does; disconnect only detaches and never stops the remote daemon.
+
+## WSL Distributions
+
+On Windows, `ConnectTarget::Wsl { distro, session }` attaches to Herdr inside a
+WSL distribution. The worker runs `%SystemRoot%\System32\wsl.exe --distribution
+<distro> --cd ~ --exec /bin/sh -c <script>` with the same discovery script,
+compatibility checks, output-ready marker, and `remote-client-bridge` handshake
+an SSH host uses, over the child's standard streams. `--exec` keeps `wsl.exe`
+from expanding `$VARIABLES` in the script. The child has no console window
+(`CREATE_NO_WINDOW`), starts in the system directory so a vanished WSL share
+cannot be its working directory, and has its stderr discarded; the worker kills
+and reaps it on every exit. As over SSH, the bridge starts the session's server
+when it is down, and disconnecting never stops it.
+
+`list_distros()` runs `wsl.exe --list --quiet` with `WSL_UTF8=1`, accepts UTF-16LE
+output from builds that ignore it, drops Docker Desktop's internal
+distributions and any line that is not a distribution name, and returns an empty
+list when none is installed. `probe_distro` and `list_distro_sessions` run the
+SSH probe and session-list scripts the same way; `delete_distro_session` the
+session deletion. Every `wsl.exe` call is bounded, because a distribution
+waiting on a first-run prompt makes `wsl.exe` print nothing and never exit.
+`RemoteHost` names either kind of remote host and dispatches session listing
+and deletion to the right one. Distribution names follow `wsl --import`'s rules
+(`valid_distro`) and are validated before anything spawns. Other platforms
+return `Error::WslUnsupported`.
+
+Saved distributions live in `gpui-wsl.json` beside the endpoint catalog, never
+in upstream's `endpoints.json` or `endpoint-selection.json`, whose strict schemas
+cannot name one: `load_wsl_hosts`, `add_wsl_host`, `remove_wsl_host`, and
+`store_wsl_selection` read and atomically rewrite that one file, one distribution
+per entry, with the same 64-entry and 64-KiB limits.
 
 ## SSH File Transfers
 

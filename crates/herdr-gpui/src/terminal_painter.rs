@@ -1,12 +1,14 @@
 mod area;
 mod glyphs;
 mod graphics;
+mod grid;
 mod images;
 
 use self::area::whole;
 pub(crate) use self::area::{Layer, Part, Span, cell_ranges, clip, covers};
 use self::glyphs::GlyphCache;
-use self::graphics::Graphic;
+use self::graphics::{CellSeparator, Graphic};
+use self::grid::{background_extent, grid_corners, grid_rect, last_row_has_separator};
 use self::images::{ImageCache, ImageGeometry, below_text};
 pub(crate) use self::images::{ImageTarget, PlacedImages};
 use crate::config::Theme;
@@ -31,24 +33,6 @@ const REPORT_INTERVAL: Duration = Duration::from_secs(5);
 const SLOW_PAINT: Duration = Duration::from_millis(16);
 const SCROLLBAR_INSET: f32 = 1.;
 const SCROLLBAR_ALPHA: u32 = 0xc0;
-
-fn background_extent(
-    grid: Size<Pixels>,
-    available: Size<Pixels>,
-    cell: Size<Pixels>,
-) -> Size<Pixels> {
-    let extend = |grid, available, cell| {
-        if available > grid && available - grid < cell {
-            available
-        } else {
-            grid
-        }
-    };
-    size(
-        extend(grid.width, available.width, cell.width),
-        extend(grid.height, available.height, cell.height),
-    )
-}
 
 /// Why a span of cells is tinted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -144,6 +128,8 @@ pub(crate) struct TerminalPainter {
     /// Each image painted, with its z, in paint order.
     #[cfg(test)]
     painted_images: Vec<(i32, Bounds<Pixels>)>,
+    #[cfg(test)]
+    painted_separators: Vec<(Bounds<Pixels>, Rgba)>,
     #[cfg(feature = "integration-test")]
     pub uncached: bool,
 }
@@ -161,6 +147,8 @@ impl Default for TerminalPainter {
             images: ImageCache::default(),
             #[cfg(test)]
             painted_images: Vec::new(),
+            #[cfg(test)]
+            painted_separators: Vec::new(),
             #[cfg(feature = "integration-test")]
             uncached: false,
         }
@@ -501,6 +489,8 @@ impl TerminalPainter {
                 size(px(cell_width), px(self.cell_height)),
             )
         });
+        let extend_last_row =
+            background.height > grid.size.height && !last_row_has_separator(frame);
         let whole_area;
         let area = match part {
             Some(part) => part.area,
@@ -550,25 +540,21 @@ impl TerminalPainter {
                         } else {
                             px(end as f32 * cell_width)
                         };
-                        let bottom = if y + 1 == usize::from(frame.height) {
+                        let bottom = if extend_last_row && y + 1 == usize::from(frame.height) {
                             background.height
                         } else {
                             px((y + 1) as f32 * self.cell_height)
                         };
-                        window.paint_quad(fill(
-                            Bounds::new(
-                                origin
-                                    + point(
-                                        px(start as f32 * cell_width),
-                                        px(y as f32 * self.cell_height),
-                                    ),
-                                size(
-                                    right - px(start as f32 * cell_width),
-                                    bottom - px(y as f32 * self.cell_height),
-                                ),
+                        let bounds = grid_rect(
+                            window,
+                            origin,
+                            point(
+                                px(start as f32 * cell_width),
+                                px(y as f32 * self.cell_height),
                             ),
-                            rgb(color),
-                        ));
+                            point(right, bottom),
+                        );
+                        window.paint_quad(fill(bounds, rgb(color)));
                         #[cfg(feature = "integration-test")]
                         {
                             counts.quads += 1;
@@ -592,16 +578,18 @@ impl TerminalPainter {
                     if *row >= frame.height || start >= end {
                         continue;
                     }
+                    let (top, bottom) = (f32::from(*row), f32::from(*row) + 1.);
                     window.paint_quad(fill(
-                        Bounds::new(
-                            origin
-                                + point(
-                                    px(f32::from(start) * cell_width),
-                                    px(f32::from(*row) * self.cell_height),
-                                ),
-                            size(
-                                px(f32::from(end - start) * cell_width),
-                                px(self.cell_height),
+                        grid_rect(
+                            window,
+                            origin,
+                            point(
+                                px(f32::from(start) * cell_width),
+                                px(top * self.cell_height),
+                            ),
+                            point(
+                                px(f32::from(end) * cell_width),
+                                px(bottom * self.cell_height),
                             ),
                         ),
                         tint.color(&self.theme),
@@ -676,11 +664,19 @@ impl TerminalPainter {
                             },
                         );
                     }
+                    let (column, row) = (
+                        index % usize::from(frame.width),
+                        index / usize::from(frame.width),
+                    );
                     for y in decoration_offsets(cell, self.cell_height) {
+                        // Absolute corners keep a run of underlined cells one unbroken line.
+                        let top = row as f32 * self.cell_height + y;
                         window.paint_quad(fill(
-                            Bounds::new(
-                                position + point(px(0.), px(y)),
-                                size(px(cell_width), px(1.)),
+                            grid_rect(
+                                window,
+                                origin,
+                                point(px(column as f32 * cell_width), px(top)),
+                                point(px((column + 1) as f32 * cell_width), px(top + 1.)),
                             ),
                             rgb(cell_colors(cell, &self.theme).0),
                         ));
@@ -750,6 +746,7 @@ impl TerminalPainter {
             total.shapes += counts.shapes;
             total.quads += counts.quads;
             total.glyphs += counts.glyphs;
+            total.paths += counts.paths;
             total.decorations += counts.decorations;
             total.paint_errors += counts.paint_errors;
             total.paints += 1;
@@ -830,6 +827,41 @@ impl TerminalPainter {
                 || Graphic::from_symbol(&cell.symbol).is_some()
             {
                 continue;
+            }
+            if let Some(separator) = CellSeparator::from_symbol(&cell.symbol) {
+                let (column, row) = (
+                    index % usize::from(frame.width),
+                    index / usize::from(frame.width),
+                );
+                // A separator the daemon measures as wide spans its continuation cell,
+                // as the font glyph would.
+                let wide = column + 1 < usize::from(frame.width)
+                    && frame.cells.get(index + 1).is_some_and(|next| next.skip);
+                let cells = if wide { 2 } else { 1 };
+                let (near, far) = grid_corners(
+                    window,
+                    origin,
+                    point(
+                        px(column as f32 * cell_width),
+                        px(row as f32 * self.cell_height),
+                    ),
+                    point(
+                        px((column + cells) as f32 * cell_width),
+                        px((row + 1) as f32 * self.cell_height),
+                    ),
+                );
+                // A degenerate cell whose path cannot tessellate keeps the font glyph.
+                if let Ok(path) = separator.path(near, far) {
+                    let color = rgb(cell_colors(cell, &self.theme).0);
+                    #[cfg(test)]
+                    self.painted_separators.push((path.bounds, color));
+                    window.paint_path(path, color);
+                    #[cfg(feature = "integration-test")]
+                    {
+                        counts.paths += 1;
+                    }
+                    continue;
+                }
             }
             let style = glyphs::style(cell.modifier);
             let newly_shaped;

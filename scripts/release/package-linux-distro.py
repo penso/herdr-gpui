@@ -20,7 +20,7 @@ ARCHES = {"x86_64-unknown-linux-gnu": "amd64", "aarch64-unknown-linux-gnu": "arm
 # (nfpm packager, published extension)
 FORMATS = (("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst"))
 TREE = {
-    "bin/herdr-gpui", "share/applications/herdr-gpui.desktop",
+    "bin/herdr-gpui", "share/applications/so.pen.herdr-gpui.desktop",
     "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
     *(f"share/licenses/herdr-gpui/{name}" for name in (
         "LICENSE", "NOTICE", "LICENSE-octicons", "LICENSE-APACHE", "NOTICE.md",

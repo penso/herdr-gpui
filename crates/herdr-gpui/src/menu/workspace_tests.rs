@@ -1,14 +1,16 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{WorkspaceAction, WorkspaceTarget, state::Deletion};
-use crate::{HerdrWindow, dialog_input::DialogInput, sidebar};
+use super::{WorkspaceAction, WorkspaceMenuAction, WorkspaceTarget, state::Deletion};
+use crate::{HerdrWindow, dialog_input::DialogInput, sidebar, worktree_scripts::ArchiveCheck};
 use herdr_client::Method;
 
 mod close;
 mod dialog_layout;
 mod naming;
 mod pull_requests;
+mod scripts;
 mod targets;
+mod tiles;
 mod worktree_create;
 mod worktree_delete;
 
@@ -71,9 +73,9 @@ pub(crate) fn submit_focus_change(
     }
     if action == WorkspaceAction::DeleteWorktree {
         view.menu.deletion = Some(Deletion {
-            pending: None,
             path: Some("/fixture/checkout".into()),
-            force: false,
+            archive: ArchiveCheck::Read(None),
+            ..Deletion::new(None, false)
         });
     }
     if action == WorkspaceAction::OpenWorktree {
@@ -227,11 +229,14 @@ pub(crate) fn check_menu_interactions(
         let view = view.read(cx);
         assert_eq!(view.menu.selected, None);
         if view.menu.page == Some(super::Page::Workspace) {
+            // The first two actions in keyboard order, whichever tiles they are.
+            let items = view.workspace_items();
             (
                 super::Page::Workspace,
-                view.workspace_items().len(),
-                "workspace-menu-Rename",
-                "workspace-menu-Close group",
+                items.len(),
+                // Debug selectors are static; leaking two test labels is fine.
+                &*format!("workspace-menu-{}", items[0].1).leak(),
+                &*format!("workspace-menu-{}", items[1].1).leak(),
             )
         } else {
             (
@@ -301,16 +306,20 @@ pub(crate) fn check_menu_interactions(
         window.draw(cx).clear(cx);
         assert_eq!(selection(view.read(cx)), Some(1));
     });
+    let second_action = cx.update(|_, cx| {
+        let view = view.read(cx);
+        (page == super::Page::Workspace).then(|| view.workspace_items()[1].0)
+    });
     cx.simulate_keystrokes("enter");
     cx.update(|_, cx| {
-        assert!(
-            view.read(cx).menu.page
-                == Some(if page == super::Page::Workspace {
-                    super::Page::Dialog(WorkspaceAction::Close)
-                } else {
-                    super::Page::Keybinds
-                })
-        );
+        let opened = view.read(cx).menu.page;
+        match second_action {
+            Some(WorkspaceMenuAction::Dialog(action)) => {
+                assert!(opened == Some(super::Page::Dialog(action)))
+            }
+            Some(_) => assert!(opened != Some(page), "the second action did not run"),
+            None => assert!(opened == Some(super::Page::Keybinds)),
+        }
     });
     cx.simulate_mouse_move(outside, None, Modifiers::default());
     cx.update(|window, cx| {

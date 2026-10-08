@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, Theme},
+    config::{Config, FontConfig, Theme},
     diagnostics::{self, Record},
     fonts::StyledFont,
     search_input::{Changed, SearchInput},
@@ -199,10 +199,10 @@ impl LogWindow {
             window.focus(&input.focus, cx);
         });
         let appearance_subscription = cx.observe_global::<Appearance>(|this, cx| {
-            let font = &cx.global::<Appearance>().config.terminal;
-            if font.family != this.appearance.config.terminal.family
-                || font.size != this.appearance.config.terminal.size
-            {
+            if row_metrics_changed(
+                &this.appearance.config.terminal,
+                &cx.global::<Appearance>().config.terminal,
+            ) {
                 // Width changes are handled by GPUI; font changes need explicit invalidation.
                 let offset = this.scroll.logical_scroll_top();
                 this.scroll.reset(this.rows.len());
@@ -707,6 +707,14 @@ impl Render for LogWindow {
         let border = theme.active;
         crate::titlebar::frame(window, border, root)
     }
+}
+
+/// GPUI re-measures only the rows it lays out, so rows outside the viewport
+/// keep stale heights unless the list is reset when the row font changes.
+fn row_metrics_changed(previous: &FontConfig, font: &FontConfig) -> bool {
+    font.family != previous.family
+        || font.size != previous.size
+        || font.line_height() != previous.line_height()
 }
 
 #[cfg(test)]

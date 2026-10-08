@@ -9,7 +9,7 @@ use super::{
 use crate::{Error, terminal::InputTarget};
 use gpui::{ClipboardEntry, ClipboardItem, Context, Task};
 use herdr_client::{
-    ClipboardImageCancellation, ConnectTarget,
+    ClipboardImageCancellation,
     protocol::{ClientClipboardImageTarget, ClientPaneInputEvent},
 };
 use std::sync::Arc;
@@ -107,11 +107,11 @@ impl HerdrWindow {
         self.selected_is_remote() && self.accepts_image_input()
     }
 
-    fn selected_is_remote(&self) -> bool {
-        matches!(
-            self.endpoints[self.selected_endpoint].connection.target,
-            ConnectTarget::Ssh { .. }
-        )
+    pub(super) fn selected_is_remote(&self) -> bool {
+        self.endpoints[self.selected_endpoint]
+            .connection
+            .target
+            .is_remote()
     }
 
     pub(crate) fn focused_input_target(&self) -> Option<InputTarget> {
@@ -453,6 +453,7 @@ impl Prepared {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use herdr_client::ConnectTarget;
     use std::io;
 
     fn processing_errors() -> Vec<Error> {

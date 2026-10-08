@@ -57,6 +57,42 @@ pub(super) fn parse_graphql(
     Ok(result)
 }
 
+/// A pull request looked up by number for a local fork branch. Only a fork's
+/// pull request can be the one that branch was created for; it is then held to
+/// the same head identity checks as one found through a configured upstream.
+pub(super) fn parse_numbered(
+    mut response: serde_json::Value,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result {
+    let pr = response["data"]["repository"]["pullRequest"].take();
+    if pr.is_null() {
+        return Ok(None);
+    }
+    if pr["number"].as_u64() != Some(number) {
+        return Err(Error::PrIdentity);
+    }
+    if pr["isCrossRepository"] != true {
+        return Ok(None);
+    }
+    let (Some(head_owner), Some(head_repo), Some(branch)) = (
+        pr["headRepositoryOwner"]["login"].as_str(),
+        pr["headRepository"]["name"].as_str(),
+        pr["headRefName"].as_str(),
+    ) else {
+        // A deleted fork leaves no head to verify against.
+        return Ok(None);
+    };
+    let head = super::fetch::Head {
+        owner: head_owner.to_owned(),
+        repo: head_repo.to_owned(),
+        branch: branch.to_owned(),
+    };
+    response["data"]["repository"]["pullRequests"] = serde_json::json!({"nodes": [pr]});
+    parse_graphql(response, owner, repo, &head.branch, Some(&head))
+}
+
 #[cfg(any(test, all(feature = "integration-test", target_os = "macos")))]
 pub(super) fn parse(text: &str, owner: &str, repo: &str, branch: &str) -> Result {
     parse_with_owner(text, owner, repo, branch, owner)

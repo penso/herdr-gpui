@@ -5,7 +5,7 @@ use super::{
     state::ConnectionStatus,
 };
 use gpui::Context;
-use herdr_client::{ClientHandle, ConnectOptions, ConnectTarget, SavedHost};
+use herdr_client::{ClientHandle, ConnectOptions, ConnectTarget, VersionMismatch};
 use std::{
     collections::HashSet,
     sync::{
@@ -24,6 +24,9 @@ pub(super) const LOCAL: &str = "local";
 /// Saved SSH endpoints are keyed `ssh:<profile-id>`, so no catalog ID can
 /// collide with `LOCAL`.
 const SAVED_PREFIX: &str = "ssh:";
+/// Saved WSL distributions are keyed `wsl:<distribution>`; a distribution is
+/// saved at most once.
+pub(crate) const WSL_PREFIX: &str = "wsl:";
 
 /// The catalog profile ID behind a saved SSH endpoint's ID, which is what the
 /// `herdr machine` commands and per-device credentials are keyed by.
@@ -128,10 +131,11 @@ pub(super) struct Endpoint {
     pub label: String,
     pub connection: ConnectionBridge,
     pub enabled: bool,
-    /// The saved entry this endpoint was last reconciled against. Its own session
-    /// may have been picked in the sessions list since, so a catalog change can
-    /// only be told from such a pick by remembering what the catalog said.
-    saved_host: Option<SavedHost>,
+    /// The target the saved entry named when this endpoint was last reconciled
+    /// against it. Its own session may have been picked in the sessions list
+    /// since, so a catalog change can only be told from such a pick by
+    /// remembering what the catalog said.
+    saved: Option<ConnectTarget>,
     pub collapsed: bool,
     pub collapsed_repos: HashSet<String>,
     pub live: LiveState,
@@ -139,6 +143,9 @@ pub(super) struct Endpoint {
     pub(crate) toasts: crate::notifications::Toasts,
     /// Derived from `live.snapshot`; refreshed by `sync_live` whenever `live` changes.
     pub(crate) config_diagnostic: crate::config_diagnostic::ConfigDiagnostic,
+    /// The last refused handshake's update advice. Unlike `live`, it survives
+    /// the retries that reset the bridge, until a handshake is accepted.
+    pub(crate) version_mismatch: Option<VersionMismatch>,
     retry_at: Instant,
     attempts: u32,
     online_since: Option<Instant>,
@@ -182,13 +189,14 @@ impl Endpoint {
             label,
             connection: ConnectionBridge::new(target),
             enabled,
-            saved_host: None,
+            saved: None,
             collapsed: false,
             collapsed_repos: HashSet::new(),
             live: LiveState::default(),
             generation: 0,
             toasts: Default::default(),
             config_diagnostic: Default::default(),
+            version_mismatch: None,
             retry_at: Instant::now(),
             attempts: 0,
             online_since: None,
@@ -214,13 +222,16 @@ impl Endpoint {
     /// own menu) reads this instead. One never reconciled against the catalog
     /// has only its live target to go on.
     pub(crate) fn saved_ssh(&self) -> Option<(&str, &str)> {
-        if let Some(host) = &self.saved_host {
-            return Some((&host.target, &host.session));
-        }
-        match &self.connection.target {
+        match self.saved_target() {
             ConnectTarget::Ssh { target, session } => Some((target, session)),
             _ => None,
         }
+    }
+
+    /// The target this device was saved with, SSH or WSL alike; see
+    /// [`Self::saved_ssh`].
+    pub(crate) fn saved_target(&self) -> &ConnectTarget {
+        self.saved.as_ref().unwrap_or(&self.connection.target)
     }
 
     /// Point this endpoint at another target, retiring the old transport. The
@@ -231,6 +242,7 @@ impl Endpoint {
         self.connection = ConnectionBridge::new(target);
         self.detached = false;
         self.attempts = 0;
+        self.version_mismatch = None;
         // The replacement transport has produced no state of its own yet.
         self.live = LiveState::default();
         self.sync_live();
@@ -268,6 +280,11 @@ impl Endpoint {
                 self.toasts.entries.clear();
             }
             self.toasts.receive(state.notifications.drain(..));
+            if state.version_mismatch.is_some() {
+                self.version_mismatch = state.version_mismatch.clone();
+            } else if state.status.is_connected() {
+                self.version_mismatch = None;
+            }
             self.live = state;
             self.sync_live();
         }
@@ -306,6 +323,11 @@ impl Endpoint {
             "detached"
         } else if self.live.status.is_connected() {
             "online"
+        } else if let Some(mismatch) = &self.version_mismatch {
+            match mismatch {
+                VersionMismatch::DaemonOutdated { .. } => "Herdr update needed",
+                VersionMismatch::ClientOutdated { .. } => "app update needed",
+            }
         } else if self.live.error.is_some() {
             "reconnecting"
         } else {
@@ -342,14 +364,12 @@ impl HerdrWindow {
                         development: false,
                     })
                 }
-                ConnectTarget::Ssh {
-                    target: host,
-                    session,
-                } if session != "default" && endpoint.connection.target == *target => {
-                    Some(ConnectTarget::Ssh {
-                        target: host.clone(),
-                        session: "default".into(),
-                    })
+                _ if target
+                    .remote_session()
+                    .is_some_and(|session| session != "default")
+                    && endpoint.connection.target == *target =>
+                {
+                    target.remote_host().map(|host| host.target("default"))
                 }
                 _ => None,
             };
@@ -367,6 +387,7 @@ impl HerdrWindow {
             return;
         }
         self.install_warning_shown = false;
+        self.version_notice_shown = false;
         self.endpoints[index].attempts = 0;
         self.endpoints[index].connect(self.options, index == 0);
         self.reset_selected();
@@ -487,15 +508,12 @@ impl HerdrWindow {
         else {
             return;
         };
-        // Only an SSH device has a session to name; the local endpoint has its
-        // own path through `select_local_session`.
-        let ConnectTarget::Ssh { target, .. } = &self.endpoints[index].connection.target else {
+        // Only a remote device has a session to name; the local endpoint has
+        // its own path through `select_local_session`.
+        let Some(host) = self.endpoints[index].connection.target.remote_host() else {
             return;
         };
-        let target = ConnectTarget::Ssh {
-            target: target.clone(),
-            session: session.to_owned(),
-        };
+        let target = host.target(session);
         if self.selected_endpoint == index && self.endpoints[index].connection.target == target {
             return;
         }

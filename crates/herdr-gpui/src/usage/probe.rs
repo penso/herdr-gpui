@@ -315,6 +315,13 @@ impl<'a> Probe<'a> {
         }
     }
 
+    /// Whether the config lists this provider in `show_providers`, rather
+    /// than it only being detected. A detected provider must not do anything
+    /// the user would notice.
+    pub fn requested(&self) -> bool {
+        self.consent != Consent::Quiet
+    }
+
     pub fn is_remote(&self) -> bool {
         matches!(self.exec, Exec::Remote(_))
     }

@@ -8,7 +8,7 @@ fn worker_discards_stale_results_and_runs_only_requested_jobs() {
     lookup.worker = Some(Worker { requests, results });
     let input = Input {
         checkout: Some("/fixture".into()),
-        repo_key: "/fixture/.git".into(),
+        repo_key: Some("/fixture/.git".into()),
         branch: "feature".into(),
     };
     lookup.request(input.clone(), Origin::Local, Arc::new("fixture".into()));

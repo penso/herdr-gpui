@@ -68,6 +68,7 @@ impl Source {
                     ticks: None,
                 })
             }
+            Host::Wsl(_) => Err(Error::WslHostUnsupported),
         }
     }
 

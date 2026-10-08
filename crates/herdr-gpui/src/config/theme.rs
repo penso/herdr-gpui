@@ -176,42 +176,72 @@ impl Config {
         if let Some(theme) = Theme::builtin(name) {
             return Ok(theme);
         }
-        let path = if let Some(relative) = name.strip_prefix("~/") {
-            home()?.join(relative)
-        } else if Path::new(name).is_absolute() {
-            PathBuf::from(name)
-        } else {
-            if name.is_empty()
-                || Path::new(name).components().count() != 1
-                || !matches!(
-                    Path::new(name).components().next(),
-                    Some(Component::Normal(_))
-                )
-            {
-                return Err(Error::InvalidThemePath);
-            }
-            let directories = directories()?;
-            let mut found = None;
-            for directory in &directories {
-                let candidate = directory.join(name);
-                match fs::metadata(&candidate) {
-                    Ok(metadata) if metadata.is_file() => {
-                        found = Some(candidate);
-                        break;
-                    }
-                    Ok(_) => {}
-                    Err(error) if error.kind() == ErrorKind::NotFound => {}
-                    Err(error) => return Err(Error::from(error).at_path(&candidate)),
-                }
-            }
-            found.ok_or_else(|| Error::ThemeNotFound {
-                name: name.into(),
-                directories,
-            })?
-        };
+        let path = theme_file(name, directories)?;
         let text = fs::read_to_string(&path).map_err(|error| Error::from(error).at_path(&path))?;
         Theme::parse_ghostty(&text).map_err(|error| error.at_path(&path))
     }
+
+    /// The files `theme` loads on either side of a light/dark pair, so a
+    /// watcher can reload a theme file that changes in place. Built-ins and
+    /// `Follow Herdr` read no file; a name found in no directory has none.
+    pub(crate) fn theme_files(theme: &str) -> Vec<PathBuf> {
+        theme_files_in(theme, theme_directories)
+    }
+}
+
+pub(super) fn theme_files_in(
+    theme: &str,
+    directories: impl Fn() -> Result<Vec<PathBuf>>,
+) -> Vec<PathBuf> {
+    let Ok(name) = ThemeName::parse(theme) else {
+        return Vec::new();
+    };
+    let mut files = Vec::new();
+    for side in [name.get(true), name.get(false)] {
+        if side == FOLLOW_HERDR || Theme::BUILTIN_NAMES.contains(&side) {
+            continue;
+        }
+        if let Ok(file) = theme_file(side, &directories)
+            && !files.contains(&file)
+        {
+            files.push(file);
+        }
+    }
+    files
+}
+
+/// Where a theme that is neither a built-in nor `Follow Herdr` is read from:
+/// a `~/` or absolute path as given, else the first theme directory holding it.
+fn theme_file(name: &str, directories: impl FnOnce() -> Result<Vec<PathBuf>>) -> Result<PathBuf> {
+    if let Some(relative) = name.strip_prefix("~/") {
+        return Ok(home()?.join(relative));
+    }
+    if Path::new(name).is_absolute() {
+        return Ok(PathBuf::from(name));
+    }
+    if name.is_empty()
+        || Path::new(name).components().count() != 1
+        || !matches!(
+            Path::new(name).components().next(),
+            Some(Component::Normal(_))
+        )
+    {
+        return Err(Error::InvalidThemePath);
+    }
+    let directories = directories()?;
+    for directory in &directories {
+        let candidate = directory.join(name);
+        match fs::metadata(&candidate) {
+            Ok(metadata) if metadata.is_file() => return Ok(candidate),
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(Error::from(error).at_path(&candidate)),
+        }
+    }
+    Err(Error::ThemeNotFound {
+        name: name.into(),
+        directories,
+    })
 }
 
 /// Colors are packed 24-bit RGB, without an alpha channel.
@@ -220,6 +250,7 @@ pub struct Theme {
     pub background: u32,
     pub foreground: u32,
     pub cursor: u32,
+    pub bold: Option<u32>,
     pub surface: u32,
     pub active: u32,
     pub muted: u32,
@@ -252,6 +283,7 @@ impl Default for Theme {
             background: 0x101419,
             foreground: 0xd8dee9,
             cursor: 0xd8dee9,
+            bold: None,
             surface: 0x1c1c22,
             active: 0x2b2933,
             muted: 0x827e91,
@@ -436,6 +468,7 @@ impl Theme {
                     theme.cursor = color(value)?;
                     cursor_set = true;
                 }
+                "bold-color" if value != "bright" => theme.bold = Some(color(value)?),
                 "palette" => {
                     let (index, value) = value
                         .split_once('=')

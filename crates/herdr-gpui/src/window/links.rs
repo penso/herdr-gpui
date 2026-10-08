@@ -5,10 +5,11 @@
 //! claim it; otherwise, or when nothing claims it, this client opens the
 //! address itself. Daemons without these methods keep the row-local detector.
 
-use super::HerdrWindow;
+use super::{HerdrWindow, file_links::FileLink};
 use crate::{
     browser::WebUrl,
     links::{LinkCell, LinkInbox, LinkRequest, ResolvedLink, activation_fallback},
+    terminal::RowLink,
 };
 use gpui::{Context, Modifiers, Pixels, Point, Task, Window};
 use std::{
@@ -30,6 +31,9 @@ pub(crate) struct DaemonLinks {
     resolving: Option<InFlight<LinkCell>>,
     activating: Option<InFlight<PendingActivation>>,
     delay: Option<Task<()>>,
+    /// What the row-local detector reads under the pointer while the link
+    /// modifier is held, underlined when the daemon resolved nothing there.
+    local: Option<RowLink>,
 }
 
 /// A request in the mailbox it was queued on. A reconnect or another
@@ -78,6 +82,8 @@ pub(crate) struct PressedLink {
     pub(crate) url: Option<String>,
     /// The pane cell the daemon is asked to activate, when it can.
     pub(crate) cell: Option<LinkCell>,
+    /// A file path pressed with the link modifier, where no web link is.
+    pub(crate) file: Option<FileLink>,
     pub(crate) position: Point<Pixels>,
 }
 
@@ -85,6 +91,7 @@ impl PressedLink {
     /// Whether a release reads the same link as this press did.
     fn same_link(&self, release: &Self) -> bool {
         self.url == release.url
+            && self.file == release.file
             && match (&self.cell, &release.cell) {
                 (Some(pressed), Some(released)) => pressed.same_content(released),
                 (pressed, released) => pressed.is_none() && released.is_none(),
@@ -123,6 +130,11 @@ impl HerdrWindow {
             .then_some(link)
     }
 
+    /// The row-local link under the pointer while the link modifier is held.
+    pub(crate) fn hovered_local_link(&self) -> Option<&RowLink> {
+        self.links.local.as_ref()
+    }
+
     /// The cell at `position` when it lies on the hovered resolved link.
     pub(crate) fn daemon_link_at(&self, position: Point<Pixels>) -> Option<LinkCell> {
         let cell = self.link_cell_at(position)?;
@@ -137,6 +149,15 @@ impl HerdrWindow {
         modifiers: Modifiers,
         cx: &mut Context<Self>,
     ) {
+        let local = modifiers
+            .secondary()
+            .then(|| self.local_link_at(position))
+            .flatten()
+            .map(|link| link.link);
+        if local != self.links.local {
+            self.links.local = local;
+            cx.notify();
+        }
         let cell = (modifiers.secondary() && self.live.supports_link_resolve)
             .then(|| self.link_cell_at(position))
             .flatten();
@@ -257,23 +278,39 @@ impl HerdrWindow {
         self.schedule_link_resolve(cx);
     }
 
-    /// The link a press at `position` is on, by either reading.
-    pub(crate) fn terminal_link_press(&self, position: Point<Pixels>) -> Option<PressedLink> {
+    /// The link a press at `position` is on, by either reading. A file path
+    /// counts only with the link modifier held, as prose is full of words
+    /// that look like paths.
+    pub(crate) fn terminal_link_press(
+        &self,
+        position: Point<Pixels>,
+        modifiers: Modifiers,
+    ) -> Option<PressedLink> {
         let url = self.terminal_link_at(position);
         let daemon = self.daemon_link_at(position);
-        if url.is_none() && daemon.is_none() {
-            return None;
+        if url.is_some() || daemon.is_some() {
+            // A plugin handler may claim any link the daemon can read, not
+            // only one the pointer hovered with the modifier held.
+            let cell = self
+                .live
+                .supports_link_activate
+                .then(|| daemon.or_else(|| self.link_cell_at(position)))
+                .flatten();
+            return Some(PressedLink {
+                url,
+                cell,
+                file: None,
+                position,
+            });
         }
-        // A plugin handler may claim any link the daemon can read, not only
-        // one the pointer hovered with the modifier held.
-        let cell = self
-            .live
-            .supports_link_activate
-            .then(|| daemon.or_else(|| self.link_cell_at(position)))
-            .flatten();
+        let file = modifiers
+            .secondary()
+            .then(|| self.file_link_at(position))
+            .flatten()?;
         Some(PressedLink {
-            url,
-            cell,
+            url: None,
+            cell: None,
+            file: Some(file),
             position,
         })
     }
@@ -283,15 +320,20 @@ impl HerdrWindow {
         &mut self,
         pressed: &PressedLink,
         release: Point<Pixels>,
+        modifiers: Modifiers,
         in_tab: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(release) = self.terminal_link_press(release) else {
+        let Some(release) = self.terminal_link_press(release, modifiers) else {
             return false;
         };
         if !pressed.same_link(&release) {
             return false;
+        }
+        if let Some(file) = release.file {
+            self.open_file_link(file, cx);
+            return true;
         }
         let fallback = release
             .url

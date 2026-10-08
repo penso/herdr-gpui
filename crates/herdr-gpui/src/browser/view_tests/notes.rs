@@ -95,16 +95,16 @@ fn notes_reach_the_agent_that_opened_the_page(cx: &mut gpui::TestAppContext) {
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             view.send_notes(&tab, cx);
-            assert_eq!(view.browser.annotations.delivering(), 1);
+            assert_eq!(view.deliveries.len(), 1);
             view.poll_deliveries(cx);
-            assert_eq!(view.browser.annotations.delivering(), 1, "held while busy");
+            assert_eq!(view.deliveries.len(), 1, "held while busy");
         });
     });
     assert!(kept(cx).is_none());
     with_agent(&view, cx, "idle");
     cx.update(|_, cx| view.update(cx, |view, cx| view.poll_deliveries(cx)));
     view.read_with(cx, |view, _| {
-        assert_eq!(view.browser.annotations.delivering(), 0);
+        assert_eq!(view.deliveries.len(), 0);
         assert_eq!(view.browser.annotations.queued(tab.id), 0);
     });
     assert!(kept(cx).is_some_and(|text| text.contains("Make it blue")));
@@ -128,7 +128,7 @@ fn a_pane_without_an_agent_is_never_typed_into(cx: &mut gpui::TestAppContext) {
         view.update(cx, |view, cx| {
             view.send_notes(&tab, cx);
             view.poll_deliveries(cx);
-            assert_eq!(view.browser.annotations.delivering(), 0);
+            assert_eq!(view.deliveries.len(), 0);
         });
     });
     assert!(kept(cx).is_some_and(|text| text.contains("Make it blue")));
@@ -144,7 +144,7 @@ fn an_agent_asking_a_question_is_not_typed_into(cx: &mut gpui::TestAppContext) {
             view.send_notes(&tab, cx);
             // Deadline not reached: still held.
             view.poll_deliveries(cx);
-            assert_eq!(view.browser.annotations.delivering(), 1);
+            assert_eq!(view.deliveries.len(), 1);
         });
     });
     // The pane closing sends them to `browser feedback` rather than nowhere.
@@ -155,7 +155,7 @@ fn an_agent_asking_a_question_is_not_typed_into(cx: &mut gpui::TestAppContext) {
             shown.agents.clear();
             view.live.snapshot = Some(Arc::new(shown));
             view.poll_deliveries(cx);
-            assert_eq!(view.browser.annotations.delivering(), 0);
+            assert_eq!(view.deliveries.len(), 0);
         });
     });
     assert!(kept(cx).is_some());

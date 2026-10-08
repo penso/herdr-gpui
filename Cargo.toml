@@ -46,7 +46,15 @@ wry                  = { package = "lb-wry", version = "=0.53.3" }
 herdr-client         = { path = "crates/herdr-client" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 interprocess         = "2.4.2"
+# Local interface addresses, so Bonjour discovery skips this machine; the
+# version mdns-sd already uses.
+if-addrs             = "0.15"
 image                = { default-features = false, features = ["gif", "jpeg", "png", "webp"], version = "0.25.10" }
+# Helix's fzf-style scorer behind the command palette.
+nucleo-matcher       = "0.3.1"
+# Bonjour browsing for SSH hosts in the Add Device dialog; it runs its own
+# thread and needs no async runtime.
+mdns-sd              = { default-features = false, version = "0.21.5" }
 nix                  = { default-features = false, features = ["socket", "user"], version = "=0.31.3" }
 objc                 = "0.2"
 # The Secret Service client GPUI's Linux platform links, with its async-io backend.
@@ -69,6 +77,9 @@ serde_json           = "1"
 serde_ignored        = "0.1.14"
 sha1                 = "0.11.0"
 sha2                 = "0.11.0"
+# Diff syntax colouring: bundled grammars, parsed with the pure-Rust regex
+# engine, no themes (colours come from the app's theme).
+syntect              = { default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"], version = "5.3" }
 # The version GPUI's screen capture already locks; only CPU and memory are read.
 sysinfo              = { default-features = false, features = ["system"], version = "0.39.6" }
 tar                  = "0.4"

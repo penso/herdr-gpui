@@ -4,7 +4,7 @@
 use super::label_text;
 use crate::{
     config::{FontConfig, Theme},
-    sidebar::{glyph_width, layout::SidebarDensity, line_height},
+    sidebar::{glyph_width, layout::SidebarMetrics, line_height},
 };
 use gpui::{prelude::*, *};
 
@@ -18,7 +18,7 @@ pub(in crate::sidebar) struct RowBadge {
 }
 
 impl RowBadge {
-    pub(in crate::sidebar) fn lines(&self, layout: &dyn SidebarDensity) -> usize {
+    pub(in crate::sidebar) fn lines(&self, layout: &SidebarMetrics) -> usize {
         1 + usize::from(self.pr.is_some() && layout.pr_counts())
     }
 
@@ -36,7 +36,7 @@ impl RowBadge {
         })
     }
 
-    pub(in crate::sidebar) fn width(&self, font: &FontConfig, layout: &dyn SidebarDensity) -> f32 {
+    pub(in crate::sidebar) fn width(&self, font: &FontConfig, layout: &SidebarMetrics) -> f32 {
         let pr = self.pr.as_ref().map_or(0., |pr| pr.width(font, layout));
         // Reserve the icon and the gap before the PR number, even at small fonts.
         let mark = line_height(font).min(18.) + glyph_width(font);
@@ -51,7 +51,7 @@ impl RowBadge {
         width: f32,
         font: &FontConfig,
         theme: &Theme,
-        layout: &dyn SidebarDensity,
+        layout: &SidebarMetrics,
     ) -> Div {
         let Self {
             pr,
@@ -158,7 +158,7 @@ impl PrBadge {
     /// Reserved width. Sidebar labels are monospace by default and digits are
     /// near-uniform elsewhere, so an em-fraction per glyph bounds both lines;
     /// a wider face truncates the counts rather than eating the label.
-    pub(in crate::sidebar) fn width(&self, font: &FontConfig, layout: &dyn SidebarDensity) -> f32 {
+    pub(in crate::sidebar) fn width(&self, font: &FontConfig, layout: &SidebarMetrics) -> f32 {
         let mut glyphs = self.number.chars().count();
         if layout.pr_counts() {
             glyphs =

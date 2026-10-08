@@ -90,7 +90,13 @@ impl HerdrWindow {
         keystroke: &Keystroke,
         prefixed: bool,
     ) -> Option<(String, ClientShellCommandAction)> {
-        let snapshot = self.live.snapshot.as_ref()?;
+        // As the palette and shortcut reference do, offer nothing while the
+        // snapshot may be stale, so the key reaches the terminal instead.
+        let snapshot = self
+            .live
+            .snapshot
+            .as_ref()
+            .filter(|_| self.live.status.is_connected())?;
         self.keymap()
             .custom_command(&snapshot.commands, keystroke, prefixed)
             .map(|command| (command.command_id.clone(), command.action))
@@ -149,8 +155,13 @@ impl HerdrWindow {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use crate::keymap::{DaemonKeys, Keymap};
+    use crate::{
+        keymap::{DaemonKeys, Keymap},
+        state::ConnectionStatus,
+    };
     use gpui::{Keystroke, TestAppContext, VisualTestContext};
+    use herdr_client::protocol::{ClientShellCommand, ClientShellCommandAction};
+    use std::sync::Arc;
 
     /// Whether something handled the keystroke. Nothing binds `cmd-y` and
     /// the terminal ignores cmd keys, so only the prefix can claim it.
@@ -252,5 +263,37 @@ mod tests {
         assert!(press("cmd-j", cx));
         assert!(press("cmd-y", cx));
         assert!(search_focused(cx));
+    }
+
+    /// The shortcut reference and palette hide custom commands while the
+    /// snapshot may be stale, so dispatch must not run them then either.
+    #[gpui::test]
+    fn custom_commands_run_only_while_connected(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+        let typed = Keystroke::parse("ctrl-alt-y").unwrap();
+        view.update(cx, |view, _| {
+            Arc::make_mut(view.live.snapshot.as_mut().unwrap()).commands =
+                vec![ClientShellCommand {
+                    command_id: "plugin.y".into(),
+                    description: None,
+                    action: ClientShellCommandAction::PluginAction,
+                    binding_label: "ctrl+alt+y".into(),
+                    binding_labels: vec!["ctrl+alt+y".into()],
+                }];
+            for (status, runs) in [
+                (ConnectionStatus::Connected, true),
+                (ConnectionStatus::AwaitingSnapshot, true),
+                (ConnectionStatus::Connecting, false),
+                (ConnectionStatus::Disconnected, false),
+                (ConnectionStatus::Detached, false),
+            ] {
+                view.live.status = status;
+                assert_eq!(
+                    view.custom_command(&typed, false).is_some(),
+                    runs,
+                    "{status:?}"
+                );
+            }
+        });
     }
 }

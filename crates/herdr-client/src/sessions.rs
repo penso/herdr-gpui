@@ -1,6 +1,7 @@
 //! The named local sessions one machine's Herdr installation owns, and which of
 //! them is running. A session socket outlives the daemon that created it, so a
 //! session's state can only come from a connect attempt, never the file itself.
+use crate::ssh::CANDIDATES;
 use crate::{
     Error, Result, Stream,
     catalog::validate_target,
@@ -10,7 +11,7 @@ use crate::{
 #[cfg(unix)]
 use crate::{
     limits::POLL,
-    ssh::{CANDIDATES, SshChild, script_command},
+    ssh::{ChildGuard, script_command},
 };
 use serde::Deserialize;
 use std::{
@@ -77,7 +78,7 @@ fn stop_then_delete(
     }
 }
 
-fn validate_delete(name: &str) -> Result<()> {
+pub(crate) fn validate_delete(name: &str) -> Result<()> {
     if !valid_session_name(name) {
         return Err(Error::InvalidSession);
     }
@@ -87,8 +88,7 @@ fn validate_delete(name: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
-fn delete_script(name: &str) -> String {
+pub(crate) fn delete_script(name: &str) -> String {
     // Choose the same first CLI that can list sessions. A mutation is never
     // retried with another installation after a refusal or ambiguous result.
     format!(
@@ -100,12 +100,12 @@ fn delete_script(name: &str) -> String {
     fi
 done
 exit 127"#,
-        crate::ssh::quote(name),
-        crate::ssh::quote(name)
+        crate::shell_quote(name),
+        crate::shell_quote(name)
     )
 }
 
-fn delete_command(mut command: std::process::Command, timeout: Duration) -> Result<()> {
+pub(crate) fn delete_command(mut command: std::process::Command, timeout: Duration) -> Result<()> {
     use std::process::Stdio;
     // No terminal, inherited pipes, or unbounded remote diagnostics. Status is
     // authoritative; a successful spawn is not a successful deletion.
@@ -249,7 +249,6 @@ const MAX_OUTPUT: usize = 64 * 1024;
 /// The `herdr session list --json` envelope. Only the entries are read: the
 /// host's `session_dir` and `socket_path` are its own filesystem, and the default
 /// flag follows from a name this client already knows how to attach to.
-#[cfg(unix)]
 #[derive(Deserialize)]
 struct SessionList {
     sessions: Vec<RemoteSession>,
@@ -283,8 +282,7 @@ pub fn list_remote_sessions(target: &str) -> Result<Vec<RemoteSession>> {
 /// candidate that fails keeps one stale install from hiding a working one. A
 /// candidate that answers ends the probe: without that `exit 0` every remaining
 /// root lists its sessions too, and a run that worked exits 127.
-#[cfg(unix)]
-fn session_list_script() -> String {
+pub(crate) fn session_list_script() -> String {
     format!(
         r#"{CANDIDATES}
     if [ -n "$path" ] && [ -x "$path" ]; then
@@ -296,7 +294,7 @@ exit 127"#
     )
 }
 
-/// One command's stdout over SSH: killed/reaped on every exit path by `SshChild`'s
+/// One command's stdout over SSH: killed/reaped on every exit path by `ChildGuard`'s
 /// `Drop`, so a host that never answers cannot leave an `ssh` process behind.
 /// Stderr and stdin are discarded rather than inherited: remote diagnostics can
 /// carry secrets and terminal controls, and a command that reads a terminal it was
@@ -310,7 +308,7 @@ fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
         .stdin(Stdio::null())
         .stdout(Stdio::from(OwnedFd::from(child_stream)))
         .stderr(Stdio::null());
-    let mut child = SshChild(command.spawn()?);
+    let mut child = ChildGuard(command.spawn()?);
     read_listing(&mut stream, DEADLINE, || {
         matches!(child.0.try_wait(), Ok(Some(_)))
     })
@@ -379,8 +377,7 @@ fn listed_sessions(output: &[u8]) -> bool {
 /// client could never attach to are dropped, and more than `LIMIT` sessions is
 /// refused rather than truncated. Order is the local listing's: `default` first,
 /// then by name.
-#[cfg(unix)]
-fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
+pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
     // An empty response is the child closing stdout without printing anything:
     // SSH failed, or no candidate ran. It is not a host that has no sessions.
     if output.is_empty() {

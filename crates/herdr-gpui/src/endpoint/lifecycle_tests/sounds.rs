@@ -6,7 +6,7 @@ fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     let (sound, played) = crate::sound::Service::recording();
     view.update(cx, |view, _| {
-        view.sound = sound;
+        view.sound = sound.into();
         for endpoint in &mut view.endpoints {
             endpoint.stop();
             endpoint.live = Default::default();
@@ -59,7 +59,7 @@ fn inactive_endpoint_semantic_sound_reaches_worker_once(cx: &mut gpui::TestAppCo
     let (remote, mut server) = connected_endpoint("ssh:sound");
     let (sound, played) = crate::sound::Service::recording();
     view.update(cx, |view, _| {
-        view.sound = sound;
+        view.sound = sound.into();
         view.endpoints[0].detached = true;
         view.endpoints.push(remote);
         assert_eq!(view.selected_endpoint, 0);

@@ -1,11 +1,9 @@
 //! The sessions this window can attach to: the named local sessions and, since
-//! a saved device's own sessions need an SSH round trip to list, the devices
+//! a saved device's own sessions need a round trip to its host to list, the devices
 //! themselves. Only the sessions popup asks for either: probing is I/O, so it
 //! runs on a worker thread and an idle window never touches the disk or a host.
 use crate::Error;
-use herdr_client::{
-    ConnectTarget, LocalSession, RemoteSession, list_local_sessions, list_remote_sessions,
-};
+use herdr_client::{ConnectTarget, LocalSession, RemoteHost, RemoteSession, list_local_sessions};
 use std::{
     collections::HashMap,
     sync::mpsc,
@@ -85,14 +83,14 @@ pub(super) struct Devices {
     /// than index, so a catalog reorder cannot move an answer to another host.
     pub(super) answers: HashMap<String, DeviceScan>,
     /// Answers on their way back, each naming the host it is about.
-    pending: Option<mpsc::Receiver<Vec<(String, String, DeviceScan)>>>,
+    pending: Option<mpsc::Receiver<Vec<(String, RemoteHost, DeviceScan)>>>,
     /// What the outstanding pass is asking, host included, so a worker that dies
     /// fails only the devices whose answers are actually unknown.
-    asking: Vec<(String, String)>,
+    asking: Vec<(String, RemoteHost)>,
     /// When each device was last asked and of which host, successful or not: a
     /// host that cannot answer is not redialled on every refresh, and a device
     /// whose host changed is asked again rather than answered for the old one.
-    asked: HashMap<String, (String, Instant)>,
+    asked: HashMap<String, (RemoteHost, Instant)>,
     discard_pending: bool,
 }
 
@@ -105,20 +103,23 @@ impl Sessions {
             ConnectTarget::Session { name, .. } => {
                 self.entries.retain(|session| session.name != name)
             }
-            ConnectTarget::Ssh { target, session } => {
+            target => {
+                let (Some(host), Some(session)) = (target.remote_host(), target.remote_session())
+                else {
+                    return;
+                };
                 for (id, answer) in &mut self.devices.answers {
                     if self
                         .devices
                         .asked
                         .get(id)
-                        .is_some_and(|(host, _)| *host == target)
+                        .is_some_and(|(asked, _)| *asked == host)
                         && let DeviceScan::Sessions(sessions) = answer
                     {
                         sessions.retain(|entry| entry.name != session);
                     }
                 }
             }
-            _ => {}
         }
     }
     /// Probe again as soon as the popup is on screen, including when a scan is
@@ -140,20 +141,28 @@ impl Devices {
         }
     }
     /// Apply a finished pass, and start one for every device whose answer has
-    /// aged out. `targets` is the endpoint id and SSH target of each device this
+    /// aged out. `targets` is the endpoint id and host of each device this
     /// window may ask. Reports whether the popup should repaint. Opening the
     /// popup does not reset these ages: a host asked a moment ago is still
     /// inside its own interval.
-    pub(super) fn poll(&mut self, targets: &[(String, String)], open: bool, now: Instant) -> bool {
-        self.poll_with(targets, open, now, list_remote_sessions)
+    pub(super) fn poll(
+        &mut self,
+        targets: &[(String, RemoteHost)],
+        open: bool,
+        now: Instant,
+    ) -> bool {
+        self.poll_with(targets, open, now, RemoteHost::list_sessions)
     }
 
     fn poll_with(
         &mut self,
-        targets: &[(String, String)],
+        targets: &[(String, RemoteHost)],
         open: bool,
         now: Instant,
-        probe: impl Fn(&str) -> Result<Vec<RemoteSession>, herdr_client::Error> + Send + Sync + 'static,
+        probe: impl Fn(&RemoteHost) -> Result<Vec<RemoteSession>, herdr_client::Error>
+        + Send
+        + Sync
+        + 'static,
     ) -> bool {
         let mut changed = false;
         // A device that is gone, or whose host changed under the same id, must not
@@ -196,7 +205,7 @@ impl Devices {
                 .iter()
                 .any(|(id, host)| stale(&self.asked, id, host, now))
         {
-            let stale: Vec<(String, String)> = targets
+            let stale: Vec<(String, RemoteHost)> = targets
                 .iter()
                 .filter(|(id, host)| stale(&self.asked, id, host, now))
                 .cloned()
@@ -209,8 +218,8 @@ impl Devices {
 
     /// Forget a device's answer and its age when it is no longer one of this
     /// window's devices, or when its host changed under the same id.
-    pub(super) fn forget_replaced(&mut self, targets: &[(String, String)]) {
-        let still_here = |id: &String, host: &String| {
+    pub(super) fn forget_replaced(&mut self, targets: &[(String, RemoteHost)]) {
+        let still_here = |id: &String, host: &RemoteHost| {
             targets
                 .iter()
                 .any(|(device, target)| device == id && target == host)
@@ -222,9 +231,12 @@ impl Devices {
 
     fn start(
         &mut self,
-        stale: Vec<(String, String)>,
+        stale: Vec<(String, RemoteHost)>,
         now: Instant,
-        probe: impl Fn(&str) -> Result<Vec<RemoteSession>, herdr_client::Error> + Send + Sync + 'static,
+        probe: impl Fn(&RemoteHost) -> Result<Vec<RemoteSession>, herdr_client::Error>
+        + Send
+        + Sync
+        + 'static,
     ) {
         let ids: Vec<String> = stale.iter().map(|(id, _)| id.clone()).collect();
         let (tx, rx) = mpsc::sync_channel(1);
@@ -255,18 +267,26 @@ impl Devices {
 
 /// Whether a device is due to be asked. One that was never asked, or whose host
 /// changed under the same id, is due however recently the old host answered.
-fn stale(asked: &HashMap<String, (String, Instant)>, id: &str, host: &str, now: Instant) -> bool {
+fn stale(
+    asked: &HashMap<String, (RemoteHost, Instant)>,
+    id: &str,
+    host: &RemoteHost,
+    now: Instant,
+) -> bool {
     asked.get(id).is_none_or(|(asked_host, at)| {
         asked_host != host || now.duration_since(*at) >= DEVICE_REFRESH
     })
 }
 
 /// One device probe: the sessions that host reports, or why it could not.
-type Probe = dyn Fn(&str) -> Result<Vec<RemoteSession>, herdr_client::Error> + Send + Sync;
+type Probe = dyn Fn(&RemoteHost) -> Result<Vec<RemoteSession>, herdr_client::Error> + Send + Sync;
 
 /// Ask every stale device at once: one unreachable host must not hold up the
 /// rest of the list, and each probe carries its own deadline.
-fn probe_all(stale: &[(String, String)], probe: &Probe) -> Vec<(String, String, DeviceScan)> {
+fn probe_all(
+    stale: &[(String, RemoteHost)],
+    probe: &Probe,
+) -> Vec<(String, RemoteHost, DeviceScan)> {
     let mut answers = Vec::with_capacity(stale.len());
     std::thread::scope(|scope| {
         let handles: Vec<_> = stale

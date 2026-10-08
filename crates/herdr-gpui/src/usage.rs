@@ -486,6 +486,7 @@ fn read(
     let mut exec = match host {
         Host::Local => Exec::Local,
         Host::Ssh(target) => Exec::Remote(Shell::connect(target)?),
+        Host::Wsl(_) => return Err(crate::Error::WslHostUnsupported),
     };
     for provider in registry::all() {
         if config.hidden(provider) {

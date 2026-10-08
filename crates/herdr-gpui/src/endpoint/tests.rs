@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use herdr_client::ClientEvent;
+use herdr_client::{ClientEvent, SavedHost};
 
 #[test]
 fn saved_profile_ids_are_the_catalog_ids_behind_ssh_endpoints() {
@@ -286,7 +286,7 @@ fn catalog_preserves_order_labels_and_scoped_collapse_but_retires_changed_target
 ) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, cx| {
-        view.reconcile_catalog(vec![host("b", true), host("a", false)], cx);
+        view.reconcile_catalog(vec![host("b", true), host("a", false)], Vec::new(), cx);
         assert_eq!(
             view.endpoints
                 .iter()
@@ -303,7 +303,7 @@ fn catalog_preserves_order_labels_and_scoped_collapse_but_retires_changed_target
         let inbox = view.endpoints[1].connection.inbox.clone();
         let mut renamed = host("b", true);
         renamed.label = "renamed".into();
-        view.reconcile_catalog(vec![renamed.clone(), host("a", true)], cx);
+        view.reconcile_catalog(vec![renamed.clone(), host("a", true)], Vec::new(), cx);
         assert!(Arc::ptr_eq(&inbox, &view.endpoints[1].connection.inbox));
         assert_eq!(view.endpoints[1].label, "renamed");
         assert!(view.endpoints[1].collapsed);
@@ -311,12 +311,12 @@ fn catalog_preserves_order_labels_and_scoped_collapse_but_retires_changed_target
         assert!(view.select_endpoint("ssh:b", cx));
         let epoch = view.selection_epoch;
         renamed.session = "changed".into();
-        view.reconcile_catalog(vec![host("a", true), renamed], cx);
+        view.reconcile_catalog(vec![host("a", true), renamed], Vec::new(), cx);
         assert_eq!(view.selected_endpoint, 0);
         assert!(view.selection_epoch > epoch);
         assert!(!Arc::ptr_eq(&inbox, &view.endpoints[2].connection.inbox));
         view.select_endpoint("ssh:a", cx);
-        view.reconcile_catalog(vec![], cx);
+        view.reconcile_catalog(vec![], Vec::new(), cx);
         assert_eq!(view.selected_endpoint, 0);
         assert_eq!(view.endpoints.len(), 1);
     });
@@ -332,14 +332,14 @@ fn a_session_picked_from_the_device_list_survives_catalog_reconciliation(
 ) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, cx| {
-        view.reconcile_catalog(vec![host("b", true)], cx);
+        view.reconcile_catalog(vec![host("b", true)], Vec::new(), cx);
         assert!(view.select_endpoint("ssh:b", cx));
         view.select_device_session("ssh:b", "other", cx);
         assert!(matches!(
             &view.endpoints[1].connection.target,
             ConnectTarget::Ssh { session, .. } if session == "other"
         ));
-        view.reconcile_catalog(vec![host("b", true)], cx);
+        view.reconcile_catalog(vec![host("b", true)], Vec::new(), cx);
         assert_eq!(view.selected_endpoint, 1);
         assert!(matches!(
             &view.endpoints[1].connection.target,
@@ -352,7 +352,7 @@ fn a_session_picked_from_the_device_list_survives_catalog_reconciliation(
 fn device_filter_follows_navigation_and_catalog_retirement(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, cx| {
-        view.reconcile_catalog(vec![host("a", true), host("b", true)], cx);
+        view.reconcile_catalog(vec![host("a", true), host("b", true)], Vec::new(), cx);
         assert!(view.select_endpoint("ssh:a", cx));
         assert!(
             view.device_filter.is_none(),
@@ -363,14 +363,14 @@ fn device_filter_follows_navigation_and_catalog_retirement(cx: &mut gpui::TestAp
         assert_eq!(view.device_filter.as_deref(), Some("ssh:b"));
         let mut renamed = host("b", true);
         renamed.label = "Renamed device".into();
-        view.reconcile_catalog(vec![renamed], cx);
+        view.reconcile_catalog(vec![renamed], Vec::new(), cx);
         assert_eq!(view.device_filter.as_deref(), Some("ssh:b"));
-        view.reconcile_catalog(vec![host("b", false)], cx);
+        view.reconcile_catalog(vec![host("b", false)], Vec::new(), cx);
         assert_eq!(view.device_filter.as_deref(), Some(LOCAL));
         assert!(!view.select_endpoint("ssh:b", cx));
-        view.reconcile_catalog(vec![host("b", true)], cx);
+        view.reconcile_catalog(vec![host("b", true)], Vec::new(), cx);
         assert!(view.select_endpoint("ssh:b", cx));
-        view.reconcile_catalog(vec![], cx);
+        view.reconcile_catalog(vec![], Vec::new(), cx);
         assert_eq!(view.device_filter.as_deref(), Some(LOCAL));
     });
 }
@@ -379,7 +379,7 @@ fn device_filter_follows_navigation_and_catalog_retirement(cx: &mut gpui::TestAp
 fn switching_away_retires_an_active_handshake_without_a_boot_id(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, cx| {
-        view.reconcile_catalog(vec![host("remote", true)], cx);
+        view.reconcile_catalog(vec![host("remote", true)], Vec::new(), cx);
         view.endpoints[0].initial_surface = true;
         let inbox = view.endpoints[0].connection.inbox.clone();
         assert!(view.select_endpoint("ssh:remote", cx));
@@ -411,7 +411,7 @@ fn timeout_and_return_to_local_do_not_wait_for_remote_release(cx: &mut gpui::Tes
                 )
         };
         assert!(current(view));
-        view.reconcile_catalog(vec![host("remote", true)], cx);
+        view.reconcile_catalog(vec![host("remote", true)], Vec::new(), cx);
         for endpoint in &mut view.endpoints {
             endpoint.detached = true;
         }
@@ -445,3 +445,5 @@ fn timeout_and_return_to_local_do_not_wait_for_remote_release(cx: &mut gpui::Tes
         assert!(view.pending_navigation.is_none());
     });
 }
+
+mod version_mismatch;

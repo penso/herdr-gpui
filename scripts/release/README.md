@@ -240,7 +240,8 @@ conservative superset of any one release binary, not its exact linked inventory.
 The accepted-license list covers the current graph's reviewed choices; Apache is
 preferred for dual licenses. `CDLA-Permissive-2.0` covers `webpki-roots` trust data
 and requires its agreement text with redistribution. MPL is accepted only for
-`cbindgen 0.28.0` (build tool), `option-ext 0.2.0`, the `symphonia` MP3 crates, and
+`cbindgen 0.28.0` (build tool), `option-ext 0.2.0`, `nucleo-matcher 0.3.1`, the
+`symphonia` MP3 crates, and
 `dwrote 0.11.5` (Windows only). The wrapper rejects version
 changes to those exceptions until reviewed. The report gives version-specific
 crate-source download links, including these unmodified MPL sources. Keep those

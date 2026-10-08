@@ -10,6 +10,7 @@ mod config_diagnostic;
 mod copy_mode;
 mod double_shift;
 mod file_drop;
+mod file_links;
 mod find;
 mod flash;
 pub(crate) use flash::Flash;
@@ -65,7 +66,8 @@ use std::time::Duration;
 pub(crate) use server_keys::ActiveServerKeymap;
 
 pub(crate) struct HerdrWindow {
-    pub(crate) sound: crate::sound::Service,
+    /// Shared by every window; see `app::shared_sound`.
+    pub(crate) sound: std::rc::Rc<crate::sound::Service>,
     pub(crate) bell: crate::bell::Bell,
     pub(crate) updater: updater::Updater,
     pub(crate) update_preview: Option<updater::State>,
@@ -79,6 +81,10 @@ pub(crate) struct HerdrWindow {
     /// Unknown keys in the GUI config, ignored but reported; follows `config`.
     pub(crate) gui_config_diagnostic: crate::config_diagnostic::ConfigDiagnostic,
     pub(crate) theme: config::Theme,
+    /// The system appearance `theme` was loaded for, which is what Herdr is
+    /// told. It trails the system while the theme for a new appearance
+    /// loads, so Herdr never pairs the new appearance with the old colors.
+    pub(crate) theme_light: bool,
     pub(crate) config_load: Option<Task<()>>,
     pub(crate) settings: crate::settings_panel::SettingsPanel,
     pub(crate) integrations: crate::integrations::Integrations,
@@ -147,6 +153,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) menu: menu::MenuState,
     /// A `worktree.remove` queued after its dialog closed.
     pub(crate) removal: Option<menu::Removal>,
+    /// The worktree script being located, read, trusted, or opened.
+    pub(crate) worktree_script: Option<crate::worktree_scripts::Job>,
     /// A teleport being set up or under way; a move outlives its dialog.
     pub(crate) teleport: Option<crate::teleport::Teleport>,
     /// Checkouts this client teleported away from, marked in the sidebar.
@@ -157,16 +165,31 @@ pub(crate) struct HerdrWindow {
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
     pub(crate) git: git::Git,
+    /// Notes waiting for their agents to be ready for them.
+    pub(crate) deliveries: crate::agent_notes::Deliveries,
+    /// The notes panel beside a review or an annotated page; both share it.
+    pub(crate) notes_width: crate::panel_resize::PanelWidth,
+    /// The review's list of changed files.
+    pub(crate) review_files_width: crate::panel_resize::PanelWidth,
+    /// Each review tab's state, by its tab.
+    pub(crate) reviews: std::collections::HashMap<crate::browser::TabId, crate::review::Review>,
+    /// The window's width at its last render, which caps side panels.
+    pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
     pub(crate) pr_actions: crate::pr_actions::Actions,
     pub(crate) usage: crate::usage::Usage,
     pub(crate) system_load: crate::system_load::SystemLoad,
+    /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
+    pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
     pub(crate) port_forwards: crate::port_forward::PortForwards,
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     /// SSH tunnels to remote ports that listen on their host's loopback only.
     pub(crate) tunnels: crate::listening_ports::Tunnels,
     pub(crate) install_warning_shown: bool,
+    /// Whether the selected endpoint's refused handshake was announced. Reset
+    /// once it has none, so a later refusal is announced again.
+    pub(crate) version_notice_shown: bool,
     pub(crate) collapsed_repos: std::collections::HashSet<String>,
     /// Expanded; collapsed leaves the rail or nothing, as Herdr's
     /// `ui.sidebar_collapsed_mode` chooses (see `sidebar_mode`).
@@ -199,6 +222,9 @@ pub(crate) struct HerdrWindow {
     /// The row each list has scrolled into view, so a new selection is revealed
     /// while the user's own scrolling of an unchanged one is left alone.
     pub(crate) sidebar_revealed: [std::cell::Cell<Option<usize>>; 2],
+    /// A spaces row revealed last frame, which the next render moves out from
+    /// under the pinned host header if it landed there.
+    pub(crate) sidebar_pin_reveal: std::cell::Cell<Option<usize>>,
     pub(crate) _poll: Task<()>,
     pub(crate) _activation: Subscription,
     pub(crate) _appearance: Subscription,
@@ -256,17 +282,13 @@ impl HerdrWindow {
     /// Theme and appearance changes all notify this view, so each one reaches
     /// the daemon without every place that sets a theme having to report it.
     pub(crate) fn observe_host_theme(cx: &mut Context<Self>) -> Subscription {
-        cx.observe_self(|this, cx| this.sync_host_theme(cx))
+        cx.observe_self(|this, _| this.sync_host_theme())
     }
 
     /// Tell every connection the terminal theme. Only queues, never waits:
     /// each handle skips a theme it already queued.
-    pub(crate) fn sync_host_theme(&self, cx: &App) {
-        let light = matches!(
-            cx.window_appearance(),
-            WindowAppearance::Light | WindowAppearance::VibrantLight
-        );
-        let theme = crate::connection::host_theme(&self.theme, light);
+    pub(crate) fn sync_host_theme(&self) {
+        let theme = crate::connection::host_theme(&self.theme, self.theme_light);
         for endpoint in &self.endpoints {
             endpoint.connection.sync_host_theme(&endpoint.live, &theme);
         }
@@ -301,6 +323,12 @@ impl HerdrWindow {
         }
         if !self.sidebar_split_modified {
             self.sidebar_split = chrome.sidebar_split;
+        }
+        if self.notes_width.chosen().is_none() {
+            self.notes_width.restore(chrome.notes_width);
+        }
+        if self.review_files_width.chosen().is_none() {
+            self.review_files_width.restore(chrome.review_files_width);
         }
         if !self.agent_sort_modified
             && let Some(sort) = chrome.agent_sort
@@ -374,7 +402,7 @@ impl HerdrWindow {
         self.reconcile_group_terminals(cx);
         // After polling: a connection that just got its first snapshot, or a
         // reconnect, is told the theme without waiting for it to change.
-        self.sync_host_theme(cx);
+        self.sync_host_theme();
         self.save_group_layouts(cx);
         self.poll_browser(window, cx);
         self.offer_browser_skill(window, cx);
@@ -392,6 +420,7 @@ impl HerdrWindow {
         self.poll_teleport(window, cx);
         self.poll_fan_out(window, cx);
         self.poll_device_setup(window, cx);
+        self.poll_worktree_script(window, cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {
@@ -422,6 +451,7 @@ impl HerdrWindow {
         if self.update_system_load() {
             cx.notify();
         }
+        self.update_checkpoints(cx);
         self.update_port_forwards(cx);
         if self.update_listening_ports() {
             cx.notify();
@@ -430,6 +460,7 @@ impl HerdrWindow {
             self.install_warning_shown = true;
             self.show_install_modal(window, cx);
         }
+        self.announce_version_mismatch(window, cx);
         self.resize();
         self.refresh_palette(window, cx);
         self.report_focus();
@@ -501,11 +532,54 @@ impl HerdrWindow {
                     &endpoint.live
                 };
                 endpoint.enabled
-                    && (live.status.is_connected()
-                        || !matches!(endpoint.connection.target, ConnectTarget::Ssh { .. }))
+                    && (live.status.is_connected() || !endpoint.connection.target.is_remote())
             })
             .map(|(_, endpoint)| crate::usage::Host::from(&endpoint.connection.target))
             .collect()
+    }
+
+    /// Agent turns are watched on every enabled, connected host this client
+    /// may run Git on, and finished restores are reported wherever the user is.
+    fn update_checkpoints(&mut self, cx: &mut Context<Self>) {
+        self.close_stale_checkpoints();
+        let enabled = self.config.agent_checkpoints;
+        let mut watched = Vec::new();
+        for (index, endpoint) in self.endpoints.iter().enumerate() {
+            let live = if index == self.selected_endpoint {
+                &self.live
+            } else {
+                &endpoint.live
+            };
+            let (true, true, Some(host), Some(snapshot)) = (
+                enabled,
+                endpoint.enabled && live.status.is_connected(),
+                crate::checkpoint::host_for(&endpoint.connection.target, live),
+                live.snapshot.as_ref(),
+            ) else {
+                continue;
+            };
+            self.checkpoints.observe(&endpoint.id, &host, snapshot);
+            watched.push(endpoint.id.as_str());
+        }
+        self.checkpoints
+            .retain_endpoints(|endpoint| watched.contains(&endpoint));
+        let (changed, restored) = self.checkpoints.poll();
+        for restored in restored {
+            let flash = match restored.result {
+                Ok(()) => Flash::success(format!(
+                    "Restored a checkpoint of {}",
+                    restored.checkout.branch
+                )),
+                Err(error) => Flash::warning(format!(
+                    "Checkpoint not restored: {}",
+                    crate::checkpoint::describe(&error)
+                )),
+            };
+            self.show_flash(flash, cx);
+        }
+        if changed {
+            cx.notify();
+        }
     }
 
     /// Forwards outlive a dropped connection, since SSH may still reach the
@@ -592,7 +666,7 @@ impl HerdrWindow {
             error,
         } = appearance;
         let mut this = Self {
-            sound: crate::sound::Service::default(),
+            sound: Default::default(),
             bell: crate::bell::Bell::default(),
             updater: updater::Updater::default(),
             update_preview: None,
@@ -605,6 +679,7 @@ impl HerdrWindow {
             },
             config,
             theme,
+            theme_light: crate::app::light_appearance(cx),
             config_load: None,
             settings: Default::default(),
             integrations: Default::default(),
@@ -663,18 +738,26 @@ impl HerdrWindow {
             local_error: error,
             menu: menu::MenuState::new(cx),
             removal: None,
+            worktree_script: None,
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,
             fan_out: None,
             git: git::Git::default(),
+            deliveries: Default::default(),
+            notes_width: crate::panel_resize::NOTES,
+            review_files_width: crate::panel_resize::REVIEW_FILES,
+            reviews: Default::default(),
+            viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),
             system_load: Default::default(),
+            checkpoints: Default::default(),
             port_forwards: Default::default(),
             listening_ports: Default::default(),
             tunnels: Default::default(),
             install_warning_shown: false,
+            version_notice_shown: false,
             collapsed_repos: Default::default(),
             sidebar_visible: true,
             sidebar_start_pending: true,
@@ -695,6 +778,7 @@ impl HerdrWindow {
             input_probe: smoke::InputProbe::default(),
             sidebar_scroll: Default::default(),
             sidebar_revealed: Default::default(),
+            sidebar_pin_reveal: Default::default(),
             _poll: poll,
             sidebar_view,
             surface_signal: cx.new(|_| SurfaceSignal),

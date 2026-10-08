@@ -485,7 +485,7 @@ impl SettingsWindow {
             self.save_with(operation, move || (io.load)(), shared, cx);
             return;
         }
-        self.save_with(operation, Self::loader(cx), shared, cx);
+        self.save_with(operation, self.loader(cx), shared, cx);
     }
 
     pub(super) fn broadcast_theme(&mut self, cx: &mut Context<Self>) {

@@ -62,7 +62,7 @@ impl Item {
     /// head branch, or the branch an issue's number and title name.
     pub(crate) fn branch(&self) -> String {
         match &self.head {
-            Some(_) if self.fork_owner.is_some() => format!("pr/{}", self.number),
+            Some(_) if self.fork_owner.is_some() => fork_branch(self.number),
             Some(head) => head.clone(),
             None => issue_branch(self.number, &self.title),
         }
@@ -94,6 +94,22 @@ impl Item {
     pub(crate) fn label(&self) -> String {
         format!("#{} {}", self.number, self.title)
     }
+}
+
+/// The local branch a fork's pull request is checked out on. Its head branch
+/// lives in another repository, so the name carries the number instead, and
+/// no upstream is configured for it.
+pub(crate) fn fork_branch(number: u64) -> String {
+    format!("pr/{number}")
+}
+
+/// The pull request number a [`fork_branch`] name carries, if it is one.
+pub(crate) fn fork_branch_number(branch: &str) -> Option<u64> {
+    let digits = branch.strip_prefix("pr/")?;
+    if digits.starts_with('0') || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 /// GitHub's branch name for an issue: the number, then a slug of the title.

@@ -19,10 +19,14 @@ pub(crate) enum Origin {
     Ssh(String),
 }
 
+/// The repository and branch a lookup reads. `repo_key` is the daemon's Git
+/// common directory; it is `None` only for a local workspace the daemon has
+/// attached no worktree metadata to, where `checkout` is then the workspace
+/// directory and the worker asks Git which repository it belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Input {
     pub checkout: Option<String>,
-    pub repo_key: String,
+    pub repo_key: Option<String>,
     pub branch: String,
 }
 
@@ -392,6 +396,15 @@ impl PullRequest {
             .join(" / ")
     }
 
+    /// The outcome the checks add up to: any failure, else anything still
+    /// running, else passed. `None` when nothing but skipped checks reported.
+    pub fn checks_outcome(&self) -> Option<Outcome> {
+        let outcomes = || self.check_list().map(|(_, outcome)| outcome);
+        [Outcome::Failed, Outcome::Pending, Outcome::Passed]
+            .into_iter()
+            .find(|wanted| outcomes().any(|outcome| outcome == *wanted))
+    }
+
     pub fn merge_status(&self) -> &'static str {
         self.merge_state_status.label()
     }
@@ -410,19 +423,49 @@ pub(crate) fn repository_input(
     let key = worktree
         .map(|tree| tree.key.as_str())
         .ok_or(Error::PrMetadata)?;
-    let branch = branch
-        .filter(|branch| {
-            !branch.is_empty() && branch.len() <= 1024 && !branch.chars().any(char::is_control)
-        })
-        .ok_or(Error::PrBranch)?;
+    let branch = valid_branch(branch)?;
     if !Path::new(key).is_absolute() {
         return Err(Error::PrAbsolutePath);
     }
     Ok(Input {
         checkout: None,
-        repo_key: key.into(),
+        repo_key: Some(key.into()),
         branch: branch.into(),
     })
+}
+
+/// A workspace's lookup key. Daemon worktree metadata wins; the daemon only
+/// attaches it once a worktree was made through Herdr, so a local workspace
+/// that merely sits in a repository falls back to its directory. Its
+/// repository is resolved by Git on the worker, and the checkout is still
+/// verified against the branch before anything is read. Remote devices keep
+/// requiring metadata: their directories are not this machine's.
+pub(crate) fn workspace_input(
+    workspace: &herdr_client::protocol::ClientShellWorkspace,
+    origin: &Origin,
+) -> crate::Result<Input> {
+    let worktree = workspace.worktree.as_ref();
+    let branch = workspace.branch.as_deref();
+    if worktree.is_some() || *origin != Origin::Local || workspace.new_workspace_cwd.is_empty() {
+        return repository_input(worktree, branch);
+    }
+    let branch = valid_branch(branch)?;
+    if !Path::new(&workspace.new_workspace_cwd).is_absolute() {
+        return Err(Error::PrAbsolutePath);
+    }
+    Ok(Input {
+        checkout: Some(workspace.new_workspace_cwd.clone()),
+        repo_key: None,
+        branch: branch.into(),
+    })
+}
+
+fn valid_branch(branch: Option<&str>) -> crate::Result<&str> {
+    branch
+        .filter(|branch| {
+            !branch.is_empty() && branch.len() <= 1024 && !branch.chars().any(char::is_control)
+        })
+        .ok_or(Error::PrBranch)
 }
 
 pub(crate) fn clean(text: &str) -> String {

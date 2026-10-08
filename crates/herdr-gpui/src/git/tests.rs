@@ -34,7 +34,7 @@ fn close_probe_detects_untracked_staged_unstaged_and_unpublished_work() {
     command(&["add", "tracked"]);
     command(&["commit", "-m", "initial"]);
     let input = Input {
-        repo_key: directory.path().join(".git").to_str().unwrap().to_owned(),
+        repo_key: Some(directory.path().join(".git").to_str().unwrap().to_owned()),
         branch: "test".into(),
         checkout: Some(checkout.into()),
     };
@@ -90,7 +90,7 @@ impl Peer {
 fn input(branch: &str) -> Input {
     Input {
         checkout: None,
-        repo_key: "/repo/.git".into(),
+        repo_key: Some("/repo/.git".into()),
         branch: branch.into(),
     }
 }

@@ -23,7 +23,10 @@ gpui.workspace                 = true
 # font-kit (macOS) or a Linux backend, text silently goes to a no-op system.
 gpui_platform                  = { features = ["font-kit", "runtime_shaders", "wayland", "x11"], workspace = true }
 herdr-client.workspace         = true
+if-addrs.workspace             = true
 image                          = { features = ["bmp", "tiff"], workspace = true }
+mdns-sd.workspace              = true
+nucleo-matcher.workspace       = true
 pbkdf2.workspace               = true
 percent-encoding.workspace     = true
 rodio.workspace                = true
@@ -35,6 +38,7 @@ serde_json.workspace           = true
 sha1.workspace                 = true
 sha2.workspace                 = true
 sysinfo.workspace              = true
+syntect.workspace              = true
 tar.workspace                  = true
 tempfile.workspace             = true
 thiserror.workspace            = true

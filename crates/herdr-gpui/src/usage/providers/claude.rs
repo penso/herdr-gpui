@@ -5,7 +5,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
-        probe::{HostPath, Probe, Request},
+        probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Timestamp, json},
     },
 };
@@ -39,16 +39,8 @@ impl Service for Claude {
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let directory = |rest: &str| HostPath::env_or("CLAUDE_CONFIG_DIR", ".claude", rest);
-        let credentials = probe
-            .is_macos()
-            .then(|| probe.keychain(KEYCHAIN, None))
-            .flatten()
-            .filter(|credentials| {
-                probe
-                    .field(credentials, &["claudeAiOauth", "accessToken"])
-                    .is_some()
-            })
-            .or_else(|| probe.file(&directory(".credentials.json")))?;
+        let credentials =
+            keychain(probe).or_else(|| probe.file(&directory(".credentials.json")))?;
         let token = probe.field(&credentials, &["claudeAiOauth", "accessToken"])?;
         let email = [directory(".claude.json"), HostPath::home(".claude.json")]
             .iter()
@@ -64,6 +56,22 @@ impl Service for Claude {
             .header("User-Agent", AGENT);
         Some(probe.body(request).and_then(|body| parse(&body, sign_in)))
     }
+}
+
+/// Claude Code keeps its sign-in under the user's account name. Asked by
+/// service alone, `security` may answer with another account's item first,
+/// such as one `sudo claude` left under `root` holding only MCP sign-ins, so
+/// the user's own item is asked for before any item of the service.
+pub(crate) fn keychain(probe: &mut Probe) -> Option<Secret> {
+    if !probe.is_macos() {
+        return None;
+    }
+    let user = probe.env_text("USER");
+    [user.as_deref(), None].into_iter().find_map(|account| {
+        let credentials = probe.keychain(KEYCHAIN, account)?;
+        probe.field(&credentials, &["claudeAiOauth", "accessToken"])?;
+        Some(credentials)
+    })
 }
 
 pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {

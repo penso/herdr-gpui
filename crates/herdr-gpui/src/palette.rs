@@ -1,22 +1,27 @@
 use crate::{
     Error, HerdrWindow, NavigationTarget, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
+    keymap::Reach,
     menu::Page,
     search_input::{Changed, SearchInput},
 };
 use gpui::{prelude::*, *};
 use herdr_client::{
     Method,
-    protocol::{AgentStatus, ClientShellCommandAction, ClientShellSnapshot},
+    protocol::{ClientShellCommandAction, ClientShellSnapshot},
 };
 use serde_json::{Value, json};
+use std::sync::Arc;
 
+mod go_to;
 #[cfg(test)]
 mod interaction_tests;
 mod project_open;
 mod projects;
 mod render;
 mod search;
+
+use go_to::{destination_exists, go_to_entries};
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -93,12 +98,12 @@ enum Action {
 }
 
 struct Entry {
-    label: String,
-    detail: String,
+    label: SharedString,
+    detail: SharedString,
     badge: SharedString,
     action: Action,
-    /// Index of the row this one nests under, indented only while that row
-    /// is visible so a search never leaves it hanging beneath nothing.
+    /// Index of the earlier row this one nests under, indented only while
+    /// that row is visible so a search never leaves it hanging beneath nothing.
     parent: Option<usize>,
     fields: search::Fields,
 }
@@ -111,15 +116,28 @@ impl Entry {
         action: Action,
         parent: Option<usize>,
     ) -> Self {
+        Self::with_keywords(label, detail, badge, action, parent, "")
+    }
+
+    /// `keywords` are searchable but never shown, such as an agent's kind.
+    fn with_keywords(
+        label: String,
+        detail: String,
+        badge: impl Into<SharedString>,
+        action: Action,
+        parent: Option<usize>,
+        keywords: &str,
+    ) -> Self {
         let badge = badge.into();
         let id = match &action {
             Action::Configured(id, _) => id.as_str(),
             _ => "",
         };
-        let fields = search::Fields::new(&label, &format!("{detail} {badge} {id}"));
+        // The detail leads the context so match indices map back onto it.
+        let fields = search::Fields::new(&label, &format!("{detail} {badge} {id} {keywords}"));
         Self {
-            label,
-            detail,
+            label: label.into(),
+            detail: detail.into(),
             badge,
             action,
             parent,
@@ -233,154 +251,23 @@ impl Target {
     }
 }
 
-/// Whether a Go To destination listed from `boot` still exists in `snapshot`.
-fn destination_exists(
-    snapshot: &ClientShellSnapshot,
-    boot: &str,
-    target: NavigationTarget<&str>,
-) -> Result<()> {
-    if boot.is_empty() || boot != snapshot.boot_id {
-        return Err(Error::PaletteSessionChanged);
-    }
-    match target {
-        NavigationTarget::Workspace(id) => snapshot
-            .workspaces
-            .iter()
-            .any(|w| w.workspace_id == id)
-            .then_some(())
-            .ok_or(Error::PaletteWorkspaceRemoved),
-        NavigationTarget::Tab(id) => snapshot
-            .tabs
-            .iter()
-            .any(|t| t.tab_id == id)
-            .then_some(())
-            .ok_or(Error::PaletteTabRemoved),
-        NavigationTarget::Pane(id) => snapshot
-            .panes
-            .iter()
-            .any(|p| p.pane_id == id)
-            .then_some(())
-            .ok_or(Error::PaletteDestinationRemoved),
-    }
-}
-
-fn status_badge(status: AgentStatus) -> &'static str {
-    match status {
-        AgentStatus::Blocked => "blocked",
-        AgentStatus::Done => "done",
-        AgentStatus::Working => "working",
-        AgentStatus::Idle => "idle",
-        AgentStatus::Unknown => "",
-    }
-}
-
-/// One host's Go To rows: each workspace, then every pane in it, one row per
-/// agent or terminal so no split is hidden behind its tab.
-fn go_to_entries(
-    endpoint: &str,
-    host: Option<&str>,
-    snapshot: &ClientShellSnapshot,
-    entries: &mut Vec<Entry>,
-) {
-    let go = |target| Action::Go {
-        endpoint: endpoint.to_owned(),
-        boot: snapshot.boot_id.clone(),
-        target,
-    };
-    for workspace in &snapshot.workspaces {
-        let detail = [
-            host,
-            Some(&*format!("#{}", workspace.number)),
-            workspace.branch.as_deref(),
-            projects::launch_root(snapshot, &workspace.workspace_id),
-        ]
-        .into_iter()
-        .flatten()
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>()
-        .join("  ");
-        let parent = entries.len();
-        entries.push(Entry::new(
-            workspace.label.clone(),
-            detail,
-            "Workspace",
-            go(NavigationTarget::Workspace(workspace.workspace_id.clone())),
-            None,
-        ));
-        let tabs: Vec<_> = snapshot
-            .tabs
-            .iter()
-            .filter(|tab| tab.workspace_id == workspace.workspace_id)
-            .collect();
-        let panes: Vec<_> = tabs
-            .iter()
-            .flat_map(|tab| {
-                snapshot
-                    .panes
-                    .iter()
-                    .filter(move |pane| {
-                        pane.workspace_id == workspace.workspace_id && pane.tab_id == tab.tab_id
-                    })
-                    .map(move |pane| (*tab, pane))
-            })
-            .collect();
-        for (tab, pane) in &panes {
-            let agent = snapshot
-                .agents
-                .iter()
-                .find(|agent| agent.pane_id == pane.pane_id);
-            let name = match agent {
-                Some(agent) => crate::sidebar::agent_name(agent),
-                None => pane
-                    .label
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|label| !label.is_empty())
-                    .unwrap_or("Terminal"),
-            };
-            // As in the sidebar, the tab only earns its place when there is a choice.
-            let tab = (tabs.len() > 1 || tab.custom_label).then_some(tab.label.as_str());
-            let path = pane.foreground_cwd.as_deref().or(pane.cwd.as_deref());
-            let detail = [host, Some(workspace.label.as_str()), tab, path]
-                .into_iter()
-                .flatten()
-                .filter(|text| !text.is_empty())
-                .collect::<Vec<_>>()
-                .join("  ");
-            entries.push(Entry::new(
-                name.to_owned(),
-                detail,
-                agent.map_or(SharedString::new_static("Terminal"), |agent| {
-                    crate::sidebar::state_label(agent, status_badge(agent.agent_status))
-                        .into_owned()
-                        .into()
-                }),
-                go(NavigationTarget::Pane(pane.pane_id.clone())),
-                Some(parent),
-            ));
-        }
-    }
-}
-
-#[cfg(test)]
-fn matches_query(text: &str, query: &str) -> bool {
-    let query = query.to_lowercase();
-    search::Fields::new(text, "")
-        .score(&query.split_whitespace().collect::<Vec<_>>())
-        .is_some()
-}
-
-/// Ranked results need not keep entry order.
-fn is_nested(entry: &Entry, filtered: &[usize]) -> bool {
-    entry
-        .parent
-        .is_some_and(|parent| filtered.contains(&parent))
+/// Whether ranking may keep the previously shown selection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Selection {
+    First,
+    Keep,
 }
 
 pub(super) struct Palette {
     pub search: Entity<SearchInput>,
-    entries: Vec<Entry>,
-    filtered: Vec<usize>,
+    /// The entries `filtered` indexes. A ranking still running on the
+    /// background executor keeps these on screen until it replaces both.
+    entries: Arc<[Entry]>,
+    filtered: Vec<search::Hit>,
+    /// The newest entries, ranked by the next query.
+    pending: Arc<[Entry]>,
+    matcher: nucleo_matcher::Matcher,
+    match_task: Option<Task<()>>,
     selected: usize,
     scroll: UniformListScrollHandle,
     target: Option<Target>,
@@ -406,7 +293,7 @@ struct Source {
     endpoint: String,
     generation: u64,
     enabled: bool,
-    snapshot: Option<std::sync::Arc<ClientShellSnapshot>>,
+    snapshot: Option<Arc<ClientShellSnapshot>>,
 }
 
 #[derive(Clone)]
@@ -426,34 +313,32 @@ enum ProjectOperation {
 }
 
 impl Palette {
-    fn filter(&mut self, query: &str) {
-        self.query = query.to_owned();
-        self.refilter(None);
-    }
-
     fn selected_identity(&self) -> Option<Identity> {
         self.filtered
             .get(self.selected)
-            .map(|index| self.entries[*index].action.identity())
+            .map(|hit| self.entries[hit.index].action.identity())
     }
 
-    fn refilter(&mut self, selected: Option<Identity>) {
-        let query = self.query.to_lowercase();
-        let terms: Vec<_> = query.split_whitespace().collect();
-        let mut ranked: Vec<_> = self
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| self.filter.accepts(&entry.action))
-            .filter_map(|(index, entry)| entry.fields.score(&terms).map(|score| (index, score)))
-            .collect();
-        ranked.sort_by(|(_, a), (_, b)| b.cmp(a));
-        self.filtered = ranked.into_iter().map(|(index, _)| index).collect();
+    fn selected_entry(&self) -> Option<&Entry> {
+        self.filtered
+            .get(self.selected)
+            .map(|hit| &self.entries[hit.index])
+    }
+
+    /// Shows `filtered` rows of `entries`, keeping the selected destination
+    /// when asked and it is still listed.
+    fn apply(&mut self, entries: Arc<[Entry]>, filtered: Vec<search::Hit>, selection: Selection) {
+        let selected = match selection {
+            Selection::Keep => self.selected_identity(),
+            Selection::First => None,
+        };
+        self.entries = entries;
+        self.filtered = filtered;
         self.selected = selected
             .and_then(|selected| {
                 self.filtered
                     .iter()
-                    .position(|index| self.entries[*index].action.identity() == selected)
+                    .position(|hit| self.entries[hit.index].action.identity() == selected)
             })
             .unwrap_or(0);
         self.scroll
@@ -466,6 +351,64 @@ impl Palette {
 }
 
 impl HerdrWindow {
+    pub(super) fn filter_palette(&mut self, query: &str, cx: &mut Context<Self>) {
+        if let Some(palette) = &mut self.menu.palette {
+            palette.query = query.to_owned();
+        }
+        self.rank_palette(Selection::First, cx);
+    }
+
+    pub(super) fn set_palette_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
+        if let Some(palette) = &mut self.menu.palette {
+            palette.filter = filter;
+        }
+        self.rank_palette(Selection::First, cx);
+    }
+
+    /// Ranks the newest entries against the query. Short lists are ranked
+    /// inline; longer ones on the background executor, so typing never waits
+    /// on them. A newer ranking drops an unfinished one with its task.
+    fn rank_palette(&mut self, selection: Selection, cx: &mut Context<Self>) {
+        let Some(palette) = &mut self.menu.palette else {
+            return;
+        };
+        let entries = palette.pending.clone();
+        let filter = palette.filter;
+        let candidates: Vec<_> = entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.accepts(&entry.action))
+            .map(|(index, _)| index)
+            .collect();
+        let query = search::Query::parse(&palette.query);
+        if candidates.len() <= search::INLINE_CANDIDATES {
+            palette.match_task = None;
+            let filtered = search::rank(&entries, candidates, &query, &mut palette.matcher);
+            palette.apply(entries, filtered, selection);
+            cx.notify();
+            return;
+        }
+        let ranking = cx.background_spawn({
+            let entries = entries.clone();
+            async move { search::rank(&entries, candidates, &query, &mut search::matcher()) }
+        });
+        let token = palette.search.clone();
+        palette.match_task = Some(cx.spawn(async move |this, cx| {
+            let filtered = ranking.await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(palette) = &mut this.menu.palette else {
+                    return;
+                };
+                if palette.search != token || !Arc::ptr_eq(&palette.pending, &entries) {
+                    return;
+                }
+                palette.match_task = None;
+                palette.apply(entries, filtered, selection);
+                cx.notify();
+            });
+        }));
+    }
+
     pub(super) fn open_palette(
         &mut self,
         filter: Filter,
@@ -478,10 +421,8 @@ impl HerdrWindow {
         self.menu.page = Some(Page::Palette);
         let search = cx.new(SearchInput::new);
         let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {
-            if let Some(palette) = &mut this.menu.palette {
-                palette.filter(search.read(cx).text());
-                cx.notify();
-            }
+            let query = search.read(cx).text().to_owned();
+            this.filter_palette(&query, cx);
         });
         let target = self
             .live
@@ -510,8 +451,11 @@ impl HerdrWindow {
         });
         let mut palette = Palette {
             search,
-            entries: Vec::new(),
+            entries: Arc::new([]),
             filtered: Vec::new(),
+            pending: Arc::new([]),
+            matcher: search::matcher(),
+            match_task: None,
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             target,
@@ -533,6 +477,7 @@ impl HerdrWindow {
         };
         self.prepare_palette_entries(&mut palette);
         self.menu.palette = Some(palette);
+        self.rank_palette(Selection::Keep, cx);
         self.load_palette_projects(window, cx);
         cx.notify();
     }
@@ -557,8 +502,9 @@ impl HerdrWindow {
             .collect()
     }
 
+    /// Rebuilds the entries; the caller ranks them once the palette is back
+    /// in the menu.
     fn prepare_palette_entries(&self, palette: &mut Palette) {
-        let selected = palette.selected_identity();
         let mut entries = Vec::new();
         let sources = self.palette_sources();
         for source in &sources {
@@ -597,43 +543,54 @@ impl HerdrWindow {
             .as_ref()
             .filter(|_| self.live.status.is_connected())
         {
-            entries.extend(snapshot.commands.iter().map(|command| {
-                let bindings = self.keymap().custom_labels(command);
-                let host = &self.endpoints[self.selected_endpoint].label;
-                let workspace = palette
-                    .target
-                    .as_ref()
-                    .and_then(|target| target.workspace.as_deref())
-                    .and_then(|id| {
-                        snapshot
-                            .workspaces
-                            .iter()
-                            .find(|workspace| workspace.workspace_id == id)
-                    })
-                    .map(|workspace| workspace.label.as_str());
-                let context = [Some(host.as_str()), workspace]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join("  ");
-                let detail = if bindings.is_empty() {
-                    context
-                } else {
-                    format!("{context}  {}", bindings.join(", "))
-                };
-                Entry::new(
-                    command
-                        .description
-                        .as_ref()
-                        .filter(|text| !text.trim().is_empty())
-                        .unwrap_or(&command.command_id)
-                        .clone(),
-                    detail,
-                    "Herdr command",
-                    Action::Configured(command.command_id.clone(), command.action),
-                    None,
-                )
-            }));
+            let bindings = self.keymap().custom_bindings(&snapshot.commands);
+            entries.extend(
+                snapshot
+                    .commands
+                    .iter()
+                    .zip(bindings)
+                    .map(|(command, bindings)| {
+                        let bindings: Vec<_> = bindings
+                            .into_iter()
+                            .filter(|binding| binding.reach == Reach::Runs)
+                            .map(|binding| binding.label)
+                            .collect();
+                        let host = &self.endpoints[self.selected_endpoint].label;
+                        let workspace = palette
+                            .target
+                            .as_ref()
+                            .and_then(|target| target.workspace.as_deref())
+                            .and_then(|id| {
+                                snapshot
+                                    .workspaces
+                                    .iter()
+                                    .find(|workspace| workspace.workspace_id == id)
+                            })
+                            .map(|workspace| workspace.label.as_str());
+                        let context = [Some(host.as_str()), workspace]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
+                            .join("  ");
+                        let detail = if bindings.is_empty() {
+                            context
+                        } else {
+                            format!("{context}  {}", bindings.join(", "))
+                        };
+                        Entry::new(
+                            command
+                                .description
+                                .as_ref()
+                                .filter(|text| !text.trim().is_empty())
+                                .unwrap_or(&command.command_id)
+                                .clone(),
+                            detail,
+                            "Herdr command",
+                            Action::Configured(command.command_id.clone(), command.action),
+                            None,
+                        )
+                    }),
+            );
         }
         entries.extend(palette.projects.projects.iter().map(|project| {
             Entry::new(
@@ -644,12 +601,11 @@ impl HerdrWindow {
                 None,
             )
         }));
-        palette.entries = entries;
+        palette.pending = entries.into();
         palette.sources = sources;
         palette.keymap = self.keymap().clone();
         palette.supports_clear = self.live.supports_pane_clear;
         palette.supports_edit_scrollback = self.live.supports_edit_scrollback;
-        palette.refilter(selected);
     }
 
     pub(crate) fn refresh_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -672,6 +628,7 @@ impl HerdrWindow {
                 palette.loading_projects = !self.config.palette.project_roots.is_empty();
                 self.prepare_palette_entries(&mut palette);
                 self.menu.palette = Some(palette);
+                self.rank_palette(Selection::Keep, cx);
                 self.load_palette_projects(window, cx);
                 cx.notify();
             }
@@ -687,7 +644,7 @@ impl HerdrWindow {
                     || a.generation != b.generation
                     || a.enabled != b.enabled
                     || match (&a.snapshot, &b.snapshot) {
-                        (Some(a), Some(b)) => !std::sync::Arc::ptr_eq(a, b),
+                        (Some(a), Some(b)) => !Arc::ptr_eq(a, b),
                         (None, None) => false,
                         _ => true,
                     }
@@ -695,7 +652,7 @@ impl HerdrWindow {
         if changed && let Some(mut palette) = self.menu.palette.take() {
             self.prepare_palette_entries(&mut palette);
             self.menu.palette = Some(palette);
-            cx.notify();
+            self.rank_palette(Selection::Keep, cx);
         }
     }
 
@@ -891,15 +848,14 @@ impl HerdrWindow {
                 } else {
                     1
                 };
-                palette.filter = Filter::ALL[(index + step) % Filter::ALL.len()];
-                palette.refilter(None);
-                cx.notify();
+                let filter = Filter::ALL[(index + step) % Filter::ALL.len()];
+                self.set_palette_filter(filter, cx);
             }
             "enter" => {
                 cx.stop_propagation();
                 window.prevent_default();
-                if let Some(index) = palette.filtered.get(palette.selected) {
-                    let action = palette.entries[*index].action.clone();
+                if let Some(entry) = palette.selected_entry() {
+                    let action = entry.action.clone();
                     self.activate_palette(action, window, cx);
                 }
             }
@@ -912,7 +868,7 @@ impl HerdrWindow {
 #[allow(clippy::unwrap_used)]
 fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
-    view.live.snapshot = Some(std::sync::Arc::new(
+    view.live.snapshot = Some(Arc::new(
         serde_json::from_str(include_str!(
             "../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
         ))

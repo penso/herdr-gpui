@@ -95,7 +95,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (Reconnect, &[]),
         (Quit, &["cmd-q"]),
         (About, &[]),
-        (NewBrowserTab, &[]),
+        (NewBrowserTab, &["cmd-shift-b"]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
     ];
@@ -328,36 +328,39 @@ fn pane_cycle_uses_snapshot_order_within_current_tab_and_workspace() {
 }
 
 #[test]
-fn numbered_tabs_use_numbers_not_positions_and_stay_in_workspace() {
+fn numbered_tabs_use_positions_not_numbers_and_stay_in_workspace() {
     let mut s = snapshot();
-    let mut tab = s.tabs[0].clone();
-    tab.number = 7;
-    let mut second = tab.clone();
-    second.number = 2;
-    second.tab_id = "second".into();
-    let mut foreign = second.clone();
-    foreign.workspace_id = "foreign".into();
-    foreign.tab_id = "foreign".into();
-    s.tabs = vec![foreign, tab.clone(), second];
-    assert_eq!(
-        request(Command::TabNumber(7), &s),
-        Some((Method::TabFocus, json!({"tab_id": tab.tab_id})))
-    );
-    assert_eq!(
-        request(Command::TabNumber(2), &s),
-        Some((Method::TabFocus, json!({"tab_id": "second"})))
-    );
-    for number in [0, 1, 3, 9, 255] {
+    let base = s.tabs[0].clone();
+    let tab = |id: &str, number, workspace: &str| {
+        let mut tab = base.clone();
+        tab.tab_id = id.into();
+        tab.number = number;
+        tab.workspace_id = workspace.into();
+        tab
+    };
+    let workspace = base.workspace_id.clone();
+    // Tab 3 closed and tab 4 moved before tab 2; each keeps its number.
+    s.tabs = vec![
+        tab("foreign", 1, "foreign"),
+        tab("a", 1, &workspace),
+        tab("c", 4, &workspace),
+        tab("b", 2, &workspace),
+        tab("d", 5, &workspace),
+    ];
+    let focus = |id: &str| Some((Method::TabFocus, json!({"tab_id": id})));
+    assert_eq!(request(Command::TabNumber(1), &s), focus("a"));
+    assert_eq!(request(Command::TabNumber(2), &s), focus("c"));
+    assert_eq!(request(Command::TabNumber(3), &s), focus("b"));
+    assert_eq!(request(Command::TabNumber(4), &s), focus("d"));
+    for number in [0, 5, 9, 255] {
         assert!(request(Command::TabNumber(number), &s).is_none());
     }
-    s.tabs.pop();
-    assert!(request(Command::TabNumber(2), &s).is_none());
     // Numeric selection needs a valid workspace, not a current tab or pane.
     s.focused_tab_id = None;
     s.focused_pane_id = None;
-    assert!(request(Command::TabNumber(7), &s).is_some());
+    assert!(request(Command::TabNumber(4), &s).is_some());
     s.tabs.clear();
-    assert!(request(Command::TabNumber(7), &s).is_none());
+    assert!(request(Command::TabNumber(1), &s).is_none());
 }
 
 #[test]

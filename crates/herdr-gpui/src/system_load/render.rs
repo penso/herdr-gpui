@@ -235,6 +235,7 @@ fn details(reading: &Reading, host: &Host) -> String {
     let mut lines = vec![match host {
         Host::Local => "This machine".to_owned(),
         Host::Ssh(target) => target.clone(),
+        Host::Wsl(distro) => format!("WSL · {distro}"),
     }];
     if let Some(sample) = reading.latest() {
         let mut cpu = match sample.cpu {

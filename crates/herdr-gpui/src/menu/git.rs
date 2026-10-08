@@ -157,7 +157,11 @@ impl HerdrWindow {
         self.menu
             .github
             .connected()
-            .then(|| self.menu.pr_cache.peek(&input.repo_key, &input.branch))
+            .then(|| {
+                self.menu
+                    .pr_cache
+                    .peek(input.repo_key.as_deref()?, &input.branch)
+            })
             .flatten()
     }
 

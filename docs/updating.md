@@ -330,9 +330,23 @@ leave no installed app at all. The sequence shares one 30-minute command budget,
 plus bounded output-draining time.
 
 Homebrew trashes the running bundle as it upgrades, so bundle resources can be
-gone until restart. Restart is offered as soon as the upgrade lands and launches
-the upgraded bundle with `open -n` before this instance quits. The daemon and its
-terminals are untouched.
+gone until restart. Restart is offered as soon as the upgrade lands. When
+restart is requested, the upgraded bundle is checked for a runnable executable
+before this instance quits. A detached helper waits until this instance has
+quit, then runs `open` on the upgraded bundle
+with no `-n`, so macOS reuses the pinned Dock tile instead of placing a second
+icon in Recents. If another Herdr instance is still running, the helper uses
+`open -n` so the upgraded build starts instead of activating that instance.
+The daemon and its terminals are untouched.
+
+The helper outlives the app, so it cannot report through the update panel. It
+retries `open` up to three times and shows a macOS alert when the relaunch
+fails, or when this instance has not quit within 30 seconds. It records each
+outcome in the system log:
+
+```sh
+log show --last 1h --predicate 'process == "logger" AND eventMessage BEGINSWITH "relaunch:"'
+```
 
 For an explicitly approved real upgrade, use
 `just test-brew-upgrade /absolute/path/to/Herdr.app YYYYMMDD.COUNTER`, supplying

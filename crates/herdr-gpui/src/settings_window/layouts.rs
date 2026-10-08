@@ -99,6 +99,6 @@ impl SettingsWindow {
             self.save_with(operation, move || (io.load)(), false, cx);
             return;
         }
-        self.save_with(operation, Self::loader(cx), false, cx);
+        self.save_with(operation, self.loader(cx), false, cx);
     }
 }

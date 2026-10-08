@@ -40,6 +40,9 @@ pub enum ConnectTarget {
     Socket(PathBuf),
     /// Noninteractive SSH attachment to an installed remote Herdr (POSIX hosts).
     Ssh { target: String, session: String },
+    /// A WSL distribution on this Windows machine, attached through `wsl.exe`
+    /// running the same bridge an SSH host runs.
+    Wsl { distro: String, session: String },
 }
 
 /// Whether a name may become a session directory. Both ends derive the same
@@ -75,6 +78,20 @@ pub fn session_socket(config_dir: &Path, name: &str) -> Result<PathBuf> {
 }
 
 impl ConnectTarget {
+    /// Whether the daemon runs on another machine or inside a WSL distribution,
+    /// so its paths, processes, and files are not this machine's.
+    pub fn is_remote(&self) -> bool {
+        matches!(self, Self::Ssh { .. } | Self::Wsl { .. })
+    }
+
+    /// The session a remote target attaches to.
+    pub fn remote_session(&self) -> Option<&str> {
+        match self {
+            Self::Ssh { session, .. } | Self::Wsl { session, .. } => Some(session),
+            _ => None,
+        }
+    }
+
     pub fn socket_path(&self) -> Result<PathBuf> {
         self.socket_path_with(|name| env::var_os(name))
     }
@@ -101,7 +118,7 @@ impl ConnectTarget {
     }
 
     fn socket_path_with(&self, var: impl Fn(&str) -> Option<OsString>) -> Result<PathBuf> {
-        if matches!(self, Self::Ssh { .. }) {
+        if self.is_remote() {
             return Err(Error::NoLocalSocket);
         }
         if let Self::Socket(path) = self {

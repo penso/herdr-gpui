@@ -122,6 +122,7 @@ impl HerdrWindow {
         if self.menu.deletion.is_some() {
             let (id, result) = (id.clone(), result.clone());
             self.menu.apply_deletion_response(&id, result);
+            self.read_archive_script(cx);
             return;
         }
         if self.menu.creation.as_deref() != Some(id.as_str()) {
@@ -190,6 +191,10 @@ impl HerdrWindow {
         if !opening {
             self.write_worktree_note(result, cx);
         }
+        // Only a new checkout is set up; an opened one already exists as it is.
+        let setup = (!opening)
+            .then(|| self.setup_launch(result, &created))
+            .flatten();
         let endpoint = self.endpoints[self.selected_endpoint].id.clone();
         // A folded group would hide the new checkout the sidebar is about to select.
         let group = self
@@ -211,6 +216,12 @@ impl HerdrWindow {
             self.collapsed_repos_mut().remove(&group);
         }
         self.navigate_endpoint(&endpoint, NavigationTarget::Workspace(&created), cx);
+        if let Some(launch) = setup
+            && let Err(error) = self.start_worktree_script(launch, cx)
+        {
+            self.local_error = Some(format!("The setup script did not start: {error}"));
+            cx.notify();
+        }
     }
 
     pub(in crate::menu) fn submit_workspace_dialog(
@@ -320,20 +331,38 @@ impl HerdrWindow {
                     return Err(crate::Error::DeletionLookup);
                 }
                 let force = deletion.force;
-                params["force"] = force.into();
-                let pending = self.endpoints[self.selected_endpoint]
-                    .connection
-                    .request_dialog(&target.boot_id, method, params)?;
-                self.removal = Some(Removal {
-                    endpoint: (
-                        self.selection_epoch,
-                        self.endpoints[self.selected_endpoint].generation,
-                    ),
-                    boot_id: target.boot_id.clone(),
-                    workspace: target.id.clone(),
-                    pending: Some(pending),
-                    force,
-                });
+                let (boot, workspace) = (target.boot_id.clone(), target.id.clone());
+                // With an archive script, the checkout is removed by that
+                // script's tab once it succeeds, never before it runs.
+                if let Some(config) = deletion.archive.script() {
+                    let tree = target.worktree.as_ref();
+                    let launch = crate::worktree_scripts::Launch {
+                        kind: crate::worktree_scripts::ScriptKind::Archive,
+                        endpoint: (
+                            self.selection_epoch,
+                            self.endpoints[self.selected_endpoint].generation,
+                        ),
+                        endpoint_id: self.endpoints[self.selected_endpoint].id.clone(),
+                        boot,
+                        workspace,
+                        repo: tree.map_or_else(|| target.label.clone(), |tree| tree.label.clone()),
+                        repo_key: tree.map(|tree| tree.key.clone()).unwrap_or_default(),
+                        checkout: deletion.path.clone().map(|path| {
+                            crate::worktree_scripts::Checkout {
+                                path,
+                                root: deletion.root.clone(),
+                            }
+                        }),
+                        force,
+                        requested: true,
+                    };
+                    let config = config.clone();
+                    self.start_archive_script(launch, config, cx)?;
+                    return Ok(Submission::Queued {
+                        focus_changed: true,
+                    });
+                }
+                self.queue_worktree_removal(&boot, &workspace, force)?;
                 return Ok(Submission::Queued {
                     focus_changed: true,
                 });

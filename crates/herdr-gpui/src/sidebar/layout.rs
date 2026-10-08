@@ -2,131 +2,227 @@
 //! budgets. A layout name pairs one of each, so every density has a rounded
 //! variant without a type per combination.
 
-use super::{CHILD_INDENT, LABEL_GAP, ROW_PADDING, STATUS_WIDTH, cell::RowState, row::RowLift};
-use crate::config::{Density, LayoutMode, Style, Theme};
+use super::{
+    CHILD_INDENT, HOST_GAP, LABEL_GAP, ROW_PADDING, STATUS_WIDTH, cell::RowState, row::RowLift,
+};
+use crate::config::{Density, LayoutMode, SidebarOverrides, Style, Theme};
 use gpui::{
     Div, InteractiveElement, ParentElement, Styled, div, prelude::FluentBuilder, px, rgb, rgba,
 };
 
-pub(super) trait SidebarDensity {
-    fn padding(&self) -> f32;
-    fn gap(&self) -> f32;
-    fn row_padding(&self) -> f32;
-    fn child_indent(&self) -> f32;
-    fn workspace_details(&self) -> bool;
-    fn child_details(&self) -> bool {
-        self.workspace_details()
-    }
-    fn pr_counts(&self) -> bool {
-        self.workspace_details()
-    }
-    fn header_padding(&self) -> f32;
-    fn host_padding(&self) -> f32;
-    fn footer_padding(&self) -> f32;
-
-    fn tree_gutter(&self) -> f32 {
-        self.padding() + STATUS_WIDTH + self.gap()
-    }
+/// The spacing, indents, and highlight shape one layout name selects. A
+/// preset fills every field; the config file may then override a few, so
+/// these are plain values rather than per-preset types.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SidebarMetrics {
+    /// Horizontal padding inside a row's highlight.
+    pub(crate) padding: f32,
+    /// Space between a row's status dot and its label.
+    pub(crate) gap: f32,
+    /// Vertical padding the density adds around a row's text.
+    pub(crate) row_padding: f32,
+    /// How far a worktree row steps in under its repository.
+    pub(crate) child_indent: f32,
+    /// How far rows step in under a host header.
+    pub(crate) nest: f32,
+    /// How far the card layouts (superset, orca) step a worktree in: their
+    /// own padding, unless an indent is configured.
+    pub(crate) card_indent: f32,
+    pub(crate) header_padding: f32,
+    pub(crate) host_padding: f32,
+    /// Space between a host header's parts: arrow, label, gauges, status.
+    pub(crate) host_gap: f32,
+    pub(crate) footer_padding: f32,
+    pub(crate) workspace_details: bool,
+    pub(crate) child_details: bool,
+    pub(crate) pr_counts: bool,
+    /// Horizontal space between the sidebar's edges and a row's highlight.
+    pub(crate) inset: f32,
+    /// Vertical space between neighbouring highlights, split above and below.
+    pub(crate) spacing: f32,
+    /// Vertical padding the style adds inside a row so text clears its
+    /// highlight edge.
+    pub(crate) style_padding: f32,
+    pub(crate) radius: f32,
+    pub(crate) highlight: Highlight,
+    pub(crate) tree_lines: bool,
+    pub(crate) header_case: HeaderCase,
 }
 
-pub(super) struct Comfortable;
+impl SidebarMetrics {
+    /// The density and style a layout name selects.
+    pub(crate) fn for_mode(mode: LayoutMode) -> Self {
+        let density = match mode.density() {
+            Density::Comfortable => Self::comfortable(),
+            Density::Normal => Self::normal(),
+            Density::Compact => Self::compact(),
+        };
+        match mode.style() {
+            Style::Flat => density,
+            Style::Rounded => density.rounded(),
+        }
+    }
 
-impl SidebarDensity for Comfortable {
-    fn padding(&self) -> f32 {
-        ROW_PADDING
+    const fn comfortable() -> Self {
+        Self {
+            padding: ROW_PADDING,
+            gap: LABEL_GAP,
+            row_padding: 4.,
+            child_indent: CHILD_INDENT,
+            nest: CHILD_INDENT,
+            card_indent: ROW_PADDING,
+            header_padding: 6.,
+            host_padding: 8.,
+            host_gap: HOST_GAP,
+            footer_padding: 5.,
+            workspace_details: true,
+            child_details: true,
+            pr_counts: true,
+            ..Self::FLAT
+        }
     }
-    fn gap(&self) -> f32 {
-        LABEL_GAP
-    }
-    fn row_padding(&self) -> f32 {
-        4.
-    }
-    fn child_indent(&self) -> f32 {
-        CHILD_INDENT
-    }
-    fn workspace_details(&self) -> bool {
-        true
-    }
-    fn header_padding(&self) -> f32 {
-        6.
-    }
-    fn host_padding(&self) -> f32 {
-        8.
-    }
-    fn footer_padding(&self) -> f32 {
-        5.
-    }
-}
 
-/// TUI-like density: branch lines on roots, single-line worktree children,
-/// and two-line agents without extra vertical padding between rows.
-pub(super) struct Normal;
+    /// TUI-like density: branch lines on roots, single-line worktree
+    /// children, and two-line agents without extra vertical padding.
+    const fn normal() -> Self {
+        let gap = 6.;
+        Self {
+            padding: 8.,
+            gap,
+            row_padding: 0.,
+            child_indent: STATUS_WIDTH + gap + 8.,
+            nest: STATUS_WIDTH + gap + 8.,
+            card_indent: 8.,
+            header_padding: 4.,
+            host_padding: 2.,
+            host_gap: HOST_GAP,
+            footer_padding: 3.,
+            workspace_details: true,
+            child_details: false,
+            pr_counts: false,
+            ..Self::FLAT
+        }
+    }
 
-impl SidebarDensity for Normal {
-    fn padding(&self) -> f32 {
-        8.
+    const fn compact() -> Self {
+        let gap = 4.;
+        Self {
+            padding: 6.,
+            gap,
+            row_padding: 0.,
+            child_indent: STATUS_WIDTH + gap + 8.,
+            nest: STATUS_WIDTH + gap + 8.,
+            card_indent: 6.,
+            header_padding: 2.,
+            host_padding: 0.,
+            host_gap: HOST_GAP,
+            footer_padding: 2.,
+            workspace_details: false,
+            child_details: false,
+            pr_counts: false,
+            ..Self::FLAT
+        }
     }
-    fn gap(&self) -> f32 {
-        6.
-    }
-    fn row_padding(&self) -> f32 {
-        0.
-    }
-    fn child_indent(&self) -> f32 {
-        STATUS_WIDTH + self.gap() + 8.
-    }
-    fn workspace_details(&self) -> bool {
-        true
-    }
-    fn child_details(&self) -> bool {
-        false
-    }
-    fn pr_counts(&self) -> bool {
-        false
-    }
-    fn header_padding(&self) -> f32 {
-        4.
-    }
-    fn host_padding(&self) -> f32 {
-        2.
-    }
-    fn footer_padding(&self) -> f32 {
-        3.
-    }
-}
 
-pub(super) struct Compact;
+    /// Edge-to-edge rows, square highlights, and tree lines tying worktrees
+    /// to their repository. The spacing fields are placeholders a density
+    /// fills in.
+    const FLAT: Self = Self {
+        padding: 0.,
+        gap: 0.,
+        row_padding: 0.,
+        child_indent: 0.,
+        nest: 0.,
+        card_indent: 0.,
+        header_padding: 0.,
+        host_padding: 0.,
+        host_gap: HOST_GAP,
+        footer_padding: 0.,
+        workspace_details: false,
+        child_details: false,
+        pr_counts: false,
+        inset: 0.,
+        spacing: 0.,
+        style_padding: 0.,
+        radius: 0.,
+        highlight: Highlight::Fill,
+        tree_lines: true,
+        header_case: HeaderCase::Lower,
+    };
 
-impl SidebarDensity for Compact {
-    fn padding(&self) -> f32 {
-        6.
+    /// Inset rows with rounded, outlined highlights. Worktrees keep their
+    /// indent but drop tree lines, which would break across the gaps
+    /// between rows. Spacing scales with the density, so a compact rounded
+    /// sidebar stays tighter than a normal one.
+    fn rounded(self) -> Self {
+        let trim = (self.gap / 3.).round();
+        Self {
+            inset: self.gap,
+            spacing: 2. * trim,
+            style_padding: trim,
+            radius: crate::config::corners::CONTROL,
+            highlight: Highlight::Outline,
+            tree_lines: false,
+            header_case: HeaderCase::Title,
+            ..self
+        }
     }
-    fn gap(&self) -> f32 {
-        4.
+
+    /// The preset with every key the config file set written over it. The
+    /// indent sets both nesting levels, so a tree keeps one rhythm.
+    pub(crate) fn with(self, overrides: &SidebarOverrides) -> Self {
+        Self {
+            child_indent: overrides.indent.unwrap_or(self.child_indent),
+            nest: overrides.indent.unwrap_or(self.nest),
+            card_indent: overrides.indent.unwrap_or(self.card_indent),
+            row_padding: overrides.row_padding.unwrap_or(self.row_padding),
+            gap: overrides.gap.unwrap_or(self.gap),
+            host_gap: overrides.host_gap.unwrap_or(self.host_gap),
+            ..self
+        }
     }
-    fn row_padding(&self) -> f32 {
-        0.
+
+    pub(super) fn padding(&self) -> f32 {
+        self.padding
     }
-    fn child_indent(&self) -> f32 {
-        STATUS_WIDTH + self.gap() + 8.
+    pub(super) fn gap(&self) -> f32 {
+        self.gap
     }
-    fn workspace_details(&self) -> bool {
-        false
+    pub(super) fn child_indent(&self) -> f32 {
+        self.child_indent
     }
-    fn header_padding(&self) -> f32 {
-        2.
+    pub(super) fn card_indent(&self) -> f32 {
+        self.card_indent
     }
-    fn host_padding(&self) -> f32 {
-        0.
+    pub(super) fn workspace_details(&self) -> bool {
+        self.workspace_details
     }
-    fn footer_padding(&self) -> f32 {
-        2.
+    pub(super) fn child_details(&self) -> bool {
+        self.child_details
+    }
+    pub(super) fn pr_counts(&self) -> bool {
+        self.pr_counts
+    }
+    pub(super) fn header_padding(&self) -> f32 {
+        self.header_padding
+    }
+    pub(super) fn host_padding(&self) -> f32 {
+        self.host_padding
+    }
+    pub(super) fn host_gap(&self) -> f32 {
+        self.host_gap
+    }
+    pub(super) fn footer_padding(&self) -> f32 {
+        self.footer_padding
+    }
+    pub(super) fn tree_gutter(&self) -> f32 {
+        self.padding + STATUS_WIDTH + self.gap
     }
 }
 
 /// How a focused or hovered row is marked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Highlight {
+pub(crate) enum Highlight {
     /// The theme's active color across the whole highlight.
     Fill,
     /// A faint foreground wash inside a brighter border, so the border carries
@@ -136,94 +232,16 @@ pub(super) enum Highlight {
 
 /// How section headings spell their label.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum HeaderCase {
+pub(crate) enum HeaderCase {
     Lower,
     Title,
 }
 
-/// Row shape, independent of density. Spacing scales with the density it is
-/// paired with, so a compact rounded sidebar stays tighter than a normal one.
-pub(super) trait SidebarStyle {
-    /// Horizontal space between the sidebar's edges and a row's highlight.
-    fn row_inset(&self, density: &dyn SidebarDensity) -> f32;
-    /// Vertical space between neighbouring highlights, split above and below.
-    fn row_spacing(&self, density: &dyn SidebarDensity) -> f32;
-    /// Vertical padding added inside a row so text clears its highlight edge.
-    fn row_padding(&self, density: &dyn SidebarDensity) -> f32;
-    fn radius(&self) -> f32;
-    fn highlight(&self) -> Highlight;
-    fn tree_lines(&self) -> bool;
-    fn header_case(&self) -> HeaderCase;
-}
-
-/// Edge-to-edge rows, square highlights, and tree lines tying worktrees to
-/// their repository.
-pub(super) struct Flat;
-
-impl SidebarStyle for Flat {
-    fn row_inset(&self, _: &dyn SidebarDensity) -> f32 {
-        0.
-    }
-    fn row_spacing(&self, _: &dyn SidebarDensity) -> f32 {
-        0.
-    }
-    fn row_padding(&self, _: &dyn SidebarDensity) -> f32 {
-        0.
-    }
-    fn radius(&self) -> f32 {
-        0.
-    }
-    fn highlight(&self) -> Highlight {
-        Highlight::Fill
-    }
-    fn tree_lines(&self) -> bool {
-        true
-    }
-    fn header_case(&self) -> HeaderCase {
-        HeaderCase::Lower
-    }
-}
-
-/// Inset rows with rounded, outlined highlights. Worktrees keep their indent
-/// but drop tree lines, which would break across the gaps between rows.
-pub(super) struct Rounded;
-
-impl Rounded {
-    fn trim(density: &dyn SidebarDensity) -> f32 {
-        (density.gap() / 3.).round()
-    }
-}
-
-impl SidebarStyle for Rounded {
-    fn row_inset(&self, density: &dyn SidebarDensity) -> f32 {
-        density.gap()
-    }
-    fn row_spacing(&self, density: &dyn SidebarDensity) -> f32 {
-        2. * Self::trim(density)
-    }
-    fn row_padding(&self, density: &dyn SidebarDensity) -> f32 {
-        Self::trim(density)
-    }
-    fn radius(&self) -> f32 {
-        crate::config::corners::CONTROL
-    }
-    fn highlight(&self) -> Highlight {
-        Highlight::Outline
-    }
-    fn tree_lines(&self) -> bool {
-        false
-    }
-    fn header_case(&self) -> HeaderCase {
-        HeaderCase::Title
-    }
-}
-
-/// The density and style a layout name selects, and the geometry derived from
-/// both. Painting, hit testing, and label budgets all read these numbers.
+/// The metrics a layout name selects and the geometry derived from them.
+/// Painting, hit testing, and label budgets all read these numbers.
 #[derive(Clone, Copy)]
 pub(super) struct SidebarLook {
-    pub(super) density: &'static dyn SidebarDensity,
-    pub(super) style: &'static dyn SidebarStyle,
+    pub(super) density: SidebarMetrics,
 }
 
 /// Group every row joins, so its highlight layer can follow the row's hover.
@@ -232,16 +250,16 @@ pub(super) const ROW_GROUP: &str = "sidebar-row";
 
 impl SidebarLook {
     pub(super) fn inset(&self) -> f32 {
-        self.style.row_inset(self.density)
+        self.density.inset
     }
 
     pub(super) fn spacing(&self) -> f32 {
-        self.style.row_spacing(self.density)
+        self.density.spacing
     }
 
     /// Vertical padding between a row's highlight edge and its text.
     pub(super) fn row_padding(&self) -> f32 {
-        self.density.row_padding() + self.style.row_padding(self.density)
+        self.density.row_padding + self.density.style_padding
     }
 
     /// Where row content starts: the highlight's inset plus the density's own
@@ -259,20 +277,26 @@ impl SidebarLook {
     /// A row's full height: its content, the padding around it, and its share
     /// of the spacing to the neighbouring rows.
     pub(super) fn row_height(&self, content: f32) -> f32 {
-        content + 2. * self.density.row_padding() + self.chrome_height()
+        content + 2. * self.density.row_padding + self.chrome_height()
     }
 
     /// Height the style adds around any row, the host rows included.
     pub(super) fn chrome_height(&self) -> f32 {
-        2. * self.style.row_padding(self.density) + self.spacing()
+        2. * self.density.style_padding + self.spacing()
     }
 
     pub(super) fn tree_gutter(&self) -> f32 {
         self.inset() + self.density.tree_gutter()
     }
 
+    /// How far rows step in under a host header, so a host reads as the
+    /// parent of its workspaces the way a repository does of its worktrees.
+    pub(super) fn nest_indent(&self) -> f32 {
+        self.density.nest
+    }
+
     pub(super) fn header_label(&self, label: &'static str) -> String {
-        match self.style.header_case() {
+        match self.density.header_case {
             HeaderCase::Lower => label.to_owned(),
             HeaderCase::Title => {
                 let mut chars = label.chars();
@@ -307,8 +331,8 @@ impl SidebarLook {
             .right(inset)
             .top(edge)
             .bottom(edge)
-            .rounded(px(self.style.radius()));
-        match self.style.highlight() {
+            .rounded(px(self.density.radius));
+        match self.density.highlight {
             Highlight::Fill => {
                 let active = theme.active;
                 layer
@@ -359,12 +383,12 @@ impl SidebarLook {
             .right(inset)
             .top(edge)
             .bottom(edge)
-            .rounded(px(self.style.radius().max(LIFT_RADIUS)))
-            .bg(rgb(match self.style.highlight() {
+            .rounded(px(self.density.radius.max(LIFT_RADIUS)))
+            .bg(rgb(match self.density.highlight {
                 Highlight::Fill if focused => theme.active,
                 _ => theme.sidebar_background(),
             }))
-            .when(self.style.highlight() == Highlight::Outline, |card| {
+            .when(self.density.highlight == Highlight::Outline, |card| {
                 card.border_1()
                     .border_color(wash(if focused { 0x40 } else { 0x20 }))
             })
@@ -379,14 +403,13 @@ const LIFT_RADIUS: f32 = 4.;
 
 pub(super) fn for_mode(mode: LayoutMode) -> SidebarLook {
     SidebarLook {
-        density: match mode.density() {
-            Density::Normal => &Normal,
-            Density::Compact => &Compact,
-            Density::Comfortable => &Comfortable,
-        },
-        style: match mode.style() {
-            Style::Flat => &Flat,
-            Style::Rounded => &Rounded,
-        },
+        density: SidebarMetrics::for_mode(mode),
+    }
+}
+
+/// The look a window's config asks for: its layout with its overrides.
+pub(super) fn for_config(config: &crate::config::Config) -> SidebarLook {
+    SidebarLook {
+        density: SidebarMetrics::for_mode(config.layout.mode).with(&config.sidebar_style.overrides),
     }
 }

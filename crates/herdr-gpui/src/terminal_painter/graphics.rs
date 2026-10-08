@@ -1,6 +1,6 @@
 //! Terminal graphics occupy the cell, not the font's ink bounds. Keep their
 //! edges on the same device-pixel grid even with fractional cell metrics.
-use gpui::{Bounds, Pixels, point, px};
+use gpui::{Bounds, Path, PathBuilder, Pixels, Point, point, px};
 
 #[derive(Clone, Copy)]
 pub(super) enum Graphic {
@@ -12,6 +12,84 @@ pub(super) enum Graphic {
 
 #[cfg(test)]
 mod tests;
+
+/// The four solid prompt separators (U+E0B0, U+E0B2, U+E0B4, U+E0B6) occupy
+/// the cell, not the font's ink bounds. Font glyphs leave line-height padding
+/// above and below a colored prompt bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CellSeparator {
+    RightTriangle,
+    LeftTriangle,
+    RightRound,
+    LeftRound,
+}
+
+impl CellSeparator {
+    pub(super) fn from_symbol(symbol: &str) -> Option<Self> {
+        match symbol {
+            "\u{e0b0}" => Some(Self::RightTriangle),
+            "\u{e0b2}" => Some(Self::LeftTriangle),
+            "\u{e0b4}" => Some(Self::RightRound),
+            "\u{e0b6}" => Some(Self::LeftRound),
+            _ => None,
+        }
+    }
+
+    /// Takes the cell's snapped absolute corners rather than a `Bounds`, whose
+    /// far edge would be rebuilt as origin + size and drift off the pixel grid
+    /// the background quads share.
+    pub(super) fn path(
+        self,
+        top_left: Point<Pixels>,
+        bottom_right: Point<Pixels>,
+    ) -> gpui::Result<Path<Pixels>> {
+        let (left, top, right, bottom) = (top_left.x, top_left.y, bottom_right.x, bottom_right.y);
+        let middle = (top + bottom) / 2.;
+        let width = right - left;
+        let half_height = (bottom - top) / 2.;
+        let k = 0.552_284_8;
+        let mut path = PathBuilder::fill();
+        match self {
+            Self::RightTriangle => path.add_polygon(
+                &[point(left, top), point(right, middle), point(left, bottom)],
+                true,
+            ),
+            Self::LeftTriangle => path.add_polygon(
+                &[point(right, top), point(left, middle), point(right, bottom)],
+                true,
+            ),
+            Self::RightRound => {
+                path.move_to(point(left, top));
+                path.cubic_bezier_to(
+                    point(right, middle),
+                    point(left + width * k, top),
+                    point(right, middle - half_height * k),
+                );
+                path.cubic_bezier_to(
+                    point(left, bottom),
+                    point(right, middle + half_height * k),
+                    point(left + width * k, bottom),
+                );
+                path.close();
+            }
+            Self::LeftRound => {
+                path.move_to(point(right, top));
+                path.cubic_bezier_to(
+                    point(left, middle),
+                    point(right - width * k, top),
+                    point(left, middle - half_height * k),
+                );
+                path.cubic_bezier_to(
+                    point(right, bottom),
+                    point(left, middle + half_height * k),
+                    point(right - width * k, bottom),
+                );
+                path.close();
+            }
+        }
+        path.build()
+    }
+}
 
 impl Graphic {
     pub(super) fn from_symbol(symbol: &str) -> Option<Self> {

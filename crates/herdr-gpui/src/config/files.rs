@@ -401,7 +401,10 @@ impl Config {
 
 pub(super) fn write_config(path: &Path, text: &str) -> Result<()> {
     let result = (|| -> std::io::Result<()> {
-        let parent = path
+        // rename(2) replaces a symlink instead of writing through it, so write
+        // to the file the link points at. A missing path keeps its own name.
+        let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let parent = target
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
@@ -409,7 +412,7 @@ pub(super) fn write_config(path: &Path, text: &str) -> Result<()> {
         let mut file = tempfile::NamedTempFile::new_in(parent)?;
         file.write_all(text.as_bytes())?;
         file.as_file().sync_all()?;
-        file.persist(path).map_err(|error| error.error)?;
+        file.persist(&target).map_err(|error| error.error)?;
         Ok(())
     })();
     result.map_err(|error| Error::from(error).at_path(path))

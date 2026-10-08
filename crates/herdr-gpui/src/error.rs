@@ -192,6 +192,8 @@ pub enum Error {
     PrEncoding(#[source] std::str::Utf8Error),
     #[error("No repository metadata.")]
     PrMetadata,
+    #[error("Workspace directory is not in a Git repository.")]
+    PrWorkspaceRepository,
     #[error("Could not {operation} the agent context note for the new checkout.")]
     AgentContext {
         operation: &'static str,
@@ -217,6 +219,14 @@ pub enum Error {
     GitPullRequestBase,
     #[error("Git worker stopped. Retry the operation.")]
     GitWorker,
+    #[error(
+        "No base branch to compare with: neither the pull request's base nor origin/HEAD, main, or master exists locally."
+    )]
+    ReviewNoBase,
+    #[error("A saved review tab names a checkout that is not a local absolute path.")]
+    InvalidReviewCheckout,
+    #[error("These changes are too large to review here, even leaving out the largest files.")]
+    ReviewTooLarge,
     #[error("Could not {operation}.")]
     GitProcess {
         operation: &'static str,
@@ -282,7 +292,7 @@ pub enum Error {
     PrCancelled,
     #[error("PR lookup timed out (15 seconds).")]
     PrTimeout,
-    #[error("GitHub network request failed or timed out.")]
+    #[error("GitHub network request failed or timed out ({0}).")]
     GitHubNetwork(#[source] ureq::Error),
     #[error("GitHub query failed. Check token repository permissions and rate limits.")]
     GitHubQuery,
@@ -415,6 +425,24 @@ pub enum Error {
     PhoneRateLimited,
     #[error("Phone notification service returned HTTP {0}.")]
     PhoneStatus(u16),
+    #[error("No checkout of this branch was found on its host.")]
+    CheckpointCheckout,
+    #[error("This checkout has no commit yet, so it has no checkpoints.")]
+    CheckpointUnborn,
+    #[error("That checkpoint no longer exists.")]
+    CheckpointMissing,
+    #[error("That checkpoint was taken on another branch. Check that branch out to restore it.")]
+    CheckpointBranch,
+    #[error("A merge, rebase, cherry-pick, or revert is in progress. Finish or abort it first.")]
+    CheckpointBusy,
+    #[error("Checkpoint Git commands failed")]
+    CheckpointScript(#[source] herdr_client::Error),
+    #[error("Checkpoint output was not understood.")]
+    CheckpointOutput,
+    #[error("Could not start the checkpoint worker")]
+    CheckpointThread(#[source] io::Error),
+    #[error("The checkpoint worker stopped.")]
+    CheckpointWorker,
     #[error("Enter a port number from 1 to 65535.")]
     ForwardPort,
     #[error("Port {0} is already forwarded from this host.")]
@@ -427,6 +455,10 @@ pub enum Error {
     ListeningPortsTool,
     #[error("Listening ports cannot be read on this platform.")]
     ListeningPortsUnsupported,
+    /// Probes that open a shell on the host (usage, load, ports, checkpoints)
+    /// have no route into a WSL distribution yet.
+    #[error("This is not available for WSL distributions yet.")]
+    WslHostUnsupported,
     #[error("No free local port for an SSH tunnel.")]
     TunnelPort(#[source] io::Error),
     #[error("Could not start ssh for a tunnel.")]
@@ -463,6 +495,30 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Client(#[from] herdr_client::Error),
+    #[error(".herdr/worktree.toml exceeds {limit} bytes")]
+    WorktreeScriptsSize { limit: u64 },
+    #[error(".herdr/worktree.toml is not valid UTF-8")]
+    WorktreeScriptsEncoding(#[source] std::str::Utf8Error),
+    #[error(".herdr/worktree.toml: {0}")]
+    WorktreeScriptsParse(#[source] toml::de::Error),
+    #[error(".herdr/worktree.toml scripts must not contain NUL bytes")]
+    WorktreeScriptsNul,
+    #[error("Could not read .herdr/worktree.toml: {0}")]
+    WorktreeScriptsRead(#[source] io::Error),
+    #[error("Could not read .herdr/worktree.toml on the host: {0}")]
+    WorktreeScriptsRemote(#[source] herdr_client::Error),
+    #[error("The daemon did not identify this workspace's checkout")]
+    WorktreeScriptsCheckout,
+    #[error("Worktree scripts cannot be read from a WSL distribution yet")]
+    WorktreeScriptsUnsupportedHost,
+    #[error("Another worktree script is still starting")]
+    WorktreeScriptsBusy,
+    #[error("{0}")]
+    WorktreeScriptsRequest(#[source] std::sync::Arc<Error>),
+    #[error("Unexpected daemon response while opening the script's tab")]
+    WorktreeScriptsResponse,
+    #[error("This workspace is not a Git checkout Herdr knows yet")]
+    WorktreeScriptsNotGit,
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error("{} exceeds {limit} bytes", path.display())]
@@ -525,6 +581,25 @@ pub enum Error {
     DeviceExists(String),
     #[error("This host is already being added.")]
     DeviceAdding,
+    #[error("Searching the local network failed: {0}")]
+    Bonjour(#[from] mdns_sd::Error),
+    #[error("Could not list this machine's network addresses: {0}")]
+    LocalAddresses(#[source] io::Error),
+    #[error("Tailscale is unavailable ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
+    TailscaleStatus {
+        status: std::process::ExitStatus,
+        detail: String,
+    },
+    #[error("Tailscale did not answer in time")]
+    TailscaleTimeout,
+    #[error("Tailscale returned an unreadable status: {0}")]
+    TailscaleJson(#[source] serde_json::Error),
+    #[error("Could not read {}: {source}", path.display())]
+    SshConfig {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     #[error("Removing the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
     DeviceRemove {
         status: std::process::ExitStatus,
@@ -568,12 +643,18 @@ pub enum Error {
     EmptyFontFamily(&'static str),
     #[error("{0}.size must be finite and between 8 and 48 logical pixels")]
     InvalidFontSize(&'static str),
+    #[error("{0}.line_height must be a finite number between 1 and 2 times the font size")]
+    InvalidLineHeight(&'static str),
     #[error("{0}.fallback families must not be empty")]
     EmptyFontFallback(&'static str),
     #[error("{0}.fallback must list at most 8 families")]
     TooManyFontFallbacks(&'static str),
     #[error("layout.sidebar_gap must be finite and between 0 and 64 logical pixels")]
     InvalidSidebarGap,
+    #[error("sidebar.{key} must be finite and between 0 and {max} logical pixels")]
+    InvalidSidebarMetric { key: &'static str, max: f32 },
+    #[error("sidebar.hosts.{host:?} must be a #rgb or #rrggbb colour, not {value:?}")]
+    InvalidHostColor { host: String, value: String },
     #[error("theme must be a name, absolute path, or ~/ path")]
     InvalidThemePath,
     #[error("a theme that follows the system must name both sides: light:NAME,dark:NAME")]
@@ -759,6 +840,19 @@ pub enum ThemeParseError {
 mod tests {
     use super::*;
     use std::error::Error as _;
+
+    #[test]
+    fn github_network_message_names_the_transport_failure() {
+        let error = Error::GitHubNetwork(ureq::Error::Io(io::Error::other(
+            "invalid peer certificate: UnknownIssuer",
+        )));
+        let message = error.to_string();
+        assert!(message.starts_with("GitHub network request failed or timed out"));
+        assert!(
+            message.contains("invalid peer certificate: UnknownIssuer"),
+            "{message}"
+        );
+    }
 
     #[test]
     fn updater_wrapper_preserves_source_chain() {

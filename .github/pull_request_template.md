@@ -13,7 +13,15 @@
 
 <!-- Opt-in suites, if relevant: just test-live / test-gui / test-sidebar / test-perf -->
 
-## Not Verified
+## Screenshots
 
-<!-- Native or manual checks you could not run, and why. Say so plainly
-     rather than leaving it implied. -->
+<!-- Required for visible changes: before and after, from the real native
+     window. Delete this section only when nothing visible changed. -->
+
+## Manual QA
+
+<!-- Checks still to do by hand, as unticked boxes with concrete steps.
+     Tick one only once it has actually been done. Say plainly why any
+     native or manual check could not be run. -->
+
+- [ ] Describe the manual check

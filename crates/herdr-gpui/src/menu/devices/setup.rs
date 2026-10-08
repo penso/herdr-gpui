@@ -390,11 +390,24 @@ fn saved_id(stdout: &[u8]) -> Option<String> {
 }
 
 /// Runs the CLI with closed stdin and a deadline, keeping bounded stdout and
-/// stderr. Both pipes are drained so a chatty CLI never blocks on a full one.
+/// stderr.
 fn run_cli(
     executable: &std::ffi::OsStr,
     args: &[&str],
     timeout: Duration,
+) -> Result<(ExitStatus, Vec<u8>, Vec<u8>)> {
+    run_bounded(executable, args, timeout, SAVE_STDERR_LIMIT)
+}
+
+/// Runs a program with closed stdin and a deadline, keeping at most `limit`
+/// bytes of each of stdout and stderr. Both pipes are drained so a chatty
+/// program never blocks on a full one. A missed deadline kills the program and
+/// returns `DeviceSetupTimeout`. Blocks: call it from the background executor.
+pub(super) fn run_bounded(
+    executable: &std::ffi::OsStr,
+    args: &[&str],
+    timeout: Duration,
+    limit: u64,
 ) -> Result<(ExitStatus, Vec<u8>, Vec<u8>)> {
     let mut child = Command::new(executable)
         .args(args)
@@ -408,7 +421,7 @@ fn run_cli(
             .spawn(move || {
                 let mut output = Vec::new();
                 if let Some(mut pipe) = pipe {
-                    let _ = (&mut pipe).take(SAVE_STDERR_LIMIT).read_to_end(&mut output);
+                    let _ = (&mut pipe).take(limit).read_to_end(&mut output);
                     let _ = std::io::copy(&mut pipe, &mut std::io::sink());
                 }
                 output
@@ -444,7 +457,7 @@ fn run_cli(
 }
 
 /// The CLI ends with its most specific error; earlier lines are progress.
-fn last_line(output: &[u8]) -> String {
+pub(super) fn last_line(output: &[u8]) -> String {
     String::from_utf8_lossy(output)
         .lines()
         .map(str::trim)

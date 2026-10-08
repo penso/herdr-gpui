@@ -9,7 +9,7 @@ use super::{
     cell::RowState,
     label_text,
     layout::{self, SidebarLook},
-    line_height, sorted_agents, visible_workspace_entries,
+    line_height, visible_workspace_entries,
     workspaces::workspace_label,
 };
 use crate::{
@@ -101,7 +101,7 @@ impl HerdrWindow {
         let width = SidebarMode::Rail
             .width(None, f32::from(window.viewport_size().width))
             .unwrap_or(0.);
-        let look = layout::for_mode(self.config.layout.mode);
+        let look = layout::for_config(&self.config);
         let font = &self.config.sidebar;
         let theme = &self.theme;
         let hint = Hint::new(theme);
@@ -281,72 +281,86 @@ impl HerdrWindow {
                     })),
                 );
             }
-            if !self.config.show_agents {
+        }
+        // Agents come after every host: the panel interleaves them.
+        let panel = if self.config.show_agents {
+            self.panel_agents()
+        } else {
+            Vec::new()
+        };
+        for (index, agent) in panel {
+            let Some(endpoint) = self.endpoints.get(index) else {
+                continue;
+            };
+            // A collapsed host folds its agents away with its workspaces.
+            if multi && endpoint.collapsed {
                 continue;
             }
-            for agent in sorted_agents(snapshot, self.agent_sort) {
-                let id = agent.pane_id.clone();
-                let key = format!("rail-agent-{endpoint_id}-{id}");
-                let navigate_endpoint = endpoint_id.clone();
-                let focused = selected && agent.focused;
-                let place = agent_place(agent, snapshot);
-                let place = place.map(|(workspace, tab)| match tab {
-                    Some(tab) => format!("{workspace} / {tab}"),
-                    None => workspace.to_owned(),
-                });
-                agents = agents.child(
-                    rail_row(
-                        &key,
-                        RowState {
-                            selected: focused,
-                            ..RowState::default()
-                        },
-                        font,
-                        look,
-                        theme,
-                    )
-                    .gap(px(MARK_GAP))
-                    // Herdr's rail prefixes each agent with its machine's
-                    // initial once more than one host shares the list.
-                    .when(multi, |row| {
-                        row.child(
-                            div()
-                                .flex_none()
-                                .text_color(rgb(theme.muted))
-                                .child(label_text(&initial)),
-                        )
-                    })
-                    .child(
-                        svg()
-                            .debug_selector(|| format!("rail-agent-icon-{id}"))
-                            .path(
-                                crate::icons::AgentIcon::from_identity(agent.agent.as_deref())
-                                    .path(),
-                            )
-                            .size(px(AGENT_ICON.min(font.size + 1.)))
+            let selected = index == self.selected_endpoint;
+            let live = if selected { &self.live } else { &endpoint.live };
+            let Some(snapshot) = live.snapshot.as_deref() else {
+                continue;
+            };
+            let endpoint_id = &endpoint.id;
+            let host = multi.then_some(endpoint.label.as_str());
+            let id = agent.pane_id.clone();
+            let key = format!("rail-agent-{endpoint_id}-{id}");
+            let navigate_endpoint = endpoint_id.clone();
+            let focused = selected && agent.focused;
+            let place = agent_place(agent, snapshot);
+            let place = place.map(|(workspace, tab)| match tab {
+                Some(tab) => format!("{workspace} / {tab}"),
+                None => workspace.to_owned(),
+            });
+            agents = agents.child(
+                rail_row(
+                    &key,
+                    RowState {
+                        selected: focused,
+                        ..RowState::default()
+                    },
+                    font,
+                    look,
+                    theme,
+                )
+                .gap(px(MARK_GAP))
+                // Herdr's rail prefixes each agent with its machine's
+                // initial once more than one host shares the list.
+                .when(multi, |row| {
+                    row.child(
+                        div()
                             .flex_none()
-                            .text_color(rgb(if focused {
-                                theme.foreground
-                            } else {
-                                theme.muted
-                            })),
+                            .text_color(rgb(theme.muted))
+                            .child(label_text(&host_initial(&endpoint.label))),
                     )
-                    .child(indicator(agent.agent_status, font, indicators))
-                    .id(SharedString::from(key.clone()))
-                    .debug_selector(|| key)
-                    .cursor_pointer()
-                    .tooltip(hint.with(describe(
-                        host,
-                        agent_name(agent),
-                        place.as_deref(),
-                        agent_status_word(agent).as_deref(),
-                    )))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
-                        window.focus(&this.focus, cx);
-                    })),
-                );
-            }
+                })
+                .child(
+                    svg()
+                        .debug_selector(|| format!("rail-agent-icon-{id}"))
+                        .path(crate::icons::AgentIcon::from_identity(agent.agent.as_deref()).path())
+                        .size(px(AGENT_ICON.min(font.size + 1.)))
+                        .flex_none()
+                        .text_color(rgb(if focused {
+                            theme.foreground
+                        } else {
+                            theme.muted
+                        })),
+                )
+                .child(indicator(agent.agent_status, font, indicators))
+                .id(SharedString::from(key.clone()))
+                .debug_selector(|| key)
+                .cursor_pointer()
+                .tooltip(hint.with(describe(
+                    host,
+                    agent_name(agent),
+                    place.as_deref(),
+                    agent_status_word(agent).as_deref(),
+                )))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
+                    window.focus(&this.focus, cx);
+                })),
+            );
         }
         div()
             .id("sidebar-rail")

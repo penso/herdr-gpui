@@ -18,6 +18,21 @@ impl HerdrWindow {
     /// The focused workspace's ports in the status bar; nothing while hidden
     /// or while it listens on none.
     pub(crate) fn render_listening_ports(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        let (endpoint, workspace, listed) = self.focused_listening_ports()?;
+        Some(
+            div()
+                .id("listening-ports")
+                .debug_selector(|| "listening-ports".into())
+                .flex_none()
+                .h_full()
+                .px(px(6.))
+                .child(chips(listed, (endpoint, workspace), &self.theme, 14., cx)),
+        )
+    }
+
+    /// The focused workspace's ports, with the endpoint and workspace a
+    /// click opens them in; None while hidden or while it listens on none.
+    pub(crate) fn focused_listening_ports(&self) -> Option<(&str, &str, super::Listed<'_>)> {
         if !self.config.show_listening_ports {
             return None;
         }
@@ -30,21 +45,27 @@ impl HerdrWindow {
             .as_deref()?;
         let daemon = super::Daemon::from(&endpoint.connection.target);
         let listed = self.listening_ports.get(&daemon, workspace)?;
-        Some(
-            div()
-                .id("listening-ports")
-                .debug_selector(|| "listening-ports".into())
-                .flex_none()
-                .h_full()
-                .px(px(6.))
-                .child(chips(
-                    listed,
-                    (&endpoint.id, workspace),
-                    &self.theme,
-                    14.,
-                    cx,
-                )),
-        )
+        Some((endpoint.id.as_str(), workspace, listed))
+    }
+
+    /// Opens a port's page in a browser tab of `workspace`, through a tunnel
+    /// when the port is only reachable on its remote host.
+    pub(crate) fn open_port_link(
+        &mut self,
+        endpoint: &str,
+        workspace: &str,
+        link: &Link,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match link {
+            Link::Page(url) => {
+                self.open_workspace_page(endpoint, workspace, url.clone(), window, cx);
+            }
+            Link::Tunnel(key) => {
+                self.open_tunneled_page(endpoint, workspace, key.clone(), window, cx);
+            }
+        }
     }
 }
 
@@ -96,20 +117,7 @@ pub(crate) fn chips(
                 .hover(|style| style.text_color(rgb(foreground)).underline())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     cx.stop_propagation();
-                    match &link {
-                        Link::Page(url) => {
-                            this.open_workspace_page(
-                                &endpoint,
-                                &workspace,
-                                url.clone(),
-                                window,
-                                cx,
-                            );
-                        }
-                        Link::Tunnel(key) => {
-                            this.open_tunneled_page(&endpoint, &workspace, key.clone(), window, cx);
-                        }
-                    }
+                    this.open_port_link(&endpoint, &workspace, &link, window, cx);
                 }))
         }))
 }

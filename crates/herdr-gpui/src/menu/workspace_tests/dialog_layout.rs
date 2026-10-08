@@ -89,9 +89,9 @@ fn workspace_dialog_sections_and_buttons_stay_inside_the_panel(cx: &mut gpui::Te
                         // Ready to confirm: the daemon has named the
                         // checkout and nothing is in flight.
                         view.menu.deletion = Some(Deletion {
-                            pending: None,
                             path: Some("/endpoint/.herdr/worktrees/agent-launcher/child".into()),
-                            force: true,
+                            archive: ArchiveCheck::Read(None),
+                            ..Deletion::new(None, true)
                         });
                     } else {
                         // The creation waits on the daemon here, so its

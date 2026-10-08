@@ -21,7 +21,7 @@ fn check_layouts(modes: &[crate::config::LayoutMode], cx: &mut gpui::TestAppCont
         view.live.snapshot = Some(Arc::new(snapshot_with_upstream()));
         let input = crate::pull_request::Input {
             checkout: None,
-            repo_key: REPO_KEY.into(),
+            repo_key: Some(REPO_KEY.into()),
             branch: "worktree/sidebar-child".into(),
         };
         let now = std::time::Instant::now();
@@ -178,7 +178,7 @@ fn sidebar_densities_keep_details_and_badges_within_their_rows(cx: &mut gpui::Te
         view.live.snapshot = Some(Arc::new(snapshot(6)));
         let input = crate::pull_request::Input {
             checkout: None,
-            repo_key: REPO_KEY.into(),
+            repo_key: Some(REPO_KEY.into()),
             branch: "worktree/sidebar-child".into(),
         };
         let now = std::time::Instant::now();

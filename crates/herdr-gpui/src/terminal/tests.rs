@@ -1,52 +1,7 @@
 use super::*;
 
-#[test]
-fn wheel_preserves_fractions_and_resets_on_target_direction_or_gesture_change() {
-    let mut wheel = WheelAccumulator::default();
-    let pane = InputTarget::Pane("pane".into());
-    let other = InputTarget::Pane("other".into());
-    let popup = InputTarget::Popup("other".into());
-    let mut event = ScrollWheelEvent {
-        delta: ScrollDelta::Pixels(point(px(0.), px(12.))),
-        touch_phase: TouchPhase::Moved,
-        ..Default::default()
-    };
-    assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-    assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
-    assert_eq!(wheel.lines(&other, &event, CELL_HEIGHT), 0);
-    assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
-    event.touch_phase = TouchPhase::Started;
-    assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
-    event.touch_phase = TouchPhase::Moved;
-    event.delta = ScrollDelta::Lines(point(0., -1.));
-    assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), -1);
-    event.delta = ScrollDelta::Lines(point(0., 1e9));
-    assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 128);
-    event.delta = ScrollDelta::Lines(point(10., 0.));
-    assert_eq!(wheel.lines(&popup, &event, CELL_HEIGHT), 0);
-}
-
-#[test]
-fn nonfinite_wheel_deltas_do_not_poison_fractional_motion() {
-    let pane = InputTarget::Pane("pane".into());
-    for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-        let mut wheel = WheelAccumulator::default();
-        let mut event = ScrollWheelEvent {
-            delta: ScrollDelta::Lines(point(0., 0.75)),
-            touch_phase: TouchPhase::Moved,
-            ..Default::default()
-        };
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-        event.delta = ScrollDelta::Lines(point(0., invalid));
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-        event.delta = ScrollDelta::Lines(point(0., 0.25));
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 1);
-        event.delta = ScrollDelta::Lines(point(0., -1e9));
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), -128);
-        event.delta = ScrollDelta::Lines(point(0., 0.));
-        assert_eq!(wheel.lines(&pane, &event, CELL_HEIGHT), 0);
-    }
-}
+mod bold_color;
+mod wheel;
 
 #[test]
 fn pane_context_hit_testing_uses_canvas_origin_and_rects_not_focus() {
@@ -213,7 +168,16 @@ fn wheel_hits_inner_pane_and_uses_relative_coordinates_and_semantic_modes() {
             ClientMousePosition::Cell { column: 2, row: 2 }
         );
         assert!(matches!(
-            target.event(-3, Modifiers::default()),
+            target
+                .wheel_events(
+                    WheelSteps {
+                        lines: -3,
+                        columns: 0
+                    },
+                    Modifiers::default()
+                )
+                .next()
+                .unwrap(),
             ClientPaneInputEvent::Mouse {
                 kind: ClientMouseKind::ScrollDown,
                 lines: 3,
@@ -455,21 +419,6 @@ fn custom_palette_and_defaults_preserve_truecolor_and_modifiers() {
         cell_colors(&cell, &theme).0,
         ((theme.palette[255] & 0xfefefe) >> 1) + ((0x123456 & 0xfefefe) >> 1)
     );
-}
-
-#[test]
-fn wheel_uses_configured_height_only_for_pixel_deltas() {
-    let mut wheel = WheelAccumulator::default();
-    let pane = InputTarget::Pane("pane".into());
-    let mut event = ScrollWheelEvent {
-        delta: ScrollDelta::Pixels(point(px(0.), px(15.))),
-        touch_phase: TouchPhase::Moved,
-        ..Default::default()
-    };
-    assert_eq!(wheel.lines(&pane, &event, 30.), 0);
-    assert_eq!(wheel.lines(&pane, &event, 30.), 1);
-    event.delta = ScrollDelta::Lines(point(0., 2.));
-    assert_eq!(wheel.lines(&pane, &event, 30.), 2);
 }
 
 #[test]

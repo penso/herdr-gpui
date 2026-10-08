@@ -74,7 +74,7 @@ pub fn run_script(
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod posix {
     use super::*;
-    use crate::ssh::SshChild;
+    use crate::ssh::ChildGuard;
     use std::{
         io::{self, ErrorKind},
         os::unix::process::CommandExt,
@@ -197,7 +197,7 @@ mod posix {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         // Dropping the guard kills and reaps the child on every early return.
-        let mut child = SshChild(command.spawn().map_err(Error::ScriptSpawn)?);
+        let mut child = ChildGuard(command.spawn().map_err(Error::ScriptSpawn)?);
         let group = rustix::process::Pid::from_child(&child.0);
         let (Some(stdin), Some(stdout), Some(stderr)) = (
             child.0.stdin.take(),

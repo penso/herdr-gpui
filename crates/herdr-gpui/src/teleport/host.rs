@@ -52,7 +52,7 @@ impl Host {
                 #[cfg(test)]
                 env: Vec::new(),
             }),
-            ConnectTarget::Socket(_) => Err(Error::UnsupportedHost),
+            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } => Err(Error::UnsupportedHost),
         }
     }
 

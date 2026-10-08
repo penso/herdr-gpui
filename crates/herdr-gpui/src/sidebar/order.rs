@@ -2,29 +2,35 @@
 //! next, and numbered shortcuts step through, as Herdr's TUI steps through
 //! its own sidebar: every listed host's rows, top to bottom.
 
-use super::{sorted_agents, visible_workspace_entries};
-use crate::{HerdrWindow, controls::Command};
-use herdr_client::protocol::ClientShellSnapshot;
+use super::{agents::panel_agents, visible_workspace_entries};
+use crate::{HerdrWindow, controls::Command, state::LiveState};
+use herdr_client::protocol::{ClientShellAgent, ClientShellSnapshot};
 
 /// A listed row: its host, by endpoint index, and the workspace or agent
 /// pane it shows.
 pub(crate) type Row<'a> = (usize, &'a str);
 
 impl HerdrWindow {
-    /// Each host the sidebar lists, with the snapshot it draws from.
-    fn listed_hosts(&self) -> impl Iterator<Item = (usize, &ClientShellSnapshot)> {
+    /// Each host the sidebar lists, with the live state it draws from.
+    fn listed_lives(&self) -> impl Iterator<Item = (usize, &LiveState)> {
         self.endpoints
             .iter()
             .enumerate()
             .filter(|(_, endpoint)| endpoint.enabled && self.device_visible(&endpoint.id))
-            .filter_map(|(index, endpoint)| {
+            .map(|(index, endpoint)| {
                 let live = if index == self.selected_endpoint {
                     &self.live
                 } else {
                     &endpoint.live
                 };
-                live.snapshot.as_deref().map(|snapshot| (index, snapshot))
+                (index, live)
             })
+    }
+
+    /// Each host the sidebar lists, with the snapshot it draws from.
+    fn listed_hosts(&self) -> impl Iterator<Item = (usize, &ClientShellSnapshot)> {
+        self.listed_lives()
+            .filter_map(|(index, live)| live.snapshot.as_deref().map(|snapshot| (index, snapshot)))
     }
 
     /// The workspace rows the sidebar shows: a folded group or host hides
@@ -46,15 +52,18 @@ impl HerdrWindow {
             .collect()
     }
 
+    /// The agents the panel paints, by host index, in its order. Painting
+    /// and stepping both read it, so a shortcut lands on the row below.
+    pub(super) fn panel_agents(&self) -> Vec<(usize, &ClientShellAgent)> {
+        panel_agents(self.listed_lives(), self.agent_sort)
+    }
+
     /// The agent panel's rows, whether or not the panel is shown, as Herdr
     /// steps through its agents either way.
     pub(crate) fn sidebar_agents(&self) -> Vec<Row<'_>> {
-        self.listed_hosts()
-            .flat_map(|(index, snapshot)| {
-                sorted_agents(snapshot, self.agent_sort)
-                    .into_iter()
-                    .map(move |agent| (index, agent.pane_id.as_str()))
-            })
+        self.panel_agents()
+            .into_iter()
+            .map(|(index, agent)| (index, agent.pane_id.as_str()))
             .collect()
     }
 }

@@ -34,6 +34,9 @@ fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) 
         step,
         claim: None,
         task: None,
+        discovery: None,
+        suggested_label: None,
+        _label_edits: None,
     });
     view.menu.page = Some(Page::AddDevice);
 }
@@ -95,6 +98,7 @@ fn a_device_on_another_session_is_still_matched_by_its_saved_entry(cx: &mut gpui
                     session: "default".into(),
                     enabled: true,
                 }],
+                Vec::new(),
                 cx,
             );
             // What choosing another session from the list does to the target.

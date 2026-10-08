@@ -105,20 +105,42 @@ pub(crate) fn bind_keys(cx: &mut App) {
     }));
     cx.bind_keys(crate::log_window::key_bindings());
     cx.bind_keys(crate::settings_window::key_bindings());
+    let [cut, copy, paste, select_all] = EDIT_KEYS;
     cx.bind_keys([
-        KeyBinding::new("cmd-x", Cut, Some(EDIT_MENU_LABELS)),
-        KeyBinding::new("cmd-c", Copy, Some(EDIT_MENU_LABELS)),
-        KeyBinding::new("cmd-v", Paste, Some(EDIT_MENU_LABELS)),
-        KeyBinding::new("cmd-a", SelectAll, Some(EDIT_MENU_LABELS)),
+        KeyBinding::new(cut, Cut, Some(EDIT_MENU_LABELS)),
+        KeyBinding::new(copy, Copy, Some(EDIT_MENU_LABELS)),
+        KeyBinding::new(paste, Paste, Some(EDIT_MENU_LABELS)),
+        KeyBinding::new(select_all, SelectAll, Some(EDIT_MENU_LABELS)),
     ]);
     // Bound last so a config keystroke can never steal a reserved macOS
     // shortcut: later bindings take precedence at the same context depth.
     #[cfg(target_os = "macos")]
-    cx.bind_keys([
-        KeyBinding::new("cmd-h", Hide, None),
-        KeyBinding::new("cmd-alt-h", HideOthers, None),
-        KeyBinding::new("cmd-m", Minimize, None),
-    ]);
+    {
+        let [hide, hide_others, minimize] = SYSTEM_KEYS;
+        cx.bind_keys([
+            KeyBinding::new(hide, Hide, None),
+            KeyBinding::new(hide_others, HideOthers, None),
+            KeyBinding::new(minimize, Minimize, None),
+        ]);
+    }
+}
+
+/// The Edit menu's keystrokes: cut, copy, paste, and select all.
+const EDIT_KEYS: [&str; 4] = ["cmd-x", "cmd-c", "cmd-v", "cmd-a"];
+
+/// macOS's Hide, Hide Others, and Minimize, bound there alone.
+const SYSTEM_KEYS: [&str; 3] = ["cmd-h", "cmd-alt-h", "cmd-m"];
+
+/// Keystrokes bound outside the `Keymap`. A daemon custom command's direct
+/// keystroke is matched before any binding, so one of these would otherwise
+/// take Paste or Hide away from the app.
+pub(crate) fn reserved_keystrokes() -> impl Iterator<Item = &'static str> {
+    let system: &[&str] = if cfg!(target_os = "macos") {
+        &SYSTEM_KEYS
+    } else {
+        &[]
+    };
+    EDIT_KEYS.into_iter().chain(system.iter().copied())
 }
 
 /// Replaces every binding after a config reload. The menu bar reads its

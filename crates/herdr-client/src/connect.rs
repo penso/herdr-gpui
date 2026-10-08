@@ -2,7 +2,7 @@
 //! the caller's thread; failures arrive as events rather than as a return value.
 
 use crate::{
-    ConnectTarget, Result, catalog,
+    ConnectTarget, Error, Result, catalog,
     discovery::session_socket,
     event::{ClientEvent, deliver},
     handle::{Client, ClientHandle, HandleInner},
@@ -12,6 +12,7 @@ use crate::{
     session::run_connection,
     ssh,
     transport::Stream,
+    wsl,
 };
 use crossbeam_channel::bounded;
 use std::{
@@ -45,7 +46,7 @@ pub fn connect_with_surface_active(
 }
 
 /// Connect using application-specific local socket setup on the I/O worker.
-/// SSH targets always use the remote bridge, never the local connector.
+/// SSH and WSL targets always use the remote bridge, never the local connector.
 /// The connector should observe `stop` during waits so detach cancels setup.
 pub fn connect_with_connector(
     target: ConnectTarget,
@@ -54,9 +55,13 @@ pub fn connect_with_connector(
     connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<Stream> + Send + 'static,
 ) -> Result<Client> {
     validate_options(options)?;
-    if let ConnectTarget::Ssh { target, session } = &target {
-        catalog::validate_target(target)?;
-        session_socket(std::path::Path::new(""), session)?;
+    match &target {
+        ConnectTarget::Ssh { target, session } => {
+            catalog::validate_target(target)?;
+            session_socket(std::path::Path::new(""), session)?;
+        }
+        ConnectTarget::Wsl { distro, session } => wsl::validate(distro, session)?,
+        _ => {}
     }
     let (commands, rx) = queue::channel(COMMAND_CAPACITY)?;
     let (tx, events) = bounded(EVENT_CAPACITY);
@@ -65,7 +70,11 @@ pub fn connect_with_connector(
     thread::Builder::new()
         .name("herdr-client-io".into())
         .spawn(move || {
-            let transport = if matches!(target, ConnectTarget::Ssh { .. }) { "ssh" } else { "local" };
+            let transport = match target {
+                ConnectTarget::Ssh { .. } => "ssh",
+                ConnectTarget::Wsl { .. } => "wsl",
+                _ => "local",
+            };
             let span = tracing::info_span!("connection", transport);
             let _entered = span.enter();
             tracing::info!(transport, "connection starting");
@@ -73,6 +82,10 @@ pub fn connect_with_connector(
                 let (stream, child) = match &target {
                     ConnectTarget::Ssh { target, session } => {
                         let (stream, child) = ssh::connect(target, session, &worker_stop)?;
+                        (stream, Some(child))
+                    }
+                    ConnectTarget::Wsl { distro, session } => {
+                        let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
                         (stream, Some(child))
                     }
                     _ => (connector(&target, &worker_stop)?, None),
@@ -96,6 +109,9 @@ pub fn connect_with_connector(
                 tracing::info!("connection ended");
             }
             if !worker_stop.load(Ordering::Acquire) {
+                if let Some(mismatch) = result.as_ref().err().and_then(Error::version_mismatch) {
+                    let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
+                }
                 let reason = result
                     .err()
                     .map(|e| {

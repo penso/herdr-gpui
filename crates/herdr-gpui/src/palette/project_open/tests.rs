@@ -7,6 +7,7 @@ use crate::{
     window::MockPeer,
 };
 use gpui::TestAppContext;
+use herdr_client::ConnectTarget;
 use herdr_client::protocol::ClientMessage;
 
 fn attach_local(view: &mut HerdrWindow, peer: &MockPeer) {

@@ -1,6 +1,6 @@
 //! The notes panel drawn beside an annotated page.
 
-use super::{super::Tab, ANNOTATIONS_WIDTH};
+use super::super::Tab;
 use crate::{
     HerdrWindow,
     browser::annotate::{Anchor, Note},
@@ -160,11 +160,10 @@ impl HerdrWindow {
                 )
         });
         let has_notes = !self.tab_notes(id).notes.is_empty();
-        div()
+        let panel = div()
             .id("annotations")
             .debug_selector(|| "annotations".into())
             .flex_none()
-            .w(px(ANNOTATIONS_WIDTH))
             .h_full()
             .flex()
             .flex_col()
@@ -232,7 +231,14 @@ impl HerdrWindow {
                             move |this, _, _, cx| this.copy_notes(&tab_for_copy, cx),
                         ))),
                 )
-            })
-            .into_any_element()
+            });
+        self.resizable_panel(
+            panel,
+            "annotations-resize",
+            crate::panel_resize::PanelDrag::PageNotes,
+            None,
+            cx,
+        )
+        .into_any_element()
     }
 }

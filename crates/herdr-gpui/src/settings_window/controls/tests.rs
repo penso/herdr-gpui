@@ -374,11 +374,7 @@ fn browser_skill_choice_changes_only_after_success_and_serializes(cx: &mut TestA
             assert_eq!(view.error.is_some(), !succeeds);
             assert_eq!(
                 view.status.as_deref(),
-                Some(if succeeds {
-                    "Saved"
-                } else {
-                    "Save failed; reloaded current preferences"
-                })
+                (!succeeds).then_some("Save failed; reloaded current preferences")
             );
         });
     }

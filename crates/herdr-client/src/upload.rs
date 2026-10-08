@@ -213,7 +213,7 @@ mod posix {
     use super::*;
     use crate::{
         StorageOperation,
-        ssh::{SshChild, quote},
+        ssh::{ChildGuard, quote},
     };
     use std::{
         fs::File,
@@ -326,7 +326,7 @@ complete=1
         format!("/bin/sh -c {}", quote(script))
     }
 
-    fn spawn(mut command: Command) -> Result<(UnixStream, SshChild)> {
+    fn spawn(mut command: Command) -> Result<(UnixStream, ChildGuard)> {
         let (stream, child_stream) = UnixStream::pair().map_err(Error::UploadIo)?;
         stream.set_nonblocking(true).map_err(Error::UploadIo)?;
         command
@@ -336,7 +336,7 @@ complete=1
             .stdout(Stdio::from(OwnedFd::from(child_stream)))
             // Remote diagnostics may contain secrets or terminal controls.
             .stderr(Stdio::null());
-        let child = SshChild(command.spawn().map_err(Error::UploadIo)?);
+        let child = ChildGuard(command.spawn().map_err(Error::UploadIo)?);
         Ok((stream, child))
     }
 
@@ -424,7 +424,7 @@ complete=1
 
     fn finish(
         stream: &mut UnixStream,
-        child: &mut SshChild,
+        child: &mut ChildGuard,
         cancelled: &AtomicBool,
         last: Instant,
     ) -> Result<()> {
@@ -447,6 +447,17 @@ complete=1
                 if eof {
                     return Ok(());
                 }
+                // The script has exited, so nothing of ours writes any more, and
+                // whatever it wrote is already buffered. EOF itself can be held
+                // back indefinitely: macOS marks a socket pair close-on-exec only
+                // after creating it, so a process another thread spawns in
+                // between inherits the child's end and keeps it open.
+                return match stream.read(&mut byte) {
+                    Ok(0) => Ok(()),
+                    Ok(_) => Err(Error::UploadResponse),
+                    Err(e) if retry(&e) => Ok(()),
+                    Err(e) => Err(Error::UploadIo(e)),
+                };
             }
             thread::sleep(POLL);
         }

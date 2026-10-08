@@ -1,5 +1,5 @@
-//! The menu behind a group's "…" button: closing tabs in the group,
-//! opening a browser tab in it, and splitting it. Closing here only ever
+//! The menu behind a group's "…" button: closing tabs in the group and
+//! splitting it. New tabs come from the group's "+". Closing here only ever
 //! takes tabs out of this group's strip, as an editor's group menu does: the
 //! tabs stay open in Herdr, in the browser, and in every other group. Only a
 //! tab's own close, unsplit, reaches Herdr, through its confirmation.
@@ -16,7 +16,6 @@ enum Action {
     CloseOthers,
     /// Closes the group, and with it every tab in it.
     CloseAll,
-    NewBrowserTab,
     Split,
 }
 
@@ -26,14 +25,13 @@ impl Action {
             Self::Close => "Close",
             Self::CloseOthers => "Close Others",
             Self::CloseAll => "Close All",
-            Self::NewBrowserTab => "New Browser Tab",
             Self::Split => "Split Right",
         }
     }
 
     /// Whether a rule separates this row from the one above it.
     fn starts_section(self) -> bool {
-        matches!(self, Self::NewBrowserTab)
+        matches!(self, Self::Split)
     }
 }
 
@@ -61,7 +59,7 @@ impl HerdrWindow {
             }
             actions.push(Action::CloseAll);
         }
-        actions.extend([Action::NewBrowserTab, Action::Split]);
+        actions.push(Action::Split);
         actions
     }
 
@@ -105,7 +103,6 @@ impl HerdrWindow {
                 self.close_in_group(group, others, window, cx);
             }
             Action::CloseAll => self.close_group(group, window, cx),
-            Action::NewBrowserTab => self.open_browser_tab_in(group, window, cx),
             Action::Split => self.split_group(group, window, cx),
         }
     }

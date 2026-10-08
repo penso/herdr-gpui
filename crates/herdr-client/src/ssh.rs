@@ -2,58 +2,55 @@
 //! No installers, daemon restarts, SSH config edits, or trust-on-first-use.
 //! The remote host is always POSIX; the local half needs a socket pair it can
 //! hand to the `ssh` child as its standard streams, which only Unix provides.
+//! The bridge and probe scripts, and the handshake that reads them, are shared
+//! with WSL distributions, which run the same scripts through `wsl.exe`.
 #[cfg(unix)]
 use crate::limits::POLL;
 use crate::{Error, Result, catalog::validate_target, session_socket, transport::Stream};
 #[cfg(unix)]
+use std::os::fd::OwnedFd;
 use std::{
     io::{self, Read, Write},
-    os::fd::OwnedFd,
+    path::Path,
     process::{Child, Command, Stdio},
-    sync::atomic::Ordering,
+    sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
-use std::{path::Path, sync::atomic::AtomicBool};
 
-#[cfg(unix)]
 const READY: &[u8] = b"herdr-remote-output-ready:1\n";
 
-#[cfg(unix)]
-pub(crate) struct SshChild(pub(super) Child);
-#[cfg(unix)]
-impl Drop for SshChild {
+/// A bridge, probe, or script child (`ssh`, or `wsl.exe` on Windows), killed
+/// and reaped on every exit path.
+pub(crate) struct ChildGuard(pub(crate) Child);
+impl Drop for ChildGuard {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
 }
 
-/// No bridge child is ever spawned on Windows, so this type has no values.
-#[cfg(windows)]
-pub(crate) enum SshChild {}
-
-#[cfg(unix)]
 pub(super) use crate::script::shell_quote as quote;
 
 // PATH first, excluding mise shims, followed by upstream's known install roots.
 // Keep paths in shell variables: discovered executable names are never eval'd.
-#[cfg(unix)]
 pub(super) const CANDIDATES: &str = r#"candidate=$(command -v herdr 2>/dev/null || :)
 case "$candidate" in /*/mise/shims/herdr) candidate=;; /*) ;; *) candidate=;; esac
 for path in "$candidate" "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /home/linuxbrew/.linuxbrew/bin/herdr "$HOME/.nix-profile/bin/herdr" "/etc/profiles/per-user/$USER/bin/herdr" /nix/var/nix/profiles/default/bin/herdr /run/current-system/sw/bin/herdr; do"#;
 
-#[cfg(unix)]
 const PROBE_CANDIDATE: &str = "herdr-probe:candidate";
-#[cfg(unix)]
 const PROBE_DONE: &str = "herdr-probe:done";
-#[cfg(unix)]
-const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
-#[cfg(unix)]
+pub(crate) const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 const PROBE_OUTPUT_LIMIT: u64 = 64 * 1024;
 
 #[cfg(unix)]
 fn bridge_command(session: &str) -> String {
-    let script = format!(
+    format!("/bin/sh -c {}", quote(&bridge_script(session)))
+}
+
+/// The bridge as a script for `/bin/sh -c`: report each candidate's client
+/// status, then run whichever one the handshake accepts.
+pub(crate) fn bridge_script(session: &str) -> String {
+    format!(
         r#"{CANDIDATES}
     if [ -n "$path" ] && [ -x "$path" ]; then
         status=$("$path" status client --json </dev/null) || continue
@@ -68,8 +65,7 @@ fn bridge_command(session: &str) -> String {
 done
 exit 127"#,
         session = quote(session)
-    );
-    format!("/bin/sh -c {}", quote(&script))
+    )
 }
 
 /// What a remote host offers for a saved SSH device, learned without
@@ -93,7 +89,12 @@ pub enum HostProbe {
 /// the choice between them stays with the same rules the bridge applies.
 #[cfg(unix)]
 fn probe_command(session: &str) -> String {
-    let script = format!(
+    format!("/bin/sh -c {}", quote(&probe_script(session)))
+}
+
+/// The probe as a script for `/bin/sh -c`.
+pub(crate) fn probe_script(session: &str) -> String {
+    format!(
         r#"{CANDIDATES}
     if [ -n "$path" ] && [ -x "$path" ]; then
         status=$("$path" status client --json </dev/null) || continue
@@ -103,14 +104,12 @@ fn probe_command(session: &str) -> String {
 done
 printf '%s\n' '{PROBE_DONE}'"#,
         session = quote(session)
-    );
-    format!("/bin/sh -c {}", quote(&script))
+    )
 }
 
 /// `None` when the script never finished, so partial output is not mistaken
 /// for a host without Herdr.
-#[cfg(unix)]
-fn classify_probe(output: &[u8]) -> Option<HostProbe> {
+pub(crate) fn classify_probe(output: &[u8]) -> Option<HostProbe> {
     // Each block holds one candidate's client status, then its server status.
     let mut blocks: Vec<Vec<serde_json::Value>> = Vec::new();
     for line in output.split(|b| *b == b'\n') {
@@ -273,13 +272,12 @@ fn run_remote(
 
 /// Runs `command` with a deadline, keeping at most `PROBE_OUTPUT_LIMIT` bytes
 /// of stdout and discarding stderr.
-#[cfg(unix)]
 pub(crate) fn run(
     command: &mut Command,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<(std::process::ExitStatus, Vec<u8>)> {
-    let mut child = SshChild(
+    let mut child = ChildGuard(
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -328,7 +326,7 @@ pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
 pub fn remote_origin_url(
     target: &str,
     _git_dir: &str,
-    _timeout: std::time::Duration,
+    _timeout: Duration,
     _cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
     validate_target(target)?;
@@ -340,7 +338,7 @@ pub fn remote_config_value(
     target: &str,
     _git_dir: &str,
     _key: &str,
-    _timeout: std::time::Duration,
+    _timeout: Duration,
     _cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
     validate_target(target)?;
@@ -434,7 +432,7 @@ pub fn forward_command(target: &str, local: u16, remote: u16) -> Result<Command>
 
 /// Windows rejects SSH endpoints, so it has no host to forward from.
 #[cfg(windows)]
-pub fn forward_command(target: &str, _local: u16, _remote: u16) -> Result<std::process::Command> {
+pub fn forward_command(target: &str, _local: u16, _remote: u16) -> Result<Command> {
     validate_target(target)?;
     Err(Error::SshUnsupported)
 }
@@ -453,7 +451,7 @@ pub(crate) fn connect(
     target: &str,
     session: &str,
     stop: &AtomicBool,
-) -> Result<(Stream, SshChild)> {
+) -> Result<(Stream, ChildGuard)> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
     let (mut stream, child_stream) = Stream::pair()?;
@@ -465,25 +463,51 @@ pub(crate) fn connect(
         .stdout(Stdio::from(OwnedFd::from(child_stream)))
         // Do not inherit a GUI terminal or collect unbounded/secret-bearing diagnostics.
         .stderr(Stdio::null());
-    let child = SshChild(command.spawn()?);
+    let child = ChildGuard(command.spawn()?);
+    handshake(&mut stream, stop)?;
+    Ok((stream, child))
+}
+
+/// Answer the bridge script: skip each incompatible candidate it reports and
+/// accept the first compatible one, which then becomes the client stream.
+/// When every candidate was skipped, the script exits and the first refusal
+/// says why, instead of the closed bridge every other failure also ends in.
+pub(crate) fn handshake(stream: &mut (impl Read + Write), stop: &AtomicBool) -> Result<()> {
     let started = Instant::now();
+    let mut refused = None;
     loop {
-        let status = await_ready(&mut stream, stop, started)?;
+        let status = match await_ready(stream, stop, started) {
+            Err(Error::SshClosed) => return Err(refused.unwrap_or(Error::SshClosed)),
+            result => result?,
+        };
         if let Some(idle_timeout) = compatible_status(&status) {
             stream.write_all(if idle_timeout {
                 b"accept-idle\n"
             } else {
                 b"accept\n"
             })?;
-            return Ok((stream, child));
+            return Ok(());
         }
+        refused = refused.or_else(|| incompatible_status(&status));
         stream.write_all(b"skip\n")?;
     }
 }
 
-/// Windows rejects SSH endpoints before spawning anything. Handing a socket to a
-/// child as its standard streams needs `OwnedFd`, and the anonymous pipes that
-/// replace it there cannot carry the read timeouts the session loop polls on.
+/// Why a candidate's `status client --json` was skipped, if it reported one.
+fn incompatible_status(output: &[u8]) -> Option<Error> {
+    let status = output
+        .split(|b| *b == b'\n')
+        .find_map(|line| serde_json::from_slice::<serde_json::Value>(line).ok())?;
+    Some(Error::BridgeIncompatible {
+        generation: status["endpoint_protocol_generation"]
+            .as_u64()
+            .and_then(|generation| u32::try_from(generation).ok()),
+        version: status["version"].as_str().and_then(crate::compat::label),
+    })
+}
+
+/// Windows rejects SSH endpoints before spawning anything: saved SSH hosts are
+/// not offered there yet (WSL distributions are, through `crate::wsl`).
 /// Validation still runs first so a malformed target reports the same error
 /// everywhere.
 #[cfg(windows)]
@@ -491,13 +515,12 @@ pub(crate) fn connect(
     target: &str,
     session: &str,
     _stop: &AtomicBool,
-) -> Result<(Stream, SshChild)> {
+) -> Result<(Stream, ChildGuard)> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
     Err(Error::SshUnsupported)
 }
 
-#[cfg(unix)]
 fn compatible_status(output: &[u8]) -> Option<bool> {
     output
         .split(|b| *b == b'\n')
@@ -507,7 +530,6 @@ fn compatible_status(output: &[u8]) -> Option<bool> {
 
 /// Whether one `status client --json` object can serve as this client's
 /// bridge, and if so whether it supports the idle timeout.
-#[cfg(unix)]
 fn compatible(status: &serde_json::Value) -> Option<bool> {
     if status["endpoint_protocol_generation"].as_u64() != Some(1) {
         return None;
@@ -533,7 +555,6 @@ fn compatible(status: &serde_json::Value) -> Option<bool> {
 /// Read the bridge's banner until the ready line, returning what preceded it.
 /// Takes only `Read`: the SSH child's pipe is a `UnixStream`, but the limit,
 /// cancellation and timeout rules here are stream-independent and tested so.
-#[cfg(unix)]
 fn await_ready(
     stream: &mut (impl Read + ?Sized),
     stop: &AtomicBool,

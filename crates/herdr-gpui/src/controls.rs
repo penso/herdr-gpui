@@ -586,7 +586,7 @@ pub const COMMANDS: &[CommandInfo] = &[
         command: Command::NewBrowserTab,
         name: "new_browser_tab",
         label: "New Browser Tab",
-        shortcuts: &[],
+        shortcuts: &["cmd-shift-b"],
     },
     CommandInfo {
         command: Command::InstallBrowserSkill,
@@ -725,11 +725,15 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         ),
         Command::ClosePane => (Method::PaneClose, json!({"pane_id": pane?.pane_id})),
         Command::CloseTab => (Method::TabClose, json!({"tab_id": tab?.tab_id})),
+        // By position, as Herdr's `switch_tab` does: a tab's `number` is an
+        // ID that is never reused, so it drifts from the strip once a tab closes.
         Command::TabNumber(number) => {
             let workspace = workspace?;
-            let target = snapshot.tabs.iter().find(|t| {
-                t.workspace_id == workspace.workspace_id && t.number == usize::from(number)
-            })?;
+            let target = snapshot
+                .tabs
+                .iter()
+                .filter(|t| t.workspace_id == workspace.workspace_id)
+                .nth(usize::from(number).checked_sub(1)?)?;
             (Method::TabFocus, json!({"tab_id": target.tab_id}))
         }
         Command::NewWindow

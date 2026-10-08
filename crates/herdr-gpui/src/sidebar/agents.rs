@@ -89,6 +89,48 @@ pub(super) fn sorted_agents(
     ordered
 }
 
+/// Every listed host's agents in the order the panel paints them, with the
+/// host's endpoint index. Grouped lists one host's agents after another's, in
+/// sidebar order. Priority merges hosts as Herdr's terminal client does: a
+/// disconnected host's last-known agents after connected ones, then attention,
+/// then the most recent change on the clock every connection shares, so a
+/// blocked agent on one host rises above an idle one on another. A plugin
+/// view orders only its own host's agents, so while any host shows one, each
+/// host keeps its own order.
+pub(super) fn panel_agents<'a>(
+    hosts: impl IntoIterator<Item = (usize, &'a crate::state::LiveState)>,
+    sort: crate::preferences::AgentSort,
+) -> Vec<(usize, &'a ClientShellAgent)> {
+    let mut merge = sort == crate::preferences::AgentSort::Priority;
+    let mut listed = 0;
+    let mut rows = Vec::new();
+    for (index, live) in hosts {
+        let Some(snapshot) = live.snapshot.as_deref() else {
+            continue;
+        };
+        listed += 1;
+        merge &= snapshot.agent_view_label.is_none();
+        rows.extend(
+            sorted_agents(snapshot, sort)
+                .into_iter()
+                .map(|agent| (index, live, agent)),
+        );
+    }
+    // One host is already in order; the stable merge would only repeat it.
+    if merge && listed > 1 {
+        rows.sort_by_key(|(_, live, agent)| {
+            (
+                !live.status.is_connected(),
+                std::cmp::Reverse(status_priority(agent.agent_status)),
+                std::cmp::Reverse(live.agent_recency.of(&agent.pane_id)),
+            )
+        });
+    }
+    rows.into_iter()
+        .map(|(index, _, agent)| (index, agent))
+        .collect()
+}
+
 /// What an agent is called wherever it is listed.
 pub(crate) fn agent_name(agent: &ClientShellAgent) -> &str {
     first_text(agent_names(agent), "agent")
@@ -366,6 +408,7 @@ mod tests {
             family: "Menlo".into(),
             size: 16.,
             fallbacks: None,
+            line_height_multiple: None,
         };
         for style in [IndicatorStyle::Dots, IndicatorStyle::Symbols] {
             let indicators = Indicators {

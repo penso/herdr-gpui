@@ -572,20 +572,19 @@ impl HerdrWindow {
     }
 
     /// The repository to read locally, under the same endpoint and staleness
-    /// rules the PR section already enforces.
+    /// rules the PR section already enforces. A workspace the daemon has no
+    /// worktree metadata for is read from its own directory.
     fn local_repository_input(&self) -> crate::Result<crate::pull_request::Input> {
-        let target = self
-            .menu
-            .target
-            .as_ref()
-            .ok_or(crate::Error::StaleWorkspace)?;
-        if !self.menu_target_current() {
+        if self.menu.target.is_none() || !self.menu_target_current() {
             return Err(crate::Error::StaleWorkspace);
         }
         if self.selected_endpoint != 0 || !self.live.local_daemon_peer {
             return Err(crate::Error::PrUntrustedEndpoint);
         }
-        crate::pull_request::repository_input(target.worktree.as_ref(), target.branch.as_deref())
+        let workspace = self
+            .menu_target_workspace()
+            .ok_or(crate::Error::StaleWorkspace)?;
+        crate::pull_request::workspace_input(workspace, &crate::pull_request::Origin::Local)
     }
 
     /// The checkout to read and the token to read GitHub with.

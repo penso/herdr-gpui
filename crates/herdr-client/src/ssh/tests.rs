@@ -1,6 +1,7 @@
 use super::*;
 
 mod forward;
+mod incompatible;
 
 #[test]
 fn discovery_and_bridge_stdio_work_with_quoted_install_paths() {
@@ -19,7 +20,7 @@ printf '%s\n' "$hello"
 "#, 0o700).unwrap();
     let (mut stream, child_stream) = Stream::pair().unwrap();
     stream.set_read_timeout(Some(POLL)).unwrap();
-    let child = SshChild(
+    let child = ChildGuard(
         Command::new("/bin/sh")
             .args(["-c", &bridge_command("agents")])
             .env("PATH", &root)
@@ -264,7 +265,7 @@ fn marker_consumes_banners_not_protocol_bytes() {
 fn child_guard_reaps_on_drop() {
     let child = Command::new("sleep").arg("60").spawn().unwrap();
     let id = child.id();
-    drop(SshChild(child));
+    drop(ChildGuard(child));
     assert!(
         !Command::new("kill")
             .args(["-0", &id.to_string()])

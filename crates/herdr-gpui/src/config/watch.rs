@@ -3,12 +3,12 @@
 use std::{
     collections::hash_map::DefaultHasher,
     fs::File,
-    hash::Hasher,
+    hash::{Hash, Hasher},
     io::{self, Read},
     path::Path,
 };
 
-type Fingerprint = Result<u64, io::ErrorKind>;
+pub(crate) type Fingerprint = Result<u64, io::ErrorKind>;
 
 pub(crate) fn fingerprint(path: &Path) -> Fingerprint {
     let read = || -> io::Result<u64> {
@@ -24,6 +24,16 @@ pub(crate) fn fingerprint(path: &Path) -> Fingerprint {
         }
     };
     read().map_err(|error| error.kind())
+}
+
+/// One sample for files read together, such as both sides of a light/dark
+/// theme: editing, creating, or removing any of them changes it.
+pub(crate) fn fingerprint_all(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> u64 {
+    let mut hash = DefaultHasher::new();
+    for path in paths {
+        fingerprint(path.as_ref()).hash(&mut hash);
+    }
+    hash.finish()
 }
 
 /// Debounces samples of a file, or of several read together.
@@ -52,6 +62,40 @@ impl<T: Copy + PartialEq> Watch<T> {
     /// in the meantime. Cancelled loads must leave their sample pending.
     pub(crate) fn accept(&mut self, sample: T) {
         self.accepted = Some(sample);
+    }
+}
+
+/// Decides when to read the configured theme again because its files
+/// changed in place, as when a desktop theme switcher rewrites one. The first
+/// sample of a theme value is its baseline: whatever set that value, a config
+/// load or the picker, read the files then.
+#[derive(Default)]
+pub(crate) struct ThemeWatch {
+    theme: Option<String>,
+    watch: Watch<u64>,
+}
+
+impl ThemeWatch {
+    /// `sampled` is the theme value whose files gave `sample`, and `current`
+    /// the value configured now. `true` means reload now; [`Self::accept`]
+    /// the sample once that reload has started.
+    pub(crate) fn observe(&mut self, sampled: &str, sample: u64, current: &str) -> bool {
+        if sampled != current {
+            return false;
+        }
+        if self.theme.as_deref() != Some(current) {
+            self.theme = Some(current.to_owned());
+            self.watch = Watch {
+                observed: Some(sample),
+                accepted: Some(sample),
+            };
+            return false;
+        }
+        self.watch.observe(sample)
+    }
+
+    pub(crate) fn accept(&mut self, sample: u64) {
+        self.watch.accept(sample);
     }
 }
 

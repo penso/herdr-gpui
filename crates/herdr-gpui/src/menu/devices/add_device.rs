@@ -1,8 +1,11 @@
 //! The Add Device dialog: its form, the host check and save that run off the
 //! UI thread, and the local workspace that carries a setup needing prompts.
 
-use super::{Page, setup};
-use crate::{HerdrWindow, NavigationTarget, search_input::SearchInput};
+use super::{Page, discover::Discovery, setup};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    search_input::{Changed, SearchInput},
+};
 use gpui::{prelude::*, *};
 use herdr_client::{
     HostProbe, Method,
@@ -16,6 +19,13 @@ pub(in crate::menu) struct Setup {
     /// until the device is saved or the dialog closes.
     pub(super) claim: Option<setup::Claim>,
     pub(super) task: Option<Task<()>>,
+    /// The search for hosts to suggest, from when the form opens.
+    pub(super) discovery: Option<Discovery>,
+    /// The label a suggestion filled in, until the user edits it. Only that
+    /// label is replaced when another suggestion is chosen.
+    pub(super) suggested_label: Option<String>,
+    /// Clears `suggested_label` once the label field holds anything else.
+    pub(super) _label_edits: Option<Subscription>,
 }
 
 /// Where adding a device stands. Each step after `Form` belongs to the request
@@ -101,13 +111,24 @@ impl HerdrWindow {
             input
         });
         window.focus(&fields[0].read(cx).focus.clone(), cx);
+        let label_edits = cx.subscribe(&fields[1], |this, field, _: &Changed, cx| {
+            if let Some(setup) = &mut this.menu.device_setup
+                && setup.suggested_label.as_deref() != Some(field.read(cx).text())
+            {
+                setup.suggested_label = None;
+            }
+        });
         self.menu.device_setup = Some(Setup {
             fields,
             step: Step::Form,
             claim: None,
             task: None,
+            discovery: None,
+            suggested_label: None,
+            _label_edits: Some(label_edits),
         });
         self.menu.page = Some(Page::AddDevice);
+        self.start_device_discovery(cx);
     }
 
     /// Route a key to the Add Device form. Returns `false` when the key is
@@ -197,13 +218,14 @@ impl HerdrWindow {
             .min_h_0().overflow_y_scroll().p(px(16.)).flex().flex_col().gap(px(12.))
             .child(div().flex_none().text_color(rgb(theme.subtext()))
                 .child("Herdr checks the host over SSH and saves the device. If Herdr is missing or SSH needs your input, setup continues in a local workspace."));
-        for (label, field) in [
+        for (index, (label, field)) in [
             "SSH target",
             "Label (optional)",
             "Remote session (optional)",
         ]
         .into_iter()
         .zip(&setup.fields)
+        .enumerate()
         {
             body = body.child(
                 div()
@@ -214,6 +236,14 @@ impl HerdrWindow {
                     .child(label)
                     .child(field.clone()),
             );
+            // Suggestions fill the target, so they sit right under it, and
+            // only while the form can still take one.
+            if index == 0
+                && matches!(setup.step, Step::Form)
+                && let Some(discovery) = &setup.discovery
+            {
+                body = body.child(self.render_device_suggestions(discovery, cx));
+            }
         }
         if let Some(error) = &self.menu.error {
             body = body.child(
@@ -669,7 +699,8 @@ impl HerdrWindow {
     }
 }
 
-pub(super) fn enter() -> ClientPaneInputEvent {
+/// The Enter key, which submits a line typed into a pane's shell.
+pub(crate) fn enter() -> ClientPaneInputEvent {
     ClientPaneInputEvent::Key {
         code: ClientKeyCode::Enter,
         modifiers: 0,

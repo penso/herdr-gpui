@@ -304,6 +304,7 @@ mod tests {
             family: "Menlo".into(),
             size: 12.,
             fallbacks: None,
+            line_height_multiple: None,
         };
         let theme = Theme::default();
         let cx = RowContext {
@@ -312,6 +313,8 @@ mod tests {
             theme: &theme,
             look: layout::for_mode(LayoutMode::default()),
             width: 232.,
+            nest: 0.,
+            mark: Default::default(),
             host: None,
         };
         let here = TokenLook {

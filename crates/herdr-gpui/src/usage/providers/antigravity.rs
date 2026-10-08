@@ -4,7 +4,9 @@
 //! `$GEMINI_CLI_HOME`, else `~/.gemini`). The report's Gemini and Claude/GPT
 //! groups give a 5-hour and a weekly window each. The report sends no model
 //! prompt and prints no credentials; it runs in a fresh empty directory so no
-//! project is loaded.
+//! project is loaded. A signed-out `agy` opens a browser to sign in instead,
+//! so the report runs only when the config asks for Antigravity, never for a
+//! merely detected install.
 //!
 //! Not ported: the Antigravity app's and IDE's local language server and the
 //! `agy` HTTPS server (process and port discovery, CSRF tokens, and loopback
@@ -44,7 +46,9 @@ static META: Meta = Meta::new("antigravity", "Antigravity")
         "cli_path",
         &["ANTIGRAVITY_CLI_PATH"],
         "The agy executable on the probed host when it is not on the PATH (install it \
-         with `brew install --cask antigravity-cli`, run `agy` once, and sign in).",
+         with `brew install --cask antigravity-cli`, run `agy` once, and sign in). agy \
+         runs only when this is set or antigravity is in show_providers, as a \
+         signed-out agy opens a browser to sign in.",
     )]);
 
 impl Service for Antigravity {
@@ -56,6 +60,9 @@ impl Service for Antigravity {
         let configured = probe
             .text_setting("cli_path")
             .filter(|path| !path.is_empty());
+        if configured.is_none() && !probe.requested() {
+            return None;
+        }
         let data = |rest: &str| HostPath::env_or("GEMINI_CLI_HOME", ".gemini", rest);
         let used = probe.exists(&data("antigravity-cli")) || probe.exists(&data("antigravity"));
         if configured.is_none() && !used {

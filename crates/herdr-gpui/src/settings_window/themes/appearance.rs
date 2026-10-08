@@ -144,13 +144,8 @@ impl SettingsWindow {
             .items_center()
             .gap(px(8.))
             .child(
-                self.control_switch(
-                    "theme-system",
-                    "Match system appearance",
-                    following,
-                    !self.busy(),
-                )
-                .on_click(cx.listener(|this, _, _, cx| this.toggle_system_theme(cx))),
+                self.control_switch("theme-system", "Match system appearance", following, true)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_system_theme(cx))),
             )
             .when(following, |row| {
                 row.children(
@@ -468,6 +463,7 @@ impl SettingsWindow {
                     .debug_selector(|| "settings-theme-actions".into())
                     .flex()
                     .flex_wrap()
+                    .items_center()
                     .gap(px(8.))
                     .child(
                         button(
@@ -495,12 +491,9 @@ impl SettingsWindow {
                             "theme-contrast",
                             "High contrast",
                             self.config.contrast == Contrast::High,
-                            !self.busy(),
+                            true,
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
-                            if this.busy() {
-                                return;
-                            }
                             let contrast = if this.config.contrast == Contrast::High {
                                 Contrast::Standard
                             } else {

@@ -1,5 +1,6 @@
-//! The sidebar host header's context menu. Only saved SSH devices have one:
-//! Local is always present, and an explicit socket is not in the catalog.
+//! The sidebar host header's context menu. Saved SSH devices have this one;
+//! a WSL distribution's only offers its removal (see `wsl`). Local is always
+//! present, and an explicit socket is not in the catalog.
 use super::setup;
 use crate::{
     HerdrWindow,
@@ -53,9 +54,15 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if id.starts_with(crate::endpoint::WSL_PREFIX) {
+            if self.device_setup_unavailable().is_none() {
+                self.open_remove_wsl(id, anchor, window, cx);
+            }
+            return;
+        }
         // The CLI edits the default catalog, the one device setup also uses.
         // A device already being removed has nothing left to offer.
-        if self.device_setup_unavailable().is_some() || self.menu.removing_devices.contains(id) {
+        if self.ssh_setup_unavailable().is_some() || self.menu.removing_devices.contains(id) {
             return;
         }
         let Some(endpoint) = self.endpoints.iter().find(|endpoint| endpoint.id == id) else {

@@ -7,6 +7,7 @@ pub(crate) enum Preference {
     ConfirmCloseTab(bool),
     ConfirmClosePane(bool),
     ShowSystemLoad(bool),
+    AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     NotificationEnabled(Option<bool>),
     NotificationDelay(Option<u64>),
@@ -41,6 +42,9 @@ impl Config {
                     (None, "confirm_close_pane", Some(value.into()))
                 }
                 Preference::ShowSystemLoad(value) => (None, "show_system_load", Some(value.into())),
+                Preference::AgentCheckpoints(value) => {
+                    (None, "agent_checkpoints", Some(value.into()))
+                }
                 Preference::ShowListeningPorts(value) => {
                     (None, "show_listening_ports", Some(value.into()))
                 }
@@ -150,6 +154,7 @@ mod tests {
             Preference::ConfirmCloseTab(false),
             Preference::ConfirmClosePane(false),
             Preference::ShowSystemLoad(false),
+            Preference::AgentCheckpoints(false),
             Preference::ShowListeningPorts(false),
             Preference::NotificationEnabled(Some(true)),
             Preference::NotificationDelay(Some(3600)),
@@ -173,6 +178,7 @@ mod tests {
         assert_eq!(table["confirm_close_tab"].as_bool(), Some(false));
         assert_eq!(table["confirm_close_pane"].as_bool(), Some(false));
         assert_eq!(table["show_system_load"].as_bool(), Some(false));
+        assert_eq!(table["agent_checkpoints"].as_bool(), Some(false));
         assert_eq!(table["show_listening_ports"].as_bool(), Some(false));
         assert_eq!(table["layout"]["mode"].as_str(), Some("orca"));
         assert_eq!(table["layout"]["sidebar_gap"].as_float(), Some(7.5));
@@ -246,6 +252,27 @@ mod tests {
             );
             assert_eq!(fs::read_to_string(&path)?, original);
         }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preference_save_writes_through_a_symlinked_file() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let dotfiles = directory.path().join("dotfiles");
+        fs::create_dir(&dotfiles)?;
+        let tracked = dotfiles.join("local.toml");
+        fs::write(&tracked, "# tracked\n")?;
+        let link = directory.path().join("local.toml");
+        std::os::unix::fs::symlink(&tracked, &link)?;
+
+        Config::save_preference_path(Preference::ShowSystemLoad(false), &link)?;
+
+        assert!(fs::symlink_metadata(&link)?.file_type().is_symlink());
+        let text = fs::read_to_string(&tracked)?;
+        assert!(text.contains("# tracked"));
+        let table: toml::Table = toml::from_str(&text)?;
+        assert_eq!(table["show_system_load"].as_bool(), Some(false));
         Ok(())
     }
 }

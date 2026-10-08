@@ -1,4 +1,7 @@
 use super::*;
+use herdr_client::protocol::ClientShellCommand;
+
+mod custom_reference;
 
 fn overrides(entries: &[(&str, Binding)]) -> BTreeMap<String, Binding> {
     entries
@@ -280,6 +283,15 @@ fn the_prefix_yields_to_gui_config_and_typing() {
     }
 }
 
+/// The labels of a command's bindings that run, as the palette lists them.
+fn running(keymap: &Keymap, commands: &[ClientShellCommand], index: usize) -> Vec<String> {
+    keymap.custom_bindings(commands)[index]
+        .iter()
+        .filter(|binding| binding.reach == Reach::Runs)
+        .map(|binding| binding.label.clone())
+        .collect()
+}
+
 fn custom(id: &str, labels: &[&str]) -> ClientShellCommand {
     ClientShellCommand {
         command_id: id.into(),
@@ -316,20 +328,14 @@ fn custom_commands_bind_after_the_keymap() {
     assert_eq!(find("cmd-t", false), None);
     assert_eq!(find("u", false), None);
     assert_eq!(find("ctrl-b", false), None);
-    assert_eq!(
-        keymap.custom_labels(&commands[0]),
-        ["ctrl-b y", "ctrl-alt-g"]
-    );
-    assert!(keymap.custom_labels(&commands[2]).is_empty());
+    assert_eq!(running(&keymap, &commands, 0), ["ctrl-b y", "ctrl-alt-g"]);
+    assert!(running(&keymap, &commands, 2).is_empty());
     // `binding_label` drops `prefix+`, so it alone binds nothing.
     let mut old = custom("old", &[]);
     old.binding_label = "g".into();
-    assert!(keymap.custom_labels(&old).is_empty());
-    assert!(
-        keymap
-            .custom_command(&[old], &keystroke("g"), true)
-            .is_none()
-    );
+    let old = [old];
+    assert!(running(&keymap, &old, 0).is_empty());
+    assert!(keymap.custom_command(&old, &keystroke("g"), true).is_none());
     // Without a usable prefix no chord can reach one.
     let keys = DaemonKeys {
         prefixes: vec![keystroke("a")],
@@ -341,7 +347,7 @@ fn custom_commands_bind_after_the_keymap() {
             .custom_command(&commands, &keystroke("y"), true)
             .is_none()
     );
-    assert_eq!(keymap.custom_labels(&commands[0]), ["ctrl-alt-g"]);
+    assert_eq!(running(&keymap, &commands, 0), ["ctrl-alt-g"]);
 }
 
 #[test]

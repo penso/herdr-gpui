@@ -42,6 +42,9 @@ mod groups;
 #[cfg(any(target_os = "macos", windows))]
 mod notes;
 
+/// Middle-clicking a strip's tab closes it.
+mod middle_click;
+
 /// Pages a control request opens, only in a workspace the window shows.
 #[cfg(unix)]
 mod requests;

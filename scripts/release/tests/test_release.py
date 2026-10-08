@@ -63,7 +63,7 @@ class ReleaseTests(unittest.TestCase):
                     base = f"Herdr-20260920.3-{target}/"
                     files = {m.name: m for m in archive.getmembers() if m.isfile()}
                     self.assertEqual(set(files), {base + p for p in [
-                        "bin/herdr-gpui", "share/applications/herdr-gpui.desktop",
+                        "bin/herdr-gpui", "share/applications/so.pen.herdr-gpui.desktop",
                         "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
                         "share/licenses/herdr-gpui/LICENSE-APACHE", "share/licenses/herdr-gpui/NOTICE.md",
                         "share/licenses/herdr-gpui/LICENSE", "share/licenses/herdr-gpui/NOTICE",
@@ -196,7 +196,7 @@ class ReleaseTests(unittest.TestCase):
         fixture = self.work / "packaging checkout"
         for path in ["scripts/release/common.sh", "scripts/release/package-macos.sh",
                      "scripts/release/package-linux.sh", "scripts/release/build-icon.py",
-                     "scripts/release/herdr-gpui.desktop", "assets/macos/Info.plist",
+                     "scripts/release/so.pen.herdr-gpui.desktop", "assets/macos/Info.plist",
                       "LICENSE", "NOTICE", "assets/icons/LICENSE-octicons",
                       "crates/herdr-gpui/SOUND-NOTICE.md",
                      "crates/herdr-protocol/LICENSE-APACHE", "crates/herdr-protocol/NOTICE.md"]:

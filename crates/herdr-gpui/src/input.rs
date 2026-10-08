@@ -6,6 +6,16 @@ use gpui::*;
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::ops::Range;
 
+#[cfg(target_os = "linux")]
+mod linux;
+// The platform input handler for every view-backed text field. It is not named
+// ElementInputHandler, so a `gpui::*` glob cannot silently replace it with
+// GPUI's strong handler on Linux.
+#[cfg(not(target_os = "linux"))]
+pub(crate) use gpui::ElementInputHandler as ViewInputHandler;
+#[cfg(target_os = "linux")]
+pub(crate) use linux::WeakInputHandler as ViewInputHandler;
+
 impl EntityInputHandler for HerdrWindow {
     fn text_for_range(
         &mut self,
@@ -151,14 +161,14 @@ impl EntityInputHandler for HerdrWindow {
 /// it opts out of macOS press-and-hold, which would otherwise swallow the
 /// repeats and open the accent picker. Menu text fields keep the picker.
 pub(crate) struct TerminalInputHandler {
-    inner: ElementInputHandler<HerdrWindow>,
+    inner: ViewInputHandler<HerdrWindow>,
     press_and_hold: bool,
 }
 
 impl TerminalInputHandler {
     pub(crate) fn new(bounds: Bounds<Pixels>, view: Entity<HerdrWindow>, menu_open: bool) -> Self {
         Self {
-            inner: ElementInputHandler::new(bounds, view),
+            inner: ViewInputHandler::new(bounds, view),
             press_and_hold: menu_open,
         }
     }

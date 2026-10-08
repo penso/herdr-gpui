@@ -80,7 +80,9 @@ pub(crate) enum Error {
         #[source]
         source: serde_json::Error,
     },
-    #[error("Teleport needs a local session or SSH host; custom socket endpoints are unsupported")]
+    #[error(
+        "Teleport needs a local session or SSH host; custom socket and WSL endpoints are unsupported"
+    )]
     UnsupportedHost,
     #[error("The workspace is no longer open on its host")]
     WorkspaceGone,

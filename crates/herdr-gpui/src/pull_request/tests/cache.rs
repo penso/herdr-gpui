@@ -4,7 +4,7 @@ use crate::pull_request::cache::{CACHE_LIMIT, ERROR_BACKOFF, REFRESH};
 fn input(branch: &str) -> Input {
     Input {
         checkout: None,
-        repo_key: "/repo/.git".into(),
+        repo_key: Some("/repo/.git".into()),
         branch: branch.into(),
     }
 }
@@ -55,7 +55,7 @@ fn explicit_refresh_keeps_cached_details_and_coalesces_in_flight_requests() {
     peer.cache.poll(now);
     assert_eq!(
         peer.cache
-            .peek(&input.repo_key, &input.branch)
+            .peek(input.repo_key.as_deref().unwrap(), &input.branch)
             .unwrap()
             .number,
         8
@@ -66,7 +66,10 @@ fn explicit_refresh_keeps_cached_details_and_coalesces_in_flight_requests() {
     updated.is_draft = true;
     updated.checks_summary = "2 pending".into();
     peer.complete(now, Ok(Some(updated)), None);
-    let pr = peer.cache.peek(&input.repo_key, &input.branch).unwrap();
+    let pr = peer
+        .cache
+        .peek(input.repo_key.as_deref().unwrap(), &input.branch)
+        .unwrap();
     assert!(pr.is_draft);
     assert_eq!(pr.checks_summary, "2 pending");
     assert!(peer.incoming.try_recv().is_err());
@@ -88,7 +91,11 @@ fn explicit_refresh_respects_account_backoff_and_bounds_the_queue() {
     assert!(peer.incoming.try_recv().is_err());
     peer.cache.poll(now + ERROR_BACKOFF);
     assert_eq!(peer.complete(now + ERROR_BACKOFF, Ok(None), None), input);
-    assert!(peer.cache.peek(&input.repo_key, &input.branch).is_none());
+    assert!(
+        peer.cache
+            .peek(input.repo_key.as_deref().unwrap(), &input.branch)
+            .is_none()
+    );
 }
 
 #[test]

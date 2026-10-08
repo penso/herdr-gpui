@@ -1,3 +1,5 @@
+mod plugin_shortcuts;
+
 #[gpui::test]
 #[allow(clippy::unwrap_used)]
 fn enabling_does_not_replay_undrained_disabled_ingress(cx: &mut gpui::TestAppContext) {

@@ -258,7 +258,10 @@ fn a_daemon_without_link_methods_keeps_the_local_detector(cx: &mut gpui::TestApp
     for position in [link, continuation] {
         view.read_with(cx, |view, _| {
             assert!(!view.terminal_link_hovered(position, Modifiers::secondary_key()));
-            assert!(view.terminal_link_press(position).is_none());
+            assert!(
+                view.terminal_link_press(position, Modifiers::default())
+                    .is_none()
+            );
         });
         cx.simulate_click(position, Modifiers::secondary_key());
     }

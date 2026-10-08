@@ -1,10 +1,12 @@
 //! The saved-host catalog: background loads of the saved devices, the
 //! serialized writes of this client's host selection, and reconciling the
-//! window's endpoints and selection with what the catalog says.
-use super::{Endpoint, LOCAL, SAVED_PREFIX};
+//! window's endpoints and selection with what the catalog says. SSH devices
+//! come from upstream's endpoint catalog; WSL distributions from this client's
+//! own list beside it, which upstream never reads.
+use super::{Endpoint, LOCAL, SAVED_PREFIX, WSL_PREFIX};
 use crate::{Error, HerdrWindow, Result};
 use gpui::Context;
-use herdr_client::{ConnectTarget, SavedHost};
+use herdr_client::{ConnectTarget, SavedHost, WslHost};
 use std::{
     sync::mpsc,
     time::{Duration, Instant},
@@ -14,6 +16,7 @@ pub(crate) struct Catalog {
     development: Option<bool>,
     pending: Option<mpsc::Receiver<Result<CatalogUpdate>>>,
     next_poll: Instant,
+    /// The endpoint ID to restore, or `None` for Local.
     pub(super) desired: Option<String>,
     pub(super) initialized: bool,
     pub(super) restore_pending: bool,
@@ -23,7 +26,61 @@ pub(crate) struct Catalog {
 
 pub(super) struct CatalogUpdate {
     pub(super) hosts: Vec<SavedHost>,
+    pub(super) wsl: Vec<WslHost>,
+    /// The endpoint ID the stored selection names, read only at startup.
     selection: Option<Option<String>>,
+}
+
+impl CatalogUpdate {
+    /// Whether `id` is an endpoint this catalog offers and the user may select.
+    fn offers(&self, id: &str) -> bool {
+        if let Some(profile) = id.strip_prefix(SAVED_PREFIX) {
+            return self
+                .hosts
+                .iter()
+                .any(|host| host.enabled && host.id == profile);
+        }
+        id.strip_prefix(WSL_PREFIX)
+            .is_some_and(|distro| self.wsl.iter().any(|host| host.distro == distro))
+    }
+}
+
+/// Load both catalogs. A WSL distribution chosen last wins over upstream's
+/// selection, which cannot name one and so says Local whenever it was chosen.
+fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
+    // Only Windows has distributions; elsewhere the file is never read.
+    let wsl = if cfg!(windows) {
+        herdr_client::load_wsl_hosts(development)?
+    } else {
+        Default::default()
+    };
+    if !startup {
+        return Ok(CatalogUpdate {
+            hosts: herdr_client::load_saved_hosts(development)?,
+            wsl: wsl.hosts,
+            selection: None,
+        });
+    }
+    let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
+    let selection = match wsl.selected_host() {
+        Some(host) => Some(format!("{WSL_PREFIX}{}", host.distro)),
+        None => selected.map(|id| format!("{SAVED_PREFIX}{id}")),
+    };
+    Ok(CatalogUpdate {
+        hosts,
+        wsl: wsl.hosts,
+        selection: Some(selection),
+    })
+}
+
+/// Persist the choice of `selected`, an endpoint ID or `None` for Local, to
+/// whichever store can name it, clearing the other.
+fn store(development: bool, selected: Option<&str>) -> Result<()> {
+    let profile = selected.and_then(|id| id.strip_prefix(SAVED_PREFIX));
+    let distro = selected.and_then(|id| id.strip_prefix(WSL_PREFIX));
+    herdr_client::store_saved_host_selection(development, profile)?;
+    herdr_client::store_wsl_selection(development, distro)?;
+    Ok(())
 }
 
 impl Catalog {
@@ -58,20 +115,7 @@ impl Catalog {
             if let Err(error) = std::thread::Builder::new()
                 .name("herdr-gui-catalog".into())
                 .spawn(move || {
-                    let result = if startup {
-                        herdr_client::load_saved_host_selection(development).map(
-                            |(hosts, selection)| CatalogUpdate {
-                                hosts,
-                                selection: Some(selection),
-                            },
-                        )
-                    } else {
-                        herdr_client::load_saved_hosts(development).map(|hosts| CatalogUpdate {
-                            hosts,
-                            selection: None,
-                        })
-                    };
-                    let _ = tx.send(result.map_err(Error::from));
+                    let _ = tx.send(load(development, startup));
                 })
             {
                 self.pending = None;
@@ -88,12 +132,7 @@ impl Catalog {
             self.restore_pending = self.desired.is_some();
             self.initialized = true;
         }
-        if self.desired.as_ref().is_some_and(|id| {
-            !update
-                .hosts
-                .iter()
-                .any(|host| host.enabled && &host.id == id)
-        }) {
+        if self.desired.as_ref().is_some_and(|id| !update.offers(id)) {
             self.desired = None;
             self.restore_pending = false;
         }
@@ -103,7 +142,7 @@ impl Catalog {
         // Also cancels an in-flight startup restore when Local is clicked.
         self.initialized = true;
         self.restore_pending = false;
-        self.desired = id.strip_prefix(SAVED_PREFIX).map(str::to_owned);
+        self.desired = (id != LOCAL).then(|| id.to_owned());
         if self.development.is_some() {
             self.queued_write = Some(self.desired.clone());
         }
@@ -124,10 +163,7 @@ impl Catalog {
             match std::thread::Builder::new()
                 .name("herdr-gui-selection".into())
                 .spawn(move || {
-                    let _ = tx.send(
-                        herdr_client::store_saved_host_selection(development, selected.as_deref())
-                            .map_err(Error::from),
-                    );
+                    let _ = tx.send(store(development, selected.as_deref()));
                 }) {
                 Ok(_) => self.writing = Some(rx),
                 Err(e) => error = Some(e.into()),
@@ -142,12 +178,7 @@ impl HerdrWindow {
         if !self.catalog.restore_pending {
             return;
         }
-        let Some(id) = self
-            .catalog
-            .desired
-            .as_ref()
-            .map(|id| format!("{SAVED_PREFIX}{id}"))
-        else {
+        let Some(id) = self.catalog.desired.clone() else {
             return;
         };
         if self.endpoints.iter().any(|endpoint| {
@@ -164,14 +195,20 @@ impl HerdrWindow {
         }
     }
 
-    pub(crate) fn reconcile_catalog(&mut self, hosts: Vec<SavedHost>, cx: &mut Context<Self>) {
+    pub(crate) fn reconcile_catalog(
+        &mut self,
+        hosts: Vec<SavedHost>,
+        wsl: Vec<WslHost>,
+        cx: &mut Context<Self>,
+    ) {
+        let devices = devices(hosts, wsl);
         let selected = &self.endpoints[self.selected_endpoint];
         let selected_id = selected.id.clone();
         let selected_retired = self.selected_endpoint != 0
-            && !hosts.iter().any(|host| {
-                format!("{SAVED_PREFIX}{}", host.id) == selected_id
-                    && host.enabled
-                    && !entry_changed(selected, host)
+            && !devices.iter().any(|device| {
+                device.id == selected_id
+                    && device.enabled
+                    && !entry_changed(selected, &device.target)
             });
         if selected_retired {
             self.switch_endpoint(LOCAL, cx);
@@ -179,35 +216,30 @@ impl HerdrWindow {
         let selected_id = self.endpoints[self.selected_endpoint].id.clone();
         let mut previous = std::mem::take(&mut self.endpoints);
         let mut next = vec![previous.remove(0)];
-        for host in hosts {
-            let id = format!("{SAVED_PREFIX}{}", host.id);
-            let mut endpoint = if let Some(index) = previous.iter().position(|e| e.id == id) {
+        for device in devices {
+            let mut endpoint = if let Some(index) = previous.iter().position(|e| e.id == device.id)
+            {
                 previous.remove(index)
             } else {
                 Endpoint::new(
-                    id,
-                    host.label.clone(),
-                    ConnectTarget::Ssh {
-                        target: host.target.clone(),
-                        session: host.session.clone(),
-                    },
-                    host.enabled,
+                    device.id,
+                    device.label.clone(),
+                    device.target.clone(),
+                    device.enabled,
                 )
             };
-            let changed = endpoint.enabled != host.enabled || entry_changed(&endpoint, &host);
+            let changed =
+                endpoint.enabled != device.enabled || entry_changed(&endpoint, &device.target);
             if changed {
                 endpoint.stop();
                 endpoint.attempts = 0;
-                endpoint.connection.target = ConnectTarget::Ssh {
-                    target: host.target.clone(),
-                    session: host.session.clone(),
-                };
-                endpoint.enabled = host.enabled;
+                endpoint.connection.target = device.target.clone();
+                endpoint.enabled = device.enabled;
                 endpoint.detached = false;
                 endpoint.retry_at = Instant::now();
             }
-            endpoint.label = host.label.clone();
-            endpoint.saved_host = Some(host);
+            endpoint.label = device.label;
+            endpoint.saved = Some(device.target);
             next.push(endpoint);
         }
         self.endpoints = next;
@@ -220,22 +252,51 @@ impl HerdrWindow {
     }
 }
 
+/// One saved device as its catalog describes it.
+struct Device {
+    id: String,
+    label: String,
+    target: ConnectTarget,
+    enabled: bool,
+}
+
+/// Every saved device in sidebar order: SSH hosts as upstream lists them, then
+/// WSL distributions in the order they were added. A distribution has no
+/// disabled state; removing it is how it stops being dialled.
+fn devices(hosts: Vec<SavedHost>, wsl: Vec<WslHost>) -> Vec<Device> {
+    let ssh = hosts.into_iter().map(|host| Device {
+        id: format!("{SAVED_PREFIX}{}", host.id),
+        label: host.label,
+        target: ConnectTarget::Ssh {
+            target: host.target,
+            session: host.session,
+        },
+        enabled: host.enabled,
+    });
+    let wsl = wsl.into_iter().map(|host| Device {
+        id: format!("{WSL_PREFIX}{}", host.distro),
+        label: host.distro.clone(),
+        target: ConnectTarget::Wsl {
+            distro: host.distro,
+            session: host.session,
+        },
+        enabled: true,
+    });
+    ssh.chain(wsl).collect()
+}
+
 /// Whether a saved entry differs from the one this endpoint was last reconciled
 /// against, which is what an edit to a device's saved profile looks like. An
 /// endpoint that has never been reconciled compares its live target instead, so
-/// one built outside the catalog still retires when its entry changes.
-fn entry_changed(endpoint: &Endpoint, host: &SavedHost) -> bool {
-    match &endpoint.saved_host {
-        Some(saved) => saved.target != host.target || saved.session != host.session,
-        None => !same_target(&endpoint.connection.target, host),
-    }
-}
-
-/// Whether an endpoint's live target is exactly the saved entry's, session
-/// included. A device's identity as the catalog describes it; the sessions list
-/// deliberately points an endpoint at other sessions of the same device.
-fn same_target(target: &ConnectTarget, host: &SavedHost) -> bool {
-    matches!(target, ConnectTarget::Ssh { target, session } if target == &host.target && session == &host.session)
+/// one built outside the catalog still retires when its entry changes. The
+/// sessions list deliberately points an endpoint at other sessions of the same
+/// device, so the live target alone is not the device's identity.
+fn entry_changed(endpoint: &Endpoint, saved: &ConnectTarget) -> bool {
+    endpoint
+        .saved
+        .as_ref()
+        .unwrap_or(&endpoint.connection.target)
+        != saved
 }
 
 #[cfg(test)]

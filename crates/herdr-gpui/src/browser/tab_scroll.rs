@@ -15,7 +15,8 @@ const MAX_TRIES: u8 = 4;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ThumbDrag(pub(crate) GroupId);
 
-/// Where a strip's thumb sits, from the strip's left edge.
+/// Where a strip's thumb sits, from the strip's left edge. The math is the
+/// same along either axis, so the review's vertical scrollbar uses it too.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Thumb {
     pub(crate) left: f32,
@@ -36,7 +37,7 @@ impl Thumb {
     }
 
     /// How far a strip scrolls with this thumb moved to `left`.
-    fn scrolled_at(self, viewport: f32, max: f32, left: f32) -> f32 {
+    pub(crate) fn scrolled_at(self, viewport: f32, max: f32, left: f32) -> f32 {
         let travel = viewport - self.width;
         if travel <= 0. {
             return 0.;

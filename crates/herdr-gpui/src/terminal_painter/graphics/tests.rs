@@ -1,6 +1,8 @@
 use super::*;
 use gpui::size;
 
+mod separators;
+
 fn rectangles(symbol: &str, cell: Bounds<Pixels>, scale: f32) -> Vec<Bounds<Pixels>> {
     let mut result = Vec::new();
     let Some(graphic) = Graphic::from_symbol(symbol) else {

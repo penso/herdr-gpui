@@ -16,7 +16,7 @@ pub(crate) use {
     branches::{Branch, list as list_branches},
     context::write as write_context,
     lookup::Lookup,
-    model::{Item, Kind},
+    model::{Item, Kind, fork_branch_number},
 };
 
 #[cfg(test)]

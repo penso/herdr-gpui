@@ -129,6 +129,7 @@ fn the_menu_names_the_saved_session_after_a_session_pick(cx: &mut TestAppContext
                 session: "default".into(),
                 enabled: true,
             }],
+            Vec::new(),
             cx,
         );
         // What choosing another session from the list does to the target.

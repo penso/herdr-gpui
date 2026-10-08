@@ -105,10 +105,7 @@ fn a_lone_group_offers_no_close(cx: &mut TestAppContext) {
     let [group] = groups(&view, cx)[..] else {
         panic!("one group")
     };
-    assert_eq!(
-        actions(&view, cx, group),
-        [Action::NewBrowserTab, Action::Split]
-    );
+    assert_eq!(actions(&view, cx, group), [Action::Split]);
 }
 
 #[gpui::test]
@@ -133,7 +130,6 @@ fn closing_in_a_group_never_closes_a_tab(cx: &mut TestAppContext) {
             Action::Close,
             Action::CloseOthers,
             Action::CloseAll,
-            Action::NewBrowserTab,
             Action::Split
         ]
     );
@@ -212,9 +208,8 @@ fn the_menu_opens_from_the_strip_and_steps_with_the_keyboard(cx: &mut TestAppCon
     cx.simulate_click(button.center(), Modifiers::none());
     draw(cx);
     assert!(view.read_with(cx, |view, _| view.menu.page == Some(Page::Group)));
-    for row in ["group-menu-NewBrowserTab", "group-menu-Split"] {
-        assert!(cx.debug_bounds(row).is_some(), "{row}");
-    }
+    assert!(cx.debug_bounds("group-menu-Split").is_some());
+    assert!(cx.debug_bounds("group-menu-NewBrowserTab").is_none());
     assert!(cx.debug_bounds("group-menu-CloseAll").is_none());
     cx.simulate_keystrokes("down");
     assert_eq!(

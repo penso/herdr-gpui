@@ -30,21 +30,19 @@ mod view_tests;
 
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use annotate_view::Annotations;
-pub(crate) use feedback::Feedback;
+pub(crate) use feedback::{Batch, Feedback};
 pub(crate) use group_motion::Fold;
 #[cfg(test)]
 pub(crate) use groups::GroupIds;
 pub(crate) use groups::{GroupId, Pick, Shown, Slot};
 pub(crate) use layouts::Layouts;
-pub(crate) use location::{LocalFile, Location};
+pub(crate) use location::{LocalFile, Location, ReviewCheckout};
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use native::Pages;
 pub(crate) use store::{Scope, Store, Tab, TabId};
 pub(crate) use tab_appear::{Leaving, Listed};
-pub(crate) use tab_scroll::ThumbDrag;
-pub(crate) use view::Browser;
-#[cfg(test)]
-pub(crate) use view::scope;
+pub(crate) use tab_scroll::{Thumb, ThumbDrag};
+pub(crate) use view::{Browser, scope};
 
 /// Whether this build can show a page inside the window. Elsewhere a browser
 /// tab request opens the system browser instead.

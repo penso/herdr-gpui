@@ -23,12 +23,18 @@ impl HostTheme {
     /// The updates that move a daemon from `previous` to this theme, or from a
     /// fresh client's unknown theme when there is none.
     ///
-    /// Appearance goes first: an explicit appearance stops Herdr inferring one
-    /// from the background color that follows it.
+    /// A fresh client sends the appearance first: an explicit appearance stops
+    /// Herdr inferring one from the background color that follows it. Later
+    /// the appearance goes last. Herdr tells pane applications about a new
+    /// appearance at once, and one that then asks for the background, as
+    /// Claude Code does, must get the colors that go with it.
     pub(crate) fn updates(&self, previous: Option<&Self>) -> Vec<ClientHostThemeUpdate> {
+        let mut appearance = previous
+            .is_none_or(|p| p.appearance != self.appearance)
+            .then_some(ClientHostThemeUpdate::Appearance(self.appearance));
         let mut updates = Vec::new();
-        if previous.is_none_or(|p| p.appearance != self.appearance) {
-            updates.push(ClientHostThemeUpdate::Appearance(self.appearance));
+        if previous.is_none() {
+            updates.extend(appearance.take());
         }
         for (kind, color, old) in [
             (
@@ -55,6 +61,7 @@ impl HostTheme {
         if !palette.is_empty() {
             updates.push(ClientHostThemeUpdate::PaletteColors(palette));
         }
+        updates.extend(appearance);
         updates
     }
 }

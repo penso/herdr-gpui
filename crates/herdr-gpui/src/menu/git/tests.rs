@@ -34,7 +34,7 @@ fn only_a_local_daemon_checkout_is_tracked(cx: &mut TestAppContext) {
             snapshot.focused_workspace_id = Some("w3".into());
             view.live.snapshot = Some(Arc::new(snapshot));
             let input = view.git_input().unwrap();
-            assert_eq!(input.repo_key, REPO_KEY);
+            assert_eq!(input.repo_key.as_deref(), Some(REPO_KEY));
             assert_eq!(input.branch, "develop");
             assert_eq!(input.checkout, None, "the checkout is resolved by Git");
             // A workspace without worktree metadata cannot be acted on.
@@ -65,7 +65,7 @@ fn a_cached_pull_request_is_named_and_only_an_open_one_can_be_opened(cx: &mut Te
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     let input = crate::pull_request::Input {
         checkout: None,
-        repo_key: REPO_KEY.into(),
+        repo_key: Some(REPO_KEY.into()),
         branch: "develop".into(),
     };
     cx.update(|window, cx| {
@@ -164,7 +164,7 @@ fn the_popup_says_when_it_is_waiting_on_github(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     let input = crate::pull_request::Input {
         checkout: None,
-        repo_key: REPO_KEY.into(),
+        repo_key: Some(REPO_KEY.into()),
         branch: "develop".into(),
     };
     let draw = |cx: &mut VisualTestContext| {
@@ -216,7 +216,7 @@ fn the_commit_dialog_ends_in_a_button_row(cx: &mut TestAppContext) {
             view.git = crate::git::Git::fixture(
                 crate::pull_request::Input {
                     checkout: None,
-                    repo_key: REPO_KEY.into(),
+                    repo_key: Some(REPO_KEY.into()),
                     branch: "develop".into(),
                 },
                 status(12, 3, 1),
@@ -252,7 +252,7 @@ fn the_menu_commits_through_a_dialog_and_refuses_an_empty_message(cx: &mut TestA
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     let input = crate::pull_request::Input {
         checkout: None,
-        repo_key: REPO_KEY.into(),
+        repo_key: Some(REPO_KEY.into()),
         branch: "develop".into(),
     };
     cx.update(|window, cx| {

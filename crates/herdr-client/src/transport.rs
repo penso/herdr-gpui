@@ -2,7 +2,8 @@
 //! daemon actually binds: a filesystem `AF_UNIX` socket on Unix, and a named
 //! pipe on Windows, where upstream maps the same socket path string into the
 //! NPFS namespace. Discovery, framing, and the session loop stay identical; only
-//! the stream underneath differs.
+//! the stream underneath differs. On Windows a stream can also be a bridge
+//! child's anonymous pipes, which take the same peek-based receive timeout.
 
 #[cfg(unix)]
 pub use std::os::unix::net::UnixStream as Stream;
@@ -20,8 +21,9 @@ mod windows {
     };
     use std::{
         io::{self, Read, Write},
-        os::windows::io::{AsHandle, AsRawHandle},
+        os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle},
         path::Path,
+        process::{ChildStdin, ChildStdout},
         thread,
         time::{Duration, Instant},
     };
@@ -34,8 +36,28 @@ mod windows {
     /// the caller set, which the pipe itself cannot hold.
     #[derive(Debug)]
     pub struct Stream {
-        pipe: LocalStream,
+        pipe: Pipe,
         read_timeout: Option<Duration>,
+    }
+
+    /// The daemon's named pipe, or a bridge child's standard streams, one
+    /// anonymous pipe each way. Both answer `PeekNamedPipe`.
+    #[derive(Debug)]
+    enum Pipe {
+        Named(LocalStream),
+        Child {
+            stdin: ChildStdin,
+            stdout: ChildStdout,
+        },
+    }
+
+    impl Pipe {
+        fn readable(&self) -> BorrowedHandle<'_> {
+            match self {
+                Self::Named(LocalStream::NamedPipe(pipe)) => pipe.as_handle(),
+                Self::Child { stdout, .. } => stdout.as_handle(),
+            }
+        }
     }
 
     /// Upstream derives the pipe name from the socket path exactly this way, so
@@ -67,10 +89,11 @@ mod windows {
     /// which the standard library maps to `BrokenPipe` and `interprocess` then
     /// downgrades to a zero-length read. Reading an idle connection would
     /// therefore look exactly like a disconnect. Peeking first is what the
-    /// daemon's own Windows client does, and no safe wrapper exposes it.
+    /// daemon's own Windows client does, and no safe wrapper exposes it. A
+    /// bridge child's anonymous pipe has the same limits, and `PeekNamedPipe`
+    /// documents accepting it too.
     #[allow(unsafe_code)]
-    fn available(pipe: &LocalStream) -> io::Result<Option<u32>> {
-        let LocalStream::NamedPipe(pipe) = pipe;
+    fn available(pipe: BorrowedHandle<'_>) -> io::Result<Option<u32>> {
         let mut ready: u32 = 0;
         // SAFETY: the handle is borrowed from a pipe that outlives this call.
         // `lpBuffer`/`lpBytesRead`/`lpBytesLeftThisMessage` are documented as
@@ -80,7 +103,7 @@ mod windows {
         // it is read.
         let peeked = unsafe {
             windows_sys::Win32::System::Pipes::PeekNamedPipe(
-                pipe.as_handle().as_raw_handle(),
+                pipe.as_raw_handle(),
                 std::ptr::null_mut(),
                 0,
                 std::ptr::null_mut(),
@@ -116,9 +139,18 @@ mod windows {
             Ok(Self::wrap(connect(path.as_ref())?))
         }
 
+        /// A bridge child's standard streams as one endpoint stream. The child
+        /// itself stays with the caller, which kills and reaps it.
+        pub(crate) fn from_child(stdin: ChildStdin, stdout: ChildStdout) -> Self {
+            Self {
+                pipe: Pipe::Child { stdin, stdout },
+                read_timeout: None,
+            }
+        }
+
         fn wrap(pipe: LocalStream) -> Self {
             Self {
-                pipe,
+                pipe: Pipe::Named(pipe),
                 read_timeout: None,
             }
         }
@@ -164,14 +196,17 @@ mod windows {
             }
             let deadline = self.read_timeout.map(|timeout| Instant::now() + timeout);
             loop {
-                match available(&self.pipe)? {
+                match available(self.pipe.readable())? {
                     // Report a closed peer as end of stream, as a socket does.
                     None => return Ok(0),
                     Some(0) => {}
                     // The pipe holds these bytes already, so this cannot block.
                     Some(ready) => {
                         let len = buf.len().min(ready as usize);
-                        return self.pipe.read(&mut buf[..len]);
+                        return match &mut self.pipe {
+                            Pipe::Named(pipe) => pipe.read(&mut buf[..len]),
+                            Pipe::Child { stdout, .. } => stdout.read(&mut buf[..len]),
+                        };
                     }
                 }
                 wait(deadline)?;
@@ -181,11 +216,17 @@ mod windows {
 
     impl Write for Stream {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.pipe.write(buf)
+            match &mut self.pipe {
+                Pipe::Named(pipe) => pipe.write(buf),
+                Pipe::Child { stdin, .. } => stdin.write(buf),
+            }
         }
 
         fn flush(&mut self) -> io::Result<()> {
-            self.pipe.flush()
+            match &mut self.pipe {
+                Pipe::Named(pipe) => pipe.flush(),
+                Pipe::Child { stdin, .. } => stdin.flush(),
+            }
         }
     }
 }

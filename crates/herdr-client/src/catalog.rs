@@ -146,21 +146,27 @@ fn store_selection(catalog: &Path, selected: Option<&str>) -> Result<()> {
             Error::SelectionSchema(error),
         )
     })?;
+    write_private(&path, &content)
+}
+
+/// Atomically replace `path` with `content` in a private file, syncing its
+/// directory. Refuses to replace anything but a regular file. Blocking.
+pub(crate) fn write_private(path: &Path, content: &[u8]) -> Result<()> {
     let parent = path
         .parent()
-        .ok_or_else(|| Error::storage(StorageOperation::Validate, &path, Error::SelectionPath))?;
+        .ok_or_else(|| Error::storage(StorageOperation::Validate, path, Error::StoragePath))?;
     fs::create_dir_all(parent)
         .map_err(|error| Error::storage(StorageOperation::CreateDirectory, parent, error))?;
-    match fs::symlink_metadata(&path) {
+    match fs::symlink_metadata(path) {
         Ok(metadata) if !metadata.is_file() => {
             return Err(Error::storage(
                 StorageOperation::Validate,
-                &path,
-                Error::SelectionDestinationNotFile,
+                path,
+                Error::StorageDestinationNotFile,
             ));
         }
         Err(error) if error.kind() != io::ErrorKind::NotFound => {
-            return Err(Error::storage(StorageOperation::Metadata, &path, error));
+            return Err(Error::storage(StorageOperation::Metadata, path, error));
         }
         _ => {}
     }
@@ -179,15 +185,15 @@ fn store_selection(catalog: &Path, selected: Option<&str>) -> Result<()> {
         .open(&temp)
         .map_err(|error| Error::storage(StorageOperation::Create, &temp, error))?;
     let result = (|| {
-        file.write_all(&content)
+        file.write_all(content)
             .map_err(|error| Error::storage(StorageOperation::Write, &temp, error))?;
         file.sync_all()
             .map_err(|error| Error::storage(StorageOperation::Sync, &temp, error))?;
         drop(file);
-        fs::rename(&temp, &path).map_err(|error| {
+        fs::rename(&temp, path).map_err(|error| {
             Error::storage(
                 StorageOperation::Replace {
-                    destination: path.clone(),
+                    destination: path.to_owned(),
                 },
                 &temp,
                 error,
@@ -211,7 +217,7 @@ fn store_selection(catalog: &Path, selected: Option<&str>) -> Result<()> {
 /// Upstream's state root for the endpoint catalog. Windows has no XDG layout by
 /// default, so upstream falls back to `%LOCALAPPDATA%` there; the catalog is
 /// shared with the daemon, so both must agree on where it lives.
-fn catalog_path(development: bool, var: impl Fn(&str) -> Option<OsString>) -> PathBuf {
+pub(crate) fn catalog_path(development: bool, var: impl Fn(&str) -> Option<OsString>) -> PathBuf {
     let app = if development { "herdr-dev" } else { "herdr" };
     let root = (|| {
         if let Some(dir) = var("XDG_STATE_HOME") {

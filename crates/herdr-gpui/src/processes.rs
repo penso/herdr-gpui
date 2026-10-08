@@ -66,7 +66,9 @@ impl Daemon {
         match target {
             ConnectTarget::Local => Some(Self::Default),
             ConnectTarget::Session { name, .. } => Some(Self::Session(name.clone())),
-            ConnectTarget::Ssh { .. } | ConnectTarget::Socket(_) => None,
+            ConnectTarget::Ssh { .. } | ConnectTarget::Wsl { .. } | ConnectTarget::Socket(_) => {
+                None
+            }
         }
     }
 

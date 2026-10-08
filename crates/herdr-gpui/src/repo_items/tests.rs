@@ -178,7 +178,7 @@ fn fork_pr_fetch_uses_the_origin_pr_ref_without_moving_local_branches() {
     git(&remote, &["update-ref", "refs/pull/51/head", &head]);
     let input = crate::pull_request::Input {
         checkout: Some(checkout.to_str().unwrap().into()),
-        repo_key: checkout.join(".git").to_str().unwrap().into(),
+        repo_key: Some(checkout.join(".git").to_str().unwrap().into()),
         branch: "main".into(),
     };
     let prs = parse(&response(), &origin(), Kind::PullRequest).unwrap();

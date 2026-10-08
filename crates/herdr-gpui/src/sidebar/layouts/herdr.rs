@@ -16,7 +16,7 @@ pub(in super::super) struct Herdr;
 impl RowLayout for Herdr {
     fn workspace(&self, row: WorkspaceRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {
         let density = cx.look.density;
-        let badge_lines = row.badge.as_ref().map_or(0, |badge| badge.lines(density));
+        let badge_lines = row.badge.as_ref().map_or(0, |badge| badge.lines(&density));
         let text_lines = if row.lines.is_empty() {
             if density.workspace_details() { 2 } else { 1 }
         } else {

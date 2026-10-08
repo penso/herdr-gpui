@@ -795,3 +795,30 @@ fn cleanup_refuses_replaced_staging_directory_and_does_not_follow_file_symlinks(
     assert_eq!(fs::read(outside).unwrap(), b"keep");
     assert!(!dir.exists());
 }
+
+/// A socket end some unrelated process inherited keeps EOF from ever arriving;
+/// the script's own exit, with nothing stray in the buffer, must end the wait.
+#[test]
+fn an_inherited_socket_end_cannot_hold_a_finished_upload_open() {
+    for (script, expected_ok) in [("exit 0", true), ("printf x; exit 0", false)] {
+        let (mut stream, child_stream) = UnixStream::pair().unwrap();
+        stream.set_nonblocking(true).unwrap();
+        let leaked = child_stream.try_clone().unwrap();
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(OwnedFd::from(child_stream)))
+            .stderr(Stdio::null());
+        let mut child = ChildGuard(command.spawn().unwrap());
+        let started = Instant::now();
+        let result = finish(&mut stream, &mut child, &AtomicBool::new(false), started);
+        assert!(started.elapsed() < IDLE / 2, "{script}: waited for EOF");
+        if expected_ok {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(Error::UploadResponse)), "{script}");
+        }
+        drop(leaked);
+    }
+}

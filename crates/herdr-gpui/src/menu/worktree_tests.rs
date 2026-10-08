@@ -11,6 +11,7 @@ use crate::{
 };
 use gpui::{Entity, VisualTestContext};
 
+mod branch_only;
 mod dialog_entry;
 mod github_listings;
 mod local_listings;

@@ -49,13 +49,19 @@ fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui::TestAppC
         let mut menu = super::super::MenuState::new(cx);
         menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[4]));
         menu.page = Some(super::super::Page::Dialog(WorkspaceAction::DeleteWorktree));
-        menu.deletion = Some(Deletion { pending: Some("list".into()), path: None, force: false });
-        let lookup = serde_json::json!({"result":{"type":"worktree_list", "worktrees":[{"open_workspace_id":"w4", "path":"/daemon/checkout", "is_linked_worktree":true, "is_bare":false}]}});
+        menu.deletion = Some(Deletion::new(Some("list".into()), false));
+        let lookup = serde_json::json!({"result":{"type":"worktree_list", "worktrees":[{"open_workspace_id":"w4", "path":"/daemon/checkout", "is_linked_worktree":true, "is_bare":false}, {"path":"/daemon/main", "is_linked_worktree":false, "is_bare":false}]}});
         menu.apply_deletion_response("unrelated", Ok(lookup.clone()));
         assert!(menu.deletion.as_ref().unwrap().path.is_none());
         menu.apply_deletion_response("list", Ok(lookup));
-        let deletion = menu.deletion.as_ref().unwrap();
+        let deletion = menu.deletion.as_mut().unwrap();
         assert_eq!(deletion.path.as_deref(), Some("/daemon/checkout"));
+        assert_eq!(deletion.root.as_deref(), Some("/daemon/main"));
+        // Confirming also waits to know whether an archive script runs first.
+        assert!(!deletion.ready());
+        deletion.archive = ArchiveCheck::Reading;
+        assert!(!deletion.ready());
+        deletion.archive = ArchiveCheck::Read(None);
         assert!(deletion.ready());
         // The dialog only ever awaits the lookup, so a removal reply here is
         // not something it can act on.
@@ -70,7 +76,7 @@ fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui::TestAppC
         menu.apply_deletion_response("broken", Err(std::sync::Arc::new(crate::Error::Client(herdr_client::Error::UnsupportedMethod))));
         assert_eq!(menu.error.as_deref(), Some("method not advertised by endpoint"));
         // A reply arriving after the menu closed changes nothing.
-        menu.deletion = Some(Deletion { pending: Some("late".into()), path: None, force: false });
+        menu.deletion = Some(Deletion::new(Some("late".into()), false));
         menu.reset();
         menu.apply_deletion_response("late", Err(std::sync::Arc::new(crate::Error::Client(herdr_client::Error::Disconnected))));
         assert!(menu.deletion.is_none());
@@ -190,9 +196,9 @@ fn deletion_dialog_confirms_without_a_text_field(cx: &mut gpui::TestAppContext) 
             assert!(view.menu.input.is_none());
             view.menu.error = None;
             view.menu.deletion = Some(Deletion {
-                pending: None,
                 path: Some("/daemon/checkout".into()),
-                force: false,
+                archive: ArchiveCheck::Read(None),
+                ..Deletion::new(None, false)
             });
             cx.notify();
         })
@@ -227,7 +233,7 @@ fn deletion_fails_closed_on_lookup_and_does_not_force_generic_errors(
         ] {
             let mut menu = super::super::MenuState::new(cx);
             menu.target = Some(WorkspaceTarget::new(&snapshot, &snapshot.workspaces[4]));
-            menu.deletion = Some(Deletion { pending: Some("id".into()), path: None, force: false });
+            menu.deletion = Some(Deletion::new(Some("id".into()), false));
             menu.apply_deletion_response("id", Ok(response));
             assert!(menu.error.is_some());
             let deletion = menu.deletion.as_ref().unwrap();

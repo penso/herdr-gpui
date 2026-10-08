@@ -28,7 +28,7 @@ fn git_button_sits_left_of_the_account_slot_and_opens_its_menu(cx: &mut TestAppC
             view.git = Git::fixture(
                 Input {
                     checkout: None,
-                    repo_key: REPO_KEY.into(),
+                    repo_key: Some(REPO_KEY.into()),
                     branch: "develop".into(),
                 },
                 Status {
@@ -99,7 +99,7 @@ fn uncommitted_changes_hide_zero_counts(cx: &mut TestAppContext) {
                 view.git = Git::fixture(
                     Input {
                         checkout: None,
-                        repo_key: REPO_KEY.into(),
+                        repo_key: Some(REPO_KEY.into()),
                         branch: "develop".into(),
                     },
                     Status {
@@ -142,7 +142,7 @@ fn a_clean_checkout_shows_no_counts(cx: &mut TestAppContext) {
             view.git = Git::fixture(
                 Input {
                     checkout: None,
-                    repo_key: REPO_KEY.into(),
+                    repo_key: Some(REPO_KEY.into()),
                     branch: "develop".into(),
                 },
                 Status::default(),
@@ -168,7 +168,7 @@ fn a_cached_pull_request_replaces_the_uncommitted_counts(cx: &mut TestAppContext
     let (view, cx) = cx.add_window_view(crate::titlebar::tests::header_window);
     let input = Input {
         checkout: None,
-        repo_key: REPO_KEY.into(),
+        repo_key: Some(REPO_KEY.into()),
         branch: "develop".into(),
     };
     cx.simulate_resize(size(px(900.), px(600.)));
@@ -257,7 +257,7 @@ fn a_clean_checkout_with_a_pull_request_shows_no_dot(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::titlebar::tests::header_window);
     let input = Input {
         checkout: None,
-        repo_key: REPO_KEY.into(),
+        repo_key: Some(REPO_KEY.into()),
         branch: "develop".into(),
     };
     cx.simulate_resize(size(px(900.), px(600.)));

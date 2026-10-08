@@ -1,7 +1,6 @@
 //! Prepared preferences state and background-only configuration operations.
 use crate::{
     HerdrWindow,
-    config::ThemeName,
     fonts::StyledFont,
     herdr_settings::{Edit, IndicatorStyle, Settings, THEME_NAMES, ToastDelivery},
 };
@@ -153,17 +152,28 @@ impl HerdrWindow {
         }
     }
 
-    /// Shows the side of a `light:…,dark:…` theme for the system appearance.
-    /// Theme files are read on the background executor; a result is dropped
-    /// when the theme or appearance changed while it loaded.
+    /// Follows the system appearance: reads the theme again, for the other
+    /// side of a `light:…,dark:…` pair or for a theme file that a desktop
+    /// theme switcher rewrote before it changed the appearance. Herdr hears
+    /// of the new appearance only with the colors loaded for it.
     pub(crate) fn apply_system_theme(&mut self, cx: &mut Context<Self>) {
-        if !ThemeName::follows_system(&self.config.theme)
-            || self.menu.page == Some(crate::menu::Page::Themes)
+        // Follow Herdr already shows the daemon's theme for it.
+        if self.config.theme == "Follow Herdr" || !self.reload_theme(cx) {
+            self.theme_light = crate::app::light_appearance(cx);
+        }
+    }
+
+    /// Reads the configured theme again, for the system appearance. Theme
+    /// files are read on the background executor; a result is dropped when
+    /// the theme or appearance changed while it loaded. Returns `false`
+    /// without reading while the picker or Settings owns the theme.
+    pub(crate) fn reload_theme(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.menu.page == Some(crate::menu::Page::Themes)
             || self.theme_save_in_flight()
             // Settings applies its own draft to every window.
             || crate::settings_window::theme_pending(cx)
         {
-            return;
+            return false;
         }
         let light = crate::app::light_appearance(cx);
         let config = self.config.clone();
@@ -173,11 +183,17 @@ impl HerdrWindow {
         cx.spawn(async move |this, cx| {
             let result = load.await;
             let _ = this.update(cx, |this, cx| {
+                // Unless a load for a newer appearance is on its way, Herdr
+                // now hears this one, with whatever theme this load leaves.
+                if light == crate::app::light_appearance(cx) && this.theme_light != light {
+                    this.theme_light = light;
+                    cx.notify();
+                }
                 let (config, theme) = match result {
                     Ok(loaded) => loaded,
                     Err(error) => {
-                        tracing::warn!(%error, "Could not load the theme for the system appearance");
-                        this.local_error = Some(format!("Apply system appearance: {error}"));
+                        tracing::warn!(%error, "Could not reload the theme");
+                        this.local_error = Some(format!("Reload theme: {error}"));
                         cx.notify();
                         return;
                     }
@@ -204,6 +220,7 @@ impl HerdrWindow {
             });
         })
         .detach();
+        true
     }
 
     fn save_shared_settings(&mut self, edit: Edit, cx: &mut Context<Self>) {
@@ -230,12 +247,10 @@ impl HerdrWindow {
                         this.apply_shared_agent_sort();
                         this.reload_notification_config(cx);
                         // Queue directly: neither dialog nor integration response slots belong to us.
-                        let local = this.endpoints.iter().find(|endpoint| {
-                            !matches!(
-                                endpoint.connection.target,
-                                herdr_client::ConnectTarget::Ssh { .. }
-                            )
-                        });
+                        let local = this
+                            .endpoints
+                            .iter()
+                            .find(|endpoint| !endpoint.connection.target.is_remote());
                         this.settings.reload_status = Some(match local {
                             Some(endpoint) => match (
                                 endpoint.connection.handle.as_ref(),

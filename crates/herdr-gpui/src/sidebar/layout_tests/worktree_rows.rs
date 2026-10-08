@@ -43,7 +43,7 @@ fn worktree_rows_wear_their_cached_pull_request(cx: &mut gpui::TestAppContext) {
                 view.menu.pr_cache.seed(
                     crate::pull_request::Input {
                         checkout: None,
-                        repo_key: key.into(),
+                        repo_key: Some(key.into()),
                         branch: branch.into(),
                     },
                     value,
@@ -110,7 +110,7 @@ fn worktree_rows_mark_uncommitted_work(cx: &mut gpui::TestAppContext) {
             let now = std::time::Instant::now();
             let input = |branch: &str| crate::pull_request::Input {
                 checkout: None,
-                repo_key: REPO_KEY.into(),
+                repo_key: Some(REPO_KEY.into()),
                 branch: branch.into(),
             };
             // A checkout with a pull request and uncommitted work, and one that

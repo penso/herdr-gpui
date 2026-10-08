@@ -4,6 +4,8 @@ use super::*;
 use anyhow::Context as _;
 use std::os::unix::fs::{PermissionsExt, symlink};
 
+mod relaunch;
+
 /// A Homebrew prefix that owns `target`, returning the artifact link.
 fn caskroom(prefix: &Path, version: &str, target: &Path) -> anyhow::Result<PathBuf> {
     let bin = prefix.join("bin");

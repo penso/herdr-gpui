@@ -117,6 +117,7 @@ fn cache_reuses_cells_invalidates_fonts_and_bounds_storage(cx: &mut TestAppConte
             family: "Courier".into(),
             size: FONT_SIZE,
             fallbacks: Some(families.iter().map(|family| (*family).to_owned()).collect()),
+            line_height_multiple: None,
         }
         .font()
     };

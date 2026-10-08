@@ -211,7 +211,7 @@ fn a_replaced_device_cannot_receive_a_captured_deletion(cx: &mut TestAppContext)
                 row,
                 target: Target::Device {
                     id: "ssh:test".into(),
-                    host: "old.invalid".into(),
+                    host: herdr_client::RemoteHost::Ssh("old.invalid".into()),
                 },
             });
             view.endpoints[1].connection.target = ConnectTarget::Ssh {

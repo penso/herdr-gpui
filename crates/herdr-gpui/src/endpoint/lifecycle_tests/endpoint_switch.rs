@@ -13,7 +13,7 @@ fn saved_selection_waits_for_snapshot_without_overwriting_preference(
     remote.live.snapshot = None;
     remote.initial_surface = false;
     view.update(cx, |view, cx| {
-        view.catalog.desired = Some("saved".into());
+        view.catalog.desired = Some("ssh:saved".into());
         view.catalog.initialized = true;
         view.catalog.restore_pending = true;
         // The catalog and then its connection can arrive long after startup.
@@ -34,7 +34,7 @@ fn saved_selection_waits_for_snapshot_without_overwriting_preference(
         view.switch_endpoint(LOCAL, cx);
         view.restore_selection(cx);
         assert_eq!(view.selected_endpoint, 0);
-        assert_eq!(view.catalog.desired.as_deref(), Some("saved"));
+        assert_eq!(view.catalog.desired.as_deref(), Some("ssh:saved"));
         assert!(view.catalog.queued_write.is_none());
         // An explicit Local click cancels even a not-yet-ready restore.
         view.catalog.restore_pending = true;
@@ -195,14 +195,14 @@ fn retiring_release_source_unblocks_destination_without_waiting_for_timeout(
         view.update(cx, |view, cx| {
             let mut source_profile = profile("source");
             match change {
-                "remove" => view.reconcile_catalog(vec![profile("target")], cx),
+                "remove" => view.reconcile_catalog(vec![profile("target")], Vec::new(), cx),
                 "disable" => {
                     source_profile.enabled = false;
-                    view.reconcile_catalog(vec![source_profile, profile("target")], cx);
+                    view.reconcile_catalog(vec![source_profile, profile("target")], Vec::new(), cx);
                 }
                 "retarget" => {
                     source_profile.session = "new-session".into();
-                    view.reconcile_catalog(vec![source_profile, profile("target")], cx);
+                    view.reconcile_catalog(vec![source_profile, profile("target")], Vec::new(), cx);
                 }
                 _ => {}
             }

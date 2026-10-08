@@ -6,8 +6,10 @@
 //! shortcuts arrive with each snapshot instead, so they are matched against
 //! this answer when typed rather than resolved into it.
 
+mod custom;
 mod daemon;
 
+pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
 
 use crate::{
@@ -16,7 +18,6 @@ use crate::{
 };
 use daemon::Trigger;
 use gpui::{KeybindingKeystroke, Keystroke, Modifiers};
-use herdr_client::protocol::ClientShellCommand;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -364,76 +365,6 @@ impl Keymap {
             None
         }
     }
-
-    /// The daemon custom command `typed` runs, alone or after the prefix as
-    /// `prefixed` says.
-    pub(crate) fn custom_command<'a>(
-        &self,
-        commands: &'a [ClientShellCommand],
-        typed: &Keystroke,
-        prefixed: bool,
-    ) -> Option<&'a ClientShellCommand> {
-        // Matching first keeps ordinary typing from checking every trigger
-        // against the whole keymap.
-        commands.iter().find(|command| {
-            custom_triggers(command)
-                .filter(|trigger| match trigger {
-                    Trigger::Prefixed(bound) => prefixed && typed_matches(typed, bound),
-                    Trigger::Direct(bound) => !prefixed && typed_matches(typed, bound),
-                })
-                .any(|trigger| self.runs_custom(&trigger))
-        })
-    }
-
-    /// A daemon custom command's shortcuts as this keymap shows them.
-    pub(crate) fn custom_labels(&self, command: &ClientShellCommand) -> Vec<String> {
-        let mut labels: Vec<String> = custom_triggers(command)
-            .filter(|trigger| self.runs_custom(trigger))
-            .filter_map(|trigger| match trigger {
-                Trigger::Direct(bound) => Some(bound.unparse()),
-                Trigger::Prefixed(bound) => self
-                    .prefixes
-                    .first()
-                    .map(|prefix| format!("{} {}", prefix.unparse(), bound.unparse())),
-            })
-            .collect();
-        labels.dedup();
-        labels
-    }
-
-    /// Whether a custom command's trigger can run it here. Herdr resolves
-    /// its own actions before custom commands, so a keystroke this keymap
-    /// already binds, or the prefix itself, never reaches one, and a direct
-    /// keystroke needs a modifier so typing still reaches the terminal.
-    fn runs_custom(&self, trigger: &Trigger) -> bool {
-        match trigger {
-            // Any prefix typed after a prefix passes it through instead.
-            Trigger::Prefixed(bound) => {
-                !self.prefixes.is_empty() && !self.is_prefix(bound) && self.chord(bound).is_none()
-            }
-            Trigger::Direct(bound) => {
-                has_modifier(bound)
-                    && !self.is_prefix(bound)
-                    && self.pane_key(bound).is_none()
-                    && !self.bindings().any(|(_, label)| {
-                        Keystroke::parse(label)
-                            .is_ok_and(|label| identity(&label) == identity(bound))
-                    })
-            }
-        }
-    }
-}
-
-/// The triggers a custom command's daemon labels spell, as Herdr writes
-/// them (`prefix+g`, `ctrl+alt+g`). `binding_label` is only for display: it
-/// drops the `prefix+` that tells a chord from a direct keystroke.
-fn custom_triggers(command: &ClientShellCommand) -> impl Iterator<Item = Trigger> + '_ {
-    command
-        .binding_labels
-        .iter()
-        .take(MAX_KEYSTROKES)
-        .flat_map(|label| daemon::triggers(label))
-        .map(|(_, trigger)| trigger)
 }
 
 /// GPUI's own matching, so a shifted symbol such as `?` matches however the

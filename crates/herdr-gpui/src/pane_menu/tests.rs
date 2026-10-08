@@ -4,6 +4,8 @@ use core::prelude::v1::test;
 use herdr_client::ClientEvent;
 use std::sync::Arc;
 
+pub(crate) mod close_option;
+
 fn snapshot() -> ClientShellSnapshot {
     let mut snapshot: ClientShellSnapshot = serde_json::from_str(include_str!(
         "../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"

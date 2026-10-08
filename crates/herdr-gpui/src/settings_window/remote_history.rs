@@ -253,8 +253,8 @@ fn describe(error: &(dyn std::error::Error + 'static)) -> String {
     parts.join(": ")
 }
 
-/// Asks every connected daemon on `target` to reload its config. Queued is
-/// not acknowledged, and the status says so.
+/// Asks every connected daemon on `target` to reload its config, returning
+/// the first failure to queue that request.
 fn queue_reload(
     source: &WeakEntity<crate::HerdrWindow>,
     target: &str,
@@ -263,7 +263,7 @@ fn queue_reload(
     source
         .update(cx, |source, _| {
             // Every session on the host reads the same config file.
-            let mut status = None;
+            let mut failure = None;
             for endpoint in &source.endpoints {
                 let ConnectTarget::Ssh { target: host, .. } = &endpoint.connection.target else {
                     continue;
@@ -276,20 +276,15 @@ fn queue_reload(
                 if host != target || !endpoint.live.status.is_connected() {
                     continue;
                 }
-                let queued = handle.request(
+                if let Err(error) = handle.request(
                     &snapshot.boot_id,
                     herdr_client::Method::ServerReloadConfig,
                     serde_json::json!({}),
-                );
-                // A failure outranks any later success in the status line.
-                if !matches!(&status, Some(Err(_))) {
-                    status = Some(queued.map(|_| ()));
+                ) {
+                    failure.get_or_insert(error);
                 }
             }
-            status.map(|queued| match queued {
-                Ok(()) => "Saved; host daemon reload queued (not acknowledged)".to_owned(),
-                Err(error) => format!("Saved; host daemon reload not queued: {error}"),
-            })
+            failure.map(|error| format!("Saved; host daemon reload not queued: {error}"))
         })
         .ok()
         .flatten()

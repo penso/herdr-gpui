@@ -167,6 +167,9 @@ impl HerdrWindow {
                     "Modified and untracked files, including submodule contents, are discarded. The branch is not deleted. The Herdr workspace will close."
                 } else {
                     "The branch is not deleted. The Herdr workspace will close."
+                }))
+                .children(deletion.and_then(|deletion| {
+                    self.archive_note(target, deletion, cx)
                 })),
         };
         if action == WorkspaceAction::Close {

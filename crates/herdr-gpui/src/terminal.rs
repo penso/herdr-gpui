@@ -3,7 +3,7 @@ mod links;
 mod selection;
 pub(crate) mod splits;
 pub(crate) use accessibility::Transcript;
-pub(crate) use links::link_at;
+pub(crate) use links::{PaneLink, RowLink, RowTarget, link_at, pane_link_at};
 pub(crate) use selection::{MAX_SELECTION_BYTES, Selection};
 
 use crate::config::Theme;
@@ -144,39 +144,84 @@ pub(crate) fn pane_at(
         .map(|pane| pane.pane_id.as_str())
 }
 
-#[derive(Default)]
-pub struct WheelAccumulator {
-    target: Option<InputTarget>,
-    remainder: f32,
+/// Whole wheel steps on each axis, signed as GPUI reports them: positive
+/// lines scroll up and positive columns scroll left.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WheelSteps {
+    pub lines: i16,
+    pub columns: i16,
 }
 
-impl WheelAccumulator {
-    pub fn lines(
-        &mut self,
-        target: &InputTarget,
-        event: &ScrollWheelEvent,
-        cell_height: f32,
-    ) -> i16 {
-        if self.target.as_ref() != Some(target) || matches!(event.touch_phase, TouchPhase::Started)
-        {
-            self.remainder = 0.;
-            self.target = Some(target.clone());
-        }
-        let delta = match event.delta {
-            ScrollDelta::Pixels(delta) => delta.y.to_f64() as f32 / cell_height,
-            ScrollDelta::Lines(delta) => delta.y,
-        };
+/// Sub-step motion kept between events on one axis.
+#[derive(Default)]
+struct WheelRemainder(f32);
+
+impl WheelRemainder {
+    fn add(&mut self, delta: f32) -> i16 {
         if !delta.is_finite() {
             return 0;
         }
-        if delta != 0. && delta.signum() != self.remainder.signum() {
-            self.remainder = 0.;
+        if delta != 0. && delta.signum() != self.0.signum() {
+            self.0 = 0.;
         }
         // Bound each event's work; keep sub-cell trackpad motion, not an input backlog.
-        let total = (self.remainder + delta).clamp(-128., 128.);
-        let lines = total.trunc() as i16;
-        self.remainder = total - f32::from(lines);
-        lines
+        let total = (self.0 + delta).clamp(-128., 128.);
+        let steps = total.trunc() as i16;
+        self.0 = total - f32::from(steps);
+        steps
+    }
+}
+
+/// Turns wheel and trackpad motion into whole lines and columns for one
+/// target, resetting when the target or the gesture changes.
+///
+/// GPUI's platforms already turn Shift with a vertical wheel into horizontal
+/// motion (macOS in the OS, X11 and Wayland in GPUI), so the axes are taken as
+/// reported and Shift is forwarded unchanged rather than swapped again.
+#[derive(Default)]
+pub struct WheelAccumulator {
+    target: Option<InputTarget>,
+    lines: WheelRemainder,
+    columns: WheelRemainder,
+}
+
+impl WheelAccumulator {
+    pub fn steps(
+        &mut self,
+        target: &WheelTarget,
+        event: &ScrollWheelEvent,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> WheelSteps {
+        if self.target.as_ref() != Some(&target.target)
+            || matches!(event.touch_phase, TouchPhase::Started)
+        {
+            *self = Self {
+                target: Some(target.target.clone()),
+                ..Self::default()
+            };
+        }
+        // Dominance compares the reported motion itself: cells are not square.
+        let (raw_x, raw_y, x, y) = match event.delta {
+            ScrollDelta::Pixels(delta) => {
+                let (x, y) = (delta.x.to_f64() as f32, delta.y.to_f64() as f32);
+                (x, y, x / cell_width, y / cell_height)
+            }
+            ScrollDelta::Lines(delta) => (delta.x, delta.y, delta.x, delta.y),
+        };
+        let lines = self.lines.add(y);
+        // Herdr turns a horizontal wheel only into a mouse report, so motion
+        // over a pane that does not report the mouse would do nothing. A
+        // mostly vertical swipe's sideways drift is not a column either.
+        let columns = if !target.mouse_reporting {
+            self.columns = WheelRemainder::default();
+            0
+        } else if raw_x.abs() > raw_y.abs() {
+            self.columns.add(x)
+        } else {
+            0
+        };
+        WheelSteps { lines, columns }
     }
 }
 
@@ -189,19 +234,40 @@ pub struct WheelTarget {
 }
 
 impl WheelTarget {
-    pub fn event(&self, lines: i16, modifiers: Modifiers) -> ClientPaneInputEvent {
-        let mut event = self.mouse_event(
-            if lines > 0 {
+    /// One event per moving axis, vertical first. Like a terminal wheel event,
+    /// each carries its whole count; Herdr reports one wheel button for it to
+    /// a mouse-reporting application and scrolls host scrollback by the count.
+    pub fn wheel_events(
+        &self,
+        steps: WheelSteps,
+        modifiers: Modifiers,
+    ) -> impl Iterator<Item = ClientPaneInputEvent> + '_ {
+        let vertical = (steps.lines != 0).then(|| {
+            let kind = if steps.lines > 0 {
                 ClientMouseKind::ScrollUp
             } else {
                 ClientMouseKind::ScrollDown
-            },
-            modifiers,
-        );
-        if let ClientPaneInputEvent::Mouse { lines: count, .. } = &mut event {
-            *count = lines.unsigned_abs();
-        }
-        event
+            };
+            (kind, steps.lines)
+        });
+        let horizontal = (steps.columns != 0).then(|| {
+            let kind = if steps.columns > 0 {
+                ClientMouseKind::ScrollLeft
+            } else {
+                ClientMouseKind::ScrollRight
+            };
+            (kind, steps.columns)
+        });
+        vertical
+            .into_iter()
+            .chain(horizontal)
+            .map(move |(kind, count)| {
+                let mut event = self.mouse_event(kind, modifiers);
+                if let ClientPaneInputEvent::Mouse { lines, .. } = &mut event {
+                    *lines = count.unsigned_abs();
+                }
+                event
+            })
     }
 
     pub(crate) fn mouse_event(
@@ -331,8 +397,19 @@ pub fn color(value: u32, default: u32, theme: &Theme) -> u32 {
     }
 }
 
+fn is_default(value: u32) -> bool {
+    match value >> 24 {
+        0 => !(1..=16).contains(&(value & 255)),
+        1 | 2 => false,
+        _ => true,
+    }
+}
+
 pub fn cell_colors(cell: &CellData, theme: &Theme) -> (u32, u32) {
-    let mut fg = color(cell.fg, theme.foreground, theme);
+    let mut fg = match theme.bold {
+        Some(bold) if cell.modifier & BOLD != 0 && is_default(cell.fg) => bold,
+        _ => color(cell.fg, theme.foreground, theme),
+    };
     let mut bg = color(cell.bg, theme.background, theme);
     if cell.modifier & REVERSED != 0 {
         std::mem::swap(&mut fg, &mut bg);

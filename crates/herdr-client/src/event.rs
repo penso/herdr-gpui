@@ -2,7 +2,7 @@
 //! delivery that never blocks the worker on a slow consumer.
 
 use crate::{
-    Error, Result,
+    Error, Result, VersionMismatch,
     limits::POLL,
     protocol::{endpoint::EndpointServerWelcome, *},
     surface_images::SurfaceImages,
@@ -35,6 +35,9 @@ pub enum ClientEvent {
     },
     /// Notifications, clipboard, title, bell, and other non-surface wire events.
     Message(ServerMessage),
+    /// The handshake was refused because one side must be updated. Sent
+    /// just before the `Disconnected` that ends the connection.
+    VersionMismatch(VersionMismatch),
     Disconnected {
         reason: String,
     },

@@ -81,7 +81,7 @@ pub enum Error {
         "Herdr refused session deletion ({0}); the session may be running, inaccessible, or unsupported by the installed CLI"
     )]
     SessionDeleteFailed(std::process::ExitStatus),
-    #[error("SSH has no local socket path")]
+    #[error("remote endpoints have no local socket path")]
     NoLocalSocket,
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
     InvalidSshTarget,
@@ -105,16 +105,39 @@ pub enum Error {
     RequestTimeout,
     #[error("expected stable endpoint welcome")]
     ExpectedWelcome,
+    /// The daemon answered the endpoint hello with a pre-endpoint welcome.
+    #[error("this Herdr server predates the endpoint protocol; run `herdr update` and reconnect")]
+    LegacyDaemon,
+    /// A local daemon closed after the hello without any welcome, as every
+    /// release before the endpoint protocol does.
+    #[error(
+        "Herdr server closed the connection without answering; it is likely older than {}, which this app requires. Run `herdr update` and reconnect",
+        crate::compat::MIN_HERDR_VERSION
+    )]
+    ClosedBeforeWelcome,
+    #[error(
+        "Herdr server {server_version} speaks endpoint generation {generation}, this app speaks {ours}; {advice}",
+        ours = herdr_protocol::endpoint::ENDPOINT_PROTOCOL_GENERATION,
+        advice = crate::compat::generation_advice(*.generation)
+    )]
+    EndpointGeneration {
+        generation: u32,
+        server_version: String,
+    },
     #[error("expected endpoint.welcome.v1")]
     WelcomeKind,
     #[error("{code}: {message}")]
     WelcomeRejected { code: String, message: String },
     #[error("incompatible endpoint generation/codecs")]
     IncompatibleCodecs,
-    #[error("endpoint lacks safe surface interest support")]
-    MissingSurfaceInterest,
-    #[error("SSH endpoint lacks health_check capability")]
-    MissingHealthCheck,
+    #[error(
+        "Herdr server {server_version} lacks safe surface interest support; run `herdr update` and reconnect"
+    )]
+    MissingSurfaceInterest { server_version: String },
+    #[error(
+        "Herdr server {server_version} on this SSH host lacks the health_check capability; run `herdr update` there and reconnect"
+    )]
+    MissingHealthCheck { server_version: String },
     #[error("endpoint boot changed or snapshot revision regressed; reconnect required")]
     SnapshotIdentity,
     #[error("surface before snapshot")]
@@ -145,8 +168,38 @@ pub enum Error {
     SshTimeout,
     #[error("SSH bridge closed; check host trust, authentication, and remote Herdr installation")]
     SshClosed,
+    /// Every Herdr installed on the SSH host or WSL distribution was skipped
+    /// as unable to serve this client. Fields describe the first one;
+    /// `version` is bounded text.
+    #[error(
+        "Herdr{} on this host cannot serve this app; {}",
+        crate::compat::version_note(.version.as_deref()),
+        crate::compat::generation_advice(.generation.unwrap_or(0))
+    )]
+    BridgeIncompatible {
+        generation: Option<u32>,
+        version: Option<String>,
+    },
     #[error("SSH startup output exceeds limit")]
     SshOutputLimit,
+    #[error("invalid WSL distribution name")]
+    InvalidWslDistro,
+    #[error("WSL distributions are only available on Windows")]
+    WslUnsupported,
+    #[error("WSL did not answer in time; the distribution may be stopped or waiting for setup")]
+    WslTimeout,
+    #[error("WSL bridge closed; check that the distribution starts and Herdr is installed in it")]
+    WslClosed,
+    #[error("wsl.exe failed ({0})")]
+    WslCommand(std::process::ExitStatus),
+    #[error("invalid WSL device list schema")]
+    WslCatalogSchema(#[source] serde_json::Error),
+    #[error("unsupported WSL device list version, size, or entries")]
+    WslCatalog,
+    #[error("this WSL distribution is already a device")]
+    WslHostExists,
+    #[error("this WSL distribution is not a saved device")]
+    WslHostMissing,
     #[error("remote Git directory must be an absolute path")]
     InvalidGitDir,
     #[error("remote command failed ({0})")]
@@ -228,10 +281,10 @@ pub enum Error {
     SelectionVersion,
     #[error("selected endpoint is absent or disabled")]
     SelectionUnavailable,
-    #[error("invalid selection path")]
-    SelectionPath,
-    #[error("selection path is not a regular file")]
-    SelectionDestinationNotFile,
+    #[error("invalid storage path")]
+    StoragePath,
+    #[error("storage destination is not a regular file")]
+    StorageDestinationNotFile,
     #[error("endpoint catalog is not a regular file")]
     CatalogNotFile,
     #[error("endpoint catalog exceeds storage limit")]
@@ -295,20 +348,26 @@ impl Error {
             Self::InvalidSession
             | Self::DefaultSession
             | Self::NoLocalSocket
-            | Self::InvalidSshTarget => io::ErrorKind::InvalidInput,
-            Self::SshUnsupported | Self::ClipboardImageUnsupported => io::ErrorKind::Unsupported,
+            | Self::InvalidSshTarget
+            | Self::InvalidWslDistro => io::ErrorKind::InvalidInput,
+            Self::SshUnsupported | Self::WslUnsupported | Self::ClipboardImageUnsupported => {
+                io::ErrorKind::Unsupported
+            }
             Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
             Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
                 io::ErrorKind::TimedOut
             }
             Self::Cancelled | Self::SshCancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
-            Self::SocketClosed | Self::SshClosed => io::ErrorKind::UnexpectedEof,
+            Self::SocketClosed | Self::SshClosed | Self::WslClosed | Self::ClosedBeforeWelcome => {
+                io::ErrorKind::UnexpectedEof
+            }
             Self::ForwardSpawn(error)
             | Self::ForwardLocalPort(error)
             | Self::ForwardControl(error) => error.kind(),
             Self::HealthTimeout
             | Self::SshTimeout
+            | Self::WslTimeout
             | Self::SessionDeleteTimeout
             | Self::ForwardTimeout => io::ErrorKind::TimedOut,
             Self::Full | Self::ClipboardImageBusy => io::ErrorKind::WouldBlock,

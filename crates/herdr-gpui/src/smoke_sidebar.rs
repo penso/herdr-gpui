@@ -17,6 +17,7 @@ fn symbol_cascade(window: &mut Window, cx: &mut App) -> Result<&'static str> {
         family: "Menlo".into(),
         size: crate::terminal::FONT_SIZE,
         fallbacks: Some(detected.clone()),
+        line_height_multiple: None,
     }
     .font();
     // Fallback faces never enter `get_font_for_id`, and a cascade gives the
@@ -63,6 +64,11 @@ fn symbol_cascade(window: &mut Window, cx: &mut App) -> Result<&'static str> {
 }
 
 pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
+    #[cfg(target_os = "linux")]
+    if let Ok(field) = std::env::var("HERDR_TEST_INPUT_SHUTDOWN") {
+        input_shutdown::start(handle, field, cx);
+        return;
+    }
     if std::env::var_os("HERDR_TEST_NOTIFICATIONS_ONLY").is_some() {
         start_notifications(handle, cx);
         return;

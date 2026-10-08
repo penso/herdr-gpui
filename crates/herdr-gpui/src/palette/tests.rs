@@ -3,6 +3,26 @@ use core::prelude::v1::test;
 use gpui::TestAppContext;
 use herdr_client::protocol::ClientShellCommand;
 
+mod background_ranking;
+mod go_to_search;
+
+fn matches_query(text: &str, query: &str) -> bool {
+    let entries = [Entry::new(
+        text.into(),
+        String::new(),
+        "",
+        Action::Native(Command::Palette),
+        None,
+    )];
+    !search::rank(
+        &entries,
+        [0],
+        &search::Query::parse(query),
+        &mut search::matcher(),
+    )
+    .is_empty()
+}
+
 fn snapshot() -> ClientShellSnapshot {
     serde_json::from_str(include_str!(
         "../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
@@ -18,10 +38,10 @@ fn notification_command_is_searchable_and_targetless_activation_is_inert(cx: &mu
             view.show_toast_preview(herdr_client::protocol::SemanticNotificationKind::Custom, cx);
             let selected = view.selected_endpoint;
             view.open_palette(Filter::All, window, cx);
-            let palette = view.menu.palette.as_mut().unwrap();
-            palette.filter("Open Notification Target");
-            assert_eq!(palette.filtered.len(), 1);
-            let action = palette.entries[palette.filtered[0]].action.clone();
+            view.filter_palette("Open Notification Target", cx);
+            let palette = view.menu.palette.as_ref().unwrap();
+            assert_eq!(palette.filtered[0].highlights.label, [0..4, 5..17, 18..24]);
+            let action = palette.selected_entry().unwrap().action.clone();
             assert!(matches!(
                 action,
                 Action::Native(Command::OpenNotificationTarget)
@@ -48,7 +68,7 @@ fn command_badges_mark_daemon_commands_and_go_to_badges_mark_agent_status(cx: &m
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
-            let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+            let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
             snapshot.commands = vec![ClientShellCommand {
                 command_id: "build".into(),
                 action: ClientShellCommandAction::Shell,
@@ -66,7 +86,7 @@ fn command_badges_mark_daemon_commands_and_go_to_badges_mark_agent_status(cx: &m
             let entries: Vec<_> = palette
                 .filtered
                 .iter()
-                .map(|index| &palette.entries[*index])
+                .map(|hit| &palette.entries[hit.index])
                 .collect();
             assert!(!entries.is_empty());
             for entry in &entries {
@@ -173,7 +193,7 @@ fn go_to_lists_the_selected_host_first_and_switches_host_for_a_remote_row(cx: &m
             },
             true,
         );
-        remote.live.snapshot = Some(std::sync::Arc::new(snapshot()));
+        remote.live.snapshot = Some(Arc::new(snapshot()));
         remote.live.status = crate::state::ConnectionStatus::Connected;
         view.endpoints.push(remote);
         view
@@ -185,7 +205,7 @@ fn go_to_lists_the_selected_host_first_and_switches_host_for_a_remote_row(cx: &m
             let entries: Vec<_> = palette
                 .filtered
                 .iter()
-                .map(|index| &palette.entries[*index])
+                .map(|hit| &palette.entries[hit.index])
                 .collect();
             let hosts: Vec<_> = entries
                 .iter()
@@ -233,6 +253,7 @@ fn go_to_fixture() -> ClientShellSnapshot {
     let mut snapshot = snapshot();
     let mut tab = snapshot.tabs[0].clone();
     tab.tab_id = "w1:t2".into();
+    tab.number = 2;
     tab.label = "logs".into();
     snapshot.tabs.push(tab);
     let mut terminal = snapshot.panes[0].clone();
@@ -270,8 +291,8 @@ fn go_to_lists_every_pane_under_its_workspace() {
             assert_eq!(endpoint, crate::endpoint::LOCAL);
             assert_eq!(boot, "boot-v1");
             (
-                entry.label.as_str(),
-                entry.detail.as_str(),
+                entry.label.as_ref(),
+                entry.detail.as_ref(),
                 entry.badge.as_ref(),
                 target.clone(),
             )
@@ -286,12 +307,24 @@ fn go_to_lists_every_pane_under_its_workspace() {
                 "Workspace",
                 NavigationTarget::Workspace("w1".into())
             ),
+            (
+                "main",
+                "repo  #1",
+                "Tab",
+                NavigationTarget::Tab("w1:t1".into())
+            ),
             // The fixture's agent labels its blocked state "waiting".
             (
                 "Claude",
                 "repo  main  /repo",
                 "waiting",
                 NavigationTarget::Pane("w1:p1".into())
+            ),
+            (
+                "logs",
+                "repo  #2",
+                "Tab",
+                NavigationTarget::Tab("w1:t2".into())
             ),
             (
                 "Terminal",
@@ -343,7 +376,7 @@ fn go_to_names_remote_hosts_and_hides_a_lone_default_tab() {
     let snapshot = snapshot();
     let mut entries = Vec::new();
     go_to_entries("ssh:box", Some("Box"), &snapshot, &mut entries);
-    let details: Vec<_> = entries.iter().map(|entry| entry.detail.as_str()).collect();
+    let details: Vec<_> = entries.iter().map(|entry| entry.detail.as_ref()).collect();
     assert_eq!(details, ["Box  #1  main  /repo", "Box  repo  /repo"]);
     assert!(entries.iter().all(|entry| matches!(
         &entry.action,
@@ -357,25 +390,33 @@ fn go_to_names_remote_hosts_and_hides_a_lone_default_tab() {
                 "box claude",
             )
         })
-        .map(|entry| entry.label.as_str());
+        .map(|entry| entry.label.as_ref());
     assert_eq!(matching.next(), Some("Claude"));
     assert_eq!(matching.next(), None);
 }
 
 #[test]
-fn go_to_panes_indent_only_beneath_a_visible_workspace() {
+fn go_to_rows_indent_only_beneath_a_visible_workspace_or_tab() {
     let snapshot = go_to_fixture();
     let mut entries = Vec::new();
     go_to_entries(crate::endpoint::LOCAL, None, &snapshot, &mut entries);
-    let nested = |filtered: &[usize]| {
-        filtered
-            .iter()
-            .map(|index| is_nested(&entries[*index], filtered))
-            .collect::<Vec<_>>()
+    let depths = |candidates: &[usize]| {
+        search::rank(
+            &entries,
+            candidates.iter().copied(),
+            &search::Query::parse(""),
+            &mut search::matcher(),
+        )
+        .iter()
+        .map(|hit| hit.depth)
+        .collect::<Vec<_>>()
     };
-    assert_eq!(nested(&[0, 1, 2, 3]), [false, true, true, false]);
-    // A search that matches a pane but not its workspace leaves it flush.
-    assert_eq!(nested(&[1, 3]), [false, false]);
+    // Workspace, tab, agent, tab, terminal, workspace.
+    assert_eq!(depths(&[0, 1, 2, 3, 4, 5]), [0, 1, 2, 1, 2, 0]);
+    // A search that matches a pane but not its tab leaves it beneath the
+    // workspace, and one matching neither leaves it flush.
+    assert_eq!(depths(&[0, 2, 5]), [0, 0, 0]);
+    assert_eq!(depths(&[2, 3, 4]), [0, 0, 1]);
 }
 
 #[test]

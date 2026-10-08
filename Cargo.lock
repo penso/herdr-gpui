@@ -595,6 +595,15 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
@@ -2078,6 +2087,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
+name = "fancy-regex"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "998b056554fbe42e03ae0e152895cd1a7e1002aec800fdc6635d20270260c46f"
+dependencies = [
+ "bit-set 0.8.0",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3432,9 +3452,12 @@ dependencies = [
  "gpui-pre-platform",
  "gpui-wry",
  "herdr-client",
+ "if-addrs",
  "image",
  "lb-wry",
+ "mdns-sd",
  "nix",
+ "nucleo-matcher",
  "objc",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
@@ -3455,6 +3478,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2 0.11.0",
+ "syntect",
  "sysinfo 0.39.6",
  "tar",
  "tempfile",
@@ -3476,7 +3500,7 @@ name = "herdr-protocol"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
- "bincode",
+ "bincode 2.0.1",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3700,6 +3724,16 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4333,6 +4367,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mdns-sd"
+version = "0.21.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "127d3355da0615643c88c885e29a1ccb29ca4b1ca1f2e44b3caed2e728a796aa"
+dependencies = [
+ "fastrand",
+ "flume 0.12.0",
+ "if-addrs",
+ "mio",
+ "socket-pktinfo",
+ "socket2",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4395,6 +4443,18 @@ checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
 dependencies = [
  "adler2",
  "simd-adler32",
+]
+
+[[package]]
+name = "mio"
+version = "1.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee"
+dependencies = [
+ "libc",
+ "log",
+ "wasi 0.11.1+wasi-snapshot-preview1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4588,6 +4648,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "nucleo-matcher"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf33f538733d1a5a3494b836ba913207f14d9d4a1d3cd67030c5061bdd2cac85"
+dependencies = [
+ "memchr",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -6911,6 +6981,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "socket-pktinfo"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "612942246d0cc239cfd83af1dfd39be47f649208a3524e5e9da651910128e0ac"
+dependencies = [
+ "libc",
+ "socket2",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "socket2"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "soup3"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7255,6 +7346,24 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
+]
+
+[[package]]
+name = "syntect"
+version = "5.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "656b45c05d95a5704399aeef6bd0ddec7b2b3531b7c9e900abbf7c4d2190c925"
+dependencies = [
+ "bincode 1.3.3",
+ "fancy-regex",
+ "flate2",
+ "fnv",
+ "once_cell",
+ "regex-syntax",
+ "serde",
+ "serde_derive",
+ "thiserror 2.0.21",
+ "walkdir",
 ]
 
 [[package]]

@@ -32,6 +32,11 @@ pub(super) struct RowContext<'a> {
     pub(super) look: SidebarLook,
     /// Full sidebar width, divider included.
     pub(super) width: f32,
+    /// How far workspace rows step in under their host's header: zero while
+    /// a single host shows no header to nest under.
+    pub(super) nest: f32,
+    /// The host's colour wash and dimming, shared by every row it owns.
+    pub(super) mark: super::wash::HostMark,
     /// The host these rows live on, named only while several hosts are
     /// listed and this one is remote, so a single-host sidebar stays quiet.
     pub(super) host: Option<&'a str>,

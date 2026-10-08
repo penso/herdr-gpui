@@ -25,7 +25,13 @@ mod configured_rows;
 #[cfg(test)]
 mod device_footer;
 #[cfg(test)]
+mod host_agents;
+#[cfg(test)]
 mod host_groups;
+#[cfg(test)]
+mod host_nesting;
+#[cfg(test)]
+mod host_wash;
 #[cfg(test)]
 mod layouts;
 #[cfg(test)]
@@ -43,9 +49,15 @@ mod selection_scroll;
 #[cfg(test)]
 mod sidebar_cache;
 #[cfg(test)]
+mod spacing_overrides;
+#[cfg(test)]
 mod split_pane;
 #[cfg(test)]
 mod status_bar;
+#[cfg(test)]
+mod sticky_hosts;
+#[cfg(test)]
+mod superset_dots;
 #[cfg(test)]
 mod text_width;
 #[cfg(test)]
@@ -407,6 +419,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         update_preview: None,
         daemon_text: Default::default(),
         removal: None,
+        worktree_script: None,
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,
@@ -428,14 +441,21 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
             ..Default::default()
         },
         theme: Default::default(),
+        theme_light: crate::app::light_appearance(cx),
         config_load: None,
         font_size_saves: Default::default(),
         config_watch: None,
         config_load_revision: 0,
         git: Default::default(),
+        deliveries: Default::default(),
+        notes_width: crate::panel_resize::NOTES,
+        review_files_width: crate::panel_resize::REVIEW_FILES,
+        reviews: Default::default(),
+        viewport_width: 0.,
         pr_actions: Default::default(),
         usage: Default::default(),
         system_load: Default::default(),
+        checkpoints: Default::default(),
         port_forwards: Default::default(),
         listening_ports: Default::default(),
         tunnels: Default::default(),
@@ -497,6 +517,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         settings: Default::default(),
         integrations: Default::default(),
         install_warning_shown: false,
+        version_notice_shown: false,
         collapsed_repos: Default::default(),
         wheel: WheelAccumulator::default(),
         sidebar_width: None,
@@ -514,6 +535,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         input_probe: crate::smoke::InputProbe::default(),
         sidebar_scroll: Default::default(),
         sidebar_revealed: Default::default(),
+        sidebar_pin_reveal: Default::default(),
         _poll: Task::ready(()),
         _activation: cx.observe_window_activation(window, |_, _, _| {}),
         _appearance: cx.observe_window_appearance(window, |this, _, cx| {

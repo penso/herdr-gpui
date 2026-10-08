@@ -89,12 +89,8 @@ impl SettingsWindow {
         edit: Preference,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        self.control_switch(id, label, checked, !self.busy())
-            .when(!self.busy(), |row| {
-                row.on_click(cx.listener(move |this, _, _, cx| {
-                    this.save_preference(edit, cx);
-                }))
-            })
+        self.control_switch(id, label, checked, true)
+            .on_click(cx.listener(move |this, _, _, cx| this.save_preference(edit, cx)))
     }
 
     fn preference_choice(
@@ -105,12 +101,8 @@ impl SettingsWindow {
         edit: Preference,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        self.control_choice(id, label.into(), selected, !self.busy())
-            .when(!self.busy(), |row| {
-                row.on_click(cx.listener(move |this, _, _, cx| {
-                    this.save_preference(edit, cx);
-                }))
-            })
+        self.control_choice(id, label.into(), selected, true)
+            .on_click(cx.listener(move |this, _, _, cx| this.save_preference(edit, cx)))
     }
 
     pub(super) fn native_notification_controls(&self, cx: &mut Context<Self>) -> Div {

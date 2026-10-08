@@ -6,8 +6,14 @@ use super::{Page, accent};
 use crate::{
     HerdrWindow,
     config::{Config, FONT_SIZE_RANGE, FONT_SIZE_STEP, FontFace},
+    keymap::Reach,
 };
 use gpui::{prelude::*, *};
+use herdr_client::protocol::ClientShellCommand;
+use std::borrow::Cow;
+
+/// The semantic paste row, which no keymap command holds.
+const PASTE_LABEL: &str = "Paste into terminal";
 
 impl HerdrWindow {
     pub(crate) fn reload_notification_config(&mut self, cx: &mut Context<Self>) {
@@ -30,24 +36,40 @@ impl HerdrWindow {
 
     /// Reloads when the GUI overrides change, or the daemon's config whose
     /// `[keys]`, clipboard toast, and `[ui.sidebar]` rows the GUI also honors.
+    /// Reads the theme again when a theme file changes in place.
     pub(crate) fn watch_gui_config(&mut self, cx: &mut Context<Self>) {
         let Ok(path) = Config::local_path() else {
             return;
         };
         let daemon = crate::config::daemon_config_path(|key| std::env::var_os(key));
         let executor = cx.background_executor().clone();
+        let mut theme = self.config.theme.clone();
         self.config_watch = Some(cx.spawn(async move |this, cx| {
             let mut watch = crate::config::watch::Watch::default();
+            let mut theme_watch = crate::config::watch::ThemeWatch::default();
             let mut pending = None;
             loop {
                 let (path, daemon) = (path.clone(), daemon.clone());
-                let sample = executor
+                let (sample, theme_sample, sampled) = executor
                     .spawn(async move {
-                        use crate::config::watch::fingerprint;
-                        [fingerprint(&path), fingerprint(&daemon)]
+                        use crate::config::watch::{fingerprint, fingerprint_all};
+                        let theme_sample = fingerprint_all(Config::theme_files(&theme));
+                        (
+                            [fingerprint(&path), fingerprint(&daemon)],
+                            theme_sample,
+                            theme,
+                        )
                     })
                     .await;
+                theme = sampled;
                 let updated = this.update(cx, |this, cx| {
+                    if theme_watch.observe(&theme, theme_sample, &this.config.theme)
+                        && this.config_load.is_none()
+                        && this.reload_theme(cx)
+                    {
+                        theme_watch.accept(theme_sample);
+                    }
+                    theme.clone_from(&this.config.theme);
                     if let Some((sample, revision)) = pending
                         && this.config_load_revision != revision
                     {
@@ -148,7 +170,7 @@ impl HerdrWindow {
         self.load_gui_config_with(
             move || {
                 let mut config = Config::load()?;
-                config.resolve_font_fallbacks(|| text_system.all_font_names());
+                config.resolve_fonts(|| text_system.all_font_names());
                 // Follow Herdr is resolved from the latest prepared snapshot on completion.
                 let theme = if config.theme == "Follow Herdr" {
                     Default::default()
@@ -215,6 +237,7 @@ impl HerdrWindow {
                             this.theme = theme;
                         }
                         this.apply_shared_theme(cx);
+                        this.theme_light = light;
                         if light != crate::app::light_appearance(cx) {
                             this.apply_system_theme(cx);
                         }
@@ -299,7 +322,14 @@ impl HerdrWindow {
         let mut groups = [
             ("WORKSPACES & PANES", Vec::new()),
             ("NAVIGATION", Vec::new()),
-            ("APPLICATION", vec![(vec!["cmd-v"], "Paste into terminal")]),
+            (
+                "APPLICATION",
+                vec![(
+                    vec![(Cow::Borrowed("cmd-v"), None)],
+                    Cow::Borrowed(PASTE_LABEL),
+                )],
+            ),
+            ("PLUGIN & CUSTOM COMMANDS", Vec::new()),
         ];
         for info in COMMANDS {
             let mut keys: Vec<&str> = self.keymap().shortcuts(info.command).collect();
@@ -374,7 +404,52 @@ impl HerdrWindow {
                 | Command::ReloadConfig => 2,
                 Command::OpenNotificationTarget => 1,
             };
-            groups[group].1.push((keys, info.label));
+            groups[group].1.push((
+                keys.into_iter()
+                    .map(|key| (Cow::Borrowed(key), None))
+                    .collect(),
+                Cow::Borrowed(info.label),
+            ));
+        }
+        if let Some(snapshot) = self
+            .live
+            .snapshot
+            .as_ref()
+            .filter(|_| self.live.status.is_connected())
+        {
+            let commands = &snapshot.commands;
+            let bindings = self.keymap().custom_bindings(commands);
+            groups[3]
+                .1
+                .extend(commands.iter().zip(bindings).enumerate().map(
+                    |(index, (command, bindings))| {
+                        let description = command_name(command);
+                        // A row's name keys its selectors and is all that tells
+                        // rows apart, so one already used by a built-in action
+                        // or an earlier command is numbered. Daemon command IDs
+                        // are generated per boot and mean nothing to a reader.
+                        let earlier = usize::from(
+                            description == PASTE_LABEL
+                                || COMMANDS.iter().any(|info| info.label == description),
+                        ) + commands[..index]
+                            .iter()
+                            .filter(|other| command_name(other) == description)
+                            .count();
+                        let description = match earlier {
+                            0 => description.to_owned(),
+                            earlier => format!("{description} ({})", earlier + 1),
+                        };
+                        (
+                            bindings
+                                .into_iter()
+                                .map(|binding| {
+                                    (Cow::Owned(binding.label), reach_note(binding.reach))
+                                })
+                                .collect(),
+                            Cow::Owned(description),
+                        )
+                    },
+                ));
         }
         let total: usize = groups.iter().map(|(_, shortcuts)| shortcuts.len()).sum();
         let mut count = 0;
@@ -382,8 +457,10 @@ impl HerdrWindow {
             let shortcuts: Vec<_> = shortcuts
                 .into_iter()
                 .filter(|(keys, description)| {
-                    keys.iter()
-                        .any(|keys| shortcut_matches(query, keys, description, section))
+                    shortcut_matches(query, "", description, section)
+                        || keys
+                            .iter()
+                            .any(|(keys, _)| shortcut_matches(query, keys, description, section))
                 })
                 .collect();
             if shortcuts.is_empty() {
@@ -417,22 +494,41 @@ impl HerdrWindow {
                                 .flex()
                                 .flex_wrap()
                                 .gap(px(10.))
-                                .children(keys.into_iter().map(|keys| {
-                                    div().flex().flex_wrap().gap(px(4.)).children(
-                                        keycaps(keys).map(|key| {
-                                            div()
-                                                .flex_none()
-                                                .px(px(6.))
-                                                .py(px(2.))
-                                                .rounded(px(crate::config::corners::SMALL))
-                                                .border_1()
-                                                .border_color(rgb(theme.active))
-                                                .bg(rgb(theme.background))
-                                                .text_size(px(font.size * 0.9))
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .child(key)
-                                        }),
+                                .when(keys.is_empty(), |column| {
+                                    column.child(
+                                        div()
+                                            .text_color(rgb(theme.muted))
+                                            .child("No shortcut assigned"),
                                     )
+                                })
+                                .children(keys.into_iter().map(|(keys, note)| {
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(3.))
+                                        .child(div().flex().flex_wrap().gap(px(4.)).children(
+                                            keycaps(&keys).map(|key| {
+                                                div()
+                                                    .flex_none()
+                                                    .px(px(6.))
+                                                    .py(px(2.))
+                                                    .rounded(px(crate::config::corners::SMALL))
+                                                    .border_1()
+                                                    .border_color(rgb(theme.active))
+                                                    .bg(rgb(theme.background))
+                                                    .text_size(px(font.size * 0.9))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .child(key)
+                                            }),
+                                        ))
+                                        .when_some(note, |binding, note| {
+                                            binding.child(
+                                                div()
+                                                    .text_size(px(font.size * 0.85))
+                                                    .text_color(rgb(theme.muted))
+                                                    .child(note),
+                                            )
+                                        })
                                 })),
                         )
                         .child(
@@ -458,7 +554,7 @@ impl HerdrWindow {
             div()
                 .py(px(14.))
                 .text_color(rgb(theme.subtext()))
-                .child("Includes the prefix chords from Herdr's [keys] in config.toml. Daemon actions with no GUI command, and terminal applications, keep their own shortcuts."),
+                .child("Includes Herdr's [keys] prefix chords and the connected daemon's plugin and custom commands. A binding that cannot run says why. Terminal applications keep their own shortcuts."),
         );
         div()
             .flex()
@@ -554,6 +650,28 @@ impl HerdrWindow {
 /// The keycaps of a shortcut, capitalized for display, a prefix chord's
 /// keystrokes in turn. `cmd--` splits into `cmd` and a `-` key rather than an
 /// empty cap, as does a chord's bare `-`.
+/// A custom command's row name: its description, or its ID without one.
+fn command_name(command: &ClientShellCommand) -> &str {
+    command
+        .description
+        .as_deref()
+        .filter(|description| !description.trim().is_empty())
+        .unwrap_or(&command.command_id)
+}
+
+/// Why a custom command's binding does not run, beneath its keycaps.
+fn reach_note(reach: Reach) -> Option<&'static str> {
+    match reach {
+        Reach::Runs => None,
+        Reach::Shadowed => Some("Used by a Herdr or GUI shortcut"),
+        Reach::Taken => Some("Used by an earlier command"),
+        Reach::NeedsModifier => Some("Needs a modifier key"),
+        Reach::NoPrefix => Some("No usable prefix key"),
+        Reach::OverLimit => Some("Beyond the 8-shortcut limit"),
+        Reach::Unsupported => Some("Not supported by this client"),
+    }
+}
+
 fn keycaps(shortcut: &str) -> impl Iterator<Item = String> + '_ {
     shortcut
         .split(' ')
@@ -588,13 +706,14 @@ fn shortcut_matches(query: &str, keys: &str, description: &str, section: &str) -
         .is_some_and(|token| matches!(token, "cmd" | "ctrl" | "alt" | "shift"))
     {
         // A key combination should match keycaps, not letters in an action's name.
+        let keys = keys.to_lowercase();
         return query
             .split_whitespace()
-            .all(|token| keys.split(['-', ' ']).any(|key| key == token));
+            .all(|token| keys.split(['-', '+', ' ']).any(|key| key == token));
     }
     let text = format!("{keys} {description} {section}")
         .to_lowercase()
-        .replace('-', " ");
+        .replace(['-', '+'], " ");
     query.split_whitespace().all(|token| text.contains(token))
 }
 

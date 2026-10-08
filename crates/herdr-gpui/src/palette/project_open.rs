@@ -4,7 +4,7 @@
 use super::{LocalTarget, ProjectOperation, projects};
 use crate::{Error, HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
-use herdr_client::{ConnectTarget, Method, protocol::ClientShellSnapshot};
+use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -41,6 +41,7 @@ impl HerdrWindow {
                 palette.projects = collection;
                 this.prepare_palette_entries(&mut palette);
                 this.menu.palette = Some(palette);
+                this.rank_palette(super::Selection::Keep, cx);
                 cx.notify();
             });
         }));
@@ -57,7 +58,7 @@ impl HerdrWindow {
             .ok_or(Error::PaletteHostUnavailable)?;
         let endpoint = &self.endpoints[index];
         // An explicitly supplied SSH launch target may occupy endpoint zero.
-        if matches!(endpoint.connection.target, ConnectTarget::Ssh { .. }) {
+        if endpoint.connection.target.is_remote() {
             return Err(Error::PaletteHostUnavailable);
         }
         let live = if index == self.selected_endpoint {

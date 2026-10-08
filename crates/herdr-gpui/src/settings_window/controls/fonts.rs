@@ -450,7 +450,6 @@ impl SettingsWindow {
             FontTarget::All => "All roles",
             FontTarget::Face(face) => role_label(face),
         };
-        let ready = !self.busy();
         let list_height = (f32::from(window.viewport_size().height) - 340.).clamp(84., 336.);
         Some(
             div()
@@ -553,7 +552,6 @@ impl SettingsWindow {
                                             .when(index == this.controls.selected, |row| {
                                                 row.bg(rgb(this.theme.active))
                                             })
-                                            .when(this.busy(), |row| row.opacity(0.5))
                                             .child(
                                                 div()
                                                     .min_w_0()
@@ -595,7 +593,6 @@ impl SettingsWindow {
                                 "settings-font-default".into(),
                                 format!("Use platform default family / {label}"),
                             )
-                            .when(!ready, |button| button.opacity(0.5))
                             .on_click(cx.listener(
                                 move |this, _, window, cx| {
                                     this.commit_control_family(target, None, window, cx)

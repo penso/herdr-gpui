@@ -238,7 +238,7 @@ fn run(start: u16, hit: usize, len: usize, belongs: &impl Fn(usize) -> bool) -> 
 
 /// Characters that end a word even though they are printed: quotes, brackets,
 /// and the separators and borders that sit between words in terminal output.
-fn separates(c: char) -> bool {
+pub(super) fn separates(c: char) -> bool {
     c.is_whitespace()
         || c.is_control()
         || matches!(

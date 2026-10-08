@@ -19,6 +19,10 @@ use std::{
 };
 
 pub(crate) const MAX_PENDING: usize = 32;
+/// How close together two identical notifications from one daemon boot must be
+/// to play once. Herdr sends each event to every attached client, so windows
+/// that share a daemon all hand the same event to the one worker.
+const REPEAT_WINDOW: Duration = Duration::from_secs(2);
 
 struct Pending {
     event: SemanticNotification,
@@ -148,8 +152,38 @@ impl Policy {
 }
 
 enum PlaybackRequest {
-    Notification(SemanticNotification),
+    Notification {
+        boot: Option<String>,
+        event: SemanticNotification,
+    },
     Preview,
+}
+
+/// Notifications the worker recently accepted, compared as complete values.
+#[derive(Default)]
+struct Recent(VecDeque<(Instant, Option<String>, SemanticNotification)>);
+
+impl Recent {
+    /// Whether this is the first time `event` from `boot` arrives within
+    /// [`REPEAT_WINDOW`]. Windows poll in any order, so `at` may precede an
+    /// entry recorded earlier.
+    fn first(&mut self, boot: Option<&str>, event: &SemanticNotification, at: Instant) -> bool {
+        let near = |then: Instant| at.max(then).duration_since(at.min(then)) < REPEAT_WINDOW;
+        self.0.retain(|(then, ..)| near(*then));
+        if self
+            .0
+            .iter()
+            .any(|(_, seen, heard)| seen.as_deref() == boot && heard == event)
+        {
+            return false;
+        }
+        if self.0.len() == MAX_PENDING {
+            self.0.pop_front();
+        }
+        self.0
+            .push_back((at, boot.map(str::to_owned), event.clone()));
+        true
+    }
 }
 
 struct Job {
@@ -206,6 +240,7 @@ impl Service {
             .name("herdr-sound".into())
             .spawn(move || {
                 let mut current = Arc::new(Settings::default());
+                let mut recent = Recent::default();
                 reload.store(true, Ordering::Release);
                 while !stop.load(Ordering::Acquire) {
                     let job = match receiver.recv_timeout(Duration::from_millis(50)) {
@@ -234,8 +269,10 @@ impl Service {
                         continue;
                     }
                     let (sound, path) = match job.request {
-                        PlaybackRequest::Notification(event) => {
-                            if !current.sound.allows(event.agent.as_deref()) {
+                        PlaybackRequest::Notification { boot, event } => {
+                            if !recent.first(boot.as_deref(), &event, job.queued)
+                                || !current.sound.allows(event.agent.as_deref())
+                            {
                                 continue;
                             }
                             let Some(sound) = event.sound else {
@@ -311,6 +348,7 @@ impl Service {
             .and_then(|value| value.clone());
         let cancel = live.sound_cancel.clone();
         let connection_cancel = live.sound_connection_cancel.clone();
+        let snapshot = live.snapshot.clone();
         policy.poll(
             live,
             settings.map(|s| s.ui_delay()),
@@ -319,7 +357,10 @@ impl Service {
             |event| {
                 if let Some(sender) = &self.sender {
                     let _ = sender.try_send(Job {
-                        request: PlaybackRequest::Notification(event),
+                        request: PlaybackRequest::Notification {
+                            boot: snapshot.as_ref().map(|s| s.boot_id.clone()),
+                            event,
+                        },
                         cancel: cancel.clone(),
                         connection_cancel: connection_cancel.clone(),
                         queued: now,

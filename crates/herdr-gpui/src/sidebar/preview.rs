@@ -125,6 +125,8 @@ impl Preview {
             theme,
             look,
             width: f32::from(self.width),
+            nest: 0.,
+            mark: Default::default(),
             host: None,
         };
         let rows = layout_for(mode);

@@ -485,7 +485,7 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .child(
                         svg()
-                            .path("icons/split.svg")
+                            .path("icons/fan-out.svg")
                             .size(px(16.))
                             .flex_none()
                             .text_color(muted),

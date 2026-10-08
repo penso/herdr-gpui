@@ -288,7 +288,11 @@ impl HerdrWindow {
                 return;
             }
             Command::Find => {
-                self.open_find(window, cx);
+                // In a review, Find searches its changes.
+                match self.focused_review(window, cx) {
+                    Some(id) => self.open_review_search(id, window, cx),
+                    None => self.open_find(window, cx),
+                }
                 return;
             }
             Command::CopyMode => {

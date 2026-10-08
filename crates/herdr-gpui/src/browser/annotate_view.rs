@@ -12,16 +12,12 @@ use crate::{
     search_input::SearchInput,
     window::Flash,
 };
-use delivery::Delivery;
 use gpui::{prelude::*, *};
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 mod delivery;
 mod panel;
 mod screenshots;
-
-/// The notes panel's width beside the page.
-pub(super) const ANNOTATIONS_WIDTH: f32 = 300.;
 
 /// What the next note will be about, picked but not yet written, and its
 /// screenshot once WebKit delivers it.
@@ -49,7 +45,6 @@ pub(crate) struct Annotations {
     /// list; `None` for a note that is whole.
     drawn: HashMap<TabId, Vec<Option<Instant>>>,
     pub(super) input: Entity<SearchInput>,
-    deliveries: Vec<Delivery>,
     /// Numbers screenshots, to match each to its draft or note.
     captures: u64,
 }
@@ -66,7 +61,6 @@ impl Annotations {
             panels: HashMap::new(),
             drawn: HashMap::new(),
             input,
-            deliveries: Vec::new(),
             captures: 0,
         }
     }
@@ -89,11 +83,6 @@ impl Annotations {
     #[cfg(test)]
     pub(super) fn queued(&self, id: TabId) -> usize {
         self.tabs.get(&id).map_or(0, |tab| tab.notes.len())
-    }
-
-    #[cfg(test)]
-    pub(super) fn delivering(&self) -> usize {
-        self.deliveries.len()
     }
 
     pub(crate) fn forget(&mut self, id: TabId) {

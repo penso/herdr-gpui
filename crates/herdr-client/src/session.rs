@@ -315,7 +315,16 @@ pub(crate) fn run_connection(
         if !commands.wait(&stream, timeout)? {
             continue;
         }
-        let Some(message) = reader.poll_batch(&mut stream)? else {
+        let message = match reader.poll_batch(&mut stream) {
+            // Daemons before the endpoint protocol cannot decode the hello and
+            // close without a word. SSH discovery vets the remote binary first,
+            // so only a local close this early is read as an outdated daemon.
+            Err(Error::SocketClosed) if session.welcome.is_none() && !remote => {
+                return Err(Error::ClosedBeforeWelcome);
+            }
+            result => result?,
+        };
+        let Some(message) = message else {
             continue;
         };
         session.handle_message(message, |event| deliver(tx, event, stop))?;
@@ -346,21 +355,32 @@ impl Session {
             ..
         } = self;
         if welcome.is_none() {
-            let ServerMessage::EndpointControl { kind, data } = message else {
-                return Err(Error::ExpectedWelcome);
+            let (kind, data) = match message {
+                ServerMessage::EndpointControl { kind, data } => (kind, data),
+                // Only a daemon from before the endpoint protocol answers the
+                // hello with its legacy welcome.
+                ServerMessage::Welcome { .. } => return Err(Error::LegacyDaemon),
+                _ => return Err(Error::ExpectedWelcome),
             };
             if kind != ENDPOINT_WELCOME_KIND {
                 return Err(Error::WelcomeKind);
             }
             let w: EndpointServerWelcome = serde_json::from_str(&data)?;
+            // A rejection carries the daemon's own generation, so a refused
+            // generation still says which side is older.
+            if w.generation != ENDPOINT_PROTOCOL_GENERATION {
+                return Err(Error::EndpointGeneration {
+                    generation: w.generation,
+                    server_version: w.server_version,
+                });
+            }
             if let Some(error) = &w.error {
                 return Err(Error::WelcomeRejected {
                     code: error.code.clone(),
                     message: error.message.clone(),
                 });
             }
-            if w.generation != ENDPOINT_PROTOCOL_GENERATION
-                || w.snapshot_codec != SNAPSHOT_CODEC_V1
+            if w.snapshot_codec != SNAPSHOT_CODEC_V1
                 || w.surface_codec != SURFACE_CODEC_V1
                 || w.input_codec != INPUT_CODEC_V1
                 || w.blob_codec != BLOB_CODEC_V1
@@ -368,11 +388,15 @@ impl Session {
                 return Err(Error::IncompatibleCodecs);
             }
             if (*remote || !*surface_active) && !supports_surface_interest(&w) {
-                return Err(Error::MissingSurfaceInterest);
+                return Err(Error::MissingSurfaceInterest {
+                    server_version: w.server_version,
+                });
             }
             if *remote {
                 if !w.capabilities.iter().any(|c| c == "health_check") {
-                    return Err(Error::MissingHealthCheck);
+                    return Err(Error::MissingHealthCheck {
+                        server_version: w.server_version,
+                    });
                 }
                 *health = Some(Health {
                     received: Instant::now(),

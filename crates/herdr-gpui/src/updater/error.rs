@@ -166,6 +166,10 @@ pub enum UpdateError {
     },
     #[error("Homebrew is no longer managing this installation")]
     MissingCask,
+    #[error("Could not arm the Dock relaunch ({0})")]
+    RelaunchFailed(ExitStatus),
+    #[error("Homebrew left no runnable app to restart")]
+    RelaunchMissing(PathBuf),
     #[error("Standalone Linux updates require installation under HOME")]
     OutsideHome,
     #[error("No executable parent")]

@@ -10,6 +10,7 @@ use super::{
         line_height,
         row::{RowKind, RowTree, TokenLook, left_behind, token_column},
         tokens::ResolvedToken,
+        wash::HostMark,
     },
     parts::{self, Line, glyph_at, wash},
 };
@@ -30,7 +31,13 @@ const GAP: f32 = 6.;
 /// is always present, transparent unless selected, so selecting a row never
 /// shifts its content, and it keeps neighbouring cards apart without vertical
 /// margins, which a dragged row's shifts could not see.
-fn card(key: &str, state: RowState, indent: f32, radius: f32, theme: &Theme) -> Div {
+fn card(
+    key: &str,
+    state: RowState,
+    indent: f32,
+    radius: f32,
+    (theme, mark): (&Theme, HostMark),
+) -> Div {
     let card = div()
         .debug_selector(|| format!("row-{key}"))
         .relative()
@@ -47,6 +54,7 @@ fn card(key: &str, state: RowState, indent: f32, radius: f32, theme: &Theme) -> 
         .gap(px(GAP))
         .px(px(GAP))
         .cursor_pointer();
+    let card = mark.fill(card, key, radius);
     parts::mark(
         card,
         state,
@@ -105,11 +113,12 @@ impl RowLayout for Orca {
         let line = line_height(font);
         let small = (font.size * 0.85).round();
         let glyph = glyph_at(font, small);
-        let indent = if tree == RowTree::None {
-            0.
-        } else {
-            cx.look.density.padding()
-        };
+        let indent = cx.nest
+            + if tree == RowTree::None {
+                0.
+            } else {
+                cx.look.density.card_indent()
+            };
         let width = inner(cx, indent);
         // Children are named by their branch already; repeating it is noise.
         let branch = branch.filter(|branch| *branch != label);
@@ -168,7 +177,7 @@ impl RowLayout for Orca {
                     let arrow = fold.element(theme).w(px(14.)).text_size(px(14.));
                     text.fixed(14., parts::first_line(14., arrow, cx))
                 });
-            return card(label, state, indent, 8., theme)
+            return card(label, state, indent, 8., (theme, cx.mark))
                 .items_start()
                 .py(px(5.))
                 .when(removing, |card| card.opacity(0.5))
@@ -221,7 +230,7 @@ impl RowLayout for Orca {
                 let (width, number) = parts::pr_number(label, pr, small, glyph);
                 line.shrink(width, number)
             });
-        card(label, state, indent, 8., theme)
+        card(label, state, indent, 8., (theme, cx.mark))
             .items_start()
             .py(px(if meta { 5. } else { 7. }))
             .when(removing, |card| card.opacity(0.5))
@@ -273,7 +282,7 @@ impl RowLayout for Orca {
                 cx,
             );
             let icon = parts::first_line(icon, parts::icon(agent.icon.path(), icon, color), cx);
-            return card(key, state, 0., 4., theme)
+            return card(key, state, 0., 4., (theme, cx.mark))
                 .py(px(4.))
                 .items_start()
                 .children(mark)
@@ -306,7 +315,7 @@ impl RowLayout for Orca {
                     0.5,
                 )
             });
-        card(key, state, 0., 4., theme)
+        card(key, state, 0., 4., (theme, cx.mark))
             .h(px(line + 8.))
             .items_center()
             .child(status_column(parts::status(agent.status, false, cx), cx))

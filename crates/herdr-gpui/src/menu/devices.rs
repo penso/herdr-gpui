@@ -2,11 +2,15 @@
 //! to one device or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
 mod add_device;
+pub(crate) use add_device::enter;
+mod discover;
 mod host_menu;
 mod setup;
+mod wsl;
 
 pub(super) use add_device::Setup;
 pub(crate) use host_menu::HostMenu;
+pub(super) use wsl::WslSetup;
 
 use super::{Page, colors};
 use crate::{Command, HerdrWindow};
@@ -62,9 +66,15 @@ impl HerdrWindow {
             ConnectTarget::Session {
                 development: true, ..
             } => Some("Device setup is unavailable with a development catalog."),
-            _ if cfg!(windows) => Some("Saved SSH devices are unavailable on Windows."),
             _ => None,
         }
+    }
+
+    /// Why saved SSH devices cannot be added or edited here. Windows saves WSL
+    /// distributions instead; its client has no SSH bridge.
+    pub(super) fn ssh_setup_unavailable(&self) -> Option<&'static str> {
+        self.device_setup_unavailable()
+            .or_else(|| cfg!(windows).then_some("Saved SSH devices are unavailable on Windows."))
     }
 
     pub(crate) fn render_device_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -258,6 +268,7 @@ impl HerdrWindow {
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
+                ConnectTarget::Wsl { distro, session } => format!("WSL {distro} · {session}"),
                 ConnectTarget::Socket(path) => path.display().to_string(),
                 ConnectTarget::Session { name, .. } => format!("This device · {name}"),
                 ConnectTarget::Local => "This device".into(),
@@ -272,7 +283,11 @@ impl HerdrWindow {
         rows.push((
             "Add Device…".into(),
             self.device_setup_unavailable()
-                .unwrap_or("Set up a remote host over SSH")
+                .unwrap_or(if cfg!(windows) {
+                    "Attach to Herdr in a WSL distribution"
+                } else {
+                    "Set up a remote host over SSH"
+                })
                 .into(),
             false,
             self.device_setup_unavailable().is_none(),
@@ -402,7 +417,11 @@ impl HerdrWindow {
             if self.device_setup_unavailable().is_some() {
                 return;
             }
-            self.open_add_device(window, cx);
+            if cfg!(windows) {
+                self.open_add_wsl(window, cx);
+            } else {
+                self.open_add_device(window, cx);
+            }
         } else {
             let filter = if index == 0 {
                 None
@@ -425,6 +444,8 @@ impl HerdrWindow {
             for revealed in &self.sidebar_revealed {
                 revealed.set(None);
             }
+            // The row a reveal left for the next frame is in the old list.
+            self.sidebar_pin_reveal.set(None);
         }
         cx.notify();
     }

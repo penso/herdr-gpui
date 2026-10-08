@@ -154,10 +154,6 @@ impl HerdrWindow {
         self.show_close(close, window, cx);
     }
 
-    /// Opens the confirmation, or closes straight away when confirmation is
-    /// turned off for the target kind or a tab has no agent mid-task. The
-    /// immediate close still goes through `confirm_close`, so its connection
-    /// and target checks hold and a refusal stays visible in the dialog.
     fn show_close(
         &mut self,
         close: Option<CloseConfirmation>,
@@ -167,6 +163,22 @@ impl HerdrWindow {
         let Some(close) = close else {
             return;
         };
+        if self.open_menu(window, cx) {
+            self.present_close(close, window, cx);
+        }
+    }
+
+    /// Shows the confirmation in a menu the caller has already opened and
+    /// fenced, or closes straight away when confirmation is turned off for the
+    /// target kind or a tab has no agent mid-task. The immediate close still
+    /// goes through `confirm_close`, so its connection and target checks hold
+    /// and a refusal stays visible in the dialog.
+    pub(super) fn present_close(
+        &mut self,
+        close: CloseConfirmation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let immediate = if close.pane.is_some() {
             !self.config.confirm_close_pane
         } else {
@@ -177,13 +189,12 @@ impl HerdrWindow {
                     .as_ref()
                     .is_some_and(|snapshot| close.interrupts_agent(snapshot))
         };
-        if !self.open_menu(window, cx) {
-            return;
-        }
         self.menu.close = Some(close);
         self.menu.page = Some(Page::ConfirmClose);
         if immediate {
             self.confirm_close(window, cx);
+        } else {
+            cx.notify();
         }
     }
 
@@ -191,6 +202,18 @@ impl HerdrWindow {
         if let Some(edit) = self.send_close(window, cx) {
             self.save_preference(move || crate::config::Config::save_preference(edit), cx);
         }
+    }
+
+    /// Whether the open dialog offers "Do not ask again": only for a pane, and
+    /// only while pane closes still ask. A refused immediate close falls back
+    /// to the dialog with the option already off, so there is nothing to save.
+    fn offers_do_not_ask_again(&self) -> bool {
+        self.config.confirm_close_pane
+            && self
+                .menu
+                .close
+                .as_ref()
+                .is_some_and(|close| close.pane.is_some())
     }
 
     /// Sends the close, returning the preference "Do not ask again" asks to
@@ -270,9 +293,10 @@ impl HerdrWindow {
     }
 
     fn toggle_do_not_ask_again(&mut self, cx: &mut Context<Self>) {
-        if let Some(close) = &mut self.menu.close
-            && close.pane.is_some()
-        {
+        if !self.offers_do_not_ask_again() {
+            return;
+        }
+        if let Some(close) = &mut self.menu.close {
             close.do_not_ask_again = !close.do_not_ask_again;
             cx.notify();
         }
@@ -291,7 +315,7 @@ impl HerdrWindow {
                 "This terminates the pane and its running processes. This cannot be undone."
             } else { "This terminates every pane and running process in this tab. This cannot be undone." }))
             .when_some(close.error.clone(), |panel, error| panel.child(div().bg(rgb(theme.active)).p(px(8.)).child(error)))
-            .when(close.pane.is_some(), |panel| panel.child(div().id("close-do-not-ask").debug_selector(|| "close-do-not-ask".into())
+            .when(self.offers_do_not_ask_again(), |panel| panel.child(div().id("close-do-not-ask").debug_selector(|| "close-do-not-ask".into())
                 .flex().gap(px(8.)).cursor_pointer().text_color(rgb(theme.muted))
                 .child(if close.do_not_ask_again { "☑" } else { "☐" })
                 .child("Do not ask again")

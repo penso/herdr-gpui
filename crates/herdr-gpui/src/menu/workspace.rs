@@ -2,8 +2,10 @@
 //! which sibling workspaces close with it, and the dialogs that carry those
 //! requests to the daemon and report what came back.
 
+pub(super) mod popover;
 mod render;
 mod requests;
+mod scripts;
 
 use super::{Page, WorkspaceAction, WorkspaceMenuAction, state::Deletion};
 use crate::{HerdrWindow, dialog_input::DialogInput};
@@ -456,27 +458,22 @@ impl HerdrWindow {
         true
     }
 
+    /// The actions this workspace offers, in the order the popover shows them
+    /// and arrow keys walk them: the tile grid row by row (work, then moving
+    /// or leaving), the plain rows, and the destructive action last.
     pub(super) fn workspace_items(&self) -> Vec<(WorkspaceMenuAction, &'static str)> {
         use WorkspaceMenuAction::Dialog;
         let Some(target) = &self.menu.target else {
             return vec![];
         };
-        let mut items = vec![
-            (Dialog(WorkspaceAction::Rename), "Rename"),
-            (Dialog(WorkspaceAction::Close), target.close_label()),
-        ];
-        if target.can_create() {
-            items.push((Dialog(WorkspaceAction::NewWorktree), "New worktree"));
-            items.push((Dialog(WorkspaceAction::OpenWorktree), "Open worktree..."));
-        } else if self.linked_new_worktree_target().is_some() {
+        let mut items = Vec::new();
+        if target.can_create() || self.linked_new_worktree_target().is_some() {
             items.push((Dialog(WorkspaceAction::NewWorktree), "New worktree"));
         }
-        if target.can_delete() {
-            items.push((
-                Dialog(WorkspaceAction::DeleteWorktree),
-                "Delete worktree checkout",
-            ));
+        if let Some(label) = self.fan_out_item() {
+            items.push((WorkspaceMenuAction::FanOut, label));
         }
+        items.push((Dialog(WorkspaceAction::Rename), "Rename"));
         if self.teleport_mark().is_some() {
             items.push((WorkspaceMenuAction::GoToTeleported, "Go to teleported copy"));
             items.push((
@@ -484,13 +481,29 @@ impl HerdrWindow {
                 "Clear teleported mark",
             ));
         } else if self.can_teleport() {
+            items.push((WorkspaceMenuAction::Teleport, "Teleport..."));
             if self.teleport_origin().is_some() {
                 items.push((WorkspaceMenuAction::TeleportBack, "Teleport back"));
             }
-            items.push((WorkspaceMenuAction::Teleport, "Teleport..."));
         }
-        if let Some(label) = self.fan_out_item() {
-            items.push((WorkspaceMenuAction::FanOut, label));
+        items.push((Dialog(WorkspaceAction::Close), target.close_label()));
+        if self.checkpoint_checkout().is_some() {
+            items.push((WorkspaceMenuAction::Checkpoints, "Checkpoints..."));
+        }
+        if target.can_create() {
+            items.push((Dialog(WorkspaceAction::OpenWorktree), "Open worktree..."));
+        }
+        // Whether the checkout defines scripts is only known once its file is
+        // read, so every Git checkout offers them and an absent one says so.
+        if target.worktree.is_some() {
+            use crate::worktree_scripts::ScriptKind;
+            items.push((WorkspaceMenuAction::Script(ScriptKind::Run), "Run script"));
+            if target.can_delete() {
+                items.push((
+                    WorkspaceMenuAction::Script(ScriptKind::Setup),
+                    "Run setup script",
+                ));
+            }
         }
         // Only a workspace that heads a group of checkouts can fold anything.
         if let Some(key) = target.group_key() {
@@ -499,6 +512,12 @@ impl HerdrWindow {
             } else {
                 (WorkspaceMenuAction::Collapse, "Collapse group")
             });
+        }
+        if target.can_delete() {
+            items.push((
+                Dialog(WorkspaceAction::DeleteWorktree),
+                "Delete worktree checkout",
+            ));
         }
         items
     }
@@ -631,15 +650,14 @@ impl HerdrWindow {
                     Method::WorktreeList,
                     serde_json::json!({"workspace_id": target.id, "trust_repository": false}),
                 );
-            self.menu.deletion = Some(Deletion {
-                pending: result.as_ref().ok().cloned(),
-                path: None,
-                force: self.removal.as_ref().is_some_and(|removal| {
+            self.menu.deletion = Some(Deletion::new(
+                result.as_ref().ok().cloned(),
+                self.removal.as_ref().is_some_and(|removal| {
                     removal.force
                         && removal.workspace == target.id
                         && removal.boot_id == target.boot_id
                 }),
-            });
+            ));
             self.menu.error = result.err().map(|error| error.to_string());
         }
         cx.notify();
@@ -673,7 +691,9 @@ impl HerdrWindow {
             WorkspaceMenuAction::GoToTeleported => self.go_to_teleported(window, cx),
             WorkspaceMenuAction::TeleportBack => self.teleport_back(window, cx),
             WorkspaceMenuAction::ClearTeleported => self.clear_teleport_mark(window, cx),
+            WorkspaceMenuAction::Checkpoints => self.open_checkpoints(window, cx),
             WorkspaceMenuAction::FanOut => self.open_fan_out(window, cx),
+            WorkspaceMenuAction::Script(kind) => self.run_workspace_script(kind, window, cx),
         }
     }
 }

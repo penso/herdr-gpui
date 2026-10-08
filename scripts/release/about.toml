@@ -34,6 +34,10 @@ accepted = ["MPL-2.0"] # 0.28.0, build tool
 # https://crates.io/api/v1/crates/option-ext/0.2.0/download
 [option-ext]
 accepted = ["MPL-2.0"] # 0.2.0, runtime dependency
+# Command palette fuzzy matcher, runtime dependency.
+# https://crates.io/api/v1/crates/nucleo-matcher/0.3.1/download
+[nucleo-matcher]
+accepted = ["MPL-2.0"] # 0.3.1, runtime dependency
 # GPUI's DirectWrite bindings, linked only into the Windows executable.
 # https://crates.io/api/v1/crates/dwrote/0.11.5/download
 [dwrote]

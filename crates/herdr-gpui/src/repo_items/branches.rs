@@ -5,7 +5,7 @@
 use super::model::branch_name;
 use crate::{
     Error,
-    pull_request::{Input, clean, run},
+    pull_request::{Input, clean, repository_key, run},
 };
 use std::{
     collections::HashSet,
@@ -32,18 +32,20 @@ impl Branch {
     }
 }
 
-/// List the branches of the repository the daemon names, most recent first.
+/// List the branches of the workspace's repository, most recent first.
 pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Result<Vec<Branch>> {
-    if !Path::new(&input.repo_key).is_absolute() {
+    let deadline = Instant::now() + TIMEOUT;
+    let repo_key = repository_key(input, deadline, cancelled)?;
+    if !Path::new(&repo_key).is_absolute() {
         return Err(Error::PrAbsolutePath);
     }
     let mut command = Command::new("git");
     command
-        .args(["-c", "core.fsmonitor=false", "--git-dir", &input.repo_key])
+        .args(["-c", "core.fsmonitor=false", "--git-dir", &repo_key])
         .args(["for-each-ref", "--sort=-committerdate"])
         .arg(format!("--format={FORMAT}"))
         .arg("refs/heads");
-    let (ok, output) = run(&mut command, Instant::now() + TIMEOUT, cancelled)?;
+    let (ok, output) = run(&mut command, deadline, cancelled)?;
     if !ok {
         return Err(Error::GitFailed {
             operation: "list branches",
@@ -135,7 +137,7 @@ mod tests {
         git(&["worktree", "add", &busy.to_string_lossy(), "busy"]);
         let input = Input {
             checkout: None,
-            repo_key: repo.join(".git").to_string_lossy().into_owned(),
+            repo_key: Some(repo.join(".git").to_string_lossy().into_owned()),
             branch: "main".into(),
         };
         let branches = list(&input, &|| false).unwrap();
@@ -151,7 +153,7 @@ mod tests {
     fn a_relative_repository_is_refused_before_git_runs() {
         let input = Input {
             checkout: None,
-            repo_key: "relative/.git".into(),
+            repo_key: Some("relative/.git".into()),
             branch: "main".into(),
         };
         assert!(matches!(

@@ -57,5 +57,5 @@ jobs:
       - name: Run the built executable's CLI without a desktop
         run: |
           ./result/bin/herdr-gpui --help >/dev/null
-          test -f result/share/applications/herdr-gpui.desktop
+          test -f result/share/applications/so.pen.herdr-gpui.desktop
           if ldd result/bin/herdr-gpui | grep 'not found'; then exit 1; fi

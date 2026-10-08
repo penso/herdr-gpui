@@ -40,6 +40,9 @@ pub(crate) struct MenuState {
     /// Written by the menu's layout, read when presenting pages.
     pub(crate) cover: std::rc::Rc<std::cell::Cell<Cover>>,
     pub(super) device_setup: Option<super::devices::Setup>,
+    pub(super) wsl_setup: Option<super::devices::WslSetup>,
+    /// The saved distribution the removal confirmation names.
+    pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
     pub(super) devices_scroll: ScrollHandle,
     /// The sessions list scrolls its own way; the two popups never share one.
@@ -81,6 +84,7 @@ pub(crate) struct MenuState {
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
     pub(crate) group: Option<crate::group_menu::GroupMenu>,
+    pub(crate) new_tab: Option<crate::new_tab_menu::NewTabMenu>,
     pub(crate) host: Option<super::devices::HostMenu>,
     pub(crate) pane: Option<crate::pane_menu::PaneMenu>,
     /// The new worktree dialog's tabs and the GitHub listing behind them.
@@ -102,19 +106,35 @@ pub(crate) struct MenuState {
     pub(super) github_selected: Option<github::Action>,
     pub(super) github_scroll: ScrollHandle,
     pub(super) pr_connection: Option<std::sync::Weak<std::sync::Mutex<crate::state::LiveState>>>,
+    pub(crate) version_notice: Option<super::VersionNotice>,
 }
 
 pub(super) struct Deletion {
     pub(super) pending: Option<String>,
     pub(super) path: Option<String>,
+    /// The repository's main checkout, for the archive script's environment.
+    pub(super) root: Option<String>,
     pub(super) force: bool,
+    /// Whether the checkout has an archive script to run first.
+    pub(super) archive: crate::worktree_scripts::ArchiveCheck,
 }
 
 impl Deletion {
+    pub(super) fn new(pending: Option<String>, force: bool) -> Self {
+        Self {
+            pending,
+            path: None,
+            root: None,
+            force,
+            archive: crate::worktree_scripts::ArchiveCheck::Unread,
+        }
+    }
+
     /// Confirming is a single keypress, so the dialog may only submit once the
-    /// daemon has named the checkout and its lookup is no longer in flight.
+    /// daemon has named the checkout, its lookup is no longer in flight, and
+    /// the checkout is known to have an archive script or not.
     pub(super) fn ready(&self) -> bool {
-        self.pending.is_none() && self.path.is_some()
+        self.pending.is_none() && self.path.is_some() && self.archive.settled()
     }
 }
 
@@ -204,6 +224,7 @@ impl MenuState {
                 .and_then(|entry| entry["path"].as_str())
                 .filter(|path| !path.is_empty())
                 .map(str::to_owned);
+            deletion.root = crate::worktree_scripts::main_checkout(result);
             if deletion.path.is_none() {
                 self.error = Some("Daemon did not identify a unique linked checkout. Dismiss and reopen the menu.".into());
             }
@@ -220,6 +241,8 @@ impl MenuState {
             page: None,
             cover: Default::default(),
             device_setup: None,
+            wsl_setup: None,
+            wsl_remove: None,
             session_edit: None,
             devices_scroll: ScrollHandle::new(),
             sessions_scroll: ScrollHandle::new(),
@@ -260,8 +283,10 @@ impl MenuState {
             github_selected: None,
             github_scroll: ScrollHandle::new(),
             pr_connection: None,
+            version_notice: None,
             tab: None,
             group: None,
+            new_tab: None,
             host: None,
             pane: None,
             worktree: None,
@@ -271,6 +296,8 @@ impl MenuState {
     pub fn reset(&mut self) {
         self.cover.set(Cover::Unknown);
         self.device_setup = None;
+        self.wsl_setup = None;
+        self.wsl_remove = None;
         self.session_edit = None;
         self.devices_scroll.set_offset(Point::default());
         self.sessions_scroll.set_offset(Point::default());
@@ -278,6 +305,7 @@ impl MenuState {
         self.opening_right_click = false;
         self.tab = None;
         self.group = None;
+        self.new_tab = None;
         self.host = None;
         self.pane = None;
         self.github_selected = None;
@@ -298,6 +326,7 @@ impl MenuState {
         self.input = None;
         self.error = None;
         self.deletion = None;
+        self.version_notice = None;
         self.close_check = None;
         self.creation = None;
         self.suggested_name = None;

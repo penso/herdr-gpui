@@ -1,5 +1,5 @@
 //! Where a browser tab's page comes from: the web, or a local file an agent
-//! wrote. Pages cannot open `file:` addresses, so a local file is served
+//! wrote; or, for a review tab, the checkout whose changes it shows. Pages cannot open `file:` addresses, so a local file is served
 //! from its folder through a private scheme, and only from that folder.
 use super::WebUrl;
 use serde::{Deserialize, Serialize};
@@ -27,8 +27,82 @@ const SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum Location {
-    Web { url: WebUrl },
-    Local { file: LocalFile },
+    Web {
+        url: WebUrl,
+    },
+    Local {
+        file: LocalFile,
+    },
+    /// A review of a checkout's changes, drawn by the app, never a page.
+    Review {
+        checkout: ReviewCheckout,
+    },
+}
+
+/// The local checkout a review tab shows. Saved with the tabs, so it is
+/// checked again whenever it is read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "SavedReviewCheckout")]
+pub(crate) struct ReviewCheckout {
+    pub(crate) repo_key: String,
+    pub(crate) branch: String,
+    pub(crate) checkout: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SavedReviewCheckout {
+    repo_key: String,
+    branch: String,
+    checkout: Option<String>,
+}
+
+impl TryFrom<SavedReviewCheckout> for ReviewCheckout {
+    type Error = crate::Error;
+
+    fn try_from(saved: SavedReviewCheckout) -> crate::Result<Self> {
+        let path = |text: &str| {
+            !text.is_empty()
+                && text.len() <= 4096
+                && !text.chars().any(char::is_control)
+                && Path::new(text).is_absolute()
+        };
+        let branch = !saved.branch.is_empty()
+            && saved.branch.len() <= 1024
+            && !saved.branch.chars().any(char::is_control);
+        if !path(&saved.repo_key) || !branch || saved.checkout.as_deref().is_some_and(|c| !path(c))
+        {
+            return Err(crate::Error::InvalidReviewCheckout);
+        }
+        Ok(Self {
+            repo_key: saved.repo_key,
+            branch: saved.branch,
+            checkout: saved.checkout,
+        })
+    }
+}
+
+/// A review is saved by repository, so only a checkout the daemon named one
+/// for can be reviewed.
+impl TryFrom<&crate::pull_request::Input> for ReviewCheckout {
+    type Error = crate::Error;
+
+    fn try_from(input: &crate::pull_request::Input) -> crate::Result<Self> {
+        Ok(Self {
+            repo_key: input.repo_key.clone().ok_or(crate::Error::PrMetadata)?,
+            branch: input.branch.clone(),
+            checkout: input.checkout.clone(),
+        })
+    }
+}
+
+impl From<&ReviewCheckout> for crate::pull_request::Input {
+    fn from(checkout: &ReviewCheckout) -> Self {
+        Self {
+            checkout: checkout.checkout.clone(),
+            repo_key: Some(checkout.repo_key.clone()),
+            branch: checkout.branch.clone(),
+        }
+    }
 }
 
 impl Location {
@@ -38,7 +112,14 @@ impl Location {
         match self {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
+            // Never loaded: a review is drawn by the app.
+            Self::Review { .. } => "about:blank".to_owned(),
         }
+    }
+
+    /// Whether a native page shows it, rather than the app drawing it.
+    pub(crate) fn is_page(&self) -> bool {
+        !matches!(self, Self::Review { .. })
     }
 
     /// What the address field and a prompt show for it.
@@ -46,6 +127,7 @@ impl Location {
         match self {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.path().display().to_string(),
+            Self::Review { checkout } => format!("Review of {}", checkout.branch),
         }
     }
 
@@ -54,6 +136,7 @@ impl Location {
         match self {
             Self::Web { url } => url.host().to_owned(),
             Self::Local { file } => file.entry.rsplit('/').next().unwrap_or_default().to_owned(),
+            Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
         }
     }
 

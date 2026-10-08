@@ -23,44 +23,71 @@ pub(super) fn check_workspace_menu_rows(
     });
     assert!(cx.debug_bounds("workspace-menu-Close group").is_some());
     assert!(cx.debug_bounds("workspace-menu-New worktree").is_some());
-    // Actions share the session picker's trailing 14px icon in a 24px slot.
-    for (row, icon, text) in [
+    // Tiles stack a 20px icon over a centred caption.
+    for (label, tile, icon, text) in [
         (
+            "Rename",
             "workspace-menu-Rename",
             "workspace-menu-icon-Rename",
             "workspace-menu-label-Rename",
         ),
         (
+            "Close group",
             "workspace-menu-Close group",
             "workspace-menu-icon-Close group",
             "workspace-menu-label-Close group",
         ),
         (
+            "New worktree",
             "workspace-menu-New worktree",
             "workspace-menu-icon-New worktree",
             "workspace-menu-label-New worktree",
         ),
-        (
-            "workspace-menu-Open worktree...",
-            "workspace-menu-icon-Open worktree...",
-            "workspace-menu-label-Open worktree...",
-        ),
     ] {
-        let label = row;
-        let row = cx.debug_bounds(row).unwrap();
+        let tile = cx.debug_bounds(tile).unwrap();
         let icon = cx.debug_bounds(icon).unwrap();
-        assert_eq!(icon.size, size(px(14.), px(14.)), "{label}");
-        assert_eq!(row.right() - icon.right(), px(13.), "{label}");
         let text = cx.debug_bounds(text).unwrap();
+        assert_eq!(icon.size, size(px(20.), px(20.)), "{label}");
         assert!(
-            text.right() <= icon.left(),
-            "{label}: label must precede icon"
+            icon.bottom() <= text.top(),
+            "{label}: icon must sit above caption"
         );
         assert!(
-            (icon.center().y - row.center().y).abs() <= px(1.),
+            (icon.center().x - tile.center().x).abs() <= px(1.),
+            "{label}"
+        );
+        assert!(
+            tile.contains(&text.origin) && text.right() <= tile.right(),
             "{label}"
         );
     }
+    // Same row: the three tiles share one top edge, in grid order.
+    let new = cx.debug_bounds("workspace-menu-New worktree").unwrap();
+    let rename = cx.debug_bounds("workspace-menu-Rename").unwrap();
+    let close = cx.debug_bounds("workspace-menu-Close group").unwrap();
+    assert_eq!(new.top(), rename.top());
+    assert!(new.right() <= rename.left());
+    assert!(rename.bottom() <= close.top());
+    // Rarer actions lead with a 16px icon, in the delete strip's column.
+    let label = "workspace-menu-Open worktree...";
+    let row = cx.debug_bounds(label).unwrap();
+    let icon = cx
+        .debug_bounds("workspace-menu-icon-Open worktree...")
+        .unwrap();
+    let text = cx
+        .debug_bounds("workspace-menu-label-Open worktree...")
+        .unwrap();
+    assert_eq!(icon.size, size(px(16.), px(16.)), "{label}");
+    assert_eq!(icon.left() - row.left(), px(10.), "{label}");
+    assert!(
+        icon.right() <= text.left(),
+        "{label}: icon must precede label"
+    );
+    assert!(
+        (icon.center().y - row.center().y).abs() <= px(1.),
+        "{label}"
+    );
+    assert!(close.bottom() <= row.top(), "rows sit below the tiles");
     crate::menu::workspace_tests::check_menu_interactions(view, cx);
     // PR data is fixture-only: no daemon, local Git, or GitHub calls in layout tests.
     crate::menu::workspace_tests::check_pr_fences(view, cx);
@@ -90,7 +117,8 @@ pub(super) fn check_pr_menu(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTes
             assert!(panel.left() >= px(0.) && panel.right() <= px(width));
             assert!(panel.bottom() <= px(600.));
             let open_row = cx.debug_bounds("workspace-menu-Open worktree...").unwrap();
-            // Preserve the content budget apart from the action row and target header.
+            // Preserve the content budget apart from the tile grid, the Open
+            // worktree and Run script rows, and the target header.
             let row_height = cx.update(|_, cx| px(view.read(cx).config.ui.line_height() + 12.));
             let header_height = cx
                 .debug_bounds("workspace-menu-header")
@@ -99,8 +127,9 @@ pub(super) fn check_pr_menu(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTes
                 .height
                 + px(4.);
             assert!((open_row.size.height - row_height).abs() <= px(1.));
+            let tiles = cx.debug_bounds("workspace-menu-tiles").unwrap().size.height;
             assert!(
-                panel.size.height < px(320.) + row_height + header_height,
+                panel.size.height < px(320.) + row_height * 2. + header_height + tiles,
                 "PR menu should size to its content: {panel:?}"
             );
             assert!(cx.debug_bounds("workspace-pr").is_some());
@@ -118,7 +147,10 @@ pub(super) fn check_pr_menu(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTes
 pub(super) fn check_menu_anchor(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext) {
     for dialog in [false, true] {
         if dialog {
-            cx.simulate_keystrokes("down enter");
+            // Rename opens a plain, form-sized dialog; hovering selects it.
+            let rename = cx.debug_bounds("workspace-menu-Rename").unwrap().center();
+            cx.simulate_mouse_move(rename, None, Default::default());
+            cx.simulate_keystrokes("enter");
         }
         for anchor in [
             point(px(200.), px(400.)),

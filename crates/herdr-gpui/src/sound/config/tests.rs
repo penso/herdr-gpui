@@ -178,16 +178,18 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
             std::thread::sleep(Duration::from_millis(1));
         }
     };
-    let send = || {
+    // Distinct titles, since the worker plays one copy of a repeated event.
+    let send = |title: &str| {
         service
             .sender
             .as_ref()
             .unwrap()
             .send(Job {
-                request: crate::sound::PlaybackRequest::Notification(
-                    herdr_client::protocol::SemanticNotification {
+                request: crate::sound::PlaybackRequest::Notification {
+                    boot: None,
+                    event: herdr_client::protocol::SemanticNotification {
                         kind: herdr_client::protocol::SemanticNotificationKind::Custom,
-                        title: String::new(),
+                        title: title.into(),
                         body: None,
                         sound: Some(Sound::Done),
                         agent: None,
@@ -196,7 +198,7 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
                         pane_id: None,
                         position: None,
                     },
-                ),
+                },
                 cancel: Arc::new(AtomicBool::new(false)),
                 connection_cancel: Arc::new(AtomicBool::new(false)),
                 queued: Instant::now(),
@@ -204,7 +206,7 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
             .unwrap();
     };
     wait_loaded(1);
-    send();
+    send("initial");
     assert_eq!(sounds.recv_timeout(Duration::from_secs(3)).unwrap(), None);
     loads
         .send(Settings::parse(
@@ -214,7 +216,7 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
         .unwrap();
     service.reload.store(true, Ordering::Release);
     wait_loaded(2);
-    send();
+    send("reloaded");
     assert_eq!(
         sounds.recv_timeout(Duration::from_secs(3)).unwrap(),
         Some("/local/new.mp3".into())
@@ -222,7 +224,7 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
     loads.send(Err(Error::SoundConfigSize)).unwrap();
     service.reload.store(true, Ordering::Release);
     wait_loaded(3);
-    send();
+    send("retained");
     assert_eq!(
         sounds.recv_timeout(Duration::from_secs(3)).unwrap(),
         Some("/local/new.mp3".into())

@@ -2,7 +2,7 @@ use gpui::{prelude::*, *};
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::HerdrWindow;
+use super::{HerdrWindow, input::ViewInputHandler};
 
 // Byte offsets internally; only the platform input boundary uses UTF-16.
 #[derive(Default)]
@@ -229,7 +229,7 @@ impl HerdrWindow {
                         let focused = focus.is_focused(window);
                         window.handle_input(
                             &focus,
-                            ElementInputHandler::new(bounds, entity.clone()),
+                            ViewInputHandler::new(bounds, entity.clone()),
                             cx,
                         );
                         entity.update(cx, |this, cx| {

@@ -351,6 +351,17 @@ fn normal_window_keeps_preview_search_list_and_actions_visible(cx: &mut TestAppC
     assert!(search.bottom() <= list.top());
     assert!(list.bottom() <= actions.top());
     assert!(actions.bottom() <= px(780.), "actions: {actions:?}");
+    let follow = cx.debug_bounds("theme-follow").unwrap();
+    let contrast = cx.debug_bounds("theme-contrast").unwrap();
+    assert_eq!(
+        follow.center().y,
+        contrast.center().y,
+        "actions share a midline"
+    );
+    assert!(
+        follow.size.height < contrast.size.height,
+        "the button keeps its own height"
+    );
 }
 
 #[gpui::test]

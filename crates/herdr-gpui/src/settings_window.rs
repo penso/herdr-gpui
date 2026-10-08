@@ -184,6 +184,10 @@ struct SettingsWindow {
     status: Option<String>,
     focus: FocusHandle,
     body_scroll: ScrollHandle,
+    /// The section list's width, dragged by its right edge.
+    navigation_width: crate::panel_resize::PanelWidth,
+    /// The window's width at its last render, which caps the section list.
+    viewport_width: f32,
     loading: bool,
     saving: bool,
     quitting: bool,
@@ -195,6 +199,12 @@ struct SettingsWindow {
     _source: Option<Subscription>,
     _appearance: Option<Subscription>,
     _watch: Option<Task<()>>,
+    /// The config files as our last save left them, for the watcher to accept
+    /// so the save's own write does not trigger a second reload.
+    saved_sample: Option<persistence::Sample>,
+    /// Enumerating system fonts takes hundreds of milliseconds, so each
+    /// Settings window does it once rather than on every load.
+    installed_fonts: std::sync::Arc<std::sync::OnceLock<Vec<String>>>,
     load_revision: u64,
     theme_revision: u64,
     theme_intent: Option<themes::ThemeIntent>,
@@ -262,6 +272,8 @@ impl SettingsWindow {
             status: None,
             focus: cx.focus_handle(),
             body_scroll: ScrollHandle::new(),
+            navigation_width: crate::panel_resize::SETTINGS_NAVIGATION,
+            viewport_width: 0.,
             loading: false,
             saving: false,
             quitting: false,
@@ -273,6 +285,8 @@ impl SettingsWindow {
             _source: subscription,
             _appearance: None,
             _watch: None,
+            saved_sample: None,
+            installed_fonts: Default::default(),
             load_revision: 0,
             theme_revision: 0,
             theme_intent: None,
@@ -512,10 +526,35 @@ impl SettingsWindow {
         cx.notify();
     }
 
-    fn navigation(&self, cx: &mut Context<Self>) -> Div {
+    fn navigation(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        use crate::panel_resize::{PanelDrag, Side, handle};
         let theme = &self.theme;
         div()
-            .w(px(184.))
+            .id("settings-navigation")
+            .relative()
+            .w(px(self.navigation_width.width(self.viewport_width)))
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<PanelDrag>, _, cx| {
+                    if *event.drag(cx) == PanelDrag::SettingsNavigation
+                        && this.navigation_width.drag(
+                            Side::Left,
+                            event.bounds,
+                            event.event.position.x,
+                        )
+                    {
+                        cx.notify();
+                    }
+                }),
+            )
+            .child(handle(
+                "settings-navigation-resize",
+                Side::Left,
+                PanelDrag::SettingsNavigation,
+                cx.listener(|this, _, _, cx| {
+                    this.navigation_width.reset();
+                    cx.notify();
+                }),
+            ))
             .h_full()
             .flex_none()
             .flex()
@@ -593,6 +632,7 @@ impl Render for SettingsWindow {
             Section::Integrations => self.render_integration_controls(cx),
             _ => self.render_controls(window, cx),
         };
+        self.viewport_width = f32::from(window.viewport_size().width);
         let navigation = self.navigation(cx);
         let font_picker = self.render_control_font_picker(window, cx);
         let this = cx.entity().downgrade();
@@ -694,7 +734,7 @@ impl Render for SettingsWindow {
                         ),
                     )
                     .child(
-                        self.control_choice("settings-footer-reload", "Reload", false, !self.busy())
+                        self.control_choice("settings-footer-reload", "Reload", false, true)
                             .debug_selector(|| "settings-footer-reload".into())
                             .flex_none()
                             .px(px(10.))

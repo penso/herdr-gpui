@@ -9,6 +9,7 @@ fn section_headings_use_the_configured_sidebar_font_size() {
             family: "Menlo".into(),
             size,
             fallbacks: None,
+            line_height_multiple: None,
         };
         for label in ["spaces", "agents"] {
             let mut heading = header(
@@ -160,6 +161,8 @@ fn cells_hand_their_state_and_data_to_the_layout() {
         theme: &theme,
         look: for_mode(Default::default()),
         width: 232.,
+        nest: 0.,
+        mark: Default::default(),
         host: None,
     };
     let recorder = Recorder::default();

@@ -63,10 +63,42 @@ fn native_notifications() {
     native_fixture(Fixture::Notifications);
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires active Wayland desktop; input shutdown fixtures, no daemon"]
+fn native_input_shutdown_terminal() {
+    native_input_shutdown("terminal");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires active Wayland desktop; input shutdown fixtures, no daemon"]
+fn native_input_shutdown_dialog() {
+    native_input_shutdown("dialog");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires active Wayland desktop; input shutdown fixtures, no daemon"]
+fn native_input_shutdown_search() {
+    native_input_shutdown("search");
+}
+
+#[cfg(target_os = "linux")]
+fn native_input_shutdown(field: &'static str) {
+    assert!(
+        std::env::var_os("WAYLAND_DISPLAY").is_some(),
+        "Wayland required"
+    );
+    native_fixture(Fixture::InputShutdown(field));
+}
+
 enum Fixture {
     Sidebar,
     Notifications,
     InvalidChildWidth,
+    #[cfg(target_os = "linux")]
+    InputShutdown(&'static str),
 }
 
 fn native_fixture(fixture: Fixture) {
@@ -86,6 +118,12 @@ fn native_fixture(fixture: Fixture) {
         }
         Fixture::InvalidChildWidth => {
             command.env("HERDR_TEST_SIDEBAR_PROBE_FAILURE", "1");
+        }
+        #[cfg(target_os = "linux")]
+        Fixture::InputShutdown(field) => {
+            command.env_remove("DISPLAY");
+            command.env("HERDR_TEST_INPUT_SHUTDOWN", field);
+            command.env("LEAK_BACKTRACE", "1");
         }
     }
     isolated.gui = Some(command.arg("--sidebar-test").spawn().unwrap());
@@ -121,6 +159,8 @@ fn native_fixture(fixture: Fixture) {
     assert!(status.success(), "native sidebar failed: {status}");
     assert!(log.contains(match fixture {
         Fixture::Notifications => "NOTIFICATIONS native PASS:",
+        #[cfg(target_os = "linux")]
+        Fixture::InputShutdown(_) => "INPUT shutdown ready:",
         _ => "SIDEBAR native PASS:",
     }));
 }

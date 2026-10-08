@@ -3,6 +3,7 @@
 
 mod about;
 mod actions;
+mod agent_notes;
 mod agent_skill;
 mod app;
 #[cfg(any(target_os = "macos", test))]
@@ -12,6 +13,7 @@ mod avatars;
 mod bell;
 mod browser;
 mod caffeine;
+mod checkpoint;
 mod cli;
 mod close_modal;
 mod config;
@@ -53,10 +55,12 @@ mod menus;
 mod mockup;
 mod motion;
 mod navigation;
+mod new_tab_menu;
 mod notifications;
 mod osc52;
 mod palette;
 mod pane_menu;
+mod panel_resize;
 mod port_forward;
 mod pr_actions;
 mod preferences;
@@ -67,6 +71,7 @@ mod pull_request;
 mod release_notes;
 mod reorder;
 mod repo_items;
+mod review;
 mod scrollback;
 mod search_input;
 mod sessions;
@@ -90,6 +95,7 @@ mod window;
 mod window_state;
 mod worktree;
 mod worktree_banner;
+mod worktree_scripts;
 
 #[cfg(feature = "integration-test")]
 mod performance;

@@ -83,8 +83,8 @@ ditto "$2" "$app"
 for arch in arm64 x86_64; do
     lipo "$app/Contents/MacOS/Herdr" -verify_arch "$arch"
 done
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/Herdr"
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app"
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app/Contents/MacOS/Herdr"
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 notarize() {
     xcrun notarytool submit "$1" --key "$tmp/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --output-format json > "$tmp/notary.json"

@@ -63,7 +63,7 @@
               ./assets
               # The agent skill is compiled into the executable.
               ./skills
-              ./scripts/release/herdr-gpui.desktop
+              ./scripts/release/so.pen.herdr-gpui.desktop
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
@@ -94,8 +94,8 @@
           # No updater key is embedded, so this build never replaces itself;
           # Nix owns the store path and upgrades come from the flake.
           postInstall = ''
-            install -Dm644 scripts/release/herdr-gpui.desktop \
-              $out/share/applications/herdr-gpui.desktop
+            install -Dm644 scripts/release/so.pen.herdr-gpui.desktop \
+              $out/share/applications/so.pen.herdr-gpui.desktop
             install -Dm644 assets/icons/herdr-icon-square-clean.svg \
               $out/share/icons/hicolor/scalable/apps/herdr-gpui.svg
           '';

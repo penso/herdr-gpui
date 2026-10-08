@@ -186,3 +186,26 @@ fn rejects_malformed_ambiguous_oversized_and_mismatched_responses() {
     assert!(parse(&" ".repeat(OUTPUT_LIMIT + 1), "a", "b", "c").is_err());
     assert_eq!(clean(&"x".repeat(2000)).len(), 512);
 }
+
+#[test]
+fn checks_add_up_to_their_worst_outcome() {
+    let mut pr = fixture().unwrap();
+    // Failed outranks running and passed.
+    assert_eq!(
+        pr.checks_outcome(),
+        Some(crate::pull_request::Outcome::Failed)
+    );
+    let rollup = pr.status_check_rollup.as_mut().unwrap();
+    rollup.remove(1);
+    assert_eq!(
+        pr.checks_outcome(),
+        Some(crate::pull_request::Outcome::Pending)
+    );
+    pr.status_check_rollup.as_mut().unwrap().pop();
+    assert_eq!(
+        pr.checks_outcome(),
+        Some(crate::pull_request::Outcome::Passed)
+    );
+    pr.status_check_rollup = None;
+    assert_eq!(pr.checks_outcome(), None);
+}

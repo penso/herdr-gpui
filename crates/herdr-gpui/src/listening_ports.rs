@@ -58,9 +58,9 @@ enum Identity {
 
 impl From<&ConnectTarget> for Daemon {
     fn from(target: &ConnectTarget) -> Self {
-        let identity = match target {
-            ConnectTarget::Ssh { session, .. } => Some(Identity::Session(session.clone())),
-            local => local.socket_path().ok().map(Identity::Client),
+        let identity = match target.remote_session() {
+            Some(session) => Some(Identity::Session(session.to_owned())),
+            None => target.socket_path().ok().map(Identity::Client),
         };
         Self {
             host: Host::from(target),
@@ -113,6 +113,7 @@ fn open(host: &Host) -> Result<Shell> {
     match host {
         Host::Local => local_shell(),
         Host::Ssh(target) => Shell::connect(target),
+        Host::Wsl(_) => Err(Error::WslHostUnsupported),
     }
     .map_err(failed)
 }
@@ -138,7 +139,7 @@ fn local_shell() -> Result<Shell> {
 /// only, but runs `ssh -G`, so it happens on the worker, once per worker.
 fn origin(host: &Host) -> Origin {
     let resolved = match host {
-        Host::Local => None,
+        Host::Local | Host::Wsl(_) => None,
         Host::Ssh(target) => herdr_client::resolve_destination(target)
             .inspect_err(|error| {
                 tracing::debug!(category = "listening-ports", %error, "could not resolve an SSH host name");

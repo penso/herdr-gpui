@@ -73,9 +73,15 @@ fn multi_host_rows_scope_duplicate_ids_and_keep_agents_when_host_collapses(
         let title = cx.debug_bounds(title).unwrap();
         assert_eq!(icon.size, size(px(12.), px(12.)));
         assert_eq!(title.left(), icon.right() + px(6.));
+        // Rows under a host header step in by the nest indent, which the
+        // label gives up.
+        let nest = super::super::layout::for_mode(crate::config::LayoutMode::from(
+            crate::config::Density::Comfortable,
+        ))
+        .nest_indent();
         assert_eq!(
             title.size.width,
-            px(super::super::LABEL_WIDTH - super::super::ICON_RESERVE)
+            px(super::super::LABEL_WIDTH - super::super::ICON_RESERVE - nest)
         );
     }
     fixture.update(cx, |fixture, cx| {
