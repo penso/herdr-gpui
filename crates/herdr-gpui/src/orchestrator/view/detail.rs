@@ -6,6 +6,7 @@ use super::{
     dispatch::Confirm,
     list::source_mark,
     look::{BLUE, CYAN, age, agent_icon},
+    rows::Tab,
     rows::{RunRow, Runs},
 };
 use crate::{
@@ -61,10 +62,17 @@ impl OrchestratorView {
     ) -> Div {
         let look = &self.look;
         let theme = &look.theme;
-        let back = match item.pull_request {
-            Some(_) => "Pull requests",
-            None => "Issues",
+        let (list, list_icon, list_tab) = match item.pull_request {
+            Some(_) => ("Pull requests", "icons/git-branch.svg", Tab::PullRequests),
+            None => ("Issues", "icons/note.svg", Tab::Issues),
         };
+        let repo = self
+            .snapshot
+            .repo
+            .as_ref()
+            .and_then(|info| info.remote.as_ref())
+            .map(|remote| remote.source.repository.clone())
+            .unwrap_or_else(|| item.key.source.repository.clone());
         let key = item.key.canonical();
         let url = item.url.clone();
         let writable = self.snapshot.access == Some(Access::ReadWrite);
@@ -79,22 +87,7 @@ impl OrchestratorView {
             .pt_3()
             .border_b_1()
             .border_color(rgb(theme.active))
-            .child(
-                div()
-                    .id("orchestrator-back")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_pointer()
-                    .text_size(look.small())
-                    .text_color(rgb(theme.muted))
-                    .child(look.icon("icons/arrow-left.svg", 12., theme.muted))
-                    .child(back)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.detail = None;
-                        cx.notify();
-                    })),
-            )
+            .child(self.breadcrumbs(&repo, list, list_icon, list_tab, item, cx))
             .child(
                 div()
                     .flex()
@@ -207,6 +200,84 @@ impl OrchestratorView {
                         }))
                 }),
             ))
+    }
+
+    /// Back, then where the page sits: the repository, the list it came
+    /// from, and the item itself. Every step but the last goes back there.
+    fn breadcrumbs(
+        &self,
+        repo: &str,
+        list: &'static str,
+        list_icon: &'static str,
+        list_tab: Tab,
+        item: &Item,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let look = &self.look;
+        let theme = &look.theme;
+        let size = look.ui.size;
+        let separator = || look.icon("icons/chevron-right.svg", size * 0.7, theme.muted);
+        let step = |id: &'static str, icon: &'static str, text: String| {
+            let hover = theme.active;
+            div()
+                .id(id)
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap_1()
+                .px_1()
+                .rounded(px(corners::SMALL))
+                .cursor_pointer()
+                .hover(move |style| style.bg(rgb(hover)))
+                .text_color(rgb(theme.subtext()))
+                .child(look.icon(icon, size * 0.9, theme.subtext()))
+                .child(text)
+        };
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .min_w_0()
+            .text_size(look.size())
+            .child(
+                look.icon_button("orchestrator-back", "icons/arrow-left.svg")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.detail = None;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                step(
+                    "orchestrator-crumb-repo",
+                    "icons/github.svg",
+                    repo.to_owned(),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.detail = None;
+                    this.select_tab(Tab::Issues, cx);
+                })),
+            )
+            .child(separator())
+            .child(
+                step("orchestrator-crumb-list", list_icon, list.to_owned()).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.detail = None;
+                        this.select_tab(list_tab, cx);
+                    },
+                )),
+            )
+            .child(separator())
+            .child(
+                div()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_1()
+                    .text_color(rgb(theme.foreground))
+                    .child(source_mark(look, item.key.source.provider))
+                    .child(div().min_w_0().truncate().child(item.identifier.clone())),
+            )
     }
 
     fn render_description(&self, item: &Item) -> AnyElement {

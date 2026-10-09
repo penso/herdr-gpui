@@ -70,6 +70,7 @@ impl HerdrWindow {
                     _ if tab.place.is_code() => "icons/vscode.svg",
                     Some(Location::Review { .. }) => "icons/diff-unified.svg",
                     Some(Location::Code { .. }) => "icons/code.svg",
+                    Some(Location::Orchestrator { .. }) => "icons/pulse.svg",
                     _ => "icons/globe.svg",
                 };
                 let tab = div()

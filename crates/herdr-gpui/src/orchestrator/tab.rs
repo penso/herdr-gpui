@@ -147,10 +147,14 @@ impl HerdrWindow {
         .filter(|path| !path.is_empty())
     }
 
+    /// The orchestrator's look: the UI font's family at the terminal font's
+    /// size, so Cmd-+ and Cmd-- scale it with the terminals.
     fn look(&self) -> Look {
+        let mut ui = self.config.ui.clone();
+        ui.size = self.config.terminal.size;
         Look {
             theme: self.theme.clone(),
-            ui: self.config.ui.clone(),
+            ui,
             mono: self.config.terminal.clone(),
         }
     }

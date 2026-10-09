@@ -10,11 +10,13 @@ use super::{
 use crate::{
     config::corners,
     orchestrator::{Access, Item},
+    release_notes,
 };
 use gpui::{prelude::*, *};
 
-/// How much of a description the preview shows.
-const EXCERPT: usize = 600;
+/// How many lines of a description the preview draws; the item's page has
+/// the rest.
+const PREVIEW_LINES: usize = 40;
 
 impl OrchestratorView {
     pub(super) fn render_preview_pane(&self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -94,11 +96,11 @@ impl OrchestratorView {
                 String::new()
             }
         );
-        let excerpt = item
+        let lines = item
             .description
             .as_deref()
-            .map(|text| excerpt(text, EXCERPT))
-            .filter(|text| !text.is_empty());
+            .filter(|text| !text.trim().is_empty())
+            .map(|text| self.preview_markdown.lines(text));
         let writable = self.snapshot.access == Some(Access::ReadWrite);
         let url = item.url.clone();
         let open_key = key.clone();
@@ -178,8 +180,14 @@ impl OrchestratorView {
             .when_some(latest, |el, latest| {
                 el.child(self.run_card_small(&runs, latest, cx))
             })
-            .when_some(excerpt, |el, text| {
-                el.child(div().text_color(rgb(theme.subtext())).child(text))
+            .when_some(lines, |el, lines| {
+                let shown = &lines[..lines.len().min(PREVIEW_LINES)];
+                el.child(release_notes::render(
+                    "orchestrator-preview-description",
+                    shown,
+                    theme,
+                    &look.mono,
+                ))
             })
             .child(
                 div()
@@ -324,21 +332,5 @@ impl OrchestratorView {
                 )
             })
             .into_any_element()
-    }
-}
-
-/// The start of `text`, on one paragraph's worth of characters.
-fn excerpt(text: &str, limit: usize) -> String {
-    let flat: String = text
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .take(limit + 1)
-        .collect();
-    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
-    if flat.chars().count() > limit {
-        let cut: String = flat.chars().take(limit).collect();
-        format!("{}\u{2026}", cut.trim_end())
-    } else {
-        flat
     }
 }

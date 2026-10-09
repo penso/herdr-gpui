@@ -12,6 +12,7 @@ mod hosts;
 mod inbox;
 mod list;
 mod look;
+mod markdown;
 mod preview;
 mod pull;
 mod rows;
@@ -141,7 +142,9 @@ pub(crate) struct OrchestratorView {
     pull_request_rows: Vec<ItemRow>,
     run_lines: Vec<RunLine>,
     /// The open item's description, parsed once per change of its text.
-    description: crate::release_notes::Prepared,
+    description: markdown::Markdown,
+    /// The previewed item's description, likewise.
+    preview_markdown: markdown::Markdown,
     dialog: Option<dispatch::Dialog>,
     confirm: Option<dispatch::Confirm>,
     /// The newest action's outcome, until dismissed or replaced.
@@ -217,7 +220,8 @@ impl OrchestratorView {
             issue_rows: Vec::new(),
             pull_request_rows: Vec::new(),
             run_lines: Vec::new(),
-            description: crate::release_notes::Prepared::default(),
+            description: markdown::Markdown::default(),
+            preview_markdown: markdown::Markdown::default(),
             dialog: None,
             confirm: None,
             notice: None,
@@ -324,6 +328,7 @@ impl OrchestratorView {
             && look.ui.family == self.look.ui.family
             && look.ui.size == self.look.ui.size
             && look.mono.family == self.look.mono.family
+            && look.mono.size == self.look.mono.size
         {
             return;
         }
