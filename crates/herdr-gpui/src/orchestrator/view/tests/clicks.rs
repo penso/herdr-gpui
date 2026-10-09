@@ -46,7 +46,7 @@ fn the_run_arrow_asks_to_open_the_run(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let bounds = cx
         .debug_bounds("orchestrator-run-open-1")
-        .expect("the arrow of the first run, after its group heading");
+        .unwrap_or_else(|| panic!("the arrow of the first run, after its group heading"));
     cx.simulate_click(bounds.center(), Modifiers::none());
     cx.run_until_parked();
     let events = events.borrow();
