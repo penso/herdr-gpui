@@ -59,6 +59,7 @@ fn external_theme_loads_coalesce_and_only_latest_validated_result_paints(cx: &mu
                 let loads = loads.clone();
                 let writes = writes.clone();
                 view.theme_io = Some(themes::ThemeIo {
+                    shared: None,
                     resolve: Some(Arc::new(move |name| {
                         loads.lock().unwrap().push(name.to_owned());
                         Ok(Theme::builtin(if name == "external-c" {
@@ -132,6 +133,7 @@ fn failed_definition_keeps_close_pending_draft_for_explicit_retry(cx: &mut TestA
                 view.theme_io = Some(themes::ThemeIo {
                     write: Arc::new(|_, _| panic!("invalid definitions must not be persisted")),
                     load: Arc::new(|| panic!("validation must not reload config")),
+                    shared: None,
                     resolve: Some(Arc::new(move |_| {
                         loads.fetch_add(1, Ordering::SeqCst);
                         Err(crate::Error::MissingHome)
