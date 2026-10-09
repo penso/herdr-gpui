@@ -155,3 +155,18 @@ fn stale_dismissal_cannot_hide_new_text(cx: &mut TestAppContext) {
         assert!(view.endpoints[0].config_diagnostic.visible().is_none());
     });
 }
+
+#[gpui::test]
+fn a_long_line_shrinks_with_a_narrow_window(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.simulate_resize(size(px(320.), px(400.)));
+    // Wider than the window on its own; the card truncates it instead of
+    // keeping its width and leaving through the left edge.
+    let long = "config.toml: ignoring unknown keys ".repeat(4);
+    set_diagnostic(&view, 0, Some(&long), cx);
+    let banner = cx.debug_bounds("config-diagnostic").unwrap();
+    assert!(
+        banner.left() >= px(0.) && banner.right() <= px(320.),
+        "{banner:?}"
+    );
+}
