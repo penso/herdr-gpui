@@ -58,6 +58,9 @@ mod motion;
 mod navigation;
 mod new_tab_menu;
 mod notifications;
+// Wired into the UI by the orchestrator tab; until then only tests use it.
+#[allow(dead_code, unused_imports)]
+mod orchestrator;
 mod osc52;
 mod palette;
 mod pane_menu;
