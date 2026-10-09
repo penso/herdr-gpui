@@ -1408,8 +1408,10 @@ local session and saved SSH hosts.
 Selecting a row shows it in the preview, whose left edge drags to resize or
 close it; Enter or a double-click opens its page. An issue's page shows its
 description as plain text with Markdown structure, its runs, and its details. A
-pull request's page also has its conversation, where you can comment, and its
-checks, review decision, and merge state. Merge offers the methods the
+pull request's page also has its conversation, read as on GitHub: authors'
+avatars, Markdown comments, each review holding its inline threads with
+resolved ones folded, and a summary of verdicts on top; you can comment there.
+It also shows the checks, review decision, and merge state. Merge offers the methods the
 repository allows and names the head commit shown, so GitHub refuses it if the
 branch moved.
 

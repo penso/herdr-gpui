@@ -35,15 +35,17 @@ pub(crate) const BODY_LIMIT: usize = 4096;
 const COMMENT_LIMIT: usize = 40;
 const AUTHOR_LIMIT: usize = 64;
 const PATH_LIMIT: usize = 160;
+/// The most of a body kept as written, for views that render Markdown.
+const SOURCE_LIMIT: usize = 16 * 1024;
 
 const CONVERSATION_QUERY: &str = r#"query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       id
-      comments(last: 20) { nodes { author { login } body createdAt } }
-      reviews(last: 20) { nodes { author { login } state body submittedAt } }
+      comments(last: 20) { nodes { author { __typename login avatarUrl(size: 64) } body createdAt } }
+      reviews(last: 20) { nodes { author { __typename login avatarUrl(size: 64) } state body submittedAt } }
       reviewThreads(last: 20) {
-        nodes { isResolved path comments(first: 1) { totalCount nodes { author { login } body createdAt } } }
+        nodes { isResolved path comments(first: 1) { totalCount nodes { author { __typename login avatarUrl(size: 64) } body createdAt } } }
       }
     }
   }
@@ -193,8 +195,16 @@ impl CommentKind {
 pub(crate) struct Comment {
     pub author: String,
     pub kind: CommentKind,
+    /// One cleaned line, for compact lists.
     pub body: String,
     pub created_at: String,
+    /// The body as written, bounded, its lines kept: Markdown for a view
+    /// that renders it, which sanitizes it as it parses.
+    pub source: String,
+    /// The author's GitHub avatar, only ever on GitHub's avatar host.
+    pub avatar: Option<String>,
+    /// Whether the author is an app rather than a person.
+    pub bot: bool,
 }
 
 enum Job {
@@ -602,6 +612,14 @@ fn entry(node: &Value, time: &str, kind: CommentKind) -> Option<Comment> {
         return None;
     }
     let author = bounded(&text(&node["author"]["login"]), AUTHOR_LIMIT);
+    let avatar = node["author"]["avatarUrl"]
+        .as_str()
+        .filter(|url| {
+            url.len() <= 512
+                && url.starts_with("https://avatars.githubusercontent.com/")
+                && url.bytes().all(|byte| byte.is_ascii_graphic())
+        })
+        .map(str::to_owned);
     Some(Comment {
         // A deleted account is GitHub's "ghost".
         author: if author.is_empty() {
@@ -612,6 +630,9 @@ fn entry(node: &Value, time: &str, kind: CommentKind) -> Option<Comment> {
         kind,
         body: text(&node["body"]),
         created_at: bounded(&text(&node[time]), 32),
+        source: bounded(node["body"].as_str().unwrap_or_default(), SOURCE_LIMIT),
+        avatar,
+        bot: node["author"]["__typename"] == "Bot",
     })
 }
 

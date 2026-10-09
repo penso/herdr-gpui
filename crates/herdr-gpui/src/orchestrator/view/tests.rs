@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use herdr_client::protocol::AgentStatus;
 
 mod clicks;
+mod conversation;
 mod markdown;
 mod rows;
 

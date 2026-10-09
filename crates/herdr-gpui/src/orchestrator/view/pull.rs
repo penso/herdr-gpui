@@ -1,17 +1,17 @@
-//! A pull request's own pages: its conversation (read, commented on, and
-//! merged through `pr_actions`, which sends each write once and never
-//! retries it) and its checks, from the status the worker looked up by
-//! number.
+//! A pull request's own pages: its conversation (drawn by `conversation`,
+//! commented on and merged through `pr_actions`, which sends each write once
+//! and never retries it) and its checks, from the status the worker looked
+//! up by number.
 
 use super::{
     OrchestratorView,
     dispatch::Confirm,
-    look::{BLUE, GREEN, MAGENTA, RED, YELLOW},
+    look::{GREEN, MAGENTA, RED, YELLOW},
 };
 use crate::{
     config::corners,
     orchestrator::Item,
-    pr_actions::{self, CommentKind, Review},
+    pr_actions,
     pull_request::{MergeMethod, Outcome, PullRequest, State},
 };
 use gpui::{prelude::*, *};
@@ -50,124 +50,6 @@ impl OrchestratorView {
         {
             let _ = self.pr.load_comments(token);
         }
-    }
-
-    pub(super) fn render_conversation(&self, cx: &mut Context<Self>) -> AnyElement {
-        let look = &self.look;
-        let theme = &look.theme;
-        let mut column = div()
-            .id("orchestrator-conversation")
-            .flex_1()
-            .min_w_0()
-            .overflow_y_scroll()
-            .p_4()
-            .flex()
-            .flex_col()
-            .gap_2();
-        if self.request.token.is_none() {
-            column = column.child(look.muted("Sign in to GitHub to read the conversation."));
-        } else if let Some(error) = self.pr.comments_error() {
-            column = column.child(look.muted(error.to_owned()));
-        } else if let Some(comments) = self.pr.comments() {
-            if comments.is_empty() {
-                column = column.child(look.muted("No comments yet."));
-            }
-            for (index, comment) in comments.iter().enumerate() {
-                let badge = match &comment.kind {
-                    CommentKind::Review(Review::Approved) => Some(("approved", GREEN)),
-                    CommentKind::Review(Review::ChangesRequested) => {
-                        Some(("changes requested", RED))
-                    }
-                    CommentKind::Review(_) => Some(("reviewed", BLUE)),
-                    _ => None,
-                };
-                let path = match &comment.kind {
-                    CommentKind::Thread { .. } => Some(comment.kind.label()),
-                    _ => None,
-                };
-                column = column.child(
-                    div()
-                        .id(("orchestrator-comment", index))
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .p_3()
-                        .rounded(px(corners::CONTROL))
-                        .border_1()
-                        .border_color(rgb(theme.active))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(look.icon("icons/user.svg", 13., theme.subtext()))
-                                .child(
-                                    div()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(comment.author.clone()),
-                                )
-                                .when_some(badge, |el, (text, hue)| el.child(look.badge(text, hue)))
-                                .child(div().flex_1())
-                                .child(look.muted(comment.created_at.clone())),
-                        )
-                        .when_some(path, |el, path| {
-                            el.child(look.mono(path).text_color(rgb(look.hue(BLUE))))
-                        })
-                        .when(!comment.body.is_empty(), |el| {
-                            el.child(
-                                div()
-                                    .text_color(rgb(theme.subtext()))
-                                    .child(comment.body.clone()),
-                            )
-                        }),
-                );
-            }
-        } else {
-            column = column.child(look.muted("Reading the conversation\u{2026}"));
-        }
-        if let Some(outcome) = self.pr.outcome() {
-            column = column.child(look.muted(outcome.message.clone()));
-        }
-        if let Some(error) = self.pr.error() {
-            column = column.child(
-                div()
-                    .text_size(look.small())
-                    .text_color(rgb(look.hue(RED)))
-                    .child(error.to_owned()),
-            );
-        }
-        let open = self
-            .open_pull_request()
-            .is_some_and(|pr| pr.state == State::Open);
-        if open && self.pr.target().is_some() {
-            let busy = self.pr.running().map(pr_actions::Action::running_label);
-            column = column.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .pt_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .px_2()
-                            .py(px(4.))
-                            .rounded(px(corners::CONTROL))
-                            .border_1()
-                            .border_color(rgb(theme.active))
-                            .child(self.comment.clone()),
-                    )
-                    .child(match busy {
-                        Some(label) => look.muted(label).into_any_element(),
-                        None => look
-                            .button("orchestrator-comment-send", "Comment", false)
-                            .on_click(cx.listener(|this, _, _, cx| this.post_comment(cx)))
-                            .into_any_element(),
-                    }),
-            );
-        }
-        column.into_any_element()
     }
 
     pub(super) fn post_comment(&mut self, cx: &mut Context<Self>) {
