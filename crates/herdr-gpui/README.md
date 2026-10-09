@@ -1307,6 +1307,51 @@ Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.
 
+## Issues & PRs
+
+The "+" menu's Issues & PRs row, or the Open Issues & PRs command, opens a tab
+listing the focused workspace's repository: its GitHub issues and pull
+requests, its [Beads](https://github.com/steveyegge/beads) issues when the main
+checkout has a `.beads` folder, and the agent runs dispatched for them. It works
+for the local session and saved SSH hosts.
+
+- **Issues** lists open GitHub issues and beads together. A bead's children sit
+  under it; filters narrow to Beads, items with a run, or blocked ones; five
+  sorts are offered. Search matches every word you type across title, id,
+  author, labels, state, and body, case-insensitively unless a word has a
+  capital, and keeps a match's parents in view.
+- **Pull requests** lists open ones and the 50 most recently closed or merged,
+  with their diff size and activity.
+- **Runs** lists every run, grouped by what needs you first. Its status comes
+  from Herdr's live view of each connected host.
+
+Selecting a row shows it in the preview, whose left edge drags to resize or
+close it; Enter or a double-click opens its page. An issue's page shows its
+description as plain text with Markdown structure, its runs, and its details. A
+pull request's page also has its conversation, where you can comment, and its
+checks, review decision, and merge state. Merge offers the methods the
+repository allows and names the head commit shown, so GitHub refuses it if the
+branch moved.
+
+**Dispatch agent** opens a dialog: a prompt, an agent installed on the
+repository's host, a branch (`<number>-<slug>`, editable), and extra
+instructions. The new worktree is created from the main checkout's `HEAD` in the
+workspace's repository, and the agent starts in it with the prompt. A pull
+request's **Review with agent** does the same on a `review/pr-<n>` branch with a
+read-only prompt: the agent verifies the pull request, reads its diff, and
+reports findings without writing to GitHub. A run's card sends it messages, stops
+it, or removes its worktree; a bead's details can delete it with `bd`. Each of
+those asks first.
+
+The tab shares its data with agent-launcher,
+so both can be open on one repository at once: each lists the other's runs,
+updates only its own, and uses agent-launcher's prompt profiles from
+`~/.config/agent-launcher/agents/<name>/prompt.md` (the built-in prompt when
+none is chosen). Issues and runs are kept in agent-launcher's per-repository
+database under the platform data directory. GitHub is read as the account used
+for pull requests on that host; GitLab remotes and GitHub Enterprise are listed
+as not supported yet.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane
