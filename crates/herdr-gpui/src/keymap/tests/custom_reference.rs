@@ -71,7 +71,7 @@ fn unsupported_labels_read_as_separate_keys() {
     let keymap = Keymap::default();
     let commands = [custom(
         "hyper",
-        &["CTRL+hyper+Y", "  ", "", "prefix+hyper+a", "+"],
+        &["CTRL+hyper+Y", "  ", "", "prefix+hyper+a"],
     )];
     assert_eq!(
         reference(&keymap, &commands),

@@ -446,8 +446,8 @@ Reload waits while a theme preview/save is active. The manual GUI config reload
 action remains available; daemon config reload is separate.
 
 Settings opens a separate, reusable native window with **Appearance, Fonts,
-Indicators, Sound, Notifications, Integrations, Code, and General** in a
-sidebar.
+Indicators, Sound, Notifications, Integrations, Plugins, Code, and General** in
+a sidebar.
 The terminal stays usable while Settings is open. Cmd-W (or Ctrl-W) closes only
 Settings; reopening activates the existing window instead of creating a duplicate.
 Local preferences remain editable if the originating session window closes.
@@ -1610,6 +1610,25 @@ the daemon exposes to clients:
 - **Metadata.** Tab-bar status segments, custom sidebar tokens and row rules, and
   agent views from `agent.view.set` are shown as the daemon reports them; see
   [`[usage]`](#configuration) for the switches that hide them.
+- **Settings > Plugins.** Lists every custom `$name` value that plugins and hooks
+  report on a connected host (`pane.report_metadata` for agents,
+  `workspace.report_metadata` for workspaces), with an example and the hosts
+  reporting it, plus agent status labels. Herdr draws a value only where its
+  `[ui.sidebar]` rows name it, so each has a switch that adds the token as its
+  own row to `rows` in the shared Herdr config, or removes it there; the
+  terminal client shows the same rows. Showing a token when `rows` is unset
+  writes out Herdr's default rows first, styled occurrences count as shown, and
+  per-agent `rows_by_agent` overrides are never edited. Tokens already in `rows`
+  stay listed while nothing reports them, so they can be hidden. A preview
+  draws an example workspace and agent with the configured rows, including
+  token styles and the rules that restyle or hide a value. While the rows are
+  still Herdr's defaults, this app draws its own native rows; the section says
+  the first switch moves the sidebar to the configured rows, in your row
+  style. With `[usage] inline = false` the section says the switches only
+  change the terminal client and offers a switch that turns `inline` back on.
+  The switches are read-only on Windows, where shared settings are. Herdr offers clients no
+  way to list, enable, or disable plugins or read their logs, and the snapshot
+  does not say which plugin reported a value.
 - **Clipboard.** A plugin terminal that copies with OSC 52 reaches this machine's
   clipboard, local or remote, through the same bounded path as any pane. A plugin
   that runs a clipboard command such as `pbcopy` on a remote host writes that
@@ -2278,12 +2297,16 @@ records when reporting the failure.
    branch, so renamed local branches can identify fork PRs. Without an upstream,
    lookup uses the local branch name and requires the origin owner as before.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
-  On macOS, all socket modes (including explicit/inherited sockets) require a
-  same-user kernel peer at the standard configured session socket, with owned,
+  On macOS and Linux, all socket modes (including explicit/inherited sockets)
+  require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
+  Linux) at the standard configured session socket, with owned,
   non-group/world-writable socket and parent. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
-  Reconnect rechecks the endpoint.
+  Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
+  reviews and logs `Daemon endpoint not trusted as local` with the failed check.
+  `DirectoryPermissions` usually means a umask of 002 created the session
+  directory group-writable; `chmod g-w` on it and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host

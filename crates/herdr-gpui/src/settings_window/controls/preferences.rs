@@ -51,7 +51,7 @@ impl SettingsWindow {
             .child(crate::toggles::switch(&self.theme, 22., checked))
     }
 
-    pub(super) fn preference_switch(
+    pub(in crate::settings_window) fn preference_switch(
         &self,
         id: &'static str,
         label: &'static str,

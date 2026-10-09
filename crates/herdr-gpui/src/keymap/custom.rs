@@ -101,9 +101,19 @@ impl Keymap {
                     }
                     for (_, trigger) in triggers {
                         let label = self.custom_label(&trigger);
-                        if !seen.insert(label.clone()) {
-                            continue;
-                        }
+                        // A malformed label can read like a working one, as
+                        // `ctrl+++` does `ctrl++`; the working one takes its row.
+                        let unsupported = if seen.insert(label.clone()) {
+                            None
+                        } else {
+                            let row = bindings.iter().position(|row: &CustomBinding| {
+                                row.reach == Reach::Unsupported && row.label == label
+                            });
+                            if row.is_none() {
+                                continue;
+                            }
+                            row
+                        };
                         let reach = match self.reach(&trigger, &bound) {
                             _ if index >= MAX_KEYSTROKES => Reach::OverLimit,
                             Reach::Runs if !claimed.insert(trigger_identity(&trigger)) => {
@@ -111,7 +121,10 @@ impl Keymap {
                             }
                             reach => reach,
                         };
-                        bindings.push(CustomBinding { label, reach });
+                        match unsupported {
+                            Some(row) => bindings[row].reach = reach,
+                            None => bindings.push(CustomBinding { label, reach }),
+                        }
                     }
                 }
                 bindings
@@ -175,11 +188,19 @@ impl Keymap {
             Some(body) => (Some(self.prefix_word()), body),
             None => (None, raw),
         };
+        // A trailing `++`, or the whole body `+`, is the plus key itself.
+        let body = body.trim();
+        let (body, plus) = match body.strip_suffix("++") {
+            Some(modifiers) => (modifiers, Some("+")),
+            None if body == "+" => ("", Some("+")),
+            None => (body, None),
+        };
         let keys = body
             .split('+')
             .map(str::trim)
             .filter(|key| !key.is_empty())
             .map(str::to_lowercase)
+            .chain(plus.map(str::to_owned))
             .collect::<Vec<_>>()
             .join("-");
         if keys.is_empty() {

@@ -94,47 +94,94 @@ pub(crate) fn executable() -> PathBuf {
 /// A same-user proxy deliberately installed at that endpoint is within this trust
 /// boundary; this is not remote-origin attestation.
 fn is_local_peer(stream: &Stream, target: &ConnectTarget, socket: &Path) -> bool {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
-        target
-            .local_session_socket_path()
-            .is_ok_and(|expected| peer_matches_local_endpoint(stream, socket, &expected))
+        // Remote targets have no local endpoint; that is not worth reporting.
+        let Ok(expected) = target.local_session_socket_path() else {
+            return false;
+        };
+        peer_matches_local_endpoint(stream, socket, &expected)
+            .inspect_err(|reason| {
+                // Local Git actions and reviews disappear without this; name the
+                // failed check, not the user's paths.
+                tracing::info!(?reason, "Daemon endpoint not trusted as local");
+            })
+            .is_ok()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = (stream, target, socket);
         false
     }
 }
 
+/// Which local endpoint check refused the connection.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UntrustedEndpoint {
+    /// The peer is another user, or its credentials could not be read.
+    PeerUser,
+    /// The standard session socket is missing or is not a socket (e.g. a symlink).
+    NotSocket,
+    /// The dialed socket is not the standard session socket.
+    OtherSocket,
+    /// The socket is not owned by this user or is group/world-writable.
+    SocketPermissions,
+    /// The socket's directory is not owned by this user or is group/world-writable,
+    /// as a umask of 002 leaves it.
+    DirectoryPermissions,
+}
+
+/// The user ID of the process at the other end of the socket.
 #[cfg(target_os = "macos")]
-fn peer_matches_local_endpoint(stream: &Stream, socket: &Path, expected: &Path) -> bool {
+fn peer_uid(stream: &Stream) -> nix::Result<nix::unistd::Uid> {
+    nix::unistd::getpeereid(stream).map(|(uid, _)| uid)
+}
+
+/// The user ID of the process at the other end of the socket.
+#[cfg(target_os = "linux")]
+fn peer_uid(stream: &Stream) -> nix::Result<nix::unistd::Uid> {
+    use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+    getsockopt(stream, PeerCredentials)
+        .map(|credentials| nix::unistd::Uid::from_raw(credentials.uid()))
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn peer_matches_local_endpoint(
+    stream: &Stream,
+    socket: &Path,
+    expected: &Path,
+) -> Result<(), UntrustedEndpoint> {
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
     let uid = nix::unistd::geteuid();
-    if !nix::unistd::getpeereid(stream).is_ok_and(|(peer, _)| peer == uid) {
-        return false;
+    if !peer_uid(stream).is_ok_and(|peer| peer == uid) {
+        return Err(UntrustedEndpoint::PeerUser);
     }
     // Do not allow the standard socket itself to redirect to another location.
     if !std::fs::symlink_metadata(expected).is_ok_and(|metadata| metadata.file_type().is_socket()) {
-        return false;
+        return Err(UntrustedEndpoint::NotSocket);
     }
-    let Ok(expected) = expected.canonicalize() else {
-        return false;
-    };
+    let expected = expected
+        .canonicalize()
+        .map_err(|_| UntrustedEndpoint::NotSocket)?;
     // Use the path actually dialed, not peer_addr(): BSD sockaddr lengths from
     // some listeners omit the NUL and std can truncate the reported pathname.
     if !socket.canonicalize().is_ok_and(|socket| socket == expected) {
-        return false;
+        return Err(UntrustedEndpoint::OtherSocket);
     }
-    let Some(parent) = expected.parent() else {
-        return false;
-    };
+    let parent = expected.parent().ok_or(UntrustedEndpoint::OtherSocket)?;
     let owned = |metadata: &std::fs::Metadata| {
         metadata.uid() == uid.as_raw() && metadata.mode() & 0o022 == 0
     };
-    std::fs::symlink_metadata(&expected)
+    if !std::fs::symlink_metadata(&expected)
         .is_ok_and(|metadata| metadata.file_type().is_socket() && owned(&metadata))
-        && std::fs::metadata(parent).is_ok_and(|metadata| metadata.is_dir() && owned(&metadata))
+    {
+        return Err(UntrustedEndpoint::SocketPermissions);
+    }
+    if !std::fs::metadata(parent).is_ok_and(|metadata| metadata.is_dir() && owned(&metadata)) {
+        return Err(UntrustedEndpoint::DirectoryPermissions);
+    }
+    Ok(())
 }
 
 /// The daemon outlives this window, so it must not share the GUI's signal or

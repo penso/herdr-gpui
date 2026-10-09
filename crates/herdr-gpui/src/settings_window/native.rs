@@ -149,11 +149,29 @@ pub(crate) async fn verify_native(
                 .await;
         }
         for (index, section) in Section::ALL.iter().copied().enumerate() {
+            // A short window scrolls the category list; bring this one into view.
+            AnyWindowHandle::from(settings)
+                .update(cx, |_, window, cx| window.draw(cx).clear(cx))?;
+            settings.update(cx, |view, _, cx| {
+                view.navigation_scroll.scroll_to_item(index);
+                cx.notify();
+            })?;
             let (target, bounds) =
-                AnyWindowHandle::from(settings).update(cx, |_, window, cx| -> Result<_> {
+                AnyWindowHandle::from(settings).update(cx, |root, window, cx| -> Result<_> {
                     window.draw(cx).clear(cx);
                     let bounds = cx.global::<Layout>().0[index]
                         .context("missing Settings category paint")?;
+                    let list = root
+                        .downcast::<SettingsWindow>()
+                        .map_err(|_| anyhow::anyhow!("unexpected Settings root"))?
+                        .read(cx)
+                        .navigation_scroll
+                        .bounds();
+                    ensure!(
+                        bounds.top() >= list.top() - px(1.)
+                            && bounds.bottom() <= list.bottom() + px(1.),
+                        "Settings category {index} not scrolled into view: {bounds:?} in {list:?}"
+                    );
                     Ok((Target::acquire(window)?, bounds))
                 })??;
             target.click(
@@ -188,7 +206,14 @@ pub(crate) async fn verify_native(
                         && body.size.height > px(400.),
                     "Settings body height: {body:?}"
                 );
-                let mut bottom = px(crate::titlebar::HEIGHT);
+                // Categories may scroll out of a short window's list, but never
+                // overlap, leave the list's column, or shrink.
+                let list = view.navigation_scroll.bounds();
+                ensure!(
+                    list.top() >= px(crate::titlebar::HEIGHT) && list.bottom() <= body.bottom(),
+                    "Settings category list escapes the window: {list:?}"
+                );
+                let mut bottom = None;
                 for (index, bounds) in cx.global::<Layout>().0[..Section::ALL.len()]
                     .iter()
                     .enumerate()
@@ -197,18 +222,26 @@ pub(crate) async fn verify_native(
                     ensure!(
                         bounds.left() >= px(0.)
                             && bounds.right() <= body.left()
-                            && bounds.top() >= bottom
-                            && bounds.bottom() <= body.bottom()
+                            && bottom.is_none_or(|bottom| bounds.top() >= bottom)
                             && bounds.size.height >= px(35.),
                         "Settings category {index} clipped/overlapped: {bounds:?}"
                     );
-                    bottom = bounds.bottom();
+                    bottom = Some(bounds.bottom());
                 }
                 ensure!(!view.saving, "navigation started a settings write");
                 Ok(())
             })??;
             if section == Section::Fonts {
                 verify_fonts(settings, source, expected, cx).await?;
+            }
+            #[cfg(feature = "mockup")]
+            if section == Section::Plugins {
+                let extension = if expected.width == px(960.) {
+                    "plugins.png"
+                } else {
+                    "plugins-narrow.png"
+                };
+                capture_settings(settings, extension, cx).await?;
             }
             #[cfg(feature = "mockup")]
             if section == Section::Appearance

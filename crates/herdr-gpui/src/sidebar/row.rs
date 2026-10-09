@@ -23,6 +23,7 @@ mod configured;
 pub(crate) use badge::compact;
 pub(super) use badge::{PrBadge, RowBadge, Upstream};
 use configured::configured_lines;
+pub(crate) use configured::styled;
 pub(super) use configured::{
     TokenLook, configured_status, configured_status_style, leading_status, token_column,
 };

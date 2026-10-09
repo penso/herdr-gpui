@@ -36,7 +36,7 @@ pub(crate) use {
     metrics::{ARROW_RESERVE, HOST_ARROW_WIDTH, HOST_GAP, ICON_RESERVE, LABEL_GAP, STATUS_WIDTH},
     rail::SidebarMode,
     reorder::WorkspaceDrag,
-    row::{compact, github_mark, label_text},
+    row::{compact, github_mark, label_text, styled as styled_token},
     view::SidebarView,
     workspaces::workspace_label,
 };

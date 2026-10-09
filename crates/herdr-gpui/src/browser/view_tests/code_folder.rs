@@ -4,6 +4,13 @@ use crate::{code_server::Server, controls::Command};
 
 const COMMIT: &str = "2a59476c9bfcb90b3ddc372c36762471b7dfad1c";
 
+/// The workspace's folder, which must be absolute where the test runs, and
+/// how it reads in the address.
+#[cfg(not(windows))]
+const FOLDER: (&str, &str) = ("/Users/me/project", "%2FUsers%2Fme%2Fproject");
+#[cfg(windows)]
+const FOLDER: (&str, &str) = (r"C:\Users\me\project", "C%3A%5CUsers%5Cme%5Cproject");
+
 fn answers(_: &WebUrl) -> crate::Result<Server> {
     Ok(Server::from_version(COMMIT).unwrap())
 }
@@ -16,7 +23,7 @@ fn a_new_vs_code_page_opens_its_workspace_folder(cx: &mut gpui::TestAppContext) 
             let mut shown = (**view.live.snapshot.as_ref().unwrap()).clone();
             shown.panes = serde_json::from_value(serde_json::json!([{
                 "pane_id": "p0", "workspace_id": "w0", "tab_id": "t0",
-                "label": "shell", "cwd": "/Users/me/project", "foreground_cwd": null,
+                "label": "shell", "cwd": FOLDER.0, "foreground_cwd": null,
                 "focused": true, "right_click_passthrough": false
             }]))
             .unwrap();
@@ -36,9 +43,10 @@ fn a_new_vs_code_page_opens_its_workspace_folder(cx: &mut gpui::TestAppContext) 
         let tab = cx.global::<Store>().code_tab(&tab_scope, "w0").unwrap();
         assert_eq!(
             tab.location,
-            Some(url(
-                "http://127.0.0.1:8000/?tkn=x&folder=%2FUsers%2Fme%2Fproject"
-            ))
+            Some(url(&format!(
+                "http://127.0.0.1:8000/?tkn=x&folder={}",
+                FOLDER.1
+            )))
         );
     });
 }

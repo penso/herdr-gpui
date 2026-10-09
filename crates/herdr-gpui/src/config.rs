@@ -42,7 +42,8 @@ pub use notifications::{BellConfig, ClipboardToast, ClipboardToastPosition, Noti
 use notifications::{ClipboardToastSettings, NotificationSettings};
 use serde::Deserialize;
 pub(crate) use sidebar::{
-    AgentLayout, AgentToken, Rows, SidebarLayout, SpaceLayout, SpaceToken, TokenStyle,
+    AgentLayout, AgentToken, MAX_ROWS as MAX_SIDEBAR_ROWS, Rows, SidebarConfigError, SidebarLayout,
+    SidebarScope, SpaceLayout, SpaceToken, TokenStyle,
 };
 pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
 pub use status_bar::StatusBar;

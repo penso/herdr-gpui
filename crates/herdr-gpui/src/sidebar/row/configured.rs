@@ -47,7 +47,8 @@ fn token_appearance(kind: &TokenKind, look: TokenLook, cx: &RowContext<'_>) -> (
     }
 }
 
-fn styled(
+/// A token's base color and weight with its configured `fg`, `dim`, and `bold`.
+pub(crate) fn styled(
     (color, weight): (u32, FontWeight),
     style: crate::config::TokenStyle,
     theme: &Theme,

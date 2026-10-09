@@ -54,6 +54,7 @@ pub(super) enum Section {
     Notifications,
     StatusBar,
     Integrations,
+    Plugins,
     Code,
     #[cfg(feature = "cloud")]
     CloudDevices,
@@ -69,6 +70,7 @@ impl Section {
         Self::Notifications,
         Self::StatusBar,
         Self::Integrations,
+        Self::Plugins,
         Self::Code,
         #[cfg(feature = "cloud")]
         Self::CloudDevices,
@@ -84,6 +86,7 @@ impl Section {
             Self::Notifications => "Notifications",
             Self::StatusBar => "Status bar",
             Self::Integrations => "Integrations",
+            Self::Plugins => "Plugins",
             Self::Code => "Code",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "Cloud Devices",
@@ -100,6 +103,7 @@ impl Section {
             Self::Notifications => "icons/bell.svg",
             Self::StatusBar => "icons/status-bar.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            Self::Plugins => "icons/plug.svg",
             Self::Code => "icons/vscode.svg",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "icons/globe.svg",
@@ -116,6 +120,7 @@ impl Section {
             Self::Notifications => "Stay informed without losing your place.",
             Self::StatusBar => "Keep the bottom bar to what you use.",
             Self::Integrations => "Connect the agents you work with.",
+            Self::Plugins => "Show what your plugins report in the sidebar.",
             Self::Code => {
                 "Review code and diffs beside your terminals by connecting to a Visual Studio Code server."
             }
@@ -208,11 +213,14 @@ struct SettingsWindow {
     section: Section,
     themes: themes::ThemeBrowser,
     controls: controls::Controls,
+    plugins: controls::plugins::Plugins,
     code: controls::code::CodeSettings,
     error: Option<String>,
     status: Option<String>,
     focus: FocusHandle,
     body_scroll: ScrollHandle,
+    /// The category list scrolls when the window is too short for it.
+    navigation_scroll: ScrollHandle,
     /// The section list's width, dragged by its right edge.
     navigation_width: crate::panel_resize::PanelWidth,
     /// The window's width at its last render, which caps the section list.
@@ -308,10 +316,12 @@ impl SettingsWindow {
             section: Section::Appearance,
             themes: themes::ThemeBrowser::new(cx),
             controls: controls::Controls::new(cx),
+            plugins: controls::plugins::Plugins::new(cx),
             error: appearance.error,
             status: None,
             focus: cx.focus_handle(),
             body_scroll: ScrollHandle::new(),
+            navigation_scroll: ScrollHandle::new(),
             navigation_width: crate::panel_resize::SETTINGS_NAVIGATION,
             viewport_width: 0.,
             loading: false,
@@ -384,7 +394,7 @@ impl SettingsWindow {
         self.cloud_source_changed(&source, cx);
         #[cfg(not(feature = "cloud"))]
         let _ = source;
-        if self.section == Section::Integrations {
+        if matches!(self.section, Section::Integrations | Section::Plugins) {
             cx.notify();
         }
         if self.section == Section::General {
@@ -647,47 +657,62 @@ impl SettingsWindow {
                             .child("Settings"),
                     ),
             )
-            .children(
-                Section::ALL
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .map(|(index, section)| {
-                        let selected = self.section == section;
-                        div()
-                            .id(("settings-section", index))
-                            .relative()
-                            .map(|row| {
-                                #[cfg(all(feature = "integration-test", target_os = "macos"))]
-                                let row = row.child(native::probe(index));
-                                row
-                            })
-                            .debug_selector(move || format!("settings-section-{index}"))
-                            .flex()
-                            .items_center()
-                            .gap(px(10.))
-                            .px(px(10.))
-                            .py(px(11.))
-                            .rounded(px(corners::CONTROL))
-                            .cursor_pointer()
-                            .when(selected, |el| el.bg(rgb(theme.primary_wash())))
-                            .hover(|el| el.bg(rgb(theme.active)))
-                            .child(
-                                svg()
-                                    .path(section.icon())
-                                    .size(px(17.))
-                                    .flex_none()
-                                    .text_color(rgb(if selected {
-                                        theme.primary()
-                                    } else {
-                                        theme.subtext()
-                                    })),
-                            )
-                            .child(section.label())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.select_section(section, window, cx)
-                            }))
-                    }),
+            .child(
+                div()
+                    .id("settings-sections")
+                    .debug_selector(|| "settings-sections".into())
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.navigation_scroll)
+                    .children(
+                        Section::ALL
+                            .iter()
+                            .copied()
+                            .enumerate()
+                            .map(|(index, section)| {
+                                let selected = self.section == section;
+                                div()
+                                    .id(("settings-section", index))
+                                    .relative()
+                                    .map(|row| {
+                                        #[cfg(all(
+                                            feature = "integration-test",
+                                            target_os = "macos"
+                                        ))]
+                                        let row = row.child(native::probe(index));
+                                        row
+                                    })
+                                    .debug_selector(move || format!("settings-section-{index}"))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(10.))
+                                    .px(px(10.))
+                                    .py(px(11.))
+                                    .rounded(px(corners::CONTROL))
+                                    .cursor_pointer()
+                                    .when(selected, |el| el.bg(rgb(theme.primary_wash())))
+                                    .hover(|el| el.bg(rgb(theme.active)))
+                                    .child(
+                                        svg()
+                                            .path(section.icon())
+                                            .size(px(17.))
+                                            .flex_none()
+                                            .text_color(rgb(if selected {
+                                                theme.primary()
+                                            } else {
+                                                theme.subtext()
+                                            })),
+                                    )
+                                    .child(section.label())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.select_section(section, window, cx)
+                                    }))
+                            }),
+                    ),
             )
     }
 }
@@ -697,6 +722,7 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            Section::Plugins => self.render_plugin_controls(cx),
             Section::Code => self.render_code_controls(window, cx),
             #[cfg(feature = "cloud")]
             Section::CloudDevices => self.render_cloud_devices(cx),
