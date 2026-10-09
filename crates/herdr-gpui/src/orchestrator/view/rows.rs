@@ -2,7 +2,7 @@
 //! Beads children under their parents, pull requests, and runs grouped by
 //! what needs the user first. Pure, so it is tested without a window.
 
-use crate::orchestrator::{HerdrSession, Item, Provider, Run, RunState};
+use crate::orchestrator::{Backend, HerdrSession, Item, Provider, Run, RunState};
 use herdr_client::protocol::AgentStatus;
 use std::{
     cmp::Ordering,
@@ -220,8 +220,22 @@ impl<'a> Runs<'a> {
         self.sessions.get(self.runs.get(run)?.id.as_str()).copied()
     }
 
+    /// The live agent of `run`: by its Herdr session when its owner wrote
+    /// one, else by the Herdr workspace the run recorded, which runs from
+    /// before the shared sessions table still have.
     pub(crate) fn live(&self, run: usize) -> Option<&'a LiveAgent> {
-        live_for(self.session(run)?, self.live)
+        if let Some(session) = self.session(run) {
+            return live_for(session, self.live);
+        }
+        let workspace = self
+            .runs
+            .get(run)?
+            .workspace
+            .as_ref()
+            .filter(|workspace| workspace.backend == Backend::Herdr)?;
+        self.live
+            .iter()
+            .find(|agent| agent.host == workspace.host && agent.workspace_id == workspace.id)
     }
 
     pub(crate) fn status(&self, run: usize) -> Option<Status> {

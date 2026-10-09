@@ -270,3 +270,24 @@ fn pull_requests_open_on_their_conversation_and_have_checks() {
     assert!(DetailTab::tabs(true).contains(&DetailTab::Checks));
     assert!(!DetailTab::tabs(false).contains(&DetailTab::Checks));
 }
+
+#[test]
+fn a_run_without_a_session_is_found_by_its_workspace() {
+    // agent-launcher builds before the shared sessions table record only the
+    // run's Herdr workspace.
+    let items = beads();
+    let theirs = run("old", &items[4], RunState::Running, "2026-10-04T01:00:00Z");
+    let list = vec![theirs.clone()];
+    let agents = vec![live(&theirs, "p3", AgentStatus::Blocked)];
+    let runs = Runs::new(&list, &[], &agents);
+    assert_eq!(runs.live(0).map(|agent| agent.pane_id.as_str()), Some("p3"));
+    assert_eq!(runs.status(0), Some(Status::NeedsInput));
+    // The same workspace id on another host is another workspace.
+    let elsewhere = vec![LiveAgent {
+        host: Some("devbox".into()),
+        ..live(&theirs, "p3", AgentStatus::Blocked)
+    }];
+    let runs = Runs::new(&list, &[], &elsewhere);
+    assert!(runs.live(0).is_none());
+    assert_eq!(runs.status(0), Some(Status::Working));
+}

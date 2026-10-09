@@ -358,6 +358,9 @@ impl HerdrWindow {
                     self.show_flash(Flash::warning("Close the open menu first"), cx);
                 }
             }
+            Event::OpenWorkspace { host, workspace_id } => {
+                self.open_run_workspace(host.as_deref(), &workspace_id, cx)
+            }
             Event::OpenUrl(url) => match WebUrl::try_from(url.as_str()) {
                 Ok(url) => {
                     if let Some((_, workspace)) = self.browser_key() {
@@ -440,6 +443,45 @@ impl HerdrWindow {
         request.elsewhere = Some(elsewhere);
         if let Some(view) = self.orchestrator_view(id).cloned() {
             view.update(cx, |view, _| view.dispatch_elsewhere(request));
+        }
+    }
+
+    /// Shows workspace `workspace_id` on the connected host `host` names:
+    /// the shown host when it fits, else the first that does.
+    fn open_run_workspace(
+        &mut self,
+        host: Option<&str>,
+        workspace_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let fits = |target: &ConnectTarget| match (host, target) {
+            (Some(destination), ConnectTarget::Ssh { target, .. }) => target == destination,
+            (None, ConnectTarget::Local | ConnectTarget::Session { .. }) => true,
+            _ => false,
+        };
+        let has = |index: usize| {
+            let live = if index == self.selected_endpoint {
+                &self.live
+            } else {
+                &self.endpoints[index].live
+            };
+            live.snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot
+                    .workspaces
+                    .iter()
+                    .any(|workspace| workspace.workspace_id == workspace_id)
+            })
+        };
+        let found = std::iter::once(self.selected_endpoint)
+            .chain(0..self.endpoints.len())
+            .find(|&index| fits(&self.endpoints[index].connection.target) && has(index));
+        let Some(index) = found else {
+            self.show_flash(Flash::warning("That run's workspace is closed"), cx);
+            return;
+        };
+        let id = self.endpoints[index].id.clone();
+        if !self.navigate_endpoint(&id, NavigationTarget::Workspace(workspace_id), cx) {
+            self.show_flash(Flash::warning("Close the open menu first"), cx);
         }
     }
 

@@ -26,12 +26,13 @@ mod window;
 pub(crate) use actions::{Action, DispatchRequest};
 pub(crate) use error::{Error, Result};
 pub(crate) use location::{Repository, database_path};
+pub(crate) use model::Backend;
+#[cfg(test)]
+pub(crate) use model::Workspace;
 pub(crate) use model::{
     Activity, Checkpoint, HerdrSession, Item, ItemKey, Owner, Provider, PullRequest, Run, RunState,
     SourceKey,
 };
-#[cfg(test)]
-pub(crate) use model::{Backend, Workspace};
 #[cfg(test)]
 pub(crate) use service::SourceStatus;
 pub(crate) use service::{Notice, Request, Service, Snapshot, SyncState, Timing};

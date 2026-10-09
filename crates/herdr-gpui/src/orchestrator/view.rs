@@ -37,6 +37,12 @@ pub(crate) enum Event {
     /// Show the pane a run's agent is in, on the endpoint the host listed it
     /// from.
     OpenRun { endpoint: usize, pane_id: String },
+    /// Show a run's Herdr workspace on the host it is on: `None` for this
+    /// machine, else an SSH destination.
+    OpenWorkspace {
+        host: Option<String>,
+        workspace_id: String,
+    },
     /// Open a web address, such as an issue's page, in a browser tab.
     OpenUrl(String),
     /// Sign in to GitHub, which the view needs to list a repository.
@@ -524,6 +530,8 @@ impl OrchestratorView {
         cx.notify();
     }
 
+    /// Shows run `run`: its agent's pane while Herdr shows the agent, else
+    /// the workspace it worked in, else says why there is nothing to show.
     fn open_run(&mut self, run: usize, cx: &mut Context<Self>) {
         let runs = Runs::new(&self.snapshot.runs, &self.snapshot.sessions, &self.live);
         if let Some(agent) = runs.live(run) {
@@ -531,6 +539,24 @@ impl OrchestratorView {
                 endpoint: agent.endpoint,
                 pane_id: agent.pane_id.clone(),
             });
+            return;
+        }
+        let workspace = self.snapshot.runs.get(run).and_then(|run| {
+            run.workspace
+                .as_ref()
+                .filter(|workspace| workspace.backend == super::Backend::Herdr)
+        });
+        match workspace {
+            Some(workspace) => cx.emit(Event::OpenWorkspace {
+                host: workspace.host.clone(),
+                workspace_id: workspace.id.clone(),
+            }),
+            None => {
+                self.notice = Some(Notice {
+                    outcome: Err(Arc::new(super::Error::NothingToOpen)),
+                });
+                cx.notify();
+            }
         }
     }
 
