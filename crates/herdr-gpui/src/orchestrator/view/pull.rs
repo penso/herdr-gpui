@@ -190,7 +190,24 @@ impl OrchestratorView {
     }
 
     /// Merges the open pull request at the head the user saw.
-    pub(super) fn merge(&mut self, method: MergeMethod, cx: &mut Context<Self>) {
+    /// Merges `expected`, the pull request and head commit the user confirmed.
+    /// A refresh that moved the head, or another pull request opened since,
+    /// refuses the merge instead of naming a commit the user never saw.
+    pub(super) fn merge(
+        &mut self,
+        method: MergeMethod,
+        expected: &pr_actions::Target,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pr.target() != Some(expected) {
+            self.notice = Some(crate::orchestrator::Notice {
+                outcome: Err(std::sync::Arc::new(
+                    crate::orchestrator::Error::PullRequestChanged,
+                )),
+            });
+            cx.notify();
+            return;
+        }
         let (Some(token), Some(pr)) = (self.request.token.clone(), self.open_pull_request()) else {
             return;
         };
@@ -301,7 +318,10 @@ impl OrchestratorView {
                             .child(method.action())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.merge_open = false;
-                                this.ask(Confirm::Merge { method }, cx);
+                                // The confirmation names what the menu showed.
+                                if let Some(target) = this.pr.target().cloned() {
+                                    this.ask(Confirm::Merge { method, target }, cx);
+                                }
                             }))
                     }))
                     .when(pr.merge_methods.is_empty(), |el| {

@@ -31,10 +31,23 @@ pub(crate) struct Dialog {
 /// A destructive action waiting for the user to confirm it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Confirm {
-    Stop { run: String, agent: String },
-    Remove { run: String, branch: String },
-    DeleteBead { source: SourceKey, id: String },
-    Merge { method: MergeMethod },
+    Stop {
+        run: String,
+        agent: String,
+    },
+    Remove {
+        run: String,
+        branch: String,
+    },
+    DeleteBead {
+        source: SourceKey,
+        id: String,
+    },
+    /// Merging the pull request and head commit shown when it was asked.
+    Merge {
+        method: MergeMethod,
+        target: crate::pr_actions::Target,
+    },
 }
 
 impl Confirm {
@@ -52,7 +65,7 @@ impl Confirm {
                 ),
                 "Remove",
             ),
-            Self::Merge { method } => (
+            Self::Merge { method, .. } => (
                 format!("{}?", method.action()),
                 "Merges the pull request at the head commit shown here; GitHub refuses if it moved."
                     .into(),
@@ -337,7 +350,9 @@ impl OrchestratorView {
                     .child(
                         danger(look, verb).on_click(cx.listener(move |this, _, window, cx| {
                             match confirm.clone() {
-                                Confirm::Merge { method } => this.merge(method, cx),
+                                Confirm::Merge { method, target } => {
+                                    this.merge(method, &target, cx)
+                                }
                                 confirm => {
                                     if let Some(action) = confirm.action() {
                                         this.act(action);

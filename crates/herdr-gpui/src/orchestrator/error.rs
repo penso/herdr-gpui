@@ -74,6 +74,8 @@ pub(crate) enum Error {
     Worker(#[source] std::io::Error),
     #[error("Several actions are already running; try again when one finishes")]
     Busy,
+    #[error("The pull request changed since you confirmed; look at it again before merging")]
+    PullRequestChanged,
 }
 
 /// `map_err` adapter naming the host script that failed.
