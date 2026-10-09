@@ -43,6 +43,8 @@ pub(crate) fn sync(
     Ok((items, checkpoint))
 }
 
+// Used by dispatch and the run actions, which land next.
+#[allow(dead_code)]
 /// Deletes one bead for good, which `bd` cannot do read-only.
 pub(crate) fn delete(
     host: &Host,
@@ -65,6 +67,7 @@ pub(crate) fn delete(
     .map(drop)
 }
 
+#[allow(dead_code)]
 pub(super) fn valid_id(id: &str) -> bool {
     id.len() <= 255
         && id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)

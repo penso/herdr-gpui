@@ -17,16 +17,23 @@ mod model;
 mod repo;
 mod service;
 mod store;
+mod tab;
+mod view;
 
 pub(crate) use error::{Error, Result};
 pub(crate) use location::{Repository, database_path};
 pub(crate) use model::{
-    Activity, Backend, Checkpoint, HerdrSession, Item, ItemKey, Owner, Provider, PullRequest, Run,
-    RunState, SourceKey, Workspace,
+    Activity, Checkpoint, HerdrSession, Item, ItemKey, Owner, Provider, PullRequest, Run, RunState,
+    SourceKey,
 };
-pub(crate) use repo::{Remote, RepoInfo};
-pub(crate) use service::{Request, Service, Snapshot, SourceStatus, SyncState, Timing};
+#[cfg(test)]
+pub(crate) use model::{Backend, Workspace};
+#[cfg(test)]
+pub(crate) use service::SourceStatus;
+pub(crate) use service::{Request, Service, Snapshot, SyncState, Timing};
 pub(crate) use store::{Access, SCHEMA_VERSION, Store};
+pub(crate) use tab::{LiveCache, Orchestrator};
+pub(crate) use view::{Event, LiveAgent, Look, OrchestratorView};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

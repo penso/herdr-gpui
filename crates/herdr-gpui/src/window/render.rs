@@ -579,7 +579,15 @@ impl Render for HerdrWindow {
                 (Shown::Terminal, _) if self.shows_parked_terminal(slot.id, cx) => {
                     self.render_parked_terminal(slot, gap, parked_font.clone(), cell_height, cx)
                 }
-                // A review tab is drawn by the app, never a page.
+                // Review and orchestrator tabs are drawn by the app, never pages.
+                (Shown::Page(_), Some(tab))
+                    if matches!(
+                        tab.location,
+                        Some(crate::browser::Location::Orchestrator { .. })
+                    ) =>
+                {
+                    self.render_orchestrator_tab(slot, &tab, gap)
+                }
                 (Shown::Page(_), Some(tab))
                     if tab
                         .location

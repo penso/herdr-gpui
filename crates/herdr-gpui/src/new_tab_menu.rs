@@ -16,6 +16,8 @@ enum Row {
     Browser,
     /// The review tab of the checkout the Git chip tracks.
     Review,
+    /// The focused workspace's repository's issues, pull requests, and runs.
+    Orchestrator,
     /// One of the focused workspace's listening ports and where it opens.
     Port {
         number: u16,
@@ -30,6 +32,7 @@ impl Row {
             Self::Terminal => "icons/terminal.svg",
             Self::Browser => "icons/globe.svg",
             Self::Review => "icons/diff-unified.svg",
+            Self::Orchestrator => "icons/github.svg",
             Self::Port { .. } => "icons/arrow-right.svg",
         }
     }
@@ -40,6 +43,7 @@ impl Row {
             Self::Terminal => "New Terminal Tab".into(),
             Self::Browser => "New Browser Tab".into(),
             Self::Review => "Review Changes".into(),
+            Self::Orchestrator => "Issues & PRs".into(),
             Self::Port { link, .. } => link.label().into(),
         }
     }
@@ -65,6 +69,9 @@ impl HerdrWindow {
         let mut rows = vec![Row::Terminal, Row::Browser];
         if self.git.tracked().is_some() {
             rows.push(Row::Review);
+        }
+        if self.can_open_orchestrator() {
+            rows.push(Row::Orchestrator);
         }
         if let Some((_, _, listed)) = self.focused_listening_ports() {
             rows.extend(listed.ports.iter().filter_map(|port| {
@@ -111,6 +118,10 @@ impl HerdrWindow {
             Row::Review => {
                 self.activate_group(group, window, cx);
                 self.open_review(window, cx);
+            }
+            Row::Orchestrator => {
+                self.activate_group(group, window, cx);
+                self.open_orchestrator(window, cx);
             }
             Row::Port { link, .. } => {
                 let Some((endpoint, workspace)) = self
@@ -189,7 +200,7 @@ impl HerdrWindow {
                     .primary(Command::NewBrowserTab)
                     .to_owned()
                     .into(),
-                Row::Review => "".into(),
+                Row::Review | Row::Orchestrator => "".into(),
                 Row::Port { process, .. } => process.clone().into(),
             };
             let selector = row.selector();

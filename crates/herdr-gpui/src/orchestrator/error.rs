@@ -3,6 +3,8 @@
 
 use std::path::PathBuf;
 
+// Used by dispatch and the run actions, which land next.
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
     #[error("No data directory is available for orchestrator state")]
@@ -68,10 +70,10 @@ pub(crate) enum Error {
     BeadId(String),
     #[error("GitHub request failed: {0}")]
     Github(#[source] Box<crate::Error>),
-    #[error("GitHub returned more than {0} items; showing the first ones without caching them")]
-    TooMany(usize),
     #[error("Cancelled")]
     Cancelled,
+    #[error("Could not start the orchestrator's worker: {0}")]
+    Worker(#[source] std::io::Error),
 }
 
 /// `map_err` adapter naming the host script that failed.

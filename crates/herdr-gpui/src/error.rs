@@ -233,6 +233,8 @@ pub enum Error {
     ReviewNoBase,
     #[error("A saved review tab names a checkout that is not a local absolute path.")]
     InvalidReviewCheckout,
+    #[error("A saved Issues & PRs tab names a folder that is not an absolute path.")]
+    InvalidOrchestratorCheckout,
     #[error("These changes are too large to review here, even leaving out the largest files.")]
     ReviewTooLarge,
     #[error("Could not {operation}.")]
