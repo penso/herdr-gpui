@@ -42,6 +42,44 @@ pub(crate) enum Error {
     NotOwner(String),
     #[error("Run {0} was not found")]
     RunNotFound(String),
+    #[error("{operation} failed: {source}")]
+    Script {
+        operation: &'static str,
+        #[source]
+        source: herdr_client::Error,
+    },
+    #[error("{operation} returned unexpected output")]
+    Output { operation: &'static str },
+    #[error("{operation} returned invalid JSON: {source}")]
+    OutputJson {
+        operation: &'static str,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("This host cannot run the orchestrator's scripts")]
+    UnsupportedHost,
+    #[error("This folder is not inside a Git repository")]
+    NotARepository,
+    #[error("Remote URL {0:?} names no repository")]
+    RemoteUrl(String),
+    #[error("Beads is not installed on this host (bd was not found)")]
+    BeadsMissing,
+    #[error("Bead id {0:?} is not one bd accepts")]
+    BeadId(String),
+    #[error("GitHub request failed: {0}")]
+    Github(#[source] Box<crate::Error>),
+    #[error("GitHub returned more than {0} items; showing the first ones without caching them")]
+    TooMany(usize),
+    #[error("Cancelled")]
+    Cancelled,
+}
+
+/// `map_err` adapter naming the host script that failed.
+pub(crate) fn script(operation: &'static str) -> impl FnOnce(herdr_client::Error) -> Error {
+    move |source| match source {
+        herdr_client::Error::ScriptCancelled => Error::Cancelled,
+        source => Error::Script { operation, source },
+    }
 }
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;

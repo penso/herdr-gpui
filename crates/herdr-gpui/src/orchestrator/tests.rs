@@ -1,8 +1,12 @@
 use super::*;
 use chrono::{DateTime, Utc};
 
+mod beads;
+mod github;
 mod keys;
 mod location;
+mod repo;
+mod service;
 mod store;
 
 fn at(value: &str) -> DateTime<Utc> {

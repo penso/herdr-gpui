@@ -162,6 +162,14 @@ impl Store {
         }
     }
 
+    /// Changes whenever another connection commits, so an unchanged value
+    /// means there is nothing new to read.
+    pub(crate) fn data_version(&self) -> Result<i64> {
+        Ok(self
+            .connection
+            .query_row("PRAGMA data_version", [], |row| row.get(0))?)
+    }
+
     /// Every cached item, of every source.
     pub(crate) fn items(&self) -> Result<Vec<Item>> {
         let mut statement = self
