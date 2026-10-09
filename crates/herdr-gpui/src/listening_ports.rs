@@ -56,20 +56,18 @@ enum Identity {
     Session(String),
 }
 
-impl From<&ConnectTarget> for Daemon {
-    fn from(target: &ConnectTarget) -> Self {
+impl Daemon {
+    /// The daemon behind `target`, or `None` for a cloud machine, whose ports
+    /// cannot be scanned without its provider's command.
+    pub(crate) fn of(target: &ConnectTarget) -> Option<Self> {
+        let host = Host::of(target)?;
         let identity = match target.remote_session() {
             Some(session) => Some(Identity::Session(session.to_owned())),
             None => target.socket_path().ok().map(Identity::Client),
         };
-        Self {
-            host: Host::from(target),
-            identity,
-        }
+        Some(Self { host, identity })
     }
-}
 
-impl Daemon {
     #[cfg(test)]
     pub(crate) fn host(&self) -> &Host {
         &self.host

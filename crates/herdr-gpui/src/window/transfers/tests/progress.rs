@@ -21,7 +21,7 @@ fn progress_above_four_gib_and_real_cancel_click_are_isolated(cx: &mut TestAppCo
     let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
     let mut peer = Peer::new();
     let cancelled = view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         let transfer = pending(view, InputTarget::Pane("w1:p1".into()));
         let cancelled = transfer.cancelled.clone();
         transfer

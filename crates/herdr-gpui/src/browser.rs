@@ -2,13 +2,18 @@
 //! another editor group, next to a workspace's Herdr tabs. Herdr panes are always
 //! terminals, so these tabs belong to this client alone; the daemon and its
 //! other clients never see them. Pages are native web views drawn above the window, which is why the
-//! window hides them whenever one of its own overlays is open.
+//! window hides them whenever one of its own overlays is open. Each workspace
+//! may also show VS Code in a panel to the right of its groups, or as a tab
+//! in its groups.
 
 #[cfg(any(target_os = "macos", windows, test))]
 mod annotate;
 // Linux builds show no pages, so there is nothing to annotate there.
 #[cfg(any(target_os = "macos", windows))]
 mod annotate_view;
+mod code;
+mod code_group;
+mod code_view;
 mod feedback;
 mod group_motion;
 mod groups;
@@ -17,6 +22,8 @@ mod layouts;
 mod location;
 #[cfg(any(target_os = "macos", windows))]
 mod native;
+#[cfg(target_os = "macos")]
+mod page_keys;
 #[cfg(target_os = "macos")]
 mod popup;
 #[cfg(any(target_os = "macos", windows))]
@@ -67,6 +74,20 @@ impl WebUrl {
 
     pub(crate) fn host(&self) -> &str {
         self.0.host_str().unwrap_or_default()
+    }
+
+    /// The scheme, host, and port, as in `http://127.0.0.1:8000`.
+    pub(crate) fn origin(&self) -> String {
+        self.0.origin().ascii_serialization()
+    }
+
+    /// The host and port, as in `127.0.0.1:8000`: what to name in a message,
+    /// since the path and query may hold a secret such as a token.
+    pub(crate) fn address(&self) -> String {
+        match self.0.port_or_known_default() {
+            Some(port) => format!("{}:{port}", self.host()),
+            None => self.host().to_owned(),
+        }
     }
 
     /// What someone typed into the address field: a bare host such as

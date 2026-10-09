@@ -6,6 +6,7 @@ use herdr_client::protocol::ClientShellCommand;
 mod background_ranking;
 mod go_to_search;
 mod notes;
+mod plugin_selection;
 
 fn matches_query(text: &str, query: &str) -> bool {
     let entries = [Entry::new(
@@ -471,7 +472,7 @@ fn invocation_uses_captured_ids_not_current_focus() {
         binding_label: String::new(),
         binding_labels: Vec::new(),
     }];
-    let target = Target::capture(&snapshot);
+    let target = Target::capture(&snapshot, None);
     snapshot.focused_workspace_id = None;
     snapshot.focused_tab_id = None;
     snapshot.focused_pane_id = None;
@@ -484,7 +485,7 @@ fn invocation_uses_captured_ids_not_current_focus() {
             "tab_id": target.tab, "pane_id": target.pane,
         })
     );
-    let empty_target = Target::capture(&snapshot);
+    let empty_target = Target::capture(&snapshot, None);
     assert_eq!(
         empty_target
             .invocation(&snapshot, "build", ClientShellCommandAction::Shell)
@@ -503,7 +504,7 @@ fn invocation_rejects_stale_boot_command_action_and_membership() {
         binding_label: String::new(),
         binding_labels: Vec::new(),
     }];
-    let target = Target::capture(&original);
+    let target = Target::capture(&original, None);
     for change in 0..7 {
         let mut snapshot = original.clone();
         match change {
@@ -536,7 +537,7 @@ fn invocation_rejects_stale_boot_command_action_and_membership() {
 #[test]
 fn workspace_selection_rejects_removed_id_and_restarted_daemon() {
     let mut snapshot = snapshot();
-    let target = Target::capture(&snapshot);
+    let target = Target::capture(&snapshot, None);
     let id = snapshot.workspaces[0].workspace_id.clone();
     assert!(target.workspace_exists(&snapshot, &id).is_ok());
     assert!(target.workspace_exists(&snapshot, "missing").is_err());

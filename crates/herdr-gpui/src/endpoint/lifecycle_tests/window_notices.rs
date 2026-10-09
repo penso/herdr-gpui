@@ -99,10 +99,10 @@ fn bell_and_window_title_follow_the_selected_endpoint(cx: &mut gpui::TestAppCont
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.read_with(cx, |fixture, _| fixture.0.clone());
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         view.endpoints = vec![local, remote];
         view.selected_endpoint = 0;
-        view.reset_selected();
+        view.reset_selected(cx);
     });
     let send = |server: &mut Server, message: ServerMessage| {
         write_message(&mut server.stream, &message, MAX_GRAPHICS_FRAME_SIZE).unwrap();
@@ -158,7 +158,7 @@ fn bell_and_window_title_follow_the_selected_endpoint(cx: &mut gpui::TestAppCont
 
             // Switching endpoints takes that endpoint's title with it.
             view.selected_endpoint = 1;
-            view.reset_selected();
+            view.reset_selected(cx);
             view.live = view.endpoints[1].live.clone();
             view.sync_window_title(window);
             assert_eq!(view.title, "remote]0;x host");

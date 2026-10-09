@@ -279,12 +279,22 @@ fn using_a_parked_group_swaps_its_connection_in(cx: &mut TestAppContext) {
     let parked = cx.debug_bounds("parked-terminal").unwrap();
     assert!(parked.right() <= terminal.left());
 
-    let epoch = view.read_with(cx, |view, _| view.selection_epoch);
+    // A composition in progress belongs to the right group's terminal.
+    let epoch = view.update(cx, |view, _| {
+        view.marked = "kan".into();
+        view.selection_epoch
+    });
+    #[cfg(feature = "integration-test")]
+    let discarded = view.read_with(cx, |view, _| view.input_probe.compositions_discarded);
     cx.update(|window, cx| view.update(cx, |view, cx| view.activate_group(left, window, cx)));
     draw(cx);
     view.read_with(cx, |view, _| {
         assert_eq!(view.primary_group(), Some(left));
         assert!(view.selection_epoch > epoch);
+        // The swap ends it in the input method too, not only here.
+        assert!(view.marked.is_empty());
+        #[cfg(feature = "integration-test")]
+        assert_eq!(view.input_probe.compositions_discarded, discarded + 1);
         // The window now speaks through the left group's connection.
         assert_eq!(view.focused_herdr_tab(), Some("t1"));
         assert_eq!(

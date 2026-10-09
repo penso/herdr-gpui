@@ -6,7 +6,7 @@ fn captured_target_fences_cancel_and_reset_cancels_immediately(cx: &mut TestAppC
     let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
     let peer = Peer::new();
     view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         let live = view.live.clone();
         let epoch = view.selection_epoch;
         let generation = view.endpoints[0].generation;
@@ -53,7 +53,7 @@ fn captured_target_fences_cancel_and_reset_cancels_immediately(cx: &mut TestAppC
                 }
                 11 => {
                     let cancelled = view.file_transfer.as_ref().unwrap().cancelled.clone();
-                    view.detach_endpoint();
+                    view.detach_endpoint(cx);
                     assert!(
                         cancelled.load(Ordering::Acquire),
                         "reset must cancel without polling"
@@ -75,7 +75,7 @@ fn dropping_entity_cancels_but_detached_completion_still_cleans(cx: &mut TestApp
     let peer = Peer::new();
     let (tx, rx) = mpsc::channel();
     let cancelled = view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         view.start_file_transfer_with(
             InputTarget::Pane("w1:p1".into()),
             vec!["source".into()],

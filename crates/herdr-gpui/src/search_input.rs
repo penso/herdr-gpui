@@ -24,6 +24,9 @@ pub struct SearchInput {
     bounds: Option<Bounds<Pixels>>,
     scroll: Pixels,
     selecting: bool,
+    /// Draw one `*` per character instead of the text, and keep it off the
+    /// clipboard: for secrets typed into settings.
+    masked: bool,
 }
 
 // Internal offsets are UTF-8 boundaries; only the platform input API uses UTF-16.
@@ -53,6 +56,19 @@ fn to_utf16(text: &str, offset: usize) -> usize {
 fn byte_range(text: &str, range: Range<usize>) -> Range<usize> {
     // Clamp out-of-bounds requests and round split surrogate pairs forward.
     from_utf16(text, range.start.min(range.end))..from_utf16(text, range.start.max(range.end))
+}
+
+/// Where byte `offset` of `text` falls in its masked rendering, which draws
+/// one single-byte `*` per character.
+fn masked_offset(text: &str, offset: usize) -> usize {
+    text[..offset].chars().count()
+}
+
+/// The byte offset of `text` shown at `offset` in its masked rendering.
+fn unmasked_offset(text: &str, offset: usize) -> usize {
+    text.char_indices()
+        .nth(offset)
+        .map_or(text.len(), |(byte, _)| byte)
 }
 
 fn single_line(text: &str) -> String {
@@ -129,6 +145,24 @@ impl SearchInput {
             bounds: None,
             scroll: px(0.),
             selecting: false,
+            masked: false,
+        }
+    }
+
+    // Only cloud provider secrets are masked so far.
+    #[cfg_attr(not(feature = "cloud"), allow(dead_code))]
+    pub(crate) fn set_masked(&mut self, masked: bool, cx: &mut Context<Self>) {
+        self.masked = masked;
+        self.layout = None;
+        cx.notify();
+    }
+
+    /// Byte `offset` of the text in the shaped line's index space.
+    fn shown(&self, offset: usize) -> usize {
+        if self.masked {
+            masked_offset(&self.edit.text, offset)
+        } else {
+            offset
         }
     }
 
@@ -185,7 +219,12 @@ impl SearchInput {
     fn mouse_index(&self, position: Point<Pixels>) -> usize {
         match (&self.layout, self.bounds) {
             (Some(line), Some(bounds)) if !self.edit.text.is_empty() => {
-                line.closest_index_for_x(position.x - bounds.left() + self.scroll)
+                let index = line.closest_index_for_x(position.x - bounds.left() + self.scroll);
+                if self.masked {
+                    unmasked_offset(&self.edit.text, index)
+                } else {
+                    index
+                }
             }
             _ => 0,
         }
@@ -229,6 +268,8 @@ impl SearchInput {
                     self.edit.anchor = 0;
                     self.edit.cursor = self.edit.text.len();
                 }
+                // A masked secret never reaches the clipboard.
+                "c" | "x" if self.masked => {}
                 "c" | "x" => {
                     let selection = self.edit.selection();
                     if !selection.is_empty() {
@@ -364,7 +405,7 @@ impl EntityInputHandler for SearchInput {
         let bounds = self.bounds?;
         let range = byte_range(self.text(), range);
         let x = |index| {
-            (bounds.left() + line.x_for_index(index) - self.scroll)
+            (bounds.left() + line.x_for_index(self.shown(index)) - self.scroll)
                 .max(bounds.left())
                 .min(bounds.right())
         };
@@ -466,6 +507,8 @@ impl Render for SearchInput {
                         let placeholder = input.text().is_empty();
                         let text: gpui::SharedString = if placeholder {
                             input.placeholder.clone().into()
+                        } else if input.masked {
+                            "*".repeat(input.text().chars().count()).into()
                         } else {
                             input.text().to_owned().into()
                         };
@@ -482,7 +525,12 @@ impl Render for SearchInput {
                             underline: None,
                             strikethrough: None,
                         };
-                        let runs = if let Some(marked) = &input.edit.marked {
+                        let marked = input
+                            .edit
+                            .marked
+                            .clone()
+                            .map(|marked| input.shown(marked.start)..input.shown(marked.end));
+                        let runs = if let Some(marked) = &marked {
                             vec![
                                 TextRun {
                                     len: marked.start,
@@ -515,7 +563,7 @@ impl Render for SearchInput {
                     move |bounds, line, window, cx| {
                         painter.update(cx, |input, cx| {
                             let visible_width = (bounds.size.width - px(1.)).max(px(0.));
-                            let caret = line.x_for_index(input.edit.cursor);
+                            let caret = line.x_for_index(input.shown(input.edit.cursor));
                             input.scroll = input
                                 .scroll
                                 .min((line.width - visible_width).max(px(0.)))
@@ -533,6 +581,8 @@ impl Render for SearchInput {
                             );
                             window.with_content_mask(Some(ContentMask { bounds }), |window| {
                                 let selection = input.edit.selection();
+                                let selection =
+                                    input.shown(selection.start)..input.shown(selection.end);
                                 if input.focus.is_focused(window) && !selection.is_empty() {
                                     window.paint_quad(fill(
                                         Bounds::from_corners(
@@ -574,6 +624,18 @@ impl Render for SearchInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn masked_offsets_count_characters_both_ways() {
+        let text = "a\u{e9}\u{1f600}z";
+        for (shown, (byte, _)) in text.char_indices().enumerate() {
+            assert_eq!(masked_offset(text, byte), shown);
+            assert_eq!(unmasked_offset(text, shown), byte);
+        }
+        assert_eq!(masked_offset(text, text.len()), 4);
+        assert_eq!(unmasked_offset(text, 4), text.len());
+        assert_eq!(unmasked_offset(text, 99), text.len());
+    }
 
     #[test]
     fn utf16_ranges_are_clamped_to_scalar_boundaries() {

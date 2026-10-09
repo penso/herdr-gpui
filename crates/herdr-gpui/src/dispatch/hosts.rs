@@ -73,9 +73,9 @@ impl HerdrWindow {
             })
             .map(|(index, endpoint)| {
                 let snapshot = self.endpoint_snapshot(index);
-                let load = self
-                    .system_load
-                    .get(&crate::usage::Host::from(&endpoint.connection.target))
+                // A cloud machine has no probed load to rank it by.
+                let load = crate::usage::Host::of(&endpoint.connection.target)
+                    .and_then(|host| self.system_load.get(&host))
                     .and_then(|reading| reading.latest())
                     .map(|sample| Load {
                         cpu: sample.cpu,

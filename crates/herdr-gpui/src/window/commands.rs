@@ -78,7 +78,7 @@ impl HerdrWindow {
                     NavigationTarget::Pane(id) => handle.focus_pane(boot, id),
                 }
             });
-        self.marked.clear();
+        self.discard_composition(cx);
         cx.notify();
         queued
     }
@@ -244,6 +244,18 @@ impl HerdrWindow {
                 self.split_active_group(window, cx);
                 return;
             }
+            Command::ToggleCode => {
+                self.toggle_code(window, cx);
+                return;
+            }
+            Command::MoveCodeToGroup => {
+                self.move_code_to_group(window, cx);
+                return;
+            }
+            Command::MoveCodeToPanel => {
+                self.move_code_to_panel(window, cx);
+                return;
+            }
             Command::InstallBrowserSkill => {
                 self.install_browser_skill(window, cx);
                 return;
@@ -258,6 +270,15 @@ impl HerdrWindow {
                     window,
                     cx,
                 );
+                return;
+            }
+            Command::GoToSymbol | Command::GoToFile => {
+                let mode = if command == Command::GoToFile {
+                    crate::code_search::Mode::Files
+                } else {
+                    crate::code_search::Mode::Symbols
+                };
+                self.open_code_search(mode, window, cx);
                 return;
             }
             Command::NewWorktree => {
@@ -307,6 +328,29 @@ impl HerdrWindow {
                 }
                 return;
             }
+            // Repeats the search in use: the review's, else the pane's find
+            // bar, opening the bar when nothing is being searched yet.
+            Command::FindNext | Command::FindPrevious => {
+                let back = command == Command::FindPrevious;
+                if let Some(id) = self.focused_review(window, cx) {
+                    self.review_find_again(id, back, window, cx);
+                } else if self.find.is_some() {
+                    // The bar's next match is the next older one, as Enter.
+                    let step = if back {
+                        crate::find::Step::Newer
+                    } else {
+                        crate::find::Step::Older
+                    };
+                    self.find_step(step, cx);
+                } else {
+                    self.open_find(window, cx);
+                }
+                return;
+            }
+            Command::ToggleFullScreen | Command::CycleWindows => {
+                run_window_command(command, window, cx);
+                return;
+            }
             Command::CopyMode => {
                 self.enter_copy_mode(window, cx);
                 return;
@@ -319,6 +363,13 @@ impl HerdrWindow {
                 return;
             }
             Command::ToggleSidebar => self.toggle_sidebar(),
+            // Window chrome only, so it runs while the daemon is still away.
+            Command::ToggleStatusBar => {
+                self.status_bar_visible = !self.status_bar_visible;
+                window.focus(&self.focus, cx);
+                cx.notify();
+                return;
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP
@@ -337,7 +388,7 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
-            Command::Reconnect => self.reconnect(),
+            Command::Reconnect => self.reconnect(cx),
             Command::Quit => {
                 cx.quit();
                 return;
@@ -414,7 +465,7 @@ impl HerdrWindow {
             self.request_focus_change(method.as_str(), None, |handle, boot| {
                 handle.request(boot, method, params)
             });
-            self.marked.clear();
+            self.discard_composition(cx);
         }
         window.focus(&self.focus, cx);
         cx.notify();
@@ -581,4 +632,41 @@ impl HerdrWindow {
                     ))),
             )
     }
+}
+
+/// Runs a command that acts on the window itself rather than its content,
+/// for every kind of window, so the Settings and Log windows do not swallow
+/// it; whether `command` was one.
+pub(crate) fn run_window_command(
+    command: Command,
+    window: &mut Window,
+    cx: &mut gpui::App,
+) -> bool {
+    match command {
+        Command::ToggleFullScreen => window.toggle_fullscreen(),
+        Command::CycleWindows => cycle_windows(window, cx),
+        _ => return false,
+    }
+    true
+}
+
+/// Brings the app's next window forward, in the stable order the app lists
+/// its windows, as macOS's Cmd-` does: a front-to-back order would only ever
+/// swap the two most recent. Deferred, since activating a window updates it.
+fn cycle_windows(window: &Window, cx: &mut gpui::App) {
+    let Some(next) = next_window(&cx.windows(), window.window_handle()) else {
+        return;
+    };
+    cx.defer(move |cx| {
+        next.update(cx, |_, window, _| window.activate_window())
+            .ok();
+    });
+}
+
+/// The window after `current` in `windows`, wrapping; none when `current`
+/// is alone or unknown.
+pub(super) fn next_window<T: Copy + PartialEq>(windows: &[T], current: T) -> Option<T> {
+    let at = windows.iter().position(|window| *window == current)?;
+    let next = windows[(at + 1) % windows.len()];
+    (next != current).then_some(next)
 }

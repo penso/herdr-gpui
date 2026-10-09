@@ -1,6 +1,7 @@
 //! Config diagnostics drawn like notification cards over the top-right of the
 //! terminal area, where Herdr draws its own: this app's GUI config warning,
-//! then the selected endpoint's daemon `config.toml` diagnostic.
+//! the missing icon font, then the selected endpoint's daemon `config.toml`
+//! diagnostic.
 use super::HerdrWindow;
 use crate::notifications::safe_text;
 use gpui::{prelude::*, *};
@@ -9,7 +10,8 @@ use std::sync::Arc;
 const MAX_WIDTH: f32 = 420.;
 
 impl HerdrWindow {
-    /// This app's GUI config warning, then the selected daemon's diagnostic.
+    /// This app's GUI config warning and icon font notice, then the selected
+    /// daemon's diagnostic.
     pub(super) fn config_diagnostic_cards(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let gui = self.gui_config_diagnostic.visible().map(|lines| {
             let drawn = lines.clone();
@@ -19,6 +21,20 @@ impl HerdrWindow {
                 lines,
                 move |this, cx| {
                     if this.gui_config_diagnostic.dismiss(&drawn) {
+                        cx.notify();
+                    }
+                },
+                cx,
+            )
+        });
+        let icon_font = self.icon_font_notice.visible().map(|lines| {
+            let drawn = lines.clone();
+            self.render_diagnostic_card(
+                "icon-font-notice",
+                "Herdr GPUI".into(),
+                lines,
+                move |this, cx| {
+                    if this.icon_font_notice.dismiss(&drawn) {
                         cx.notify();
                     }
                 },
@@ -51,6 +67,7 @@ impl HerdrWindow {
                 ))
             });
         gui.into_iter()
+            .chain(icon_font)
             .chain(endpoint)
             .map(IntoElement::into_any_element)
             .collect()

@@ -256,6 +256,7 @@ impl HerdrWindow {
             .flex_none()
             .items_center()
             .children(self.render_git_button(cx))
+            .children(self.render_code_toggle(cx))
             .child(
                 div()
                     .debug_selector(|| "titlebar-account-slot".into())
@@ -569,6 +570,9 @@ mod tests {
 
 #[cfg(test)]
 mod git_button_tests;
+
+#[cfg(test)]
+mod code_toggle_tests;
 
 #[cfg(all(test, target_os = "macos"))]
 #[allow(clippy::unwrap_used)]

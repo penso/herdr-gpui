@@ -232,6 +232,9 @@ impl HerdrWindow {
                                 endpoint.toasts.enabled_since = Some(cutoff);
                             }
                         }
+                        if config.status_bar.show != this.config.status_bar.show {
+                            this.status_bar_visible = config.status_bar.show;
+                        }
                         this.config = config.clone();
                         if this.config.theme != "Follow Herdr" {
                             this.theme = theme;
@@ -349,6 +352,8 @@ impl HerdrWindow {
                 | Command::Zoom
                 | Command::ClearPane
                 | Command::Find
+                | Command::FindNext
+                | Command::FindPrevious
                 | Command::CopyMode
                 | Command::EditScrollback
                 | Command::ClosePane
@@ -381,6 +386,8 @@ impl HerdrWindow {
                 | Command::PreviousPane
                 | Command::TabNumber(_)
                 | Command::WorkspacePicker
+                | Command::GoToSymbol
+                | Command::GoToFile
                 | Command::WorktreeNotes
                 | Command::LastPane
                 | Command::PreviousWorkspace
@@ -391,6 +398,10 @@ impl HerdrWindow {
                 | Command::AgentNumber(_) => 1,
                 Command::NewWindow
                 | Command::ToggleSidebar
+                | Command::ToggleCode
+                | Command::MoveCodeToGroup
+                | Command::MoveCodeToPanel
+                | Command::ToggleStatusBar
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize
@@ -404,6 +415,8 @@ impl HerdrWindow {
                 | Command::Logs
                 | Command::About
                 | Command::InstallBrowserSkill
+                | Command::ToggleFullScreen
+                | Command::CycleWindows
                 | Command::ReloadConfig => 2,
                 Command::OpenNotificationTarget => 1,
             };

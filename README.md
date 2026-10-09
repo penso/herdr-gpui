@@ -101,6 +101,8 @@ running another terminal emulator or wrapping the TUI.
 Also included: saved SSH hosts with [file copies](crates/herdr-gpui/README.md#ssh-file-copies),
 [inline images](crates/herdr-gpui/README.md#images),
 [clickable links](crates/herdr-gpui/README.md#terminal-links),
+[code navigation](crates/herdr-gpui/README.md#code-navigation) that jumps to a
+symbol, file, or printed `path:line` in your terminal editor,
 [file drops](crates/herdr-gpui/README.md#file-drops),
 [editor groups](crates/herdr-gpui/README.md#editor-groups), and
 [system notifications](crates/herdr-gpui/README.md#system-notifications),

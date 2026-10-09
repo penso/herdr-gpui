@@ -12,6 +12,7 @@
 //! which would reach out to another machine, opens nothing.
 
 use super::HerdrWindow;
+use crate::editor::EditorTarget;
 use crate::terminal::{PaneLink, RowTarget, pane_link_at};
 use gpui::{Context, Pixels, Point};
 use std::{
@@ -30,11 +31,20 @@ const DOCUMENTS: [&str; 52] = [
     "zig",
 ];
 
-/// A path a pane printed, and the directory the pane was in.
+/// A path a pane printed, the line printed after it, and the pane and the
+/// directory it was in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileLink {
     pub(crate) path: String,
+    pub(crate) line: Option<u32>,
+    pub(crate) pane_id: String,
     pub(crate) cwd: Option<String>,
+}
+
+/// Where a clicked path opens, decided off the UI thread.
+enum Opened {
+    Editor(EditorTarget),
+    System(url::Url),
 }
 
 impl FileLink {
@@ -178,33 +188,79 @@ impl HerdrWindow {
     /// The file path under `position`, with the directory it is relative to.
     pub(crate) fn file_link_at(&self, position: Point<Pixels>) -> Option<FileLink> {
         let PaneLink { pane_id, link } = self.local_link_at(position)?;
-        let RowTarget::Path(path) = link.target else {
+        let RowTarget::Path { path, line } = link.target else {
             return None;
         };
         let cwd = self.live.snapshot.as_ref().and_then(|snapshot| {
             let pane = snapshot.panes.iter().find(|pane| pane.pane_id == pane_id)?;
             pane.foreground_cwd.clone().or_else(|| pane.cwd.clone())
         });
-        Some(FileLink { path, cwd })
+        Some(FileLink {
+            path,
+            line,
+            pane_id,
+            cwd,
+        })
     }
 
-    /// Opens the file `link` names with the system's default application,
-    /// once a background check finds it there, or the folder holding it
-    /// when it is not a known document.
-    pub(crate) fn open_file_link(&mut self, link: FileLink, cx: &mut Context<Self>) {
+    /// Opens `path` with the system's default application under the same
+    /// rule as a clicked path: a document itself, and otherwise the folder
+    /// holding it, so an executable or a bundle is never launched. Checked
+    /// on the background executor.
+    pub(crate) fn open_in_system_app(&self, path: PathBuf, cx: &mut Context<Self>) {
+        let found = cx
+            .background_executor()
+            .spawn(async move { url::Url::from_file_path(opened(&path)?).ok() });
+        cx.spawn(async move |_, cx| {
+            if let Some(url) = found.await {
+                cx.update(|cx| cx.open_url(url.as_str()));
+            }
+        })
+        .detach();
+    }
+
+    /// Opens the file `link` names, once a background check finds it there:
+    /// in the terminal editor beside its pane when `in_editor` and the file
+    /// is one an editor shows, and otherwise with the system's default
+    /// application, or the folder holding it when it is not a known document.
+    pub(crate) fn open_file_link(
+        &mut self,
+        link: FileLink,
+        in_editor: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let pane = link.pane_id.clone();
         let found = cx.background_executor().spawn(async move {
             let home = crate::config::home().ok();
             let path = link.resolve(home.as_deref())?;
-            url::Url::from_file_path(opened(&path)?).ok()
+            let real = real_path(&path)?;
+            if in_editor
+                && std::fs::metadata(&real)
+                    .is_ok_and(|metadata| EditorTarget::editable(&real, &metadata))
+            {
+                let target = EditorTarget {
+                    path: path.clone(),
+                    line: link.line,
+                };
+                if crate::editor::command_line(&target, None, None).is_ok() {
+                    return Some(Opened::Editor(target));
+                }
+            }
+            url::Url::from_file_path(opened(&path)?)
+                .ok()
+                .map(Opened::System)
         });
         cx.spawn(async move |this, cx| {
-            let Some(url) = found.await else {
+            let Some(opened) = found.await else {
                 tracing::debug!("Clicked file path not found");
                 return;
             };
             // The window may have closed meanwhile; the file is no longer
             // asked for then.
-            let _ = this.update(cx, |_, cx| cx.open_url(url.as_str()));
+            let _ = this.update(cx, |this, cx| match opened {
+                Opened::Editor(target) => this.open_in_editor(&target, Some(&pane), cx),
+                Opened::System(url) => cx.open_url(url.as_str()),
+            });
         })
         .detach();
     }

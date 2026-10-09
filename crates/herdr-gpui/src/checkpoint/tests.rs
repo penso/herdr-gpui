@@ -283,16 +283,7 @@ fn stamps_always_increase() {
 }
 
 #[test]
-fn summaries_and_ages_read_plainly() {
-    assert_eq!(summary(Diff::default()), "No changes");
-    assert_eq!(
-        summary(Diff {
-            files: 1,
-            additions: 3,
-            deletions: 0
-        }),
-        "+3 \u{2212}0 in 1 file"
-    );
+fn ages_read_plainly() {
     assert_eq!(age(100, 130), "just now");
     assert_eq!(age(0, 125), "2 min ago");
     assert_eq!(age(0, 7200), "2 h ago");

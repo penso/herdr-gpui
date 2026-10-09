@@ -2,6 +2,8 @@
 //! to one device or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
 mod add_device;
+#[cfg(feature = "coder")]
+pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
 mod host_menu;
@@ -51,7 +53,74 @@ impl Render for SettingsHint {
     }
 }
 
+#[cfg(feature = "cloud")]
+fn capitalized(word: &str) -> String {
+    let mut chars = word.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
 impl HerdrWindow {
+    /// The cloud providers set up in the config, in picker order.
+    #[cfg(feature = "cloud")]
+    fn cloud_providers(&self) -> Vec<crate::cloud::CloudProvider> {
+        if crate::cloud::unavailable().is_some() {
+            return Vec::new();
+        }
+        crate::cloud::CloudProvider::ALL
+            .iter()
+            .copied()
+            .filter(|provider| match provider {
+                #[cfg(feature = "coder")]
+                crate::cloud::CloudProvider::Coder => self.coder_configured(),
+                // The row opens Daytona's Settings tab, which sets it up.
+                #[cfg(feature = "daytona")]
+                crate::cloud::CloudProvider::Daytona => true,
+            })
+            .collect()
+    }
+
+    /// How many rows the picker offers to add a cloud provider's machine.
+    fn cloud_provider_rows(&self) -> usize {
+        #[cfg(feature = "cloud")]
+        return self.cloud_providers().len();
+        #[cfg(not(feature = "cloud"))]
+        0
+    }
+
+    /// Whether the open page is a cloud provider's add dialog.
+    pub(in crate::menu) fn cloud_dialog_open(&self) -> bool {
+        #[cfg(feature = "coder")]
+        if self.menu.page == Some(Page::AddCoder) {
+            return true;
+        }
+        false
+    }
+
+    /// The open cloud provider's add dialog, if one is open.
+    pub(in crate::menu) fn render_cloud_dialog(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        #[cfg(feature = "coder")]
+        if self.menu.page == Some(Page::AddCoder) {
+            return Some(self.render_add_coder(cx).into_any_element());
+        }
+        #[cfg(not(feature = "coder"))]
+        let _ = cx;
+        None
+    }
+
+    /// How many cloud machines are still being added.
+    fn cloud_jobs_pending(&self) -> usize {
+        #[cfg(feature = "cloud")]
+        return self.cloud_jobs.len();
+        #[cfg(not(feature = "cloud"))]
+        0
+    }
+
     pub(crate) fn device_visible(&self, id: &str) -> bool {
         self.device_filter
             .as_deref()
@@ -129,11 +198,37 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(self.theme.active)))
                     .child(
-                        svg()
-                            .path("icons/devices.svg")
-                            .size(px(16.))
+                        div()
+                            .relative()
                             .flex_none()
-                            .text_color(rgb(self.theme.foreground)),
+                            .child(
+                                svg()
+                                    .path("icons/devices.svg")
+                                    .size(px(16.))
+                                    .text_color(rgb(self.theme.foreground)),
+                            )
+                            // How many Coder workspaces are still being added,
+                            // on the icon's corner so the label keeps its room.
+                            .when(self.cloud_jobs_pending() > 0, |icon| {
+                                icon.child(
+                                    div()
+                                        .debug_selector(|| "device-footer-adding".into())
+                                        .absolute()
+                                        .top(px(-6.))
+                                        .right(px(-8.))
+                                        .min_w(px(13.))
+                                        .h(px(13.))
+                                        .px(px(3.))
+                                        .rounded_full()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_size(px(9.))
+                                        .bg(colors::accent(&self.theme))
+                                        .text_color(rgb(self.theme.background))
+                                        .child(self.cloud_jobs_pending().to_string()),
+                                )
+                            }),
                     )
                     .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
                     .child(
@@ -268,6 +363,13 @@ impl HerdrWindow {
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
+                #[cfg(feature = "cloud")]
+                ConnectTarget::Cloud {
+                    provider,
+                    machine,
+                    session,
+                    ..
+                } => format!("{} {machine} · {session}", crate::cloud::name(*provider)),
                 ConnectTarget::Wsl { distro, session } => format!("WSL {distro} · {session}"),
                 ConnectTarget::Socket(path) => path.display().to_string(),
                 ConnectTarget::Session { name, .. } => format!("This device · {name}"),
@@ -292,6 +394,18 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
+        #[cfg(feature = "cloud")]
+        for provider in self.cloud_providers() {
+            let (name, noun) = (crate::cloud::name(provider), crate::cloud::noun(provider));
+            rows.push((
+                format!("Add {name} {}…", capitalized(noun)),
+                self.device_setup_unavailable()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| crate::cloud::offer(provider).to_owned()),
+                false,
+                self.device_setup_unavailable().is_none(),
+            ));
+        }
         let mut view = div()
             .id("devices-list")
             .max_h(list_height(self.menu.anchor.y))
@@ -349,7 +463,7 @@ impl HerdrWindow {
                                                 .text_color(rgb(self.theme.foreground)),
                                         )
                                     })
-                                    .when(index == self.endpoints.len() + 1, |row| {
+                                    .when(index > self.endpoints.len(), |row| {
                                         row.child(
                                             svg()
                                                 .path("icons/plus.svg")
@@ -409,14 +523,91 @@ impl HerdrWindow {
                     })),
             );
         }
+        // Workspaces still being added: progress only, not selectable rows,
+        // so keyboard navigation keeps its indices.
+        #[cfg(feature = "cloud")]
+        {
+            view = self.cloud_job_rows(view);
+        }
+        view
+    }
+
+    /// Machines still being added: progress only, not selectable rows, so
+    /// keyboard navigation keeps its indices.
+    #[cfg(feature = "cloud")]
+    fn cloud_job_rows(&self, mut view: Stateful<Div>) -> Stateful<Div> {
+        if !self.cloud_jobs.is_empty() {
+            view = view.child(
+                div()
+                    .p(px(8.))
+                    .text_color(rgb(self.theme.muted))
+                    .child("ADDING"),
+            );
+        }
+        for (index, provision) in self.cloud_jobs.iter().enumerate() {
+            view = view.child(
+                div()
+                    .debug_selector(move || format!("device-adding-{index}"))
+                    .p(px(8.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(div().truncate().child(provision.name.clone()))
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(self.config.ui.size * 0.85))
+                                    .text_color(rgb(self.theme.muted))
+                                    .child(format!(
+                                        "{} · {}",
+                                        crate::cloud::name(provision.provider),
+                                        provision.status
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .size(px(7.))
+                            .flex_none()
+                            .rounded_full()
+                            .bg(colors::accent(&self.theme)),
+                    ),
+            );
+        }
         view
     }
 
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(offset) = index.checked_sub(self.endpoints.len() + 2) {
+            #[cfg(feature = "cloud")]
+            if self.device_setup_unavailable().is_none()
+                && let Some(provider) = self.cloud_providers().into_iter().nth(offset)
+            {
+                match provider {
+                    #[cfg(feature = "coder")]
+                    crate::cloud::CloudProvider::Coder => self.open_coder_setup(window, cx),
+                    #[cfg(feature = "daytona")]
+                    crate::cloud::CloudProvider::Daytona => {
+                        self.dismiss_menu(window, cx);
+                        crate::settings_window::open_cloud(cx.weak_entity(), provider, cx);
+                    }
+                }
+            }
+            #[cfg(not(feature = "cloud"))]
+            let _ = offset;
+            return;
+        }
         if index == self.endpoints.len() + 1 {
-            if self.device_setup_unavailable().is_some() {
+            if let Some(reason) = self.device_setup_unavailable() {
+                tracing::info!(category = "device_setup", reason, "Add Device unavailable");
                 return;
             }
+            tracing::info!(category = "device_setup", "Opening Add Device");
             if cfg!(windows) {
                 self.open_add_wsl(window, cx);
             } else {
@@ -462,7 +653,7 @@ impl HerdrWindow {
             }
         } else {
             let key = event.keystroke.key.as_str();
-            let count = self.endpoints.len() + 2;
+            let count = self.endpoints.len() + 2 + self.cloud_provider_rows();
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

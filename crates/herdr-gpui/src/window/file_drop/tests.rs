@@ -83,10 +83,10 @@ fn rejects_non_utf8_instead_of_lossy_replacement() {
     assert!(!format!("{error} {error:?}").contains("private"));
 }
 
-fn prepare(view: &mut HerdrWindow) {
+fn prepare(view: &mut HerdrWindow, cx: &mut Context<HerdrWindow>) {
     // Reconnect only to the fixture's explicit nonexistent socket, never a
     // personal daemon. The projection below is entirely synthetic.
-    view.reconnect();
+    view.reconnect(cx);
     let snapshot = crate::sidebar::layout_tests::snapshot(2);
     let frame = FrameData {
         width: 80,
@@ -172,7 +172,7 @@ fn external_drop_dispatches_with_submit_position_and_empty_payload_is_inert(
     let (fixture, cx) = cx.add_window_view(|window, cx| DropFixture {
         view: cx.new(|cx| {
             let mut view = fixture_window(window, cx);
-            prepare(&mut view);
+            prepare(&mut view, cx);
             view
         }),
         submitted_at: None,
@@ -206,8 +206,8 @@ fn targets_drop_position_not_focus_and_never_targets_chrome_or_covered_panes(
     cx: &mut gpui::TestAppContext,
 ) {
     let (view, cx) = cx.add_window_view(fixture_window);
-    view.update(cx, |view, _| {
-        prepare(view);
+    view.update(cx, |view, cx| {
+        prepare(view, cx);
         let at = |column: f32, row: f32| {
             point(
                 px(100. + column * 10.),
@@ -256,8 +256,8 @@ fn targets_drop_position_not_focus_and_never_targets_chrome_or_covered_panes(
 #[gpui::test]
 fn drops_obey_menu_readiness_and_projection_fences(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
-    view.update(cx, |view, _| {
-        prepare(view);
+    view.update(cx, |view, cx| {
+        prepare(view, cx);
         let position =
             view.bounds.origin + point(px(20.), px(2. * view.config.terminal.line_height()));
         assert!(view.file_drop_target(position).is_some());

@@ -6,10 +6,36 @@ fn read(text: &str, column: u16) -> Option<RowLink> {
 }
 
 fn path(text: &str, column: u16) -> Option<(String, Range<u16>)> {
+    located(text, column).map(|(path, _, columns)| (path, columns))
+}
+
+fn located(text: &str, column: u16) -> Option<(String, Option<u32>, Range<u16>)> {
     read(text, column).and_then(|link| match link.target {
-        RowTarget::Path(path) => Some((path, link.columns)),
+        RowTarget::Path { path, line } => Some((path, line, link.columns)),
         RowTarget::Web(_) => None,
     })
+}
+
+fn bare(path: &str) -> RowTarget {
+    RowTarget::Path {
+        path: path.into(),
+        line: None,
+    }
+}
+
+#[test]
+fn a_location_suffix_names_the_line() {
+    for (text, column, line) in [
+        ("error: src/main.rs:12:5: oops", 9, Some(12)),
+        ("--> main.rs:3", 5, Some(3)),
+        ("modified:   crates/a/b.rs", 20, None),
+    ] {
+        assert_eq!(
+            located(text, column).map(|found| found.1),
+            Some(line),
+            "{text}"
+        );
+    }
 }
 
 #[test]
@@ -57,7 +83,13 @@ fn paths_are_pane_links_only_and_never_web_links() {
     assert!(link_at(&s, 61., 1., 10., 20.).is_none());
     let link = pane_link_at(&s, 61., 1., 10., 20.).unwrap();
     assert_eq!(link.pane_id, "pane");
-    assert_eq!(link.link.target, RowTarget::Path("src/lib.rs".into()));
+    assert_eq!(
+        link.link.target,
+        RowTarget::Path {
+            path: "src/lib.rs".into(),
+            line: Some(4)
+        }
+    );
     assert_eq!((link.link.row, link.link.columns), (0, 5..17));
 }
 
@@ -75,7 +107,7 @@ fn paths_that_may_wrap_are_not_guessed() {
     }
     assert_eq!(
         frame_link(&separate, 2, 1, 0, 20).map(|link| link.target),
-        Some(RowTarget::Path("src/a.rs".into()))
+        Some(bare("src/a.rs"))
     );
 }
 
@@ -110,7 +142,7 @@ fn file_hyperlinks_name_local_paths_only() {
         s.frame.hyperlinks = vec![destination.into()];
         assert_eq!(
             pane_link_at(&s, 1., 1., 10., 20.).map(|link| link.link.target),
-            expected.map(|path| RowTarget::Path(path.into())),
+            expected.map(bare),
             "{destination}"
         );
         assert!(link_at(&s, 1., 1., 10., 20.).is_none());

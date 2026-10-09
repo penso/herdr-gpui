@@ -285,9 +285,9 @@ fn edit_menu_items_follow_focus(cx: &mut gpui::TestAppContext) {
 
 /// The font size items are the only way to reach these commands from the
 /// macOS menu bar, and each must dispatch the catalog command rather than
-/// an action of its own.
+/// an action of its own; full screen follows them, as in other Mac apps.
 #[test]
-fn view_menu_carries_the_font_size_commands() {
+fn view_menu_carries_the_font_size_and_full_screen_commands() {
     let menus = menus(Layout::default());
     let view = menus
         .iter()
@@ -305,6 +305,7 @@ fn view_menu_carries_the_font_size_commands() {
         ("Increase Font Size", Command::IncreaseFontSize),
         ("Decrease Font Size", Command::DecreaseFontSize),
         ("Reset Font Size", Command::ResetFontSize),
+        ("Toggle Full Screen", Command::ToggleFullScreen),
     ];
     assert_eq!(actions.len(), expected.len());
     for ((name, action), (label, command)) in actions.iter().zip(expected) {
@@ -406,5 +407,8 @@ fn hide_and_minimize_are_macos_only() {
         .iter()
         .find(|menu| menu.name.as_ref() == "Window")
         .unwrap();
-    assert_eq!(action_names(window), ["New Window", "Logs"]);
+    assert_eq!(
+        action_names(window),
+        ["New Window", "Cycle Through Windows", "Logs"]
+    );
 }

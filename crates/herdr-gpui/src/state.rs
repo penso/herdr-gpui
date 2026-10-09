@@ -104,6 +104,9 @@ pub struct LiveState {
     /// `tab.create`), kept apart from dialogs so opening one cannot lose it.
     /// Cleared from the mailbox once the script job has read it.
     pub(crate) script_response: Option<(String, Option<DialogResponse>)>,
+    /// The `pane.split` an editor pane is waiting on, in its own slot for
+    /// the same reason. Cleared from the mailbox once the job has read it.
+    pub(crate) editor_response: Option<(String, Option<DialogResponse>)>,
     pub(crate) notifications: std::collections::VecDeque<crate::notifications::Notice>,
     pub(crate) notifications_lost: bool,
     outer_focused: Option<bool>,
@@ -197,6 +200,7 @@ impl Default for LiveState {
             dirty: true,
             dialog_response: None,
             script_response: None,
+            editor_response: None,
             notifications: Default::default(),
             notifications_lost: false,
             keyboard_report_all: false,
@@ -250,6 +254,7 @@ impl LiveState {
             dirty: _,
             dialog_response,
             script_response,
+            editor_response,
             notifications,
             notifications_lost,
             outer_focused,
@@ -306,6 +311,10 @@ impl LiveState {
                 (Some((a, None)), Some((b, None))) => a == b,
                 (a, b) => a.is_none() && b.is_none(),
             }
+            && match (editor_response, &self.editor_response) {
+                (Some((a, None)), Some((b, None))) => a == b,
+                (a, b) => a.is_none() && b.is_none(),
+            }
             && notifications.is_empty()
             && !notifications_lost
             && *outer_focused == self.outer_focused
@@ -330,10 +339,14 @@ impl LiveState {
     }
 
     fn has_operation_result(&self, request_id: &str) -> bool {
-        [&self.dialog_response, &self.script_response]
-            .into_iter()
-            .flatten()
-            .any(|(id, _)| id == request_id)
+        [
+            &self.dialog_response,
+            &self.script_response,
+            &self.editor_response,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|(id, _)| id == request_id)
             || [&self.tab_rename, &self.pane_rename]
                 .into_iter()
                 .flatten()
@@ -552,9 +565,13 @@ impl LiveState {
                     self.error = Some(reason.to_string());
                 }
                 let reason = Arc::new(crate::Error::Client(reason));
-                for (id, result) in [&mut self.dialog_response, &mut self.script_response]
-                    .into_iter()
-                    .flatten()
+                for (id, result) in [
+                    &mut self.dialog_response,
+                    &mut self.script_response,
+                    &mut self.editor_response,
+                ]
+                .into_iter()
+                .flatten()
                 {
                     if request_id.as_ref() == Some(id) {
                         *result = Some(Err(reason.clone()));
@@ -627,10 +644,13 @@ impl LiveState {
                 {
                     self.announcement_dismissal = None;
                 }
-                if let Some((id, result)) = &mut self.script_response
-                    && *id == request_id
+                for (id, result) in [&mut self.script_response, &mut self.editor_response]
+                    .into_iter()
+                    .flatten()
                 {
-                    *result = Some(Ok(response.clone()));
+                    if *id == request_id {
+                        *result = Some(Ok(response.clone()));
+                    }
                 }
                 if let Some((id, result)) = &mut self.dialog_response
                     && *id == request_id

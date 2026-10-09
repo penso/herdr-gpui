@@ -191,7 +191,7 @@ pub(super) fn workspace_roots(snapshot: &ClientShellSnapshot) -> Vec<(String, St
         .collect()
 }
 
-pub(super) fn launch_root<'a>(
+pub(crate) fn launch_root<'a>(
     snapshot: &'a ClientShellSnapshot,
     workspace: &str,
 ) -> Option<&'a str> {

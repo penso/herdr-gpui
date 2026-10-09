@@ -17,12 +17,20 @@ impl HerdrWindow {
             || self.live.error.is_some())
         .then(|| self.live.status_text(self.local_error.as_deref()));
         let items = self.config.status_bar;
+        let height = px((self.config.ui.size * 1.5 + 4.).max(22.));
         div()
             .id("connection-status")
             .debug_selector(|| "connection-status".into())
+            // Pages draw above the bar's tooltips, so those under where a
+            // tooltip shows step aside while the pointer is over the bar.
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                this.hover_status_bar(*hovered, cx);
+            }))
+            .relative()
+            .child(self.status_bar_probe())
             .flex()
             .flex_none()
-            .h(px((self.config.ui.size * 1.5 + 4.).max(22.)))
+            .h(height)
             .overflow_hidden()
             .items_center()
             .gap(px(6.))

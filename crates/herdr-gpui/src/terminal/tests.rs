@@ -561,15 +561,45 @@ fn alt_characters_reach_the_pane_as_shortcuts() {
 
 #[test]
 fn option_as_alt_follows_the_layout_only_on_macos() {
-    use crate::config::OptionAsAlt;
+    use crate::config::{OptionAsAlt, OptionKeys};
     let us = "com.apple.keylayout.US";
     let german = "com.apple.keylayout.German";
     let macos = cfg!(target_os = "macos");
-    assert!(OptionAsAlt::Auto.sends_alt(us));
-    assert!(OptionAsAlt::Auto.sends_alt("com.apple.keylayout.ABC"));
-    assert_eq!(OptionAsAlt::Auto.sends_alt(german), !macos);
-    assert!(OptionAsAlt::Always.sends_alt(german));
-    assert_eq!(OptionAsAlt::Never.sends_alt(us), !macos);
+    let left = OptionKeys::LEFT;
+    assert!(OptionAsAlt::Auto.sends_alt(us, left));
+    assert!(OptionAsAlt::Auto.sends_alt("com.apple.keylayout.ABC", left));
+    assert_eq!(OptionAsAlt::Auto.sends_alt(german, left), !macos);
+    assert!(OptionAsAlt::Always.sends_alt(german, left));
+    assert_eq!(OptionAsAlt::Never.sends_alt(us, left), !macos);
+}
+
+#[test]
+fn the_right_option_types_dead_keys_while_the_left_sends_alt() {
+    use crate::config::{OptionAsAlt, OptionKeys};
+    let us = "com.apple.keylayout.US";
+    let macos = cfg!(target_os = "macos");
+    let right = OptionKeys {
+        left: false,
+        right: true,
+    };
+    let both = OptionKeys {
+        left: true,
+        right: true,
+    };
+    assert_eq!(OptionAsAlt::Auto.sends_alt(us, right), !macos);
+    assert!(OptionAsAlt::Auto.sends_alt(us, both));
+    assert!(OptionAsAlt::Left.sends_alt("com.apple.keylayout.German", OptionKeys::LEFT));
+    assert_eq!(OptionAsAlt::Left.sends_alt(us, right), !macos);
+    assert!(OptionAsAlt::Right.sends_alt(us, right));
+    assert_eq!(OptionAsAlt::Right.sends_alt(us, OptionKeys::LEFT), !macos);
+    assert!(OptionAsAlt::Always.sends_alt(us, right));
+    // NSEvent's device-dependent bits: left 0x20, right 0x40, with the
+    // device-independent Option flag 0x80000 beside them.
+    assert_eq!(OptionKeys::from_device_flags(0x80020), OptionKeys::LEFT);
+    assert_eq!(OptionKeys::from_device_flags(0x80040), right);
+    assert_eq!(OptionKeys::from_device_flags(0x80060), both);
+    // A synthesized event without the bits counts as the left key.
+    assert_eq!(OptionKeys::from_device_flags(0x80000), OptionKeys::LEFT);
 }
 
 #[test]

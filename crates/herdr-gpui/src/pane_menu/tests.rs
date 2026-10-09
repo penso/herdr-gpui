@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 pub(crate) mod close_option;
 mod menu_width;
+mod vs_code_realm;
 
 fn snapshot() -> ClientShellSnapshot {
     let mut snapshot: ClientShellSnapshot = serde_json::from_str(include_str!(
@@ -245,7 +246,7 @@ fn live_pane(
     use herdr_client::protocol::{FrameData, PaneSurfaceFrame, PaneSurfacePane, SurfaceRect};
     // Initialize surface interest without connecting to a personal daemon.
     // A cancelled handle lets queue-failure paths run deterministically.
-    v.reconnect();
+    v.reconnect(cx);
     let client = herdr_client::connect(
         herdr_client::ConnectTarget::Socket("/unused-pane-menu-test.sock".into()),
         v.options,

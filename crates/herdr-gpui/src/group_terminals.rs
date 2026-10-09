@@ -221,7 +221,7 @@ impl HerdrWindow {
                     parked.group == active && parked.workspace == key && parked.connected()
                 })
             {
-                self.swap_primary(active, &key);
+                self.swap_primary(active, &key, cx);
                 // The connection may still be on its way to the group's tab;
                 // the window's navigation takes it the rest of the way.
                 if let Some(Pick::Herdr(tab)) = wants
@@ -382,7 +382,7 @@ impl HerdrWindow {
     /// under the group that had it. Everything a gesture, an IME
     /// composition, or held input aimed at the old connection is dropped,
     /// as a switch of endpoint drops it.
-    fn swap_primary(&mut self, group: GroupId, key: &(Scope, String)) {
+    fn swap_primary(&mut self, group: GroupId, key: &(Scope, String), cx: &mut Context<Self>) {
         let Some(index) = self
             .browser
             .terminals
@@ -425,7 +425,7 @@ impl HerdrWindow {
         self.scrollbar_drag = None;
         self.split_drag = None;
         self.pressed_terminal_link = None;
-        self.marked.clear();
+        self.discard_composition(cx);
         self.wheel = Default::default();
         self.sent_focus = None;
         self.activation_deadline = None;

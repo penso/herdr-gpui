@@ -21,13 +21,18 @@ pub(crate) enum Host {
     Wsl(String),
 }
 
-impl From<&ConnectTarget> for Host {
-    fn from(target: &ConnectTarget) -> Self {
+impl Host {
+    /// The host whose sign-ins a device's usage comes from, or `None` for a
+    /// cloud machine: it is reached only through its provider's command, and reading
+    /// this machine's sign-ins instead would misreport them as the workspace's.
+    pub(crate) fn of(target: &ConnectTarget) -> Option<Self> {
         match target {
-            ConnectTarget::Ssh { target, .. } => Self::Ssh(target.clone()),
-            ConnectTarget::Wsl { distro, .. } => Self::Wsl(distro.clone()),
+            ConnectTarget::Ssh { target, .. } => Some(Self::Ssh(target.clone())),
+            ConnectTarget::Wsl { distro, .. } => Some(Self::Wsl(distro.clone())),
+            #[cfg(feature = "cloud")]
+            ConnectTarget::Cloud { .. } => None,
             ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
-                Self::Local
+                Some(Self::Local)
             }
         }
     }

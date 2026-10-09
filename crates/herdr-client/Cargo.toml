@@ -9,6 +9,13 @@ version.workspace      = true
 [lints]
 workspace = true
 
+[features]
+# `ConnectTarget::Cloud`: machines a cloud provider created, reached through an
+# application-built command. Each provider adds its `CloudProvider` variant.
+cloud = []
+coder = ["cloud"]
+daytona = ["cloud"]
+
 [dependencies]
 crossbeam-channel.workspace = true
 herdr-protocol.workspace    = true

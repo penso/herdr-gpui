@@ -9,6 +9,7 @@ use gpui::{prelude::*, *};
 use herdr_client::{
     Method,
     protocol::{ClientShellCommandAction, ClientShellSnapshot},
+    scrollback::SelectionReadParams,
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -18,6 +19,7 @@ mod go_to;
 mod interaction_tests;
 mod project_open;
 mod projects;
+pub(crate) use projects::launch_root;
 mod render;
 mod search;
 
@@ -195,15 +197,19 @@ struct Target {
     workspace: Option<String>,
     tab: Option<String>,
     pane: Option<String>,
+    /// The focused pane's highlight when the target was captured, which a
+    /// plugin action receives as its selected text.
+    selection: Option<SelectionReadParams>,
 }
 
 impl Target {
-    fn capture(snapshot: &ClientShellSnapshot) -> Self {
+    fn capture(snapshot: &ClientShellSnapshot, selection: Option<SelectionReadParams>) -> Self {
         Self {
             boot: snapshot.boot_id.clone(),
             workspace: snapshot.focused_workspace_id.clone(),
             tab: snapshot.focused_tab_id.clone(),
             pane: snapshot.focused_pane_id.clone(),
+            selection,
         }
     }
 
@@ -268,6 +274,14 @@ impl Target {
             if let Some(value) = value {
                 params[key] = json!(value);
             }
+        }
+        // Herdr reads the selection only for plugin actions, and only from
+        // the pane the command targets.
+        if action == ClientShellCommandAction::PluginAction
+            && let Some(selection) = &self.selection
+            && self.pane.as_ref() == Some(&selection.pane_id)
+        {
+            params["selection"] = serde_json::to_value(selection)?;
         }
         Ok(params)
     }
@@ -448,11 +462,14 @@ impl HerdrWindow {
             let query = search.read(cx).text().to_owned();
             this.filter_palette(&query, cx);
         });
+        // Captured with the target, before the palette's own input could
+        // change what is highlighted.
+        let selection = self.plugin_selection();
         let target = self
             .live
             .snapshot
             .as_ref()
-            .map(|snapshot| Target::capture(snapshot));
+            .map(|snapshot| Target::capture(snapshot, selection));
         let local_target = self
             .endpoints
             .iter()
@@ -759,7 +776,13 @@ impl HerdrWindow {
                 .and_then(|p| p.target.as_ref())
                 .ok_or(Error::NoPaletteSession)?;
             match &action {
-                Action::Configured(id, action) => target.invocation(snapshot, id, *action),
+                Action::Configured(id, action) => {
+                    let mut target = target.clone();
+                    if let Some(selection) = &mut target.selection {
+                        self.fence_plugin_selection(selection);
+                    }
+                    target.invocation(snapshot, id, *action)
+                }
                 Action::Native(_)
                 | Action::Go { .. }
                 | Action::Project(_)
@@ -801,14 +824,14 @@ impl HerdrWindow {
                 return Err(Error::PaletteConnectionNotReady);
             }
             let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
-            Target::capture(snapshot).invocation(snapshot, id, action)
+            Target::capture(snapshot, self.plugin_selection()).invocation(snapshot, id, action)
         })();
         match result {
             Ok(params) => {
                 self.request_focus_change(Method::CommandInvoke.as_str(), None, |handle, boot| {
                     handle.request(boot, Method::CommandInvoke, params)
                 });
-                self.marked.clear();
+                self.discard_composition(cx);
             }
             Err(error) => self.local_error = Some(error.to_string()),
         }

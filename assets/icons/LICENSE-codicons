@@ -1,0 +1,15 @@
+vscode.svg, error.svg, and pass.svg are Codicons from Microsoft's
+vscode-codicons, copied unchanged from revision
+6b53088f5c55bce7107fb579765364f59cd4ad5d:
+https://github.com/microsoft/vscode-codicons/tree/6b53088f5c55bce7107fb579765364f59cd4ad5d/src/icons
+
+Copyright (c) Microsoft Corporation.
+
+The icons are licensed under the Creative Commons Attribution 4.0
+International Public License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Visual Studio Code, VS Code, and the Visual Studio Code icon are trademarks
+of Microsoft Corporation. The license above grants no right to use them;
+vscode.svg only labels the panel that shows VS Code, which this app connects
+to. This app is not made or endorsed by Microsoft.

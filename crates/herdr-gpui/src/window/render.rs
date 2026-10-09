@@ -594,7 +594,12 @@ impl Render for HerdrWindow {
                         .as_ref()
                         .is_some_and(|location| !location.is_page()) =>
                 {
-                    self.render_review_tab(slot, &tab, gap, cx)
+                    match tab.location {
+                        Some(crate::browser::Location::Code { .. }) => {
+                            self.render_code_tab(slot, &tab, gap, cx)
+                        }
+                        _ => self.render_review_tab(slot, &tab, gap, cx),
+                    }
                 }
                 (Shown::Page(_), Some(tab)) => {
                     self.render_browser(slot, &tab, gap, owns_keyboard, cx)
@@ -618,6 +623,7 @@ impl Render for HerdrWindow {
             groups.push(self.render_group(slot, body, ends, window, cx));
         }
         let content = self.render_groups(groups, cx);
+        let content = self.render_beside_code(content, cx);
         // Not `||`: asking forgets group motion that has finished.
         if self.groups_moving() | self.tabs_growing() | self.annotations_moving() {
             window.request_animation_frame();
@@ -742,7 +748,9 @@ impl Render for HerdrWindow {
                             .relative()
                             .child(content)
                             .children(self.render_notices(cx))
-                            .child(self.render_status_bar(cx)),
+                            .when(self.status_bar_visible, |column| {
+                                column.child(self.render_status_bar(cx))
+                            }),
                     ),
             )
             .when(merged, |root| root.children(self.render_worktree_banner()))

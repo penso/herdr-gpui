@@ -16,7 +16,7 @@ fn connected_mouse_focused_pane_preserves_drag_target_and_immediate_text(
         let (endpoint, mut server) = connected_endpoint("ssh:mouse");
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
-                prepare_mouse(view, endpoint);
+                prepare_mouse(view, endpoint, cx);
                 if button == MouseButton::Right {
                     // A right-click stays with the window until Herdr routes
                     // the pane's right-clicks to the application.
@@ -99,7 +99,7 @@ fn connected_mouse_inactive_pane_receives_first_click_before_focus_fence(
     let (endpoint, mut server) = connected_endpoint("ssh:mouse");
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             let position = mouse_position(view, 43.5, 4.5);
             assert!(view.terminal_mouse_down(
                 &MouseDownEvent {
@@ -185,7 +185,7 @@ fn connected_mouse_popup_uses_popup_relative_pixel_coordinates_and_blocks_covere
     let (endpoint, mut server) = connected_endpoint("ssh:mouse");
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
             surface.popup = Some(Box::new(ClientShellPopupSurface {
                 terminal_id: "popup-mouse".into(),

@@ -197,11 +197,11 @@ impl Peer {
         }
     }
 
-    pub(crate) fn prepare(&self, view: &mut HerdrWindow) {
+    pub(crate) fn prepare(&self, view: &mut HerdrWindow, cx: &mut Context<HerdrWindow>) {
         // Only the fixture's explicit nonexistent local socket is used to
         // initialize endpoint lifecycle flags. Replace its handle before
         // marking the synthetic projection as SSH; never reconnect to HOST.
-        view.reconnect();
+        view.reconnect(cx);
         // Retire that attempt as Endpoint::stop does: its connector and event
         // reader keep the old inbox, so their late failure cannot hold or
         // overwrite the one tests drive, as a plain disconnect would allow.

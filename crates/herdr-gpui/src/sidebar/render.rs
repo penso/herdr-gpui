@@ -111,7 +111,7 @@ impl HerdrWindow {
                 host: (multi && endpoint_id != crate::endpoint::LOCAL)
                     .then_some(endpoint.label.as_str()),
             };
-            let daemon = crate::listening_ports::Daemon::from(&endpoint.connection.target);
+            let daemon = crate::listening_ports::Daemon::of(&endpoint.connection.target);
             let live = if selected { &self.live } else { &endpoint.live };
             let Some(snapshot) = &live.snapshot else {
                 continue;
@@ -307,8 +307,9 @@ impl HerdrWindow {
                     ))
                 });
                 let ports = (self.config.show_listening_ports && !removing_row)
-                    .then(|| self.listening_ports.get(&daemon, &workspace.workspace_id))
+                    .then_some(daemon.as_ref())
                     .flatten()
+                    .and_then(|daemon| self.listening_ports.get(daemon, &workspace.workspace_id))
                     .map(|listed| {
                         div()
                             .debug_selector(|| format!("ports-{endpoint_id}-{id}"))

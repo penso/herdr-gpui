@@ -16,6 +16,8 @@ fn paths_resolve_under_home_or_the_pane_directory() {
     let root = std::env::temp_dir();
     let link = |path: &str, cwd: Option<&Path>| FileLink {
         path: path.into(),
+        line: None,
+        pane_id: "pane".into(),
         cwd: cwd.map(|cwd| cwd.to_str().unwrap().into()),
     };
     assert_eq!(
@@ -228,9 +230,44 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
     cx.run_until_parked();
     assert!(cx.opened_url().is_none());
 
+    // By default a text file goes to the editor, which needs a pane to open
+    // beside; this fixture has no connection, so nothing opens.
+    // Without a Unix shell there is no editor, and the file opens in the
+    // default application as with Alt.
     cx.simulate_click(found, Modifiers::secondary_key());
     cx.run_until_parked();
+    if crate::editor::SUPPORTED {
+        assert!(cx.opened_url().is_none());
+        view.read_with(cx, |view, _| {
+            let (flash, _) = view.flash.as_ref().unwrap();
+            assert_eq!(flash.text.as_ref(), crate::Error::NotConnected.to_string());
+        });
+    }
+
+    // Alt-click opens it in the other place, the default application.
+    let alt = Modifiers {
+        alt: true,
+        ..Modifiers::secondary_key()
+    };
+    cx.simulate_click(found, alt);
+    cx.run_until_parked();
     let real = real_path(&root.path().join("docs/notes.txt")).unwrap();
+    let expected = url::Url::from_file_path(real).unwrap();
+    assert_eq!(cx.opened_url().as_deref(), Some(expected.as_str()));
+}
+
+#[gpui::test]
+fn files_open_in_the_system_app_when_configured(cx: &mut gpui::TestAppContext) {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("a.rs"), "fn a() {}").unwrap();
+    let (view, cx) = window("at ./a.rs:1", root.path(), cx);
+    let position = at(&view, cx, 5);
+    view.update(cx, |view, _| {
+        view.config.open_files_in = crate::config::FileTarget::System;
+    });
+    cx.simulate_click(position, Modifiers::secondary_key());
+    cx.run_until_parked();
+    let real = real_path(&root.path().join("a.rs")).unwrap();
     let expected = url::Url::from_file_path(real).unwrap();
     assert_eq!(cx.opened_url().as_deref(), Some(expected.as_str()));
 }

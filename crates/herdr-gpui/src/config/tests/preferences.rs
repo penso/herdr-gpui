@@ -116,7 +116,7 @@ fn selections_stay_after_copy_unless_configured() -> anyhow::Result<()> {
 }
 
 #[test]
-fn option_as_alt_accepts_auto_or_a_bool() -> anyhow::Result<()> {
+fn option_as_alt_accepts_auto_a_side_or_a_bool() -> anyhow::Result<()> {
     assert_eq!(Config::parse("")?.option_as_alt, OptionAsAlt::Auto);
     assert_eq!(
         Config::parse(DEFAULT_CONFIG)?.option_as_alt,
@@ -126,11 +126,13 @@ fn option_as_alt_accepts_auto_or_a_bool() -> anyhow::Result<()> {
         ("'auto'", OptionAsAlt::Auto),
         ("true", OptionAsAlt::Always),
         ("false", OptionAsAlt::Never),
+        ("'left'", OptionAsAlt::Left),
+        ("'right'", OptionAsAlt::Right),
     ] {
         let config = Config::parse(&format!("option_as_alt = {value}"))?;
         assert_eq!(config.option_as_alt, expected);
     }
-    for value in ["'left'", "'true'", "1"] {
+    for value in ["'both'", "'true'", "1"] {
         assert!(Config::parse(&format!("option_as_alt = {value}")).is_err());
     }
     Ok(())

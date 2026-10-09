@@ -135,6 +135,7 @@ impl SettingsWindow {
             .take()
             .filter(|_| !self.layout_saving)
             .map(|mode| self.layout_operation(mode));
+        let code = self.take_shutdown_code_url();
         let completion = self.save_completion.take();
         let executor = cx.background_executor().clone();
         cx.background_executor().spawn(async move {
@@ -166,7 +167,8 @@ impl SettingsWindow {
             };
             let theme = theme.map_or(Ok(()), |theme| theme(shared));
             let layout = layout.map_or(Ok(()), |write| write());
-            preceding.and(sizes).and(theme).and(layout)
+            let code = code.map_or(Ok(()), |write| write());
+            preceding.and(sizes).and(theme).and(layout).and(code)
         })
     }
 
@@ -247,6 +249,7 @@ impl SettingsWindow {
                 }
                 self.shared = loaded.shared;
                 self.error = loaded.error;
+                self.sync_code_field(cx);
             }
             Err(error) => {
                 self.error = Some(format!(
@@ -260,6 +263,8 @@ impl SettingsWindow {
         self.drive_theme_intent(cx);
         if valid {
             self.publish_appearance(cx);
+            #[cfg(feature = "cloud")]
+            self.cloud_config_changed(cx);
         }
         cx.notify();
     }

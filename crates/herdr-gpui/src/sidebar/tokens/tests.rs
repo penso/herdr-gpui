@@ -2,6 +2,8 @@ use super::*;
 use crate::config::SidebarLayout;
 use crate::sidebar::layout_tests;
 
+mod plugin_rows;
+
 fn agent_layout(text: &str) -> AgentLayout {
     toml::from_str(text).unwrap()
 }

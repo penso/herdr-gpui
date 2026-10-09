@@ -145,7 +145,7 @@ impl HerdrWindow {
             self.sync_pr_scope();
             self.menu.pr_cache.refresh(input, std::time::Instant::now());
         }
-        self.marked.clear();
+        self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
     }

@@ -98,7 +98,7 @@ fn changed_target_and_manual_reconnect_reset_retry_history(cx: &mut gpui::TestAp
         assert_eq!(view.endpoints[1].attempts, 0);
         assert!(view.endpoints[1].online_since.is_none());
         view.endpoints[0].attempts = 8;
-        view.reconnect(); // Explicit isolated missing socket, never SSH/discovery.
+        view.reconnect(cx); // Explicit isolated missing socket, never SSH/discovery.
         assert_eq!(
             view.endpoints[0].attempts, 1,
             "manual reconnect starts a fresh first attempt"

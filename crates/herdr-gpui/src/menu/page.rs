@@ -18,6 +18,9 @@ pub(crate) enum Page {
     /// Names a saved SSH device's port to forward to this computer.
     ForwardPort,
     RemoveDevice,
+    /// Sign in to Coder and add one of its workspaces as a device.
+    #[cfg(feature = "coder")]
+    AddCoder,
     /// Picking a WSL distribution to save as a device.
     AddWsl,
     /// Confirming a saved WSL distribution should be forgotten.
@@ -26,6 +29,8 @@ pub(crate) enum Page {
     Themes,
     Fonts,
     Palette,
+    /// Go to Symbol and Go to File over the focused pane's checkout.
+    CodeSearch,
     ConfirmClose,
     Update,
     AppUpdate,
@@ -36,10 +41,9 @@ pub(crate) enum Page {
     AgentSkill,
     Tab,
     RenameTab,
-    /// A group's "…" menu: closing tabs and splitting.
+    /// A group's "…" menu: opening tabs other than a terminal, closing
+    /// tabs, and splitting.
     Group,
-    /// A group's "+" menu: the kinds of tab to open in it.
-    NewTab,
     Pane,
     RenamePane,
     /// The processes under the pane menu's pane.
@@ -105,6 +109,32 @@ pub(crate) enum WorkspaceMenuAction {
     Script(crate::worktree_scripts::ScriptKind),
     /// Open the repository's Issues & PRs tab.
     IssuesAndPullRequests,
+}
+
+impl Page {
+    /// Context menus open where the pointer asked for them, rather than
+    /// centred over a dimmed window as a dialog is.
+    pub(crate) fn pointer_anchored(self) -> bool {
+        matches!(
+            self,
+            Self::Workspace
+                | Self::Tab
+                | Self::RenameTab
+                | Self::Group
+                | Self::Pane
+                | Self::RenamePane
+                | Self::PaneProcesses
+                | Self::KillProcesses
+                | Self::Host
+                | Self::RemoveDevice
+                | Self::RemoveWsl
+                | Self::Git
+                | Self::GitCommit
+                | Self::PrReview
+                | Self::PrComment
+                | Self::PrMerge
+        )
+    }
 }
 
 impl WorkspaceMenuAction {

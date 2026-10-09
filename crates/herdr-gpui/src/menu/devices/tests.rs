@@ -12,6 +12,8 @@ use herdr_client::protocol::{ClientMessage, ClientShellSnapshot};
 use herdr_client::{HostProbe, protocol::ClientPaneInputEvent};
 use std::sync::Arc;
 
+mod local_network;
+
 #[test]
 fn only_a_present_herdr_is_saved_without_a_terminal() {
     assert_eq!(Offer::for_probe(HostProbe::Running), None);
@@ -19,7 +21,7 @@ fn only_a_present_herdr_is_saved_without_a_terminal() {
     assert_eq!(Offer::for_probe(HostProbe::Missing), Some(Offer::Install));
     assert_eq!(Offer::for_probe(HostProbe::Outdated), Some(Offer::Update));
     assert_eq!(
-        Offer::for_probe(HostProbe::SshFailed),
+        Offer::for_probe(HostProbe::SshFailed(herdr_client::SshFailure::HostKey)),
         Some(Offer::Terminal)
     );
     assert_eq!(

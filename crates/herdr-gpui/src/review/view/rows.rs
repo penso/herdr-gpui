@@ -1,9 +1,14 @@
 //! Drawing the diff's lines, unified or side by side, and dragging the line
-//! between the sides. Every line cell starts a note on its own row, so a
-//! side-by-side change is noted on the side the user clicked. A row asks for
-//! what it lacks as it is drawn, its file's lines or its colours, and draws
-//! what it has meanwhile.
-use super::{Review, model::Item};
+//! between the sides. A line's gutter, its numbers and sign, starts a note
+//! on its own row, so a side-by-side change is noted on the side the user
+//! clicked; its code is selected to copy. A row asks for what it lacks as
+//! it is drawn, its file's lines or its colours, and draws what it has
+//! meanwhile.
+use super::{
+    Review,
+    model::Item,
+    selection::{Press, Selection},
+};
 use crate::browser::TabId;
 use crate::{
     HerdrWindow,
@@ -56,16 +61,30 @@ fn token_colour(theme: &Theme, token: Token) -> Rgba {
     })
 }
 
+/// The tint selected code is drawn on.
+fn selection_tint(theme: &Theme) -> Rgba {
+    rgba((theme.palette[4] << 8) | 0x66)
+}
+
+/// Where in `layout`'s text the pointer at `position` is, as a byte offset.
+/// Past either end of the text it is that end.
+fn offset_at(layout: &TextLayout, position: Point<Pixels>) -> usize {
+    match layout.index_for_position(position) {
+        Ok(offset) | Err(offset) => offset,
+    }
+}
+
 /// A line's code, coloured by its syntax where known, its changed words on
-/// a stronger tint. The two may overlap, so the text is cut at every edge
-/// of either.
-fn code(
+/// a stronger tint, and the part of it `selected` on the selection's. They
+/// may overlap, so the text is cut at every edge of any.
+pub(crate) fn code(
     theme: &Theme,
     text: &str,
     spans: &[Span],
     words: &[Range<u32>],
     word_tint: Option<Rgba>,
-) -> AnyElement {
+    selected: Option<Range<usize>>,
+) -> StyledText {
     let words: Vec<Range<usize>> = word_tint
         .map(|_| {
             words
@@ -75,13 +94,14 @@ fn code(
                 .collect()
         })
         .unwrap_or_default();
-    if spans.is_empty() && words.is_empty() {
-        return SharedString::from(text.to_owned()).into_any_element();
+    if spans.is_empty() && words.is_empty() && selected.is_none() {
+        return StyledText::new(text.to_owned());
     }
     let mut edges: Vec<usize> = spans
         .iter()
         .flat_map(|span| [span.start, span.end])
         .chain(words.iter().flat_map(|word| [word.start, word.end]))
+        .chain(selected.iter().flat_map(|range| [range.start, range.end]))
         .filter(|&edge| edge <= text.len() && text.is_char_boundary(edge))
         .collect();
     edges.sort_unstable();
@@ -93,12 +113,19 @@ fn code(
             .iter()
             .find(|span| span.start <= range.start && range.end <= span.end)
             .map(|span| token_colour(theme, span.token).into());
-        let background = words
-            .iter()
-            .any(|word| word.start <= range.start && range.end <= word.end)
-            .then_some(word_tint)
-            .flatten()
-            .map(Into::into);
+        let in_selection = selected
+            .as_ref()
+            .is_some_and(|selected| selected.start <= range.start && range.end <= selected.end);
+        let background = if in_selection {
+            Some(selection_tint(theme).into())
+        } else {
+            words
+                .iter()
+                .any(|word| word.start <= range.start && range.end <= word.end)
+                .then_some(word_tint)
+                .flatten()
+                .map(Into::into)
+        };
         if colour.is_some() || background.is_some() {
             highlights.push((
                 range,
@@ -110,9 +137,7 @@ fn code(
             ));
         }
     }
-    StyledText::new(text.to_owned())
-        .with_highlights(highlights)
-        .into_any_element()
+    StyledText::new(text.to_owned()).with_highlights(highlights)
 }
 
 fn number(theme: &Theme, value: Option<u32>) -> Div {
@@ -124,6 +149,25 @@ fn number(theme: &Theme, value: Option<u32>) -> Div {
         .justify_end()
         .text_color(rgb(theme.muted))
         .child(value.map(|value| value.to_string()).unwrap_or_default())
+}
+
+/// A small copy icon, for a header's row.
+pub(super) fn copy_button(theme: &Theme, line_height: f32) -> Div {
+    div()
+        .flex_none()
+        .size(px(line_height))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .rounded(px(crate::config::corners::CONTROL))
+        .hover(|button| button.bg(rgb(theme.surface)))
+        .child(
+            svg()
+                .path("icons/copy.svg")
+                .size(px(12.))
+                .text_color(rgb(theme.muted)),
+        )
 }
 
 /// The slot a note's number shows in, empty without one.
@@ -152,7 +196,7 @@ pub(super) fn mark_slot(theme: &Theme, mark: Option<usize>) -> Div {
 
 /// Which line number a cell shows: the old one on the left of a
 /// side-by-side row, otherwise the new one where there is one.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Numbers {
     Both,
     Old,
@@ -339,47 +383,106 @@ impl HerdrWindow {
                 cell.bg(rgba((theme.palette[3] << 8) | alpha))
             })
             .when(review.draft == Some(row), |cell| cell.bg(rgb(theme.active)))
-            .text_color(rgb(text))
-            .when(noteable, |cell| {
-                cell.cursor_pointer()
-                    .hover(|cell| cell.bg(rgb(theme.active)))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.begin_review_note(id, row, window, cx);
-                    }))
-            })
-            .child(mark_slot(theme, mark).h(px(line_height)));
+            .text_color(rgb(text));
         if found.kind == Kind::Hunk {
             return Some(
-                cell.child(self.review_expander(id, review, file, index, cx))
+                cell.child(mark_slot(theme, mark).h(px(line_height)))
+                    .child(self.review_expander(id, review, file, index, cx))
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
                             .child(lines.text_of(found).to_owned()),
-                    ),
+                    )
+                    .child(self.review_hunk_copy(id, file, index, line_height, cx)),
             );
         }
-        let cell = match numbers {
-            Numbers::Both => cell
+        // The gutter notes the line; the code beside it is for selecting.
+        let gutter = div()
+            .id((
+                SharedString::from(format!("review-gutter-{side}-{file}")),
+                index,
+            ))
+            .debug_selector(move || format!("review-gutter-{side}-{file}-{index}"))
+            .flex_none()
+            .flex()
+            .items_start()
+            .child(mark_slot(theme, mark).h(px(line_height)));
+        let gutter = match numbers {
+            Numbers::Both => gutter
                 .child(number(theme, found.old))
                 .child(number(theme, found.new)),
-            Numbers::Old => cell.child(number(theme, found.old)),
-            Numbers::New => cell.child(number(theme, found.new)),
-        };
+            Numbers::Old => gutter.child(number(theme, found.old)),
+            Numbers::New => gutter.child(number(theme, found.new)),
+        }
+        .child(div().flex_none().w(px(16.)).child(sign))
+        .when(noteable, |gutter| {
+            gutter
+                .cursor_pointer()
+                .hover(|gutter| gutter.bg(rgb(theme.active)))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.begin_review_note(id, row, window, cx);
+                }))
+        });
         let (spans, words) = review
             .colours
             .line(file, lines.stretch(index).start, index)
             .unwrap_or_default();
-        Some(cell.child(div().flex_none().w(px(16.)).child(sign)).child(
-            div().flex_1().min_w_0().child(code(
-                theme,
-                lines.text_of(found),
-                spans,
-                words,
-                word_tint,
-            )),
-        ))
+        let code_text = lines.text_of(found);
+        let selected = review
+            .selection
+            .and_then(|selection: Selection| selection.highlight(file, numbers, index, code_text));
+        let styled = code(theme, code_text, spans, words, word_tint, selected);
+        let layout = styled.layout().clone();
+        let pressed = layout.clone();
+        let code = div()
+            .flex_1()
+            .min_w_0()
+            .cursor(CursorStyle::IBeam)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    let press = Press {
+                        file,
+                        side: numbers,
+                        line: index,
+                        offset: offset_at(&pressed, event.position),
+                        clicks: event.click_count,
+                        extend: event.modifiers.shift,
+                    };
+                    this.press_review_code(id, press, window, cx);
+                }),
+            )
+            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
+                if event.pressed_button == Some(MouseButton::Left) {
+                    let offset = offset_at(&layout, event.position);
+                    this.drag_review_code(id, file, numbers, index, offset, cx);
+                }
+            }))
+            .child(styled);
+        Some(cell.child(gutter).child(code))
+    }
+
+    /// The hunk header's button that copies the hunk.
+    fn review_hunk_copy(
+        &self,
+        id: TabId,
+        file: usize,
+        header: usize,
+        line_height: f32,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        copy_button(&self.theme, line_height)
+            .id(ElementId::named_usize(
+                format!("review-copy-hunk-{file}"),
+                header,
+            ))
+            .debug_selector(move || format!("review-copy-hunk-{file}-{header}"))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.copy_review_hunk(id, file, header, cx);
+            }))
     }
 
     /// Before a hunk header, the unchanged lines above it to show, if any.

@@ -210,12 +210,14 @@ fn saved_layouts_the_app_could_not_have_written_are_refused() {
     let valid = SavedLayout {
         groups: vec![group(None, 0.5), group(Some(herdr("t1")), 0.5)],
         active: 1,
+        code: false,
     };
     assert!(valid.valid());
     for invalid in [
         SavedLayout {
             groups: vec![],
             active: 0,
+            code: false,
         },
         SavedLayout {
             active: 2,
@@ -224,26 +226,52 @@ fn saved_layouts_the_app_could_not_have_written_are_refused() {
         SavedLayout {
             groups: vec![group(None, f32::NAN)],
             active: 0,
+            code: false,
         },
         SavedLayout {
             groups: vec![group(None, 0.)],
             active: 0,
+            code: false,
         },
         SavedLayout {
             groups: vec![group(Some(herdr("")), 1.)],
             active: 0,
+            code: false,
         },
         SavedLayout {
             groups: vec![group(Some(herdr(&"x".repeat(300))), 1.)],
             active: 0,
+            code: false,
         },
         SavedLayout {
             groups: vec![group(None, 1.); MAX_SAVED_GROUPS + 1],
             active: 0,
+            code: false,
         },
     ] {
         assert!(!invalid.valid(), "{invalid:?}");
     }
+}
+
+#[test]
+fn a_workspace_s_vs_code_panel_is_saved_with_its_groups() {
+    let (mut lone, mut ids, _) = layout();
+    assert_eq!(lone.saved(), None);
+    // A shown panel is worth keeping on its own.
+    lone.code = true;
+    let saved = lone.saved().unwrap();
+    assert!(saved.valid());
+    let json = serde_json::to_string(&saved).unwrap();
+    assert!(json.contains(r#""code":true"#), "{json}");
+    let restored = Layout::restore(&serde_json::from_str(&json).unwrap(), &mut ids);
+    assert!(restored.code);
+    // Layouts saved before the panel existed restore it hidden, and a
+    // hidden panel adds nothing to what is saved.
+    let old: SavedLayout =
+        serde_json::from_str(r#"{"groups":[{"pick":null,"share":1}],"active":0}"#).unwrap();
+    assert!(old.valid());
+    assert!(!Layout::restore(&old, &mut ids).code);
+    assert!(!serde_json::to_string(&old).unwrap().contains("code"));
 }
 
 #[test]

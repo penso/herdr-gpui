@@ -24,7 +24,7 @@ fn do_not_ask_again_persists_only_with_a_sent_pane_close(cx: &mut gpui::TestAppC
                 view.endpoints.push(endpoint);
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 view.activation_deadline = None;
                 assert!(view.config.confirm_close_pane);
                 assert!(view.input_ready());
@@ -60,7 +60,7 @@ fn pane_menu_close_sends_at_once_when_confirmation_is_off(cx: &mut gpui::TestApp
             view.endpoints.push(endpoint);
             view.selected_endpoint = 1;
             view.options = ConnectOptions::default();
-            view.reset_selected();
+            view.reset_selected(cx);
             view.activation_deadline = None;
             view.config.confirm_close_pane = false;
             assert!(view.input_ready());

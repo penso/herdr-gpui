@@ -76,6 +76,7 @@ export CARGO_BUILD_JOBS=$jobs
 
 printf 'host: %s, jobs: %s\n' "$(rustc -vV | sed -n 's/^host: //p')" "$jobs"
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
 INNER
 
 # An explicit branch, not `[[ ... ]] && run+=(...)`: under `set -e` a false test

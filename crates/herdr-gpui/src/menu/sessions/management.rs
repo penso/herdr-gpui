@@ -268,7 +268,7 @@ impl HerdrWindow {
                 // Retire old inboxes before stopping the daemon, so this window
                 // cannot reconnect to and recreate the name being deleted.
                 if self.retarget_session_for_deletion(&connection) {
-                    self.reconnect();
+                    self.reconnect(cx);
                     self.menu.page = Some(Page::Sessions);
                     self.menu.selected = Some(0);
                 }

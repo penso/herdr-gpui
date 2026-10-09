@@ -14,6 +14,37 @@ use crate::{
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
+    /// A page, filling the space it is given. It also records where the
+    /// page draws, so a menu hides only the pages it covers; and, while one
+    /// does, it shows the page's picture in its place.
+    pub(in crate::browser) fn page_area(&self, id: TabId, page: impl IntoElement) -> Div {
+        let area = div().flex_1().min_h_0().relative().child(page);
+        #[cfg(any(target_os = "macos", windows))]
+        let area = {
+            let (picture, bounds) = (self.frozen_picture(id), self.browser.page_bounds.clone());
+            area.child(
+                canvas(
+                    move |area, _, _| {
+                        bounds.borrow_mut().insert(id, area);
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .children(picture.map(|picture| {
+                img(picture)
+                    .debug_selector(|| "page-picture".into())
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+            }))
+        };
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = id;
+        area
+    }
+
     /// The workspace's browser tabs, after its Herdr tabs in a group's strip.
     pub(crate) fn browser_tab_entries(
         &self,
@@ -33,15 +64,13 @@ impl HerdrWindow {
             .map(|tab| {
                 let id = tab.id;
                 let (background, text) = self.tab_colors(shown == Some(id), slot.id);
-                // A review tab shows a diff, not a page.
-                let icon = if tab
-                    .location
-                    .as_ref()
-                    .is_some_and(|location| !location.is_page())
-                {
-                    "icons/diff-unified.svg"
-                } else {
-                    "icons/globe.svg"
+                // The VS Code tab bears its mark; a review tab shows a diff
+                // and a code tab a file, not a page.
+                let icon = match tab.location {
+                    _ if tab.place.is_code() => "icons/vscode.svg",
+                    Some(Location::Review { .. }) => "icons/diff-unified.svg",
+                    Some(Location::Code { .. }) => "icons/code.svg",
+                    _ => "icons/globe.svg",
                 };
                 let tab = div()
                     .id(SharedString::from(format!("browser-tab-{id}")))
@@ -219,12 +248,7 @@ impl HerdrWindow {
         let page = self.browser.pages.page(id).cloned();
         #[cfg(not(any(target_os = "macos", windows)))]
         let page: Option<AnyView> = None;
-        let failure = self
-            .browser
-            .failed
-            .as_ref()
-            .filter(|(failed, _)| *failed == id)
-            .map(|(_, message)| message.clone());
+        let failure = self.browser.failed.get(&id).cloned();
         let placeholder: SharedString = match (&failure, loaded) {
             (Some(message), _) => format!("Could not show this page: {message}").into(),
             (None, false) => "Type an address above and press Return.".into(),
@@ -329,39 +353,11 @@ impl HerdrWindow {
                     }
                 },
             ));
-        #[cfg(any(target_os = "macos", windows))]
-        let (picture, bounds) = (self.frozen_picture(id), self.browser.page_bounds.clone());
         let content = match (page, &failure) {
-            (Some(page), None) => div()
-                .flex_1()
-                .min_h_0()
-                .relative()
-                .child(page)
-                // Where the page draws, so a menu hides only the pages it
-                // covers; and, while one does, the page's picture in its place.
-                .map(|content| {
-                    #[cfg(any(target_os = "macos", windows))]
-                    let content = content
-                        .child(
-                            canvas(
-                                move |area, _, _| {
-                                    bounds.borrow_mut().insert(id, area);
-                                },
-                                |_, _, _, _| {},
-                            )
-                            .absolute()
-                            .inset_0(),
-                        )
-                        .children(picture.map(|picture| {
-                            img(picture)
-                                .debug_selector(|| "page-picture".into())
-                                .absolute()
-                                .inset_0()
-                                .size_full()
-                        }));
-                    content
-                })
-                .into_any_element(),
+            (Some(page), None) => self.page_area(id, page).into_any_element(),
+            // The VS Code tab says, as its panel does, why its page is not
+            // there yet.
+            _ if tab.place.is_code() => self.render_code_status(failure.clone()),
             _ => div()
                 .flex_1()
                 .min_h_0()

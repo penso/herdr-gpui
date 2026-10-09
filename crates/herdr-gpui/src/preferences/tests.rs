@@ -73,6 +73,7 @@ fn roundtrip_and_reset_drain_after_drop() {
             agent_sort: Some(AgentSort::Priority),
             notes_width: None,
             review_files_width: None,
+            code_width: None,
         });
     }
     let worker = preferences.worker.take().unwrap();
@@ -88,6 +89,7 @@ fn roundtrip_and_reset_drain_after_drop() {
             agent_sort: Some(AgentSort::Priority),
             notes_width: None,
             review_files_width: None,
+            code_width: None,
         }
     );
     preferences.save(Chrome::default());
@@ -110,6 +112,7 @@ fn only_a_toggled_sort_is_stored_and_older_files_migrate() {
         agent_sort,
         notes_width: None,
         review_files_width: None,
+        code_width: None,
     };
     for (json, expected) in [
         // A file from before the sort existed follows the daemon.
@@ -182,6 +185,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
             agent_sort: Some(AgentSort::Grouped),
             notes_width: None,
             review_files_width: None,
+            code_width: None,
         },
         Chrome {
             sidebar_width: Some(400.),
@@ -189,6 +193,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
             agent_sort: Some(AgentSort::Priority),
             notes_width: Some(420.),
             review_files_width: None,
+            code_width: None,
         },
         Chrome::default(),
     ];
@@ -245,6 +250,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
                     agent_sort: None,
                     notes_width: None,
                     review_files_width: None,
+                    code_width: None,
                 }
             )
             .is_err()
@@ -256,6 +262,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
         agent_sort: None,
         notes_width: None,
         review_files_width: None,
+        code_width: None,
     };
     write_chrome(&path, chrome).unwrap();
     assert_eq!(read_chrome(&path).unwrap(), chrome);
@@ -272,6 +279,7 @@ fn invalid_sidebar_splits_preserve_other_preferences() {
         agent_sort: Some(AgentSort::Priority),
         notes_width: None,
         review_files_width: None,
+        code_width: None,
     };
     for split in [
         "null", "0", "-1", "0.099", "0.901", "1e100", "1e-100", "\"0.5\"", "true", "[]", "{}",
@@ -316,6 +324,7 @@ fn sidebar_split_roundtrips_including_boundaries_and_reset() {
             agent_sort: Some(AgentSort::Priority),
             notes_width: None,
             review_files_width: None,
+            code_width: None,
         };
         write_chrome(&path, chrome).unwrap();
         let stored: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();

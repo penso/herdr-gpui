@@ -403,6 +403,14 @@ impl CopyMode {
         })
     }
 
+    /// The marked cells, when this is the pane copy mode walks and a mark
+    /// is set; a cursor alone selects nothing.
+    pub(crate) fn marked(&self, pane: &PaneSurfacePane) -> Option<TextRange> {
+        (pane.pane_id == self.pane_id)
+            .then(|| self.selection(pane.inner_rect.width.saturating_sub(1)))
+            .flatten()
+    }
+
     /// The selection and the cursor, tinted, in the surface frame's grid.
     pub(crate) fn highlights(&self, pane: &PaneSurfacePane) -> Vec<Highlight> {
         let mut highlights = Vec::new();

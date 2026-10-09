@@ -6,6 +6,7 @@ use super::{HerdrWindow, tab_drag::StripDrag};
 use crate::{
     TAB_HEIGHT, TAB_WIDTH,
     browser::{Fold, GroupId, Leaving, Listed, Pick, Shown, Slot, ThumbDrag},
+    controls::Command,
     fonts::StyledFont,
     herdr_settings::TabBarPosition,
     sidebar::{Indicators, status_indicator},
@@ -461,9 +462,11 @@ impl HerdrWindow {
                             // Quiet like the unselected tabs beside it.
                             .text_color(rgb(self.theme.muted)),
                     )
-                    // Offers the kinds of tab to open in this group.
-                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                        this.open_new_tab_menu(slot.id, event.position(), window, cx);
+                    // A new Herdr tab opens in the group that asked for it;
+                    // other kinds of tab are behind "…".
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.expect_new_tab_in(slot.id);
+                        this.command(Command::Tab, window, cx);
                     })),
             )
             .child(self.strip_room(ends, window))

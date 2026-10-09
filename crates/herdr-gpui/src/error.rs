@@ -233,8 +233,6 @@ pub enum Error {
     ReviewNoBase,
     #[error("A saved review tab names a checkout that is not a local absolute path.")]
     InvalidReviewCheckout,
-    #[error("A saved Issues & PRs tab names a folder that is not an absolute path.")]
-    InvalidOrchestratorCheckout,
     #[error("These changes are too large to review here, even leaving out the largest files.")]
     ReviewTooLarge,
     #[error("Could not {operation}.")]
@@ -285,13 +283,13 @@ pub enum Error {
     #[error("Missing credential directory.")]
     CredentialDirectory,
     #[error(
-        "Cannot access private GitHub credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
+        "Cannot access private credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
     )]
     CredentialPermissions,
-    #[error("Cannot access private GitHub credential file.")]
+    #[error("Cannot access private credential file.")]
     CredentialIo(#[source] io::Error),
     #[error(
-        "No secure credential store configured. Explicitly opt in with [github] allow_plaintext_credentials = true, or use GH_TOKEN / GITHUB_TOKEN."
+        "No secure credential store configured. Explicitly opt in with allow_plaintext_credentials = true in the [github] or [coder] table, or use GH_TOKEN / GITHUB_TOKEN for GitHub."
     )]
     CredentialPolicy,
     #[error(
@@ -342,6 +340,15 @@ pub enum Error {
     GitHubTokenType,
     #[error("GitHub {0} worker stopped.")]
     GitHubWorker(&'static str),
+    #[cfg(feature = "coder")]
+    #[error(transparent)]
+    Coder(#[from] crate::coder::Error),
+    #[cfg(feature = "daytona")]
+    #[error(transparent)]
+    Daytona(#[from] crate::daytona::Error),
+    #[cfg(feature = "cloud")]
+    #[error(transparent)]
+    Cloud(#[from] crate::cloud::Error),
     #[error("{0}")]
     Config(#[source] config_loader::ConfigError),
     #[error("{source}")]
@@ -399,12 +406,29 @@ pub enum Error {
     UsageJson(serde_json::error::Category),
     #[error("Could not reach this host over SSH to read usage.")]
     UsageUnreachable,
+    /// Only the host and port are named: the address's query may hold the
+    /// server's connection token.
+    #[error("{reason} at {address}.")]
+    CodeUnreachable {
+        address: String,
+        reason: crate::code_server::NoAnswer,
+        #[source]
+        source: ureq::Error,
+    },
+    #[error("This address is not a VS Code server (HTTP {status}).")]
+    CodeNotServer { status: u16 },
+    #[error("The server refused the connection token. Use the address it prints, with its ?tkn=.")]
+    CodeTokenRefused,
+    #[error("The VS Code server answered HTTP {0}.")]
+    CodeStatus(u16),
     #[error("curl is not installed on this host, so usage cannot be read.")]
     UsageMissingCurl,
     #[error("Remote usage needs SSH, which this platform's client does not support.")]
     UsageUnsupported,
     #[error("usage must be a TOML table")]
     InvalidUsageTable,
+    #[error("code must be a TOML table")]
+    InvalidCodeTable,
     #[error("Could not read CPU and memory on this host.")]
     SystemLoadRemote(#[source] Box<Error>),
     /// The host's `uname -s`, bounded, so the message names what it is.
@@ -506,6 +530,38 @@ pub enum Error {
     WorktreeScriptsResponse,
     #[error("This workspace is not a Git checkout Herdr knows yet")]
     WorktreeScriptsNotGit,
+    #[error(
+        "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
+    )]
+    EditorCommand,
+    #[error("A code tab must name an absolute file path without control characters")]
+    InvalidCodeFile,
+    #[error("This file is missing, larger than 1 MiB, or not UTF-8 text")]
+    CodeFileUnreadable,
+    #[error("Only a local Git checkout can be searched for files and symbols")]
+    CodeIndexRoot,
+    #[error("Reading the checkout was cancelled")]
+    CodeIndexCancelled,
+    #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
+    EditorPath,
+    #[error("Opening a terminal editor needs a Unix shell in the pane")]
+    EditorUnsupported,
+    #[error("The Neovim in the editor pane did not answer")]
+    EditorRemote,
+    #[error("Could not run nvim to reach the editor pane")]
+    EditorRemoteLaunch(#[source] io::Error),
+    #[error("The Neovim in the editor pane is busy: answer it, then try again")]
+    EditorRemoteBusy,
+    #[error("The Neovim in the editor pane could not open the file")]
+    EditorRemoteFailed,
+    #[error("Another file is still opening in the editor")]
+    EditorBusy,
+    #[error("No local pane to open the editor beside")]
+    EditorNoPane,
+    #[error("Unexpected daemon response while opening the editor pane")]
+    EditorResponse,
+    #[error(transparent)]
+    EditorRequest(std::sync::Arc<Error>),
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error("{} exceeds {limit} bytes", path.display())]

@@ -285,31 +285,47 @@ impl ResolvedLink {
     }
 }
 
-/// The address this client opens itself after a click the daemon was asked
-/// to activate: nothing when a plugin handled it, otherwise the daemon's own
-/// reading of the link, which may span wrapped rows, and failing that the
-/// row-local `fallback`. Only bounded web addresses are ever opened.
-pub(crate) fn activation_fallback(
-    response: crate::Result<Value>,
-    fallback: Option<crate::browser::WebUrl>,
-) -> Option<crate::browser::WebUrl> {
-    let Ok(response) = response else {
-        return fallback;
-    };
-    if response.get("error").is_some_and(|error| !error.is_null()) {
-        return fallback;
+/// What the daemon made of a click it was asked to activate.
+#[derive(Debug)]
+pub(crate) enum Activation {
+    /// A plugin link handler claimed the click: nothing else may act on it.
+    Handled,
+    /// The handler that claimed the click failed. It may have run partway,
+    /// so the click is spent and the daemon's reason is shown instead of
+    /// opening the address some other way.
+    HandlerFailed(crate::Error),
+    /// Nothing claimed the click. The daemon's own reading of the link, which
+    /// may span wrapped rows, when it is a bounded web address; otherwise the
+    /// client's local reading opens, if it has one. Any other error lands
+    /// here too: a stale or unanswered request never ran a handler.
+    Declined(Option<crate::browser::WebUrl>),
+}
+
+impl From<crate::Result<Value>> for Activation {
+    fn from(response: crate::Result<Value>) -> Self {
+        let Ok(response) = response else {
+            return Self::Declined(None);
+        };
+        if let Some(error) = response.get("error").filter(|error| !error.is_null()) {
+            return if error["code"] == "plugin_link_failed" {
+                Self::HandlerFailed(crate::Error::DaemonResponse(error.clone()))
+            } else {
+                Self::Declined(None)
+            };
+        }
+        let result = &response["result"];
+        if result["type"] != "pane_link_activated" {
+            return Self::Declined(None);
+        }
+        if result["handled"] == true {
+            return Self::Handled;
+        }
+        Self::Declined(
+            result["url"]
+                .as_str()
+                .and_then(|url| crate::browser::WebUrl::try_from(url).ok()),
+        )
     }
-    let result = &response["result"];
-    if result["type"] != "pane_link_activated" {
-        return fallback;
-    }
-    if result["handled"] == true {
-        return None;
-    }
-    result["url"]
-        .as_str()
-        .and_then(|url| crate::browser::WebUrl::try_from(url).ok())
-        .or(fallback)
 }
 
 #[cfg(test)]

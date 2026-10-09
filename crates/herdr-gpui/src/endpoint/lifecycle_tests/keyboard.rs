@@ -34,7 +34,7 @@ fn keyboard_report_all_releases_sent_keys(cx: &mut gpui::TestAppContext) {
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             view.live.activation = Some(crate::state::SurfaceActivation {
                 request: "activate-1".into(),
                 boot: view.live.snapshot.as_ref().unwrap().boot_id.clone(),
@@ -103,12 +103,12 @@ fn custom_command_and_resize_mode_keys_send_endpoint_requests(cx: &mut gpui::Tes
     for resize in [false, true] {
         let (endpoint, mut server) = connected_endpoint("ssh:fixture");
         cx.update(|_, cx| {
-            view.update(cx, |view, _| {
+            view.update(cx, |view, cx| {
                 view.endpoints.truncate(1);
                 view.endpoints.push(endpoint);
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 view.activation_deadline = None;
                 // The fixture's `prefix+x` is Close Pane's chord, which wins.
                 let relabel = |snapshot: &mut Arc<ClientShellSnapshot>| {

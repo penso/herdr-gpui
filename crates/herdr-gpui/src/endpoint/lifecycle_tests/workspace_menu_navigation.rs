@@ -13,7 +13,7 @@ fn workspace_menu_keeps_immediate_and_deferred_navigation(cx: &mut gpui::TestApp
                 view.selected_endpoint = 0;
                 view.endpoints = vec![endpoint];
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 if deferred {
                     view.live.surface = None;
                 }

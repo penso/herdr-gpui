@@ -4,13 +4,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 mod bitmap_fonts;
 mod bold_color;
+mod code;
+mod code_navigation;
 mod default_fonts;
 mod discovery;
 mod fonts;
 mod github;
+mod icon_font;
 mod keybindings;
 mod line_height;
 mod loading;
+mod missing_fonts;
 mod notification_settings;
 mod preferences;
 mod sidebar_settings;

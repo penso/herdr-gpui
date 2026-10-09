@@ -26,8 +26,11 @@ format:
 format-check:
     cargo fmt --all -- --check
 
+# Every feature, then none: cloud providers are default features, and a build
+# without them must not keep code only they use.
 lint:
     cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+    cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
 
 test:
     cargo test --locked --workspace
@@ -138,6 +141,10 @@ lint-windows:
     CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc \
     AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar \
     cargo clippy --locked --workspace --all-targets --all-features \
+        --target x86_64-pc-windows-gnu -- -D warnings
+    CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc \
+    AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar \
+    cargo clippy --locked --workspace --all-targets --no-default-features \
         --target x86_64-pc-windows-gnu -- -D warnings
 
 # Clippy for Linux in the Ubuntu 24.04 that CI uses, from any host with Docker.

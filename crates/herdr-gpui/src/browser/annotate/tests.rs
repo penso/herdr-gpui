@@ -12,6 +12,7 @@ fn tab() -> Tab {
         }),
         title: "Mockup".into(),
         origin: Some("w_1:p1".into()),
+        place: Default::default(),
     }
 }
 

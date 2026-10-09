@@ -36,12 +36,24 @@ pub(crate) enum PanelDrag {
     DiffSides,
     /// The review's list of changed files.
     ReviewFiles,
+    /// The VS Code panel beside the editor groups.
+    Code,
+}
+
+impl PanelDrag {
+    /// Whether the panel's grip hangs outside its edge, over what it sits
+    /// beside, rather than inside it.
+    fn outside(self) -> bool {
+        self == Self::Code
+    }
 }
 
 /// The notes panel beside a review or an annotated page.
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
+/// The VS Code panel beside the editor groups.
+pub(crate) const CODE: PanelWidth = PanelWidth::new(640., 320.);
 /// The settings window's section list.
 pub(crate) const SETTINGS_NAVIGATION: PanelWidth = PanelWidth::new(184., 150.);
 
@@ -189,6 +201,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((&mut self.review_files_width, Side::Left)),
+            PanelDrag::Code => Some((&mut self.code_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }
@@ -200,6 +213,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((self.review_files_width, Side::Left)),
+            PanelDrag::Code => Some((self.code_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }
@@ -247,21 +261,30 @@ impl crate::HerdrWindow {
             )
             .on_mouse_up(MouseButton::Left, cx.listener(save))
             .on_mouse_up_out(MouseButton::Left, cx.listener(save))
-            .child(handle(
-                id,
-                side,
-                drag,
-                cx.listener(move |this, _, _, cx| {
-                    let reset = this.window_panel(drag).is_some_and(|(width, _)| {
-                        width.reset();
-                        width.take_unsaved()
-                    });
-                    if reset {
-                        this.save_chrome();
-                    }
-                    cx.notify();
-                }),
-            ))
+            .child({
+                let grip = handle(
+                    id,
+                    side,
+                    drag,
+                    cx.listener(move |this, _, _, cx| {
+                        let reset = this.window_panel(drag).is_some_and(|(width, _)| {
+                            width.reset();
+                            width.take_unsaved()
+                        });
+                        if reset {
+                            this.save_chrome();
+                        }
+                        cx.notify();
+                    }),
+                );
+                // A panel a native page fills, which draws above GPUI, would
+                // hide a grip inside it, so its grip hangs just outside.
+                match (drag.outside(), side) {
+                    (false, _) => grip,
+                    (true, Side::Right) => grip.left(px(-HANDLE)),
+                    (true, Side::Left) => grip.right(px(-HANDLE)),
+                }
+            })
     }
 }
 

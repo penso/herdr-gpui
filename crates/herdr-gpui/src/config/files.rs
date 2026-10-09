@@ -198,6 +198,55 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
+    /// Persist the VS Code server's address, or remove it with `None`,
+    /// keeping the rest of the local file.
+    pub(crate) fn save_code_url(url: Option<crate::browser::WebUrl>) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_code_url_path(url.as_ref(), &local)
+    }
+
+    pub(super) fn save_code_url_path(
+        url: Option<&crate::browser::WebUrl>,
+        path: &Path,
+    ) -> Result<()> {
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            match url {
+                Some(url) => {
+                    let code = document
+                        .entry("code")
+                        .or_insert(toml_edit::Item::Table(toml_edit::Table::new()))
+                        .as_table_like_mut()
+                        .ok_or(Error::InvalidCodeTable)?;
+                    let mut value = toml_edit::Value::from(url.as_str());
+                    if let Some(previous) = code.get("url").and_then(toml_edit::Item::as_value) {
+                        *value.decor_mut() = previous.decor().clone();
+                    }
+                    code.insert("url", toml_edit::Item::Value(value));
+                }
+                None => {
+                    let Some(code) = document
+                        .get_mut("code")
+                        .and_then(toml_edit::Item::as_table_like_mut)
+                    else {
+                        return Ok(());
+                    };
+                    code.remove("url");
+                    if code.is_empty() {
+                        document.remove("code");
+                    }
+                }
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
     /// Persist only the contrast setting, keeping the rest of the local file.
     pub(crate) fn save_contrast(contrast: Contrast) -> Result<()> {
         let (_lock, local) = Self::prepare_files(&Self::path()?)?;

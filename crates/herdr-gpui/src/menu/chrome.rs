@@ -12,6 +12,8 @@ use herdr_client::Method;
 /// How far past its panel a popover counts as covering, for the native pages
 /// that step aside for it.
 const COVER_MARGIN: f32 = 8.;
+/// The widest a popover grows, for keeping it clear of the VS Code column.
+const POPOVER_REACH: f32 = 480.;
 
 impl HerdrWindow {
     pub(crate) fn show_install_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -34,7 +36,7 @@ impl HerdrWindow {
             self.endpoints[self.selected_endpoint].generation,
         );
         self.menu.page = Some(Page::Menu);
-        self.marked.clear();
+        self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
         true
@@ -161,11 +163,11 @@ impl HerdrWindow {
                 self.dismiss_menu(window, cx);
             }
             "detach" => {
-                self.detach_endpoint();
+                self.detach_endpoint(cx);
                 self.dismiss_menu(window, cx);
             }
             "reconnect" => {
-                self.reconnect();
+                self.reconnect(cx);
                 self.dismiss_menu(window, cx);
             }
             _ => {}
@@ -252,11 +254,29 @@ impl HerdrWindow {
         }
     }
 
+    /// Whether the open menu is a dialog that dims the Herdr realm behind
+    /// it, rather than a popover beside what opened it.
+    pub(crate) fn menu_dims(&self) -> bool {
+        let Some(page) = self.menu.page else {
+            return false;
+        };
+        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
+        let footer_anchored =
+            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        !footer_anchored && !matches!(page, Page::Usage(_)) && !page.pointer_anchored()
+    }
+
     fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let page = self.menu.page.unwrap_or(Page::Menu);
         let font = &self.config.ui;
         let theme = &self.theme;
-        let viewport = window.viewport_size();
+        // Menus size and centre themselves in the Herdr realm, clear of the
+        // VS Code column.
+        let realm = self.herdr_realm();
+        let viewport = match realm {
+            Some(width) => size(width, window.viewport_size().height),
+            None => window.viewport_size(),
+        };
         let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
         let footer_anchored =
             matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
@@ -269,26 +289,7 @@ impl HerdrWindow {
         // Context menus open where the pointer asked for them. A dialog is a
         // modal decision, not a continuation of the row it came from, so it
         // centres over a dimmed window the way the Herdr TUI's dialogs do.
-        let pointer_anchored = matches!(
-            page,
-            Page::Workspace
-                | Page::Tab
-                | Page::RenameTab
-                | Page::Group
-                | Page::NewTab
-                | Page::Pane
-                | Page::RenamePane
-                | Page::PaneProcesses
-                | Page::KillProcesses
-                | Page::Host
-                | Page::RemoveDevice
-                | Page::RemoveWsl
-                | Page::Git
-                | Page::GitCommit
-                | Page::PrReview
-                | Page::PrComment
-                | Page::PrMerge
-        );
+        let pointer_anchored = page.pointer_anchored();
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
@@ -379,7 +380,6 @@ impl HerdrWindow {
                     Page::Tab
                         | Page::RenameTab
                         | Page::Group
-                        | Page::NewTab
                         | Page::Pane
                         | Page::RenamePane
                         | Page::PaneProcesses
@@ -406,7 +406,7 @@ impl HerdrWindow {
                         } else if page == Page::PaneProcesses {
                             // Name, command, pid, CPU and memory columns.
                             560.
-                        } else if matches!(page, Page::Group | Page::NewTab) {
+                        } else if page == Page::Group {
                             240.
                         } else {
                             360.
@@ -438,6 +438,7 @@ impl HerdrWindow {
                         | Page::Themes
                         | Page::Fonts
                         | Page::Palette
+                        | Page::CodeSearch
                         | Page::Preferences
                         | Page::AppUpdate
                         | Page::GitHub
@@ -446,7 +447,7 @@ impl HerdrWindow {
                         | Page::Usage(_)
                         | Page::RenameDevice
                         | Page::ForwardPort
-                ),
+                ) && !self.cloud_dialog_open(),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
@@ -464,7 +465,12 @@ impl HerdrWindow {
             .when(
                 matches!(
                     page,
-                    Page::Keybinds | Page::Themes | Page::Fonts | Page::Palette | Page::Preferences
+                    Page::Keybinds
+                        | Page::Themes
+                        | Page::Fonts
+                        | Page::Palette
+                        | Page::CodeSearch
+                        | Page::Preferences
                 ),
                 |panel| {
                     panel
@@ -503,7 +509,7 @@ impl HerdrWindow {
                         | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
-                ),
+                ) || self.cloud_dialog_open(),
                 |panel| panel.flex().flex_col().overflow_hidden().shadow_lg(),
             )
             .when(page == Page::About, |panel| {
@@ -568,6 +574,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
             panel = panel.child(self.render_add_device(cx));
+        } else if let Some(dialog) = self.render_cloud_dialog(cx) {
+            panel = panel.child(dialog);
         } else if page == Page::AddWsl {
             panel = panel.child(self.render_add_wsl(cx));
         } else if page == Page::RemoveWsl {
@@ -607,9 +615,7 @@ impl HerdrWindow {
         } else if matches!(page, Page::Tab | Page::RenameTab) {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
-            panel = panel.child(self.render_group_menu(cx));
-        } else if page == Page::NewTab {
-            panel = panel.child(self.render_new_tab_menu(cx));
+            panel = self.render_group_menu(panel, cx);
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses
@@ -623,6 +629,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_font_picker(cx));
         } else if page == Page::Palette {
             panel = panel.child(self.render_palette(cx));
+        } else if page == Page::CodeSearch {
+            panel = panel.child(self.render_code_search(cx));
         } else if page == Page::ConfirmClose {
             panel = panel.child(self.render_close_confirmation(cx));
         } else if page == Page::Preferences {
@@ -683,10 +691,10 @@ impl HerdrWindow {
         }
         // Pages sit above everything GPUI draws, so the menu says what it
         // covers: a dimmed dialog covers the window, a popover its panel.
-        let dims = !footer_anchored && !matches!(page, Page::Usage(_)) && !pointer_anchored;
+        let dims = self.menu_dims();
         let cover = self.menu.cover.clone();
         if dims {
-            cover.set(super::state::Cover::All);
+            cover.set(super::state::Cover::dimmed(realm));
         }
         let panel = panel.when(!dims, |panel| {
             panel.child(
@@ -704,8 +712,15 @@ impl HerdrWindow {
         });
         div()
             .id("menu-overlay")
+            .debug_selector(|| "menu-overlay".into())
             .absolute()
-            .inset_0()
+            .top_0()
+            .left_0()
+            .bottom_0()
+            .map(|overlay| match realm {
+                Some(width) => overlay.w(width),
+                None => overlay.right_0(),
+            })
             .when(dims, |overlay| {
                 overlay
                     .flex()
@@ -752,22 +767,34 @@ impl HerdrWindow {
             )
             .on_key_down(cx.listener(Self::menu_key_down))
             .child(if pointer_anchored {
+                let position = if page == Page::Git {
+                    point(
+                        self.menu.anchor.x,
+                        px(crate::titlebar::HEIGHT
+                            + crate::worktree_banner::reserved(
+                                env!("HERDR_BUILD_WORKTREE") == "1",
+                            )
+                            + 6.),
+                    )
+                } else {
+                    self.menu.anchor
+                };
+                // Beside the VS Code column, a popover that could reach into
+                // it hangs leftward from the pointer instead, in the realm.
+                let (position, hang_left) = match realm {
+                    Some(width) => {
+                        let x = position.x.min(width - px(MENU_MARGIN));
+                        (point(x, position.y), x + px(POPOVER_REACH) > width)
+                    }
+                    None => (position, false),
+                };
                 anchored()
-                    .position(if page == Page::Git {
-                        point(
-                            self.menu.anchor.x,
-                            px(crate::titlebar::HEIGHT
-                                + crate::worktree_banner::reserved(
-                                    env!("HERDR_BUILD_WORKTREE") == "1",
-                                )
-                                + 6.),
-                        )
-                    } else {
-                        self.menu.anchor
-                    })
+                    .position(position)
                     // The "…" button sits at a strip's right end, so its menu
                     // hangs leftward from it, as an editor's does.
-                    .when(page == Page::Group, |menu| menu.anchor(Anchor::TopRight))
+                    .when(page == Page::Group || hang_left, |menu| {
+                        menu.anchor(Anchor::TopRight)
+                    })
                     .snap_to_window_with_margin(Edges::all(px(12.)))
                     .child(panel)
                     .into_any_element()

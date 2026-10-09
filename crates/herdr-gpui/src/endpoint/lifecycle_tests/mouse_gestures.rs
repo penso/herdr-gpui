@@ -18,7 +18,7 @@ fn connected_mouse_cancels_stale_gestures_before_drag_or_release(cx: &mut gpui::
             let (endpoint, mut server) = connected_endpoint("ssh:mouse");
             cx.update(|window, cx| {
                 view.update(cx, |view, cx| {
-                    prepare_mouse(view, endpoint);
+                    prepare_mouse(view, endpoint, cx);
                     let position = mouse_position(view, 3.5, 4.5);
                     assert!(view.terminal_mouse_down(
                         &MouseDownEvent {
@@ -150,7 +150,7 @@ fn connected_mouse_external_drag_cleans_up_once_without_forwarding_synthetic_inp
             let (endpoint, mut server) = connected_endpoint("ssh:mouse");
             let position = cx.update(|window, cx| {
                 view.update(cx, |view, cx| {
-                    prepare_mouse(view, endpoint);
+                    prepare_mouse(view, endpoint, cx);
                     let position = mouse_position(view, 3.5, 4.5);
                     if pressed {
                         assert!(view.terminal_mouse_down(
@@ -265,7 +265,7 @@ fn connected_mouse_deactivation_releases_last_sent_position_once_without_focusin
         let (endpoint, mut server) = connected_endpoint("ssh:mouse");
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
-                prepare_mouse(view, endpoint);
+                prepare_mouse(view, endpoint, cx);
                 view.active = true;
                 assert!(view.terminal_mouse_down(
                     &MouseDownEvent {
@@ -342,7 +342,7 @@ fn connected_mouse_hover_is_separate_from_capture_and_obeys_input_guards(
     let (endpoint, mut server) = connected_endpoint("ssh:mouse");
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             let event = MouseMoveEvent {
                 position: mouse_position(view, 43.5, 4.5),
                 ..Default::default()

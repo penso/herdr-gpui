@@ -7,6 +7,8 @@ use herdr_client::protocol::{
 };
 use serde_json::json;
 
+mod file_handlers;
+
 const URL: &str = "https://example.com/wrapped/path";
 
 fn snapshot() -> ClientShellSnapshot {
@@ -283,7 +285,7 @@ fn a_replaced_connection_retires_link_requests_unanswered(cx: &mut gpui::TestApp
             id: "old".into(),
             inbox: Arc::default(),
             context: PendingActivation {
-                fallback: WebUrl::try_from(URL).ok(),
+                fallback: WebUrl::try_from(URL).ok().map(Fallback::Web),
                 in_tab: false,
             },
         });

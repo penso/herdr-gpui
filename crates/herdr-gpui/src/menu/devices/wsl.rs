@@ -485,7 +485,7 @@ fn add(distro: &str, session: &str) -> Outcome {
         Ok(HostProbe::Outdated) => Outcome::Refused(format!(
             "The Herdr in {distro} is too old for this app. Update it inside the distribution, then add it again."
         )),
-        Ok(HostProbe::SshFailed) => Outcome::Refused(format!("{distro} did not answer.")),
+        Ok(HostProbe::SshFailed(_)) => Outcome::Refused(format!("{distro} did not answer.")),
         Err(error) => Outcome::Refused(format!("Check {distro}: {error}")),
     }
 }

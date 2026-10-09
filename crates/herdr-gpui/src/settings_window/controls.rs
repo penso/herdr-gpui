@@ -1,4 +1,5 @@
 //! Prepared controls for the standalone window; persistence belongs to its serial save path.
+pub(super) mod code;
 mod fonts;
 mod preferences;
 mod status_bar;
@@ -178,6 +179,7 @@ impl SettingsWindow {
         if !self.busy() {
             self.controls.saving_sizes.clear();
             self.flush_control_sizes(cx);
+            self.flush_code_url(cx);
         }
     }
 
@@ -193,6 +195,7 @@ impl SettingsWindow {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             });
         }
+        self.refresh_code_appearance(cx);
     }
 
     fn flush_control_sizes(&mut self, cx: &mut Context<Self>) {
@@ -325,7 +328,7 @@ impl SettingsWindow {
         }
     }
 
-    fn control_card(&self, title: &'static str) -> Div {
+    pub(super) fn control_card(&self, title: &'static str) -> Div {
         div()
             .flex()
             .flex_col()
@@ -339,7 +342,7 @@ impl SettingsWindow {
             .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
     }
 
-    fn control_note(&self, text: impl Into<SharedString>) -> Div {
+    pub(super) fn control_note(&self, text: impl Into<SharedString>) -> Div {
         div()
             .min_w_0()
             .text_color(rgb(self.theme.muted))
@@ -404,7 +407,9 @@ impl SettingsWindow {
             Section::Notifications => self.render_notification_controls(cx),
             Section::StatusBar => self.render_status_bar_controls(cx),
             Section::General => self.render_general_controls(cx),
-            Section::Appearance | Section::Integrations => div(),
+            Section::Appearance | Section::Integrations | Section::Code => div(),
+            #[cfg(feature = "cloud")]
+            Section::CloudDevices => div(),
         };
         div()
             .flex()
@@ -945,7 +950,7 @@ impl SettingsWindow {
             .debug_selector(|| "settings-sidebar-layout".into())
             .map(|card| {
                 #[cfg(all(feature = "integration-test", target_os = "macos"))]
-                let card = card.child(super::native::probe(7));
+                let card = card.child(super::native::probe(super::native::SIDEBAR_LAYOUT));
                 card
             })
             .child(chooser)

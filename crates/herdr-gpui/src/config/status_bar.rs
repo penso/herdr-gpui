@@ -52,6 +52,8 @@ impl Detail {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct StatusBar {
+    /// The bar at all; `toggle_status_bar` hides or shows it for the session.
+    pub show: bool,
     pub usage: Detail,
     pub system_load: Detail,
     pub keep_awake: bool,
@@ -63,6 +65,7 @@ pub struct StatusBar {
 impl Default for StatusBar {
     fn default() -> Self {
         Self {
+            show: true,
             usage: Detail::default(),
             system_load: Detail::default(),
             keep_awake: true,

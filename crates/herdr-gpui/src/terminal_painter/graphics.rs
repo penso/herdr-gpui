@@ -17,7 +17,7 @@ mod tests;
 /// the cell, not the font's ink bounds. Font glyphs leave line-height padding
 /// above and below a colored prompt bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum CellSeparator {
+pub(crate) enum CellSeparator {
     RightTriangle,
     LeftTriangle,
     RightRound,
@@ -25,7 +25,7 @@ pub(super) enum CellSeparator {
 }
 
 impl CellSeparator {
-    pub(super) fn from_symbol(symbol: &str) -> Option<Self> {
+    pub(crate) fn from_symbol(symbol: &str) -> Option<Self> {
         match symbol {
             "\u{e0b0}" => Some(Self::RightTriangle),
             "\u{e0b2}" => Some(Self::LeftTriangle),
@@ -92,7 +92,7 @@ impl CellSeparator {
 }
 
 impl Graphic {
-    pub(super) fn from_symbol(symbol: &str) -> Option<Self> {
+    pub(crate) fn from_symbol(symbol: &str) -> Option<Self> {
         // Every graphic below is one character in U+2500..=U+259F, three UTF-8
         // bytes; this rejects ASCII, most of any grid, before decoding.
         if symbol.len() != 3 {

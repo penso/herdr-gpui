@@ -42,6 +42,10 @@ pub(crate) enum Location {
     Orchestrator {
         repo: OrchestratorRepo,
     },
+    /// A local source file, drawn read-only by the app, never a page.
+    Code {
+        file: crate::code_view::CodeFile,
+    },
 }
 
 /// The checkout an orchestrator tab lists the repository of, on the tab's
@@ -59,9 +63,9 @@ struct SavedOrchestratorRepo {
 }
 
 impl TryFrom<SavedOrchestratorRepo> for OrchestratorRepo {
-    type Error = crate::Error;
+    type Error = crate::orchestrator::Error;
 
-    fn try_from(saved: SavedOrchestratorRepo) -> crate::Result<Self> {
+    fn try_from(saved: SavedOrchestratorRepo) -> crate::orchestrator::Result<Self> {
         Self::new(saved.checkout)
     }
 }
@@ -69,13 +73,13 @@ impl TryFrom<SavedOrchestratorRepo> for OrchestratorRepo {
 impl OrchestratorRepo {
     /// An absolute, bounded path without control characters; a remote one
     /// is a POSIX path whatever this machine's own convention.
-    pub(crate) fn new(checkout: String) -> crate::Result<Self> {
+    pub(crate) fn new(checkout: String) -> crate::orchestrator::Result<Self> {
         let valid = !checkout.is_empty()
             && checkout.len() <= 4096
             && !checkout.chars().any(char::is_control)
             && (checkout.starts_with('/') || Path::new(&checkout).is_absolute());
         if !valid {
-            return Err(crate::Error::InvalidOrchestratorCheckout);
+            return Err(crate::orchestrator::Error::InvalidCheckout);
         }
         Ok(Self { checkout })
     }
@@ -164,13 +168,18 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
             // Never loaded: a review is drawn by the app.
-            Self::Review { .. } | Self::Orchestrator { .. } => "about:blank".to_owned(),
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } => {
+                "about:blank".to_owned()
+            }
         }
     }
 
     /// Whether a native page shows it, rather than the app drawing it.
     pub(crate) fn is_page(&self) -> bool {
-        !matches!(self, Self::Review { .. } | Self::Orchestrator { .. })
+        !matches!(
+            self,
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. }
+        )
     }
 
     /// What the address field and a prompt show for it.
@@ -179,7 +188,8 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.path().display().to_string(),
             Self::Review { checkout } => format!("Review of {}", checkout.branch),
-            Self::Orchestrator { repo } => format!("Issues & PRs of {}", repo.name()),
+            Self::Code { file } => file.path.clone(),
+            Self::Orchestrator { repo } => format!("Orchestrator of {}", repo.name()),
         }
     }
 
@@ -189,7 +199,8 @@ impl Location {
             Self::Web { url } => url.host().to_owned(),
             Self::Local { file } => file.entry.rsplit('/').next().unwrap_or_default().to_owned(),
             Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
-            Self::Orchestrator { repo } => format!("Issues & PRs \u{00b7} {}", repo.name()),
+            Self::Code { file } => file.name().to_owned(),
+            Self::Orchestrator { repo } => format!("Orchestrator \u{00b7} {}", repo.name()),
         }
     }
 

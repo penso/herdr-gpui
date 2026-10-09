@@ -486,6 +486,9 @@ impl Render for LogWindow {
             .key_context("LogWindow")
             .track_focus(&self.focus)
             .on_action(cx.listener(|_, _: &Close, window, _| window.remove_window()))
+            .on_action(cx.listener(|_, action: &crate::RunCommand, window, cx| {
+                crate::window::run_window_command(action.command, window, cx);
+            }))
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| {
                 this.level_menu = None;
                 window.focus(&this.search.read(cx).focus.clone(), cx);

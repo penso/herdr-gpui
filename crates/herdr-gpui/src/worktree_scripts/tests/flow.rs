@@ -13,7 +13,7 @@ fn a_run_script_is_located_reviewed_trusted_and_typed_into_a_new_tab(
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            connect(view, &peer);
+            connect(view, &peer, cx);
             view.start_worktree_script(launch(view, ScriptKind::Run, None), cx)
                 .unwrap();
             assert_eq!(step(view), "locating");
@@ -126,7 +126,7 @@ fn trust_covers_one_file_and_a_changed_file_asks_again(cx: &mut gpui::TestAppCon
     .unwrap();
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            connect(view, &peer);
+            connect(view, &peer, cx);
             cx.default_global::<Trust>()
                 .grant(launch(view, ScriptKind::Setup, None).grant(&config));
         })
@@ -176,7 +176,7 @@ fn missing_scripts_are_reported_only_when_asked_for(cx: &mut gpui::TestAppContex
     // A setup after creation stays quiet in a repository without scripts.
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            connect(view, &peer);
+            connect(view, &peer, cx);
             let quiet = Launch {
                 requested: false,
                 ..launch(view, ScriptKind::Setup, Some(dir.path()))
@@ -236,7 +236,7 @@ fn a_replaced_connection_or_dismissed_question_runs_nothing(cx: &mut gpui::TestA
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            connect(view, &peer);
+            connect(view, &peer, cx);
             view.start_worktree_script(launch(view, ScriptKind::Run, Some(dir.path())), cx)
                 .unwrap();
         })

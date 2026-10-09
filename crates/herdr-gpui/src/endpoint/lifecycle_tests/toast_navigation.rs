@@ -42,7 +42,7 @@ fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui::TestApp
                 view.endpoints.push(endpoint);
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 window.focus(&view.focus, cx);
                 view.marked = "composition".into();
                 assert!(view.input_ready());
@@ -141,7 +141,7 @@ fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
             });
             // Select the already-active fixture surface without issuing unrelated activation requests.
             view.selected_endpoint = 1;
-            view.reset_selected();
+            view.reset_selected(cx);
             view.command(Command::OpenNotificationTarget, window, cx);
             assert!(view.endpoints[1].toasts.entries.is_empty());
             assert!(!view.input_ready());
@@ -282,7 +282,7 @@ fn toast_queue_failure_retains_notice(cx: &mut gpui::TestAppContext) {
         view.endpoints.push(endpoint);
         view.selected_endpoint = 1;
         view.options = ConnectOptions::default();
-        view.reset_selected();
+        view.reset_selected(cx);
         // Keep the projected connected state to exercise enqueue failure itself.
         view.endpoints[1].connection.inbox = Arc::new(Mutex::new(view.live.clone()));
         view.endpoints[1]

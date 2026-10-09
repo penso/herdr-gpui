@@ -56,13 +56,29 @@ pub(crate) struct Browser {
     pub(super) tab_scroll: super::tab_scroll::TabScroll,
     /// Groups opening from a split and folding away as they close.
     pub(super) group_motion: super::group_motion::GroupMotion,
-    /// Why a tab's page could not be created, shown in its place.
-    pub(super) failed: Option<(TabId, SharedString)>,
+    /// Why each tab's page could not be created, shown in its place. One
+    /// per tab, so a failure elsewhere never clears another's and sets it
+    /// retrying; bounded by the tabs the store keeps.
+    pub(super) failed: HashMap<TabId, SharedString>,
+    /// Whether the VS Code server answers, asked before its pages open.
+    pub(super) code_server: super::code::CodeServer,
     /// The workspaces of the last snapshot and the boot they came from: one
     /// missing from the next snapshot of the same boot was closed.
     workspaces: Option<(Scope, String, HashSet<String>)>,
     #[cfg(any(target_os = "macos", windows))]
     pub(super) annotations: Annotations,
+    /// The menu page open when pages were last presented, which the menu's
+    /// measured cover belongs to.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) cover_page: Option<crate::menu::Page>,
+    /// While the pointer is over the status bar, the band above it where
+    /// the bar's tooltips show. Pages draw above tooltips, so those in the
+    /// band step aside, as for a menu.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) tooltip_band: Option<Bounds<Pixels>>,
+    /// Where the status bar last drew, which the band sits above.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) status_bar: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
 }
 
 impl Browser {
@@ -86,10 +102,17 @@ impl Browser {
             appear: Default::default(),
             tab_scroll: Default::default(),
             group_motion: Default::default(),
-            failed: None,
+            failed: HashMap::new(),
+            code_server: Default::default(),
             workspaces: None,
             #[cfg(any(target_os = "macos", windows))]
             annotations: Annotations::new(cx),
+            #[cfg(any(target_os = "macos", windows))]
+            cover_page: None,
+            #[cfg(any(target_os = "macos", windows))]
+            tooltip_band: None,
+            #[cfg(any(target_os = "macos", windows))]
+            status_bar: Default::default(),
         }
     }
 }
@@ -159,14 +182,7 @@ impl HerdrWindow {
         }
         #[cfg(any(target_os = "macos", windows))]
         self.browser.pages.retain(|id| !gone(id));
-        if self
-            .browser
-            .failed
-            .as_ref()
-            .is_some_and(|(id, _)| gone(*id))
-        {
-            self.browser.failed = None;
-        }
+        self.browser.failed.retain(|id, _| !gone(*id));
         #[cfg(any(target_os = "macos", windows))]
         let annotated: Vec<TabId> = self
             .browser
@@ -280,8 +296,10 @@ impl HerdrWindow {
         }
         self.forget_closed_workspaces(cx);
         self.forget_closed_herdr_tabs(cx);
+        self.ensure_code_page(window, cx);
         self.poll_deliveries(cx);
         self.poll_reviews(cx);
+        self.poll_code_views(cx);
         self.poll_orchestrators(window, cx);
         self.sync_addresses(false, window, cx);
     }

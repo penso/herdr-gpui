@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::endpoint::tests::host;
+#[cfg(feature = "coder")]
+use std::sync::Arc;
 
 #[test]
 fn explicit_socket_never_reads_shared_catalog() {
@@ -50,6 +52,8 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![host("a", enabled)],
         wsl: Vec::new(),
         selection,
+        #[cfg(feature = "cloud")]
+        cloud: None,
     };
     let mut first = Catalog::new(&ConnectTarget::Local);
     let mut second = Catalog::new(&ConnectTarget::Local);
@@ -78,8 +82,57 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![],
         wsl: Vec::new(),
         selection: None,
+        #[cfg(feature = "cloud")]
+        cloud: None,
     });
     assert_eq!(second.desired, None);
+}
+
+#[cfg(feature = "coder")]
+#[gpui::test]
+fn cloud_devices_follow_ssh_hosts_and_survive_an_unreadable_list(cx: &mut gpui::TestAppContext) {
+    let workspace = |id: &str, enabled| crate::cloud::SavedDevice {
+        provider: crate::cloud::CloudProvider::Coder,
+        id: id.into(),
+        label: format!("Coder {id}"),
+        account: "https://coder.example.com".into(),
+        machine: format!("herdr-{id}"),
+        session: "default".into(),
+        enabled,
+    };
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    view.update(cx, |view, cx| {
+        let ids = |view: &HerdrWindow| {
+            view.endpoints
+                .iter()
+                .map(|e| e.id.clone())
+                .collect::<Vec<_>>()
+        };
+        view.reconcile_devices(
+            vec![host("a", false)],
+            Vec::new(),
+            Some(vec![workspace("w1", false), workspace("w2", false)]),
+            cx,
+        );
+        assert_eq!(ids(view), [LOCAL, "ssh:a", "coder:w1", "coder:w2"]);
+        assert_eq!(
+            view.endpoints[2].connection.target,
+            workspace("w1", false).target()
+        );
+        let inbox = view.endpoints[2].connection.inbox.clone();
+        // A failed read of the Coder list keeps its endpoints and connections.
+        view.reconcile_catalog(vec![host("a", false)], Vec::new(), cx);
+        assert_eq!(ids(view), [LOCAL, "ssh:a", "coder:w1", "coder:w2"]);
+        assert!(Arc::ptr_eq(&inbox, &view.endpoints[2].connection.inbox));
+        let mut moved = workspace("w1", false);
+        moved.session = "work".into();
+        view.reconcile_devices(vec![], Vec::new(), Some(vec![moved.clone()]), cx);
+        assert_eq!(ids(view), [LOCAL, "coder:w1"]);
+        assert_eq!(view.endpoints[1].connection.target, moved.target());
+        assert!(!Arc::ptr_eq(&inbox, &view.endpoints[1].connection.inbox));
+        view.reconcile_devices(vec![], Vec::new(), Some(vec![]), cx);
+        assert_eq!(ids(view), [LOCAL]);
+    });
 }
 
 mod storage_warning;

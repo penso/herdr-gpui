@@ -77,7 +77,7 @@ exit 127"#,
 pub enum HostProbe {
     /// SSH could not run a command without prompting: unknown host key,
     /// password or passphrase authentication, or an unreachable host.
-    SshFailed,
+    SshFailed(SshFailure),
     /// No Herdr executable was found in the known install locations.
     Missing,
     /// Herdr is installed, but no copy speaks this client's endpoint protocol.
@@ -151,11 +151,36 @@ pub(crate) fn classify_probe(output: &[u8]) -> Option<HostProbe> {
 pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
-    let (status, output) = run_remote(target, &probe_command(session), PROBE_TIMEOUT, || false)?;
+    let mut command = command(target, &probe_command(session));
+    // Stderr is read only to classify an `ssh` failure; its text is dropped.
+    command.stderr(Stdio::piped());
+    tracing::info!(category = "probe", "probing host");
+    let started = Instant::now();
+    let (status, output, stderr) = match run_with_stderr(&mut command, PROBE_TIMEOUT, || false) {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::warn!(category = "probe", kind = ?error.kind(), elapsed_ms = started.elapsed().as_millis() as u64, "probe did not finish");
+            return Err(error);
+        }
+    };
+    let elapsed_ms = started.elapsed().as_millis() as u64;
     if status.code() == Some(255) {
-        return Ok(HostProbe::SshFailed);
+        let failure = SshFailure::classify(status.code(), &stderr);
+        tracing::warn!(category = "probe", %status, ?failure, stderr_bytes = stderr.len(), elapsed_ms, "ssh failed during probe");
+        return Ok(HostProbe::SshFailed(failure));
     }
-    classify_probe(&output).ok_or(Error::SshClosed)
+    let probe = classify_probe(&output);
+    tracing::info!(
+        category = "probe",
+                %status,
+        stdout_bytes = output.len(),
+        candidates = output.split(|b| *b == b'\n').filter(|line| *line == PROBE_CANDIDATE.as_bytes()).count(),
+        finished = output.split(|b| *b == b'\n').any(|line| line == PROBE_DONE.as_bytes()),
+        ?probe,
+        elapsed_ms,
+        "probe finished"
+    );
+    probe.ok_or(Error::SshClosed)
 }
 
 /// The `remote.origin.url` of a repository on a saved host, read without a
@@ -233,9 +258,16 @@ pub fn resolve_destination(target: &str) -> Result<Destination> {
     command.args(["-G", "--", target]);
     let (status, output) = run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
+        tracing::warn!(category = "resolve", %status, "ssh -G failed");
         return Err(Error::RemoteCommand(status));
     }
-    parse_destination(&output).ok_or(Error::RemoteOutput)
+    let destination = parse_destination(&output);
+    tracing::info!(
+        category = "resolve",
+        resolved = destination.is_some(),
+        "resolved SSH target"
+    );
+    destination.ok_or(Error::RemoteOutput)
 }
 
 #[cfg(windows)]
@@ -280,14 +312,29 @@ pub(crate) fn run(
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<(std::process::ExitStatus, Vec<u8>)> {
+    command.stderr(Stdio::null());
+    let (status, output, _) = run_with_stderr(command, timeout, cancelled)?;
+    Ok((status, output))
+}
+
+/// [`run`], also returning a bounded tail of stderr when the caller piped it.
+/// That tail is for classification only: callers never log or show it.
+fn run_with_stderr(
+    command: &mut Command,
+    timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>)> {
     let mut child = ChildGuard(
         command
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
             .spawn()?,
     );
     let stdout = child.0.stdout.take().ok_or(Error::SshClosed)?;
+    let stderr = match child.0.stderr.take() {
+        Some(stderr) => Some(failure::drain(stderr)?),
+        None => None,
+    };
     // The pipe reaches EOF once the child exits or the guard kills it.
     let reader = std::thread::Builder::new()
         .name("herdr-ssh-command".into())
@@ -315,7 +362,11 @@ pub(crate) fn run(
     if output.len() as u64 > PROBE_OUTPUT_LIMIT {
         return Err(Error::SshOutputLimit);
     }
-    Ok((status, output))
+    // The pipe closes once the child exits, so this waits only for the drain.
+    let stderr = stderr
+        .and_then(|stderr| stderr.recv_timeout(Duration::from_secs(2)).ok())
+        .unwrap_or_default();
+    Ok((status, output, stderr))
 }
 
 #[cfg(windows)]
@@ -457,10 +508,39 @@ pub(crate) fn connect(
 ) -> Result<(Stream, ChildGuard)> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
+    bridge(command(target, &bridge_command(session)), stop)
+}
+
+/// The stdio bridge through an application-built remote command, such as
+/// `coder ssh -- <workspace>`: the discovery script is appended as its final
+/// argument, and the command's standard streams become the connection. The
+/// caller owns the program, its arguments, and any credential it needs.
+#[cfg(unix)]
+pub fn connect_command(mut command: Command, session: &str, stop: &AtomicBool) -> Result<Bridge> {
+    session_socket(Path::new(""), session)?;
+    command.arg(bridge_command(session));
+    let (stream, child) = bridge(command, stop)?;
+    Ok(Bridge { stream, child })
+}
+
+#[cfg(windows)]
+pub fn connect_command(_command: Command, session: &str, _stop: &AtomicBool) -> Result<Bridge> {
+    session_socket(Path::new(""), session)?;
+    Err(Error::SshUnsupported)
+}
+
+/// A spawned remote bridge that has answered discovery. Dropping it kills and
+/// reaps the child.
+pub struct Bridge {
+    pub(crate) stream: Stream,
+    pub(crate) child: ChildGuard,
+}
+
+#[cfg(unix)]
+fn bridge(mut command: Command, stop: &AtomicBool) -> Result<(Stream, ChildGuard)> {
     let (mut stream, child_stream) = Stream::pair()?;
     stream.set_read_timeout(Some(POLL))?;
     stream.set_write_timeout(Some(Duration::from_secs(1)))?;
-    let mut command = command(target, &bridge_command(session));
     command
         .stdin(Stdio::from(OwnedFd::from(child_stream.try_clone()?)))
         .stdout(Stdio::from(OwnedFd::from(child_stream)))

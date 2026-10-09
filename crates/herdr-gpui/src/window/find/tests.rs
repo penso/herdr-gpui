@@ -66,7 +66,7 @@ fn open<'a>(
     let peer = MockPeer::advertising(methods);
     let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
-        peer.prepare(&mut view);
+        peer.prepare(&mut view, cx);
         view.live.supports_copy_search = methods.contains(&"pane.copy_search");
         let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
         // 100 rows of history above a 24-row screen, scrolled to the bottom.

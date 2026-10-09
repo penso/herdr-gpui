@@ -107,7 +107,7 @@ impl HerdrWindow {
         self.selected_is_remote() && self.accepts_image_input()
     }
 
-    pub(super) fn selected_is_remote(&self) -> bool {
+    pub(crate) fn selected_is_remote(&self) -> bool {
         self.endpoints[self.selected_endpoint]
             .connection
             .target

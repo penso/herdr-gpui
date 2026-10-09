@@ -369,7 +369,9 @@ impl Error {
                 crate::SshFailure::HostKey | crate::SshFailure::Auth => {
                     io::ErrorKind::PermissionDenied
                 }
-                crate::SshFailure::Unreachable => io::ErrorKind::NotConnected,
+                crate::SshFailure::Unreachable
+                | crate::SshFailure::NoRoute
+                | crate::SshFailure::LocalNetworkDenied => io::ErrorKind::NotConnected,
                 crate::SshFailure::HerdrMissing => io::ErrorKind::NotFound,
                 crate::SshFailure::Other => io::ErrorKind::UnexpectedEof,
             },

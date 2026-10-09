@@ -69,6 +69,8 @@ impl Daemon {
             ConnectTarget::Ssh { .. } | ConnectTarget::Wsl { .. } | ConnectTarget::Socket(_) => {
                 None
             }
+            #[cfg(feature = "cloud")]
+            ConnectTarget::Cloud { .. } => None,
         }
     }
 

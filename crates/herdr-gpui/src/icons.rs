@@ -153,6 +153,7 @@ impl AssetSource for Icons {
             "icons/x.svg" => include_bytes!("../../../assets/icons/x.svg"),
             "icons/pencil.svg" => include_bytes!("../../../assets/icons/pencil.svg"),
             "icons/note.svg" => include_bytes!("../../../assets/icons/note.svg"),
+            "icons/code.svg" => include_bytes!("../../../assets/icons/code.svg"),
             "icons/trash.svg" => include_bytes!("../../../assets/icons/trash.svg"),
             "icons/chevron-up.svg" => include_bytes!("../../../assets/icons/chevron-up.svg"),
             "icons/chevron-down.svg" => include_bytes!("../../../assets/icons/chevron-down.svg"),
@@ -172,6 +173,9 @@ impl AssetSource for Icons {
             "icons/pulse.svg" => include_bytes!("../../../assets/icons/pulse.svg"),
             "icons/lock.svg" => include_bytes!("../../../assets/icons/lock.svg"),
             "icons/globe.svg" => include_bytes!("../../../assets/icons/globe.svg"),
+            "icons/vscode.svg" => include_bytes!("../../../assets/icons/vscode.svg"),
+            "icons/error.svg" => include_bytes!("../../../assets/icons/error.svg"),
+            "icons/pass.svg" => include_bytes!("../../../assets/icons/pass.svg"),
             "icons/terminal.svg" => include_bytes!("../../../assets/icons/terminal.svg"),
             "icons/arrow-left.svg" => include_bytes!("../../../assets/icons/arrow-left.svg"),
             "icons/arrow-right.svg" => include_bytes!("../../../assets/icons/arrow-right.svg"),
@@ -188,6 +192,7 @@ impl AssetSource for Icons {
             "icons/whitespace.svg" => include_bytes!("../../../assets/icons/whitespace.svg"),
             "icons/search.svg" => include_bytes!("../../../assets/icons/search.svg"),
             "icons/check.svg" => include_bytes!("../../../assets/icons/check.svg"),
+            "icons/copy.svg" => include_bytes!("../../../assets/icons/copy.svg"),
             "icons/panel-left.svg" => include_bytes!("../../../assets/icons/panel-left.svg"),
             "icons/panel-right.svg" => include_bytes!("../../../assets/icons/panel-right.svg"),
             "icons/status-bar.svg" => include_bytes!("../../../assets/icons/status-bar.svg"),
@@ -236,6 +241,9 @@ impl AssetSource for Icons {
             "icons/pulse.svg",
             "icons/lock.svg",
             "icons/globe.svg",
+            "icons/vscode.svg",
+            "icons/error.svg",
+            "icons/pass.svg",
             "icons/terminal.svg",
             "icons/arrow-left.svg",
             "icons/arrow-right.svg",
@@ -293,7 +301,7 @@ mod tests {
         assert!(Icons.load("unknown.svg").unwrap().is_none());
         assert_eq!(
             Icons.list("icons/").unwrap().len(),
-            46 + AgentIcon::ALL.len() + crate::usage::icon_paths().count()
+            49 + AgentIcon::ALL.len() + crate::usage::icon_paths().count()
         );
     }
 

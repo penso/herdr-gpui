@@ -158,7 +158,7 @@ fn host_theme_is_boot_fenced_and_a_failed_queue_resends_in_full() {
         ConnectTarget::Local,
         ConnectOptions::default(),
         true,
-        |_, _| Err(io::Error::other("offline")),
+        |_, _| Err::<Stream, _>(io::Error::other("offline")),
     )
     .unwrap();
     disconnected.handle.disconnect();

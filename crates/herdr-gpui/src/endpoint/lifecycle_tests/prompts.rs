@@ -15,7 +15,7 @@ fn dialog_response_survives_initial_surface_activation(cx: &mut gpui::TestAppCon
         view.endpoints[0].detached = true;
         view.endpoints.push(endpoint);
         view.selected_endpoint = 1;
-        view.reset_selected();
+        view.reset_selected(cx);
         view.poll_endpoints(cx);
         assert!(view.live.activation.is_some());
         assert!(matches!(&view.live.dialog_response, Some((id, Some(Ok(value)))) if id == "lookup" && value == &response));
@@ -96,7 +96,7 @@ fn name_prompts_follow_shared_config_and_label_creations(cx: &mut gpui::TestAppC
                 view.endpoints.push(endpoint);
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 view.activation_deadline = None;
                 // A reload replaces the prepared settings; nothing is re-read here.
                 view.settings.shared = (!config.is_empty())
@@ -144,7 +144,7 @@ fn unconfirmed_tab_close_rejects_invalid_targets_and_unready_input(cx: &mut gpui
         view.update(cx, |view, cx| {
             view.endpoints.push(endpoint);
             view.selected_endpoint = 1;
-            view.reset_selected();
+            view.reset_selected(cx);
             view.activation_deadline = None;
             view.config.confirm_close_tab = false;
             assert!(view.input_ready());

@@ -68,19 +68,24 @@ async fn open() -> Result<Option<Keyring>> {
     Ok(Some(keyring))
 }
 
-fn attributes(account: &str) -> [(&'static str, &str); 2] {
-    [("service", SERVICE), ("account", account)]
+fn attributes<'a>(service: &'a str, account: &'a str) -> [(&'static str, &'a str); 2] {
+    [("service", service), ("account", account)]
 }
 
 /// A missing Secret Service holds nothing, so reading one is not an error:
 /// the environment remains the source of a token, exactly as before.
 pub(super) fn read(account: &str) -> Result<Option<SecretString>> {
+    read_in(SERVICE, account)
+}
+
+/// `read` for an entry under another feature's service name.
+pub(super) fn read_in(service: &str, account: &str) -> Result<Option<SecretString>> {
     block_on(async {
         let Some(keyring) = open().await? else {
             return Ok(None);
         };
         let items = keyring
-            .search_items(&attributes(account))
+            .search_items(&attributes(service, account))
             .await
             .map_err(read_error)?;
         let Some(item) = items.into_iter().next() else {
@@ -96,6 +101,16 @@ pub(super) fn read(account: &str) -> Result<Option<SecretString>> {
 /// Saves `token`, or removes the entry when it is `None`. Removing from a
 /// missing Secret Service succeeds, since nothing can have been saved there.
 pub(super) fn save(token: Option<&SecretString>, account: &str) -> Result<()> {
+    save_in(SERVICE, LABEL, token, account)
+}
+
+/// `save` for an entry under another feature's service name and label.
+pub(super) fn save_in(
+    service: &str,
+    label: &str,
+    token: Option<&SecretString>,
+    account: &str,
+) -> Result<()> {
     block_on(async {
         let keyring = match (open().await, token) {
             (Ok(Some(keyring)), _) => keyring,
@@ -106,12 +121,12 @@ pub(super) fn save(token: Option<&SecretString>, account: &str) -> Result<()> {
             }
             (Err(error), _) => return Err(error),
         };
-        let attributes = attributes(account);
+        let attributes = attributes(service, account);
         match token {
             Some(token) => {
                 keyring
                     .create_item(
-                        LABEL,
+                        label,
                         &attributes,
                         oo7::Secret::text(token.expose_secret()),
                         true,
@@ -206,8 +221,12 @@ mod tests {
     #[test]
     fn entries_are_keyed_by_service_and_account() {
         assert_eq!(
-            attributes("github.com/host/0123"),
+            attributes(SERVICE, "github.com/host/0123"),
             [("service", SERVICE), ("account", "github.com/host/0123")]
+        );
+        assert_eq!(
+            attributes("dev.herdr.gpui.coder", "coder"),
+            [("service", "dev.herdr.gpui.coder"), ("account", "coder")]
         );
     }
 }

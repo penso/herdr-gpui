@@ -50,7 +50,7 @@ fn connected_split_drag_sends_coalesced_ratios_and_stops_on_layout_change(
     };
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             Arc::make_mut(view.live.surface.as_mut().unwrap()).splits = vec![PaneSurfaceSplit {
                 direction: PaneSurfaceSplitDirection::Horizontal,
                 pos: 40,

@@ -286,16 +286,18 @@ impl HerdrWindow {
             "Copying..."
         };
         let accent = self.theme.primary();
+        // Left of the VS Code column, however narrow, since its page would
+        // hide the card.
+        let viewport = window.viewport_size().width;
+        let realm = self.beside_code().unwrap_or(viewport);
         Some(
             div()
                 .id("file-transfer")
                 .debug_selector(|| "file-transfer".into())
                 .absolute()
-                .right(px(12.))
+                .right(px(12.) + viewport - realm)
                 .top(px(72.))
-                .w((window.viewport_size().width - px(24.))
-                    .max(px(0.))
-                    .min(px(340.)))
+                .w((realm - px(24.)).max(px(0.)).min(px(340.)))
                 .occlude()
                 .rounded(px(crate::config::corners::PANEL))
                 .border_1()

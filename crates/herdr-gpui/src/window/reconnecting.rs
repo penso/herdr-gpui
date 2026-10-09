@@ -74,7 +74,7 @@ impl HerdrWindow {
                         .child("Reconnect now")
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
-                            this.reconnect();
+                            this.reconnect(cx);
                             cx.notify();
                         })),
                 ),

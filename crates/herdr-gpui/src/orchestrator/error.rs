@@ -58,6 +58,8 @@ pub(crate) enum Error {
     },
     #[error("This host cannot run the orchestrator's scripts")]
     UnsupportedHost,
+    #[error("A saved Orchestrator tab names a folder that is not an absolute path")]
+    InvalidCheckout,
     #[error("This folder is not inside a Git repository")]
     NotARepository,
     #[error("Remote URL {0:?} names no repository")]

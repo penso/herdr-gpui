@@ -52,5 +52,23 @@ mod requests;
 /// Browser tabs in a group's strip: reordering and growing in.
 mod tab_strip;
 
+/// The panel beside the groups. No native page is created, so this runs on
+/// every platform, except the server checks, which only builds that show
+/// pages make.
+mod code;
+
+/// The VS Code tab moved between its panel and the groups.
+mod code_group;
+
+/// A new VS Code page opens on its workspace's folder, once its server
+/// answers, which only builds that show pages ask.
+#[cfg(any(target_os = "macos", windows))]
+mod code_folder;
+
+/// Pages step aside under the status bar's tooltips; only builds that show
+/// pages have any.
+#[cfg(any(target_os = "macos", windows))]
+mod status_tooltip;
+
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;
