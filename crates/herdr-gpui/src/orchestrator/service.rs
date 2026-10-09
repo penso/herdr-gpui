@@ -4,21 +4,23 @@
 //! mailbox on its tick; it never waits on this thread.
 
 use super::{
-    Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store, beads,
-    database_path, github,
+    Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
+    actions::{Action, Site},
+    beads, database_path, github,
     location::database_path_in,
+    prompt::{self, Profile},
     repo::{self, RepoInfo},
 };
-use crate::teleport::Host;
+use crate::teleport::{AgentKind, Host};
 use chrono::{DateTime, Utc};
 use herdr_client::ConnectTarget;
 use secrecy::SecretString;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, RecvTimeoutError, SyncSender, TrySendError},
     },
     time::{Duration, Instant},
@@ -47,6 +49,10 @@ impl Default for Timing {
 /// After a failure, a source waits this long before trying again.
 const BACKOFF: Duration = Duration::from_secs(300);
 const COMMANDS: usize = 8;
+/// Actions running at once; more wait for the user to try again.
+const MAX_ACTIONS: usize = 4;
+/// Outcomes kept for the view between its polls.
+const MAX_NOTICES: usize = 8;
 
 /// Where the view's repository is and whom to read GitHub as.
 #[derive(Clone)]
@@ -54,6 +60,9 @@ pub(crate) struct Request {
     pub(crate) target: ConnectTarget,
     /// Any checkout of the repository on `target`.
     pub(crate) checkout: String,
+    /// The Herdr workspace the view was opened from, whose repository new
+    /// worktrees are created in.
+    pub(crate) workspace_id: String,
     pub(crate) token: Option<Arc<SecretString>>,
     /// agent-launcher's data directory parent; `None` for the platform's.
     pub(crate) data_root: Option<PathBuf>,
@@ -63,6 +72,17 @@ pub(crate) struct Request {
 enum Command {
     /// Sync every source now, reading GitHub as `token`.
     Refresh(Option<Arc<SecretString>>),
+    /// Do what the user asked, on a thread of its own.
+    Act(Action),
+    /// An action finished: read the database again, and sync when it changed
+    /// a source.
+    Acted { resync: bool },
+}
+
+/// How an action the user asked for ended.
+#[derive(Clone, Debug)]
+pub(crate) struct Notice {
+    pub(crate) outcome: std::result::Result<&'static str, Arc<Error>>,
 }
 
 /// How one source is doing.
@@ -101,11 +121,16 @@ pub(crate) struct Snapshot {
     pub(crate) sources: Vec<SourceStatus>,
     /// Opening the repository or its database failed.
     pub(crate) error: Option<Arc<Error>>,
+    /// agent-launcher's prompt profiles, read once when the view opened.
+    pub(crate) profiles: Arc<Vec<Profile>>,
+    /// The agents installed on the repository's host, once known.
+    pub(crate) installed: Option<Arc<Vec<AgentKind>>>,
 }
 
 pub(crate) struct Service {
     commands: SyncSender<Command>,
     mailbox: Arc<Mutex<Option<Snapshot>>>,
+    notices: Arc<Mutex<VecDeque<Notice>>>,
     cancelled: Arc<AtomicBool>,
 }
 
@@ -113,10 +138,15 @@ impl Service {
     pub(crate) fn start(request: Request) -> std::io::Result<Self> {
         let (commands, receiver) = mpsc::sync_channel(COMMANDS);
         let mailbox = Arc::new(Mutex::new(None));
+        let notices = Arc::new(Mutex::new(VecDeque::new()));
         let cancelled = Arc::new(AtomicBool::new(false));
         let worker = Worker {
             request,
             mailbox: mailbox.clone(),
+            notices: notices.clone(),
+            commands: commands.clone(),
+            actions: Arc::new(AtomicUsize::new(0)),
+            site: None,
             cancelled: cancelled.clone(),
             snapshot: Snapshot::default(),
             store: None,
@@ -132,8 +162,23 @@ impl Service {
         Ok(Self {
             commands,
             mailbox,
+            notices,
             cancelled,
         })
+    }
+
+    /// Asks for `action`. A full queue means the worker is behind; the user
+    /// is told, and nothing is queued silently.
+    pub(crate) fn act(&self, action: Action) -> bool {
+        self.commands.try_send(Command::Act(action)).is_ok()
+    }
+
+    /// Outcomes of finished actions since the last call.
+    pub(crate) fn notices(&self) -> Vec<Notice> {
+        self.notices
+            .lock()
+            .map(|mut notices| notices.drain(..).collect())
+            .unwrap_or_default()
     }
 
     /// Asks for a sync now. A full queue already holds one, so it is dropped.
@@ -160,6 +205,11 @@ impl Drop for Service {
 struct Worker {
     request: Request,
     mailbox: Arc<Mutex<Option<Snapshot>>>,
+    notices: Arc<Mutex<VecDeque<Notice>>>,
+    /// The worker's own queue, for action threads to report back on.
+    commands: SyncSender<Command>,
+    actions: Arc<AtomicUsize>,
+    site: Option<Site>,
     cancelled: Arc<AtomicBool>,
     snapshot: Snapshot,
     store: Option<Store>,
@@ -195,6 +245,15 @@ impl Worker {
                     self.sync(token.as_deref());
                     next_sync = Instant::now() + sync;
                 }
+                Ok(Command::Act(action)) => self.act(action),
+                Ok(Command::Acted { resync }) => {
+                    if resync {
+                        let token = self.request.token.clone();
+                        self.sync(token.as_deref());
+                    } else {
+                        self.reload_if_changed();
+                    }
+                }
                 Err(RecvTimeoutError::Timeout) if Instant::now() >= next_sync => {
                     let token = self.request.token.clone();
                     self.sync(token.as_deref());
@@ -204,6 +263,53 @@ impl Worker {
                 Err(RecvTimeoutError::Disconnected) => return,
             }
         }
+    }
+
+    /// Starts `action` on a thread of its own, at most [`MAX_ACTIONS`] at once.
+    fn act(&mut self, action: Action) {
+        let Some(site) = self.site.clone() else {
+            self.notice(Err(Arc::new(Error::NotARepository)));
+            return;
+        };
+        if self.snapshot.access != Some(Access::ReadWrite) {
+            let found = match self.snapshot.access {
+                Some(Access::ReadOnly { found }) => found,
+                _ => 0,
+            };
+            self.notice(Err(Arc::new(Error::NewerSchema {
+                found,
+                known: super::SCHEMA_VERSION,
+            })));
+            return;
+        }
+        if self.actions.fetch_add(1, Ordering::SeqCst) >= MAX_ACTIONS {
+            self.actions.fetch_sub(1, Ordering::SeqCst);
+            self.notice(Err(Arc::new(Error::Busy)));
+            return;
+        }
+        let resync = matches!(action, Action::DeleteBead { .. });
+        let (notices, commands, actions, cancelled) = (
+            self.notices.clone(),
+            self.commands.clone(),
+            self.actions.clone(),
+            self.cancelled.clone(),
+        );
+        let spawned = std::thread::Builder::new()
+            .name("herdr-orchestrator-action".into())
+            .spawn(move || {
+                let outcome = super::actions::perform(&site, &action, &cancelled).map_err(Arc::new);
+                push(&notices, Notice { outcome });
+                actions.fetch_sub(1, Ordering::SeqCst);
+                let _ = commands.try_send(Command::Acted { resync });
+            });
+        if let Err(error) = spawned {
+            self.actions.fetch_sub(1, Ordering::SeqCst);
+            self.notice(Err(Arc::new(Error::Worker(error))));
+        }
+    }
+
+    fn notice(&self, outcome: std::result::Result<&'static str, Arc<Error>>) {
+        push(&self.notices, Notice { outcome });
     }
 
     fn cancelled(&self) -> bool {
@@ -242,10 +348,21 @@ impl Worker {
                 },
             })
             .collect();
+        self.site = Some(Site {
+            host: host.clone(),
+            target: self.request.target.clone(),
+            main_root: info.main_root.clone(),
+            database: path,
+        });
+        if let Some(home) = std::env::var_os("HOME") {
+            self.snapshot.profiles = Arc::new(prompt::load_profiles(std::path::Path::new(&home)));
+        }
         self.snapshot.repo = Some(info);
         self.store = Some(store);
         self.host = Some(host);
         self.reload()?;
+        self.publish();
+        self.snapshot.installed = installed(self.host.as_ref(), &self.cancelled).map(Arc::new);
         self.publish();
         Ok(())
     }
@@ -375,6 +492,28 @@ impl Worker {
             status.state = state;
         }
     }
+}
+
+/// Adds `notice`, dropping the oldest past [`MAX_NOTICES`].
+fn push(notices: &Mutex<VecDeque<Notice>>, notice: Notice) {
+    if let Ok(mut notices) = notices.lock() {
+        if notices.len() >= MAX_NOTICES {
+            notices.pop_front();
+        }
+        notices.push_back(notice);
+    }
+}
+
+/// The agents installed on `host`, in [`AgentKind::ALL`] order.
+fn installed(host: Option<&Host>, cancelled: &AtomicBool) -> Option<Vec<AgentKind>> {
+    let binaries = AgentKind::ALL.map(AgentKind::binary);
+    let found = host?.installed_programs(&binaries, cancelled).ok()?;
+    Some(
+        AgentKind::ALL
+            .into_iter()
+            .filter(|kind| found.iter().any(|binary| binary == kind.binary()))
+            .collect(),
+    )
 }
 
 /// The sources a repository has, and whether this build can read each.

@@ -136,12 +136,16 @@ impl HerdrWindow {
             return;
         };
         let (token, login) = self.github_account();
+        let Some((_, workspace_id)) = self.browser_key() else {
+            return;
+        };
         let request = Request {
             target: self.endpoints[self.selected_endpoint]
                 .connection
                 .target
                 .clone(),
             checkout: repo.checkout,
+            workspace_id,
             token,
             data_root: None,
             timing: Timing::default(),
@@ -288,12 +292,6 @@ impl HerdrWindow {
                     self.menu.page = Some(crate::menu::Page::GitHub);
                 }
                 cx.notify();
-            }
-            Event::Dispatch { .. } => {
-                self.show_flash(
-                    Flash::warning("Dispatching from Issues & PRs comes next"),
-                    cx,
-                );
             }
         }
     }

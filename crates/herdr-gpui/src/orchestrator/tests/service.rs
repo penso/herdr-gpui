@@ -28,6 +28,7 @@ fn start(dir: &std::path::Path, checkout: String) -> Service {
     Service::start(Request {
         target: ConnectTarget::Local,
         checkout,
+        workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.join("data")),
         timing: Timing {

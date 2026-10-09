@@ -1,10 +1,13 @@
 use super::*;
 use chrono::{DateTime, Utc};
 
+#[cfg(unix)]
+mod actions;
 mod beads;
 mod github;
 mod keys;
 mod location;
+mod prompt;
 mod repo;
 mod service;
 mod store;

@@ -194,10 +194,8 @@ impl OrchestratorView {
                                 latest.is_none(),
                             )
                             .on_click(cx.listener(
-                                move |_, _, _, cx| {
-                                    cx.emit(Event::Dispatch {
-                                        item: dispatch_key.clone(),
-                                    });
+                                move |this, _, window, cx| {
+                                    this.open_dispatch(dispatch_key.clone(), window, cx);
                                 },
                             )),
                         )

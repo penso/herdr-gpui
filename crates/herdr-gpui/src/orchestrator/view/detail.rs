@@ -3,6 +3,7 @@
 
 use super::{
     Detail, DetailTab, Event, OrchestratorView,
+    dispatch::Confirm,
     list::source_mark,
     look::{BLUE, CYAN, age, agent_icon},
     rows::{RunRow, Runs},
@@ -37,7 +38,7 @@ impl OrchestratorView {
                 .child(self.render_overview(&item, &runs, &item_runs, cx))
                 .into_any_element(),
             DetailTab::Agent => self.render_runs(&runs, &item_runs, cx),
-            DetailTab::Details => self.render_details(&item),
+            DetailTab::Details => self.render_details(&item, cx),
         };
         div()
             .flex_1()
@@ -117,8 +118,8 @@ impl OrchestratorView {
                                 runs == 0,
                             )
                             .on_click(cx.listener(
-                                move |_, _, _, cx| {
-                                    cx.emit(Event::Dispatch { item: key.clone() });
+                                move |this, _, window, cx| {
+                                    this.open_dispatch(key.clone(), window, cx);
                                 },
                             )),
                         )
@@ -426,20 +427,11 @@ impl OrchestratorView {
                                 .child(line),
                         )
                     })
-                    .when(live.is_some(), |el| {
-                        el.child(
-                            div().flex().gap_2().child(
-                                look.button(("orchestrator-card-open", index), "Open pane", true)
-                                    .on_click(
-                                        cx.listener(move |this, _, _, cx| this.open_run(index, cx)),
-                                    ),
-                            ),
-                        )
-                    }),
+                    .child(self.run_controls(run, index, current, live.is_some(), cx)),
             )
     }
 
-    fn render_details(&self, item: &Item) -> AnyElement {
+    fn render_details(&self, item: &Item, cx: &mut Context<Self>) -> AnyElement {
         let look = &self.look;
         let theme = &look.theme;
         let mut rows: Vec<(&'static str, String)> = vec![
@@ -467,6 +459,9 @@ impl OrchestratorView {
         let time = |value: Option<chrono::DateTime<chrono::Utc>>| {
             value.map_or_else(|| "\u{2014}".to_owned(), |value| value.to_rfc3339())
         };
+        let deletable = item.key.source.provider == crate::orchestrator::Provider::Beads
+            && self.snapshot.access == Some(Access::ReadWrite);
+        let (source, id) = (item.key.source.clone(), item.key.native_id.clone());
         rows.push(("Created", time(item.created_at)));
         rows.push(("Updated", time(item.updated_at)));
         div()
@@ -491,6 +486,100 @@ impl OrchestratorView {
                     )
                     .child(look.mono(value).min_w_0())
             }))
+            .when(deletable, |el| {
+                el.child(div().h_4()).child(
+                    div().flex().child(
+                        look.button("orchestrator-delete-bead", "Delete bead\u{2026}", false)
+                            .text_color(rgb(look.hue(super::look::RED)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.ask(
+                                    Confirm::DeleteBead {
+                                        source: source.clone(),
+                                        id: id.clone(),
+                                    },
+                                    cx,
+                                );
+                            })),
+                    ),
+                )
+            })
             .into_any_element()
+    }
+
+    /// A run card's buttons: open its pane while Herdr shows it; for the
+    /// newest run herdr-gpui owns, a message field, Send, and Stop; Remove
+    /// for any run herdr-gpui owns that has a worktree.
+    fn run_controls(
+        &self,
+        run: &crate::orchestrator::Run,
+        index: usize,
+        current: bool,
+        live: bool,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let look = &self.look;
+        let theme = &look.theme;
+        let own = run.owner == Owner::HerdrGpui;
+        let writable = self.snapshot.access == Some(Access::ReadWrite);
+        let branch = run
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.branch.clone())
+            .unwrap_or_default();
+        let (stop_run, remove_run, agent) = (run.id.clone(), run.id.clone(), run.agent.clone());
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .when(live, |el| {
+                el.child(
+                    look.button(("orchestrator-card-open", index), "Open pane", true)
+                        .on_click(cx.listener(move |this, _, _, cx| this.open_run(index, cx))),
+                )
+            })
+            .when(own && writable && current && live, |el| {
+                el.child(
+                    div()
+                        .flex_1()
+                        .min_w(px(160.))
+                        .px_2()
+                        .py(px(4.))
+                        .rounded(px(corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(theme.active))
+                        .child(self.message.clone()),
+                )
+                .child(
+                    look.button(("orchestrator-card-send", index), "Send", false)
+                        .on_click(cx.listener(|this, _, _, cx| this.send_message(cx))),
+                )
+                .child(
+                    look.button(("orchestrator-card-stop", index), "Stop", false)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.ask(
+                                Confirm::Stop {
+                                    run: stop_run.clone(),
+                                    agent: agent.clone(),
+                                },
+                                cx,
+                            );
+                        })),
+                )
+            })
+            .when(own && writable && run.workspace.is_some(), |el| {
+                el.child(
+                    look.icon_button(("orchestrator-card-remove", index), "icons/trash.svg")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.ask(
+                                Confirm::Remove {
+                                    run: remove_run.clone(),
+                                    branch: branch.clone(),
+                                },
+                                cx,
+                            );
+                        })),
+                )
+            })
     }
 }

@@ -9,17 +9,20 @@
 //! which rows. herdr-gpui writes only the runs it owns, and never takes
 //! agent-launcher's `runtime.lock`.
 
+mod actions;
 mod beads;
 mod error;
 mod github;
 mod location;
 mod model;
+mod prompt;
 mod repo;
 mod service;
 mod store;
 mod tab;
 mod view;
 
+pub(crate) use actions::{Action, DispatchRequest};
 pub(crate) use error::{Error, Result};
 pub(crate) use location::{Repository, database_path};
 pub(crate) use model::{
@@ -30,7 +33,7 @@ pub(crate) use model::{
 pub(crate) use model::{Backend, Workspace};
 #[cfg(test)]
 pub(crate) use service::SourceStatus;
-pub(crate) use service::{Request, Service, Snapshot, SyncState, Timing};
+pub(crate) use service::{Notice, Request, Service, Snapshot, SyncState, Timing};
 pub(crate) use store::{Access, SCHEMA_VERSION, Store};
 pub(crate) use tab::{LiveCache, Orchestrator};
 pub(crate) use view::{Event, LiveAgent, Look, OrchestratorView};

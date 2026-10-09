@@ -3,8 +3,6 @@
 
 use std::path::PathBuf;
 
-// Used by dispatch and the run actions, which land next.
-#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
     #[error("No data directory is available for orchestrator state")]
@@ -74,6 +72,8 @@ pub(crate) enum Error {
     Cancelled,
     #[error("Could not start the orchestrator's worker: {0}")]
     Worker(#[source] std::io::Error),
+    #[error("Several actions are already running; try again when one finishes")]
+    Busy,
 }
 
 /// `map_err` adapter naming the host script that failed.

@@ -235,8 +235,6 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
-    // Used by dispatch and the run actions, which land next.
-    #[allow(dead_code)]
     /// Writes a run herdr-gpui dispatched, with its Herdr session, in one
     /// transaction. Inserts or updates; a run owned elsewhere is refused.
     pub(crate) fn save_run(&mut self, run: &Run, session: Option<&HerdrSession>) -> Result<()> {
@@ -304,7 +302,6 @@ impl Store {
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Deletes a run herdr-gpui owns, with its events and session.
     pub(crate) fn delete_run(&mut self, id: &str) -> Result<()> {
         self.writable()?;
@@ -323,7 +320,6 @@ impl Store {
     }
 }
 
-#[allow(dead_code)]
 /// Fails when a run with `id` exists and another application owns it.
 fn refuse_foreign(transaction: &Transaction<'_>, id: &str) -> Result<()> {
     let owner = transaction

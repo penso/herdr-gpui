@@ -161,9 +161,9 @@ impl OrchestratorView {
             .when(dispatchable, |el| {
                 el.child(
                     look.button("orchestrator-dispatch", "Dispatch agent", true)
-                        .on_click(cx.listener(|this, _, _, cx| {
+                        .on_click(cx.listener(|this, _, window, cx| {
                             if let Some(item) = this.selected.clone() {
-                                cx.emit(Event::Dispatch { item });
+                                this.open_dispatch(item, window, cx);
                             }
                         })),
                 )

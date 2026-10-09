@@ -7,6 +7,7 @@
 //! the theme, live agent statuses, and the GitHub account from its tick.
 
 mod detail;
+mod dispatch;
 mod inbox;
 mod list;
 mod look;
@@ -20,7 +21,7 @@ mod tests;
 pub(crate) use look::Look;
 pub(crate) use rows::LiveAgent;
 
-use super::{Item, Request, Service, Snapshot};
+use super::{Item, Notice, Request, Service, Snapshot};
 use crate::search_input::{self, SearchInput};
 use gpui::{prelude::*, *};
 use rows::{Filters, ItemRow, RunLine, Runs, Sort, Tab};
@@ -41,8 +42,6 @@ pub(crate) enum Event {
     OpenUrl(String),
     /// Sign in to GitHub, which the view needs to list a repository.
     SignIn,
-    /// Start an agent on the item with this canonical key.
-    Dispatch { item: String },
 }
 
 impl EventEmitter<Event> for OrchestratorView {}
@@ -119,6 +118,12 @@ pub(crate) struct OrchestratorView {
     run_lines: Vec<RunLine>,
     /// The open item's description, parsed once per change of its text.
     description: crate::release_notes::Prepared,
+    dialog: Option<dispatch::Dialog>,
+    confirm: Option<dispatch::Confirm>,
+    /// The newest action's outcome, until dismissed or replaced.
+    notice: Option<Notice>,
+    /// What to type to the open item's newest run.
+    message: Entity<SearchInput>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -134,6 +139,12 @@ impl OrchestratorView {
             this.query = search.read(cx).text().to_owned();
             this.refresh_rows();
             cx.notify();
+        });
+        let message = cx.new(|cx| {
+            let mut input = SearchInput::new(cx);
+            input.set_placeholder("Send a message to the agent\u{2026}", cx);
+            input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
+            input
         });
         let (service, error) = match Service::start(request.clone()) {
             Ok(service) => (Some(service), None),
@@ -169,6 +180,10 @@ impl OrchestratorView {
             pull_request_rows: Vec::new(),
             run_lines: Vec::new(),
             description: crate::release_notes::Prepared::default(),
+            dialog: None,
+            confirm: None,
+            notice: None,
+            message,
             _subscriptions: vec![subscription],
         }
     }
@@ -179,6 +194,14 @@ impl OrchestratorView {
 
     /// Takes the worker's newest snapshot; called from the host's tick.
     pub(crate) fn poll(&mut self, cx: &mut Context<Self>) {
+        if let Some(notice) = self
+            .service
+            .as_ref()
+            .and_then(|service| service.notices().pop())
+        {
+            self.notice = Some(notice);
+            cx.notify();
+        }
         let Some(snapshot) = self.service.as_ref().and_then(Service::poll) else {
             return;
         };
@@ -195,9 +218,11 @@ impl OrchestratorView {
         {
             return;
         }
-        self.search.update(cx, |search, cx| {
-            search.set_appearance(look.ui.clone(), look.theme.clone(), cx);
-        });
+        for input in [&self.search, &self.message] {
+            input.update(cx, |input, cx| {
+                input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
+            });
+        }
         self.look = look;
         cx.notify();
     }
@@ -391,6 +416,24 @@ impl OrchestratorView {
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if (self.dialog.is_some() || self.confirm.is_some())
+            && self.dialog_key(&event.keystroke.key, window, cx)
+        {
+            cx.stop_propagation();
+            return;
+        }
+        if self.dialog.is_some() {
+            return;
+        }
+        if self.message.read(cx).focus.is_focused(window) {
+            match event.keystroke.key.as_str() {
+                "enter" => self.send_message(cx),
+                "escape" => window.focus(&self.focus, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+            return;
+        }
         if self.search.read(cx).focus.is_focused(window) {
             if event.keystroke.key == "escape" {
                 window.focus(&self.focus, cx);
@@ -476,9 +519,12 @@ impl Render for OrchestratorView {
             Some(detail) => self.render_detail(detail, window, cx),
             None => self.render_inbox(window, cx),
         };
+        let notice = self.render_notice(cx);
+        let overlay = self.render_overlay(cx);
         let look = &self.look;
         div()
             .id("orchestrator")
+            .relative()
             .key_context("Orchestrator")
             .track_focus(&self.focus)
             .size_full()
@@ -497,6 +543,8 @@ impl Render for OrchestratorView {
                     }
                 }),
             )
+            .children(notice)
             .child(body)
+            .children(overlay)
     }
 }
