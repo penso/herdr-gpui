@@ -23,6 +23,7 @@ pub(crate) struct RepoInfo {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Remote {
     pub(crate) name: String,
+    pub(crate) url: String,
     pub(crate) source: SourceKey,
 }
 
@@ -102,6 +103,7 @@ pub(super) fn parse(target: &ConnectTarget, output: &str) -> Result<RepoInfo> {
     let remote = chosen.and_then(|(name, url)| {
         Some(Remote {
             name: (*name).to_owned(),
+            url: (*url).to_owned(),
             source: parse_remote_url(url).ok()?,
         })
     });

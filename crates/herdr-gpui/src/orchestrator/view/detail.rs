@@ -39,6 +39,8 @@ impl OrchestratorView {
                 .into_any_element(),
             DetailTab::Agent => self.render_runs(&runs, &item_runs, cx),
             DetailTab::Details => self.render_details(&item, cx),
+            DetailTab::Conversation => self.render_conversation(cx),
+            DetailTab::Checks => self.render_checks(&item),
         };
         div()
             .flex_1()
@@ -66,6 +68,8 @@ impl OrchestratorView {
         let key = item.key.canonical();
         let url = item.url.clone();
         let writable = self.snapshot.access == Some(Access::ReadWrite);
+        let pull_request = item.pull_request.is_some();
+        let review_key = item.key.canonical();
         div()
             .flex_none()
             .flex()
@@ -110,7 +114,7 @@ impl OrchestratorView {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(item.title.clone()),
                     )
-                    .when(writable, |el| {
+                    .when(writable && !pull_request, |el| {
                         el.child(
                             look.button(
                                 "orchestrator-detail-dispatch",
@@ -122,6 +126,23 @@ impl OrchestratorView {
                                     this.open_dispatch(key.clone(), window, cx);
                                 },
                             )),
+                        )
+                    })
+                    .when(writable && pull_request, |el| {
+                        el.child(
+                            look.button("orchestrator-detail-review", "Review with agent", true)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_review(review_key.clone(), window, cx);
+                                })),
+                        )
+                    })
+                    .when(self.mergeable(), |el| {
+                        el.child(
+                            look.button("orchestrator-detail-merge", "Merge \u{25be}", false)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.merge_open = !this.merge_open;
+                                    cx.notify();
+                                })),
                         )
                     })
                     .when_some(url, |el, url| {
@@ -159,34 +180,33 @@ impl OrchestratorView {
                         el.child(look.muted(format!("child of {parent}")))
                     }),
             )
-            .child(
-                div()
-                    .flex()
-                    .gap_4()
-                    .children(DetailTab::ALL.into_iter().map(|tab| {
-                        let on = tab == active;
-                        let label = match tab {
-                            DetailTab::Agent if runs > 0 => format!("{}  {runs}", tab.label()),
-                            _ => tab.label().to_owned(),
-                        };
-                        div()
-                            .id(SharedString::from(format!(
-                                "orchestrator-detail-{}",
-                                tab.label()
-                            )))
-                            .pb(px(6.))
-                            .cursor_pointer()
-                            .when(on, |el| el.border_b_2().border_color(rgb(theme.primary())))
-                            .text_color(rgb(if on { theme.foreground } else { theme.muted }))
-                            .child(label)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(detail) = &mut this.detail {
-                                    detail.tab = tab;
-                                }
-                                cx.notify();
-                            }))
-                    })),
-            )
+            .child(div().flex().gap_4().children(
+                DetailTab::tabs(pull_request).iter().copied().map(|tab| {
+                    let on = tab == active;
+                    let label = match tab {
+                        DetailTab::Agent if runs > 0 => format!("{}  {runs}", tab.label()),
+                        _ => tab.label().to_owned(),
+                    };
+                    div()
+                        .id(SharedString::from(format!(
+                            "orchestrator-detail-{}",
+                            tab.label()
+                        )))
+                        .pb(px(6.))
+                        .cursor_pointer()
+                        .when(on, |el| el.border_b_2().border_color(rgb(theme.primary())))
+                        .text_color(rgb(if on { theme.foreground } else { theme.muted }))
+                        .child(label)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(detail) = &mut this.detail {
+                                detail.tab = tab;
+                            }
+                            this.merge_open = false;
+                            this.follow_pull_request();
+                            cx.notify();
+                        }))
+                }),
+            ))
     }
 
     fn render_description(&self, item: &Item) -> AnyElement {

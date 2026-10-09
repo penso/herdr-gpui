@@ -262,3 +262,11 @@ fn pull_requests_list_in_every_state_unless_narrowed() {
     );
     assert_eq!(mine.iter().map(|row| row.item).collect::<Vec<_>>(), [0]);
 }
+
+#[test]
+fn pull_requests_open_on_their_conversation_and_have_checks() {
+    use crate::orchestrator::view::DetailTab;
+    assert_eq!(DetailTab::tabs(true)[0], DetailTab::Conversation);
+    assert!(DetailTab::tabs(true).contains(&DetailTab::Checks));
+    assert!(!DetailTab::tabs(false).contains(&DetailTab::Checks));
+}

@@ -9,6 +9,7 @@ use crate::{
         Action, DispatchRequest, Item, Notice, SourceKey,
         prompt::{self, MAX_EXTRA},
     },
+    pull_request::MergeMethod,
     search_input::SearchInput,
     teleport::AgentKind,
 };
@@ -23,6 +24,8 @@ pub(crate) struct Dialog {
     branch: Entity<SearchInput>,
     extra: Entity<SearchInput>,
     problem: Option<&'static str>,
+    /// A read-only review of a pull request rather than work on an issue.
+    review: bool,
 }
 
 /// A destructive action waiting for the user to confirm it.
@@ -31,6 +34,7 @@ pub(crate) enum Confirm {
     Stop { run: String, agent: String },
     Remove { run: String, branch: String },
     DeleteBead { source: SourceKey, id: String },
+    Merge { method: MergeMethod },
 }
 
 impl Confirm {
@@ -48,6 +52,12 @@ impl Confirm {
                 ),
                 "Remove",
             ),
+            Self::Merge { method } => (
+                format!("{}?", method.action()),
+                "Merges the pull request at the head commit shown here; GitHub refuses if it moved."
+                    .into(),
+                "Merge",
+            ),
             Self::DeleteBead { id, .. } => (
                 format!("Delete {id} permanently?"),
                 "Runs bd delete --force. This cannot be undone and removes it for everyone using this .beads."
@@ -57,11 +67,13 @@ impl Confirm {
         }
     }
 
-    fn action(self) -> Action {
+    /// The worker action it confirms; a merge goes through `pr_actions`.
+    fn action(self) -> Option<Action> {
         match self {
-            Self::Stop { run, .. } => Action::Stop { run },
-            Self::Remove { run, .. } => Action::Remove { run },
-            Self::DeleteBead { source, id } => Action::DeleteBead { source, id },
+            Self::Stop { run, .. } => Some(Action::Stop { run }),
+            Self::Remove { run, .. } => Some(Action::Remove { run }),
+            Self::DeleteBead { source, id } => Some(Action::DeleteBead { source, id }),
+            Self::Merge { .. } => None,
         }
     }
 }
@@ -74,10 +86,33 @@ impl OrchestratorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_dialog(item, false, window, cx);
+    }
+
+    /// Opens the dialog for a read-only review of the pull request `item`.
+    pub(super) fn open_review(
+        &mut self,
+        item: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_dialog(item, true, window, cx);
+    }
+
+    fn open_dialog(
+        &mut self,
+        item: String,
+        review: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(found) = self.item(&item) else {
             return;
         };
-        let branch_name = prompt::branch(found);
+        let branch_name = match (&found.pull_request, review) {
+            (Some(pr), true) => format!("review/pr-{}", pr.number),
+            _ => prompt::branch(found),
+        };
         let field = |placeholder: &str, text: &str, cx: &mut Context<Self>| {
             let (ui, theme) = (self.look.ui.clone(), self.look.theme.clone());
             cx.new(|cx| {
@@ -105,6 +140,7 @@ impl OrchestratorView {
             branch,
             extra,
             problem: None,
+            review,
         });
         window.focus(&focus, cx);
         cx.notify();
@@ -151,10 +187,20 @@ impl OrchestratorView {
         let profile = dialog
             .profile
             .and_then(|index| self.snapshot.profiles.get(index));
+        let remote = self
+            .snapshot
+            .repo
+            .as_ref()
+            .and_then(|info| info.remote.as_ref())
+            .map(|remote| remote.url.as_str());
+        let text = match (&item.pull_request, dialog.review) {
+            (Some(pr), true) => prompt::compose_review(item, pr, remote, profile, &extra),
+            _ => prompt::compose(item, profile, &extra),
+        };
         let request = DispatchRequest {
             item_key: dialog.item.clone(),
             kind,
-            prompt: prompt::compose(item, profile, &extra),
+            prompt: text,
             branch,
             workspace_id: self.request.workspace_id.clone(),
             base: None,
@@ -290,7 +336,14 @@ impl OrchestratorView {
                     )
                     .child(
                         danger(look, verb).on_click(cx.listener(move |this, _, window, cx| {
-                            this.act(confirm.clone().action());
+                            match confirm.clone() {
+                                Confirm::Merge { method } => this.merge(method, cx),
+                                confirm => {
+                                    if let Some(action) = confirm.action() {
+                                        this.act(action);
+                                    }
+                                }
+                            }
                             this.close_overlays(window, cx);
                         })),
                     ),
@@ -420,7 +473,11 @@ impl OrchestratorView {
                             .flex_1()
                             .text_size(px(look.ui.size + 3.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Dispatch agent"),
+                            .child(if dialog.review {
+                                "Review with agent"
+                            } else {
+                                "Dispatch agent"
+                            }),
                     )
                     .child(look.chip(format!("on {host}")))
                     .child(

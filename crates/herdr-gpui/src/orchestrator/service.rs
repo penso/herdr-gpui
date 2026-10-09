@@ -77,6 +77,15 @@ enum Command {
     /// An action finished: read the database again, and sync when it changed
     /// a source.
     Acted { resync: bool },
+    /// Look up a pull request's status, checks, and merge state by number.
+    LoadPullRequest(u64),
+}
+
+/// A pull request looked up for the open item.
+#[derive(Clone, Debug)]
+pub(crate) struct PullRequestLookup {
+    pub(crate) number: u64,
+    pub(crate) result: Arc<crate::Result<Option<crate::pull_request::PullRequest>>>,
 }
 
 /// How an action the user asked for ended.
@@ -125,6 +134,8 @@ pub(crate) struct Snapshot {
     pub(crate) profiles: Arc<Vec<Profile>>,
     /// The agents installed on the repository's host, once known.
     pub(crate) installed: Option<Arc<Vec<AgentKind>>>,
+    /// The newest pull request lookup.
+    pub(crate) pull_request: Option<PullRequestLookup>,
 }
 
 pub(crate) struct Service {
@@ -171,6 +182,11 @@ impl Service {
     /// is told, and nothing is queued silently.
     pub(crate) fn act(&self, action: Action) -> bool {
         self.commands.try_send(Command::Act(action)).is_ok()
+    }
+
+    /// Asks for pull request `number`'s status; a full queue drops it.
+    pub(crate) fn load_pull_request(&self, number: u64) {
+        let _ = self.commands.try_send(Command::LoadPullRequest(number));
     }
 
     /// Outcomes of finished actions since the last call.
@@ -246,6 +262,7 @@ impl Worker {
                     next_sync = Instant::now() + sync;
                 }
                 Ok(Command::Act(action)) => self.act(action),
+                Ok(Command::LoadPullRequest(number)) => self.load_pull_request(number),
                 Ok(Command::Acted { resync }) => {
                     if resync {
                         let token = self.request.token.clone();
@@ -306,6 +323,35 @@ impl Worker {
             self.actions.fetch_sub(1, Ordering::SeqCst);
             self.notice(Err(Arc::new(Error::Worker(error))));
         }
+    }
+
+    fn load_pull_request(&mut self, number: u64) {
+        let remote = self
+            .snapshot
+            .repo
+            .as_ref()
+            .and_then(|info| info.remote.as_ref())
+            .filter(|remote| remote.source.provider == Provider::Github);
+        let (Some(remote), Some(token)) = (remote, self.request.token.clone()) else {
+            return;
+        };
+        let Some((owner, repo)) = remote.source.repository.split_once('/') else {
+            return;
+        };
+        let cancelled = self.cancelled.clone();
+        let result = crate::pull_request::by_number(
+            owner,
+            repo,
+            number,
+            &token,
+            || cancelled.load(Ordering::Relaxed),
+            &mut self.cooldown,
+        );
+        self.snapshot.pull_request = Some(PullRequestLookup {
+            number,
+            result: Arc::new(result),
+        });
+        self.publish();
     }
 
     fn notice(&self, outcome: std::result::Result<&'static str, Arc<Error>>) {

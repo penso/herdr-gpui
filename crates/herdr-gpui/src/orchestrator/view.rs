@@ -12,6 +12,7 @@ mod inbox;
 mod list;
 mod look;
 mod preview;
+mod pull;
 mod rows;
 
 #[cfg(test)]
@@ -61,6 +62,8 @@ pub(crate) struct Detail {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum DetailTab {
+    Conversation,
+    Checks,
     #[default]
     Description,
     Agent,
@@ -68,10 +71,26 @@ pub(crate) enum DetailTab {
 }
 
 impl DetailTab {
-    pub(crate) const ALL: [Self; 3] = [Self::Description, Self::Agent, Self::Details];
+    /// The pages an item has: a pull request also has its conversation and
+    /// checks, first.
+    pub(crate) fn tabs(pull_request: bool) -> &'static [Self] {
+        if pull_request {
+            &[
+                Self::Conversation,
+                Self::Checks,
+                Self::Description,
+                Self::Agent,
+                Self::Details,
+            ]
+        } else {
+            &[Self::Description, Self::Agent, Self::Details]
+        }
+    }
 
     pub(crate) fn label(self) -> &'static str {
         match self {
+            Self::Conversation => "Conversation",
+            Self::Checks => "Checks",
             Self::Description => "Description",
             Self::Agent => "Agent",
             Self::Details => "Details",
@@ -124,6 +143,10 @@ pub(crate) struct OrchestratorView {
     notice: Option<Notice>,
     /// What to type to the open item's newest run.
     message: Entity<SearchInput>,
+    /// The open pull request's conversation, comment, and merge.
+    pr: crate::pr_actions::Actions,
+    comment: Entity<SearchInput>,
+    merge_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -143,6 +166,12 @@ impl OrchestratorView {
         let message = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
             input.set_placeholder("Send a message to the agent\u{2026}", cx);
+            input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
+            input
+        });
+        let comment = cx.new(|cx| {
+            let mut input = SearchInput::new(cx);
+            input.set_placeholder("Leave a comment\u{2026}", cx);
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
@@ -184,6 +213,9 @@ impl OrchestratorView {
             confirm: None,
             notice: None,
             message,
+            pr: crate::pr_actions::Actions::default(),
+            comment,
+            merge_open: false,
             _subscriptions: vec![subscription],
         }
     }
@@ -194,20 +226,45 @@ impl OrchestratorView {
 
     /// Takes the worker's newest snapshot; called from the host's tick.
     pub(crate) fn poll(&mut self, cx: &mut Context<Self>) {
+        let mut changed = false;
         if let Some(notice) = self
             .service
             .as_ref()
             .and_then(|service| service.notices().pop())
         {
             self.notice = Some(notice);
+            changed = true;
+        }
+        if let Some(snapshot) = self.service.as_ref().and_then(Service::poll) {
+            self.snapshot = snapshot;
+            self.refresh_rows();
+            self.follow_pull_request();
+            changed = true;
+        }
+        if self.pr.poll() {
+            // A comment or merge landed: read the pull request and list again.
+            if self.pr.take_settled() {
+                self.reload_pull_request();
+                self.refresh();
+            }
+            changed = true;
+        }
+        if changed {
             cx.notify();
         }
-        let Some(snapshot) = self.service.as_ref().and_then(Service::poll) else {
-            return;
-        };
-        self.snapshot = snapshot;
-        self.refresh_rows();
-        cx.notify();
+    }
+
+    /// Asks the worker for the open pull request's status.
+    fn reload_pull_request(&self) {
+        let number = self
+            .detail
+            .as_ref()
+            .and_then(|detail| self.item(&detail.key))
+            .and_then(|item| item.pull_request.as_ref())
+            .map(|pr| pr.number);
+        if let (Some(number), Some(service)) = (number, &self.service) {
+            service.load_pull_request(number);
+        }
     }
 
     pub(crate) fn set_look(&mut self, look: Look, cx: &mut Context<Self>) {
@@ -218,7 +275,7 @@ impl OrchestratorView {
         {
             return;
         }
-        for input in [&self.search, &self.message] {
+        for input in [&self.search, &self.message, &self.comment] {
             input.update(cx, |input, cx| {
                 input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             });
@@ -382,17 +439,23 @@ impl OrchestratorView {
             },
             _ => key,
         };
-        if self.item(&key).is_none() {
+        let Some(item) = self.item(&key) else {
             return;
-        }
+        };
+        let pull_request = item.pull_request.is_some();
         self.detail = Some(Detail {
             key,
-            tab: if self.tab == Tab::Runs {
-                DetailTab::Agent
-            } else {
-                DetailTab::Description
+            tab: match (self.tab, pull_request) {
+                (Tab::Runs, _) => DetailTab::Agent,
+                (_, true) => DetailTab::Conversation,
+                (_, false) => DetailTab::Description,
             },
         });
+        self.merge_open = false;
+        if pull_request {
+            self.reload_pull_request();
+        }
+        self.follow_pull_request();
         cx.notify();
     }
 
@@ -423,6 +486,15 @@ impl OrchestratorView {
             return;
         }
         if self.dialog.is_some() {
+            return;
+        }
+        if self.comment.read(cx).focus.is_focused(window) {
+            match event.keystroke.key.as_str() {
+                "enter" => self.post_comment(cx),
+                "escape" => window.focus(&self.focus, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
             return;
         }
         if self.message.read(cx).focus.is_focused(window) {
@@ -491,11 +563,16 @@ impl OrchestratorView {
                 self.refresh();
                 true
             }
-            ("1" | "2" | "3", Some(detail)) => {
+            ("1" | "2" | "3" | "4" | "5", Some(detail)) => {
                 let index = event.keystroke.key.parse::<usize>().unwrap_or(1) - 1;
+                let pull_request = self
+                    .item(&detail.key)
+                    .is_some_and(|item| item.pull_request.is_some());
+                let tabs = DetailTab::tabs(pull_request);
                 let mut detail = detail.clone();
-                detail.tab = DetailTab::ALL[index.min(DetailTab::ALL.len() - 1)];
+                detail.tab = tabs[index.min(tabs.len() - 1)];
                 self.detail = Some(detail);
+                self.follow_pull_request();
                 cx.notify();
                 true
             }
@@ -521,6 +598,7 @@ impl Render for OrchestratorView {
         };
         let notice = self.render_notice(cx);
         let overlay = self.render_overlay(cx);
+        let merge_menu = self.render_merge_menu(cx);
         let look = &self.look;
         div()
             .id("orchestrator")
@@ -545,6 +623,7 @@ impl Render for OrchestratorView {
             )
             .children(notice)
             .child(body)
+            .children(merge_menu)
             .children(overlay)
     }
 }

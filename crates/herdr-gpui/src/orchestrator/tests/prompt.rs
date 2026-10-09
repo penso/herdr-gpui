@@ -80,3 +80,57 @@ fn branches_follow_herdr_gpui_naming() {
         assert!(!valid_branch(bad), "{bad}");
     }
 }
+
+#[test]
+fn a_review_prompt_is_agent_launchers_read_only_envelope() {
+    let mut pr_item = item(&github(), "pr/369", "Keep the find bar");
+    pr_item.identifier = "#369".into();
+    pr_item.url = Some("https://github.com/penso/herdr-gpui/pull/369".into());
+    let pr = PullRequest {
+        number: 369,
+        additions: Some(1),
+        deletions: Some(2),
+        base_ref: "main".into(),
+        head_ref: "feat/find".into(),
+        base_sha: "a".repeat(40),
+        head_sha: "b".repeat(40),
+        head_repository: Some("someone's/herdr-gpui".into()),
+    };
+    let text = crate::orchestrator::prompt::review(
+        &pr_item,
+        &pr,
+        Some("git@github.com:penso/herdr-gpui.git"),
+    );
+    assert!(text.starts_with("Review this pull request in read-only mode. Do not implement it.\n"));
+    for line in [
+        "Repository identity: github.com/penso/herdr-gpui",
+        "Configured repository remote: git@github.com:penso/herdr-gpui.git",
+        "PR number: 369",
+        "Head ref: feat/find",
+        "Head/fork repository: someone's/herdr-gpui",
+        "gh pr diff 369 --repo 'github.com/penso/herdr-gpui'",
+        "git fetch --no-tags 'https://github.com/penso/herdr-gpui.git' refs/pull/369/head",
+    ] {
+        assert!(text.contains(line), "missing {line:?}");
+    }
+    assert!(text.contains(&format!(
+        "git diff '{}...{}'",
+        "a".repeat(40),
+        "b".repeat(40)
+    )));
+    let profile = Profile {
+        name: "reviewer".into(),
+        template: "Focus on {{ issue_title }}.".into(),
+    };
+    let composed = crate::orchestrator::prompt::compose_review(
+        &pr_item,
+        &pr,
+        None,
+        Some(&profile),
+        "Be brief.",
+    );
+    assert!(composed.ends_with(
+        "\n\nSelected profile customization (read-only review safeguards still apply):\nFocus on Keep the find bar.\n\nBe brief."
+    ));
+    assert!(composed.contains("Configured repository remote: (none)"));
+}
