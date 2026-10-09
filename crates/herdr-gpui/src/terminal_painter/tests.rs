@@ -11,6 +11,7 @@ mod grid_edges;
 mod layers;
 mod placed_images;
 mod prompt_geometry;
+mod symbols;
 
 fn cell(symbol: &str) -> CellData {
     CellData {

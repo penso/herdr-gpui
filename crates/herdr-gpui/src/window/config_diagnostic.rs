@@ -17,6 +17,7 @@ impl HerdrWindow {
                 "gui-config-diagnostic",
                 "Herdr GPUI".into(),
                 lines,
+                None,
                 move |this, cx| {
                     if this.gui_config_diagnostic.dismiss(&drawn) {
                         cx.notify();
@@ -38,6 +39,7 @@ impl HerdrWindow {
                     "config-diagnostic",
                     safe_text(&endpoint.label, 80),
                     lines,
+                    None,
                     move |this, cx| {
                         this.dismiss_config_diagnostic(
                             &endpoint_id,
@@ -56,32 +58,22 @@ impl HerdrWindow {
             .collect()
     }
 
-    fn render_diagnostic_card(
+    /// `footer` spans the card under the text, for a control the lines
+    /// cannot carry.
+    pub(super) fn render_diagnostic_card(
         &self,
         selector: &'static str,
         label: String,
         lines: &Arc<[String]>,
+        footer: Option<AnyElement>,
         dismiss: impl Fn(&mut Self, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let accent = self.theme.ink(self.theme.palette[3]);
-        div()
-            .id(selector)
-            .debug_selector(move || selector.into())
-            .occlude()
+        let header = div()
             .min_w_0()
-            .max_w(px(MAX_WIDTH))
             .flex()
             .gap(px(8.))
-            .p(px(10.))
-            .rounded(px(crate::config::corners::PANEL))
-            .border_1()
-            .border_color(rgb(accent))
-            .bg(rgb(self.theme.surface))
-            .text_color(rgb(self.theme.foreground))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .child(
                 div()
                     .mt(px(6.))
@@ -132,7 +124,27 @@ impl HerdrWindow {
                         cx.stop_propagation();
                         dismiss(this, cx);
                     })),
-            )
+            );
+        div()
+            .id(selector)
+            .debug_selector(move || selector.into())
+            .occlude()
+            .min_w_0()
+            .max_w(px(MAX_WIDTH))
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(10.))
+            .rounded(px(crate::config::corners::PANEL))
+            .border_1()
+            .border_color(rgb(accent))
+            .bg(rgb(self.theme.surface))
+            .text_color(rgb(self.theme.foreground))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+            .child(header)
+            .children(footer)
     }
 
     /// Dismisses the banner only for the connection and text it was drawn

@@ -89,6 +89,12 @@ pub struct Config {
     pub tabs: FontConfig,
     pub terminal: FontConfig,
     pub ui: FontConfig,
+    /// Whether [`Config::resolve_fonts`] looked for an icon font for the
+    /// terminal and found none, so terminal icons draw as missing-glyph boxes.
+    /// Never set when the config names a cascade, even an empty one: that is
+    /// the user's choice, not a missing font. Only macOS reports it, as
+    /// `fonts::REPORTS_MISSING_SYMBOL_FONT` explains.
+    pub(crate) symbol_font_missing: bool,
     pub github: GitHubConfig,
     pub features: Features,
     pub notifications: NotificationConfig,
@@ -312,6 +318,7 @@ impl Default for Config {
             tabs: font(monospace, 12.0),
             terminal: font(monospace, 14.0),
             ui: font(ui, 12.0),
+            symbol_font_missing: false,
         }
     }
 }

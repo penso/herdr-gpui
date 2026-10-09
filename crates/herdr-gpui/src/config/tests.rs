@@ -16,6 +16,7 @@ mod preferences;
 mod sidebar_settings;
 mod sidebar_style;
 mod status_bar;
+mod symbol_font;
 mod system_themes;
 mod theme_files;
 mod themes;

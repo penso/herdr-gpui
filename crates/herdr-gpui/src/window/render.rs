@@ -16,14 +16,16 @@ use gpui::{prelude::*, *};
 use herdr_client::ConnectOptions;
 
 impl HerdrWindow {
-    /// Config warnings, then the daemon's announcement, stacked over the
-    /// top-right of the terminal area below the tab strip, whose buttons stay
-    /// reachable. A menu page owns the window's attention; they wait behind it.
+    /// Config warnings, the icon font notice, then the daemon's announcement,
+    /// stacked over the top-right of the terminal area below the tab strip,
+    /// whose buttons stay reachable. A menu page owns the window's attention;
+    /// they wait behind it.
     fn render_notices(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.menu.page.is_some() {
             return None;
         }
         let mut cards = self.config_diagnostic_cards(cx);
+        cards.extend(self.symbol_font_card(cx));
         cards.extend(self.announcement_card(cx));
         if cards.is_empty() {
             return None;

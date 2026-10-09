@@ -3,6 +3,7 @@ mod glyphs;
 mod graphics;
 mod grid;
 mod images;
+mod symbols;
 
 use self::area::whole;
 pub(crate) use self::area::{Layer, Part, Span, cell_ranges, clip, covers};
@@ -11,6 +12,7 @@ use self::graphics::{CellSeparator, Graphic};
 use self::grid::{background_extent, grid_corners, grid_rect, last_row_has_separator};
 use self::images::{ImageCache, ImageGeometry, below_text};
 pub(crate) use self::images::{ImageTarget, PlacedImages};
+pub(crate) use self::symbols::frame_needs_symbol_font;
 use crate::config::Theme;
 use crate::terminal::*;
 use gpui::*;

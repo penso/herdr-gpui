@@ -29,6 +29,7 @@ mod render;
 mod selection;
 mod server_keys;
 mod status_bar;
+mod symbol_font;
 pub(crate) mod system_notifications;
 mod tab_drag;
 mod tab_strip;
@@ -81,6 +82,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) configured_terminal_size: f32,
     /// Unknown keys in the GUI config, ignored but reported; follows `config`.
     pub(crate) gui_config_diagnostic: crate::config_diagnostic::ConfigDiagnostic,
+    /// Says that terminal icons need a Nerd Font; follows `config` and `live`.
+    pub(crate) symbol_font_notice: symbol_font::SymbolFontNotice,
     pub(crate) theme: config::Theme,
     /// The system appearance `theme` was loaded for, which is what Herdr is
     /// told. It trails the system while the theme for a new appearance
@@ -690,6 +693,7 @@ impl HerdrWindow {
                 diagnostic.sync(config.diagnostic().as_deref());
                 diagnostic
             },
+            symbol_font_notice: Default::default(),
             config,
             theme,
             theme_light: crate::app::light_appearance(cx),

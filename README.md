@@ -135,6 +135,16 @@ the updater runs `brew update` and retries once. The update panel shows progress
 throughout. macOS `.dmg`, experimental Linux packages, and experimental Windows `.zip`s
 are also published on [Releases](https://github.com/penso/herdr-gpui/releases).
 
+Fonts are not bundled. A prompt that draws Nerd Font icons, such as Powerlevel10k
+or Starship, needs a Nerd Font installed, or its icons draw as boxes:
+
+```sh
+brew install --cask font-symbols-only-nerd-font
+```
+
+Without one, the app shows a dismissible notice the first time a pane draws such
+an icon.
+
 ### Linux packages
 
 Each release publishes x86_64 and ARM64 builds as a `.deb`, an `.rpm`, an Arch

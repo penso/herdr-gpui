@@ -241,6 +241,31 @@ const SYMBOL_FAMILY_MARKER: &str = "nerd font";
 /// detection keeps only the best-ranked few families.
 const MAX_DETECTED_FALLBACKS: usize = 3;
 
+/// Whether an empty detected cascade means icons draw as boxes. On macOS it
+/// does: CoreText's own cascade never reaches a Private Use Area glyph. Linux
+/// shaping searches every installed font for an uncovered codepoint, so family
+/// names cannot tell what draws there, and Windows is unproven; neither may
+/// claim a font is missing.
+pub(super) const REPORTS_MISSING_SYMBOL_FONT: bool = cfg!(target_os = "macos");
+
+/// Whether `family` draws the icons itself: an installed face that is, by its
+/// name, patched. That is a Nerd Font, one of its abbreviated `NF` builds such
+/// as Powerlevel10k's `MesloLGS NF`, or a Powerline face. A patched name this
+/// machine lacks draws nothing, so it must not pass for one that does.
+fn carries_symbols(family: &str, installed: &BTreeSet<String>) -> bool {
+    let lowercase = family.to_lowercase();
+    let patched = lowercase.contains(SYMBOL_FAMILY_MARKER)
+        || lowercase.contains("powerline")
+        || lowercase
+            .split_whitespace()
+            .any(|word| matches!(word, "nf" | "nfm" | "nfp"));
+    // CoreText finds a family whatever the case it is written in.
+    patched
+        && installed
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(family))
+}
+
 #[derive(Clone, Debug)]
 pub struct FontConfig {
     pub family: String,
@@ -318,6 +343,7 @@ impl Config {
         I: IntoIterator<Item = String>,
     {
         self.replace_undrawable_fonts(super::bitmap_fonts::is_undrawable);
+        let terminal_unset = self.terminal.fallbacks.is_none();
         let mut faces = [
             &mut self.sidebar,
             &mut self.tabs,
@@ -341,12 +367,19 @@ impl Config {
         if faces.iter().all(|face| face.fallbacks.is_some()) {
             return;
         }
+        // Read before detection takes the installed families.
+        let [_, _, terminal, _] = &faces;
+        let terminal_carries_symbols = carries_symbols(&terminal.family, &installed);
         let detected = symbol_fallbacks(installed);
         for face in faces {
             if face.fallbacks.is_none() {
                 face.fallbacks = Some(detected.clone());
             }
         }
+        self.symbol_font_missing = REPORTS_MISSING_SYMBOL_FONT
+            && terminal_unset
+            && detected.is_empty()
+            && !terminal_carries_symbols;
     }
 
     /// Puts each face whose family `undrawable` rejects back on its default,

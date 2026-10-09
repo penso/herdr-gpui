@@ -202,6 +202,10 @@ impl HerdrWindow {
             self.local_error = Some(error);
             changed = Redraw::Window;
         }
+        // The notice is window chrome, which a terminal-only redraw skips.
+        if selected_changed && self.watch_symbol_font() {
+            changed = Redraw::Window;
+        }
         self.sync_server_keymap(cx);
         match changed {
             Redraw::None => {}

@@ -14,6 +14,8 @@
 # no text face covers. Each section falls back to the installed "Nerd Font"
 # families automatically; set fallback to choose them yourself, or to [] for
 # none. Uninstalled names are ignored, and at most 8 are accepted per section.
+# On macOS, with no Nerd Font found and no [terminal] fallback set, the first
+# icon a pane draws brings a dismissible notice naming a font to install.
 # Saved changes to the local file reload automatically in every GUI window.
 
 # Built-ins: Default, Nord, Dracula, Catppuccin Mocha, Catppuccin Latte.
