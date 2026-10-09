@@ -324,6 +324,24 @@ impl OrchestratorView {
         cx.notify();
     }
 
+    /// The banner's text, for tests outside the view.
+    #[cfg(test)]
+    pub(crate) fn notice_text(&self) -> Option<String> {
+        let notice = self.notice.as_ref()?;
+        Some(match &notice.outcome {
+            Ok(text) => (*text).to_owned(),
+            Err(error) => error.to_string(),
+        })
+    }
+
+    /// Shows `error` in the banner, for a request the host could not carry out.
+    pub(crate) fn report(&mut self, error: super::Error, cx: &mut Context<Self>) {
+        self.notice = Some(Notice {
+            outcome: Err(Arc::new(error)),
+        });
+        cx.notify();
+    }
+
     /// Starts a dispatch the window set up for another host.
     pub(crate) fn dispatch_elsewhere(&mut self, request: super::DispatchRequest) {
         self.act(super::Action::Dispatch(Box::new(request)));

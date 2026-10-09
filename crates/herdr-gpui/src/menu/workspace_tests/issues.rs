@@ -136,3 +136,51 @@ fn a_view_moves_into_its_own_window_and_goes_when_it_closes(cx: &mut gpui::TestA
         })
     });
 }
+
+#[gpui::test]
+fn a_run_whose_workspace_closed_says_so_in_the_view(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    let workspace = "w3".to_owned();
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            if let Some(snapshot) = view.live.snapshot.as_mut() {
+                std::sync::Arc::make_mut(snapshot).focused_workspace_id = Some(workspace.clone());
+            }
+        })
+    });
+    let id = cx.update(|_, cx| {
+        let tab_scope = scope(&view.read(cx).endpoints[0]);
+        Store::update(cx, |store| {
+            store.open(
+                tab_scope,
+                &workspace,
+                Some(Location::Orchestrator {
+                    repo: OrchestratorRepo::new("/nonexistent/orchestrator-test".into()).unwrap(),
+                }),
+                None,
+            )
+        })
+        .unwrap()
+    });
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.poll_orchestrators(window, cx);
+            // The run's workspace is not on any connected host.
+            view.orchestrator_events.push((
+                id,
+                crate::orchestrator::Event::OpenWorkspace {
+                    host: None,
+                    workspace_id: "w404".into(),
+                },
+            ));
+            view.poll_orchestrators(window, cx);
+        })
+    });
+    let text = cx.update(|_, cx| {
+        view.read(cx).orchestrators[&id]
+            .view()
+            .read(cx)
+            .notice_text()
+    });
+    assert_eq!(text.as_deref(), Some("This run's workspace is closed"));
+}

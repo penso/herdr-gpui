@@ -22,6 +22,13 @@ pub(crate) struct Orchestrator {
     pub(super) _events: Subscription,
 }
 
+#[cfg(test)]
+impl Orchestrator {
+    pub(crate) fn view(&self) -> &Entity<OrchestratorView> {
+        &self.view
+    }
+}
+
 /// The live agents last handed to the views, and the snapshots they came
 /// from, so they are rebuilt only when a snapshot changes.
 #[derive(Default)]
@@ -351,15 +358,16 @@ impl HerdrWindow {
             Event::OpenRun {
                 endpoint, pane_id, ..
             } => {
-                let Some(id) = self.endpoints.get(endpoint).map(|e| e.id.clone()) else {
+                let Some(endpoint) = self.endpoints.get(endpoint).map(|e| e.id.clone()) else {
+                    self.tell_orchestrator(id, super::Error::WorkspaceClosed, cx);
                     return;
                 };
-                if !self.navigate_endpoint(&id, NavigationTarget::Pane(&pane_id), cx) {
-                    self.show_flash(Flash::warning("Close the open menu first"), cx);
+                if !self.navigate_endpoint(&endpoint, NavigationTarget::Pane(&pane_id), cx) {
+                    self.tell_orchestrator(id, super::Error::MenuOpen, cx);
                 }
             }
             Event::OpenWorkspace { host, workspace_id } => {
-                self.open_run_workspace(host.as_deref(), &workspace_id, cx)
+                self.open_run_workspace(id, host.as_deref(), &workspace_id, cx)
             }
             Event::OpenUrl(url) => match WebUrl::try_from(url.as_str()) {
                 Ok(url) => {
@@ -368,7 +376,7 @@ impl HerdrWindow {
                         self.open_workspace_page(&endpoint, &workspace, url, window, cx);
                     }
                 }
-                Err(_) => self.show_flash(Flash::warning("Only web addresses open here"), cx),
+                Err(_) => self.tell_orchestrator(id, super::Error::NotWebAddress, cx),
             },
             Event::SignIn => {
                 if self.open_menu(window, cx) {
@@ -408,10 +416,7 @@ impl HerdrWindow {
             .orchestrator_view(id)
             .is_some_and(|view| view.read(cx).target() != shown)
         {
-            self.show_flash(
-                Flash::warning("Show this repository's host to dispatch elsewhere"),
-                cx,
-            );
+            self.tell_orchestrator(id, super::Error::HostNotShown, cx);
             return;
         }
         let set_up = self
@@ -436,7 +441,7 @@ impl HerdrWindow {
                 ))
             });
         let Some((label, elsewhere)) = set_up else {
-            self.show_flash(Flash::warning("That host cannot take this repository"), cx);
+            self.tell_orchestrator(id, super::Error::HostCannotTake, cx);
             return;
         };
         crate::dispatch::History::update(cx, |history| history.record(&label, endpoint));
@@ -450,6 +455,7 @@ impl HerdrWindow {
     /// the shown host when it fits, else the first that does.
     fn open_run_workspace(
         &mut self,
+        view: TabId,
         host: Option<&str>,
         workspace_id: &str,
         cx: &mut Context<Self>,
@@ -476,12 +482,20 @@ impl HerdrWindow {
             .chain(0..self.endpoints.len())
             .find(|&index| fits(&self.endpoints[index].connection.target) && has(index));
         let Some(index) = found else {
-            self.show_flash(Flash::warning("That run's workspace is closed"), cx);
+            self.tell_orchestrator(view, super::Error::WorkspaceClosed, cx);
             return;
         };
         let id = self.endpoints[index].id.clone();
         if !self.navigate_endpoint(&id, NavigationTarget::Workspace(workspace_id), cx) {
-            self.show_flash(Flash::warning("Close the open menu first"), cx);
+            self.tell_orchestrator(view, super::Error::MenuOpen, cx);
+        }
+    }
+
+    /// Shows why a view's request did not happen in that view's own banner:
+    /// the window's flash draws over terminals, behind the view's tab.
+    fn tell_orchestrator(&self, id: TabId, error: super::Error, cx: &mut Context<Self>) {
+        if let Some(view) = self.orchestrator_view(id).cloned() {
+            view.update(cx, |view, cx| view.report(error, cx));
         }
     }
 

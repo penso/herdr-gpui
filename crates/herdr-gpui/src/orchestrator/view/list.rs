@@ -392,16 +392,24 @@ impl OrchestratorView {
         self.row_shell(("orchestrator-run", index), run.id.clone(), RUN_ROW, cx)
             .child(look.icon(agent_icon(&run.agent), 15., theme.foreground))
             .child(
-                look.mono(item.map(|item| item.identifier.clone()).unwrap_or_default())
-                    .flex_none()
-                    .w(px(80.))
-                    .text_color(rgb(theme.muted)),
+                look.mono(item.map_or_else(
+                    || super::rows::key_label(&run.item_key),
+                    |item| item.identifier.clone(),
+                ))
+                .flex_none()
+                .w(px(80.))
+                .text_color(rgb(theme.muted)),
             )
             .child(
-                div().flex_1().min_w_0().truncate().child(
-                    item.map(|item| item.title.clone())
-                        .unwrap_or_else(|| run.item_key.clone()),
-                ),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .when(item.is_none(), |el| el.text_color(rgb(theme.muted)))
+                    .child(item.map_or_else(
+                        || "Not listed (closed or filtered)".to_owned(),
+                        |item| item.title.clone(),
+                    )),
             )
             .child(div().flex_none().w(px(100.)).flex().child(look.chip(host)))
             .child(
@@ -449,6 +457,7 @@ impl OrchestratorView {
             )))
             .child(
                 look.icon_button(("orchestrator-run-open", index), "icons/arrow-right.svg")
+                    .debug_selector(move || format!("orchestrator-run-open-{index}"))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {

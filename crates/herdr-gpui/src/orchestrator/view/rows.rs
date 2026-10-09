@@ -530,3 +530,20 @@ pub(crate) fn attention(runs: &Runs<'_>) -> usize {
         .filter(|status| status.group() == Group::Attention)
         .count()
 }
+
+/// What a run's item is called when the item is not listed, such as a
+/// closed issue: `#375` for a GitHub issue or pull request, else its id.
+pub(crate) fn key_label(key: &str) -> String {
+    let native = key
+        .rsplit(':')
+        .next()
+        .unwrap_or(key)
+        .replace("%3A", ":")
+        .replace("%25", "%");
+    let number = native.strip_prefix("pr/").unwrap_or(&native);
+    if !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()) {
+        format!("#{number}")
+    } else {
+        native
+    }
+}

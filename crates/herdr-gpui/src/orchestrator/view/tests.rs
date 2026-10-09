@@ -6,6 +6,7 @@ use crate::orchestrator::{
 use chrono::{DateTime, Utc};
 use herdr_client::protocol::AgentStatus;
 
+mod clicks;
 mod markdown;
 mod rows;
 

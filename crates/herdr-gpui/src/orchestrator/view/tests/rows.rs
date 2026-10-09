@@ -291,3 +291,17 @@ fn a_run_without_a_session_is_found_by_its_workspace() {
     assert!(runs.live(0).is_none());
     assert_eq!(runs.status(0), Some(Status::Working));
 }
+
+#[test]
+fn unlisted_items_are_named_by_their_key() {
+    assert_eq!(key_label("github:github.com:penso/herdr-gpui:375"), "#375");
+    assert_eq!(
+        key_label("github:github.com:penso/herdr-gpui:pr/369"),
+        "#369"
+    );
+    assert_eq!(
+        key_label("beads:local:/Users/me/app:hg-a3f2.1"),
+        "hg-a3f2.1"
+    );
+    assert_eq!(key_label("beads:local:/r:a%3Ab"), "a:b");
+}

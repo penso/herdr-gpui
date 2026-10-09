@@ -78,6 +78,16 @@ pub(crate) enum Error {
     Busy,
     #[error("This run has no Herdr workspace to show")]
     NothingToOpen,
+    #[error("This run's workspace is closed")]
+    WorkspaceClosed,
+    #[error("Close the open menu first")]
+    MenuOpen,
+    #[error("Only web addresses open here")]
+    NotWebAddress,
+    #[error("Show this repository's host to dispatch elsewhere")]
+    HostNotShown,
+    #[error("That host cannot take this repository")]
+    HostCannotTake,
     #[error("Setting up the other host failed: {0}")]
     Teleport(#[source] crate::teleport::Error),
     #[error("The pull request changed since you confirmed; look at it again before merging")]
