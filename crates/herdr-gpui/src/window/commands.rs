@@ -384,6 +384,11 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
+            Command::Detach => {
+                self.detach_endpoint(cx);
+                cx.notify();
+                return;
+            }
             Command::Reconnect => self.reconnect(cx),
             Command::Quit => {
                 cx.quit();
