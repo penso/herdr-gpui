@@ -184,6 +184,14 @@ impl HerdrWindow {
                     }
                 }),
             )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, _| this.release_review_code(id)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, _| this.release_review_code(id)),
+            )
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                 // Only keys meant for the diff itself; fields keep theirs.
                 let Some(review) = this.reviews.get(&id) else {
@@ -193,6 +201,19 @@ impl HerdrWindow {
                     cx.stop_propagation();
                 }
             }))
+            // The Edit menu's Copy and Select All, which replay their keys.
+            .when(review.selection.is_some_and(|s| !s.is_empty()), |tab| {
+                tab.on_action(
+                    cx.listener(move |this, _: &crate::actions::Copy, window, cx| {
+                        this.review_key(id, &crate::actions::edit_key("c"), window, cx);
+                    }),
+                )
+            })
+            .on_action(
+                cx.listener(move |this, _: &crate::actions::SelectAll, window, cx| {
+                    this.review_key(id, &crate::actions::edit_key("a"), window, cx);
+                }),
+            )
             .child(self.render_review(id, cx))
             .into_any_element()
     }
@@ -259,6 +280,8 @@ impl HerdrWindow {
             revealed: Cell::new(None),
             search: search::Search::new(search),
             draft: None,
+            selection: None,
+            selecting: false,
             notes: Vec::new(),
             marks: HashMap::new(),
             input,

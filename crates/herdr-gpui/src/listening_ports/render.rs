@@ -43,7 +43,7 @@ impl HerdrWindow {
             .as_ref()?
             .focused_workspace_id
             .as_deref()?;
-        let daemon = super::Daemon::from(&endpoint.connection.target);
+        let daemon = super::Daemon::of(&endpoint.connection.target)?;
         let listed = self.listening_ports.get(&daemon, workspace)?;
         Some((endpoint.id.as_str(), workspace, listed))
     }

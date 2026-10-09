@@ -17,6 +17,7 @@ use std::{
 };
 
 mod close_pane;
+mod dead_keys;
 mod endpoint_switch;
 mod focus_fences;
 mod horizontal_wheel;
@@ -26,6 +27,7 @@ mod input_gap;
 mod keyboard;
 mod mouse_gestures;
 mod mouse_targets;
+mod plugin_selection;
 mod prompts;
 mod reconnect_backoff;
 mod remote_drop;
@@ -254,12 +256,12 @@ fn connected_endpoint(id: &str) -> (Endpoint, Server) {
     (endpoint, server)
 }
 
-fn prepare_mouse(view: &mut HerdrWindow, endpoint: Endpoint) {
+fn prepare_mouse(view: &mut HerdrWindow, endpoint: Endpoint, cx: &mut Context<HerdrWindow>) {
     view.endpoints.truncate(1);
     view.endpoints.push(endpoint);
     view.selected_endpoint = 1;
     view.options = ConnectOptions::default();
-    view.reset_selected();
+    view.reset_selected(cx);
     view.activation_deadline = None;
     let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
     let mut inactive = snapshot.panes[0].clone();
@@ -323,13 +325,17 @@ fn clipboard_image(bytes: &[u8]) -> ClipboardItem {
     ClipboardItem::new_image(&Image::from_bytes(ImageFormat::Png, bytes.to_vec()))
 }
 
-fn prepare_remote_image(view: &mut HerdrWindow, mut endpoint: Endpoint) {
+fn prepare_remote_image(
+    view: &mut HerdrWindow,
+    mut endpoint: Endpoint,
+    cx: &mut Context<HerdrWindow>,
+) {
     // Only change the classification after connecting the isolated socket harness.
     endpoint.connection.target = ConnectTarget::Ssh {
         target: "unused-image-test.invalid".into(),
         session: "default".into(),
     };
-    prepare_mouse(view, endpoint);
+    prepare_mouse(view, endpoint, cx);
     assert!(view.accepts_remote_images());
 }
 

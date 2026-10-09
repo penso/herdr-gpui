@@ -253,7 +253,7 @@ fn clean_path(path: &str) -> String {
 
 /// Appends one line of untrusted text: tabs become spaces, controls and
 /// direction overrides go, and it is bounded.
-fn push_clean(buffer: &mut String, text: &str) {
+pub(crate) fn push_clean(buffer: &mut String, text: &str) {
     let text = text.strip_suffix('\r').unwrap_or(text);
     let mut kept = 0;
     for c in text.chars() {

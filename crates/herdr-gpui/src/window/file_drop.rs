@@ -30,6 +30,18 @@ impl HerdrWindow {
         if paths.paths().is_empty() {
             return;
         }
+        // Local paths mean nothing on a cloud machine, and file copies
+        // there would need the provider's own transfer; refuse rather than paste dead paths.
+        #[cfg(feature = "cloud")]
+        if matches!(
+            self.endpoints[self.selected_endpoint].connection.target,
+            herdr_client::ConnectTarget::Cloud { .. }
+        ) {
+            self.local_error =
+                Some("Files not pasted: file drops are not supported on cloud devices yet.".into());
+            cx.notify();
+            return;
+        }
         let result = quote_paths(paths.paths()).and_then(|text| {
             if self.accepts_remote_images()
                 && let [path] = paths.paths()

@@ -32,6 +32,9 @@ pub(super) struct CatalogUpdate {
     pub(super) wsl: Vec<WslHost>,
     /// The endpoint ID the stored selection names, read only at startup.
     selection: Option<Option<String>>,
+    /// The GUI's saved cloud devices, or `None` when that list could not be read.
+    #[cfg(feature = "cloud")]
+    pub(super) cloud: Option<Vec<crate::cloud::SavedDevice>>,
 }
 
 impl CatalogUpdate {
@@ -50,6 +53,21 @@ impl CatalogUpdate {
 
 /// Load both catalogs. A WSL distribution chosen last wins over upstream's
 /// selection, which cannot name one and so says Local whenever it was chosen.
+/// The GUI's saved cloud devices; `None` when they cannot be read, so the
+/// current cloud endpoints are kept rather than dropped.
+#[cfg(feature = "cloud")]
+fn cloud_devices() -> Option<Vec<crate::cloud::SavedDevice>> {
+    // Devices saved on another system stay in the file but are not offered.
+    if crate::cloud::unavailable().is_some() {
+        return Some(Vec::new());
+    }
+    crate::cloud::load()
+        .inspect_err(|error| {
+            tracing::warn!(category = "cloud_catalog", %error, "Cannot read saved cloud devices");
+        })
+        .ok()
+}
+
 fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
     // Only Windows has distributions; elsewhere the file is never read.
     let wsl = if cfg!(windows) {
@@ -62,6 +80,8 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
             hosts: herdr_client::load_saved_hosts(development)?,
             wsl: wsl.hosts,
             selection: None,
+            #[cfg(feature = "cloud")]
+            cloud: cloud_devices(),
         });
     }
     let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
@@ -73,6 +93,8 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
         hosts,
         wsl: wsl.hosts,
         selection: Some(selection),
+        #[cfg(feature = "cloud")]
+        cloud: cloud_devices(),
     })
 }
 
@@ -215,13 +237,58 @@ impl HerdrWindow {
         }
     }
 
+    /// SSH hosts and WSL distributions only, keeping the current cloud
+    /// endpoints; for fixtures.
+    #[cfg(test)]
     pub(crate) fn reconcile_catalog(
         &mut self,
         hosts: Vec<SavedHost>,
         wsl: Vec<WslHost>,
         cx: &mut Context<Self>,
     ) {
-        let devices = devices(hosts, wsl);
+        #[cfg(feature = "cloud")]
+        self.reconcile_devices(hosts, wsl, None, cx);
+        #[cfg(not(feature = "cloud"))]
+        self.reconcile_devices(hosts, wsl, cx);
+    }
+
+    /// Replace the remote endpoints with every saved device. `None` keeps the
+    /// current cloud endpoints, so a failed read of the GUI's own list never
+    /// drops their connections.
+    pub(super) fn reconcile_devices(
+        &mut self,
+        hosts: Vec<SavedHost>,
+        wsl: Vec<WslHost>,
+        #[cfg(feature = "cloud")] cloud: Option<Vec<crate::cloud::SavedDevice>>,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg_attr(not(feature = "cloud"), allow(unused_mut))]
+        let mut devices = devices(hosts, wsl);
+        #[cfg(feature = "cloud")]
+        match cloud {
+            Some(cloud) => devices.extend(cloud.into_iter().map(|saved| Device {
+                id: saved.endpoint_id(),
+                target: saved.target(),
+                label: saved.label,
+                enabled: saved.enabled,
+            })),
+            None => devices.extend(
+                self.endpoints
+                    .iter()
+                    .filter(|endpoint| {
+                        matches!(endpoint.connection.target, ConnectTarget::Cloud { .. })
+                    })
+                    .map(|endpoint| Device {
+                        id: endpoint.id.clone(),
+                        label: endpoint.label.clone(),
+                        target: endpoint
+                            .saved
+                            .clone()
+                            .unwrap_or_else(|| endpoint.connection.target.clone()),
+                        enabled: endpoint.enabled,
+                    }),
+            ),
+        }
         let selected = &self.endpoints[self.selected_endpoint];
         let selected_id = selected.id.clone();
         let selected_retired = self.selected_endpoint != 0
@@ -234,6 +301,29 @@ impl HerdrWindow {
             self.switch_endpoint(LOCAL, cx);
         }
         let selected_id = self.endpoints[self.selected_endpoint].id.clone();
+        for endpoint in &self.endpoints[1..] {
+            if !devices.iter().any(|device| device.id == endpoint.id) {
+                tracing::info!(
+                    category = "catalog",
+                    id = endpoint.id,
+                    "Device left the catalog"
+                );
+            }
+        }
+        for device in &devices {
+            if !self
+                .endpoints
+                .iter()
+                .any(|endpoint| endpoint.id == device.id)
+            {
+                tracing::info!(
+                    category = "catalog",
+                    id = device.id,
+                    enabled = device.enabled,
+                    "Device joined the catalog"
+                );
+            }
+        }
         let mut previous = std::mem::take(&mut self.endpoints);
         let mut next = vec![previous.remove(0)];
         for device in devices {

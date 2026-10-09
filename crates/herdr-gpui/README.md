@@ -291,6 +291,84 @@ appears automatically on the next catalog refresh. No credentials are collected
 by the GUI. Explicit-socket and development-catalog windows do not offer setup,
 and saved SSH devices remain unsupported on Windows.
 
+### Coder workspaces
+
+Settings > **Cloud Devices** holds accounts with providers that create machines
+to use as devices; Coder is the only one so far. Its card edits the `[coder]`
+keys (see `config-gpui.example.toml`), saves the OAuth client secret to the
+credential store rather than the config file, signs in and out, and lists the
+saved Coder devices with a Remove action. A secret set in the config file or
+`HERDR_CODER_OAUTH_CLIENT_SECRET` takes precedence over the saved one.
+
+Once Coder is configured, the device picker also offers **Add Coder Workspace…**. It signs in with Coder's
+OAuth2 provider (authorization code with PKCE; the browser returns to the
+configured loopback redirect), then lists the account's templates, their presets,
+and existing workspaces. It opens with the first template, its default preset,
+and a random `prefix-adjective-noun` name already chosen, so creating takes one
+click; choosing an existing workspace attaches it instead.
+
+Creating or attaching runs in the background: the dialog closes at once and can
+start another while earlier ones are still building. The devices icon in the
+footer counts the workspaces being added, the device picker lists each under
+**Adding** with its latest status (creating, building, installing Herdr), and a
+toast reports each one ready to use, or why it was not added. Closing the window
+cancels unfinished jobs.
+
+Templates need not include Herdr. The dialog's **Install Herdr if it is missing**
+switch, on by default, is the approval to run Herdr's published installer
+(`curl -fsSL https://herdr.dev/install.sh | sh`) inside the new workspace, which
+verifies the release checksum and installs to `~/.local/bin`. This is the only
+remote installation the GUI performs, and only with that approval; reconnects
+never install anything. With the switch off, a workspace without Herdr is not
+added. A workspace without `curl` must get Herdr another way.
+
+Cloud devices, from every provider, are stored in the GUI's own
+`cloud-devices.json` in its state directory, because Herdr's `endpoints.json`
+schema is SSH-only. Each entry names its provider, so adding another provider
+needs no new file. They connect by
+running Herdr's remote bridge through `coder ssh`, with the deployment URL and
+access token passed only in that child's environment; Coder's tunnel
+authenticates the connection, so no SSH config or host key is involved. The
+`coder` CLI is required, found on PATH, in `/opt/homebrew/bin`, `/usr/local/bin`,
+`~/.local/bin`, or at `[coder] cli`. A stopped workspace (for example after
+autostop) is started before connecting. Selecting a saved workspace in the dialog
+offers **Remove device**, which forgets it without touching the workspace.
+
+The sign-in is saved under the same rules as the GitHub one: the Keychain in
+signed macOS release builds, the Secret Service on Linux, otherwise the private
+`coder-credentials` file beside the GUI config. It is tied
+to the deployment and OAuth client; changing either signs out. Tokens are renewed
+before expiry and on rejection. File drops are refused on Coder panes, and
+restoring the last selected device at startup covers SSH devices only. Coder
+devices are unavailable on Windows.
+
+### Daytona sandboxes (experimental)
+
+Settings > **Cloud Devices** > **Daytona** holds a Daytona account: the API URL
+(`https://app.daytona.io/api` for Daytona's cloud), an optional organization,
+region, and snapshot, saved to `[daytona]`, and an API key saved to the
+credential store (`HERDR_DAYTONA_API_KEY` takes precedence). **Create sandbox**
+creates one with a generated name and, when the **Install Herdr** switch is on
+(the default), installs Herdr in it if it is missing; the device picker shows
+its progress and a toast says when it is ready. The picker's **Add Daytona
+Sandbox…** row opens this tab. Removing a device leaves its sandbox in Daytona.
+
+Each connection starts a stopped sandbox, asks the API for a 10-minute SSH
+token for it, and runs Herdr's remote bridge through Daytona's SSH gateway.
+The token goes in a private temporary `ssh` config file that also replaces your
+own, never on the command line. Daytona publishes no host key for its gateway,
+so the first key seen is pinned in `daytona_known_hosts` in the GUI's state
+directory and a changed key is refused. Daytona devices need `ssh` on the PATH
+and are unavailable on Windows. This provider is a proof of concept: the API
+path is covered by tests against a scripted server, but not yet exercised
+against a live Daytona account.
+
+Each provider is a Cargo feature of `herdr-gpui`, on by default: `coder` for
+Coder and `daytona` for Daytona. A build with `--no-default-features` has no
+Cloud Devices section and no provider rows in the device picker; it still
+accepts the `[coder]` and `[daytona]` tables, so one config file serves every
+build, but never reads them.
+
 Switching revokes the old host's focus before releasing its surface, then resizes
 and activates the selected host. Input waits for the activation acknowledgement
 and a coherent surface at the current viewport size. Handoffs time out after five
@@ -1266,6 +1344,47 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Smart Dispatch
+
+When more than one host is connected, the New worktree dialog (its branch form)
+and the New workspace dialog for a Git checkout offer a host for the new
+checkout. The three hosts with the most room are tiles, best first; every other
+host, offline ones last, opens from the Other field below them. The host the
+window shows stays chosen until you pick another, so pressing Enter still
+creates where it always did.
+
+Hosts rank by spare cores: cores less the 5 minute load average (or the CPU
+share where there is none), from the same samples as the CPU and memory
+display. While a picker is open every connected host is sampled, even with
+that display off. Each agent working there takes half a core off, a host that
+would have to clone the repository first takes one, memory above 90% halves
+its room, and each of the repository's last eight new checkouts that went
+there adds half a core, up to three. The ranking follows the samples for a few
+seconds, then holds still so the tiles do not move under the pointer.
+
+Choosing another host creates the checkout there through the same scripts as
+Teleport: the repository is found by remote (or opened, or cloned, as Teleport
+does), the base commit is resolved here and shipped as a Git bundle only when
+that host lacks it, and that host's own daemon creates the worktree from it.
+Closing the dialog does not stop it; the result arrives as a flash, and the
+window switches to the new workspace. Once it is shown, a new worktree runs the
+repository's setup script there, asking for trust as a local creation does.
+Setups of several such worktrees wait their turn; one whose host is not shown
+within two minutes is given up on, with a warning. A
+new workspace opens the repository's main checkout on that host.
+
+The fan-out dialog offers Spread agents across hosts. Each lane then goes to
+the host with the most room left, a lane counting as a core, and its host chip
+opens every host, best first, to move that lane. Each other host is set up once
+before its lanes, and a lane whose agent is not installed there fails with a
+reason. Lanes on another host show it next to their status, and Open, Keep and
+the comparison work across hosts; a host that cannot be read marks only its
+own lanes, keeping the changes read before.
+
+Where new checkouts went is kept in `dispatch-history.json` in the state
+directory, by repository name and host. Like Teleport, dispatch needs a Linux
+or macOS client and the local session or a saved SSH host on both ends.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane
@@ -1377,18 +1496,133 @@ are not activated.
 
 Cmd-click (Ctrl-click elsewhere) a file path a pane prints, such as
 `src/main.rs:12:5`, `./build/out`, `~/notes.md`, or a `file://` hyperlink, to
-open it with the system's default application. Holding the modifier underlines
-the path under the pointer. Relative paths resolve against the pane's working
-directory, and a path opens only if it exists; the line and column are not
-passed on. Terminal output is untrusted, so a click never launches anything:
-only a plain folder or a non-executable document (text, source, Markdown, JSON,
-images, PDF, and similar) opens itself, judged by where symlinks lead. An
-application, script, or unknown file type opens the folder that holds it, and a
-network path opens nothing. A bare name needs a location (`main.rs:3`) to count as a path, and
+open it. Holding the modifier underlines the path under the pointer. Relative
+paths resolve against the pane's working directory, and a path opens only if it
+exists. A bare name needs a location (`main.rs:3`) to count as a path, and
 paths are not detected in panes on SSH hosts, whose files live on that host.
+
+A file opens in your terminal editor at the printed line, in a new pane split
+to the right of the pane that printed it (see [Code Navigation](#code-navigation)).
+Folders, images, videos, and PDFs open with the system's default application
+instead, as does every file with `open_files_in = "system"`. Alt-click
+(Option-click on macOS) opens a file in the other one. There, terminal output
+is untrusted, so a click never launches anything: only a plain folder or a
+non-executable document (text, source, Markdown, JSON, images, PDF, and
+similar) opens itself, judged by where symlinks lead. An application, script,
+or unknown file type opens the folder that holds it, and a network path opens
+nothing.
 
 Set `open_links_in = "browser-tab"` to open links in a [browser tab](#browser-tabs)
 instead. Alt-click (Option-click on macOS) opens a link in the other target.
+
+With a daemon that offers it, a link click, a file path or `file://` hyperlink
+included, first goes to the daemon so a plugin's `[[link_handlers]]` entry can
+claim it; see [Herdr Plugins](#herdr-plugins).
+
+## Herdr Plugins
+
+Herdr runs plugins; this client never reads plugin manifests, runs plugin
+commands, or touches the plugin registry. It works with the parts of a plugin
+the daemon exposes to clients:
+
+- **Actions.** Bind a plugin action in Herdr's own config with
+  `[[keys.command]] type = "plugin_action"`. It then runs from its key, as a
+  direct shortcut or a prefix chord, from the command palette, and is listed in
+  the shortcut reference. Herdr does not offer clients a list of plugin actions
+  nobody bound, so an unbound action cannot be run from here.
+- **Selected text.** A plugin action run while text is highlighted in the focused
+  pane, by a mouse selection kept after release or a copy-mode mark, is given that
+  text as `selected_text` in `HERDR_PLUGIN_CONTEXT_JSON`. The client sends the
+  selection's cells and Herdr reads the text from its own terminal, so the plugin
+  gets exactly what was highlighted on the host that runs the pane, without going
+  through the clipboard. As in Herdr's terminal client, only plugin actions receive
+  it, only from the focused pane, and never from a popup. The palette takes the
+  selection when it opens. Herdr reads the highlighted cells as they are in the
+  frame on screen when the action runs, and refuses the action, showing the
+  error, if the pane changed after that frame was drawn; run it again. With
+  `copy_on_select` on and
+  `keep_selection_after_copy = false`, a mouse selection is cleared on release, so
+  there is none to send.
+- **Link handlers.** A link click that a handler claims opens nothing here. If the
+  handler fails, its error is shown and nothing opens in its place. A click that
+  nothing claims opens here as described in [Terminal Links](#terminal-links).
+  Herdr matches handlers against the URL it reads at the click (a terminal
+  hyperlink's target, or a web address in the text), so a plain printed path is
+  never claimed. A link-modifier click on any terminal hyperlink is offered to
+  the daemon, including one this client never opens itself, such as an SSH
+  host's own `file://` link, so a handler on that host can still claim it.
+- **Popups and panes.** Plugin popups, splits, and tabs are ordinary daemon
+  terminals: keys, paste, input methods, and the mouse go to a popup while it is
+  open, and focus is whatever the daemon reports, including after a plugin's
+  process exits and its popup closes.
+- **Metadata.** Tab-bar status segments, custom sidebar tokens and row rules, and
+  agent views from `agent.view.set` are shown as the daemon reports them; see
+  [`[usage]`](#configuration) for the switches that hide them.
+- **Clipboard.** A plugin terminal that copies with OSC 52 reaches this machine's
+  clipboard, local or remote, through the same bounded path as any pane. A plugin
+  that runs a clipboard command such as `pbcopy` on a remote host writes that
+  host's clipboard, not this one.
+
+## Code Navigation
+
+Herdr GPUI is not an editor, but it can get you to the right line quickly,
+next to the agent that is changing the code.
+
+- **Open in your editor.** Cmd-click (Ctrl-click elsewhere) a printed path
+  such as `src/main.rs:42` to open it at that line in your terminal editor, in
+  a new pane split to the right of the pane that printed it. In a
+  [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
+  diff the same way. Quitting the editor closes its pane. When the editor is
+  Neovim, later files for the same tab open in that Neovim instead of a new
+  split, as [herdr-nvim](https://github.com/ChmaraX/herdr-nvim)'s sidebar
+  does.
+- **Go to Symbol** (`cmd-shift-o`) lists the functions, types, modules, and
+  constants of the focused pane's checkout; **Go to File** (`cmd-o`) lists its
+  files, and takes `file:line` to open at a line. Tab switches between the two.
+  Before you type, both start with what the agent is changing: the checkout's
+  uncommitted files, newest first, with their `+added −removed` line counts,
+  or the definitions in them.
+  Enter opens the result in your editor beside the focused pane;
+  Cmd-Enter (Ctrl-Enter elsewhere) opens it in a code tab instead.
+- **Code tabs** show a file read-only with syntax colouring and an outline of
+  its definitions, beside the workspace's terminals like any other tab. Click
+  an outline entry to jump to it, or a line to mark it. `j`/`k` and the arrows
+  scroll, Space and Page Up/Down page, `g`/`G` go to the top and bottom, `o`
+  shows or hides the outline, and `e` opens the marked line, or the top line in
+  view, in your editor.
+
+The editor is `$VISUAL`, then `$EDITOR`, then `vi`, as the new pane's shell
+sees them, started as `EDITOR +LINE FILE`. Set `editor_command` to choose
+another, with `{file}` and `{line}` placeholders where it needs them, such as
+`editor_command = "hx {file}:{line}"`. Placeholders may sit inside double
+quotes, as in `subl "{file}:{line}"`; either way the path stays one word. The command is typed into the pane's
+shell, so the file's path must not contain a quote, backslash, or control
+character; such a file opens in the system's application instead.
+
+A Neovim editor is started with `--listen` on a socket in this app's private
+state folder (`herdr/gpui/nvim` under `$XDG_STATE_HOME` or `~/.local/state`,
+created with mode 700), and
+reused with `nvim --server … --remote-expr`, which opens the file with `:drop`,
+so `nvim` must be on the app's `PATH`. If that Neovim has quit, the file opens
+in a new split; if it is busy, such as on a swap-file prompt, its pane comes
+forward to be answered. An `editor_command`
+naming `nvim` listens too; one with `{file}` or `{line}` runs exactly as
+written and is never reused.
+On Windows, where a pane's shell has no `sh` to start the editor with, printed
+paths open in the system's application and Go to Symbol and Go to File open
+code tabs.
+
+The symbol index is built in the background from the files Git lists (tracked
+files and untracked ones it does not ignore), and kept for the next search;
+an index older than 30 seconds is read again while the last one stays usable.
+Symbols come from each line's leading keywords, as `ctags` reads them, for
+Rust, Swift, Ruby, Python, Go, JavaScript and TypeScript, Kotlin, Java, C#,
+Elixir, Zig, and the types and macros of C-family files. This is a heuristic, not a language server:
+a definition a macro generates, or one split oddly across lines, is missed, and
+C and C++ functions are not listed. Only local checkouts are indexed. Limits
+keep a huge repository responsive: at most 100,000 files are listed, files over
+1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
+kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
 
 ## Editor Groups
 
@@ -1412,12 +1646,12 @@ the same tab. Splitting opens nothing new.
   or padded. Pressing that group brings the live tab there. A page shown in
   another group is stood in for with **Show Here**.
 - The group in use has the keyboard, and its chosen tab carries the accent.
-  **+** opens a menu of what to add to that group: **New Terminal Tab**
-  (`cmd-t`), **New Browser Tab** (`cmd-shift-b`), **Review Changes** when
-  the Git chip tracks a checkout, and the workspace's listening ports, each
-  opening its page. The shortcuts skip the menu and open in the group in
-  use, where Close Tab acts too. Close Tab in an empty group closes the
-  group.
+  **+** opens a terminal tab in that group. The group's **…**, at the end
+  of its strip, offers the other kinds of tab: **New Browser Tab**
+  (`cmd-shift-b`), **Review Changes** when the Git chip tracks a checkout,
+  and the workspace's listening ports, each opening its page. `cmd-t` and
+  `cmd-shift-b` open in the group in use, where Close Tab acts too. Close
+  Tab in an empty group closes the group.
 - Drag a divider to resize the groups beside it. Groups are the window's own,
   per workspace. A group's own connection closes with the group, or when the
   window leaves the workspace or host; returning reconnects it.
@@ -1458,7 +1692,7 @@ own page for each one. Tabs are saved in
 `$XDG_STATE_HOME/herdr/gpui/browser-tabs.json` (default `~/.local/state/`) and
 come back after a restart; closing a workspace in Herdr removes its tabs.
 
-- Open one from a group's **+** menu, with **New Browser Tab** (`cmd-shift-b`)
+- Open one from a group's **…** menu, with **New Browser Tab** (`cmd-shift-b`)
   in the command palette, from a clicked link
   (see [Terminal Links](#terminal-links)), or from an agent (below). A new
   tab starts blank with its address field focused, and lists the
@@ -1524,7 +1758,7 @@ them to the agent that opened it, so it can change the page.
 
 ### Reviewing An Agent's Changes
 
-**Review Changes** in a group's **+** menu opens a review tab on the focused
+**Review Changes** in a group's **…** menu opens a review tab on the focused
 local checkout's changes, with untracked text files as wholly added,
 and lets you send review notes to the agent that made them, like inline
 comments on a pull request.
@@ -1603,10 +1837,19 @@ comments on a pull request.
   The review and an annotated page share the width, which is remembered
   with the sidebar's.
 
-- Click a line, added, removed or unchanged, or a file name, write what should
-  change, and press Enter or **Add note**. Escape drops the note being
-  written. Noted lines carry the note's number, and unsent notes stay while
-  the tab is open.
+- Click a line's gutter (its numbers and sign), added, removed or unchanged,
+  or a file name, write what should change, and press Enter or **Add note**.
+  Escape drops the note being written. Noted lines carry the note's number,
+  and unsent notes stay while the tab is open.
+- The code itself selects like an editor's: drag across it, double-click a
+  word, triple-click a line, Shift-click to extend, and Cmd-A (Ctrl-A
+  elsewhere) for the whole file at the top. Cmd-C or **Edit > Copy** copies
+  the code alone, never line numbers, `+`/`-` signs, or hunk headers; side by
+  side, a selection keeps to the side it started on, and Select All takes the
+  side last clicked in that file, else the new side (the old side of a deleted
+  file). A folded file has no code to select. Escape clears it. Tabs copy as the four spaces they are drawn as.
+- The copy icon on a file's header copies its path, and the one on a hunk
+  header copies the hunk as a patch reads, signs and header included.
 - Notes go to the agent in the focused pane, or else to the first agent Herdr
   reports in the focused workspace; the header names it. **Send to agent**
   turns them into one prompt: the checkout, then for each note the
@@ -2065,7 +2308,9 @@ records when reporting the failure.
   daemon's `pane.copy_search`. Matches are tinted, the current one more
   strongly, and shown as "3 of 17". Enter or Up moves to the next older match
   and Shift-Enter or Down to the next newer one (Cmd-G and Cmd-Shift-G work
-  too), scrolling the pane to it.
+  too, also once the terminal has the keyboard back; with no bar open, Cmd-G
+  opens it), scrolling the pane to it. In a review, Cmd-G and Cmd-Shift-G
+  step through its matches.
   Escape closes the bar. Lowercase queries ignore case; any uppercase letter
   makes the search case-sensitive, as Herdr's copy mode does. Text typed in
   the bar, IME composition included, never reaches the terminal. Daemons that
@@ -2145,7 +2390,8 @@ records when reporting the failure.
   like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
   Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
   prompts jump to the line's ends or delete back to its start as in every
-  other Mac terminal. A value is a key a terminal can receive (`ctrl-a`,
+  other Mac terminal, and Option-Left and Option-Right send Esc-b and Esc-f
+  to move by word. A value is a key a terminal can receive (`ctrl-a`,
   `home`, `alt-b`, `shift-enter`), and an empty string removes a default. A
   pane key takes its keystroke from a default or daemon command, so
   `"cmd-k" = "ctrl-l"` replaces Clear; listing it under `[keybindings]` as well
@@ -2234,10 +2480,21 @@ records when reporting the failure.
 - Server popup text surfaces centered above the main surface, with popup input
   routing while one is active.
 - Native committed text through `EntityInputHandler`, including Unicode and
-  composition. In-progress marked text is shown in the status bar.
+  composition. In-progress marked text is drawn inline at the input cursor,
+  and the input method's caret or converted clause anchors its candidate
+  window. Moving to another pane or running a command drops a composition in
+  progress, in the input method too, so it never carries into the new pane.
 - Enter, Tab/BackTab, Escape, Backspace, arrows, navigation/editing keys,
   F1-F24, Control characters and modifiers on special keys. Option-printable
-  input follows the macOS keyboard layout, including dead keys.
+  input follows the macOS keyboard layout, including dead keys. With the
+  default `option_as_alt = "auto"` on the U.S. and ABC layouts, the left
+  Option sends Alt shortcuts and the right Option types accents and dead keys
+  (right Option-E, then E, types é); `"left"` and `"right"` pick a side on
+  any layout. Option-Left and Option-Right move a word back and forward
+  (Esc-b and Esc-f), Cmd-Left and Cmd-Right to the line's start and end.
+- Ctrl-Cmd-F toggles full screen and Cmd-` brings the app's next window
+  forward, as in other Mac apps, from the Settings and Log windows too. The
+  cycle visits every window in a stable order, not front to back.
 - Pointer selection of terminal cells, copied to the clipboard on release with
   a configurable flash. Selections stay within one pane or the popup above it,
   anchor on half cells, and never reach the daemon.
@@ -2335,7 +2592,8 @@ GPUI native action/menu/keybinding patterns.
 - No server-owned keybindings, session picker, saved-host editing, or daemon
   stop/upgrade management.
 - IME uses a minimal transient buffer, not a local editable terminal document;
-  composition appears in the status bar rather than inline. Key releases are
+  the composition is drawn inline at the cursor with one underline, not a
+  thicker one under the clause being converted. Key releases are
   reported only while Herdr says the focused pane asks for every key (kitty
   report-all), and only for keys sent as key events: typed text still arrives
   as text rather than escape codes, so IME and dead keys keep working.

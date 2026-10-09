@@ -5,35 +5,12 @@ use super::Page;
 use crate::{
     HerdrWindow,
     teleport::{
-        Follow, HostRepositories, Mark, Place, Repository, Retired, Source, Teleport, host_for,
+        Follow, HostRepositories, Mark, Place, Retired, Source, Teleport, host_for,
+        open_repositories,
     },
 };
 use gpui::{Context, Window};
-use herdr_client::protocol::ClientShellSnapshot;
 use std::collections::HashMap;
-
-/// The repositories open in `snapshot`, one per Git common directory, each
-/// reached through its main checkout's workspace when that is open.
-fn repositories(snapshot: &ClientShellSnapshot) -> Vec<Repository> {
-    let mut found: Vec<Repository> = Vec::new();
-    for workspace in &snapshot.workspaces {
-        let Some(tree) = &workspace.worktree else {
-            continue;
-        };
-        match found.iter_mut().find(|repo| repo.key == tree.key) {
-            Some(repo) if !tree.is_linked_worktree => {
-                repo.workspace_id.clone_from(&workspace.workspace_id);
-            }
-            Some(_) => {}
-            None => found.push(Repository {
-                key: tree.key.clone(),
-                label: tree.label.clone(),
-                workspace_id: workspace.workspace_id.clone(),
-            }),
-        }
-    }
-    found
-}
 
 impl HerdrWindow {
     /// Whether the menu's workspace can be teleported: a linked worktree on
@@ -186,7 +163,7 @@ impl HerdrWindow {
                 .snapshot
                 .as_ref()
                 .filter(|_| endpoint.live.status.is_connected());
-            let repositories = snapshot.map(|snapshot| repositories(snapshot));
+            let repositories = snapshot.map(|snapshot| open_repositories(snapshot));
             // Checkouts this client teleported away from, still open there.
             let retired = snapshot
                 .map(|snapshot| {

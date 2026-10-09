@@ -331,7 +331,7 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .when(tab.selected == Some(index), |row| row.bg(rgb(theme.active)))
                         .hover(|row| row.bg(rgb(theme.active)))
-                        .child(label)
+                        .child(div().min_w_0().truncate().child(label))
                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                             if *hovered && let Some(tab) = &mut this.menu.tab {
                                 tab.selected = Some(index);
@@ -389,7 +389,9 @@ impl HerdrWindow {
                     );
         }
         body.when_some(tab.error.clone(), |body, error| {
-            body.child(div().p(px(8.)).child(error))
+            // No width of its own, so the labels set the panel's width and
+            // the message wraps inside it.
+            body.child(div().w_0().min_w_full().p(px(8.)).child(error))
         })
     }
 }

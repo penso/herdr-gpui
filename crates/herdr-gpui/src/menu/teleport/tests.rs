@@ -1,5 +1,6 @@
 use super::*;
 use crate::sidebar::layout_tests::{REPO_KEY, snapshot};
+use crate::teleport::Repository;
 
 #[test]
 fn repositories_prefer_their_main_checkout_workspace() {
@@ -7,7 +8,7 @@ fn repositories_prefer_their_main_checkout_workspace() {
     let mut snapshot = snapshot(6);
     snapshot.workspaces.swap(3, 5);
     assert_eq!(
-        repositories(&snapshot),
+        open_repositories(&snapshot),
         [Repository {
             key: REPO_KEY.into(),
             label: "agent-launcher".into(),
@@ -17,7 +18,7 @@ fn repositories_prefer_their_main_checkout_workspace() {
     snapshot
         .workspaces
         .retain(|workspace| workspace.workspace_id != "w3");
-    assert_eq!(repositories(&snapshot)[0].workspace_id, "w5");
+    assert_eq!(open_repositories(&snapshot)[0].workspace_id, "w5");
 }
 
 fn teleport_items(view: &HerdrWindow) -> usize {

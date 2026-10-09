@@ -54,6 +54,7 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        tracing::info!(category = "device_remove", id, "Opening host menu");
         if id.starts_with(crate::endpoint::WSL_PREFIX) {
             if self.device_setup_unavailable().is_none() {
                 self.open_remove_wsl(id, anchor, window, cx);
@@ -62,18 +63,47 @@ impl HerdrWindow {
         }
         // The CLI edits the default catalog, the one device setup also uses.
         // A device already being removed has nothing left to offer.
-        if self.ssh_setup_unavailable().is_some() || self.menu.removing_devices.contains(id) {
+        if let Some(reason) = self.ssh_setup_unavailable() {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                reason,
+                "Host menu unavailable"
+            );
+            return;
+        }
+        if self.menu.removing_devices.contains(id) {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                "Host menu refused: the device is still being removed"
+            );
             return;
         }
         let Some(endpoint) = self.endpoints.iter().find(|endpoint| endpoint.id == id) else {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                "Host menu refused: no such device"
+            );
             return;
         };
         // The saved entry, not the live target: removal claims and names the
         // profile, whichever session the list has attached the device to.
         let Some((target, session)) = endpoint.saved_ssh() else {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                "Host menu refused: the device has no saved SSH target"
+            );
             return;
         };
         let Some(profile) = crate::endpoint::saved_profile_id(&endpoint.id) else {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                "Host menu refused: the device has no saved profile"
+            );
             return;
         };
         let menu = HostMenu {
@@ -89,6 +119,11 @@ impl HerdrWindow {
             error: None,
         };
         if !self.open_menu(window, cx) {
+            tracing::info!(
+                category = "device_remove",
+                id,
+                "Host menu refused: menu did not open"
+            );
             return;
         }
         self.menu.anchor = anchor;
@@ -105,6 +140,12 @@ impl HerdrWindow {
     }
 
     fn activate_host_menu(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        tracing::info!(
+            category = "device_remove",
+            ?action,
+            id = self.menu.host.as_ref().map(|host| host.id.as_str()),
+            "Host menu action"
+        );
         match action {
             Action::Rename => {
                 let Some(host) = &self.menu.host else {
@@ -221,6 +262,10 @@ impl HerdrWindow {
     /// row does while it is removed; a failure is reported in the status bar.
     fn confirm_remove_device(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(host) = self.menu.host.take() else {
+            tracing::warn!(
+                category = "device_remove",
+                "Remove confirmed without a host menu"
+            );
             return;
         };
         let forget = host.forget_github && self.host_has_github(&host.id);
@@ -236,6 +281,7 @@ impl HerdrWindow {
             session,
             ..
         } = host;
+        tracing::info!(category = "device_remove", id, "Removing device");
         // The outer result is the removal itself; the inner one, the GitHub
         // credential that only matters once the device is gone.
         let background = cx.background_executor().spawn(async move {
@@ -265,6 +311,14 @@ impl HerdrWindow {
         result: crate::Result<crate::Result<()>>,
         cx: &mut Context<Self>,
     ) {
+        match &result {
+            Ok(_) => tracing::info!(
+                category = "device_remove",
+                id,
+                "Device removed; waiting for the catalog to drop it"
+            ),
+            Err(_) => tracing::warn!(category = "device_remove", id, "Device removal failed"),
+        }
         match result {
             Err(error) => {
                 self.menu.removing_devices.remove(id);
@@ -277,6 +331,13 @@ impl HerdrWindow {
                 if forget {
                     self.menu.github_hosts.remove(id);
                 }
+                tracing::info!(
+                    category = "device_remove",
+                    id,
+                    forget,
+                    github_deleted = forgotten.is_ok(),
+                    "GitHub sign-in cleanup"
+                );
                 if let Err(error) = forgotten {
                     self.local_error = Some(format!(
                         "Removed {label}, but could not delete its GitHub sign-in: {error}"
@@ -290,9 +351,13 @@ impl HerdrWindow {
     /// Forget removal marks for devices the catalog no longer lists.
     pub(crate) fn prune_device_removals(&mut self) {
         let endpoints = &self.endpoints;
-        self.menu
-            .removing_devices
-            .retain(|id| endpoints.iter().any(|endpoint| &endpoint.id == id));
+        self.menu.removing_devices.retain(|id| {
+            let listed = endpoints.iter().any(|endpoint| &endpoint.id == id);
+            if !listed {
+                tracing::info!(category = "device_remove", id, "Catalog dropped the device");
+            }
+            listed
+        });
     }
 
     pub(in crate::menu) fn host_menu_key(
@@ -320,7 +385,10 @@ impl HerdrWindow {
         cx.stop_propagation();
         window.prevent_default();
         match key {
-            "escape" => self.dismiss_menu(window, cx),
+            "escape" => {
+                tracing::info!(category = "device_remove", page = ?self.menu.page, "Host menu dismissed");
+                self.dismiss_menu(window, cx)
+            }
             "enter" if self.menu.page == Some(Page::RenameDevice) => {
                 self.submit_rename_device(window, cx)
             }
@@ -362,8 +430,12 @@ impl HerdrWindow {
             // Name the device first, so the destructive row below cannot be
             // mistaken for acting on another host.
             body = body.child(
+                // No width of its own, so a long name or target ends with
+                // "…" instead of widening the menu past its actions.
                 div()
                     .debug_selector(|| "host-menu-header".into())
+                    .w_0()
+                    .min_w_full()
                     .px(px(8.))
                     .pt(px(4.))
                     .pb(px(8.))
@@ -411,7 +483,13 @@ impl HerdrWindow {
                             row.bg(rgb(theme.active))
                         })
                         .hover(|row| row.bg(rgb(theme.active)))
-                        .child(label)
+                        .child(
+                            div()
+                                .debug_selector(move || format!("host-menu-label-{index}"))
+                                .min_w_0()
+                                .truncate()
+                                .child(label),
+                        )
                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                             if *hovered && let Some(host) = &mut this.menu.host {
                                 host.selected = Some(index);
@@ -429,8 +507,12 @@ impl HerdrWindow {
                     .flatten()
                 {
                     body = body.child(
+                        // No width of its own, so the labels set the menu's
+                        // width and the message wraps inside it.
                         div()
                             .debug_selector(|| "host-menu-keybindings-error".into())
+                            .w_0()
+                            .min_w_full()
                             .px(px(8.))
                             .pb(px(4.))
                             .text_size(px(self.config.ui.size * 0.85))
@@ -495,9 +577,10 @@ impl HerdrWindow {
                             .p(px(6.))
                             .cursor_pointer()
                             .child("Cancel")
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
-                            ),
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                tracing::info!(category = "device_remove", "Remove cancelled");
+                                this.dismiss_menu(window, cx)
+                            })),
                     )
                     .child(
                         div()

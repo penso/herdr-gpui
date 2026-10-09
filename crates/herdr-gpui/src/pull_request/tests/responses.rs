@@ -22,6 +22,8 @@ fn badge_colors_report_readiness_and_preserve_terminal_lifecycles() {
             theme.palette[1],
         ),
         ("UNSTABLE", "", vec![], theme.palette[1]),
+        ("UNSTABLE", "", vec!["SUCCESS", "PENDING"], theme.palette[3]),
+        ("UNSTABLE", "", vec!["PENDING", "FAILURE"], theme.palette[1]),
         ("BLOCKED", "", vec![], theme.palette[208]),
         ("BEHIND", "", vec![], theme.palette[208]),
         ("BLOCKED", "", vec!["PENDING"], theme.palette[3]),

@@ -13,6 +13,7 @@ mod navigation_resize;
 mod quit_saves;
 mod theme_drafts;
 mod theme_sources;
+mod window_commands;
 mod window_lifecycle;
 
 fn fixture_load() -> crate::Result<Loaded> {

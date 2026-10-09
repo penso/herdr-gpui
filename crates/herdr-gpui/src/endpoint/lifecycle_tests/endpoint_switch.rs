@@ -59,7 +59,7 @@ fn another_endpoint_changing_keeps_the_selected_window_state(cx: &mut gpui::Test
     let (other, _other_server) = connected_endpoint("ssh:other");
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, selected);
+            prepare_mouse(view, selected, cx);
             view.endpoints.push(other);
             view.poll_endpoints(cx);
             view.live.drag_request = Some("gpui-pending".into());
@@ -96,7 +96,7 @@ fn deferred_release_is_generation_fenced_and_local_can_escape(cx: &mut gpui::Tes
             view.endpoints[0].detached = true;
             view.endpoints.extend([source, target]);
             view.selected_endpoint = 1;
-            view.reset_selected();
+            view.reset_selected(cx);
             assert!(view.select_endpoint("ssh:target", cx));
             assert!(matches!(
                 view.pending_releases[0].phase,
@@ -177,7 +177,7 @@ fn retiring_release_source_unblocks_destination_without_waiting_for_timeout(
             view.endpoints[0].detached = true;
             view.endpoints.extend([source, target]);
             view.selected_endpoint = 1;
-            view.reset_selected();
+            view.reset_selected(cx);
             view.select_endpoint("ssh:target", cx);
             assert_eq!(view.pending_releases.len(), 1);
             view.poll_endpoints(cx);

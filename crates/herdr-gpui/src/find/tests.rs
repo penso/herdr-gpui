@@ -2,6 +2,8 @@ use super::*;
 use crate::scrollback::reveal_offset;
 use herdr_client::protocol::{PaneSurfaceScrollMetrics, SurfaceRect};
 
+mod memory;
+
 fn pane(content_revision: u64, offset: u64, max: u64) -> PaneSurfacePane {
     let rect = SurfaceRect {
         x: 2,

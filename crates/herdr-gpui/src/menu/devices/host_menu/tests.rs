@@ -3,6 +3,7 @@ use crate::{config::KeybindingSource, menu::Page, sidebar::layout_tests::fixture
 use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext, point, px, size};
 
 mod forwards;
+mod menu_width;
 
 // Endpoint IDs carry the `ssh:` prefix; the profile ID is the rest.
 const HOST: &str = "ssh:0123456789abcdef0123456789abcdef";

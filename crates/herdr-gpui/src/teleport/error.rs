@@ -81,11 +81,13 @@ pub(crate) enum Error {
         source: serde_json::Error,
     },
     #[error(
-        "Teleport needs a local session or SSH host; custom socket and WSL endpoints are unsupported"
+        "Teleport needs a local session or SSH host; custom socket, WSL, and cloud endpoints are unsupported"
     )]
     UnsupportedHost,
     #[error("The workspace is no longer open on its host")]
     WorkspaceGone,
+    #[error("{reference} does not name a commit on the source")]
+    NoCommit { reference: String },
     #[error("The checkout is not on a branch (detached HEAD)")]
     DetachedHead,
     #[error("Branch {branch} already exists on the destination with commits this checkout lacks")]

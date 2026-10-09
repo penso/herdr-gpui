@@ -32,7 +32,7 @@ fn type_across_gap(
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             let inbox = view.endpoints[1].connection.inbox.clone();
             let mut next = (**view.live.snapshot.as_ref().unwrap()).clone();
             next.revision += 1;
@@ -136,7 +136,7 @@ fn input_held_across_gap_is_bounded_and_dropped_on_reset(cx: &mut gpui::TestAppC
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, _server) = connected_endpoint("bound");
     view.update(cx, |view, cx| {
-        prepare_mouse(view, endpoint);
+        prepare_mouse(view, endpoint, cx);
         view.poll_endpoints(cx);
         let mut next = (**view.live.snapshot.as_ref().unwrap()).clone();
         next.revision += 1;
@@ -152,7 +152,7 @@ fn input_held_across_gap_is_bounded_and_dropped_on_reset(cx: &mut gpui::TestAppC
         }
         assert_eq!(view.pending_input.len(), 256);
         assert!(view.local_error.is_some());
-        view.reset_selected();
+        view.reset_selected(cx);
         assert_eq!(view.pending_input.len(), 0);
     });
 }

@@ -3,9 +3,11 @@
 
 use super::{
     error::{Error, Result, Step, script},
-    plan::{DiffStat, Lane, parse_commit, parse_stats, stats_script},
+    plan::{DiffStat, Lane, parse_stats, stats_script},
 };
-use crate::teleport::{AgentKind, Envelope, Host, WorktreeCreated};
+use crate::teleport::{
+    self, AgentKind, Envelope, FreshOrigin, Host, HostRepositories, Prepared, WorktreeCreated,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// How long `herdr agent start` may wait for each agent to be ready. Agents
@@ -15,19 +17,23 @@ const AGENT_START_TIMEOUT_MS: &str = "90000";
 /// What a fan-out launches.
 #[derive(Debug, Clone)]
 pub(crate) struct Request {
-    pub(crate) host: Host,
-    /// The workspace new worktrees are created through: the main checkout.
-    pub(crate) workspace_id: String,
-    /// The ref the first worktree branches from. The rest branch from the
-    /// commit it resolved to, so every lane starts from the same commit.
+    /// The repository lanes branch from, through its main checkout.
+    pub(crate) origin: FreshOrigin,
+    /// The ref every lane branches from, resolved once on the origin so
+    /// every lane, on every host, starts from the same commit.
     pub(crate) base: String,
     pub(crate) prompt: String,
     pub(crate) lanes: Vec<Lane>,
+    /// Where each lane runs, in lane order: `None` on the origin, else the
+    /// other host, which is set up once before its first lane.
+    pub(crate) hosts: Vec<Option<HostRepositories>>,
 }
 
-/// A lane's new worktree.
+/// A lane's new worktree, and the host it is on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Checkout {
+    pub(crate) endpoint_id: String,
+    pub(crate) host: Host,
     pub(crate) workspace_id: String,
     pub(crate) path: String,
     pub(crate) pane_id: String,
@@ -36,6 +42,8 @@ pub(crate) struct Checkout {
 /// How far one lane has got.
 #[derive(Debug)]
 pub(crate) enum Progress {
+    /// Its host is getting the repository and the base commit.
+    SettingUp,
     CreatingWorktree,
     Created(Checkout),
     StartingAgent,
@@ -52,42 +60,153 @@ pub(crate) enum Report {
     Lane(usize, Progress),
 }
 
-/// Create every lane's worktree one at a time, since concurrent `git
-/// worktree add` runs contend for the repository's ref locks, then start the
-/// agents and send the prompt to all of them side by side.
+/// Where lanes on one host are created through.
+#[derive(Clone)]
+struct Site {
+    endpoint_id: String,
+    label: String,
+    host: Host,
+    workspace_id: String,
+    /// The agents installed on another host. The origin's were listed
+    /// before anything was picked.
+    agents: Option<Vec<AgentKind>>,
+}
+
+/// Another host set up for its lanes, whose shipped commit's reference is
+/// dropped once every lane is created.
+struct SetUp {
+    endpoint_id: String,
+    result: Option<(Site, Prepared)>,
+}
+
+/// Each lane's site, setting up every other host once: the repository and
+/// the base commit put there. A host that cannot be set up fails its lanes,
+/// the first with the cause. Returns the sites, `None` for a failed lane,
+/// and the hosts set up.
+fn sites(
+    request: &Request,
+    commit: &str,
+    report: &impl Fn(Report),
+    cancelled: &AtomicBool,
+) -> (Vec<Option<Site>>, Vec<SetUp>) {
+    let origin = &request.origin;
+    let mut set_up: Vec<SetUp> = Vec::new();
+    let mut sites = Vec::with_capacity(request.lanes.len());
+    for (index, host) in request.hosts.iter().enumerate() {
+        let Some(destination) = host else {
+            sites.push(Some(Site {
+                endpoint_id: origin.place.endpoint_id.clone(),
+                label: origin.place.label.clone(),
+                host: origin.place.host.clone(),
+                workspace_id: origin.workspace_id.clone(),
+                agents: None,
+            }));
+            continue;
+        };
+        let endpoint = &destination.place.endpoint_id;
+        if let Some(known) = set_up.iter().find(|known| &known.endpoint_id == endpoint) {
+            let site = known.result.as_ref().map(|(site, _)| site.clone());
+            if site.is_none() {
+                report(Report::Lane(
+                    index,
+                    Progress::Failed(Error::HostUnavailable {
+                        host: destination.place.label.clone(),
+                    }),
+                ));
+            }
+            sites.push(site);
+            continue;
+        }
+        report(Report::Lane(index, Progress::SettingUp));
+        let result = match set_up_host(origin, destination, commit, cancelled) {
+            Ok(result) => Some(result),
+            Err(error) => {
+                report(Report::Lane(index, Progress::Failed(error)));
+                None
+            }
+        };
+        sites.push(result.as_ref().map(|(site, _)| site.clone()));
+        set_up.push(SetUp {
+            endpoint_id: endpoint.clone(),
+            result,
+        });
+    }
+    (sites, set_up)
+}
+
+/// The repository and the base commit on `destination`, and the agents
+/// installed there.
+fn set_up_host(
+    origin: &FreshOrigin,
+    destination: &HostRepositories,
+    commit: &str,
+    cancelled: &AtomicBool,
+) -> Result<(Site, Prepared)> {
+    let host = &destination.place.host;
+    let agents = installed(host, cancelled)?;
+    let prepared = teleport::prepare(origin, destination, commit, &mut |_| {}, cancelled)
+        .map_err(Error::Dispatch)?;
+    let site = Site {
+        endpoint_id: destination.place.endpoint_id.clone(),
+        label: destination.place.label.clone(),
+        host: host.clone(),
+        workspace_id: prepared.repository.workspace_id.clone(),
+        agents: Some(agents),
+    };
+    Ok((site, prepared))
+}
+
+/// Resolve the base commit, set up every host, then create every lane's
+/// worktree one at a time, since concurrent `git worktree add` runs contend
+/// for a repository's ref locks, and start the agents side by side.
 pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cancelled: &AtomicBool) {
-    let mut base: Option<String> = None;
+    let commit = match teleport::base_commit(&request.origin, &request.base, cancelled) {
+        Ok(commit) => commit,
+        Err(error) => {
+            report(Report::Lane(0, Progress::Failed(Error::Dispatch(error))));
+            for index in 1..request.lanes.len() {
+                report(Report::Lane(index, Progress::Failed(Error::NoBase)));
+            }
+            return;
+        }
+    };
+    report(Report::Base(commit.clone()));
+    let (sites, set_up) = sites(request, &commit, report, cancelled);
     let mut created = Vec::new();
-    for (index, lane) in request.lanes.iter().enumerate() {
+    for (index, (lane, site)) in request.lanes.iter().zip(&sites).enumerate() {
+        let Some(site) = site else {
+            continue;
+        };
         if cancelled.load(Ordering::Acquire) {
             report(Report::Lane(index, Progress::Failed(Error::Cancelled)));
             continue;
         }
-        report(Report::Lane(index, Progress::CreatingWorktree));
-        let from = base.as_deref().unwrap_or(&request.base);
-        let checkout = match create(request, lane, from, cancelled) {
-            Ok(checkout) => checkout,
-            Err(error) => {
-                report(Report::Lane(index, Progress::Failed(error)));
-                continue;
-            }
-        };
-        report(Report::Lane(index, Progress::Created(checkout.clone())));
-        if base.is_none() {
-            match resolve_base(&request.host, &checkout.path, cancelled) {
-                Ok(commit) => {
-                    report(Report::Base(commit.clone()));
-                    base = Some(commit);
-                }
-                // Without its commit nothing can be compared; the checkout
-                // stays listed so it can still be removed.
-                Err(error) => {
-                    report(Report::Lane(index, Progress::Failed(error)));
-                    continue;
-                }
-            }
+        if site
+            .agents
+            .as_ref()
+            .is_some_and(|agents| !agents.contains(&lane.kind))
+        {
+            report(Report::Lane(
+                index,
+                Progress::Failed(Error::AgentMissing {
+                    agent: lane.kind.name(),
+                    host: site.label.clone(),
+                }),
+            ));
+            continue;
         }
-        created.push((index, lane, checkout));
+        report(Report::Lane(index, Progress::CreatingWorktree));
+        match create(site, lane, &commit, cancelled) {
+            Ok(checkout) => {
+                report(Report::Lane(index, Progress::Created(checkout.clone())));
+                created.push((index, lane, checkout));
+            }
+            Err(error) => report(Report::Lane(index, Progress::Failed(error))),
+        }
+    }
+    // The new branches keep the shipped commit; its references can go.
+    for (_, prepared) in set_up.into_iter().filter_map(|set_up| set_up.result) {
+        prepared.finish(&AtomicBool::new(false));
     }
     std::thread::scope(|scope| {
         for (index, lane, checkout) in &created {
@@ -115,19 +234,19 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
     });
 }
 
-fn create(request: &Request, lane: &Lane, base: &str, cancelled: &AtomicBool) -> Result<Checkout> {
+fn create(site: &Site, lane: &Lane, commit: &str, cancelled: &AtomicBool) -> Result<Checkout> {
     let line = Host::herdr_line(&[
         "worktree",
         "create",
         "--workspace",
-        &request.workspace_id,
+        &site.workspace_id,
         "--branch",
         &lane.branch,
         "--base",
-        base,
+        commit,
         "--no-focus",
     ]);
-    let output = request
+    let output = site
         .host
         .capture(&line, cancelled)
         .map_err(script(Step::CreateWorktree))?;
@@ -138,21 +257,12 @@ fn create(request: &Request, lane: &Lane, base: &str, cancelled: &AtomicBool) ->
         })?
         .result;
     Ok(Checkout {
+        endpoint_id: site.endpoint_id.clone(),
+        host: site.host.clone(),
         workspace_id: created.workspace.workspace_id,
         path: created.worktree.path,
         pane_id: created.root_pane.pane_id,
     })
-}
-
-fn resolve_base(host: &Host, checkout: &str, cancelled: &AtomicBool) -> Result<String> {
-    let body = format!(
-        "git -C {} rev-parse --verify 'HEAD^{{commit}}'\n",
-        herdr_client::shell_quote(checkout)
-    );
-    let output = host
-        .capture(&body, cancelled)
-        .map_err(script(Step::ResolveBase))?;
-    parse_commit(&String::from_utf8_lossy(&output)).ok_or(Error::NoBase)
 }
 
 /// Start the lane's agent in its first pane and, once it is ready, send it
@@ -177,14 +287,14 @@ fn start(
         "--timeout",
         AGENT_START_TIMEOUT_MS,
     ]);
-    request
+    checkout
         .host
         .capture(&start, cancelled)
         .map_err(script(Step::StartAgent))?;
     report(Report::Lane(index, Progress::Prompting));
     // The pane is the target: an agent name could match one started elsewhere.
     let prompt = Host::herdr_line(&["agent", "prompt", &checkout.pane_id, &request.prompt]);
-    request
+    checkout
         .host
         .capture(&prompt, cancelled)
         .map_err(script(Step::Prompt))?;
@@ -203,20 +313,46 @@ pub(crate) fn installed(host: &Host, cancelled: &AtomicBool) -> Result<Vec<Agent
         .collect())
 }
 
-/// Each checkout's changes since `base`; `None` for a checkout that is gone.
+/// One host's part of a comparison: the lanes on it, and their changes
+/// since the base, `None` for a checkout that is gone, in the same order.
+#[derive(Debug)]
+pub(crate) struct HostStats {
+    pub(crate) lanes: Vec<usize>,
+    pub(crate) result: Result<Vec<Option<DiffStat>>>,
+}
+
+/// Each lane's changes since `base`, reading every host once. A host that
+/// cannot be read fails only its own lanes.
 pub(crate) fn stats(
-    host: &Host,
-    checkouts: &[String],
+    checkouts: &[Option<(Host, String)>],
     base: &str,
     cancelled: &AtomicBool,
-) -> Result<Vec<Option<DiffStat>>> {
-    let output = host
-        .capture(&stats_script(checkouts, base), cancelled)
-        .map_err(script(Step::Compare))?;
-    Ok(parse_stats(
-        &String::from_utf8_lossy(&output),
-        checkouts.len(),
-    ))
+) -> Vec<HostStats> {
+    let mut hosts: Vec<(&Host, Vec<usize>)> = Vec::new();
+    for (index, (host, _)) in checkouts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, checkout)| Some((index, checkout.as_ref()?)))
+    {
+        match hosts.iter_mut().find(|(known, _)| *known == host) {
+            Some((_, lanes)) => lanes.push(index),
+            None => hosts.push((host, vec![index])),
+        }
+    }
+    hosts
+        .into_iter()
+        .map(|(host, lanes)| {
+            let paths: Vec<String> = lanes
+                .iter()
+                .filter_map(|&index| Some(checkouts[index].as_ref()?.1.clone()))
+                .collect();
+            let result = host
+                .capture(&stats_script(&paths, base), cancelled)
+                .map_err(script(Step::Compare))
+                .map(|output| parse_stats(&String::from_utf8_lossy(&output), paths.len()));
+            HostStats { lanes, result }
+        })
+        .collect()
 }
 
 /// Remove a lane's worktree and workspace, discarding uncommitted changes.

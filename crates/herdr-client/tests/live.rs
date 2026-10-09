@@ -25,6 +25,9 @@ use std::{
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+#[path = "live/plugins.rs"]
+mod plugins;
+
 /// Verify the CLI contract used by the picker against an explicitly selected
 /// installation. Every command has the sandbox's cleared, private environment.
 #[test]
@@ -117,11 +120,18 @@ impl Drop for Daemon {
 
 impl Daemon {
     fn start() -> Self {
+        Self::start_with(|_, _| {})
+    }
+
+    /// Starts the daemon once `prepare` has set up its sandbox, for state the
+    /// daemon reads only at startup, such as linked plugins and key bindings.
+    fn start_with(prepare: impl FnOnce(&Sandbox, &std::path::Path)) -> Self {
         let binary = daemon_binary();
         let mut daemon = Self {
             sandbox: Sandbox::new(),
             child: None,
         };
+        prepare(&daemon.sandbox, &binary);
         daemon.child = Some(
             daemon
                 .sandbox

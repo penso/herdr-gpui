@@ -457,7 +457,7 @@ fn default_pane_keys_follow_ghostty_on_macos() {
     let keymap = Keymap::default();
     assert_eq!(
         keymap.pane_keys.len(),
-        if cfg!(target_os = "macos") { 3 } else { 0 }
+        if cfg!(target_os = "macos") { 5 } else { 0 }
     );
     // Defaults are replaced by keystroke, not spelling, or removed.
     let resolved = resolve_pane_keys(
@@ -473,6 +473,8 @@ fn default_pane_keys_follow_ghostty_on_macos() {
         resolved,
         [
             (keystroke("cmd-right"), keystroke("ctrl-e")),
+            (keystroke("alt-left"), keystroke("alt-b")),
+            (keystroke("alt-right"), keystroke("alt-f")),
             (keystroke("cmd-left"), keystroke("home")),
             (keystroke("ctrl-shift-enter"), keystroke("alt-enter")),
         ]

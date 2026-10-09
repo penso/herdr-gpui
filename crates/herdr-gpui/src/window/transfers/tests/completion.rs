@@ -7,7 +7,7 @@ fn success_pastes_quoted_paths_to_captured_pane_or_popup(cx: &mut TestAppContext
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
         let mut peer = Peer::new();
         view.update(cx, |view, cx| {
-            peer.prepare(view);
+            peer.prepare(view, cx);
             let target = if is_popup {
                 popup(view, "popup");
                 InputTarget::Popup("popup".into())
@@ -65,7 +65,7 @@ fn stale_or_cancelled_success_cleans_original_host_without_pasting(cx: &mut Test
         let mut peer = Peer::new();
         let (tx, rx) = mpsc::channel();
         view.update(cx, |view, cx| {
-            peer.prepare(view);
+            peer.prepare(view, cx);
             view.start_file_transfer_with(
                 InputTarget::Pane("w1:p1".into()),
                 vec!["source".into()],
@@ -104,7 +104,7 @@ fn old_completion_preserves_replacement_and_reports_cleanup_failure(cx: &mut Tes
     let mut peer = Peer::new();
     let (tx, rx) = mpsc::channel();
     let replacement = view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         view.endpoints[0].label = "Original\n host".into();
         view.start_file_transfer_with(
             InputTarget::Pane("w1:p1".into()),
@@ -147,7 +147,7 @@ fn backend_cleanup_failure_survives_host_switch_without_disclosing_diagnostics(
     let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
     let mut peer = Peer::new();
     view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         view.endpoints[0].label = "Original\n host".into();
         view.start_file_transfer_with(
             InputTarget::Pane("w1:p1".into()),
@@ -205,7 +205,7 @@ fn duplicate_copy_never_invokes_second_backend(cx: &mut TestAppContext) {
     let calls = Arc::new(AtomicU64::new(0));
     let worker_calls = calls.clone();
     view.update(cx, |view, cx| {
-        peer.prepare(view);
+        peer.prepare(view, cx);
         view.start_file_transfer_with(
             InputTarget::Pane("w1:p1".into()),
             vec!["large file".into()],

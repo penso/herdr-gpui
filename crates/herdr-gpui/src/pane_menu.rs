@@ -573,7 +573,15 @@ impl HerdrWindow {
                             row.bg(rgb(self.theme.active))
                         })
                         .hover(|row| row.bg(rgb(self.theme.active)))
-                        .child(action.label(&pane.target))
+                        .child(
+                            // One line: the panel widens to fit it, and a
+                            // window too narrow for that ends it with "…".
+                            div()
+                                .debug_selector(move || format!("pane-menu-label-{index}"))
+                                .min_w_0()
+                                .truncate()
+                                .child(action.label(&pane.target)),
+                        )
                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                             if *hovered && let Some(pane) = &mut this.menu.pane {
                                 pane.selected = Some(index);
@@ -636,7 +644,9 @@ impl HerdrWindow {
                     );
         }
         body.when_some(pane.error.clone(), |body, error| {
-            body.child(div().p(px(8.)).child(error))
+            // No width of its own, so the labels set the panel's width and
+            // the message wraps inside it.
+            body.child(div().w_0().min_w_full().p(px(8.)).child(error))
         })
     }
 }

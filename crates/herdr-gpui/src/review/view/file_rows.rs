@@ -1,6 +1,6 @@
-//! A file's header in the diff, which folds it, marks it viewed and takes a
-//! note on the whole file, and the line that stands for its lines while
-//! they are unread, binary, or too large to read unasked.
+//! A file's header in the diff, which folds it, copies its path, marks it
+//! viewed and takes a note on the whole file, and the line that stands for
+//! its lines while they are unread, binary, or too large to read unasked.
 use super::{Review, rows::mark_slot};
 use crate::{
     HerdrWindow,
@@ -136,6 +136,15 @@ impl HerdrWindow {
                 )
             })
             .children(counts)
+            .child(
+                super::rows::copy_button(theme, line_height)
+                    .id(("review-copy-path", file))
+                    .debug_selector(move || format!("review-copy-path-{file}"))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.copy_review_path(id, file, cx);
+                    })),
+            )
             .child(check)
             .into_any_element()
     }

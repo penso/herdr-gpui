@@ -35,6 +35,26 @@ pub(super) fn read(_path: &Path, _name: &CStr) -> Result<Option<SecretString>> {
     Ok(None)
 }
 
+#[cfg(all(not(unix), feature = "cloud"))]
+pub(super) fn read_checked(
+    _path: &Path,
+    _name: &CStr,
+    _validate: fn(&SecretString) -> Result<()>,
+) -> Result<Option<SecretString>> {
+    Ok(None)
+}
+
+#[cfg(all(not(unix), feature = "cloud"))]
+pub(super) fn store_checked(
+    path: &Path,
+    name: &CStr,
+    token: Option<&SecretString>,
+    plaintext: bool,
+    _validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
+    store(path, name, token, plaintext)
+}
+
 #[cfg(not(unix))]
 pub(super) fn store(
     _path: &Path,
@@ -92,6 +112,21 @@ fn existing(dir: &File, name: &CStr) -> Result<Option<File>> {
 
 #[cfg(unix)]
 pub(super) fn read(path: &Path, name: &CStr) -> Result<Option<SecretString>> {
+    read_checked(path, name, github_record)
+}
+
+#[cfg(unix)]
+fn github_record(value: &SecretString) -> Result<()> {
+    Credential::decode(value).map(drop)
+}
+
+/// `read` for a record another feature owns; `validate` must bound its size.
+#[cfg(unix)]
+pub(super) fn read_checked(
+    path: &Path,
+    name: &CStr,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<Option<SecretString>> {
     let dir = directory(path)?;
     let Some(file) = existing(&dir, name)? else {
         return Ok(None);
@@ -102,7 +137,7 @@ pub(super) fn read(path: &Path, name: &CStr) -> Result<Option<SecretString>> {
         .map_err(Error::CredentialIo)?;
     let text = std::str::from_utf8(&bytes).map_err(Error::GitHubEncoding)?;
     let value = SecretString::from(text);
-    Credential::decode(&value)?;
+    validate(&value)?;
     Ok(Some(value))
 }
 
@@ -120,8 +155,33 @@ pub(super) fn store(
     write(path, name, token)
 }
 
+/// `store` for a record another feature owns; `validate` must bound its size.
+#[cfg(all(unix, any(test, feature = "cloud")))]
+pub(super) fn store_checked(
+    path: &Path,
+    name: &CStr,
+    token: Option<&SecretString>,
+    plaintext: bool,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
+    if token.is_some() && !plaintext {
+        return Err(Error::CredentialPolicy);
+    }
+    write_checked(path, name, token, validate)
+}
+
 #[cfg(unix)]
 fn write(path: &Path, target: &CStr, token: Option<&SecretString>) -> Result<()> {
+    write_checked(path, target, token, github_record)
+}
+
+#[cfg(unix)]
+fn write_checked(
+    path: &Path,
+    target: &CStr,
+    token: Option<&SecretString>,
+    validate: fn(&SecretString) -> Result<()>,
+) -> Result<()> {
     let dir = directory(path)?;
     let present = existing(&dir, target)?.is_some();
     let Some(token) = token else {
@@ -131,7 +191,7 @@ fn write(path: &Path, target: &CStr, token: Option<&SecretString>) -> Result<()>
         }
         return dir.sync_all().map_err(Error::CredentialIo);
     };
-    Credential::decode(token)?;
+    validate(token)?;
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let name = format!(
         ".github-credentials-{}-{}",

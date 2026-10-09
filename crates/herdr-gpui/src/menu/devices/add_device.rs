@@ -8,7 +8,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::{
-    HostProbe, Method,
+    HostProbe, Method, SshFailure,
     protocol::{ClientKeyCode, ClientKeyKind, ClientPaneInputEvent},
 };
 
@@ -62,7 +62,7 @@ impl Offer {
             HostProbe::Running | HostProbe::Stopped => None,
             HostProbe::Missing => Some(Self::Install),
             HostProbe::Outdated => Some(Self::Update),
-            HostProbe::SshFailed => Some(Self::Terminal),
+            HostProbe::SshFailed(_) => Some(Self::Terminal),
         }
     }
 
@@ -371,6 +371,7 @@ impl HerdrWindow {
         }) {
             Ok(request) => request,
             Err(error) => {
+                tracing::info!(category = "device_setup", "Device form refused");
                 self.menu.error = Some(error.to_string());
                 cx.notify();
                 return;
@@ -379,6 +380,7 @@ impl HerdrWindow {
         let Some(form) = &mut self.menu.device_setup else {
             return;
         };
+        tracing::info!(category = "device_setup", "Checking device");
         form.step = Step::Checking(request.clone());
         self.menu.error = None;
         // Claim before probing: a second add of this host, from any window of
@@ -428,6 +430,7 @@ impl HerdrWindow {
         let (claim, probe) = match result {
             Ok(result) => result,
             Err(error) => {
+                tracing::warn!(category = "device_setup", "Could not claim device");
                 if !self.refuse_duplicate(&error, cx) {
                     self.menu.error = Some(format!("Check {}: {error}", request.target()));
                     if let Some(form) = &mut self.menu.device_setup {
@@ -438,10 +441,34 @@ impl HerdrWindow {
                 return;
             }
         };
+        match &probe {
+            Ok(probe) => tracing::info!(
+                category = "device_setup",
+                probe = ?probe,
+                "Device probed"
+            ),
+            Err(_) => tracing::warn!(category = "device_setup", "Device probe failed"),
+        }
+        // A terminal cannot help: the permission belongs to this app. Back on
+        // the form, the user grants it and submits again; the claim drops.
+        if let Ok(HostProbe::SshFailed(failure @ SshFailure::LocalNetworkDenied)) = probe {
+            self.menu.error = Some(failure.to_string());
+            if let Some(form) = &mut self.menu.device_setup {
+                form.step = Step::Form;
+            }
+            cx.notify();
+            return;
+        }
         let offer = match probe {
             Ok(probe) => match Offer::for_probe(probe) {
                 None => return self.save_device(request, probe, claim, cx),
-                Some(offer) => offer,
+                Some(offer) => {
+                    // Say what SSH refused, since the terminal may not need to.
+                    if let HostProbe::SshFailed(failure) = probe {
+                        self.menu.error = Some(format!("SSH to {}: {failure}", request.target()));
+                    }
+                    offer
+                }
             },
             Err(error) => {
                 self.menu.error = Some(format!("Check {}: {error}", request.target()));
@@ -483,6 +510,10 @@ impl HerdrWindow {
                     return;
                 };
                 let request = request.clone();
+                match &result {
+                    Ok(()) => tracing::info!(category = "device_setup", "Device saved"),
+                    Err(_) => tracing::warn!(category = "device_setup", "Device save failed"),
+                }
                 let error = match result {
                     Ok(()) => {
                         // Saved: the catalog now refuses this host by itself.
@@ -551,6 +582,10 @@ impl HerdrWindow {
         let claim = match result {
             Ok(claim) => claim,
             Err(error) => {
+                tracing::warn!(
+                    category = "device_setup",
+                    "Device setup verification failed"
+                );
                 if !self.refuse_duplicate(&error, cx) {
                     self.menu.error = Some(format!("Open a local workspace: {error}"));
                     if let Some(form) = &mut self.menu.device_setup {
@@ -624,6 +659,7 @@ impl HerdrWindow {
         };
         let local = &self.endpoints[0];
         let fail = |this: &mut Self, error: String, cx: &mut Context<Self>| {
+            tracing::warn!(category = "device_setup", "Setup workspace failed");
             if let Some(form) = &mut this.menu.device_setup
                 && let Step::Opening(request, _) = &form.step
             {

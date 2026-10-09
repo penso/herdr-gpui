@@ -8,6 +8,7 @@
 
 mod credentials;
 mod error;
+mod fresh;
 mod git;
 mod host;
 mod job;
@@ -20,16 +21,21 @@ mod sessions;
 mod snapshot;
 mod ui;
 
-#[cfg(test)]
-pub(crate) use marks::Destination as MarkDestination;
 pub(crate) use {
+    error::{Error, Step},
+    fresh::{
+        Created, Naming, NewCheckout, Origin as FreshOrigin, Prepared, base_commit,
+        dispatch_workspace, dispatch_worktree, prepare,
+    },
     host::Host,
-    job::{HostRepositories, Place, Repository, Retired, Source},
+    job::{HostRepositories, Place, Retired, Source, open_repositories},
     launch::AgentKind,
     marks::{Mark, Marks},
     snapshot::{Envelope, ProcessInfo, ProcessInfoResult, WorktreeCreated},
     ui::{Follow, Teleport},
 };
+#[cfg(test)]
+pub(crate) use {job::Repository, marks::Destination as MarkDestination};
 
 /// The host Teleport scripts for an endpoint, if it can script it at all.
 pub(crate) fn host_for(target: &herdr_client::ConnectTarget) -> error::Result<Host> {

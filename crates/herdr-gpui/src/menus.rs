@@ -118,6 +118,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                         command: Command::WorkspacePicker,
                     },
                 ),
+                MenuItem::action(
+                    "Go to Symbol...",
+                    RunCommand {
+                        command: Command::GoToSymbol,
+                    },
+                ),
+                MenuItem::action(
+                    "Go to File...",
+                    RunCommand {
+                        command: Command::GoToFile,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Close Pane...",
@@ -171,6 +183,13 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 layout_menu(layout.mode),
+                MenuItem::separator(),
+                MenuItem::action(
+                    "Toggle Full Screen",
+                    RunCommand {
+                        command: Command::ToggleFullScreen,
+                    },
+                ),
             ],
         },
         Menu {
@@ -221,6 +240,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::action(
+                    "Find Next",
+                    RunCommand {
+                        command: Command::FindNext,
+                    },
+                ),
+                MenuItem::action(
+                    "Find Previous",
+                    RunCommand {
+                        command: Command::FindPrevious,
+                    },
+                ),
+                MenuItem::action(
                     "Copy Mode",
                     RunCommand {
                         command: Command::CopyMode,
@@ -242,6 +273,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     "Toggle Sidebar",
                     RunCommand {
                         command: Command::ToggleSidebar,
+                    },
+                ),
+                MenuItem::action(
+                    "Toggle Status Bar",
+                    RunCommand {
+                        command: Command::ToggleStatusBar,
                     },
                 ),
                 MenuItem::separator(),
@@ -267,6 +304,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     "New Window",
                     RunCommand {
                         command: Command::NewWindow,
+                    },
+                ),
+                MenuItem::action(
+                    "Cycle Through Windows",
+                    RunCommand {
+                        command: Command::CycleWindows,
                     },
                 ),
                 MenuItem::separator(),

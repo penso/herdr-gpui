@@ -5,6 +5,37 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 const NAME: &CStr = c"github-credentials";
 
 #[test]
+fn another_features_record_uses_its_own_check_and_file() {
+    let path = tempfile::tempdir().unwrap();
+    std::fs::set_permissions(path.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let name = c"coder-credentials";
+    let check: fn(&SecretString) -> Result<()> = |value| {
+        if value.expose_secret().starts_with("{\"coder\"") {
+            Ok(())
+        } else {
+            Err(Error::CredentialPermissions)
+        }
+    };
+    let record: SecretString = r#"{"coder":1}"#.into();
+    // GitHub's own check would refuse this record; the feature's check decides.
+    assert!(store(path.path(), name, Some(&record), true).is_err());
+    store_checked(path.path(), name, Some(&record), true, check).unwrap();
+    assert_eq!(
+        read_checked(path.path(), name, check)
+            .unwrap()
+            .unwrap()
+            .expose_secret(),
+        record.expose_secret()
+    );
+    assert!(read(path.path(), name).is_err());
+    assert!(store_checked(path.path(), name, Some(&"other".into()), true, check).is_err());
+    assert!(store_checked(path.path(), name, Some(&record), false, check).is_err());
+    assert!(!path.path().join("github-credentials").exists());
+    store_checked(path.path(), name, None, false, check).unwrap();
+    assert!(read_checked(path.path(), name, check).unwrap().is_none());
+}
+
+#[test]
 fn accounts_are_separate_files_and_removing_one_keeps_the_other() {
     let path = tempfile::tempdir().unwrap();
     std::fs::set_permissions(path.path(), std::fs::Permissions::from_mode(0o700)).unwrap();

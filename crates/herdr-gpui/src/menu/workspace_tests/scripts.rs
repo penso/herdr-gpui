@@ -68,7 +68,7 @@ fn an_untrusted_archive_script_is_asked_about_before_removal(cx: &mut gpui::Test
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            crate::worktree_scripts::tests::connect(view, &peer);
+            crate::worktree_scripts::tests::connect(view, &peer, cx);
             delete_with_scripts(view, dir.path(), window, cx);
         })
     });
@@ -114,7 +114,7 @@ fn a_trusted_archive_script_runs_in_a_tab_instead_of_removing(cx: &mut gpui::Tes
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            crate::worktree_scripts::tests::connect(view, &peer);
+            crate::worktree_scripts::tests::connect(view, &peer, cx);
             cx.default_global::<Trust>()
                 .grant(crate::worktree_scripts::Grant {
                     endpoint: view.endpoints[0].id.clone(),
@@ -153,7 +153,7 @@ fn a_created_worktree_offers_its_setup_script(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            crate::worktree_scripts::tests::connect(view, &peer);
+            crate::worktree_scripts::tests::connect(view, &peer, cx);
             view.open_workspace_menu("w1", Default::default(), window, cx);
             view.menu.page = Some(crate::menu::Page::Dialog(WorkspaceAction::NewWorktree));
             view.apply_creation_response(Ok(created), window, cx);

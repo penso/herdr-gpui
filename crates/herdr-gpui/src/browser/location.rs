@@ -37,6 +37,10 @@ pub(crate) enum Location {
     Review {
         checkout: ReviewCheckout,
     },
+    /// A local source file, drawn read-only by the app, never a page.
+    Code {
+        file: crate::code_view::CodeFile,
+    },
 }
 
 /// The local checkout a review tab shows. Saved with the tabs, so it is
@@ -113,13 +117,13 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
             // Never loaded: a review is drawn by the app.
-            Self::Review { .. } => "about:blank".to_owned(),
+            Self::Review { .. } | Self::Code { .. } => "about:blank".to_owned(),
         }
     }
 
     /// Whether a native page shows it, rather than the app drawing it.
     pub(crate) fn is_page(&self) -> bool {
-        !matches!(self, Self::Review { .. })
+        !matches!(self, Self::Review { .. } | Self::Code { .. })
     }
 
     /// What the address field and a prompt show for it.
@@ -128,6 +132,7 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.path().display().to_string(),
             Self::Review { checkout } => format!("Review of {}", checkout.branch),
+            Self::Code { file } => file.path.clone(),
         }
     }
 
@@ -137,6 +142,7 @@ impl Location {
             Self::Web { url } => url.host().to_owned(),
             Self::Local { file } => file.entry.rsplit('/').next().unwrap_or_default().to_owned(),
             Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
+            Self::Code { file } => file.name().to_owned(),
         }
     }
 

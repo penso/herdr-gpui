@@ -2,6 +2,7 @@
 //! which sibling workspaces close with it, and the dialogs that carry those
 //! requests to the daemon and report what came back.
 
+mod dispatch;
 pub(super) mod popover;
 mod render;
 mod requests;
@@ -81,6 +82,18 @@ impl WorkspaceTarget {
             base: Some(branch),
             ..Self::new(snapshot, main)
         })
+    }
+
+    /// The ref a new worktree starts from: a full ref, so a tag of the same
+    /// name cannot shadow the branch.
+    pub(super) fn base_ref(&self) -> crate::Result<String> {
+        match &self.base {
+            Some(branch) => {
+                crate::worktree::validate_branch(branch)?;
+                Ok(format!("refs/heads/{branch}"))
+            }
+            None => Ok("HEAD".to_owned()),
+        }
     }
 
     /// What the new worktree dialog says it branches from.
@@ -170,14 +183,7 @@ impl WorkspaceTarget {
             }
             WorkspaceAction::NewWorktree => {
                 self.validate_repository(snapshot)?;
-                // A full ref, so a tag of the same name cannot shadow the branch.
-                let base = match &self.base {
-                    Some(branch) => {
-                        crate::worktree::validate_branch(branch)?;
-                        format!("refs/heads/{branch}")
-                    }
-                    None => "HEAD".to_owned(),
-                };
+                let base = self.base_ref()?;
                 let mut params = serde_json::json!({"workspace_id": self.id, "base": base, "focus": true, "trust_repository": false});
                 if !text.trim().is_empty() {
                     crate::worktree::validate_branch(text.trim())?;
@@ -366,7 +372,7 @@ impl HerdrWindow {
         self.menu.anchor = anchor;
         self.menu.page = Some(Page::Workspace);
         self.refresh_workspace_pr();
-        self.marked.clear();
+        self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
     }
@@ -626,6 +632,18 @@ impl HerdrWindow {
             | WorkspaceAction::OpenWorktree => None,
         };
         self.menu.page = Some(Page::Dialog(action));
+        self.menu.dispatch = matches!(
+            action,
+            WorkspaceAction::NewWorktree | WorkspaceAction::NewWorkspace
+        )
+        .then(|| self.menu.dispatch_repo())
+        .flatten()
+        .and_then(|repo| {
+            crate::dispatch::Picker::opened(
+                &self.endpoints[self.selected_endpoint].id,
+                self.dispatch_candidates(&repo, cx),
+            )
+        });
         self.menu.pr.clear();
         self.menu.pr_connection = None;
         self.menu.error = None;

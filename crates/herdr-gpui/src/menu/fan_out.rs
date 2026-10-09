@@ -11,17 +11,28 @@ use crate::{
 };
 use gpui::{Context, Window};
 
+/// What a fan-out branches from.
+struct Source {
+    workspace_id: String,
+    repo_key: String,
+    repo_label: String,
+    base: String,
+}
+
 impl HerdrWindow {
     /// The repository checkout new lanes are created through, when the menu's
-    /// workspace has one: its workspace, repository label, and base ref.
-    fn fan_out_source(&self) -> Option<(String, String, String)> {
+    /// workspace has one: its workspace, repository key and label, and base
+    /// ref.
+    fn fan_out_source(&self) -> Option<Source> {
         let target = self.menu.target.as_ref()?;
         let describe = |source: &WorkspaceTarget| {
-            let label = source
-                .worktree
-                .as_ref()
-                .map_or_else(|| source.label.clone(), |tree| tree.label.clone());
-            (source.id.clone(), label, source.base_label().to_owned())
+            let tree = source.worktree.as_ref();
+            Source {
+                workspace_id: source.id.clone(),
+                repo_key: tree.map(|tree| tree.key.clone()).unwrap_or_default(),
+                repo_label: tree.map_or_else(|| source.label.clone(), |tree| tree.label.clone()),
+                base: source.base_ref().unwrap_or_else(|_| "HEAD".to_owned()),
+            }
         };
         if target.can_create() {
             return Some(describe(target));
@@ -59,7 +70,13 @@ impl HerdrWindow {
             cx.notify();
             return;
         }
-        let Some((workspace_id, repo_label, base)) = self.fan_out_source() else {
+        let Some(Source {
+            workspace_id,
+            repo_key,
+            repo_label,
+            base,
+        }) = self.fan_out_source()
+        else {
             return;
         };
         let selected = &self.endpoints[self.selected_endpoint];
@@ -71,6 +88,7 @@ impl HerdrWindow {
             endpoint_label: selected.label.clone(),
             host,
             workspace_id,
+            repo_key,
             repo_label,
             base,
         };

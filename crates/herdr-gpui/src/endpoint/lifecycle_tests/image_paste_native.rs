@@ -18,9 +18,9 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
                 cx.update(|window, cx| {
                     view.update(cx, |view, cx| {
                         if remote {
-                            prepare_remote_image(view, endpoint);
+                            prepare_remote_image(view, endpoint, cx);
                         } else {
-                            prepare_mouse(view, endpoint);
+                            prepare_mouse(view, endpoint, cx);
                         }
                         let item = if image {
                             clipboard_image(&[42])
@@ -87,7 +87,7 @@ fn connected_image_paste_native_text_reservations_preserve_fifo(cx: &mut gpui::T
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:image");
     view.update(cx, |view, cx| {
-        prepare_remote_image(view, endpoint);
+        prepare_remote_image(view, endpoint, cx);
         for text in ["first paste", "second paste"] {
             cx.write_to_clipboard(ClipboardItem::new_string(text.into()));
             view.paste_native_clipboard(false, None, cx);
@@ -124,7 +124,7 @@ fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:image");
     view.update(cx, |view, cx| {
-        prepare_remote_image(view, endpoint);
+        prepare_remote_image(view, endpoint, cx);
         let handle = view.endpoints[1].connection.handle.as_ref().unwrap();
         // The second API request holds the FIFO behind the first request's reply.
         for _ in 0..2 {
@@ -206,11 +206,11 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
     for reset_all in [false, true] {
         let (endpoint, mut server) = connected_endpoint("ssh:image");
         view.update(cx, |view, cx| {
-            prepare_remote_image(view, endpoint);
+            prepare_remote_image(view, endpoint, cx);
             let surface = view.live.surface.clone();
             for index in 0..4 {
                 if index == 3 {
-                    view.reset_selected();
+                    view.reset_selected(cx);
                     view.activation_deadline = None;
                     view.live.surface = surface.clone();
                 }
@@ -219,7 +219,7 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
                 assert_eq!(view.pending_images.len(), index + 1);
             }
             if reset_all {
-                view.reset_selected();
+                view.reset_selected(cx);
                 view.live.surface = surface;
             }
             view.cancel_stale_image();
@@ -273,7 +273,7 @@ fn connected_image_paste_queued_upload_remains_cancellable_after_preparation(
     for change in ["epoch", "popup", "local"] {
         let (endpoint, mut server) = connected_endpoint("ssh:image");
         let requests = view.update(cx, |view, cx| {
-            prepare_remote_image(view, endpoint);
+            prepare_remote_image(view, endpoint, cx);
             if change == "popup" {
                 image_popup(view, "original-popup");
             }
@@ -362,7 +362,7 @@ fn connected_image_paste_snapshot_surface_gap_preserves_existing_target(
     for removed in [false, true] {
         let (endpoint, mut server) = connected_endpoint("ssh:image");
         let requests = view.update(cx, |view, cx| {
-            prepare_remote_image(view, endpoint);
+            prepare_remote_image(view, endpoint, cx);
             let handle = view.endpoints[1].connection.handle.as_ref().unwrap();
             let requests = [0, 1].map(|_| {
                 handle

@@ -280,6 +280,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::worktree_notes::Notes::default()
     };
+    // Nor with where the user's worktrees went.
+    let dispatch_history = if mode == LaunchMode::Normal {
+        crate::dispatch::History::load()
+    } else {
+        crate::dispatch::History::default()
+    };
     gpui_platform::application()
         .with_assets(icons::Icons)
         .run(move |cx| {
@@ -290,6 +296,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             browser_tabs.install(cx);
             group_layouts.install(cx);
             worktree_notes.install(cx);
+            dispatch_history.install(cx);
             agent_skill.install_global(cx);
             keychain_grants.install(cx);
             // Only the user's own app answers agents; native test modes stay private.

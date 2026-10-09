@@ -1,4 +1,8 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
+#[cfg(feature = "cloud")]
+mod cloud_devices;
+#[cfg(feature = "daytona")]
+pub(crate) use cloud_devices::open as open_cloud;
 mod controls;
 mod layouts;
 pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
@@ -50,11 +54,13 @@ pub(super) enum Section {
     Notifications,
     StatusBar,
     Integrations,
+    #[cfg(feature = "cloud")]
+    CloudDevices,
     General,
 }
 
 impl Section {
-    const ALL: [Self; 8] = [
+    const ALL: &[Self] = &[
         Self::Appearance,
         Self::Fonts,
         Self::Indicators,
@@ -62,6 +68,8 @@ impl Section {
         Self::Notifications,
         Self::StatusBar,
         Self::Integrations,
+        #[cfg(feature = "cloud")]
+        Self::CloudDevices,
         Self::General,
     ];
 
@@ -74,6 +82,8 @@ impl Section {
             Self::Notifications => "Notifications",
             Self::StatusBar => "Status bar",
             Self::Integrations => "Integrations",
+            #[cfg(feature = "cloud")]
+            Self::CloudDevices => "Cloud Devices",
             Self::General => "General",
         }
     }
@@ -87,6 +97,8 @@ impl Section {
             Self::Notifications => "icons/bell.svg",
             Self::StatusBar => "icons/status-bar.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            #[cfg(feature = "cloud")]
+            Self::CloudDevices => "icons/globe.svg",
             Self::General => "icons/settings.svg",
         }
     }
@@ -100,6 +112,10 @@ impl Section {
             Self::Notifications => "Stay informed without losing your place.",
             Self::StatusBar => "Keep the bottom bar to what you use.",
             Self::Integrations => "Connect the agents you work with.",
+            #[cfg(feature = "cloud")]
+            Self::CloudDevices => {
+                "Create machines from your cloud accounts and use them as devices."
+            }
             Self::General => "The small details of your daily workflow.",
         }
     }
@@ -219,6 +235,17 @@ struct SettingsWindow {
     #[cfg(test)]
     layout_io: Option<layouts::LayoutIo>,
     remote_history: remote_history::RemoteHistory,
+    /// The Coder card, built when Cloud Devices is first shown.
+    /// The provider whose tab Cloud Devices shows.
+    #[cfg(feature = "cloud")]
+    cloud_tab: crate::cloud::CloudProvider,
+    /// The main window's finished cloud jobs when the cards last read them.
+    #[cfg(feature = "cloud")]
+    cloud_jobs_seen: u64,
+    #[cfg(feature = "coder")]
+    coder_card: Option<cloud_devices::CoderCard>,
+    #[cfg(feature = "daytona")]
+    daytona_card: Option<cloud_devices::DaytonaCard>,
     theme_loading: bool,
     theme_waiting: bool,
     theme_light: bool,
@@ -301,6 +328,14 @@ impl SettingsWindow {
             #[cfg(test)]
             layout_io: None,
             remote_history: Default::default(),
+            #[cfg(feature = "cloud")]
+            cloud_tab: cloud_devices::first_tab(),
+            #[cfg(feature = "cloud")]
+            cloud_jobs_seen: 0,
+            #[cfg(feature = "coder")]
+            coder_card: None,
+            #[cfg(feature = "daytona")]
+            daytona_card: None,
             theme_loading: false,
             theme_waiting: false,
             theme_light: false,
@@ -335,7 +370,11 @@ impl SettingsWindow {
         }
     }
 
-    fn source_changed(&mut self, _source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
+    fn source_changed(&mut self, source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
+        #[cfg(feature = "cloud")]
+        self.cloud_source_changed(&source, cx);
+        #[cfg(not(feature = "cloud"))]
+        let _ = source;
         if self.section == Section::Integrations {
             cx.notify();
         }
@@ -528,6 +567,10 @@ impl SettingsWindow {
         if section == Section::General {
             self.sync_remote_history(false, cx);
         }
+        #[cfg(feature = "cloud")]
+        if section == Section::CloudDevices {
+            self.open_cloud_devices(cx);
+        }
         cx.notify();
     }
 
@@ -588,7 +631,8 @@ impl SettingsWindow {
             )
             .children(
                 Section::ALL
-                    .into_iter()
+                    .iter()
+                    .copied()
                     .enumerate()
                     .map(|(index, section)| {
                         let selected = self.section == section;
@@ -635,6 +679,8 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            #[cfg(feature = "cloud")]
+            Section::CloudDevices => self.render_cloud_devices(cx),
             _ => self.render_controls(window, cx),
         };
         self.viewport_width = f32::from(window.viewport_size().width);
@@ -651,6 +697,7 @@ impl Render for SettingsWindow {
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, action: &crate::RunCommand, window, cx| {
                 match action.command {
+                    command if crate::window::run_window_command(command, window, cx) => {}
                     crate::controls::Command::Settings => window.activate_window(),
                     crate::controls::Command::NewWindow => {
                         if let Some(target) = this.additional_window_target(cx) {
@@ -729,10 +776,15 @@ impl Render for SettingsWindow {
                                     }
                                 })
                                 .unwrap_or_else(|| {
-                                    if self.section == Section::Appearance {
-                                        "Themes and layouts change live; saved on Settings close or app quit."
-                                    } else {
-                                        "Changes are saved automatically."
+                                    match self.section {
+                                        Section::Appearance => {
+                                            "Themes and layouts change live; saved on Settings close or app quit."
+                                        }
+                                        #[cfg(feature = "cloud")]
+                                        Section::CloudDevices => {
+                                            "Account fields save with Save; sign-in and removal apply at once."
+                                        }
+                                        _ => "Changes are saved automatically.",
                                     }
                                     .into()
                                 }),

@@ -187,5 +187,19 @@ pub(crate) fn colour(name: &str, lines: &Lines, range: Range<usize>) -> Vec<Vec<
     range.map(read).collect()
 }
 
+/// The spans of each of the first `limit` lines of `text`, a whole file
+/// named `name`, read top to bottom. Blocking: it runs on the background
+/// executor.
+pub(crate) fn colour_file(name: &str, text: &str, limit: usize) -> Vec<Vec<Span>> {
+    let Some(syntax) = grammar(name) else {
+        return Vec::new();
+    };
+    let mut side = Side::new(syntax);
+    text.lines()
+        .take(limit)
+        .map(|line| side.line(line))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests;

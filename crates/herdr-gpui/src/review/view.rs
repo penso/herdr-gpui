@@ -20,6 +20,7 @@ use std::{
 };
 
 mod colours;
+pub(crate) use rows::code as styled_code;
 mod file_rows;
 mod files;
 mod header;
@@ -31,6 +32,7 @@ mod panels;
 mod rows;
 mod scrollbar;
 mod search;
+mod selection;
 mod tab;
 mod tree;
 
@@ -156,6 +158,10 @@ pub(crate) struct Review {
     search: search::Search,
     /// The row a note is being written for.
     draft: Option<RowId>,
+    /// The code selected to copy, and whether a press on the code is still
+    /// being dragged to extend it.
+    selection: Option<selection::Selection>,
+    selecting: bool,
     notes: Vec<Note>,
     /// Each noted row and its note's number, recomputed when either changes.
     marks: HashMap<RowId, usize>,
@@ -226,6 +232,7 @@ impl Review {
         self.cursor = 0;
         self.expanding.clear();
         self.colours = colours::Colours::default();
+        self.selection = None;
         self.search.clear_results();
         self.picked = None;
         self.revealed.set(None);

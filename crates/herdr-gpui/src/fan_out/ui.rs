@@ -74,8 +74,7 @@ impl HerdrWindow {
             self.show_flash(flash, cx);
             return cx.notify();
         }
-        if let Some(workspace) = kept {
-            let endpoint = fan_out.origin.endpoint_id.clone();
+        if let Some((endpoint, workspace)) = kept {
             self.fan_out = None;
             if open {
                 self.dismiss_menu(window, cx);
@@ -124,12 +123,28 @@ impl HerdrWindow {
             .as_ref()
             .map(|input| input.text.clone())
             .unwrap_or_default();
+        // Other hosts are described before the fan-out is borrowed to launch.
+        let destinations: Vec<_> = self
+            .fan_out
+            .as_ref()
+            .filter(|fan_out| fan_out.composing())
+            .map(|fan_out| fan_out.lane_hosts())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|endpoint| self.dispatch_destination(&endpoint))
+            .collect();
         let Some(fan_out) = &mut self.fan_out else {
             return;
         };
         match fan_out.stage {
             Stage::Compose(_) => {
-                if fan_out.launch(&prompt, seed()) {
+                let destination = |endpoint: &str| {
+                    destinations
+                        .iter()
+                        .find(|found| found.place.endpoint_id == endpoint)
+                        .cloned()
+                };
+                if fan_out.launch(&prompt, seed(), destination) {
                     // The prompt is sent; the comparison takes the keyboard.
                     self.menu.input = None;
                 }
@@ -149,10 +164,7 @@ impl HerdrWindow {
         let Some(checkout) = fan_out.lanes.get(index).and_then(|l| l.checkout.as_ref()) else {
             return;
         };
-        let follow = Follow::new(
-            fan_out.origin.endpoint_id.clone(),
-            checkout.workspace_id.clone(),
-        );
+        let follow = Follow::new(checkout.endpoint_id.clone(), checkout.workspace_id.clone());
         self.dismiss_menu(window, cx);
         self.teleport_follow = Some(follow);
     }
@@ -190,7 +202,11 @@ impl HerdrWindow {
                 body = body.child(
                     line(format!(
                         "Each agent gets its own new worktree from {}, then the same prompt.",
-                        fan_out.origin.base
+                        fan_out
+                            .origin
+                            .base
+                            .strip_prefix("refs/heads/")
+                            .unwrap_or(&fan_out.origin.base)
                     ))
                     .text_color(muted),
                 );
@@ -290,15 +306,16 @@ impl HerdrWindow {
                         }
                     }
                 }
+                body = body.children(self.render_fan_out_spread(fan_out, cx));
                 let lanes = fan_out.picks.total();
-                let label = match lanes {
-                    0 | 1 => "Start agent".to_owned(),
-                    lanes => format!("Start {lanes} agents"),
+                let label = match (lanes, fan_out.host_count()) {
+                    (0 | 1, _) => "Start agent".to_owned(),
+                    (lanes, 0 | 1) => format!("Start {lanes} agents"),
+                    (lanes, hosts) => format!("Start {lanes} agents on {hosts} hosts"),
                 };
                 (label, fan_out.not_ready(prompt).is_none())
             }
             Stage::Launching | Stage::Compare | Stage::Confirm(_) | Stage::Removing(_) => {
-                let snapshot = self.fan_out_snapshot(&fan_out.origin.endpoint_id);
                 let comparing = !matches!(fan_out.stage, Stage::Launching);
                 body = body.child(
                     line(format!("“{}”", fan_out.prompt))
@@ -316,18 +333,42 @@ impl HerdrWindow {
                 }
                 for (index, lane) in fan_out.lanes.iter().enumerate() {
                     let failed = matches!(lane.state, LaneState::Failed(_));
-                    let status = match (&lane.state, &lane.checkout) {
-                        (LaneState::Running, Some(checkout)) if comparing => {
-                            agent_status(snapshot, &checkout.workspace_id).to_owned()
-                        }
+                    let mut status = match (&lane.state, &lane.checkout) {
+                        (LaneState::Running, Some(checkout)) if comparing => agent_status(
+                            self.fan_out_snapshot(&checkout.endpoint_id),
+                            &checkout.workspace_id,
+                        )
+                        .to_owned(),
                         (state, _) => state.label().to_owned(),
                     };
-                    let changes = match (&lane.checkout, lane.stats) {
+                    // A lane elsewhere says where it runs.
+                    if let Some(checkout) = lane
+                        .checkout
+                        .as_ref()
+                        .filter(|c| c.endpoint_id != fan_out.origin.endpoint_id)
+                    {
+                        let host = self
+                            .endpoints
+                            .iter()
+                            .find(|endpoint| endpoint.id == checkout.endpoint_id)
+                            .map_or(checkout.endpoint_id.as_str(), |e| e.label.as_str());
+                        status = format!("{status} · {host}");
+                    }
+                    let mut changes = match (&lane.checkout, lane.stats) {
                         (None, _) => None,
                         (Some(_), Some(stats)) => Some(stats.summary()),
                         (Some(_), None) if comparing => Some("Reading changes...".to_owned()),
                         (Some(_), None) => None,
                     };
+                    // A host that could not be read says so; any changes
+                    // read before stay beside it.
+                    let unread = lane.unread.as_ref().filter(|_| lane.checkout.is_some());
+                    if let Some(unread) = unread {
+                        changes = Some(match lane.stats {
+                            Some(stats) => format!("{} · not updated: {unread}", stats.summary()),
+                            None => format!("Changes not read: {unread}"),
+                        });
+                    }
                     let winner = matches!(
                         fan_out.stage,
                         Stage::Confirm(kept) | Stage::Removing(kept) if kept == index
@@ -382,6 +423,9 @@ impl HerdrWindow {
                                                 .truncate()
                                                 .debug_selector(move || {
                                                     format!("fan-out-changes-{index}")
+                                                })
+                                                .when(unread.is_some(), |text| {
+                                                    text.text_color(danger)
                                                 })
                                                 .child(changes),
                                         )

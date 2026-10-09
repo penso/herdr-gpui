@@ -14,7 +14,7 @@ use super::{
         PaneInfoResult, SnapshotResult, TabCreated, TabList, WorkspaceCreated, WorktreeCreated,
     },
 };
-use herdr_client::shell_quote;
+use herdr_client::{protocol::ClientShellSnapshot, shell_quote};
 use std::{collections::HashMap, io::Seek, sync::atomic::AtomicBool, time::Duration};
 
 mod discover;
@@ -116,7 +116,30 @@ pub(crate) struct Outcome {
     pub(crate) warnings: Vec<String>,
 }
 
-fn reference_name() -> String {
+/// The repositories open in `snapshot`, one per Git common directory, each
+/// reached through its main checkout's workspace when that is open.
+pub(crate) fn open_repositories(snapshot: &ClientShellSnapshot) -> Vec<Repository> {
+    let mut found: Vec<Repository> = Vec::new();
+    for workspace in &snapshot.workspaces {
+        let Some(tree) = &workspace.worktree else {
+            continue;
+        };
+        match found.iter_mut().find(|repo| repo.key == tree.key) {
+            Some(repo) if !tree.is_linked_worktree => {
+                repo.workspace_id.clone_from(&workspace.workspace_id);
+            }
+            Some(_) => {}
+            None => found.push(Repository {
+                key: tree.key.clone(),
+                label: tree.label.clone(),
+                workspace_id: workspace.workspace_id.clone(),
+            }),
+        }
+    }
+    found
+}
+
+pub(super) fn reference_name() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_nanos());
@@ -314,7 +337,7 @@ pub(crate) fn run(
 
 /// The destination repository, opened as a space: as it is when already
 /// open, else after opening an existing checkout or cloning one.
-fn arrive(
+pub(super) fn arrive(
     source: &Source,
     destination: &Candidate,
     report: &mut impl FnMut(Step),
@@ -350,6 +373,43 @@ fn arrive(
         label: source.repo_label.clone(),
         workspace_id: opened.workspace.workspace_id,
     })
+}
+
+/// A new workspace on the destination repository's main checkout, cloning
+/// the repository first where it is missing.
+pub(super) fn open_workspace(
+    source: &Source,
+    destination: &Candidate,
+    label: Option<&str>,
+    report: &mut impl FnMut(Step),
+    cancelled: &AtomicBool,
+) -> Result<String> {
+    let to = &destination.place.host;
+    let path = match &destination.destination {
+        Destination::Open { repository, .. } | Destination::Reclaim { repository, .. } => {
+            git::main_checkout(to, &repository.key, cancelled)?
+        }
+        Destination::Arrive(Arrival::Existing { path, .. }) => path.clone(),
+        Destination::Arrive(Arrival::Clone { path }) => {
+            report(Step::Clone);
+            provision::clone(
+                &source.place.host,
+                &source.repo_key,
+                to,
+                path,
+                destination.origin.as_deref(),
+                cancelled,
+            )?;
+            path.clone()
+        }
+    };
+    report(Step::Open);
+    let mut args = vec!["workspace", "create", "--cwd", &path, "--no-focus"];
+    if let Some(label) = label {
+        args.extend(["--label", label]);
+    }
+    let opened: WorkspaceCreated = to.herdr(Step::Open, &args, cancelled)?;
+    Ok(opened.workspace.workspace_id)
 }
 
 /// A destination pane standing in for a source pane.

@@ -157,6 +157,10 @@ impl ConnectionBridge {
         let startup_inbox = self.inbox.clone();
         let result =
             connect_with_connector(target, options, surface_active, move |target, stop| {
+                #[cfg(feature = "cloud")]
+                if matches!(target, ConnectTarget::Cloud { .. }) {
+                    return crate::cloud::connect(target, stop);
+                }
                 let result = crate::daemon::connect(target, stop, || {
                     tracing::debug!("Connection bridge starting local daemon");
                     if let Ok(mut state) = startup_inbox.lock()
@@ -189,7 +193,7 @@ impl ConnectionBridge {
                     state.missing_installation = true;
                     state.dirty = true;
                 }
-                result
+                result.map(herdr_client::Transport::from)
             })
             .map_err(crate::Error::from)
             .and_then(|client| {
@@ -335,6 +339,26 @@ impl ConnectionBridge {
             .ok_or(crate::Error::NotConnected)?
             .request(boot_id, method, params)?;
         state.script_response = Some((id.clone(), None));
+        Ok(id)
+    }
+
+    /// Queues the `pane.split` an editor pane waits on, in its own slot.
+    pub(crate) fn request_editor(
+        &self,
+        boot_id: &str,
+        method: Method,
+        params: serde_json::Value,
+    ) -> crate::Result<String> {
+        let mut state = self
+            .inbox
+            .try_lock()
+            .map_err(|_| crate::Error::ConnectionBusy)?;
+        let id = self
+            .handle
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?
+            .request(boot_id, method, params)?;
+        state.editor_response = Some((id.clone(), None));
         Ok(id)
     }
 

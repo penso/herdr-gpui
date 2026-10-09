@@ -2,6 +2,7 @@ use super::*;
 use core::prelude::v1::test;
 
 mod line_height;
+mod window_commands;
 
 fn records() -> Vec<Arc<Record>> {
     [

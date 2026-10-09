@@ -342,15 +342,18 @@ impl PullRequest {
                 .flatten()
                 .any(|check| check.outcome() == outcome)
         };
-        if matches!(
-            self.merge_state_status,
-            MergeState::Dirty | MergeState::Unstable
-        ) || self.review_decision == ReviewDecision::ChangesRequested
+        // GitHub also reports UNSTABLE while checks are still running, so it
+        // only means attention once nothing is pending; failed checks are
+        // caught directly.
+        let running = has_check(Outcome::Pending);
+        if self.merge_state_status == MergeState::Dirty
+            || (self.merge_state_status == MergeState::Unstable && !running)
+            || self.review_decision == ReviewDecision::ChangesRequested
             || has_check(Outcome::Failed)
         {
             return theme.palette[1];
         }
-        if has_check(Outcome::Pending) || self.review_decision == ReviewDecision::ReviewRequired {
+        if running || self.review_decision == ReviewDecision::ReviewRequired {
             return theme.palette[3];
         }
         match self.merge_state_status {

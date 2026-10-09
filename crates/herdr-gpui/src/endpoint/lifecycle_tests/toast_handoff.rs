@@ -21,7 +21,7 @@ fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui::T
         view.endpoints.push(endpoint);
         view.selected_endpoint = 1;
         view.options = ConnectOptions::default();
-        view.reset_selected();
+        view.reset_selected(cx);
         view.tick_toasts(false, Instant::now());
         let held = inbox.lock().unwrap();
         view.click_toast("ssh:toast", view.endpoints[1].generation, &inbox, 0, cx);
@@ -142,7 +142,7 @@ fn toast_handoff_retains_busy_validation_and_revalidates_before_queueing(
             view.options = ConnectOptions::default();
             if already_active {
                 view.selected_endpoint = 1;
-                view.reset_selected();
+                view.reset_selected(cx);
                 assert!(view.input_ready());
             }
             let inbox = view.endpoints[1].connection.inbox.clone();
@@ -245,7 +245,7 @@ fn accepted_toast_survives_expiry_but_not_invalidation(cx: &mut gpui::TestAppCon
             view.selected_endpoint = 0;
             view.endpoints.truncate(1);
             view.endpoints[0].detached = true;
-            view.reset_selected();
+            view.reset_selected(cx);
             view.endpoints.push(endpoint);
             view.tick_toasts(false, Instant::now());
             let inbox = view.endpoints[1].connection.inbox.clone();
@@ -359,7 +359,7 @@ fn toast_handoff_defers_a_contended_source_without_activating_destination(
         view.endpoints[0].detached = true;
         view.endpoints.extend([source, target]);
         view.selected_endpoint = 1;
-        view.reset_selected();
+        view.reset_selected(cx);
         view.tick_toasts(false, Instant::now());
         view.click_toast(
             "ssh:target",

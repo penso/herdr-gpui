@@ -33,11 +33,15 @@ pub(crate) type PaneKeys = BTreeMap<String, String>;
 
 /// Ghostty's macOS line-editing chords, which every other Mac terminal also
 /// sends: Cmd-Left and Cmd-Right to the line's start and end, Cmd-Backspace
-/// to delete back to its start. Elsewhere the platform key is the desktop's.
+/// to delete back to its start, and Option-Left and Option-Right a word back
+/// and forward as Esc-b and Esc-f, which shells bind where they rarely bind
+/// an Alt-modified arrow. Elsewhere the platform key is the desktop's.
 const DEFAULT_PANE_KEYS: &[(&str, &str)] = &[
     ("cmd-left", "ctrl-a"),
     ("cmd-right", "ctrl-e"),
     ("cmd-backspace", "ctrl-u"),
+    ("alt-left", "alt-b"),
+    ("alt-right", "alt-f"),
 ];
 
 /// Keystrokes the GUI config binds, with the command holding each. Spelling

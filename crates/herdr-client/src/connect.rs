@@ -10,7 +10,7 @@ use crate::{
     options::{ConnectOptions, validate_options},
     queue,
     session::{Signals, run_connection},
-    ssh,
+    ssh::{self, Bridge},
     transport::Stream,
     wsl,
 };
@@ -45,14 +45,34 @@ pub fn connect_with_surface_active(
     })
 }
 
-/// Connect using application-specific local socket setup on the I/O worker.
-/// SSH and WSL targets always use the remote bridge, never the local connector.
-/// The connector should observe `stop` during waits so detach cancels setup.
-pub fn connect_with_connector(
+/// What an application connector produced: a local socket, or a remote bridge
+/// it spawned (see [`crate::connect_command`]) whose child the worker owns.
+pub enum Transport {
+    Local(Stream),
+    Bridge(Bridge),
+}
+
+impl From<Stream> for Transport {
+    fn from(stream: Stream) -> Self {
+        Self::Local(stream)
+    }
+}
+
+impl From<Bridge> for Transport {
+    fn from(bridge: Bridge) -> Self {
+        Self::Bridge(bridge)
+    }
+}
+
+/// Connect using application-specific setup on the I/O worker. SSH and WSL
+/// targets always use the built-in remote bridge; local and cloud targets use
+/// the connector. The connector should observe `stop` during waits so detach
+/// cancels setup.
+pub fn connect_with_connector<T: Into<Transport>>(
     target: ConnectTarget,
     options: ConnectOptions,
     surface_active: bool,
-    connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<Stream> + Send + 'static,
+    connector: impl FnOnce(&ConnectTarget, &AtomicBool) -> io::Result<T> + Send + 'static,
 ) -> Result<Client> {
     validate_options(options)?;
     match &target {
@@ -61,6 +81,10 @@ pub fn connect_with_connector(
             session_socket(std::path::Path::new(""), session)?;
         }
         ConnectTarget::Wsl { distro, session } => wsl::validate(distro, session)?,
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { session, .. } => {
+            session_socket(std::path::Path::new(""), session)?;
+        }
         _ => {}
     }
     let (commands, rx) = queue::channel(COMMAND_CAPACITY)?;
@@ -75,6 +99,8 @@ pub fn connect_with_connector(
             let transport = match target {
                 ConnectTarget::Ssh { .. } => "ssh",
                 ConnectTarget::Wsl { .. } => "wsl",
+                #[cfg(feature = "cloud")]
+                ConnectTarget::Cloud { provider, .. } => provider.key(),
                 _ => "local",
             };
             let span = tracing::info_span!("connection", transport);
@@ -90,7 +116,10 @@ pub fn connect_with_connector(
                         let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
                         (stream, Some(child))
                     }
-                    _ => (connector(&target, &worker_stop)?, None),
+                    _ => match connector(&target, &worker_stop)?.into() {
+                        Transport::Local(stream) => (stream, None),
+                        Transport::Bridge(Bridge { stream, child }) => (stream, Some(child)),
+                    },
                 };
                 run_connection(
                     stream,

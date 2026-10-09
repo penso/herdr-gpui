@@ -10,6 +10,7 @@
 mod error;
 mod job;
 mod plan;
+mod spread;
 mod state;
 mod ui;
 

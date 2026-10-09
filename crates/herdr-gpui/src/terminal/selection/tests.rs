@@ -4,6 +4,8 @@ use herdr_client::protocol::{
     CellData, ClientShellPopupSurface, FrameData, PaneSurfacePane, SurfaceRect,
 };
 
+mod content_range;
+
 const CELL_WIDTH: f32 = 10.;
 const CELL_HEIGHT: f32 = 20.;
 

@@ -1,6 +1,9 @@
 use super::super::WorkspaceMenuAction;
 use super::*;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod spread;
+
 fn offered(view: &HerdrWindow) -> Option<&'static str> {
     view.workspace_items()
         .into_iter()
@@ -54,8 +57,8 @@ fn composing_picks_agents_and_closing_forgets_it(cx: &mut gpui::TestAppContext) 
             let fan_out = view.fan_out.as_mut().unwrap();
             assert_eq!(
                 fan_out.base_for_test(),
-                "worktree/sidebar-child",
-                "a linked checkout's lanes start from its branch"
+                "refs/heads/worktree/sidebar-child",
+                "a linked checkout's lanes start from its branch, as a full ref"
             );
             // The host lookup is replaced, so nothing depends on this machine.
             fan_out.agents_for_test(vec![

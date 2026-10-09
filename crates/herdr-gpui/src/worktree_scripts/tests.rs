@@ -17,8 +17,12 @@ mod review;
 
 /// A window connected to `peer`, projecting the peer's own snapshot so
 /// requests carry the boot it accepts.
-pub(crate) fn connect(view: &mut HerdrWindow, peer: &MockPeer) {
-    peer.prepare(view);
+pub(crate) fn connect(
+    view: &mut HerdrWindow,
+    peer: &MockPeer,
+    cx: &mut gpui::Context<HerdrWindow>,
+) {
+    peer.prepare(view, cx);
     let local = &mut view.endpoints[0];
     // Scripts are read from this machine's files, as a local daemon's are.
     local.connection.target =

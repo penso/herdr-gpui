@@ -173,11 +173,16 @@ impl HerdrWindow {
         {
             self.input_probe.keys += 1;
         }
+        let modifiers = event.keystroke.modifiers;
+        let option_keys = if modifiers.alt {
+            crate::input::held_option_keys()
+        } else {
+            crate::config::OptionKeys::LEFT
+        };
         let alt_keys = self
             .config
             .option_as_alt
-            .sends_alt(cx.keyboard_layout().id());
-        let modifiers = event.keystroke.modifiers;
+            .sends_alt(cx.keyboard_layout().id(), option_keys);
         // Cmd-C copies a selection that is still highlighted. Ctrl-C does too
         // only while Herdr's `copy_on_select` is off, as in Herdr, where the
         // highlight is waiting for that copy; a selection the release already

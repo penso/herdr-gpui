@@ -190,6 +190,11 @@ impl HerdrWindow {
         // dialog's own pending row before dismissal drops it.
         if !opening {
             self.write_worktree_note(result, cx);
+            // Staying put is a pick too, so the ranking learns it.
+            if let Some(repo) = self.menu.dispatch_repo() {
+                let endpoint = self.endpoints[self.selected_endpoint].id.clone();
+                crate::dispatch::History::update(cx, |history| history.record(&repo, &endpoint));
+            }
         }
         // Only a new checkout is set up; an opened one already exists as it is.
         let setup = (!opening)
@@ -259,6 +264,14 @@ impl HerdrWindow {
             return;
         }
         let name = self.worktree_name(cx);
+        if let Some(endpoint) = self.dispatch_choice(action) {
+            match self.submit_dispatch(action, &endpoint, name) {
+                Ok(()) => self.local_error = None,
+                Err(error) => self.menu.error = Some(error.to_string()),
+            }
+            cx.notify();
+            return;
+        }
         let result = (|| {
             if !self.menu_target_current() {
                 return Err(crate::Error::StaleConnection);

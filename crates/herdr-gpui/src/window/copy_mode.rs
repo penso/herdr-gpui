@@ -52,7 +52,7 @@ impl HerdrWindow {
         };
         self.leave_copy_mode(cx);
         self.selection = None;
-        self.marked.clear();
+        self.discard_composition(cx);
         self.copy_mode = Some(CopyModeState {
             mode,
             boot_id,
@@ -80,6 +80,16 @@ impl HerdrWindow {
             self.scroll_pane(&state.boot_id, state.mode.pane_id(), offset, cx);
         }
         cx.notify();
+    }
+
+    /// The cells copy mode has marked in `pane`, while it walks that pane
+    /// for the connection and session it began on.
+    pub(super) fn copy_mode_marked(&self, boot: &str, pane: &PaneSurfacePane) -> Option<TextRange> {
+        let state = self.copy_mode.as_ref()?;
+        let current = &self.endpoints[self.selected_endpoint].connection.scrollback;
+        (state.boot_id == boot && Arc::ptr_eq(&state.inbox, current))
+            .then(|| state.mode.marked(pane))
+            .flatten()
     }
 
     /// Whether copy mode holds the keyboard, so nothing typed reaches the
@@ -227,6 +237,14 @@ impl HerdrWindow {
             cx.notify();
             return;
         }
+        // Its pane left the screen with its tab; the keyboard must not stay
+        // with a mode nobody can see.
+        if self.live.surface_ready()
+            && pane_of(self.live.surface.as_deref(), state.mode.pane_id()).is_none()
+        {
+            self.leave_copy_mode(cx);
+            return;
+        }
         let answer = state.mode.in_flight().and_then(|request| {
             let answer = state.inbox.try_lock().ok()?.take(request)?;
             Some((request.to_owned(), answer))
@@ -359,7 +377,7 @@ mod tests {
             MockPeer::advertising(&["pane.copy_motion", "pane.selection.read", "pane.scroll"]);
         let (view, cx) = cx.add_window_view(|window, cx| {
             let mut view = fixture_window(window, cx);
-            peer.prepare(&mut view);
+            peer.prepare(&mut view, cx);
             view.live.supports_copy_motion = true;
             let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
             surface.panes[0].content_revision = 2;

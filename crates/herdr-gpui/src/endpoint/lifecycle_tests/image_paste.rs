@@ -24,7 +24,7 @@ fn text_paste_survives_a_settled_navigation(cx: &mut gpui::TestAppContext) {
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             view.live.activation = Some(settled(view));
             assert!(view.live.surface_ready() && !view.live.activation_pending());
             cx.write_to_clipboard(ClipboardItem::new_string("after navigation".into()));
@@ -87,7 +87,7 @@ fn connected_image_paste_captures_pane_before_immediate_text_and_enter(
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_remote_image(view, endpoint);
+            prepare_remote_image(view, endpoint, cx);
             assert!(view.paste_terminal_clipboard(clipboard_image(&[0, 1, 255]), false, cx));
             assert_eq!(view.pending_images.len(), 1);
             // Focus can move while preparation runs; the image retains its original pane.
@@ -130,7 +130,7 @@ fn connected_image_paste_popup_never_reaches_underlying_pane(cx: &mut gpui::Test
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:image");
     view.update(cx, |view, cx| {
-        prepare_remote_image(view, endpoint);
+        prepare_remote_image(view, endpoint, cx);
         image_popup(view, "image-popup");
         assert!(view.paste_terminal_clipboard(clipboard_image(&[42]), false, cx));
         view.send(ClientPaneInputEvent::TextCommit("popup only".into()), cx);
@@ -165,9 +165,9 @@ fn connected_image_paste_image_only_preserves_text(cx: &mut gpui::TestAppContext
         let (endpoint, mut server) = connected_endpoint("image");
         view.update(cx, |view, cx| {
             if remote {
-                prepare_remote_image(view, endpoint);
+                prepare_remote_image(view, endpoint, cx);
             } else {
-                prepare_mouse(view, endpoint);
+                prepare_mouse(view, endpoint, cx);
                 assert!(!view.accepts_remote_images());
             }
             let text = ClipboardItem::new_string("ordinary text".into());
@@ -211,7 +211,7 @@ fn connected_image_paste_local_bridges_clipboard_image_but_not_paths(
     let text = format!("'{}'", path.display());
     let (endpoint, mut server) = connected_endpoint("image");
     view.update(cx, |view, cx| {
-        prepare_mouse(view, endpoint);
+        prepare_mouse(view, endpoint, cx);
         assert!(view.accepts_clipboard_images());
         assert!(!view.accepts_remote_images());
         assert!(view.paste_terminal_clipboard(clipboard_image(&[42]), false, cx));
@@ -253,7 +253,7 @@ fn connected_image_paste_missing_path_falls_back_in_reserved_order(cx: &mut gpui
     );
     let (endpoint, mut server) = connected_endpoint("ssh:image");
     view.update(cx, |view, cx| {
-        prepare_remote_image(view, endpoint);
+        prepare_remote_image(view, endpoint, cx);
         assert!(view.paste_terminal_clipboard(ClipboardItem::new_string(text.clone()), false, cx));
         assert_eq!(view.pending_images.len(), 1);
         view.send(
@@ -300,7 +300,7 @@ fn connected_image_paste_cancels_stale_preparation_without_blocking_fifo(
             let (endpoint, mut server) = connected_endpoint("ssh:image");
             cx.update(|window, cx| {
                 view.update(cx, |view, cx| {
-                    prepare_remote_image(view, endpoint);
+                    prepare_remote_image(view, endpoint, cx);
                     if change == "popup" {
                         image_popup(view, "original-popup");
                     }
@@ -363,7 +363,7 @@ fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui::Tes
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:image");
-    view.update(cx, |view, _| prepare_remote_image(view, endpoint));
+    view.update(cx, |view, cx| prepare_remote_image(view, endpoint, cx));
     for byte in [1, 2] {
         view.update(cx, |view, cx| {
             assert!(view.pending_images.is_empty());
@@ -415,7 +415,7 @@ fn connected_image_paste_reconnect_cancels_old_task_and_keeps_single_preparation
     let (replacement, mut server) = connected_endpoint("ssh:image");
     let directory = tempfile::tempdir().unwrap();
     view.update(cx, |view, cx| {
-        prepare_remote_image(view, endpoint);
+        prepare_remote_image(view, endpoint, cx);
         assert!(view.paste_terminal_clipboard(clipboard_image(&[1]), false, cx));
         view.send(
             ClientPaneInputEvent::TextCommit("must not replay".into()),
@@ -424,9 +424,9 @@ fn connected_image_paste_reconnect_cancels_old_task_and_keeps_single_preparation
         // Exercise reconnect without ever launching SSH or discovering a personal daemon.
         view.endpoints[1].connection.target =
             ConnectTarget::Socket(directory.path().join("missing.sock"));
-        view.reconnect();
+        view.reconnect(cx);
         assert_eq!(view.pending_images.len(), 1);
-        prepare_remote_image(view, replacement);
+        prepare_remote_image(view, replacement, cx);
         assert!(view.paste_terminal_clipboard(clipboard_image(&[2]), false, cx));
         assert!(view.local_error.is_some());
         view.send(

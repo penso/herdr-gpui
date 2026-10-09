@@ -7,10 +7,10 @@ fn first_focus_claims_geometry_without_a_window_resize(cx: &mut gpui::TestAppCon
         Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
     });
     let view = fixture.read_with(cx, |fixture, _| fixture.0.clone());
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         view.endpoints = vec![endpoint];
         view.selected_endpoint = 0;
-        view.reset_selected();
+        view.reset_selected(cx);
         view.active = true;
         view.options.surface_size = ClientSurfaceSize {
             cols: 150,
@@ -60,10 +60,10 @@ fn startup_focus_waits_for_the_first_surface_without_flapping_on_later_updates(
     endpoint.connection.inbox.lock().unwrap().surface = None;
     endpoint.live.surface = None;
     let inbox = endpoint.connection.inbox.clone();
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         view.endpoints = vec![endpoint];
         view.options = ConnectOptions::default();
-        view.reset_selected();
+        view.reset_selected(cx);
         view.active = true;
         assert!(!view.input_ready());
         view.report_focus();
@@ -149,7 +149,7 @@ fn every_focus_changing_command_fences_immediate_input_until_ack_and_surface(
                 view.endpoints.push(endpoint);
                 view.selected_endpoint = 1;
                 view.options = ConnectOptions::default();
-                view.reset_selected();
+                view.reset_selected(cx);
                 view.activation_deadline = None;
                 view.config.confirm_close_tab = confirm_close;
                 view.config.confirm_close_pane = confirm_close;

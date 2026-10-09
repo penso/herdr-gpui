@@ -131,7 +131,9 @@ jobs:
             arch: x86_64
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # Intel runners have taken 34-40 minutes for the release build alone,
+    # leaving 60 minutes too tight for the tests, notices, and upload.
+    timeout-minutes: 90
     permissions:
       contents: read
     env:

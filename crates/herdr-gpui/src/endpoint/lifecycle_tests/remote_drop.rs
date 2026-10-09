@@ -31,8 +31,8 @@ fn a_dropped_remote_stays_selected_with_its_last_picture_dimmed(cx: &mut gpui::T
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, server) = connected_endpoint("ssh:remote");
-    view.update(cx, |view, _| {
-        prepare_mouse(view, endpoint);
+    view.update(cx, |view, cx| {
+        prepare_mouse(view, endpoint, cx);
         assert!(view.presentation.picture(&view.live).is_some());
         assert!(!view.presentation.stale());
         view.endpoints[1].retry_at = Instant::now() + Duration::from_secs(120);
@@ -121,7 +121,7 @@ fn a_drop_seen_before_its_state_arrives_does_not_fall_back_to_local(cx: &mut gpu
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, _server) = connected_endpoint("ssh:remote");
     view.update(cx, |view, cx| {
-        prepare_mouse(view, endpoint);
+        prepare_mouse(view, endpoint, cx);
         view.endpoints[1].retry_at = Instant::now() + Duration::from_secs(120);
         // A stopped handle delivers no disconnect state at all.
         view.endpoints[1]
@@ -196,7 +196,7 @@ fn the_card_stays_until_the_replacement_frame_lands(cx: &mut gpui::TestAppContex
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, _server) = connected_endpoint("ssh:remote");
     view.update(cx, |view, cx| {
-        prepare_mouse(view, endpoint);
+        prepare_mouse(view, endpoint, cx);
         let first = view.presentation.picture(&view.live).unwrap().frame;
         view.endpoints[1].retry_at = Instant::now() + Duration::from_secs(120);
         view.endpoints[1]

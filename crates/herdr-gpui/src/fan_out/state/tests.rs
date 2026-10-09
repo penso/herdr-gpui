@@ -1,12 +1,16 @@
 use super::*;
 use crate::fan_out::error::Step;
 
+mod compare;
+mod spread;
+
 fn origin() -> Origin {
     Origin {
         endpoint_id: "local".into(),
         endpoint_label: "This Mac".into(),
         host: crate::teleport::host_for(&herdr_client::ConnectTarget::Local).unwrap(),
         workspace_id: "w1".into(),
+        repo_key: "/tmp/repo/.git".into(),
         repo_label: "repo".into(),
         base: "HEAD".into(),
     }
@@ -19,6 +23,9 @@ fn idle() -> FanOut {
         origin: origin(),
         stage: Stage::Compose(Some(Ok(vec![AgentKind::Claude, AgentKind::Codex]))),
         picks: Picks::default(),
+        hosts: Picker::new("local", Instant::now()),
+        spread: false,
+        overrides: Vec::new(),
         prompt: String::new(),
         lanes: Vec::new(),
         base: None,
@@ -34,6 +41,8 @@ fn idle() -> FanOut {
 
 fn checkout(n: usize) -> Checkout {
     Checkout {
+        endpoint_id: "local".into(),
+        host: origin().host,
         workspace_id: format!("w{n}"),
         path: format!("/tmp/lane-{n}"),
         pane_id: format!("p{n}"),
@@ -53,6 +62,7 @@ fn launched() -> FanOut {
             state: LaneState::Waiting,
             checkout: None,
             stats: None,
+            unread: None,
         })
         .collect();
     fan_out.stage = Stage::Launching;
@@ -74,7 +84,10 @@ fn launch_needs_the_agent_list_a_prompt_and_a_pick() {
     assert!(fan_out.toggle(AgentKind::Claude, true));
     assert_eq!(fan_out.not_ready("go"), None);
     fan_out.stage = Stage::Compose(Some(Err("no".into())));
-    assert!(!fan_out.launch("go", 1), "a failed lookup cannot launch");
+    assert!(
+        !fan_out.launch("go", 1, |_| None),
+        "a failed lookup cannot launch"
+    );
     assert!(fan_out.composing());
 }
 
@@ -154,7 +167,13 @@ fn stats_land_on_their_lanes_and_reads_do_not_overlap() {
         ..DiffStat::default()
     };
     fan_out.probing = true;
-    send(&fan_out, Event::Stats(Ok(vec![Some(stat), None, None])));
+    send(
+        &fan_out,
+        Event::Stats(vec![HostStats {
+            lanes: vec![0, 1, 2],
+            result: Ok(vec![Some(stat), None, None]),
+        }]),
+    );
     fan_out.poll();
     assert!(!fan_out.probing);
     assert_eq!(fan_out.lanes[0].stats, Some(stat));
@@ -181,7 +200,10 @@ fn keeping_a_lane_needs_its_confirmation_and_removes_only_the_others() {
     fan_out.stage = Stage::Removing(2);
     assert!(fan_out.busy());
     send(&fan_out, Event::Removed(vec![(0, Ok(()))]));
-    assert_eq!(fan_out.poll(), (true, Some("w2".into())));
+    assert_eq!(
+        fan_out.poll(),
+        (true, Some(("local".to_owned(), "w2".to_owned())))
+    );
 }
 
 #[test]

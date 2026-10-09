@@ -265,7 +265,7 @@ impl Pages {
         // keeps the folder it was created with wherever it navigates.
         let root = match location {
             Location::Local { file } => Some(file.root().to_owned()),
-            Location::Web { .. } | Location::Review { .. } => None,
+            Location::Web { .. } | Location::Review { .. } | Location::Code { .. } => None,
         };
         let builder = with_handlers(wry::WebViewBuilder::new(), Source::Tab(id), &self.outbox)
             .with_url(location.page_url())

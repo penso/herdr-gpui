@@ -42,12 +42,12 @@ impl HerdrWindow {
         let select_id = endpoint_id.clone();
         let menu_id = endpoint_id.clone();
         let removing = self.menu.removing_devices.contains(&endpoint.id);
-        let host = crate::usage::Host::from(&endpoint.connection.target);
-        let load = self
-            .config
-            .show_system_load
-            .then(|| self.system_load.get(&host))
-            .flatten();
+        // A cloud machine has no host to read its load from.
+        let host = crate::usage::Host::of(&endpoint.connection.target);
+        let load = host
+            .as_ref()
+            .filter(|_| self.config.show_system_load)
+            .and_then(|host| self.system_load.get(host));
         // Densities with detail lines give the load its own line;
         // compact ones fit gauges between the name and the status.
         let load_line = load.filter(|_| layout.workspace_details());
@@ -173,17 +173,20 @@ impl HerdrWindow {
                                     .child(label_text(&endpoint.label)),
                             ),
                     )
-                    .when_some(gauges.zip(load), |row, ((_, gauges), reading)| {
-                        row.child(
-                            div()
-                                .id(SharedString::from(format!(
-                                    "{prefix}host-load-{endpoint_id}"
-                                )))
-                                .flex_none()
-                                .child(gauges)
-                                .tooltip(crate::system_load::tooltip(reading, &host, theme)),
-                        )
-                    })
+                    .when_some(
+                        gauges.zip(load).zip(host.clone()),
+                        |row, (((_, gauges), reading), host)| {
+                            row.child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "{prefix}host-load-{endpoint_id}"
+                                    )))
+                                    .flex_none()
+                                    .child(gauges)
+                                    .tooltip(crate::system_load::tooltip(reading, &host, theme)),
+                            )
+                        },
+                    )
                     .child(
                         div()
                             .debug_selector(|| format!("{prefix}host-status-{endpoint_id}"))
@@ -197,7 +200,7 @@ impl HerdrWindow {
                             })),
                     ),
             )
-            .when_some(load_line, |row, reading| {
+            .when_some(load_line.zip(host), |row, (reading, host)| {
                 row.child(
                     div()
                         .id(SharedString::from(format!(

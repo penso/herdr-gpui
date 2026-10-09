@@ -5,7 +5,6 @@
 pub(crate) enum Step {
     Detect,
     CreateWorktree,
-    ResolveBase,
     StartAgent,
     Prompt,
     Compare,
@@ -17,7 +16,6 @@ impl Step {
         match self {
             Self::Detect => "finding installed agents",
             Self::CreateWorktree => "creating the worktree",
-            Self::ResolveBase => "reading the base commit",
             Self::StartAgent => "starting the agent",
             Self::Prompt => "sending the prompt",
             Self::Compare => "reading the changes",
@@ -40,8 +38,14 @@ pub(crate) enum Error {
         #[source]
         source: serde_json::Error,
     },
-    #[error("The new checkout reported no commit to compare against")]
+    #[error("The base commit could not be read")]
     NoBase,
+    #[error(transparent)]
+    Dispatch(crate::teleport::Error),
+    #[error("{host} could not be set up")]
+    HostUnavailable { host: String },
+    #[error("{agent} is not installed on {host}")]
+    AgentMissing { agent: &'static str, host: String },
     #[error("Fan-out cancelled")]
     Cancelled,
 }

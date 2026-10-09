@@ -56,14 +56,27 @@ agent_checkpoints = true
 show_listening_ports = true
 # macOS only: whether Option-letter reaches a pane as an Alt shortcut (Alt-P
 # for Option-P) or types the character the keyboard layout puts there. "auto"
-# sends Alt on the U.S. and ABC layouts and types elsewhere, so layouts that
-# keep @, [, or letters on Option still type them. true always sends Alt,
-# false always types. Alt always reaches the pane on Linux and Windows.
+# sends Alt from the left Option on the U.S. and ABC layouts, while the right
+# Option still types accents and dead keys (Option-E then E types é); it types
+# with both elsewhere, so layouts that keep @, [, or letters on Option still
+# type them. "left" or "right" sends Alt from that Option key alone on any
+# layout, true from both, and false never. Alt always reaches the pane on
+# Linux and Windows.
 option_as_alt = "auto"
 # Where a clicked terminal link opens: "system" (the default browser) or
 # "browser-tab" (a browser tab beside the workspace's terminals, macOS and
 # Windows only). Alt-click (Option-click) opens a link in the other one.
 open_links_in = "system"
+# Where a Cmd-click (Ctrl-click elsewhere) on a file path a pane printed, such
+# as `src/main.rs:42`, opens it: "editor" (the terminal editor, at that line,
+# in a pane split beside the one that printed it) or "system" (the default
+# application). Folders, images, and PDFs always open in the system's
+# application, as does every file on Windows. Alt-click (Option-click) opens a
+# file in the other one.
+open_files_in = "editor"
+# How that editor starts. Unset, the pane's $VISUAL or $EDITOR runs, then vi,
+# as `$EDITOR +LINE FILE`. `{file}` and `{line}` place the two yourself:
+# editor_command = "hx {file}:{line}"
 # Keep a terminal selection highlighted after releasing the mouse copies it,
 # until the next click or keystroke. Cmd-C and Edit > Copy copy it again, and
 # selection tools and screen readers can still read it. false clears it on
@@ -154,6 +167,7 @@ project_roots = []
 # close_tab = "cmd-shift-w"
 # focus_tab_1 = "cmd-1"   # through focus_tab_9 = "cmd-9"
 # toggle_sidebar = "cmd-b"
+# toggle_status_bar = "cmd-ctrl-b"   # unbound by default
 # increase_font_size = ["cmd-=", "cmd-+"]
 # decrease_font_size = "cmd--"
 # reset_font_size = "cmd-0"
@@ -161,8 +175,14 @@ project_roots = []
 # keybindings = "cmd-/"
 # workspace_picker = "cmd-p"
 # command_palette = "cmd-shift-p"
+# go_to_symbol = "cmd-shift-o"
+# go_to_file = "cmd-o"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
+# find_next = "cmd-g"
+# find_previous = "cmd-shift-g"
+# toggle_full_screen = "ctrl-cmd-f"
+# cycle_windows = "cmd-`"
 # Unbound by default: themes, reconnect, logs, about, worktree_notes,
 # edit_worktree_note.
 
@@ -175,6 +195,8 @@ project_roots = []
 # "cmd-left" = "ctrl-a"
 # "cmd-right" = "ctrl-e"
 # "cmd-backspace" = "ctrl-u"
+# "alt-left" = "alt-b"
+# "alt-right" = "alt-f"
 
 # Saved SSH devices use the local keybindings above, as `herdr --remote` does.
 # "server" uses the [keys] profile that device's Herdr publishes instead, like
@@ -258,9 +280,56 @@ size = 12
 # Other software running as you and backups can read it. Default is false.
 # allow_plaintext_credentials = false
 
+# A Coder deployment whose workspaces can be created and added as devices from
+# the device picker's "Add Coder Workspace…". Settings > Cloud Devices edits
+# these keys and saves the client secret to the credential store, so editing
+# this table by hand is optional. Register an OAuth2 app in Coder
+# (the deployment must enable the `oauth2` experiment) with the redirect URI
+# below; Coder compares it as an exact string, so copy it verbatim. Requires the
+# `coder` CLI, which carries the connection. Each HERDR_CODER_URL,
+# HERDR_CODER_OAUTH_CLIENT_ID, HERDR_CODER_OAUTH_CLIENT_SECRET, and
+# HERDR_CODER_OAUTH_REDIRECT_URI variable overrides its field when set.
+# [coder]
+# url = "https://coder.example.com"
+# oauth_client_id = "YOUR_OAUTH2_APP_ID"
+# Coder requires a confidential client. Prefer Settings > Cloud Devices, which
+# keeps the secret out of this file; when set here or in the environment, this
+# value takes precedence. It identifies this app to Coder, not your account.
+# oauth_client_secret = "YOUR_OAUTH2_APP_SECRET"
+# A loopback address with an explicit port the GUI can listen on while signing in.
+# oauth_redirect_uri = "http://127.0.0.1:47823/callback"
+# Create workspaces in this organization instead of your default one.
+# organization = "default"
+# New workspace names start with this prefix (lowercase, digits, hyphens).
+# workspace_prefix = "herdr"
+# Absolute path to the coder CLI when it is not on PATH or in a usual location.
+# cli = "/opt/homebrew/bin/coder"
+# Same meaning as [github] allow_plaintext_credentials, for the Coder sign-in,
+# which is saved in its own 0600 coder-credentials file. Default is false.
+# allow_plaintext_credentials = false
+
+# Daytona sandboxes as devices (experimental). Settings > Cloud Devices >
+# Daytona edits this table and saves the API key to the credential store; the
+# key is never read from this file. HERDR_DAYTONA_API_KEY overrides the saved
+# key and HERDR_DAYTONA_API_URL overrides api_url.
+# [daytona]
+# api_url = "https://app.daytona.io/api"
+# Send requests on behalf of this organization instead of the key's default.
+# organization_id = "YOUR_ORGANIZATION_ID"
+# The region and snapshot new sandboxes use; Daytona's defaults when unset.
+# target = "us"
+# snapshot = "daytonaio/sandbox:0.4.3"
+# Same meaning as [github] allow_plaintext_credentials, for the API key, which
+# is saved in its own 0600 daytona-api-key file. Default is false.
+# allow_plaintext_credentials = false
+
 # What the status bar shows, also under Settings > Status bar. Whether usage
 # and CPU/memory show at all is [usage] show and show_system_load.
 # [status_bar]
+# The bar itself. false opens windows without it; Terminal > Toggle Status Bar,
+# or a `toggle_status_bar` binding, hides or shows it for the session. While
+# hidden, its connection message, prefix and resize badges show nowhere else.
+# show = true
 # "detailed" draws a meter and a service's two tightest windows; "compact"
 # shows each service's tightest limit as one share.
 # usage = "detailed"

@@ -27,6 +27,13 @@ impl Picks {
         self.0.iter().map(|(_, count)| count).sum()
     }
 
+    /// Each lane's agent kind, in lane order: [`lanes`] follows it too.
+    pub(crate) fn kinds(&self) -> impl Iterator<Item = AgentKind> + '_ {
+        self.0
+            .iter()
+            .flat_map(|(kind, count)| std::iter::repeat_n(*kind, *count))
+    }
+
     /// Add a lane of `kind`, unless the fan-out is already full.
     pub(crate) fn add(&mut self, kind: AgentKind) -> bool {
         if self.total() >= MAX_LANES {
@@ -192,7 +199,9 @@ pub(crate) fn parse_stats(output: &str, lanes: usize) -> Vec<Option<DiffStat>> {
     stats
 }
 
-/// The commit `git rev-parse` printed, when it is one.
+/// The commit `git rev-parse` printed, when it is one. Only tests read a
+/// commit this way; lanes take theirs from Teleport's resolution.
+#[cfg(test)]
 pub(crate) fn parse_commit(output: &str) -> Option<String> {
     let commit = output.trim();
     (matches!(commit.len(), 40 | 64) && commit.bytes().all(|byte| byte.is_ascii_hexdigit()))

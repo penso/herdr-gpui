@@ -5,7 +5,7 @@
 use super::Page;
 use crate::{
     HerdrWindow,
-    checkpoint::{Checkout, Listing, age, host_for, summary},
+    checkpoint::{Checkout, Listing, age, host_for},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -169,74 +169,7 @@ impl HerdrWindow {
                     );
                 }
                 Listing::Ready(list) => {
-                    for (index, checkpoint) in list.iter().enumerate() {
-                        let selected = view.selected == Some(index);
-                        let restorable = view.restorable(checkpoint);
-                        let id = checkpoint.id.clone();
-                        body = body.child(
-                            div()
-                                .id(("checkpoint", index))
-                                .debug_selector(move || format!("checkpoint-{index}"))
-                                .px(px(10.))
-                                .py(px(6.))
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .when(selected, |row| row.bg(rgb(theme.active)))
-                                .hover(|row| row.bg(rgb(theme.active)))
-                                .flex()
-                                .items_center()
-                                .gap(px(10.))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .child(crate::sidebar::label_text(
-                                                    &checkpoint.label,
-                                                )),
-                                        )
-                                        .child(div().truncate().text_color(muted).child(format!(
-                                            "{} \u{b7} {}",
-                                            age(checkpoint.created, now),
-                                            summary(checkpoint.diff)
-                                        ))),
-                                )
-                                .when(restorable, |row| {
-                                    row.child(
-                                        div()
-                                            .id(("checkpoint-restore", index))
-                                            .debug_selector(move || {
-                                                format!("checkpoint-restore-{index}")
-                                            })
-                                            .flex_none()
-                                            .px(px(10.))
-                                            .py(px(4.))
-                                            .rounded(px(crate::config::corners::CONTROL))
-                                            .border_1()
-                                            .border_color(rgb(theme.active))
-                                            .hover(|button| button.bg(rgb(theme.background)))
-                                            .cursor_pointer()
-                                            .child("Restore")
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                cx.stop_propagation();
-                                                if let Some(view) = &mut this.checkpoints.view {
-                                                    view.selected = Some(index);
-                                                    view.confirming = Some(id.clone());
-                                                }
-                                                cx.notify();
-                                            })),
-                                    )
-                                })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(view) = &mut this.checkpoints.view {
-                                        view.selected = Some(index);
-                                    }
-                                    cx.notify();
-                                })),
-                        );
-                    }
+                    body = body.child(self.render_checkpoint_timeline(list, now, cx));
                 }
             }
         }
@@ -358,3 +291,4 @@ impl HerdrWindow {
 
 #[cfg(test)]
 mod tests;
+mod timeline;

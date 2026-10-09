@@ -1,14 +1,16 @@
 //! Links under the pointer. While the link modifier is held over a pane, the
 //! daemon is asked which cells the link there covers, so a URL that wraps
-//! onto the next row is underlined and opened whole. A click goes to the
-//! daemon first when it offers activation, which lets a plugin link handler
-//! claim it; otherwise, or when nothing claims it, this client opens the
-//! address itself. Daemons without these methods keep the row-local detector.
+//! onto the next row is underlined and opened whole. A click, on a web
+//! address or a file path alike, goes to the daemon first when it offers
+//! activation, which lets a plugin link handler claim it, `file://` links
+//! included; otherwise, or when nothing claims it, this client opens the
+//! address or file itself. A handler that fails spends the click. Daemons
+//! without these methods keep the row-local detector.
 
 use super::{HerdrWindow, file_links::FileLink};
 use crate::{
     browser::WebUrl,
-    links::{LinkCell, LinkInbox, LinkRequest, ResolvedLink, activation_fallback},
+    links::{Activation, LinkCell, LinkInbox, LinkRequest, ResolvedLink},
     terminal::RowLink,
 };
 use gpui::{Context, Modifiers, Pixels, Point, Task, Window};
@@ -71,8 +73,19 @@ enum PollResult {
 struct PendingActivation {
     /// What the row-local detector read at the click, opened when the
     /// daemon neither handles nor reads a web address there.
-    fallback: Option<WebUrl>,
+    fallback: Option<Fallback>,
     in_tab: bool,
+}
+
+/// What this client opens itself for a click no plugin handler claimed.
+enum Fallback {
+    Web(WebUrl),
+    /// A file, in the terminal editor or the system's default application,
+    /// as the click's modifiers chose.
+    File {
+        link: FileLink,
+        in_editor: bool,
+    },
 }
 
 /// A press that may become a click on a link.
@@ -114,6 +127,24 @@ impl HerdrWindow {
             self.cell_width,
             self.config.terminal.line_height(),
         )
+    }
+
+    fn terminal_hyperlink_at(&self, position: Point<Pixels>) -> bool {
+        if self.menu.page.is_some()
+            || !self.live.surface_ready()
+            || !self.bounds.contains(&position)
+        {
+            return false;
+        }
+        self.live.surface.as_deref().is_some_and(|surface| {
+            crate::terminal::pane_hyperlink_at(
+                surface,
+                f32::from(position.x - self.bounds.origin.x),
+                f32::from(position.y - self.bounds.origin.y),
+                self.cell_width,
+                self.config.terminal.line_height(),
+            )
+        })
     }
 
     /// The resolved link under the pointer, while it still reads the live
@@ -265,11 +296,13 @@ impl HerdrWindow {
                 // address as well could act on one click twice.
                 PollResult::Retired => self.links.activating = None,
                 PollResult::Answered(result) => {
-                    let in_tab = flight.context.in_tab;
-                    let fallback = flight.context.fallback.clone();
-                    self.links.activating = None;
-                    if let Some(url) = activation_fallback(result, fallback) {
-                        self.open_web_link(url, in_tab, window, cx);
+                    if let Some(flight) = self.links.activating.take() {
+                        self.finish_activation(
+                            Activation::from(result),
+                            flight.context,
+                            window,
+                            cx,
+                        );
                     }
                 }
             }
@@ -288,29 +321,34 @@ impl HerdrWindow {
     ) -> Option<PressedLink> {
         let url = self.terminal_link_at(position);
         let daemon = self.daemon_link_at(position);
-        if url.is_some() || daemon.is_some() {
-            // A plugin handler may claim any link the daemon can read, not
-            // only one the pointer hovered with the modifier held.
-            let cell = self
-                .live
-                .supports_link_activate
-                .then(|| daemon.or_else(|| self.link_cell_at(position)))
-                .flatten();
-            return Some(PressedLink {
-                url,
-                cell,
-                file: None,
-                position,
-            });
-        }
-        let file = modifiers
-            .secondary()
+        // Read whether or not a hover already resolved the cell, so a press
+        // and its release agree, and a `file://` hyperlink the daemon reads
+        // still has its file to open when no handler claims it.
+        let file = (url.is_none() && modifiers.secondary())
             .then(|| self.file_link_at(position))
-            .flatten()?;
+            .flatten();
+        // A hyperlink this client cannot open, such as an SSH host's own
+        // `file://` link, may still be claimed by a handler on its host.
+        let claimable = url.is_none()
+            && file.is_none()
+            && modifiers.secondary()
+            && self.live.supports_link_activate
+            && self.terminal_hyperlink_at(position);
+        if url.is_none() && daemon.is_none() && file.is_none() && !claimable {
+            return None;
+        }
+        // A plugin handler may claim any link the daemon can read, a file
+        // path included, not only one the pointer hovered with the modifier
+        // held.
+        let cell = self
+            .live
+            .supports_link_activate
+            .then(|| daemon.or_else(|| self.link_cell_at(position)))
+            .flatten();
         Some(PressedLink {
-            url: None,
-            cell: None,
-            file: Some(file),
+            url,
+            cell,
+            file,
             position,
         })
     }
@@ -331,14 +369,18 @@ impl HerdrWindow {
         if !pressed.same_link(&release) {
             return false;
         }
-        if let Some(file) = release.file {
-            self.open_file_link(file, cx);
-            return true;
-        }
-        let fallback = release
-            .url
-            .as_deref()
-            .and_then(|url| WebUrl::try_from(url).ok());
+        let fallback = match release.file {
+            Some(link) => Some(Fallback::File {
+                link,
+                in_editor: (self.config.open_files_in == crate::config::FileTarget::Editor)
+                    != modifiers.alt,
+            }),
+            None => release
+                .url
+                .as_deref()
+                .and_then(|url| WebUrl::try_from(url).ok())
+                .map(Fallback::Web),
+        };
         if let Some(cell) = &release.cell {
             // One click at a time: a second while the first is unanswered
             // would race its handler.
@@ -358,10 +400,41 @@ impl HerdrWindow {
                 Err(error) => tracing::debug!(%error, "Link activation not sent"),
             }
         }
-        if let Some(url) = fallback {
-            self.open_web_link(url, in_tab, window, cx);
-        }
+        self.open_link(fallback, in_tab, window, cx);
         true
+    }
+
+    fn finish_activation(
+        &mut self,
+        activation: Activation,
+        PendingActivation { fallback, in_tab }: PendingActivation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match activation {
+            Activation::Handled => {}
+            Activation::HandlerFailed(error) => {
+                self.local_error = Some(format!("Link handler failed: {error}"));
+                cx.notify();
+            }
+            Activation::Declined(url) => {
+                self.open_link(url.map(Fallback::Web).or(fallback), in_tab, window, cx);
+            }
+        }
+    }
+
+    fn open_link(
+        &mut self,
+        link: Option<Fallback>,
+        in_tab: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match link {
+            Some(Fallback::Web(url)) => self.open_web_link(url, in_tab, window, cx),
+            Some(Fallback::File { link, in_editor }) => self.open_file_link(link, in_editor, cx),
+            None => {}
+        }
     }
 
     /// Opens a web address in a browser tab or the system browser, as the

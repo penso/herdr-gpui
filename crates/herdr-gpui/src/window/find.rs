@@ -10,7 +10,7 @@
 
 use super::HerdrWindow;
 use crate::{
-    find::{Search, Step},
+    find::{Search, Step, memory::Left},
     scrollback::{Inbox, reveal_offset},
     search_input::{self, SearchInput},
     terminal_painter::Highlight,
@@ -36,7 +36,8 @@ pub(crate) struct FindBar {
 
 impl HerdrWindow {
     /// Opens the bar over the focused pane, or returns to it with its query
-    /// selected when it is already open there.
+    /// selected when it is already open there. A new bar starts from the
+    /// query last searched over that pane.
     pub(crate) fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.live.supports_copy_search {
             self.show_flash(super::Flash::warning("Find needs a newer Herdr daemon"), cx);
@@ -61,13 +62,35 @@ impl HerdrWindow {
             cx.notify();
             return;
         }
+        let query = self
+            .find_memory
+            .query(&boot_id, &pane.pane_id)
+            .unwrap_or_default()
+            .to_owned();
+        self.show_find(&pane, boot_id, &query, true, window, cx);
+    }
+
+    /// Puts a bar over `pane` searching `query`, replacing one over another
+    /// pane, whose query is kept for when it opens there again.
+    fn show_find(
+        &mut self,
+        pane: &PaneSurfacePane,
+        boot_id: String,
+        query: &str,
+        focus: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismiss_find(Some(Left::Closed), window, cx);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_placeholder("Find", cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
-        let focus = input.read(cx).focus.clone();
-        window.focus(&focus, cx);
+        if focus {
+            let focus = input.read(cx).focus.clone();
+            window.focus(&focus, cx);
+        }
         let changed = cx.subscribe(&input, |this, input, _: &search_input::Changed, cx| {
             let query = input.read(cx).text().to_owned();
             if let Some(bar) = &mut this.find {
@@ -77,8 +100,8 @@ impl HerdrWindow {
             cx.notify();
         });
         self.find = Some(FindBar {
-            input,
-            search: Search::new(&pane),
+            input: input.clone(),
+            search: Search::new(pane),
             boot_id,
             inbox: self.endpoints[self.selected_endpoint]
                 .connection
@@ -86,12 +109,21 @@ impl HerdrWindow {
                 .clone(),
             _changed: changed,
         });
+        // After the subscription, so the query is searched like a typed one.
+        input.update(cx, |input, cx| input.set_text_selected(query, cx));
         cx.notify();
     }
 
     /// Closes the bar and hands the keyboard back to the terminal. A search
     /// still in flight is answered into nothing.
     pub(crate) fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.dismiss_find(Some(Left::Closed), window, cx);
+    }
+
+    /// Takes the bar down, remembering it over its pane as `left` says. A bar
+    /// whose connection is gone is not remembered: its pane IDs mean nothing
+    /// to the next one.
+    fn dismiss_find(&mut self, left: Option<Left>, window: &mut Window, cx: &mut Context<Self>) {
         let Some(bar) = self.find.take() else {
             return;
         };
@@ -100,7 +132,12 @@ impl HerdrWindow {
         {
             inbox.discard(request);
         }
-        if bar.input.read(cx).focus.is_focused(window) {
+        let input = bar.input.read(cx);
+        if let Some(left) = left {
+            self.find_memory
+                .remember(&bar.boot_id, bar.search.pane_id(), input.text(), left);
+        }
+        if input.focus.is_focused(window) {
             window.focus(&self.focus, cx);
         }
         cx.notify();
@@ -126,6 +163,7 @@ impl HerdrWindow {
     /// Runs every tick: retires a bar whose pane or connection is gone,
     /// applies an answer, and sends whatever search is due.
     pub(crate) fn poll_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.follow_find_pane(window, cx);
         let Some(bar) = &mut self.find else {
             return;
         };
@@ -139,7 +177,7 @@ impl HerdrWindow {
                         .any(|pane| pane.pane_id == bar.search.pane_id())
             });
         if !current {
-            self.close_find(window, cx);
+            self.dismiss_find(None, window, cx);
             return;
         }
         // The reader holds this lock only to deliver; a busy mailbox is read
@@ -168,6 +206,41 @@ impl HerdrWindow {
             bar.search.content_changed(pane, Instant::now());
         }
         self.flush_find(cx);
+    }
+
+    /// Keeps the bar with its pane as the user moves between tabs: a bar
+    /// whose pane left the screen is put away, giving the terminal the
+    /// keyboard it may hold, and comes back when that pane is focused again.
+    /// A pane beside the focused one keeps its bar, as before.
+    fn follow_find_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(surface) = self
+            .live
+            .surface
+            .clone()
+            .filter(|_| self.live.surface_ready())
+        else {
+            return;
+        };
+        if let Some(bar) = &self.find {
+            if pane_of(&surface, bar.search.pane_id()).is_some() {
+                return;
+            }
+            let left = if bar.input.read(cx).focus.is_focused(window) {
+                Left::Typing
+            } else {
+                Left::Open
+            };
+            self.dismiss_find(Some(left), window, cx);
+        }
+        let Some(pane) = self.focused_surface_pane().cloned() else {
+            return;
+        };
+        let Some(boot_id) = self.live.snapshot.as_ref().map(|s| s.boot_id.clone()) else {
+            return;
+        };
+        if let Some(resume) = self.find_memory.resume(&boot_id, &pane.pane_id) {
+            self.show_find(&pane, boot_id, &resume.query, resume.focus, window, cx);
+        }
     }
 
     /// Sends the search that is due, if any, registering it in the mailbox

@@ -151,7 +151,7 @@ fn categories_reset_scroll_without_touching_main_menu(cx: &mut TestAppContext) {
         let weak = source.update(cx, |_, _, cx| cx.weak_entity()).unwrap();
         open_fixture(weak, cx);
         let settings = cx.global::<SettingsWindowHandle>().window.unwrap();
-        for section in Section::ALL {
+        for &section in Section::ALL {
             settings
                 .update(cx, |view, window, cx| {
                     view.body_scroll.set_offset(point(px(0.), px(-100.)));

@@ -165,52 +165,61 @@ fn untrusted_resolutions_that_leave_the_pane_or_miss_the_cell_are_no_link() {
 
 #[test]
 fn a_handled_click_opens_nothing_and_a_declined_one_opens_only_web_addresses() {
-    let local = || crate::browser::WebUrl::try_from("https://local.example/").ok();
     let activated = |result: Value| Ok(json!({"id": "gpui-2", "result": result}));
-    let opened = |response, fallback| activation_fallback(response, fallback).map(String::from);
+    let declined = |response| match Activation::from(response) {
+        Activation::Declined(url) => Some(url.map(String::from)),
+        _ => None,
+    };
+    assert!(matches!(
+        Activation::from(activated(
+            json!({"type": "pane_link_activated", "url": "https://x.example/", "handled": true})
+        )),
+        Activation::Handled
+    ));
     assert_eq!(
-        opened(
-            activated(
-                json!({"type": "pane_link_activated", "url": "https://x.example/", "handled": true})
-            ),
-            local()
-        ),
-        None
+        declined(activated(
+            json!({"type": "pane_link_activated", "url": "https://wrapped.example/a/b", "handled": false})
+        )),
+        Some(Some("https://wrapped.example/a/b".into()))
     );
-    assert_eq!(
-        opened(
-            activated(
-                json!({"type": "pane_link_activated", "url": "https://wrapped.example/a/b", "handled": false})
-            ),
-            local()
-        ),
-        Some("https://wrapped.example/a/b".into())
-    );
-    // A destination this client must never open falls back to the local
-    // reading of the row, and to nothing without one.
+    // A destination this client must never open leaves the click to the
+    // local reading of the row, which opens nothing without one.
     for url in [
         "file:///etc/passwd",
         "javascript:alert(1)",
         "x-man-page://ls",
     ] {
-        let declined =
-            || activated(json!({"type": "pane_link_activated", "url": url, "handled": false}));
         assert_eq!(
-            opened(declined(), local()),
-            Some("https://local.example/".into())
+            declined(activated(
+                json!({"type": "pane_link_activated", "url": url, "handled": false})
+            )),
+            Some(None),
+            "{url}"
         );
-        assert_eq!(opened(declined(), None), None);
     }
+    // A request that never ran a handler is declined too.
     for failed in [
         activated(json!({"type": "pane_link_activated", "handled": false})),
+        activated(json!({"type": "something_else"})),
         Ok(json!({"id": "gpui-2", "error": {"code": "stale_content", "message": "moved"}})),
         Err(crate::Error::NotConnected),
     ] {
-        assert_eq!(
-            opened(failed, local()),
-            Some("https://local.example/".into())
-        );
+        assert_eq!(declined(failed), Some(None));
     }
+}
+
+/// A plugin handler that claimed the click and failed has spent it: the
+/// daemon's reason is reported, and nothing opens in its place.
+#[test]
+fn a_failed_plugin_handler_spends_the_click() {
+    let failed = Activation::from(Ok(json!({"id": "gpui-2", "error": {
+        "code": "plugin_link_failed", "message": "handler exited with status 1",
+    }})));
+    let Activation::HandlerFailed(error) = failed else {
+        panic!("a failed handler was read as {failed:?}");
+    };
+    assert!(matches!(error, crate::Error::DaemonResponse(_)));
+    assert_eq!(error.to_string(), "handler exited with status 1");
 }
 
 #[test]

@@ -24,12 +24,15 @@ pub enum Command {
     Zoom,
     ClearPane,
     Find,
+    FindNext,
+    FindPrevious,
     CopyMode,
     EditScrollback,
     ClosePane,
     CloseTab,
     TabNumber(u8),
     ToggleSidebar,
+    ToggleStatusBar,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -39,6 +42,10 @@ pub enum Command {
     Themes,
     WorkspacePicker,
     Palette,
+    /// Go to a definition in the focused pane's checkout.
+    GoToSymbol,
+    /// Go to a file in the focused pane's checkout.
+    GoToFile,
     Reconnect,
     Quit,
     Logs,
@@ -47,6 +54,8 @@ pub enum Command {
     NewBrowserTab,
     InstallBrowserSkill,
     SplitEditor,
+    ToggleFullScreen,
+    CycleWindows,
     MoveTabPrevious,
     MoveTabNext,
     RenameTab,
@@ -371,6 +380,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-f"],
     },
     CommandInfo {
+        command: Command::FindNext,
+        name: "find_next",
+        label: "Find Next",
+        shortcuts: &["cmd-g"],
+    },
+    CommandInfo {
+        command: Command::FindPrevious,
+        name: "find_previous",
+        label: "Find Previous",
+        shortcuts: &["cmd-shift-g"],
+    },
+    CommandInfo {
         command: Command::CopyMode,
         name: "copy_mode",
         label: "Copy Mode",
@@ -521,6 +542,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-b"],
     },
     CommandInfo {
+        command: Command::ToggleStatusBar,
+        name: "toggle_status_bar",
+        label: "Toggle Status Bar",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -581,6 +608,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-shift-p"],
     },
     CommandInfo {
+        command: Command::GoToSymbol,
+        name: "go_to_symbol",
+        label: "Go to Symbol",
+        shortcuts: &["cmd-shift-o"],
+    },
+    CommandInfo {
+        command: Command::GoToFile,
+        name: "go_to_file",
+        label: "Go to File",
+        shortcuts: &["cmd-o"],
+    },
+    CommandInfo {
         command: Command::Reconnect,
         name: "reconnect",
         label: "Reconnect",
@@ -615,6 +654,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "split_editor",
         label: "Split Editor",
         shortcuts: &["cmd-\\"],
+    },
+    CommandInfo {
+        command: Command::ToggleFullScreen,
+        name: "toggle_full_screen",
+        label: "Toggle Full Screen",
+        shortcuts: &["ctrl-cmd-f"],
+    },
+    CommandInfo {
+        command: Command::CycleWindows,
+        name: "cycle_windows",
+        label: "Cycle Through Windows",
+        shortcuts: &["cmd-`"],
     },
 ];
 
@@ -757,8 +808,11 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::WorktreeNotes
         | Command::EditWorktreeNote
         | Command::Find
+        | Command::FindNext
+        | Command::FindPrevious
         | Command::CopyMode
         | Command::ToggleSidebar
+        | Command::ToggleStatusBar
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
@@ -768,6 +822,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Themes
         | Command::WorkspacePicker
         | Command::Palette
+        | Command::GoToSymbol
+        | Command::GoToFile
         | Command::Reconnect
         | Command::Quit
         | Command::Logs
@@ -776,6 +832,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::NewBrowserTab
         | Command::InstallBrowserSkill
         | Command::SplitEditor
+        | Command::ToggleFullScreen
+        | Command::CycleWindows
         // These need state beyond the snapshot, such as the sidebar's order
         // or a dialog, so the window runs them.
         | Command::RenameTab

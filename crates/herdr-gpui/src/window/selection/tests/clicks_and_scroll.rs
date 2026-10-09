@@ -51,7 +51,7 @@ fn a_drag_past_the_pane_scrolls_and_copies_through_the_daemon(cx: &mut TestAppCo
     let mut peer = MockPeer::advertising(&["pane.scroll", "pane.selection.read"]);
     let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
-        peer.prepare(&mut view);
+        peer.prepare(&mut view, cx);
         view.live.supports_selection_read = true;
         let frame = surface(&["x"; 24], 80);
         let live = Arc::make_mut(view.live.surface.as_mut().unwrap());

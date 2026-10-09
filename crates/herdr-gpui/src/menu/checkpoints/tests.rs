@@ -2,6 +2,8 @@
 
 use crate::HerdrWindow;
 
+mod timeline;
+
 /// The fixture's w4 (a linked worktree on `worktree/sidebar-child`) on
 /// this machine's own daemon.
 pub(super) fn local(view: &mut HerdrWindow) {

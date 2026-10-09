@@ -40,6 +40,7 @@ flate2               = "1"
 fontdb               = "0.23"
 foreign-types        = "0.5"
 futures-lite         = "2"
+getrandom            = "0.3.4"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
 gpui-wry             = "=0.6.6"
@@ -64,7 +65,7 @@ objc                 = "0.2"
 # The Secret Service client GPUI's Linux platform links, with its async-io backend.
 oo7                  = { default-features = false, features = ["async-std", "native_crypto"], version = "0.6" }
 objc2                = "0.6.4"
-objc2-app-kit        = { default-features = false, features = ["NSApplication", "NSDockTile", "NSImage", "NSImageRep", "NSPasteboard", "NSResponder", "NSView", "std"], version = "0.3.2" }
+objc2-app-kit        = { default-features = false, features = ["NSApplication", "NSDockTile", "NSEvent", "NSImage", "NSImageRep", "NSPasteboard", "NSResponder", "NSTextInputContext", "NSView", "std"], version = "0.3.2" }
 objc2-foundation     = { default-features = false, features = ["NSBundle", "NSData", "NSError", "NSProcessInfo", "NSString", "std"], version = "0.3.2" }
 # The WebKit snapshot behind page annotation screenshots and the popups pages
 # open, at the versions wry uses.

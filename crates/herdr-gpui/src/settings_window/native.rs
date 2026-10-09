@@ -10,7 +10,8 @@ use fonts::verify_fonts;
 use themes::verify_themes;
 
 #[derive(Default)]
-struct Layout([Option<Bounds<Pixels>>; 8]);
+/// One probe per section, so the count follows the sections this build has.
+struct Layout([Option<Bounds<Pixels>>; Section::ALL.len()]);
 impl Global for Layout {}
 
 pub(super) fn probe(index: usize) -> impl IntoElement {
@@ -144,7 +145,7 @@ pub(crate) async fn verify_native(
                 .timer(Duration::from_millis(10))
                 .await;
         }
-        for (index, section) in Section::ALL.into_iter().enumerate() {
+        for (index, section) in Section::ALL.iter().copied().enumerate() {
             let (target, bounds) =
                 AnyWindowHandle::from(settings).update(cx, |_, window, cx| -> Result<_> {
                     window.draw(cx).clear(cx);

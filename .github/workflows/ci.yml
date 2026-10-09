@@ -137,6 +137,8 @@ jobs:
         run: bash scripts/check-file-size.sh
       - name: Lint every target and feature
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Lint without default features
+        run: cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
       - name: Test default features and executable CLI
         run: cargo test --locked --workspace
       - name: Test integration-feature build and executable CLI
@@ -179,6 +181,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint every target and feature
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Lint without default features
+        run: cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
       - name: Test default features and executable CLI
         run: cargo test --locked --workspace
       - name: Test integration-feature build and executable CLI

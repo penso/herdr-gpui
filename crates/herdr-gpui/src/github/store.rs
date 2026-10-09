@@ -178,11 +178,7 @@ pub(crate) enum Note {
 
 #[cfg(target_os = "macos")]
 fn keyring_token(account: &Account) -> Result<Option<SecretString>> {
-    match security_framework::passwords::get_generic_password(SERVICE, &account.keyring_account()) {
-        Ok(bytes) => credential_bytes(bytes).map(Some),
-        Err(e) if e.code() == -25300 => Ok(None),
-        Err(error) => Err(Error::KeychainRead(error)),
-    }
+    keychain_read(SERVICE, &account.keyring_account())
 }
 
 #[cfg(target_os = "linux")]
@@ -198,17 +194,7 @@ fn keyring_token(_: &Account) -> Result<Option<SecretString>> {
 
 #[cfg(target_os = "macos")]
 fn keyring_save(token: Option<&SecretString>, account: &Account) -> Result<()> {
-    use security_framework::passwords::{delete_generic_password, set_generic_password};
-    let name = account.keyring_account();
-    let result = match token {
-        Some(token) => set_generic_password(SERVICE, &name, token.expose_secret().as_bytes()),
-        None => delete_generic_password(SERVICE, &name),
-    };
-    match result {
-        Ok(()) => Ok(()),
-        Err(e) if token.is_none() && e.code() == -25300 => Ok(()),
-        Err(error) => Err(Error::KeychainWrite(error)),
-    }
+    keychain_save(SERVICE, &account.keyring_account(), token)
 }
 
 #[cfg(target_os = "linux")]
@@ -219,6 +205,105 @@ fn keyring_save(token: Option<&SecretString>, account: &Account) -> Result<()> {
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn keyring_save(_: Option<&SecretString>, _: &Account) -> Result<()> {
     Err(Error::CredentialPolicy)
+}
+
+/// A credential another feature saves under the same policy as GitHub's:
+/// the keyring service, account and label, the private file beside the GUI
+/// config, and the record check every read and write must pass (which must
+/// also bound its size).
+#[cfg(feature = "cloud")]
+pub(crate) struct Entry {
+    // Only the macOS Keychain and Linux Secret Service address entries by these.
+    #[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+    pub(crate) service: &'static str,
+    #[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+    pub(crate) account: &'static str,
+    /// Shown by the Linux Secret Service; the Keychain has no item label here.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(crate) label: &'static str,
+    pub(crate) file: &'static std::ffi::CStr,
+    pub(crate) validate: fn(&SecretString) -> Result<()>,
+}
+
+#[cfg(feature = "cloud")]
+impl Store {
+    /// The store for another feature's credential, from its own plaintext opt-in.
+    pub(crate) const fn for_policy(allow_plaintext: bool) -> Self {
+        Self::choose(allow_plaintext && OPT_IN, KEYRING, FILE_DEFAULT)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_read(service: &str, account: &str) -> Result<Option<SecretString>> {
+    match security_framework::passwords::get_generic_password(service, account) {
+        Ok(bytes) => credential_bytes(bytes).map(Some),
+        Err(e) if e.code() == -25300 => Ok(None),
+        Err(error) => Err(Error::KeychainRead(error)),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_save(service: &str, account: &str, token: Option<&SecretString>) -> Result<()> {
+    use security_framework::passwords::{delete_generic_password, set_generic_password};
+    let result = match token {
+        Some(token) => set_generic_password(service, account, token.expose_secret().as_bytes()),
+        None => delete_generic_password(service, account),
+    };
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) if token.is_none() && e.code() == -25300 => Ok(()),
+        Err(error) => Err(Error::KeychainWrite(error)),
+    }
+}
+
+/// Read `entry` from `store`. Callers run on a background worker.
+#[cfg(feature = "cloud")]
+pub(crate) fn read_entry(store: Store, entry: &Entry) -> Result<Option<SecretString>> {
+    match store {
+        Store::Environment => Ok(None),
+        #[cfg(target_os = "macos")]
+        Store::Keyring => keychain_read(entry.service, entry.account),
+        #[cfg(target_os = "linux")]
+        Store::Keyring => super::secret_service::read_in(entry.service, entry.account),
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        Store::Keyring => Ok(None),
+        Store::File => {
+            credentials::read_checked(&credential_directory()?, entry.file, entry.validate)
+        }
+    }
+}
+
+/// Write or remove `entry` in `store`. Callers run on a background worker.
+#[cfg(feature = "cloud")]
+pub(crate) fn save_entry(store: Store, entry: &Entry, token: Option<&SecretString>) -> Result<()> {
+    if let Some(token) = token {
+        (entry.validate)(token)?;
+    }
+    match store {
+        #[cfg(target_os = "macos")]
+        Store::Keyring => keychain_save(entry.service, entry.account, token),
+        #[cfg(target_os = "linux")]
+        Store::Keyring => {
+            super::secret_service::save_in(entry.service, entry.label, token, entry.account)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        Store::Keyring => Err(Error::CredentialPolicy),
+        // Removal stays allowed without an opt-in, as for GitHub sign-out.
+        Store::Environment => credentials::store_checked(
+            &credential_directory()?,
+            entry.file,
+            token,
+            false,
+            entry.validate,
+        ),
+        Store::File => credentials::store_checked(
+            &credential_directory()?,
+            entry.file,
+            token,
+            true,
+            entry.validate,
+        ),
+    }
 }
 
 pub(super) fn saved_token(store: Store, account: &Account) -> Result<Option<SecretString>> {

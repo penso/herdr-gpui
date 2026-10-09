@@ -19,10 +19,11 @@ fn of<'a>(ports: &'a Ports, workspace: &str) -> &'a [Port] {
 }
 
 fn remote(session: &str) -> Daemon {
-    Daemon::from(&ConnectTarget::Ssh {
+    Daemon::of(&ConnectTarget::Ssh {
         target: "devbox".into(),
         session: session.into(),
     })
+    .unwrap()
 }
 
 fn port(number: u16, bind: Bind, process: &str) -> Port {
@@ -242,7 +243,7 @@ fn seeded_hosts_are_looked_up_by_workspace_and_forgotten_when_dropped() {
     assert!(ports.get(&daemon, "w2").is_none());
     assert!(
         ports
-            .get(&Daemon::from(&ConnectTarget::Local), "w1")
+            .get(&Daemon::of(&ConnectTarget::Local).unwrap(), "w1")
             .is_none()
     );
     // A host still wanted keeps its reading; no worker is started for it.
@@ -348,14 +349,15 @@ fn two_sessions_on_one_host_keep_their_own_ports() {
 #[cfg(unix)]
 #[test]
 fn a_local_daemon_owns_the_api_socket_beside_its_client_socket() {
-    let daemon = Daemon::from(&ConnectTarget::Socket(
+    let daemon = Daemon::of(&ConnectTarget::Socket(
         "/cfg/herdr/sessions/work/herdr-client.sock".into(),
-    ));
+    ))
+    .unwrap();
     assert!(daemon.owns("/cfg/herdr/sessions/work/herdr.sock"));
     assert!(!daemon.owns("/cfg/herdr/herdr.sock"));
     assert!(!daemon.owns("/cfg/herdr-dev/sessions/work/herdr.sock"));
     assert!(daemon.owns(""));
-    let custom = Daemon::from(&ConnectTarget::Socket("/run/x/dev-client.sock".into()));
+    let custom = Daemon::of(&ConnectTarget::Socket("/run/x/dev-client.sock".into())).unwrap();
     assert!(custom.owns("/run/x/dev.sock"));
     assert!(!custom.owns("/run/x/herdr.sock"));
 }

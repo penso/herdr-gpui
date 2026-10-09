@@ -113,6 +113,26 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// Cmd-G in a review: the next match, or the one before with `back`;
+    /// with no search open yet, opens the field as Find does.
+    pub(crate) fn review_find_again(
+        &mut self,
+        id: TabId,
+        back: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let open = self
+            .reviews
+            .get(&id)
+            .is_some_and(|review| review.search.open);
+        if open {
+            self.step_review_search(id, back, cx);
+        } else {
+            self.open_review_search(id, window, cx);
+        }
+    }
+
     fn close_review_search(&mut self, id: TabId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(review) = self.reviews.get_mut(&id) else {
             return;

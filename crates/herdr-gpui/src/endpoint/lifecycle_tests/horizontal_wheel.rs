@@ -20,7 +20,7 @@ fn connected_horizontal_wheel_reaches_only_mouse_reporting_panes_and_popups(
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             Arc::make_mut(view.live.surface.as_mut().unwrap()).panes[1].mouse_reporting = false;
             let reporting = mouse_position(view, 3.5, 4.5);
             let plain = mouse_position(view, 45.5, 6.5);
