@@ -1,3 +1,7 @@
+mod desktop;
+
+pub(crate) use desktop::Platform;
+
 use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
 
@@ -77,7 +81,8 @@ pub struct CommandInfo {
     /// The key naming this command in the config file's `[keybindings]`.
     pub name: &'static str,
     pub label: &'static str,
-    /// Default keystrokes, primary first. The config can replace each list.
+    /// Default macOS keystrokes, primary first; `defaults` gives other
+    /// platforms theirs. The config can replace each list.
     pub shortcuts: &'static [&'static str],
 }
 

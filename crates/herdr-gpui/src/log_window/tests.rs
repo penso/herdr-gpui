@@ -424,9 +424,9 @@ fn shortcuts_focus_search_and_close_only_log_window(cx: &mut TestAppContext) {
         window.draw(cx).clear(cx);
         assert!(!view.read(cx).search.read(cx).focus.is_focused(window));
     });
-    cx.simulate_keystrokes("cmd-f");
+    cx.simulate_keystrokes("secondary-f");
     cx.update(|window, cx| assert!(view.read(cx).search.read(cx).focus.is_focused(window)));
-    cx.simulate_keystrokes("cmd-w");
+    cx.simulate_keystrokes("secondary-w");
     assert!(cx.windows() == vec![other.into()]);
 }
 
@@ -513,7 +513,7 @@ fn level_dropdown_keyboard_dismissal_focus_and_input_isolation(cx: &mut TestAppC
     let (view, cx) = cx.add_window_view(LogWindow::new);
     cx.simulate_resize(size(px(620.), px(360.)));
     cx.run_until_parked();
-    cx.simulate_keystrokes("cmd-l enter");
+    cx.simulate_keystrokes("secondary-l enter");
     cx.run_until_parked();
     cx.update(|window, cx| {
         window.draw(cx).clear(cx);

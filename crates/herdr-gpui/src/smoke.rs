@@ -276,12 +276,12 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                 }
                 let focused_tab = snapshot.focused_tab_id.as_deref().unwrap_or_default();
                 let focused_workspace = snapshot.focused_workspace_id.as_deref().unwrap_or_default();
-                let key = |name: &str, window: &mut Window, cx: &mut App| -> Result<()> {
+                let key = |name: &str, action: bool, window: &mut Window, cx: &mut App| -> Result<()> {
                     let before = view.read(cx).input_probe;
                     let key = Keystroke::parse(name).with_context(|| format!("parsing keystroke {name}"))?;
                     if !window.dispatch_keystroke(key, cx) { bail!("unhandled keystroke {name}"); }
                     let after = view.read(cx).input_probe;
-                    let delivered = if name.starts_with("cmd-") {
+                    let delivered = if action {
                         after.actions == before.actions + 1
                     } else {
                         after.keys == before.keys + 1
@@ -289,24 +289,26 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     if !delivered { bail!("keystroke {name} missed intended handler: before={before:?} after={after:?}; {}", diagnostic()); }
                     Ok(())
                 };
+                // The platform's own default, so the run works on Linux too.
+                let bound = |command: Command, cx: &App| view.read(cx).keymap().primary(command).to_owned();
                 match step {
                     0 if !focused_tab.is_empty() && surface.panes.len() == 1 && bounds.size.width > px(0.) => {
                         boot = snapshot.boot_id.clone();
                         workspace = focused_workspace.into();
                         first_tab = focused_tab.into();
-                        key("cmd-t", window, cx)?;
+                        key(&bound(Command::Tab, cx), true, window, cx)?;
                     }
                     1 if snapshot.tabs.len() == 2 && focused_tab != first_tab && surface.panes.len() == 1 => {
                         second_tab = focused_tab.into();
                         split_pane = snapshot.focused_pane_id.clone().unwrap_or_default();
-                        key("cmd-d", window, cx)?;
+                        key(&bound(Command::SplitRight, cx), true, window, cx)?;
                     }
                     2 if surface.panes.len() == 2 => {
                         let old = surface.panes.iter().find(|p| p.pane_id == split_pane).context("original split pane missing")?;
                         let new = surface.panes.iter().find(|p| Some(&p.pane_id) == snapshot.focused_pane_id.as_ref()).context("focused split missing")?;
                         if new.rect.x <= old.rect.x || new.rect.y != old.rect.y { bail!("right split geometry: {}", diagnostic()); }
                         split_pane = new.pane_id.clone();
-                        key("cmd-shift-d", window, cx)?;
+                        key(&bound(Command::SplitDown, cx), true, window, cx)?;
                     }
                     3 if surface.panes.len() == 3 => {
                         let old = surface.panes.iter().find(|p| p.pane_id == split_pane).context("original split pane missing")?;
@@ -318,7 +320,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         window.dispatch_action(Box::new(RunCommand { command: Command::NextTab }), cx);
                     }
                     5 if focused_tab == second_tab && surface.panes.len() == 3 => {
-                        key("cmd-shift-n", window, cx)?;
+                        key(&bound(Command::Workspace, cx), true, window, cx)?;
                     }
                     6 if snapshot.workspaces.len() == 2 && focused_workspace != workspace && surface.panes.len() == 1 => {
                         let before = view.read(cx).presentation.probe;
@@ -348,7 +350,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     8 if focused_tab == first_tab && surface.panes.len() == 1 => {
                         let command = format!("echo HERDR_GUI_{}\"_OK\"", std::process::id());
                         type_text(&command, &view, window, cx)?;
-                        key("enter", window, cx)?;
+                        key("enter", false, window, cx)?;
                     }
                     9 if has_output(&surface.frame, &marker) => {
                         eprintln!("GUI shell output verified (not command echo): {marker}");
@@ -363,7 +365,7 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     11 if snapshot.boot_id == boot && snapshot.workspaces.len() == 2 && snapshot.tabs.len() == 3
                         && focused_workspace == workspace && focused_tab == first_tab && has_output(&surface.frame, &marker) => {
                         type_text(&format!("echo HERDR_GUI_{}\"_OK_RECONNECTED\"", std::process::id()), &view, window, cx)?;
-                        key("enter", window, cx)?;
+                        key("enter", false, window, cx)?;
                     }
                     12 if has_output(&surface.frame, &reconnected_marker) => {
                         eprintln!("GUI input pipeline verified: frames={frames} focus={focused} active={active} probe={probe:?}");

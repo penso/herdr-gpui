@@ -20,11 +20,13 @@ actions!(log_window, [Close, FocusSearch, FocusLevel]);
 
 /// The console's own keys, scoped to its window. They are bound with the app
 /// keymap so a config reload, which replaces every binding, keeps them.
+/// `secondary` is Cmd on macOS and Ctrl elsewhere, where Super belongs to
+/// the desktop.
 pub(crate) fn key_bindings() -> [KeyBinding; 5] {
     [
-        KeyBinding::new("cmd-w", Close, Some("LogWindow")),
-        KeyBinding::new("cmd-f", FocusSearch, Some("LogWindow")),
-        KeyBinding::new("cmd-l", FocusLevel, Some("LogWindow")),
+        KeyBinding::new("secondary-w", Close, Some("LogWindow")),
+        KeyBinding::new("secondary-f", FocusSearch, Some("LogWindow")),
+        KeyBinding::new("secondary-l", FocusLevel, Some("LogWindow")),
         KeyBinding::new("tab", FocusLevel, Some("LogWindow")),
         KeyBinding::new("shift-tab", FocusSearch, Some("LogWindow")),
     ]

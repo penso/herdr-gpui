@@ -197,12 +197,7 @@ impl HerdrWindow {
             if self.menu.github_selected == Some(Action::Copy) {
                 self.menu.github_scroll.set_offset(Point::default());
             }
-        } else if key == "c"
-            && modifiers.platform
-            && !modifiers.shift
-            && !modifiers.alt
-            && !modifiers.control
-        {
+        } else if key == "c" && crate::input::edit_shortcut(modifiers) {
             self.github_action(Action::Copy, window, cx);
         } else if modifiers == Modifiers::default() {
             let action = match key {

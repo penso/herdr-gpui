@@ -329,10 +329,10 @@ pub(super) async fn verify_themes(
     AnyWindowHandle::from(settings).update(cx, |_, window, cx| -> Result<()> {
         window.draw(cx).clear(cx);
         ensure!(
-            window.dispatch_keystroke(Keystroke::parse("cmd-,")?, cx),
+            window.dispatch_keystroke(Keystroke::parse("secondary-,")?, cx),
             "Settings Cmd-, was not handled"
         );
-        window.dispatch_keystroke(Keystroke::parse("cmd-w")?, cx);
+        window.dispatch_keystroke(Keystroke::parse("secondary-w")?, cx);
         Ok(())
     })??;
     let deadline = Instant::now() + Duration::from_secs(2);

@@ -2,6 +2,7 @@ use super::*;
 use herdr_client::protocol::ClientShellCommand;
 
 mod custom_reference;
+mod desktop_defaults;
 
 fn overrides(entries: &[(&str, Binding)]) -> BTreeMap<String, Binding> {
     entries

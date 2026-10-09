@@ -167,7 +167,7 @@ fn picks_and_notes_are_sent_to_the_feedback_file(cx: &mut TestAppContext) {
         window.focus(&focus, cx);
     });
     cx.simulate_input("tighter spacing");
-    cx.simulate_keystrokes("cmd-enter");
+    cx.simulate_keystrokes("secondary-enter");
     cx.run_until_parked();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("Picked: B\n"), "{text}");

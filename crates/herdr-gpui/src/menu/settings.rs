@@ -15,6 +15,14 @@ use std::borrow::Cow;
 /// The semantic paste row, which no keymap command holds.
 const PASTE_LABEL: &str = "Paste into terminal";
 
+/// The terminal's paste keystroke: Ctrl-V belongs to the program outside
+/// macOS, so the desktop pastes with Ctrl-Shift-V.
+const PASTE_KEYS: &str = if cfg!(target_os = "macos") {
+    "cmd-v"
+} else {
+    "ctrl-shift-v"
+};
+
 impl HerdrWindow {
     pub(crate) fn reload_notification_config(&mut self, cx: &mut Context<Self>) {
         self.sound.reload();
@@ -325,7 +333,7 @@ impl HerdrWindow {
             (
                 "APPLICATION",
                 vec![(
-                    vec![(Cow::Borrowed("cmd-v"), None)],
+                    vec![(Cow::Borrowed(PASTE_KEYS), None)],
                     Cow::Borrowed(PASTE_LABEL),
                 )],
             ),

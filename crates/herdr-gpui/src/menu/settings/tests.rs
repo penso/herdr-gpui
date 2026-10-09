@@ -412,7 +412,7 @@ fn config_reload_rebinds_the_keymap(cx: &mut gpui::TestAppContext) {
     cx.update(|_, cx| {
         let keymap = cx.key_bindings();
         let keymap = keymap.borrow();
-        let console = keymap.all_bindings_for_input(&[Keystroke::parse("cmd-l").unwrap()]);
+        let console = keymap.all_bindings_for_input(&[Keystroke::parse("secondary-l").unwrap()]);
         assert_eq!(console.len(), 1);
     });
     view.read_with(cx, |view, _| {

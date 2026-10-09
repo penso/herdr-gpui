@@ -106,17 +106,18 @@ impl DialogInput {
             .map(|(i, _)| i)
             .find(|i| *i > cursor)
             .unwrap_or(self.text.len());
+        // The line-end moves keep Cmd: Ctrl-Left moves by word on Linux.
         match key.key.as_str() {
-            "a" if key.modifiers.platform => {
+            "a" if crate::input::edit_shortcut(key.modifiers) => {
                 self.selection = 0..self.text.len();
                 self.reversed = false;
             }
-            "v" if key.modifiers.platform => {
+            "v" if crate::input::edit_shortcut(key.modifiers) => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
                     self.replace(None, &text, false, None);
                 }
             }
-            "c" | "x" if key.modifiers.platform => {
+            "c" | "x" if crate::input::edit_shortcut(key.modifiers) => {
                 if !self.selection.is_empty() {
                     cx.write_to_clipboard(ClipboardItem::new_string(
                         self.text[self.selection.clone()].into(),
@@ -356,6 +357,9 @@ mod tests {
             assert_eq!(input.text, "");
             input.key(&Keystroke::parse("cmd-v").unwrap_or_default(), cx);
             assert_eq!(input.text, "e\u{301}");
+            input.key(&Keystroke::parse("secondary-a").unwrap_or_default(), cx);
+            assert_eq!(input.selection, 0..3);
+            input.key(&Keystroke::parse("end").unwrap_or_default(), cx);
             input.replace(None, "\n\r\tX", false, None);
             assert_eq!(input.text, "e\u{301}X");
             input.replace(None, &"x".repeat(20000), false, None);

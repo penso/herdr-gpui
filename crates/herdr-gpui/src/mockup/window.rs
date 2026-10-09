@@ -12,11 +12,12 @@ use std::path::PathBuf;
 actions!(mockup, [Close, Send]);
 
 /// The window's own keys. Note fields keep Escape, which hands focus back to
-/// the window so the number keys choose a variant again.
+/// the window so the number keys choose a variant again. `secondary` is Cmd
+/// on macOS and Ctrl elsewhere.
 pub(super) fn key_bindings() -> [KeyBinding; 2] {
     [
-        KeyBinding::new("cmd-w", Close, Some("MockupWindow")),
-        KeyBinding::new("cmd-enter", Send, Some("MockupWindow")),
+        KeyBinding::new("secondary-w", Close, Some("MockupWindow")),
+        KeyBinding::new("secondary-enter", Send, Some("MockupWindow")),
     ]
 }
 

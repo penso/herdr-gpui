@@ -97,7 +97,7 @@ pub(crate) async fn verify_native(
     AnyWindowHandle::from(source).update(cx, |_, window, cx| -> Result<()> {
         window.draw(cx).clear(cx);
         ensure!(
-            window.dispatch_keystroke(Keystroke::parse("cmd-,")?, cx),
+            window.dispatch_keystroke(Keystroke::parse("secondary-,")?, cx),
             "Settings shortcut was not handled"
         );
         Ok(())

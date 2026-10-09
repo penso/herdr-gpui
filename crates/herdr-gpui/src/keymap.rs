@@ -14,7 +14,7 @@ pub(crate) use daemon::DaemonKeys;
 
 use crate::{
     Error, Result,
-    controls::{COMMANDS, Command},
+    controls::{COMMANDS, Command, Platform},
 };
 use daemon::Trigger;
 use gpui::{KeybindingKeystroke, Keystroke, Modifiers};
@@ -119,6 +119,7 @@ impl Default for Keymap {
             &claimed,
             &DaemonKeys::default(),
             pane_keys,
+            Platform::CURRENT,
         )
     }
 }
@@ -173,18 +174,26 @@ impl Keymap {
                 });
             }
         }
-        Ok(Self::layer(configured, &claimed, keys, pane_keys))
+        Ok(Self::layer(
+            configured,
+            &claimed,
+            keys,
+            pane_keys,
+            Platform::CURRENT,
+        ))
     }
 
     /// Herdr owns and validates its own file, so a daemon binding this client
     /// cannot honor, or that collides with one already placed, is skipped
     /// rather than reported: the first daemon binding for a keystroke wins,
-    /// as does any GUI-configured keystroke over the daemon's.
+    /// as does any GUI-configured keystroke over the daemon's. `platform`
+    /// picks the catalog defaults underneath.
     fn layer(
         configured: Vec<Option<Vec<String>>>,
         claimed: &Claimed,
         keys: &DaemonKeys,
         pane_keys: Vec<(Keystroke, Keystroke)>,
+        platform: Platform,
     ) -> Self {
         // Keystrokes bound directly so far, which later layers cannot take.
         let mut taken: HashSet<_> = claimed.keys().cloned().collect();
@@ -238,7 +247,7 @@ impl Keymap {
             .map(|((info, configured), from_daemon)| match configured {
                 Some(keystrokes) => keystrokes.into_iter().map(Shortcut::direct).collect(),
                 None => info
-                    .shortcuts
+                    .defaults(platform)
                     .iter()
                     .filter(|shortcut| {
                         Keystroke::parse(shortcut)

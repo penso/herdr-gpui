@@ -201,30 +201,36 @@ impl SearchInput {
         if matches!(key, "up" | "down" | "enter" | "escape") {
             return;
         }
-        if modifiers.platform && !modifiers.control && !modifiers.alt {
+        if modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && matches!(key, "left" | "right")
+        {
+            // As in every macOS text field: Cmd-Left and Cmd-Right go to the
+            // line's ends, Cmd-Backspace and Cmd-Delete delete to them.
+            let offset = if key == "left" {
+                0
+            } else {
+                self.edit.text.len()
+            };
+            self.edit.select_to(offset, modifiers.shift);
+        } else if modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+            && matches!(key, "backspace" | "delete")
+        {
+            if self.edit.selection().is_empty() {
+                let offset = if key == "backspace" {
+                    0
+                } else {
+                    self.edit.text.len()
+                };
+                self.edit.select_to(offset, true);
+            }
+            self.replace_text_in_range(None, "", window, cx);
+        } else if crate::input::edit_shortcut(modifiers) {
             match key {
-                // As in every macOS text field: Cmd-Left and Cmd-Right go to
-                // the line's ends, Cmd-Backspace and Cmd-Delete delete to them.
-                "left" | "right" => {
-                    let offset = if key == "left" {
-                        0
-                    } else {
-                        self.edit.text.len()
-                    };
-                    self.edit.select_to(offset, modifiers.shift);
-                }
-                "backspace" | "delete" if !modifiers.shift => {
-                    if self.edit.selection().is_empty() {
-                        let offset = if key == "backspace" {
-                            0
-                        } else {
-                            self.edit.text.len()
-                        };
-                        self.edit.select_to(offset, true);
-                    }
-                    self.replace_text_in_range(None, "", window, cx);
-                }
-                _ if modifiers.shift => return,
                 "a" => {
                     self.edit.anchor = 0;
                     self.edit.cursor = self.edit.text.len();

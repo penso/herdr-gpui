@@ -16,6 +16,14 @@ pub(crate) use gpui::ElementInputHandler as ViewInputHandler;
 #[cfg(target_os = "linux")]
 pub(crate) use linux::WeakInputHandler as ViewInputHandler;
 
+/// Whether a text field's select all, copy, cut, or paste key is held: Cmd
+/// on macOS and Ctrl elsewhere, where Super belongs to the desktop. The
+/// platform key alone counts everywhere, since the Edit menu replays its
+/// items as that keystroke.
+pub(crate) fn edit_shortcut(modifiers: Modifiers) -> bool {
+    modifiers == Modifiers::secondary_key() || modifiers == Modifiers::command()
+}
+
 impl EntityInputHandler for HerdrWindow {
     fn text_for_range(
         &mut self,
@@ -246,3 +254,7 @@ impl InputHandler for TerminalInputHandler {
         self.press_and_hold
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;

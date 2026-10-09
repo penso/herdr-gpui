@@ -2124,6 +2124,22 @@ Windows setup) nothing is saved and the window says so.
   away from its default command, keystrokes need a cmd, ctrl, alt, or fn
   modifier, and unknown names, unparseable keys, or one key on two configured
   commands reject the config. Saved changes rebind the keymap and menu bar live.
+- The shortcuts in this README are the macOS defaults. GPUI reads `cmd` as the
+  Super or Windows key elsewhere, which GNOME, KDE, and Windows keep for
+  themselves, so Linux and Windows start from their own table, after GNOME
+  Terminal, Terminator, and WezTerm: Ctrl-Shift-T new tab, Ctrl-Shift-N new
+  workspace, Ctrl-Shift-G new worktree, Ctrl-Shift-Alt-N new window,
+  Ctrl-Shift-E / Ctrl-Shift-O split right / down, Ctrl-PageDown / Ctrl-PageUp
+  (or Ctrl-Tab / Ctrl-Shift-Tab) next / previous tab, Alt-1..9 a tab by
+  position, Ctrl-Shift-Arrows focus a pane, Ctrl-Shift-] / Ctrl-Shift-[ next /
+  previous pane, Ctrl-Shift-Z zoom, Ctrl-Shift-K clear, Ctrl-Shift-F find,
+  Ctrl-Shift-X copy mode, Ctrl-Shift-W close pane, Ctrl-Shift-Alt-W close tab,
+  Ctrl-Shift-B sidebar, Ctrl-= / Ctrl-- / Ctrl-0 font size, Ctrl-, settings,
+  Ctrl-Shift-H keybindings, Ctrl-Shift-S sessions, Ctrl-Shift-L workspace
+  picker, Ctrl-Shift-P palette, Ctrl-Shift-I browser tab, Ctrl-Shift-\ editor
+  split, Ctrl-Shift-J notification target, and Ctrl-Shift-Q quit. The terminal
+  keeps Ctrl-Shift-C / Ctrl-Shift-V, text fields and dialogs take Ctrl-A/C/X/V,
+  and the Keybindings page lists what is bound.
 - `[pane_keys]` maps a keystroke to the key the focused pane receives instead,
   like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
   Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
