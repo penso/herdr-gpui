@@ -1309,8 +1309,8 @@ or macOS client and the local session or a saved SSH host on both ends.
 
 ## Issues & PRs
 
-The "+" menu's Issues & PRs row, or the Open Issues & PRs command, opens a tab
-listing the focused workspace's repository: its GitHub issues and pull
+The "+" menu's Issues & PRs row, the Open Issues & PRs command, or the Issues &
+PRs row of a workspace's popover opens a tab listing that workspace's repository: its GitHub issues and pull
 requests, its [Beads](https://github.com/steveyegge/beads) issues when the main
 checkout has a `.beads` folder, and the agent runs dispatched for them. It works
 for the local session and saved SSH hosts.
@@ -1334,9 +1334,13 @@ repository allows and names the head commit shown, so GitHub refuses it if the
 branch moved.
 
 **Dispatch agent** opens a dialog: a prompt, an agent installed on the
-repository's host, a branch (`<number>-<slug>`, editable), and extra
-instructions. The new worktree is created from the main checkout's `HEAD` in the
-workspace's repository, and the agent starts in it with the prompt. A pull
+repository's host, an optional model (passed as `--model`), a branch
+(`<number>-<slug>`, editable), and extra instructions. The new worktree is
+created from the main checkout's `HEAD` in the workspace's repository, and the
+agent starts in it with the prompt. With more than one host connected, the
+dialog also ranks the hosts as [Smart Dispatch](#smart-dispatch) does; picking
+another one sets the repository up there the same way and starts the agent
+there, and its run card then acts on that host. A pull
 request's **Review with agent** does the same on a `review/pr-<n>` branch with a
 read-only prompt: the agent verifies the pull request, reads its diff, and
 reports findings without writing to GitHub. A run's card sends it messages, stops
@@ -1350,7 +1354,8 @@ updates only its own, and uses agent-launcher's prompt profiles from
 none is chosen). Issues and runs are kept in agent-launcher's per-repository
 database under the platform data directory. GitHub is read as the account used
 for pull requests on that host; GitLab remotes and GitHub Enterprise are listed
-as not supported yet.
+as not supported yet. The window button in the tab's header moves the view into
+a window of its own.
 
 ## Images
 
