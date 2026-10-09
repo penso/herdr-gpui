@@ -186,6 +186,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) orchestrators:
         std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Orchestrator>,
     pub(crate) orchestrator_live: crate::orchestrator::LiveCache,
+    /// Orchestrator views moved into windows of their own, by their old tab.
+    pub(crate) detached_orchestrators:
+        std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Detached>,
     /// Orchestrator views' requests, acted on at the next tick.
     pub(crate) orchestrator_events: Vec<(crate::browser::TabId, crate::orchestrator::Event)>,
     /// Whether an orchestrator's dispatch dialog ranks hosts by their load.
@@ -784,6 +787,7 @@ impl HerdrWindow {
             reviews: Default::default(),
             orchestrators: Default::default(),
             orchestrator_live: Default::default(),
+            detached_orchestrators: Default::default(),
             orchestrator_events: Vec::new(),
             orchestrator_sampling: false,
             viewport_width: 0.,

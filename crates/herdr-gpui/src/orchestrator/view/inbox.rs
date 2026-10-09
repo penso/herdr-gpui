@@ -151,6 +151,12 @@ impl OrchestratorView {
                 look.icon_button("orchestrator-refresh", "icons/refresh.svg")
                     .on_click(cx.listener(|this, _, _, _| this.refresh())),
             )
+            .when(!self.detached, |el| {
+                el.child(
+                    look.icon_button("orchestrator-window", "icons/window-maximize.svg")
+                        .on_click(cx.listener(|_, _, _, cx| cx.emit(Event::OpenWindow))),
+                )
+            })
             .child(
                 look.icon_button("orchestrator-preview", "icons/panel-right.svg")
                     .on_click(cx.listener(|this, _, _, cx| {

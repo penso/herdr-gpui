@@ -460,6 +460,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         reviews: Default::default(),
         orchestrators: Default::default(),
         orchestrator_live: Default::default(),
+        detached_orchestrators: Default::default(),
         orchestrator_events: Vec::new(),
         orchestrator_sampling: false,
         viewport_width: 0.,

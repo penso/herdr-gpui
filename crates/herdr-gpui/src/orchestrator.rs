@@ -21,6 +21,7 @@ mod service;
 mod store;
 mod tab;
 mod view;
+mod window;
 
 pub(crate) use actions::{Action, DispatchRequest};
 pub(crate) use error::{Error, Result};
@@ -37,6 +38,7 @@ pub(crate) use service::{Notice, Request, Service, Snapshot, SyncState, Timing};
 pub(crate) use store::{Access, SCHEMA_VERSION, Store};
 pub(crate) use tab::{LiveCache, Orchestrator};
 pub(crate) use view::{Event, LiveAgent, Look, OrchestratorView};
+pub(crate) use window::Detached;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

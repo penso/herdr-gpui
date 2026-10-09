@@ -40,6 +40,8 @@ pub(crate) enum Event {
     OpenUrl(String),
     /// Sign in to GitHub, which the view needs to list a repository.
     SignIn,
+    /// Move the view into a window of its own.
+    OpenWindow,
     /// Start `request` on the host `endpoint`, which the window sets it up
     /// for, then hands back through [`OrchestratorView::dispatch_elsewhere`].
     Dispatch {
@@ -152,6 +154,8 @@ pub(crate) struct OrchestratorView {
     merge_open: bool,
     /// Hosts a dispatch could go to, while the dialog is open.
     hosts: Arc<Vec<crate::dispatch::Candidate>>,
+    /// Hosted by a window of its own rather than a tab.
+    detached: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -222,6 +226,7 @@ impl OrchestratorView {
             comment,
             merge_open: false,
             hosts: Arc::default(),
+            detached: false,
             _subscriptions: vec![subscription],
         }
     }
@@ -276,6 +281,20 @@ impl OrchestratorView {
     /// Whether the dispatch dialog is open, so hosts are sampled and pushed.
     pub(crate) fn wants_hosts(&self) -> bool {
         self.dialog.is_some()
+    }
+
+    /// The host the repository is on.
+    pub(crate) fn target(&self) -> &herdr_client::ConnectTarget {
+        &self.request.target
+    }
+
+    pub(crate) fn theme(&self) -> &crate::config::Theme {
+        &self.look.theme
+    }
+
+    pub(crate) fn set_detached(&mut self, detached: bool, cx: &mut Context<Self>) {
+        self.detached = detached;
+        cx.notify();
     }
 
     /// The Herdr workspace the view was opened from.

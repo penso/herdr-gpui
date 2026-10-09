@@ -18,8 +18,8 @@ const MAX_EVENTS: usize = 16;
 
 /// An open orchestrator tab's view and its event subscription.
 pub(crate) struct Orchestrator {
-    view: Entity<OrchestratorView>,
-    _events: Subscription,
+    pub(super) view: Entity<OrchestratorView>,
+    pub(super) _events: Subscription,
 }
 
 /// The live agents last handed to the views, and the snapshots they came
@@ -233,35 +233,41 @@ impl HerdrWindow {
                 self.ensure_orchestrator(id, cx);
             }
         }
-        if self.orchestrators.is_empty() {
+        self.forget_closed_orchestrator_windows(cx);
+        let views = self.orchestrator_views();
+        if views.is_empty() {
             self.orchestrator_sampling = false;
             return;
         }
         // Hosts for open dispatch dialogs, ranked as smart dispatch ranks them.
-        let wanting: Vec<(TabId, String)> = self
-            .orchestrators
+        // Only a view of the shown host's repository can be ranked against it.
+        let shown = self.endpoints[self.selected_endpoint]
+            .connection
+            .target
+            .clone();
+        let wanting: Vec<(Entity<OrchestratorView>, String)> = views
             .iter()
-            .filter(|(_, o)| o.view.read(cx).wants_hosts())
-            .map(|(id, o)| (*id, o.view.read(cx).workspace_id().to_owned()))
+            .filter(|(_, view)| view.read(cx).wants_hosts())
+            .map(|(_, view)| (view.clone(), view.read(cx).workspace_id().to_owned()))
             .collect();
         self.orchestrator_sampling = !wanting.is_empty();
-        for (id, workspace) in wanting {
-            let label = self
-                .orchestrator_repository(&workspace)
-                .map(|(_, label)| label)
-                .unwrap_or_default();
-            let hosts = self.dispatch_candidates(&label, cx);
-            if let Some(orchestrator) = self.orchestrators.get(&id) {
-                orchestrator
-                    .view
-                    .update(cx, |view, cx| view.set_hosts(hosts, cx));
-            }
+        for (view, workspace) in wanting {
+            let hosts = if view.read(cx).target() == &shown {
+                let label = self
+                    .orchestrator_repository(&workspace)
+                    .map(|(_, label)| label)
+                    .unwrap_or_default();
+                self.dispatch_candidates(&label, cx)
+            } else {
+                Vec::new()
+            };
+            view.update(cx, |view, cx| view.set_hosts(hosts, cx));
         }
         let live = self.live_agents();
         let look = self.look();
         let (token, login) = self.github_account();
-        for orchestrator in self.orchestrators.values() {
-            orchestrator.view.update(cx, |view, cx| {
+        for (_, view) in views {
+            view.update(cx, |view, cx| {
                 view.poll(cx);
                 view.set_look(look.clone(), cx);
                 view.set_live(live.clone(), cx);
@@ -334,6 +340,7 @@ impl HerdrWindow {
             Event::Dispatch { request, endpoint } => {
                 self.dispatch_elsewhere(id, *request, &endpoint, cx)
             }
+            Event::OpenWindow => self.detach_orchestrator(id, cx),
             Event::OpenRun {
                 endpoint, pane_id, ..
             } => {
@@ -386,6 +393,17 @@ impl HerdrWindow {
         endpoint: &str,
         cx: &mut Context<Self>,
     ) {
+        let shown = &self.endpoints[self.selected_endpoint].connection.target;
+        if self
+            .orchestrator_view(id)
+            .is_some_and(|view| view.read(cx).target() != shown)
+        {
+            self.show_flash(
+                Flash::warning("Show this repository's host to dispatch elsewhere"),
+                cx,
+            );
+            return;
+        }
         let set_up = self
             .orchestrator_repository(&request.workspace_id)
             .and_then(|(key, label)| {
@@ -413,10 +431,8 @@ impl HerdrWindow {
         };
         crate::dispatch::History::update(cx, |history| history.record(&label, endpoint));
         request.elsewhere = Some(elsewhere);
-        if let Some(orchestrator) = self.orchestrators.get(&id) {
-            orchestrator
-                .view
-                .update(cx, |view, _| view.dispatch_elsewhere(request));
+        if let Some(view) = self.orchestrator_view(id).cloned() {
+            view.update(cx, |view, _| view.dispatch_elsewhere(request));
         }
     }
 
