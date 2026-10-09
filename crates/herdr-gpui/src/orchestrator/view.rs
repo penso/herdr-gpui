@@ -173,6 +173,7 @@ impl OrchestratorView {
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
             input.set_placeholder("Filter: title, id, author, label, body\u{2026}", cx);
+            input.set_frameless(cx);
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });

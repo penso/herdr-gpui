@@ -176,7 +176,7 @@ impl Look {
             .child(self.icon(path, 14., self.theme.subtext()))
     }
 
-    /// A toggle chip for a filter, filled while on.
+    /// A filter pill: a quiet fill, the accent wash while on.
     pub(crate) fn toggle(
         &self,
         id: impl Into<ElementId>,
@@ -187,12 +187,14 @@ impl Look {
         div()
             .id(id)
             .flex_none()
-            .px_2()
+            .px_3()
             .py(px(3.))
-            .rounded(px(corners::CONTROL))
-            .border_1()
-            .border_color(rgb(if on { theme.primary() } else { theme.active }))
-            .when(on, |el| el.bg(rgb(theme.primary_wash())))
+            .rounded_full()
+            .bg(rgb(if on {
+                theme.primary_wash()
+            } else {
+                theme.surface
+            }))
             .cursor_pointer()
             .text_size(self.small())
             .text_color(rgb(if on {

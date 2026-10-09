@@ -29,7 +29,7 @@ impl OrchestratorView {
             .flex_col()
             .child(self.render_header(cx))
             .child(self.render_tabs(cx))
-            .child(self.render_search_row(cx))
+            .child(self.render_search_row(window, cx))
             .children(self.render_banners(cx))
             .child(
                 div()
@@ -224,7 +224,7 @@ impl OrchestratorView {
             }))
     }
 
-    fn render_search_row(&self, cx: &mut Context<Self>) -> Div {
+    fn render_search_row(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
         let theme = &look.theme;
         let filters = self.filters;
@@ -235,20 +235,7 @@ impl OrchestratorView {
             .gap_2()
             .px_4()
             .py_2()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_2()
-                    .py(px(2.))
-                    .rounded(px(corners::CONTROL))
-                    .bg(rgb(theme.surface))
-                    .child(look.icon("icons/search.svg", 13., theme.muted))
-                    .child(div().flex_1().min_w_0().child(self.search.clone())),
-            );
+            .child(self.render_search_field(window, cx));
         let toggle = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Self)| {
             look.toggle(id, label, on)
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -342,6 +329,51 @@ impl OrchestratorView {
                     })),
             )
         })
+    }
+
+    /// One outlined field, the magnifier inside: the outline turns accent
+    /// while the field has the keyboard, and a clear button shows once there
+    /// is text.
+    fn render_search_field(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        let look = &self.look;
+        let theme = &look.theme;
+        let focused = self.search.read(cx).focus.is_focused(window);
+        div()
+            .id("orchestrator-search")
+            .flex_1()
+            .min_w_0()
+            .h(px(look.ui.line_height() + 12.))
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .rounded(px(corners::CONTROL))
+            .border_1()
+            .border_color(rgb(if focused {
+                theme.primary()
+            } else {
+                theme.active
+            }))
+            .bg(rgb(theme.background))
+            .child(look.icon(
+                "icons/search.svg",
+                13.,
+                if focused {
+                    theme.foreground
+                } else {
+                    theme.muted
+                },
+            ))
+            .child(div().flex_1().min_w_0().child(self.search.clone()))
+            .when(!self.query.is_empty(), |field| {
+                field.child(
+                    look.icon_button("orchestrator-search-clear", "icons/close.svg")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.search.update(cx, |search, cx| search.clear(cx));
+                            window.focus(&this.search.read(cx).focus.clone(), cx);
+                        })),
+                )
+            })
     }
 
     fn render_sort_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
