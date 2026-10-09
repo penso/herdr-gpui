@@ -157,9 +157,9 @@ impl HerdrWindow {
             view
         });
         // Handled from the tick, which has the window acting on them needs.
-        let events = cx.subscribe(&view, |this, _, event: &Event, cx| {
+        let events = cx.subscribe(&view, move |this, _, event: &Event, cx| {
             if this.orchestrator_events.len() < MAX_EVENTS {
-                this.orchestrator_events.push(event.clone());
+                this.orchestrator_events.push((id, event.clone()));
                 cx.notify();
             }
         });
@@ -176,8 +176,8 @@ impl HerdrWindow {
     /// tabs' views go, and every view gets its worker's news and the
     /// window's current look, agents, and account.
     pub(crate) fn poll_orchestrators(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for event in std::mem::take(&mut self.orchestrator_events) {
-            self.orchestrator_event(event, window, cx);
+        for (id, event) in std::mem::take(&mut self.orchestrator_events) {
+            self.orchestrator_event(id, event, window, cx);
         }
         let Some(store) = cx.try_global::<Store>() else {
             self.orchestrators.clear();
@@ -198,7 +198,28 @@ impl HerdrWindow {
             }
         }
         if self.orchestrators.is_empty() {
+            self.orchestrator_sampling = false;
             return;
+        }
+        // Hosts for open dispatch dialogs, ranked as smart dispatch ranks them.
+        let wanting: Vec<(TabId, String)> = self
+            .orchestrators
+            .iter()
+            .filter(|(_, o)| o.view.read(cx).wants_hosts())
+            .map(|(id, o)| (*id, o.view.read(cx).workspace_id().to_owned()))
+            .collect();
+        self.orchestrator_sampling = !wanting.is_empty();
+        for (id, workspace) in wanting {
+            let label = self
+                .orchestrator_repository(&workspace)
+                .map(|(_, label)| label)
+                .unwrap_or_default();
+            let hosts = self.dispatch_candidates(&label, cx);
+            if let Some(orchestrator) = self.orchestrators.get(&id) {
+                orchestrator
+                    .view
+                    .update(cx, |view, cx| view.set_hosts(hosts, cx));
+            }
         }
         let live = self.live_agents();
         let look = self.look();
@@ -266,8 +287,17 @@ impl HerdrWindow {
         self.orchestrator_live.agents.clone()
     }
 
-    fn orchestrator_event(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
+    fn orchestrator_event(
+        &mut self,
+        id: TabId,
+        event: Event,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match event {
+            Event::Dispatch { request, endpoint } => {
+                self.dispatch_elsewhere(id, *request, &endpoint, cx)
+            }
             Event::OpenRun {
                 endpoint, pane_id, ..
             } => {
@@ -293,6 +323,64 @@ impl HerdrWindow {
                 }
                 cx.notify();
             }
+        }
+    }
+
+    /// The repository of workspace `id` on the shown host, as smart dispatch
+    /// keys it: its Git common directory and its name.
+    fn orchestrator_repository(&self, id: &str) -> Option<(String, String)> {
+        let worktree = self
+            .live
+            .snapshot
+            .as_deref()?
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.workspace_id == id)?
+            .worktree
+            .as_ref()?;
+        Some((worktree.key.clone(), worktree.label.clone()))
+    }
+
+    /// Sets `request` up for host `endpoint` as smart dispatch does, then
+    /// hands it back to tab `id`'s view to run.
+    fn dispatch_elsewhere(
+        &mut self,
+        id: TabId,
+        mut request: super::DispatchRequest,
+        endpoint: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let set_up = self
+            .orchestrator_repository(&request.workspace_id)
+            .and_then(|(key, label)| {
+                let origin = self.dispatch_origin(&request.workspace_id, &key, &label)?;
+                let destination = self.dispatch_destination(endpoint)?;
+                let target = self
+                    .endpoints
+                    .iter()
+                    .find(|e| e.id == endpoint)?
+                    .connection
+                    .target
+                    .clone();
+                Some((
+                    label,
+                    super::actions::Elsewhere {
+                        origin,
+                        destination,
+                        target,
+                    },
+                ))
+            });
+        let Some((label, elsewhere)) = set_up else {
+            self.show_flash(Flash::warning("That host cannot take this repository"), cx);
+            return;
+        };
+        crate::dispatch::History::update(cx, |history| history.record(&label, endpoint));
+        request.elsewhere = Some(elsewhere);
+        if let Some(orchestrator) = self.orchestrators.get(&id) {
+            orchestrator
+                .view
+                .update(cx, |view, _| view.dispatch_elsewhere(request));
         }
     }
 

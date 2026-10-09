@@ -461,6 +461,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         orchestrators: Default::default(),
         orchestrator_live: Default::default(),
         orchestrator_events: Vec::new(),
+        orchestrator_sampling: false,
         viewport_width: 0.,
         pr_actions: Default::default(),
         usage: Default::default(),

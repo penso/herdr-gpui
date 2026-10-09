@@ -8,6 +8,7 @@
 
 mod detail;
 mod dispatch;
+mod hosts;
 mod inbox;
 mod list;
 mod look;
@@ -30,19 +31,21 @@ use secrecy::SecretString;
 use std::{collections::HashSet, sync::Arc};
 
 /// What the view asks its host to do.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(crate) enum Event {
     /// Show the pane a run's agent is in, on the endpoint the host listed it
     /// from.
-    OpenRun {
-        endpoint: usize,
-        workspace_id: String,
-        pane_id: String,
-    },
+    OpenRun { endpoint: usize, pane_id: String },
     /// Open a web address, such as an issue's page, in a browser tab.
     OpenUrl(String),
     /// Sign in to GitHub, which the view needs to list a repository.
     SignIn,
+    /// Start `request` on the host `endpoint`, which the window sets it up
+    /// for, then hands back through [`OrchestratorView::dispatch_elsewhere`].
+    Dispatch {
+        request: Box<super::DispatchRequest>,
+        endpoint: String,
+    },
 }
 
 impl EventEmitter<Event> for OrchestratorView {}
@@ -147,6 +150,8 @@ pub(crate) struct OrchestratorView {
     pr: crate::pr_actions::Actions,
     comment: Entity<SearchInput>,
     merge_open: bool,
+    /// Hosts a dispatch could go to, while the dialog is open.
+    hosts: Arc<Vec<crate::dispatch::Candidate>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -216,6 +221,7 @@ impl OrchestratorView {
             pr: crate::pr_actions::Actions::default(),
             comment,
             merge_open: false,
+            hosts: Arc::default(),
             _subscriptions: vec![subscription],
         }
     }
@@ -265,6 +271,33 @@ impl OrchestratorView {
         if let (Some(number), Some(service)) = (number, &self.service) {
             service.load_pull_request(number);
         }
+    }
+
+    /// Whether the dispatch dialog is open, so hosts are sampled and pushed.
+    pub(crate) fn wants_hosts(&self) -> bool {
+        self.dialog.is_some()
+    }
+
+    /// The Herdr workspace the view was opened from.
+    pub(crate) fn workspace_id(&self) -> &str {
+        &self.request.workspace_id
+    }
+
+    pub(crate) fn set_hosts(
+        &mut self,
+        hosts: Vec<crate::dispatch::Candidate>,
+        cx: &mut Context<Self>,
+    ) {
+        if *self.hosts == hosts {
+            return;
+        }
+        self.hosts = Arc::new(hosts);
+        cx.notify();
+    }
+
+    /// Starts a dispatch the window set up for another host.
+    pub(crate) fn dispatch_elsewhere(&mut self, request: super::DispatchRequest) {
+        self.act(super::Action::Dispatch(Box::new(request)));
     }
 
     pub(crate) fn set_look(&mut self, look: Look, cx: &mut Context<Self>) {
@@ -472,7 +505,6 @@ impl OrchestratorView {
         if let Some(agent) = runs.live(run) {
             cx.emit(Event::OpenRun {
                 endpoint: agent.endpoint,
-                workspace_id: agent.workspace_id.clone(),
                 pane_id: agent.pane_id.clone(),
             });
         }

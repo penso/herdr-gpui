@@ -8,7 +8,9 @@ use super::{
     error::script,
     model::{Backend, Workspace},
 };
-use crate::teleport::{AgentKind, Envelope, Host, WorktreeCreated};
+use crate::teleport::{
+    self, AgentKind, Envelope, FreshOrigin, Host, HostRepositories, WorktreeCreated,
+};
 use chrono::Utc;
 use herdr_client::{ConnectTarget, shell_quote};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
@@ -25,11 +27,23 @@ pub(crate) struct Site {
     pub(crate) database: PathBuf,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Another connected host to start the agent on, set up as smart dispatch
+/// and fan-out do: the repository found or cloned there, the base commit
+/// shipped when it lacks it.
+#[derive(Clone, Debug)]
+pub(crate) struct Elsewhere {
+    pub(crate) origin: FreshOrigin,
+    pub(crate) destination: HostRepositories,
+    pub(crate) target: ConnectTarget,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct DispatchRequest {
     /// The canonical key of the item the agent works on.
     pub(crate) item_key: String,
     pub(crate) kind: AgentKind,
+    /// Passed to the agent as `--model`, when chosen.
+    pub(crate) model: Option<String>,
     pub(crate) prompt: String,
     pub(crate) branch: String,
     /// The Herdr workspace of the repository, whose worktree list gets the
@@ -37,11 +51,13 @@ pub(crate) struct DispatchRequest {
     pub(crate) workspace_id: String,
     /// What the branch starts from; the main checkout's `HEAD` when `None`.
     pub(crate) base: Option<String>,
+    /// Another host to start on; the repository's own when `None`.
+    pub(crate) elsewhere: Option<Elsewhere>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(crate) enum Action {
-    Dispatch(DispatchRequest),
+    Dispatch(Box<DispatchRequest>),
     /// Interrupt a run's agent.
     Stop {
         run: String,
@@ -75,6 +91,17 @@ impl Action {
     }
 }
 
+/// Whether `model` is a name an agent's `--model` could take: no spaces,
+/// controls, or leading dash, so it cannot become another option.
+pub(crate) fn valid_model(model: &str) -> bool {
+    !model.is_empty()
+        && model.len() <= 128
+        && !model.starts_with('-')
+        && model
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@'))
+}
+
 /// Runs `action` to completion; the success text, or why it failed.
 pub(crate) fn perform(
     site: &Site,
@@ -84,10 +111,10 @@ pub(crate) fn perform(
     match action {
         Action::Dispatch(request) => dispatch(site, request, cancelled)?,
         Action::Stop { run } => {
-            let (mut store, mut found, session) = own_run(site, run)?;
+            let (mut store, mut found, session, host) = own_run(site, run)?;
             for key in ["esc", "ctrl+c"] {
                 herdr(
-                    site,
+                    &host,
                     &["agent", "send-keys", &session.pane_id, key],
                     "Stopping the agent",
                     cancelled,
@@ -98,19 +125,19 @@ pub(crate) fn perform(
             store.save_run(&found, Some(&session))?;
         }
         Action::Send { run, text } => {
-            let (_, _, session) = own_run(site, run)?;
+            let (_, _, session, host) = own_run(site, run)?;
             herdr(
-                site,
+                &host,
                 &["agent", "prompt", &session.pane_id, text],
                 "Sending the message",
                 cancelled,
             )?;
         }
         Action::Remove { run } => {
-            let (mut store, found, _) = own_run(site, run)?;
+            let (mut store, found, _, host) = own_run(site, run)?;
             if let Some(workspace) = &found.workspace {
                 herdr(
-                    site,
+                    &host,
                     &[
                         "worktree",
                         "remove",
@@ -129,8 +156,9 @@ pub(crate) fn perform(
     Ok(action.done())
 }
 
-/// A run herdr-gpui owns, with its session, read fresh from the database.
-fn own_run(site: &Site, id: &str) -> Result<(Store, Run, HerdrSession)> {
+/// A run herdr-gpui owns, with its session and the host its agent is on,
+/// read fresh from the database.
+fn own_run(site: &Site, id: &str) -> Result<(Store, Run, HerdrSession, Host)> {
     let store = Store::open(&site.database)?;
     let run = store
         .runs()?
@@ -145,17 +173,41 @@ fn own_run(site: &Site, id: &str) -> Result<(Store, Run, HerdrSession)> {
         .into_iter()
         .find(|session| session.run_id == id)
         .ok_or_else(|| Error::RunNotFound(id.to_owned()))?;
-    Ok((store, run, session))
+    let host = host_of(site, &session)?;
+    Ok((store, run, session, host))
+}
+
+/// The host a session's agent is on: the repository's own unless the run was
+/// dispatched elsewhere.
+fn host_of(site: &Site, session: &HerdrSession) -> Result<Host> {
+    if (session.host.clone(), session.session.clone()) == place(&site.target) {
+        return Ok(site.host.clone());
+    }
+    Host::new(&target_of(session)).map_err(|_| Error::UnsupportedHost)
+}
+
+/// The target a session's host and Herdr session name.
+pub(super) fn target_of(session: &HerdrSession) -> ConnectTarget {
+    match (&session.host, &session.session) {
+        (Some(destination), session) => ConnectTarget::Ssh {
+            target: destination.clone(),
+            session: session.clone().unwrap_or_else(|| "default".into()),
+        },
+        (None, Some(name)) => ConnectTarget::Session {
+            name: name.clone(),
+            development: false,
+        },
+        (None, None) => ConnectTarget::Local,
+    }
 }
 
 fn herdr(
-    site: &Site,
+    host: &Host,
     args: &[&str],
     operation: &'static str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>> {
-    site.host
-        .capture(&Host::herdr_line(args), cancelled)
+    host.capture(&Host::herdr_line(args), cancelled)
         .map_err(script(operation))
 }
 
@@ -174,6 +226,16 @@ fn agent_name() -> String {
     format!("herdr-gpui-{}", &hex[..23])
 }
 
+/// Where the new worktree goes: the host, its target, the workspace whose
+/// repository gets it, and the base commit.
+struct Destination {
+    host: Host,
+    target: ConnectTarget,
+    workspace_id: String,
+    commit: String,
+    prepared: Option<teleport::Prepared>,
+}
+
 fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> Result<()> {
     let mut store = Store::open(&site.database)?;
     let name = agent_name();
@@ -183,7 +245,7 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
         item_key: request.item_key.clone(),
         workspace: None,
         agent: request.kind.name().to_owned(),
-        model: None,
+        model: request.model.clone(),
         state: RunState::Provisioning,
         message: None,
         session_id: Some(name.clone()),
@@ -192,21 +254,28 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
         owner: Owner::HerdrGpui,
     };
     store.save_run(&run, None)?;
-    let mut created_workspace = None;
-    let outcome = launch(
-        site,
-        request,
-        &name,
-        &mut run,
-        &mut store,
-        &mut created_workspace,
-        cancelled,
-    );
+    let mut created: Option<(Host, String)> = None;
+    let outcome = destination(site, request, cancelled).and_then(|destination| {
+        let outcome = launch(
+            &destination,
+            request,
+            &name,
+            &mut run,
+            &mut store,
+            &mut created,
+            cancelled,
+        );
+        // The new branch keeps the shipped commit; its reference can go.
+        if let Some(prepared) = &destination.prepared {
+            prepared.finish(&AtomicBool::new(false));
+        }
+        outcome
+    });
     if let Err(error) = &outcome {
         // Undo the checkout of a run that never got going; the branch stays.
-        if let Some(workspace) = created_workspace {
+        if let Some((host, workspace)) = created {
             let _ = herdr(
-                site,
+                &host,
                 &["worktree", "remove", "--workspace", &workspace, "--force"],
                 "Removing the worktree",
                 &AtomicBool::new(false),
@@ -220,16 +289,31 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
     outcome
 }
 
-fn launch(
+fn destination(
     site: &Site,
     request: &DispatchRequest,
-    name: &str,
-    run: &mut Run,
-    store: &mut Store,
-    created_workspace: &mut Option<String>,
     cancelled: &AtomicBool,
-) -> Result<()> {
+) -> Result<Destination> {
     let base = request.base.as_deref().unwrap_or("HEAD");
+    if let Some(elsewhere) = &request.elsewhere {
+        let commit =
+            teleport::base_commit(&elsewhere.origin, base, cancelled).map_err(Error::Teleport)?;
+        let prepared = teleport::prepare(
+            &elsewhere.origin,
+            &elsewhere.destination,
+            &commit,
+            &mut |_| {},
+            cancelled,
+        )
+        .map_err(Error::Teleport)?;
+        return Ok(Destination {
+            host: elsewhere.destination.place.host.clone(),
+            target: elsewhere.target.clone(),
+            workspace_id: prepared.repository.workspace_id.clone(),
+            commit,
+            prepared: Some(prepared),
+        });
+    }
     let body = format!(
         "git -C {} rev-parse --verify --quiet {}\n",
         shell_quote(&site.main_root),
@@ -245,17 +329,36 @@ fn launch(
             operation: "Reading the base commit",
         });
     }
+    Ok(Destination {
+        host: site.host.clone(),
+        target: site.target.clone(),
+        workspace_id: request.workspace_id.clone(),
+        commit,
+        prepared: None,
+    })
+}
+
+fn launch(
+    destination: &Destination,
+    request: &DispatchRequest,
+    name: &str,
+    run: &mut Run,
+    store: &mut Store,
+    created_workspace: &mut Option<(Host, String)>,
+    cancelled: &AtomicBool,
+) -> Result<()> {
+    let host = &destination.host;
     let output = herdr(
-        site,
+        host,
         &[
             "worktree",
             "create",
             "--workspace",
-            &request.workspace_id,
+            &destination.workspace_id,
             "--branch",
             &request.branch,
             "--base",
-            &commit,
+            &destination.commit,
             "--no-focus",
         ],
         "Creating the worktree",
@@ -267,12 +370,12 @@ fn launch(
             source,
         })?
         .result;
-    *created_workspace = Some(created.workspace.workspace_id.clone());
-    let (host, session) = place(&site.target);
+    *created_workspace = Some((host.clone(), created.workspace.workspace_id.clone()));
+    let (ssh, session) = place(&destination.target);
     run.workspace = Some(Workspace {
         backend: Backend::Herdr,
         id: created.workspace.workspace_id.clone(),
-        host: host.clone(),
+        host: ssh.clone(),
         path: Some(created.worktree.path.clone().into()),
         branch: request.branch.clone(),
     });
@@ -280,7 +383,7 @@ fn launch(
     run.updated_at = Utc::now();
     let herdr_session = HerdrSession {
         run_id: run.id.clone(),
-        host,
+        host: ssh,
         session,
         workspace_id: created.workspace.workspace_id,
         pane_id: created.root_pane.pane_id,
@@ -288,25 +391,25 @@ fn launch(
         updated_at: run.updated_at,
     };
     store.save_run(run, Some(&herdr_session))?;
-    herdr(
-        site,
-        &[
-            "agent",
-            "start",
-            name,
-            "--kind",
-            request.kind.name(),
-            "--pane",
-            &herdr_session.pane_id,
-            "--timeout",
-            AGENT_START_TIMEOUT_MS,
-        ],
-        "Starting the agent",
-        cancelled,
-    )?;
+    let mut start = vec![
+        "agent",
+        "start",
+        name,
+        "--kind",
+        request.kind.name(),
+        "--pane",
+        &herdr_session.pane_id,
+        "--timeout",
+        AGENT_START_TIMEOUT_MS,
+    ];
+    let model = request.model.as_deref().filter(|model| valid_model(model));
+    if let Some(model) = model {
+        start.extend(["--", "--model", model]);
+    }
+    herdr(host, &start, "Starting the agent", cancelled)?;
     // The pane is the target: a name could match an agent started elsewhere.
     herdr(
-        site,
+        host,
         &["agent", "prompt", &herdr_session.pane_id, &request.prompt],
         "Sending the prompt",
         cancelled,

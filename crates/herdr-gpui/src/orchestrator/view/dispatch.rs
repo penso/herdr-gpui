@@ -7,6 +7,7 @@ use crate::{
     config::{corners, mix},
     orchestrator::{
         Action, DispatchRequest, Item, Notice, SourceKey,
+        actions::valid_model,
         prompt::{self, MAX_EXTRA},
     },
     pull_request::MergeMethod,
@@ -23,6 +24,10 @@ pub(crate) struct Dialog {
     kind: Option<AgentKind>,
     branch: Entity<SearchInput>,
     extra: Entity<SearchInput>,
+    /// The model the agent is started with; its own default when empty.
+    model: Entity<SearchInput>,
+    /// Another host to start on, by endpoint; the tab's own when `None`.
+    pub(super) host: Option<String>,
     problem: Option<&'static str>,
     /// A read-only review of a pull request rather than work on an issue.
     review: bool,
@@ -140,6 +145,7 @@ impl OrchestratorView {
         };
         let branch = field("Branch name", &branch_name, cx);
         let extra = field("Extra instructions, appended verbatim (optional)", "", cx);
+        let model = field("Agent default", "", cx);
         let kind = self
             .snapshot
             .installed
@@ -152,6 +158,8 @@ impl OrchestratorView {
             kind,
             branch,
             extra,
+            model,
+            host: None,
             problem: None,
             review,
         });
@@ -189,6 +197,13 @@ impl OrchestratorView {
             cx.notify();
             return;
         }
+        let model = dialog.model.read(cx).text().trim().to_owned();
+        if !model.is_empty() && !valid_model(&model) {
+            dialog.problem = Some("A model name has no spaces and does not start with a dash.");
+            cx.notify();
+            return;
+        }
+        let host = dialog.host.clone();
         let Some(item) = self
             .snapshot
             .items
@@ -213,12 +228,21 @@ impl OrchestratorView {
         let request = DispatchRequest {
             item_key: dialog.item.clone(),
             kind,
+            model: (!model.is_empty()).then_some(model),
             prompt: text,
             branch,
             workspace_id: self.request.workspace_id.clone(),
             base: None,
+            elsewhere: None,
         };
-        self.act(Action::Dispatch(request));
+        match host {
+            // The window knows the other host and sets the request up for it.
+            Some(endpoint) => cx.emit(super::Event::Dispatch {
+                request: Box::new(request),
+                endpoint,
+            }),
+            None => self.act(Action::Dispatch(Box::new(request))),
+        }
         self.dialog = None;
         window.focus(&self.focus, cx);
         cx.notify();
@@ -505,6 +529,10 @@ impl OrchestratorView {
             .when_some(item, |el, item| el.child(item_line(look, item)))
             .child(section("PROMPT", segmented.into_any_element()))
             .child(section("AGENT", tiles))
+            .when_some(self.render_hosts(dialog, cx), |el, hosts| {
+                el.child(section("HOST", hosts))
+            })
+            .child(section("MODEL", field(&dialog.model).into_any_element()))
             .child(section("BRANCH", field(&dialog.branch).into_any_element()))
             .child(section(
                 "EXTRA INSTRUCTIONS",

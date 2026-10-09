@@ -70,10 +70,12 @@ fn request() -> DispatchRequest {
     DispatchRequest {
         item_key: "github:github.com:penso/herdr-gpui:377".into(),
         kind: AgentKind::Claude,
+        model: None,
         prompt: "Fix the icons; don't break 'quotes'.".into(),
         branch: "377-icons".into(),
         workspace_id: "w1".into(),
         base: None,
+        elsewhere: None,
     }
 }
 
@@ -89,7 +91,12 @@ fn calls(dir: &Path) -> Vec<String> {
 fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "");
-    let done = perform(&site, &Action::Dispatch(request()), &AtomicBool::new(false)).unwrap();
+    let done = perform(
+        &site,
+        &Action::Dispatch(Box::new(request())),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
     assert_eq!(done, "Agent started");
     let calls = calls(dir.path());
     assert!(calls[0].starts_with("worktree create --workspace w1 --branch 377-icons --base "));
@@ -128,7 +135,12 @@ fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
 fn a_failed_start_removes_the_worktree_and_records_why() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "agent start");
-    let error = perform(&site, &Action::Dispatch(request()), &AtomicBool::new(false)).unwrap_err();
+    let error = perform(
+        &site,
+        &Action::Dispatch(Box::new(request())),
+        &AtomicBool::new(false),
+    )
+    .unwrap_err();
     assert!(matches!(
         error,
         Error::Script {
@@ -154,7 +166,7 @@ fn stop_and_remove_act_on_own_runs_only() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "");
     let cancelled = AtomicBool::new(false);
-    perform(&site, &Action::Dispatch(request()), &cancelled).unwrap();
+    perform(&site, &Action::Dispatch(Box::new(request())), &cancelled).unwrap();
     let id = Store::open(&site.database).unwrap().runs().unwrap()[0]
         .id
         .clone();
@@ -215,5 +227,85 @@ fn stop_and_remove_act_on_own_runs_only() {
         calls(dir.path()).len(),
         before,
         "nothing ran for a foreign run"
+    );
+}
+
+#[test]
+fn a_chosen_model_reaches_the_agent_and_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let site = site(dir.path(), "");
+    let mut with_model = request();
+    with_model.model = Some("claude-opus-5-5".into());
+    perform(
+        &site,
+        &Action::Dispatch(Box::new(with_model)),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    let start = calls(dir.path())[1].clone();
+    assert!(
+        start.ends_with(" --timeout 90000 -- --model claude-opus-5-5"),
+        "{start}"
+    );
+    let run = Store::open(&site.database)
+        .unwrap()
+        .runs()
+        .unwrap()
+        .remove(0);
+    assert_eq!(run.model.as_deref(), Some("claude-opus-5-5"));
+}
+
+#[test]
+fn only_plain_model_names_are_passed_on() {
+    use crate::orchestrator::actions::valid_model;
+    for good in [
+        "gpt-5.5",
+        "anthropic/claude-sonnet-5-5",
+        "qwen3:32b",
+        "model@latest",
+    ] {
+        assert!(valid_model(good), "{good}");
+    }
+    for bad in [
+        "",
+        "--dangerously-skip-permissions",
+        "a b",
+        "x;rm",
+        &"m".repeat(129),
+    ] {
+        assert!(!valid_model(bad), "{bad}");
+    }
+}
+
+#[test]
+fn a_run_dispatched_elsewhere_is_reached_on_its_own_host() {
+    use crate::orchestrator::actions::target_of;
+    let mut on = session("r");
+    on.host = Some("devbox".into());
+    on.session = Some("work".into());
+    assert_eq!(
+        target_of(&on),
+        ConnectTarget::Ssh {
+            target: "devbox".into(),
+            session: "work".into()
+        }
+    );
+    on.session = None;
+    assert_eq!(
+        target_of(&on),
+        ConnectTarget::Ssh {
+            target: "devbox".into(),
+            session: "default".into()
+        }
+    );
+    on.host = None;
+    assert_eq!(target_of(&on), ConnectTarget::Local);
+    on.session = Some("dev".into());
+    assert_eq!(
+        target_of(&on),
+        ConnectTarget::Session {
+            name: "dev".into(),
+            development: false
+        }
     );
 }

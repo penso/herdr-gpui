@@ -187,7 +187,9 @@ pub(crate) struct HerdrWindow {
         std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Orchestrator>,
     pub(crate) orchestrator_live: crate::orchestrator::LiveCache,
     /// Orchestrator views' requests, acted on at the next tick.
-    pub(crate) orchestrator_events: Vec<crate::orchestrator::Event>,
+    pub(crate) orchestrator_events: Vec<(crate::browser::TabId, crate::orchestrator::Event)>,
+    /// Whether an orchestrator's dispatch dialog ranks hosts by their load.
+    pub(crate) orchestrator_sampling: bool,
     /// The window's width at its last render, which caps side panels.
     pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
@@ -523,7 +525,8 @@ impl HerdrWindow {
     /// CPU and memory are sampled for every enabled host, while they are
     /// shown or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load && !self.dispatch_sampling() {
+        if !self.config.show_system_load && !self.dispatch_sampling() && !self.orchestrator_sampling
+        {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -782,6 +785,7 @@ impl HerdrWindow {
             orchestrators: Default::default(),
             orchestrator_live: Default::default(),
             orchestrator_events: Vec::new(),
+            orchestrator_sampling: false,
             viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),
