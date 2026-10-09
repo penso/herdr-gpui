@@ -40,10 +40,11 @@ agent-launcher wrote it and check that migration keeps its rows.
 | `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts, branch names. |
 | `view/` | The view entity: inbox, preview, item pages, dialogs. Pure row logic is in `view/rows.rs`. |
 | `tab.rs` | Hosting the view in a tab: opening, restoring, the tick, and events. |
+| `window.rs` | Hosting the same view in a window of its own, still fed from the main window's tick. |
 
 The view is a GPUI entity that talks to its host only through `Event`s and
-setters (`set_look`, `set_live`, `set_github`), so a separate window could host
-it as well. Nothing in it blocks: the worker does every disk, network, and host
+setters (`set_look`, `set_live`, `set_github`, `set_hosts`), so a tab or a
+window of its own can host it. Nothing in it blocks: the worker does every disk, network, and host
 script call, and the UI reads the newest `Snapshot` from a coalescing mailbox.
 
 Live agent status comes from each connected host's Herdr snapshot, matched to
