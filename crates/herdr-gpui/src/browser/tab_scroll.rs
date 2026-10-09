@@ -52,6 +52,10 @@ struct Strip {
     /// The tab last brought into view, so a strip the user scrolled away
     /// stays put until the choice changes.
     revealed: Option<Pick>,
+    /// How far the strip's measured tabs reached to `revealed`'s right
+    /// edge: a tab opening before it, or a title arriving, moves that edge
+    /// and brings it into view again.
+    extent: f32,
     /// Where on the thumb the pointer took hold of it.
     grab: f32,
     /// The frames spent bringing `revealed` into view; at `MAX_TRIES` it is
@@ -97,19 +101,23 @@ impl TabScroll {
         group: GroupId,
         pick: &Pick,
         index: usize,
+        extent: f32,
         growing: bool,
     ) -> bool {
         let strip = self.strips.entry(group).or_default();
-        if strip.revealed.as_ref() != Some(pick) {
+        if strip.revealed.as_ref() != Some(pick) || (strip.extent - extent).abs() > 0.5 {
             strip.revealed = Some(pick.clone());
+            strip.extent = extent;
             strip.tries = 0;
         } else if !growing && strip.tries >= MAX_TRIES {
             return false;
         }
         // GPUI scrolls to an item by the strip's last layout, before this
         // frame's; a strip not yet laid out, or since resized, can miss, so
-        // it tries again until the last layout shows the tab.
-        if strip.shows(index) && !growing {
+        // it tries again until the last layout shows the tab. That layout
+        // predates a change, which is why the first frame after one always
+        // scrolls: GPUI leaves a tab already in view where it is.
+        if strip.tries > 0 && strip.shows(index) && !growing {
             strip.tries = MAX_TRIES;
             return false;
         }
