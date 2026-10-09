@@ -539,8 +539,11 @@ device's published `[keys]` profile applies while it is selected (see
 Supported below). The GUI never reads a remote host's `config.toml`.
 
 Shared saves preserve comments and unknown keys, reject conflicting external
-edits and unsafe paths, and run off the UI thread. Symlinked config files and
-user-controlled symlink ancestors are refused rather than replaced. Save success
+edits and unsafe paths, and run off the UI thread. A symlinked `config.toml`, or
+a symlinked directory above it, is followed as Herdr follows it when the links
+belong to you or root and sit in directories other users cannot write: saves
+replace the file the link points at and keep the link, while a link to a missing
+file is refused. Save success
 is separate from the local daemon reload request, which is reported as queued,
 not acknowledged. Opening Preferences, its Reload button, and the daemon's reload
 signal reread the local file. Debounced disk polling also reloads saved changes,
