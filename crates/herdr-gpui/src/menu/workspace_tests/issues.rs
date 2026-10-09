@@ -1,4 +1,4 @@
-//! The workspace popover opens a Git workspace's Issues & PRs tab on a host
+//! The workspace popover opens a Git workspace's orchestrator tab on a host
 //! that runs scripts, and a restored orchestrator tab gets its view back.
 use super::*;
 use crate::browser::{Location, OrchestratorRepo, Store, scope};
@@ -17,8 +17,8 @@ fn a_git_workspace_offers_issues_and_pull_requests(cx: &mut gpui::TestAppContext
     let items = cx.update(|_, cx| view.read(cx).workspace_items());
     assert!(
         items.iter().any(
-            |(action, label)| *action == WorkspaceMenuAction::IssuesAndPullRequests
-                && *label == "Issues & PRs"
+            |(action, label)| *action == WorkspaceMenuAction::Orchestrator
+                && *label == "Orchestrator"
         ),
         "{items:?}"
     );
@@ -33,7 +33,7 @@ fn a_git_workspace_offers_issues_and_pull_requests(cx: &mut gpui::TestAppContext
     assert!(
         !items
             .iter()
-            .any(|(action, _)| *action == WorkspaceMenuAction::IssuesAndPullRequests)
+            .any(|(action, _)| *action == WorkspaceMenuAction::Orchestrator)
     );
 }
 

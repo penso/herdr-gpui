@@ -107,8 +107,8 @@ pub(crate) enum WorkspaceMenuAction {
     FanOut,
     /// Run one of the repository's worktree scripts in a new tab.
     Script(crate::worktree_scripts::ScriptKind),
-    /// Open the repository's Issues & PRs tab.
-    IssuesAndPullRequests,
+    /// Open the repository's orchestrator tab.
+    Orchestrator,
 }
 
 impl Page {
@@ -158,7 +158,7 @@ impl WorkspaceMenuAction {
             Self::ClearTeleported => "icons/x.svg",
             Self::Checkpoints => "icons/refresh.svg",
             Self::FanOut => "icons/fan-out.svg",
-            Self::IssuesAndPullRequests => "icons/github.svg",
+            Self::Orchestrator => "icons/github.svg",
             Self::Script(crate::worktree_scripts::ScriptKind::Setup) => "icons/refresh.svg",
             Self::Script(_) => "icons/play.svg",
             Self::PullRequest => return None,

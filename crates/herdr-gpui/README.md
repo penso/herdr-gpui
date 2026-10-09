@@ -1386,13 +1386,14 @@ Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.
 
-## Issues & PRs
+## Orchestrator
 
-The "+" menu's Issues & PRs row, the Open Issues & PRs command, or the Issues &
-PRs row of a workspace's popover opens a tab listing that workspace's repository: its GitHub issues and pull
-requests, its [Beads](https://github.com/steveyegge/beads) issues when the main
-checkout has a `.beads` folder, and the agent runs dispatched for them. It works
-for the local session and saved SSH hosts.
+The Orchestrator row of a group's "…" menu, the Open Orchestrator command, or
+the Orchestrator row of a workspace's popover opens a tab listing that
+workspace's repository: its GitHub issues and pull requests, its
+[Beads](https://github.com/steveyegge/beads) issues when the main checkout has
+a `.beads` folder, and the agent runs dispatched for them. It works for the
+local session and saved SSH hosts.
 
 - **Issues** lists open GitHub issues and beads together. A bead's children sit
   under it; filters narrow to Beads, items with a run, or blocked ones; five

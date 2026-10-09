@@ -650,8 +650,8 @@ pub const COMMANDS: &[CommandInfo] = &[
     },
     CommandInfo {
         command: Command::OpenOrchestrator,
-        name: "open_issues_and_prs",
-        label: "Open Issues & PRs",
+        name: "open_orchestrator",
+        label: "Open Orchestrator",
         shortcuts: &[],
     },
     CommandInfo {

@@ -54,7 +54,10 @@ impl HerdrWindow {
     ) {
         let target = &self.endpoints[self.selected_endpoint].connection.target;
         if matches!(target, ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. }) {
-            self.show_flash(Flash::warning("Issues & PRs need a local or SSH host"), cx);
+            self.show_flash(
+                Flash::warning("The orchestrator needs a local or SSH host"),
+                cx,
+            );
             return;
         }
         let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);

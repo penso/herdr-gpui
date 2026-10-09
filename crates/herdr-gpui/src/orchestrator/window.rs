@@ -55,7 +55,7 @@ impl HerdrWindow {
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(640.), px(400.))),
-                titlebar: Some(crate::titlebar::options("Issues & PRs")),
+                titlebar: Some(crate::titlebar::options("Orchestrator")),
                 app_owns_titlebar_drag: cfg!(target_os = "macos"),
                 ..Default::default()
             },
@@ -74,7 +74,7 @@ impl HerdrWindow {
                 );
             }
             Err(error) => {
-                tracing::error!(%error, "could not open an Issues & PRs window");
+                tracing::error!(%error, "could not open an Orchestrator window");
                 self.orchestrators.insert(id, orchestrator);
                 self.show_flash(Flash::warning("Could not open a new window"), cx);
             }

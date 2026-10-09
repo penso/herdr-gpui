@@ -1,9 +1,9 @@
 # Orchestrator
 
-The Issues & PRs tab (`crates/herdr-gpui/src/orchestrator/`) lists a
+The Orchestrator tab (`crates/herdr-gpui/src/orchestrator/`) lists a
 repository's issues, pull requests, and the agent runs dispatched for them,
 and dispatches new ones through the Herdr CLI. User-facing behavior is in the
-crate README's "Issues & PRs" section; this page is for working on it.
+crate README's "Orchestrator" section; this page is for working on it.
 
 ## Shared state with agent-launcher
 
