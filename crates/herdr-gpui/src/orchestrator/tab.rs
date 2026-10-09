@@ -34,19 +34,31 @@ impl HerdrWindow {
     /// Opens the focused workspace's orchestrator tab, or brings back the one
     /// already open.
     pub(crate) fn open_orchestrator(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((_, workspace)) = self.browser_key() else {
+            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            return;
+        };
+        let checkout = self.focused_checkout();
+        self.open_orchestrator_in(workspace, checkout, window, cx);
+    }
+
+    /// Opens workspace `workspace`'s orchestrator tab, listing the repository
+    /// of `checkout`. Another workspace than the focused one is switched to,
+    /// and its tab shows once it is.
+    pub(crate) fn open_orchestrator_in(
+        &mut self,
+        workspace: String,
+        checkout: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let target = &self.endpoints[self.selected_endpoint].connection.target;
         if matches!(target, ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. }) {
             self.show_flash(Flash::warning("Issues & PRs need a local or SSH host"), cx);
             return;
         }
-        let Some((scope, workspace)) = self.browser_key() else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
-            return;
-        };
-        let Some(repo) = self
-            .focused_checkout()
-            .and_then(|path| OrchestratorRepo::new(path).ok())
-        else {
+        let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
+        let Some(repo) = checkout.and_then(|path| OrchestratorRepo::new(path).ok()) else {
             self.show_flash(Flash::warning("This workspace has no folder to read"), cx);
             return;
         };
@@ -71,6 +83,13 @@ impl HerdrWindow {
             return;
         };
         self.dismiss_menu(window, cx);
+        if self
+            .browser_key()
+            .is_none_or(|(_, focused)| focused != workspace)
+        {
+            self.navigate(NavigationTarget::Workspace(&workspace), cx);
+            return;
+        }
         self.ensure_orchestrator(id, cx);
         self.show_browser_tab(id, window, cx);
         if let Some(orchestrator) = self.orchestrators.get(&id) {
@@ -82,10 +101,27 @@ impl HerdrWindow {
     /// Whether the focused workspace's repository can be listed: a host
     /// scripts can run on, with a workspace open.
     pub(crate) fn can_open_orchestrator(&self) -> bool {
+        self.orchestrator_host() && self.browser_key().is_some()
+    }
+
+    /// Whether the shown host can run the orchestrator's scripts.
+    pub(crate) fn orchestrator_host(&self) -> bool {
         !matches!(
             self.endpoints[self.selected_endpoint].connection.target,
             ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. }
-        ) && self.browser_key().is_some()
+        )
+    }
+
+    /// The folder new tabs of workspace `id` start in.
+    pub(crate) fn workspace_folder(&self, id: &str) -> Option<String> {
+        self.live
+            .snapshot
+            .as_deref()?
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.workspace_id == id)
+            .map(|workspace| workspace.new_workspace_cwd.clone())
+            .filter(|path| !path.is_empty())
     }
 
     /// A folder of the focused workspace: its focused pane's, else the one

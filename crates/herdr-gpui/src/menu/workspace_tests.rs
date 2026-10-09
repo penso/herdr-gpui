@@ -7,6 +7,7 @@ use herdr_client::Method;
 mod close;
 mod dialog_layout;
 mod dispatch;
+mod issues;
 mod naming;
 mod pull_requests;
 mod scripts;

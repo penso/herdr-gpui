@@ -500,6 +500,9 @@ impl HerdrWindow {
         if self.note_checkout().is_some() {
             items.push((Dialog(WorkspaceAction::Note), "Note..."));
         }
+        if target.worktree.is_some() && self.orchestrator_host() {
+            items.push((WorkspaceMenuAction::IssuesAndPullRequests, "Issues & PRs"));
+        }
         if target.can_create() {
             items.push((Dialog(WorkspaceAction::OpenWorktree), "Open worktree..."));
         }
@@ -718,6 +721,13 @@ impl HerdrWindow {
             WorkspaceMenuAction::Checkpoints => self.open_checkpoints(window, cx),
             WorkspaceMenuAction::FanOut => self.open_fan_out(window, cx),
             WorkspaceMenuAction::Script(kind) => self.run_workspace_script(kind, window, cx),
+            WorkspaceMenuAction::IssuesAndPullRequests => {
+                if let Some(target) = &self.menu.target {
+                    let workspace = target.id.clone();
+                    let folder = self.workspace_folder(&workspace);
+                    self.open_orchestrator_in(workspace, folder, window, cx);
+                }
+            }
         }
     }
 }
