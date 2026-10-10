@@ -2547,8 +2547,10 @@ records when reporting the failure.
   Queue acceptance dismisses the dialog, not an optimistic state mutation.
 - Linked spaces offer Delete worktree checkout with a daemon-resolved path and a
   single confirmation, matching the Herdr TUI. Unlike other workspace dialogs,
-  deletion stays open until the correlated daemon result arrives. Dirty/untracked
-  refusals and errors are shown inline; force requires a new confirmation. All Git/filesystem work
+   deletion stays open until the correlated daemon result arrives, with submission
+   disabled while waiting. Dirty/untracked refusals show the error and **Force remove**
+   in the same dialog; force requires a new confirmation. Dismissing while waiting
+   does not cancel the request, and its reply never reopens the dialog. All Git/filesystem work
   stays in Herdr. Unpushed commits are not checked by this API. See
   [WORKTREE-DELETION.md](WORKTREE-DELETION.md) for safety limits and sources.
 - Worktree creation sends the clicked `workspace_id`, optional `branch`,

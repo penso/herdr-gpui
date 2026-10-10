@@ -15,7 +15,8 @@ build dependency and has not been modified.
    Revalidate the clicked workspace ID, boot and worktree metadata against the
    latest snapshot before sending `worktree.remove` with `workspace_id`,
    `force: false`, `trust_repository: false`.
-4. Wait for the matching request ID. Display daemon error code/message inline.
+4. Keep the confirmation open and disable submission while waiting for the matching
+   request ID. Display daemon error code/message inline.
    Only `dirty_worktree_requires_force` enables force; the dialog restates the
    discarded-files warning and requires a new confirmation before sending the
    same method with `force: true`.
@@ -23,6 +24,11 @@ build dependency and has not been modified.
    Pushed snapshots, not optimistic client mutations, update the sidebar.
 
 Escape/outside click cancels confirmation, not an already queued operation.
+Replies never reopen a dismissed confirmation or dismiss an unrelated menu. A
+refusal after dismissal is reported in the status bar; reopening deletion after
+a dirty refusal offers force. Removal failures also log a category distinguishing
+dirty checkouts, Git removal failures, other daemon refusals, and client request
+rejections, without recording paths or diagnostic payloads.
 Repeated submission while pending queues nothing. Reconnect resets the dialog
 and replaces the response mailbox; delayed old results cannot open/advance a new
 dialog. The mailbox retains one explicitly registered response, not an unbounded

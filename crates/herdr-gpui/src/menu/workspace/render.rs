@@ -48,6 +48,10 @@ impl HerdrWindow {
         let danger = danger(theme);
         let deletion = self.menu.deletion.as_ref();
         let force = deletion.is_some_and(|deletion| deletion.force);
+        let removing = action == WorkspaceAction::DeleteWorktree
+            && self.removal.as_ref().is_some_and(|removal| {
+                removal.pending_for(self.menu.endpoint_target, &target.boot_id, &target.id)
+            });
         let dispatching = self.dispatch_job.is_some()
             && matches!(
                 action,
@@ -79,7 +83,8 @@ impl HerdrWindow {
                             .map_or("", |input| input.text.as_str()),
                     )
                 }))
-            && !creating;
+            && !creating
+            && !removing;
         let destructive = matches!(
             action,
             WorkspaceAction::Close | WorkspaceAction::DeleteWorktree
@@ -256,7 +261,7 @@ impl HerdrWindow {
                     .child(error.clone()),
             );
         }
-        if creating {
+        if creating || removing {
             // Dismissing only closes the panel; the daemon keeps the queued work.
             let waiting = match self.dispatch_job.as_ref().filter(|_| dispatching) {
                 Some(job) => format!("{} Dismissing does not cancel it.", job.status()),

@@ -15,6 +15,7 @@ mod targets;
 mod tiles;
 mod worktree_create;
 mod worktree_delete;
+mod worktree_delete_recovery;
 
 /// Presses the open workspace dialog's submit, for `endpoint::lifecycle_tests`.
 #[cfg(unix)]
@@ -101,11 +102,11 @@ pub(crate) fn submit_focus_change(
     }
     view.submit_workspace_dialog(window, cx);
     assert!(view.menu.error.is_none() && view.local_error.is_none());
-    // A creation waits for its correlated response in the open dialog; a
-    // removal is queued and its dialog closes, leaving the id on the window.
+    // Creation and removal both await their correlated response. Removal also
+    // keeps the id on the window in case its confirmation is dismissed.
     let pending = match action {
         WorkspaceAction::DeleteWorktree => {
-            assert!(view.menu.page.is_none());
+            assert_eq!(view.menu.page, Some(super::Page::Dialog(action)));
             view.removal.as_ref().unwrap().pending.clone()
         }
         WorkspaceAction::NewWorktree | WorkspaceAction::OpenWorktree => view.menu.creation.clone(),
