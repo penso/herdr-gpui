@@ -353,8 +353,9 @@ region, and snapshot, saved to `[daytona]`, and an API key saved to the
 credential store (`HERDR_DAYTONA_API_KEY` takes precedence). **Create sandbox**
 creates one with a generated name and, when the **Install Herdr** switch is on
 (the default), installs Herdr in it if it is missing; the device picker shows
-its progress and a toast says when it is ready. The picker's **Add Daytona
-Sandbox…** row opens this tab. Removing a device leaves its sandbox in Daytona.
+its progress and a toast says when it is ready. Once Daytona is configured, the
+picker's **Add Daytona Sandbox…** row opens this tab. Removing a device leaves
+its sandbox in Daytona.
 
 Each connection starts a stopped sandbox, asks the API for a 10-minute SSH
 token for it, and runs Herdr's remote bridge through Daytona's SSH gateway.

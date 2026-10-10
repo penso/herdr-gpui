@@ -17,6 +17,7 @@ use std::sync::Arc;
 mod go_to;
 #[cfg(test)]
 mod interaction_tests;
+mod project_create;
 mod project_open;
 mod projects;
 pub(crate) use projects::launch_root;
@@ -90,7 +91,7 @@ impl Filter {
                 == match action {
                     Action::Native(_) | Action::Configured(..) => Self::Commands,
                     Action::Go { .. } => Self::Navigation,
-                    Action::Project(_) => Self::Projects,
+                    Action::Project(_) | Action::NewProject(_) => Self::Projects,
                     Action::Note { .. } => Self::Notes,
                 }
     }
@@ -107,6 +108,8 @@ enum Action {
     },
     Configured(String, ClientShellCommandAction),
     Project(projects::Project),
+    /// A new project directory to create or clone, named by the query.
+    NewProject(project_create::NewProject),
     /// A workspace whose checkout has a note, gone to as Go To goes to it.
     Note {
         endpoint: String,
@@ -115,6 +118,7 @@ enum Action {
     },
 }
 
+#[derive(Clone)]
 struct Entry {
     label: SharedString,
     detail: SharedString,
@@ -170,6 +174,7 @@ enum Identity {
     Go(String, OwnedNavigationTarget),
     Configured(String),
     Project(std::path::PathBuf),
+    NewProject(std::path::PathBuf),
     Note(String, String),
 }
 
@@ -182,6 +187,7 @@ impl Action {
             } => Identity::Go(endpoint.clone(), target.clone()),
             Self::Configured(id, _) => Identity::Configured(id.clone()),
             Self::Project(project) => Identity::Project(project.path.clone()),
+            Self::NewProject(project) => Identity::NewProject(project.path.clone()),
             Self::Note {
                 endpoint,
                 workspace,
@@ -302,6 +308,9 @@ pub(super) struct Palette {
     filtered: Vec<search::Hit>,
     /// The newest entries, ranked by the next query.
     pending: Arc<[Entry]>,
+    /// `pending` without the row the current query would create, so that row can
+    /// be rebuilt as the query changes instead of accumulating.
+    base: Arc<[Entry]>,
     matcher: nucleo_matcher::Matcher,
     match_task: Option<Task<()>>,
     selected: usize,
@@ -390,8 +399,10 @@ impl Palette {
 
 impl HerdrWindow {
     pub(super) fn filter_palette(&mut self, query: &str, cx: &mut Context<Self>) {
+        let roots = self.config.palette.project_roots.clone();
         if let Some(palette) = &mut self.menu.palette {
             palette.query = query.to_owned();
+            palette.rebuild_pending(&roots);
         }
         self.rank_palette(Selection::First, cx);
     }
@@ -495,6 +506,7 @@ impl HerdrWindow {
             entries: Arc::new([]),
             filtered: Vec::new(),
             pending: Arc::new([]),
+            base: Arc::new([]),
             matcher: search::matcher(),
             match_task: None,
             selected: 0,
@@ -650,7 +662,8 @@ impl HerdrWindow {
                 None,
             )
         }));
-        palette.pending = entries.into();
+        palette.base = entries.clone().into();
+        palette.rebuild_pending(&self.config.palette.project_roots);
         palette.sources = sources;
         palette.keymap = self.keymap().clone();
         palette.supports_clear = self.live.supports_pane_clear;
@@ -740,6 +753,10 @@ impl HerdrWindow {
             self.activate_project(project, window, cx);
             return;
         }
+        if let Action::NewProject(project) = action {
+            self.create_project(project, window, cx);
+            return;
+        }
         if let Action::Go {
             endpoint,
             boot,
@@ -786,6 +803,7 @@ impl HerdrWindow {
                 Action::Native(_)
                 | Action::Go { .. }
                 | Action::Project(_)
+                | Action::NewProject(_)
                 | Action::Note { .. } => unreachable!(),
             }
         })();

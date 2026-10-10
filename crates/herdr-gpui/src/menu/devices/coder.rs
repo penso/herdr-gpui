@@ -59,11 +59,6 @@ pub(in crate::menu) struct Wizard {
 }
 
 impl HerdrWindow {
-    /// Whether the Coder row belongs in the device list at all.
-    pub(super) fn coder_configured(&self) -> bool {
-        self.config.coder.url.is_some() || std::env::var_os("HERDR_CODER_URL").is_some()
-    }
-
     fn coder_input(
         &self,
         placeholder: &str,

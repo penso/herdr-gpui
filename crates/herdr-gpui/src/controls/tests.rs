@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 103] = [
+    let expected: &[(Command, &[&str])] = &[
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -127,7 +127,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     );
     let names: std::collections::HashSet<_> = COMMANDS.iter().map(|info| info.name).collect();
     assert_eq!(names.len(), COMMANDS.len());
-    for (info, (command, shortcuts)) in COMMANDS.iter().zip(expected) {
+    for (info, &(command, shortcuts)) in COMMANDS.iter().zip(expected) {
         assert_eq!(info.command, command);
         assert_eq!(info.shortcuts, shortcuts);
         assert!(!info.name.is_empty());
