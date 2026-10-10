@@ -387,16 +387,32 @@ mod process {
             program: fake.path("missing"),
             ..fake.plan(None)
         };
-        let supervisor =
-            Supervisor::start_with(plan, serve_web, fake.probe(), |_| Ok(()), fast()).unwrap();
-        until("the start to fail", || failure(&supervisor).is_some());
-        let error = failure(&supervisor).unwrap();
+        // Exercise spawning directly: choosing then releasing a real port can
+        // race another test and report PortTaken before the missing program.
+        let worker = Worker {
+            shared: Arc::default(),
+            plan,
+            port: None,
+            command: serve_web,
+            probe: |_: &WebUrl| -> crate::Result<Server> {
+                panic!("a missing program cannot answer")
+            },
+            save_port: |_: NonZeroU16| Ok(()),
+            timing: fast(),
+        };
+        let Ended::Failed { error, healthy } = worker.serve(&Address {
+            port: NonZeroU16::new(51234).unwrap(),
+            url: WebUrl::try_from("http://127.0.0.1:51234/").unwrap(),
+        }) else {
+            panic!("a missing program must fail to start")
+        };
+        assert!(!healthy);
         assert!(
-            matches!(&*error, crate::Error::Code(Error::Spawn { .. })),
+            matches!(&error, crate::Error::Code(Error::Spawn { .. })),
             "{error:?}"
         );
         assert!(error.to_string().contains("missing"));
-        assert!(std::error::Error::source(&*error).is_some());
+        assert!(std::error::Error::source(&error).is_some());
     }
 
     #[test]

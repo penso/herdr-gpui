@@ -51,6 +51,13 @@ fn native_sidebar() {
     native_fixture(Fixture::Sidebar);
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires active Linux desktop; GUI-only menu fixtures, no daemon"]
+fn native_application_menus() {
+    native_fixture(Fixture::ApplicationMenus);
+}
+
 #[test]
 #[ignore = "requires active native desktop; intentionally invalid paint fixture, no daemon"]
 fn native_sidebar_probe_failure_exits_without_aborting() {
@@ -95,6 +102,8 @@ fn native_input_shutdown(field: &'static str) {
 
 enum Fixture {
     Sidebar,
+    #[cfg(target_os = "linux")]
+    ApplicationMenus,
     Notifications,
     InvalidChildWidth,
     #[cfg(target_os = "linux")]
@@ -113,6 +122,10 @@ fn native_fixture(fixture: Fixture) {
     }
     match fixture {
         Fixture::Sidebar => {}
+        #[cfg(target_os = "linux")]
+        Fixture::ApplicationMenus => {
+            command.env("HERDR_TEST_APPLICATION_MENUS", "1");
+        }
         Fixture::Notifications => {
             command.env("HERDR_TEST_NOTIFICATIONS_ONLY", "1");
         }
@@ -158,6 +171,8 @@ fn native_fixture(fixture: Fixture) {
     }
     assert!(status.success(), "native sidebar failed: {status}");
     assert!(log.contains(match fixture {
+        #[cfg(target_os = "linux")]
+        Fixture::ApplicationMenus => "APPLICATION MENUS native PASS",
         Fixture::Notifications => "NOTIFICATIONS native PASS:",
         #[cfg(target_os = "linux")]
         Fixture::InputShutdown(_) => "INPUT shutdown ready:",

@@ -392,6 +392,7 @@ impl HerdrWindow {
         // strip's foot, as in an editor.
         let scroller = div()
             .id(SharedString::from(slot.selector("tab-scroller")))
+            .debug_selector(move || slot.selector("tab-scroller"))
             .group(hover_group.clone())
             .relative()
             .flex()

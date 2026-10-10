@@ -1,9 +1,11 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::titlebar::tests::header_window;
+use crate::{sidebar::SidebarMode, titlebar::tests::header_window};
 use core::prelude::v1::test;
 use gpui::{Bounds, TestAppContext, VisualTestContext, point, px, size};
 use herdr_client::protocol::ClientShellTabStatusSegment;
+
+mod toggle_position;
 
 fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
@@ -49,12 +51,15 @@ fn only_the_strips_at_the_window_edges_carry_the_bar() {
 fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
     let (_, cx) = window(cx);
     assert!(cx.debug_bounds("titlebar").is_none());
-    assert_eq!(cx.debug_bounds("window-body").unwrap().top(), px(0.));
+    let top = cx
+        .debug_bounds("application-menu-bar")
+        .map_or(px(0.), |bar| bar.bottom());
+    assert_eq!(cx.debug_bounds("window-body").unwrap().top(), top);
     // The sidebar's first row clears the traffic lights and holds the toggle,
     // level with the tabs beside it.
     let header = cx.debug_bounds("sidebar-titlebar").unwrap();
     let sidebar = cx.debug_bounds("sidebar").unwrap();
-    assert_eq!(header.origin, point(px(0.), px(0.)));
+    assert_eq!(header.origin, point(px(0.), top));
     assert_eq!(header.size, size(sidebar.size.width, px(HEIGHT)));
     assert_eq!(sidebar.top(), header.bottom());
     let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
@@ -69,13 +74,13 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("strip-titlebar-leading").is_none());
     // The strip ends with the account at the window's right edge.
     let new_tab = cx.debug_bounds("new-tab").unwrap();
-    assert_eq!(new_tab.top(), px(0.));
+    assert_eq!(new_tab.top(), top);
     assert_eq!(new_tab.size.height, px(HEIGHT));
     let trailing = cx.debug_bounds("strip-titlebar-trailing").unwrap();
     assert_eq!(trailing.right(), px(1200.));
     assert_eq!(
         cx.debug_bounds("titlebar-avatar").unwrap(),
-        Bounds::new(point(px(1200. - 34.), px(3.)), size(px(28.), px(28.)))
+        Bounds::new(point(px(1200. - 34.), top + px(3.)), size(px(28.), px(28.)))
     );
     let room = cx.debug_bounds("strip-titlebar-room").unwrap();
     assert!(room.size.width >= px(DRAG_ROOM));
@@ -83,7 +88,7 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppContext) {
+fn a_collapsed_sidebar_keeps_the_toggle_in_the_header_when_it_fits(cx: &mut TestAppContext) {
     let (view, cx) = window(cx);
     cx.update(|_, cx| view.update(cx, |view, _| view.toggle_sidebar()));
     for (mode, expected) in [("compact", Some(SidebarMode::Rail)), ("hidden", None)] {
@@ -105,11 +110,20 @@ fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppCo
         draw(cx);
         let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
         let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
-        assert!(leading.contains(&toggle.center()), "{mode}");
+        if expected.is_some() && !cfg!(target_os = "macos") {
+            let header = cx.debug_bounds("sidebar-titlebar").unwrap();
+            assert!(header.contains(&toggle.center()), "{mode}");
+            assert!(!leading.contains(&toggle.center()), "{mode}");
+        } else {
+            assert!(leading.contains(&toggle.center()), "{mode}");
+        }
         let back = cx.debug_bounds("titlebar-back").unwrap();
         assert!(leading.contains(&back.center()), "{mode}");
         assert!(back.left() >= toggle.right(), "{mode}");
-        assert_eq!(leading.top(), px(0.), "{mode}");
+        let top = cx
+            .debug_bounds("application-menu-bar")
+            .map_or(px(0.), |bar| bar.bottom());
+        assert_eq!(leading.top(), top, "{mode}");
         // Clear of the traffic lights, whatever the column beside it covers.
         assert!(toggle.left() >= px(LEADING), "{mode}");
         if expected.is_none() {
@@ -146,7 +160,12 @@ fn a_split_puts_the_toggle_left_and_the_account_right(cx: &mut TestAppContext) {
     assert_eq!(slots.len(), 2);
     let left = cx.debug_bounds("group").unwrap();
     let right = cx.debug_bounds("g1-group").unwrap();
-    assert!(left.contains(&cx.debug_bounds("toggle-sidebar").unwrap().center()));
+    let toggle_host = if cfg!(target_os = "macos") {
+        left
+    } else {
+        cx.debug_bounds("sidebar-titlebar").unwrap()
+    };
+    assert!(toggle_host.contains(&cx.debug_bounds("toggle-sidebar").unwrap().center()));
     assert!(right.contains(&cx.debug_bounds("titlebar-avatar").unwrap().center()));
     assert!(cx.debug_bounds("titlebar").is_none());
 }

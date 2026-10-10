@@ -1,6 +1,7 @@
 //! The sidebar's device footer and the device picker that scopes the sidebar
 //! to one device or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
+mod activity_card;
 mod add_device;
 #[cfg(feature = "coder")]
 pub(super) mod coder;
@@ -26,11 +27,21 @@ pub(super) const MENU_WIDTH: f32 = 280.;
 /// origin of the button that opened it. The device picker and the session list
 /// clamp at the same place, so neither grows over the terminal.
 pub(super) fn list_height(anchor_y: Pixels) -> Pixels {
-    let chrome = crate::titlebar::HEIGHT
-        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
-    (anchor_y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.))
+    room_above(anchor_y).max(px(48.)).min(px(420.))
+}
+
+/// The device picker's list: the same cap, less the room the activity card
+/// above it takes when the window is too short for both.
+fn device_list_height(anchor_y: Pixels) -> Pixels {
+    (room_above(anchor_y) - px(activity_card::ROOM))
         .max(px(48.))
         .min(px(420.))
+}
+
+fn room_above(anchor_y: Pixels) -> Pixels {
+    let chrome = crate::titlebar::HEIGHT
+        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
+    anchor_y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.)
 }
 
 struct SettingsHint {
@@ -127,7 +138,7 @@ impl HerdrWindow {
             .is_none_or(|filter| filter == id)
     }
 
-    pub(super) fn device_setup_unavailable(&self) -> Option<&'static str> {
+    pub(crate) fn device_setup_unavailable(&self) -> Option<&'static str> {
         match &self.endpoints[0].connection.target {
             ConnectTarget::Socket(_) => {
                 Some("Device setup is unavailable with an explicit socket.")
@@ -408,7 +419,7 @@ impl HerdrWindow {
         }
         let mut view = div()
             .id("devices-list")
-            .max_h(list_height(self.menu.anchor.y))
+            .max_h(device_list_height(self.menu.anchor.y))
             .overflow_y_scroll()
             .track_scroll(&self.menu.devices_scroll)
             .flex()
@@ -529,7 +540,12 @@ impl HerdrWindow {
         {
             view = self.cloud_job_rows(view);
         }
-        view
+        // The card stays put above the list, which scrolls on its own.
+        div()
+            .flex()
+            .flex_col()
+            .child(self.render_activity_card(cx))
+            .child(view)
     }
 
     /// Machines still being added: progress only, not selectable rows, so
@@ -582,6 +598,21 @@ impl HerdrWindow {
         view
     }
 
+    /// Shared by the picker and overview, including isolated-window guards.
+    pub(crate) fn open_device_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(reason) = self.device_setup_unavailable() {
+            tracing::info!(category = "device_setup", reason, "Add Device unavailable");
+            return;
+        }
+        tracing::info!(category = "device_setup", "Opening Add Device");
+        if cfg!(windows) {
+            self.open_add_wsl(window, cx);
+        } else {
+            self.open_add_device(window, cx);
+        }
+        cx.notify();
+    }
+
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(offset) = index.checked_sub(self.endpoints.len() + 2) {
             #[cfg(feature = "cloud")]
@@ -603,16 +634,7 @@ impl HerdrWindow {
             return;
         }
         if index == self.endpoints.len() + 1 {
-            if let Some(reason) = self.device_setup_unavailable() {
-                tracing::info!(category = "device_setup", reason, "Add Device unavailable");
-                return;
-            }
-            tracing::info!(category = "device_setup", "Opening Add Device");
-            if cfg!(windows) {
-                self.open_add_wsl(window, cx);
-            } else {
-                self.open_add_device(window, cx);
-            }
+            self.open_device_setup(window, cx);
         } else {
             let filter = if index == 0 {
                 None

@@ -17,6 +17,7 @@ use std::{
 };
 
 mod actions;
+mod by_number;
 mod cache;
 mod fetch;
 mod fork_branch;

@@ -107,10 +107,11 @@ impl HerdrWindow {
         {
             return None;
         }
+        let (x, y) = self.grid_position(position);
         wheel_target(
             self.live.surface.as_deref()?,
-            f32::from(position.x - self.bounds.origin.x),
-            f32::from(position.y - self.bounds.origin.y),
+            x,
+            y,
             self.cell_width,
             self.config.terminal.line_height(),
         )
@@ -418,8 +419,9 @@ impl HerdrWindow {
         let Some(drag) = &self.scrollbar_drag else {
             return;
         };
+        // A snapshot ahead of its surface leaves no bar for a moment: the drag
+        // waits it out, and the next move (macOS repeats a held one) resumes.
         let Some(bar) = self.scrollbar(&drag.pane) else {
-            self.scrollbar_drag = None;
             return;
         };
         let top = f32::from(position.y - self.bounds.origin.y) - drag.grab;

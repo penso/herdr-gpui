@@ -1,11 +1,11 @@
-//! Codex plan usage, read with the Codex CLI's own ChatGPT sign-in in
-//! `$CODEX_HOME/auth.json`. An API-key-only install has no plan usage.
+//! Codex plan usage, read with the Codex CLI's ChatGPT sign-in, falling back
+//! to OpenCode's OpenAI OAuth sign-in. API keys do not provide plan usage.
 
 use crate::{
     Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
-        probe::{HostPath, Probe, Request},
+        probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Timestamp, json},
     },
 };
@@ -28,18 +28,38 @@ impl Service for Codex {
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
-        let auth = probe.file(&HostPath::env_or("CODEX_HOME", ".codex", "auth.json"))?;
-        let token = probe.field(&auth, &["tokens", "access_token"])?;
+        let (token, account) = codex_auth(probe).or_else(|| opencode_auth(probe))?;
         let mut request = Request::get(URL)
             .bearer(&token)
             .header("User-Agent", AGENT)
             .header("OpenAI-Beta", "codex-1")
             .header("originator", "Codex Desktop");
-        if let Some(account) = probe.field(&auth, &["tokens", "account_id"]) {
+        if let Some(account) = account {
             request = request.secret_header("ChatGPT-Account-Id", "", &account);
         }
         Some(probe.body(request).and_then(|body| parse(&body)))
     }
+}
+
+fn codex_auth(probe: &mut Probe) -> Option<(Secret, Option<Secret>)> {
+    let auth = probe.file(&HostPath::env_or("CODEX_HOME", ".codex", "auth.json"))?;
+    let token = probe.field(&auth, &["tokens", "access_token"])?;
+    Some((token, probe.field(&auth, &["tokens", "account_id"])))
+}
+
+/// OpenCode renews and saves this token itself; each poll reads the current
+/// file. Keeping extraction in the probe also keeps remote tokens on the host.
+fn opencode_auth(probe: &mut Probe) -> Option<(Secret, Option<Secret>)> {
+    let auth = probe.file(&HostPath::env_or(
+        "XDG_DATA_HOME",
+        ".local/share",
+        "opencode/auth.json",
+    ))?;
+    if probe.text(&auth, &["openai", "type"]).as_deref() != Some("oauth") {
+        return None;
+    }
+    let token = probe.field(&auth, &["openai", "access"])?;
+    Some((token, probe.field(&auth, &["openai", "accountId"])))
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {

@@ -20,7 +20,7 @@ pub(crate) use {
     },
 };
 
-pub(crate) use fetch::{local_repository, repository_key};
+pub(crate) use fetch::{by_number, local_repository, repository_key};
 #[cfg(any(test, all(feature = "integration-test", target_os = "macos")))]
 pub(crate) use model::fixture;
 

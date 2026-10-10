@@ -358,7 +358,8 @@ mod tests {
                     LayoutMode::Classic { density, .. } => {
                         density != crate::config::Density::Compact
                     }
-                    LayoutMode::Orca => true,
+                    // Herdr's rows at normal density.
+                    LayoutMode::Orca | LayoutMode::Devices => true,
                     LayoutMode::Superset | LayoutMode::Minimal => false,
                 };
                 assert_eq!(

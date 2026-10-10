@@ -16,11 +16,13 @@
 //!
 //! Retained cells are presentation only. Hit testing, input routing, and IME
 //! placement keep reading `LiveState::surface`, so a retained frame can never
-//! aim a click or a keystroke at a pane the client has already left.
+//! aim a click or a keystroke at a pane the client has already left. A pane
+//! drawn mid-row after a wheel scroll (`smooth_scroll`) is the one exception:
+//! hit testing and IME placement follow its offset, since that is what shows.
 
-use crate::state::LiveState;
+use crate::{smooth_scroll::SmoothScroll, state::LiveState};
 use herdr_client::{SurfaceImages, protocol::PaneSurfaceFrame};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 /// A frame with the pixels for the images it places.
 #[derive(Clone)]
@@ -35,6 +37,9 @@ pub(crate) struct Presentation {
     /// The pixels the presented frame was shown with. A retained frame keeps
     /// them, since the connection's own set follows the newest surface.
     images: Arc<SurfaceImages>,
+    /// Wheel scrolling drawn between the daemon's rows, fed the presented
+    /// frame's transitions.
+    pub(crate) scroll: SmoothScroll,
     /// The presented frame belongs to a connection that was lost, and stays
     /// up only to show where the reconnecting endpoint left off.
     stale: bool,
@@ -52,6 +57,9 @@ impl Presentation {
     pub(crate) fn frame(&mut self, live: &LiveState) -> Option<Arc<PaneSurfaceFrame>> {
         match live.surface.clone().filter(|_| live.surface_ready()) {
             Some(ready) => {
+                if let Some(shown) = self.presented.as_ref().filter(|s| !Arc::ptr_eq(s, &ready)) {
+                    self.scroll.observe(shown, &ready);
+                }
                 self.presented = Some(ready);
                 self.images = live.surface_images.clone();
                 // Only a frame accepted after `resume` is the new connection's.
@@ -86,6 +94,13 @@ impl Presentation {
                 .is_some_and(|snapshot| snapshot.boot_id == presented.boot_id)
     }
 
+    /// Records that the OS scrolled `pane_id` by `rows`, up into history being
+    /// positive, and returns the lines to send (see `SmoothScroll::wheel`).
+    pub(crate) fn wheel(&mut self, pane_id: &str, rows: f32) -> Option<i16> {
+        let presented = self.presented.as_ref()?;
+        self.scroll.wheel(presented, pane_id, rows, Instant::now())
+    }
+
     /// A daemon that restarted while the connection was down no longer has
     /// the terminals the stale frame shows.
     fn rebooted(&self, live: &LiveState) -> bool {
@@ -118,6 +133,7 @@ impl Presentation {
     pub(crate) fn clear(&mut self) {
         self.presented = None;
         self.images = Default::default();
+        self.scroll.clear();
         self.stale = false;
         self.held = false;
     }

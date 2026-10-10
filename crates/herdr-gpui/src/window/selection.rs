@@ -44,7 +44,7 @@ impl HerdrWindow {
         self.leave_copy_mode(cx);
         let cleared = self.selection.take().is_some();
         if let Some(surface) = self.selectable_surface(position) {
-            let (x, y) = Self::terminal_offset(self.bounds, position);
+            let (x, y) = self.grid_position(position);
             self.selection = Selection::begin(
                 surface,
                 x,
@@ -67,7 +67,7 @@ impl HerdrWindow {
         position: Point<Pixels>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let (x, y) = Self::terminal_offset(self.bounds, position);
+        let (x, y) = self.grid_position(position);
         let cell_width = self.cell_width;
         let cell_height = self.config.terminal.line_height();
         let (Some(selection), Some(surface)) = (&mut self.selection, &self.live.surface) else {
@@ -285,7 +285,7 @@ impl HerdrWindow {
         let pane = surface.panes.iter().find(|pane| pane.pane_id == pane_id)?;
         let scroll = pane.scroll?;
         let cell_height = self.config.terminal.line_height();
-        let (_, y) = Self::terminal_offset(self.bounds, pointer);
+        let (_, y) = self.grid_position(pointer);
         let top = f32::from(pane.inner_rect.y) * cell_height;
         let bottom = top + f32::from(pane.inner_rect.height) * cell_height;
         let rows = |distance: f32| ((distance / cell_height).ceil() as u64).clamp(1, 5);
@@ -399,13 +399,6 @@ impl HerdrWindow {
             return None;
         }
         self.live.surface.as_deref()
-    }
-
-    fn terminal_offset(bounds: gpui::Bounds<Pixels>, position: Point<Pixels>) -> (f32, f32) {
-        (
-            f32::from(position.x - bounds.origin.x),
-            f32::from(position.y - bounds.origin.y),
-        )
     }
 }
 

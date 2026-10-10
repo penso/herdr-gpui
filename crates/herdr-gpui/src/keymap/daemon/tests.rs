@@ -1,5 +1,6 @@
 use super::*;
 
+mod detach;
 mod literal_plus;
 
 fn keys(text: &str) -> DaemonKeys {

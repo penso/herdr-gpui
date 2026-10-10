@@ -76,7 +76,10 @@ const LOCAL_ROWS: [&str; 3] = ["wash-host-local", "wash-herdr", "wash-agent-p0"]
 /// its agents' rows, and no one else's, in every layout.
 #[gpui::test]
 fn a_host_colour_washes_only_that_hosts_rows(cx: &mut gpui::TestAppContext) {
-    for mode in crate::config::LayoutMode::ALL {
+    for mode in crate::config::LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
         assert_eq!(
             washed(cx, mode, SelectMode::Row, &[("Remote", 0x336699)], 0),
             REMOTE_ROWS,

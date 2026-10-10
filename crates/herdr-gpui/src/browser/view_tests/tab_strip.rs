@@ -105,3 +105,47 @@ fn a_tab_that_opens_grows_into_the_strip(cx: &mut gpui::TestAppContext) {
     );
     view.read_with(cx, |view, _| assert!(view.tabs_growing()));
 }
+
+/// A page's title arrives after its tab was brought into view. At the end of
+/// a crowded strip the tab widens past the strip's edge, and the strip
+/// follows it, so its close button stays in view.
+#[gpui::test]
+fn a_tab_that_widens_with_its_title_stays_in_view(cx: &mut gpui::TestAppContext) {
+    use gpui::px;
+
+    let (view, cx) = window(cx);
+    cx.simulate_resize(gpui::size(px(900.), px(600.)));
+    let ids = cx.update(|_, cx| {
+        let scope = scope(&view.read(cx).endpoints[0]);
+        (0..8)
+            .map(|_| {
+                Store::update(cx, |store| {
+                    store.open(scope.clone(), "w0", None, None).unwrap()
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    let last = *ids.last().unwrap();
+    cx.update(|_, cx| view.update(cx, |view, _| view.browser.appear = Default::default()));
+    cx.update(|window, cx| view.update(cx, |view, cx| view.show_browser_tab(last, window, cx)));
+    for _ in 0..6 {
+        draw(cx);
+    }
+    let scroller = cx.debug_bounds("tab-scroller").unwrap();
+    let close: &'static str = format!("close-browser-tab-{last}").leak();
+    assert!(cx.debug_bounds(close).unwrap().right() <= scroller.right() + px(0.5));
+
+    cx.update(|_, cx| {
+        Store::update(cx, |store| {
+            store.visited(last, None, Some("A pull request title that runs long"))
+        })
+    });
+    for _ in 0..6 {
+        draw(cx);
+    }
+    let shown = cx.debug_bounds(close).unwrap();
+    assert!(
+        shown.right() <= scroller.right() + px(0.5),
+        "{shown:?} past {scroller:?}"
+    );
+}

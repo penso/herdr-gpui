@@ -47,7 +47,10 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 `--dev` selects the `herdr-dev` config directory. Connection failure is displayed
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
-without input replay. Detach pauses retries for that endpoint until Reconnect.
+without input replay. The command palette's **Detach** disconnects the selected
+endpoint without closing the window or stopping the daemon, and pauses retries
+until Reconnect. It follows Herdr's `[keys].detach` binding (default: `Ctrl-B`,
+then `Q`); set `detach = ""` under `[keys]` to leave it unbound.
 A selected host that drops stays selected while it reconnects: its last terminal
 picture stays up, dimmed, under a card with the reason and a Reconnect now button,
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
@@ -536,8 +539,11 @@ device's published `[keys]` profile applies while it is selected (see
 Supported below). The GUI never reads a remote host's `config.toml`.
 
 Shared saves preserve comments and unknown keys, reject conflicting external
-edits and unsafe paths, and run off the UI thread. Symlinked config files and
-user-controlled symlink ancestors are refused rather than replaced. Save success
+edits and unsafe paths, and run off the UI thread. A symlinked `config.toml`, or
+a symlinked directory above it, is followed as Herdr follows it when the links
+belong to you or root and sit in directories other users cannot write: saves
+replace the file the link points at and keep the link, while a link to a missing
+file is refused. Save success
 is separate from the local daemon reload request, which is reported as queued,
 not acknowledged. Opening Preferences, its Reload button, and the daemon's reload
 signal reread the local file. Debounced disk polling also reloads saved changes,
@@ -630,14 +636,18 @@ space or punctuation trimmed before the ellipsis.
 
 The status bar shows the selected host's CPU and memory: a sparkline of recent
 CPU use and a memory meter, each with its current share, and cores, load
-averages, and memory in gigabytes in its tooltip. With more than one host, each
+averages, memory in gigabytes, free space on the volume holding the home
+directory, and uptime in its tooltip. With more than one host, each
 host row in the sidebar shows its own: right-aligned gauges after the name in
 compact layouts, and the sparkline and meter on a second line otherwise. This
 machine is read in process; each connected Linux or macOS remote host is read
 every two seconds over its own SSH shell, kept open while the host is connected
-(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
-systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
-or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS; `df -Pk
+"$HOME"` on both, with `/proc/uptime` on Linux and `kern.boottime` on macOS).
+Other remote systems, and remote hosts from a Windows client, show it as
+unavailable. Set top-level `show_system_load = false`, or turn off **Show CPU
+and memory** in Settings, to hide it and stop sampling while no
+[Devices overview](#devices-overview) is open.
 
 The coffee cup in the status bar keeps this machine's display on and stops it
 from sleeping when idle, for as long as the cup is full; click it again to let
@@ -697,8 +707,10 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-The sidebar button at the left of the titlebar (the sidebar's top row, or the
-leftmost tab strip while the sidebar is collapsed) hides or shows the sidebar.
+The sidebar button at the left of the titlebar hides or shows the sidebar.
+On Linux and Windows it stays in the same position when the sidebar collapses
+to a rail. The leftmost tab strip takes the button when the sidebar is hidden
+or the rail cannot fit it beside macOS's traffic lights.
 It stays available when the sidebar is hidden; the existing View menu command and shortcut still work.
 In **Settings > General**, toggle **Show usage** to turn the bottom quota display on or off.
 The choice is saved to `config-gpui.local.toml` and follows the existing `[usage] show` setting.
@@ -770,6 +782,15 @@ spacing:
   differs from the name, and the pull request. Agents are single compact lines.
 - `minimal`: one line per row with only the status dot and the name, for narrow
   sidebars or long lists.
+
+The `devices` layout lists agents by device instead of workspaces. Every
+device gets a header, even when there is only one, with its connection dot
+and how many of its agents are working (`2/5`). The device's agents sit under
+the header in Herdr's normal rows, and the separate agents section is hidden.
+A search field under the heading keeps only the devices whose name, address,
+agents, or workspaces match every word typed. The
+[Devices overview](#devices-overview) shows the same devices with their
+activity and load.
 
 New installs start with `comfortable-rounded`: the first launch writes it into
 the new `config-gpui.local.toml`. Existing override files and migrated personal
@@ -1408,6 +1429,67 @@ Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.
 
+## Orchestrator
+
+The Orchestrator row of a group's "…" menu, the Open Orchestrator command, or
+the Orchestrator row of a workspace's popover opens a tab listing that
+workspace's repository: its GitHub issues and pull requests, its
+[Beads](https://github.com/steveyegge/beads) issues when the main checkout has
+a `.beads` folder, and the agent runs dispatched for them. It works for the
+local session and saved SSH hosts.
+
+- **Issues** lists open GitHub issues and beads together. A bead's children sit
+  under it; filters narrow to Beads, items with a run, or blocked ones; five
+  sorts are offered. Search matches every word you type across title, id,
+  author, labels, state, and body, case-insensitively unless a word has a
+  capital, and keeps a match's parents in view.
+- **Pull requests** lists open ones and the 50 most recently closed or merged,
+  with their diff size and activity.
+- **Runs** lists every run, grouped by what needs you first. Its status comes
+  from Herdr's live view of each connected host.
+
+Selecting a row shows it in the preview, whose left edge drags to resize or
+close it; Enter or a double-click opens its page. An issue's page shows its
+description as plain text with Markdown structure, its runs, and its details. A
+pull request's page also has its conversation, read as on GitHub: authors'
+avatars, Markdown comments, each review holding its inline threads with
+resolved ones folded, and a summary of verdicts on top; you can comment there.
+It also shows the checks, review decision, and merge state. Merge offers the methods the
+repository allows and names the head commit shown, so GitHub refuses it if the
+branch moved.
+
+**Dispatch agent** opens a dialog: a prompt, an agent installed on the
+selected destination host, an optional model (passed as `--model`), a branch
+(`agent/<number>-<slug>-<hash>` as agent-launcher names it, editable), and
+extra instructions. The new worktree is
+created from the main checkout's `HEAD` in the workspace's repository, and the
+agent starts in it with the prompt. With more than one host connected, the
+dialog also ranks the hosts as [Smart Dispatch](#smart-dispatch) does; picking
+another one sets the repository up there the same way and starts the agent
+there, and its run card then acts on that host. A pull
+request's **Review with agent** does the same on an `agent/review-…` branch with a
+read-only prompt: the agent verifies the pull request, reads its diff, and
+reports findings without writing to GitHub. A run's card sends it messages, stops
+it, or removes its worktree; a bead's details can delete it with `bd`. Each of
+those asks first. Closing the Orchestrator tab or its detached window leaves
+an already-started dispatch running; it does not remove the new worktree.
+
+The hash at the end of a branch name is the item's own, so the Orchestrator
+finds work without its database, such as on another machine: a Herdr workspace
+on an item's branch shows as that item's run, working or stopped by whether an
+agent is in it, and so does an `agent/…` branch in the repository that no
+workspace shows. These runs open their workspace but have no controls.
+
+The tab shares its data with agent-launcher,
+so both can be open on one repository at once: each lists the other's runs,
+updates only its own, and uses agent-launcher's prompt profiles from
+`~/.config/agent-launcher/agents/<name>/prompt.md` (the built-in prompt when
+none is chosen). Issues and runs are kept in agent-launcher's per-repository
+database under the platform data directory. GitHub is read as the account used
+for pull requests on that host; GitLab remotes and GitHub Enterprise are listed
+as not supported yet. The window button in the tab's header moves the view into
+a window of its own.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane
@@ -1665,6 +1747,45 @@ C and C++ functions are not listed. Only local checkouts are indexed. Limits
 keep a huge repository responsive: at most 100,000 files are listed, files over
 1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
 kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
+
+## Devices Overview
+
+The activity card at the top of the device picker (the "All Devices" button
+at the foot of the sidebar), View > Devices Overview, or the command
+palette's "Devices Overview" opens a tab listing every device the window
+connects to. The card itself shows every device's agent activity for the
+last two hours and how many agents are working and blocked now. Like
+any tab, it can share a group with terminals, take a group of its own, or fill
+a window.
+
+- **Agent activity:** working agents, with blocked ones stacked above them, for
+  each of the last 120 minutes, with how many are working now and the peak.
+  "View all devices" adds one lane per device on the same time axis. Darker
+  cells mean more agents were working, red cells mean one was waiting for
+  input, and blank cells mean the device was not connected.
+- **Totals:** working, blocked, and idle or done agents across every device,
+  and how many devices are online.
+- **Devices:** one row per device with a dot per agent, how many are working
+  and blocked, CPU, memory, free space on the volume holding the home
+  directory, and uptime. Clicking a row opens it on that device's agents,
+  working first, with each agent's workspace and state; clicking an agent
+  shows its pane.
+
+The search field narrows the lanes and the table to devices whose name,
+address, agents, or workspaces match every word typed. Load columns wrap in
+narrow tabs. **Add Device** opens SSH setup, or WSL setup on Windows; it is
+unavailable in explicit-socket and development-catalog windows.
+
+The window keeps the activity history from the snapshots it already receives,
+so it starts empty each time the window opens; nothing is saved or asked of
+the daemon. Each minute holds the most agents seen working and waiting at
+once, and minutes the machine slept stay empty. A wall-clock jump forward of
+at least five seconds beyond monotonic elapsed time is treated like sleep;
+backward adjustments do not rewind or pause the history. CPU, memory, disk, and uptime
+come from the same sampling as the status bar's load, and every enabled host
+is sampled while an overview tab is open, even with the status bar's load
+hidden. A cloud machine has no host to sample, so its load columns stay
+empty.
 
 ## Editor Groups
 
@@ -2335,14 +2456,23 @@ records when reporting the failure.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
   On macOS and Linux, all socket modes (including explicit/inherited sockets)
   require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
-  Linux) at the standard configured session socket, with owned,
-  non-group/world-writable socket and parent. Executable upgrades/removal do not
+  Linux) at the standard configured session socket. The socket must be owned by
+  your user and not group/world-writable; its parent must be owned by your user
+  and not world-writable. Group-writable directories such as `775`, commonly
+  created by a umask of `002`, are accepted. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
   Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
   reviews and logs `Daemon endpoint not trusted as local` with the failed check.
-  `DirectoryPermissions` usually means a umask of 002 created the session
-  directory group-writable; `chmod g-w` on it and reconnect.
+  A local peer or permissions failure also produces an in-app toast once the
+  terminal connects, explaining why Git/PR details are unavailable and how to
+  restore them. It appears once per connection even when daemon notifications
+  are muted; permission failures include a quoted command on its own line for
+  the affected socket or directory and a reminder to reconnect the GUI. Intentionally
+  non-local sockets do not produce this toast.
+  `DirectoryPermissions` means the session directory's ownership could not be
+  verified or it is world-writable; check ownership, remove world-write access
+  with `chmod o-w` on it, and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
@@ -2675,6 +2805,17 @@ records when reporting the failure.
   horizontal by the platform (macOS, X11, Wayland), so it is sent as horizontal
   motion with Shift held, not swapped back. Popups capture wheel input only
   within their displayed bounds; input never falls through to a covered pane.
+- The daemon shows whole rows, at most one surface per render interval (16 ms),
+  so wheel scrollback in a pane draws where the OS's own deltas, momentum
+  included, put the content. Each delta slides in over 48 ms. The wheel asks
+  the daemon for each row as the motion enters it, and the rows are drawn from
+  the presented surface and the earlier ones that showed them. When the
+  gesture stops part-way into a row, the pane rests there; clicks, selection,
+  and links target the cells where they are drawn. Applications reading the
+  wheel, a dragged scrollbar thumb, a frame placing images, an open popup,
+  keyboard scrolling, and any change to the pane's rows besides the scroll move
+  the content to the daemon's whole row. Only the moving pane repaints; other
+  panes replay their cached paint.
 - Direct semantic cell canvas: named ANSI colors, indexed 256-color palette,
   RGB, reset foreground/background, reverse, dim, hidden, bold, italic,
   underline, strikeout, wide-cell skip handling, and cursor shapes.
@@ -2888,8 +3029,17 @@ X11/Wayland backends are retained. Linux uses Vulkan; macOS GPUI's
 the separate downloadable build-time Metal compiler. Integrated Linux ARM64
 compilation, Clippy, default/all-feature tests, and release CLI checks were
 verified in Ubuntu 24.04, not native desktop rendering or input. Linux Cmd bindings mean
-Super and can conflict with desktop shortcuts; global macOS menus are not
-available. Tests cover wire colors,
+Super and can conflict with desktop shortcuts. Linux shows an **in-window menu
+bar** using the same Herdr, File, Edit, View, Terminal, and Window definitions as
+macOS (plus QA in `qa-menu` builds). It remains visible with the sidebar hidden
+and collapses to **Menu** in narrow windows. In client-decorated windows, the
+minimize, maximize, and close buttons share its right edge. Drag the empty
+menu-bar background to move the window; it also supports the title bar's
+double-click and right-click behavior. Press **F10** to open a menu; arrows
+navigate, Enter selects, and Escape or F10 dismisses. Submenus open in the same
+panel; their back header returns to the parent. The menu shows current layout
+checkmarks and configured shortcuts, and restores the previous input focus on
+dismissal. Desktop-global menus are not exported. Tests cover wire colors,
 cell modifiers, viewport bounds, semantic key selection, revision coherence,
 creation request parameters, workspace-local tab cycling, wheel accumulation,
 pane-relative hit testing, and popup routing.
@@ -2899,6 +3049,17 @@ rejection, Unicode composition, and headless right-click/input routing.
 sizes, but does not validate OS IME candidate-window delivery or live daemon
 worktree creation/close.
 They do not replace an interactive smoke test against a live daemon.
+
+On an active Linux desktop, exercise the menu bar in an isolated, daemon-free
+native window with:
+
+```sh
+cargo test --locked -p herdr-gpui --features integration-test --test live_gui native_application_menus -- --ignored --nocapture --test-threads=1
+```
+
+This checks native painting and geometry at wide and narrow sizes, action
+dispatch, focus restoration, and input isolation using GPUI-injected events;
+it does not verify compositor-delivered keyboard input or OS IME behavior.
 
 Selection regressions cover unflagged CJK continuation cells, real spaces,
 partial wide characters, emoji/combining text, popup/pane boundaries, and headless

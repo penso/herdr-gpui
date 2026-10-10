@@ -17,6 +17,8 @@ mod browser_cookies;
 mod claude_keychain;
 mod keychain_access;
 mod labels;
+#[cfg(unix)]
+mod opencode_auth;
 mod provider_data;
 mod provider_settings;
 mod refresh;

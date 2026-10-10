@@ -264,6 +264,10 @@ impl HerdrWindow {
                 self.open_browser_tab(None, window, cx);
                 return;
             }
+            Command::OpenOrchestrator => {
+                self.open_orchestrator(window, cx);
+                return;
+            }
             Command::SplitEditor => {
                 self.split_active_group(window, cx);
                 return;
@@ -390,6 +394,10 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
+            Command::DevicesOverview => {
+                self.open_devices_overview(window, cx);
+                return;
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP
@@ -405,6 +413,11 @@ impl HerdrWindow {
                 // Older daemons do not advertise `pane.clear`. Say so rather than
                 // typing `clear` into the pane, which could reach a running program.
                 self.local_error = Some("Clear Pane needs a newer Herdr daemon.".into());
+                cx.notify();
+                return;
+            }
+            Command::Detach => {
+                self.detach_endpoint(cx);
                 cx.notify();
                 return;
             }

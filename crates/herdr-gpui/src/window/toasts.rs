@@ -321,7 +321,24 @@ impl HerdrWindow {
                                 )
                                 .child(div().truncate().child(notice.title.clone()))
                                 .when_some(notice.body.clone(), |d, body| {
-                                    d.child(div().max_h(px(48.)).overflow_hidden().child(body))
+                                    d.child(
+                                        div()
+                                            .id("body")
+                                            .debug_selector({
+                                                let endpoint_id = endpoint.id.clone();
+                                                move || format!("toast-body-{endpoint_id}-{id}")
+                                            })
+                                            .when(notice.is_local_feedback(), |body| {
+                                                body.max_h(
+                                                    (viewport.height - px(208.)).max(px(20.)),
+                                                )
+                                                .overflow_y_scroll()
+                                            })
+                                            .when(!notice.is_local_feedback(), |body| {
+                                                body.max_h(px(48.)).overflow_hidden()
+                                            })
+                                            .child(body),
+                                    )
                                 }),
                         )
                         .child(

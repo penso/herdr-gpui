@@ -24,6 +24,7 @@ mod horizontal_wheel;
 mod image_paste;
 mod image_paste_native;
 mod input_gap;
+mod install_prompt;
 mod keyboard;
 mod mouse_gestures;
 mod mouse_targets;
@@ -31,10 +32,12 @@ mod plugin_selection;
 mod prompts;
 mod reconnect_backoff;
 mod remote_drop;
+mod scrollbar_drag;
 mod sounds;
 mod split_drag;
 mod toast_handoff;
 mod toast_navigation;
+mod wheel_slides;
 mod window_notices;
 mod workspace_menu_navigation;
 
@@ -210,6 +213,7 @@ fn connected_endpoint(id: &str) -> (Endpoint, Server) {
             Method::PaneResize,
             Method::PaneSwap,
             Method::PaneClear,
+            Method::PaneScroll,
             Method::PaneClose,
             Method::TabClose,
             Method::CommandInvoke,

@@ -14,6 +14,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::ConnectOptions;
+use std::time::Instant;
 
 impl HerdrWindow {
     /// Config warnings, then the daemon's announcement, stacked over the
@@ -29,7 +30,9 @@ impl HerdrWindow {
             return None;
         }
         // Spans the terminal area so a narrow window shrinks the cards rather
-        // than pushing them off the left edge.
+        // than pushing them off the left edge. Each card sits in its own row:
+        // a column only shrinks its children along its height, so a card with
+        // a long line kept its full width there.
         Some(
             div()
                 .absolute()
@@ -38,9 +41,12 @@ impl HerdrWindow {
                 .right(px(8.))
                 .flex()
                 .flex_col()
-                .items_end()
                 .gap(px(8.))
-                .children(cards)
+                .children(
+                    cards
+                        .into_iter()
+                        .map(|card| div().flex().justify_end().child(card)),
+                )
                 .into_any_element(),
         )
     }
@@ -146,15 +152,38 @@ impl Render for HerdrWindow {
             cell_height,
             theme: self.theme.clone(),
         };
-        let regions = self.terminal_regions(surface.as_ref(), &highlights, &look, cx);
+        if !self.slides_allowed() {
+            self.presentation.scroll.clear();
+        }
+        let now = Instant::now();
+        let slide = self.presentation.scroll.slide(now);
+        // A link in a pane drawn mid-row underlines where its text is drawn.
+        let link_shift = link_rows.first().and_then(|(row, columns)| {
+            self.shift_at(point(
+                px(f32::from(columns.start) * cell_width),
+                px(f32::from(*row) * cell_height),
+            ))
+        });
+        if self.presentation.scroll.moving(now) {
+            // Advance the drawing on the next refresh through the surface
+            // signal: notifying this view would also rebuild the cached sidebar.
+            let signal = self.surface_signal.clone();
+            window.on_next_frame(move |_, cx| signal.update(cx, |_, cx| cx.notify()));
+        }
+        let regions = self.terminal_regions(surface.as_ref(), &highlights, slide, &look, cx);
         // Without regions the canvas paints the whole grid, images included.
         let whole = regions.is_empty();
         // The IME composition paints inline at the input cursor; a menu's
         // text field shows its own.
         // It anchors to the live surface, as the IME's candidate window does,
         // so a retained frame never separates the text from the window.
-        let marked = (!menu_open && !self.marked.is_empty())
-            .then(|| (self.marked.clone(), self.live.surface.clone()));
+        let marked = (!menu_open && !self.marked.is_empty()).then(|| {
+            (
+                self.marked.clone(),
+                self.live.surface.clone(),
+                self.ime_shift(),
+            )
+        });
         self.hovered_terminal_link =
             self.terminal_link_hovered(window.mouse_position(), window.modifiers());
         self.split_cursor = self.split_cursor_at(window.mouse_position());
@@ -443,13 +472,27 @@ impl Render for HerdrWindow {
                                     // else releases the ones that went away.
                                     painter.borrow_mut().release_idle_images(window);
                                 }
-                                painter.borrow().paint_link(
-                                    &surface.frame,
-                                    bounds.origin,
-                                    cell_width,
-                                    &link_rows,
-                                    window,
-                                );
+                                let paint_link = |window: &mut Window, shift| {
+                                    painter.borrow().paint_link(
+                                        &surface.frame,
+                                        bounds.origin + point(px(0.), shift),
+                                        cell_width,
+                                        &link_rows,
+                                        window,
+                                    )
+                                };
+                                match link_shift {
+                                    Some((pane, shift)) => window.with_content_mask(
+                                        Some(ContentMask {
+                                            bounds: Bounds::new(
+                                                bounds.origin + pane.origin,
+                                                pane.size,
+                                            ),
+                                        }),
+                                        |window| paint_link(window, shift),
+                                    ),
+                                    None => paint_link(window, px(0.)),
+                                }
                                 if let Some(popup) = &surface.popup {
                                     let offset = popup_origin(
                                         &surface.frame,
@@ -476,7 +519,7 @@ impl Render for HerdrWindow {
                                     );
                                 }
                             }
-                            if let Some((marked, live)) = &marked {
+                            if let Some((marked, live, shift)) = &marked {
                                 let live = live.as_deref();
                                 painter.borrow().paint_composition(
                                     marked,
@@ -486,7 +529,8 @@ impl Render for HerdrWindow {
                                         cell_width,
                                         cell_height,
                                     )
-                                    .origin,
+                                    .origin
+                                        + point(px(0.), *shift),
                                     input_area(live, bounds, cell_width, cell_height),
                                     &font,
                                     window,
@@ -581,7 +625,15 @@ impl Render for HerdrWindow {
                 (Shown::Terminal, _) if self.shows_parked_terminal(slot.id, cx) => {
                     self.render_parked_terminal(slot, gap, parked_font.clone(), cell_height, cx)
                 }
-                // A review tab is drawn by the app, never a page.
+                // Review and orchestrator tabs are drawn by the app, never pages.
+                (Shown::Page(_), Some(tab))
+                    if matches!(
+                        tab.location,
+                        Some(crate::browser::Location::Orchestrator { .. })
+                    ) =>
+                {
+                    self.render_orchestrator_tab(slot, &tab, gap)
+                }
                 (Shown::Page(_), Some(tab))
                     if tab
                         .location
@@ -591,6 +643,9 @@ impl Render for HerdrWindow {
                     match tab.location {
                         Some(crate::browser::Location::Code { .. }) => {
                             self.render_code_tab(slot, &tab, gap, cx)
+                        }
+                        Some(crate::browser::Location::Devices) => {
+                            self.render_devices_tab(slot, &tab, gap, cx)
                         }
                         _ => self.render_review_tab(slot, &tab, gap, cx),
                     }
@@ -626,12 +681,14 @@ impl Render for HerdrWindow {
             window.request_animation_frame();
         }
         let root = div()
+            .capture_key_down(cx.listener(Self::application_menu_shortcut))
             .on_modifiers_changed(cx.listener(Self::double_shift_modifiers))
             .capture_any_mouse_down(cx.listener(|this, _, _, _| this.shift_taps.cancel()))
             .child({
                 let entity = cx.weak_entity();
+                let menu_bounds = self.menu.application_bar.content.clone();
                 canvas(
-                    |_, _, _| (),
+                    move |bounds, _, _| menu_bounds.set(bounds),
                     move |_, _, window, _| {
                         let scroll_entity = entity.clone();
                         window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
@@ -731,6 +788,9 @@ impl Render for HerdrWindow {
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
+            .when(cfg!(target_os = "linux"), |root| {
+                root.child(self.render_application_bar(window, cx))
+            })
             .when(!merged, |root| root.child(self.render_titlebar(window, cx)))
             // Under the traffic lights a banner would hide them, so with no
             // header it moves to the window's foot.

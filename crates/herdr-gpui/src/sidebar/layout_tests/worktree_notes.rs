@@ -62,6 +62,19 @@ fn a_note_marks_its_row_and_reads_on_a_line_beneath_it(cx: &mut gpui::TestAppCon
     assert!(cx.debug_bounds("note-line-local-w5").is_none());
 
     // The line opens the note to edit, with the note as its draft.
+    // The menu bar and sidebar search can put this line below the viewport.
+    let viewport = cx.debug_bounds("spaces-scroll").unwrap();
+    if line.bottom() > viewport.bottom() {
+        view.update(cx, |view, cx| {
+            let scroll = &view.sidebar_scroll[0];
+            let mut offset = scroll.offset();
+            offset.y -= line.bottom() - viewport.bottom();
+            scroll.set_offset(offset);
+            cx.notify();
+        });
+        cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    }
+    let line = cx.debug_bounds("note-line-local-w4").unwrap();
     cx.simulate_click(line.center(), Modifiers::default());
     cx.run_until_parked();
     cx.update(|_, cx| {
@@ -99,6 +112,10 @@ fn a_note_marks_its_row_and_reads_on_a_line_beneath_it(cx: &mut gpui::TestAppCon
     });
     cx.simulate_keystrokes("backspace enter");
     cx.run_until_parked();
+    view.update(cx, |view, cx| {
+        view.sidebar_scroll[0].set_offset(Default::default());
+        cx.notify();
+    });
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     assert!(cx.debug_bounds("note-line-local-w4").is_none());
     assert_eq!(cx.debug_bounds(next).unwrap(), below);
