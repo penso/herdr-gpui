@@ -54,6 +54,8 @@ pub enum Command {
     About,
     OpenNotificationTarget,
     NewBrowserTab,
+    /// The focused workspace's repository's issues, pull requests, and runs.
+    OpenOrchestrator,
     InstallBrowserSkill,
     SplitEditor,
     OpenCode,
@@ -674,6 +676,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-shift-b"],
     },
     CommandInfo {
+        command: Command::OpenOrchestrator,
+        name: "open_orchestrator",
+        label: "Open Orchestrator",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::InstallBrowserSkill,
         name: "install_browser_skill",
         label: "Install Browser Skill for Agents",
@@ -868,6 +876,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::About
         | Command::OpenNotificationTarget
         | Command::NewBrowserTab
+        | Command::OpenOrchestrator
         | Command::InstallBrowserSkill
         | Command::SplitEditor
         | Command::OpenCode

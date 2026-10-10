@@ -35,15 +35,17 @@ pub(crate) const BODY_LIMIT: usize = 4096;
 const COMMENT_LIMIT: usize = 40;
 const AUTHOR_LIMIT: usize = 64;
 const PATH_LIMIT: usize = 160;
+/// The most of a body kept as written, for views that render Markdown.
+const SOURCE_LIMIT: usize = 16 * 1024;
 
 const CONVERSATION_QUERY: &str = r#"query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       id
-      comments(last: 20) { nodes { author { login } body createdAt } }
-      reviews(last: 20) { nodes { author { login } state body submittedAt } }
+      comments(last: 20) { nodes { author { __typename login avatarUrl(size: 64) } body createdAt } }
+      reviews(last: 20) { nodes { author { __typename login avatarUrl(size: 64) } state body submittedAt } }
       reviewThreads(last: 20) {
-        nodes { isResolved path comments(first: 1) { totalCount nodes { author { login } body createdAt } } }
+        nodes { isResolved path comments(first: 1) { totalCount nodes { author { __typename login avatarUrl(size: 64) } body createdAt } } }
       }
     }
   }
@@ -68,9 +70,23 @@ pub(crate) struct Target {
     pub url: String,
     id: String,
     head: String,
+    /// Whether comments and merges may be sent: only an open pull request's
+    /// target allows them. A closed one's is for reading its conversation.
+    writable: bool,
 }
 
 impl Target {
+    /// A target for reading `pr`'s conversation, whatever its state. Writes
+    /// through it are refused unless the pull request is open.
+    pub fn for_reading(pr: &PullRequest) -> crate::Result<Self> {
+        Self::of(pr, pr.state == State::Open)
+    }
+
+    /// The head commit a merge through this target names.
+    pub fn head(&self) -> &str {
+        &self.head
+    }
+
     /// The same pull request, whatever its head commit.
     pub fn same_pull_request(&self, other: &Self) -> bool {
         self.number == other.number
@@ -83,7 +99,16 @@ impl TryFrom<&PullRequest> for Target {
     type Error = Error;
 
     fn try_from(pr: &PullRequest) -> crate::Result<Self> {
-        if pr.state != State::Open || pr.id.is_empty() || pr.head_ref_oid.is_empty() {
+        if pr.state != State::Open {
+            return Err(Error::PrActionTarget);
+        }
+        Self::of(pr, true)
+    }
+}
+
+impl Target {
+    fn of(pr: &PullRequest, writable: bool) -> crate::Result<Self> {
+        if pr.id.is_empty() || pr.head_ref_oid.is_empty() {
             return Err(Error::PrActionTarget);
         }
         // Parsing re-wrote the URL to exactly this shape after checking it.
@@ -111,6 +136,7 @@ impl TryFrom<&PullRequest> for Target {
             url: pr.url.clone(),
             id: pr.id.clone(),
             head: pr.head_ref_oid.clone(),
+            writable,
         })
     }
 }
@@ -193,8 +219,16 @@ impl CommentKind {
 pub(crate) struct Comment {
     pub author: String,
     pub kind: CommentKind,
+    /// One cleaned line, for compact lists.
     pub body: String,
     pub created_at: String,
+    /// The body as written, bounded, its lines kept: Markdown for a view
+    /// that renders it, which sanitizes it as it parses.
+    pub source: String,
+    /// The author's GitHub avatar, only ever on GitHub's avatar host.
+    pub avatar: Option<String>,
+    /// Whether the author is an app rather than a person.
+    pub bot: bool,
 }
 
 enum Job {
@@ -327,7 +361,11 @@ impl Actions {
         if self.running.is_some() {
             return Err(Error::PrActionBusy);
         }
-        let target = self.target.clone().ok_or(Error::PrActionTarget)?;
+        let target = self
+            .target
+            .clone()
+            .filter(|target| target.writable)
+            .ok_or(Error::PrActionTarget)?;
         let action = match action {
             Action::Comment(body) => {
                 let body = body.trim();
@@ -602,6 +640,14 @@ fn entry(node: &Value, time: &str, kind: CommentKind) -> Option<Comment> {
         return None;
     }
     let author = bounded(&text(&node["author"]["login"]), AUTHOR_LIMIT);
+    let avatar = node["author"]["avatarUrl"]
+        .as_str()
+        .filter(|url| {
+            url.len() <= 512
+                && url.starts_with("https://avatars.githubusercontent.com/")
+                && url.bytes().all(|byte| byte.is_ascii_graphic())
+        })
+        .map(str::to_owned);
     Some(Comment {
         // A deleted account is GitHub's "ghost".
         author: if author.is_empty() {
@@ -612,6 +658,9 @@ fn entry(node: &Value, time: &str, kind: CommentKind) -> Option<Comment> {
         kind,
         body: text(&node["body"]),
         created_at: bounded(&text(&node[time]), 32),
+        source: bounded(node["body"].as_str().unwrap_or_default(), SOURCE_LIMIT),
+        avatar,
+        bot: node["author"]["__typename"] == "Bot",
     })
 }
 

@@ -177,6 +177,32 @@ fn the_conversation_is_cleaned_bounded_ordered_and_fenced_by_identity() {
 }
 
 #[test]
+fn the_conversation_keeps_markdown_and_only_github_avatars() {
+    let target = target();
+    let response = json!({"data": {"repository": {"pullRequest": {
+        "id": "PR_kwDOfixture8",
+        "comments": {"nodes": [
+            {"author": {"__typename": "User", "login": "alice", "avatarUrl": "https://avatars.githubusercontent.com/u/1?s=64"},
+             "body": "**bold**\n\n- item", "createdAt": "2026-09-20T12:00:01Z"},
+            {"author": {"__typename": "Bot", "login": "ci", "avatarUrl": "https://evil.example/a.png"},
+             "body": "ok", "createdAt": "2026-09-20T12:00:02Z"},
+        ]},
+        "reviews": {"nodes": []},
+        "reviewThreads": {"nodes": []},
+    }}}});
+    let comments = parse_conversation(&response, &target).unwrap();
+    assert_eq!(comments[0].source, "**bold**\n\n- item");
+    assert_eq!(comments[0].body, "**bold** - item");
+    assert_eq!(
+        comments[0].avatar.as_deref(),
+        Some("https://avatars.githubusercontent.com/u/1?s=64")
+    );
+    assert!(!comments[0].bot);
+    assert_eq!(comments[1].avatar, None);
+    assert!(comments[1].bot);
+}
+
+#[test]
 fn actions_are_validated_before_they_are_queued_and_never_overlap() {
     let mut actions = Actions::default();
     assert!(matches!(
@@ -299,4 +325,27 @@ fn a_lost_worker_reports_instead_of_resending() {
         actions.error(),
         Some(Error::PrActionWorker.to_string().as_str())
     );
+}
+
+#[test]
+fn a_closed_pull_request_can_be_read_but_never_written() {
+    let mut pr = fixture().unwrap();
+    pr.state = State::Merged;
+    let closed = Target::for_reading(&pr).unwrap();
+    assert_eq!(closed.number, 8);
+    let mut actions = Actions::default();
+    actions.track(Some(closed));
+    assert!(actions.load_comments(token()).is_ok());
+    for action in [
+        Action::Comment("hi".into()),
+        Action::Merge(MergeMethod::Merge),
+    ] {
+        assert!(matches!(
+            actions.start(action, &[MergeMethod::Merge], token()),
+            Err(Error::PrActionTarget)
+        ));
+    }
+    // An open one reads and writes alike.
+    let open = Target::for_reading(&fixture().unwrap()).unwrap();
+    assert_eq!(Some(&open), Some(&target()));
 }

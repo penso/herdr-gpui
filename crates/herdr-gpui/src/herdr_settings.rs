@@ -70,7 +70,7 @@ pub(crate) enum Error {
     #[error("shared Herdr config is busy; retry saving")]
     Busy,
     #[error(
-        "shared Herdr config requires an owned regular file and owned, non-writable-by-others parent; symlink targets are refused"
+        "shared Herdr config must be a single-link regular file you own, in directories only you or root can write, reached only through symlinks you or root own"
     )]
     UnsafePath,
     #[error("shared Herdr config exceeds the 1 MiB limit")]

@@ -107,6 +107,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (Quit, &["cmd-q"]),
         (About, &[]),
         (NewBrowserTab, &["cmd-shift-b"]),
+        (OpenOrchestrator, &[]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
         (OpenCode, &[]),

@@ -205,6 +205,17 @@ pub(crate) struct HerdrWindow {
         std::collections::HashMap<crate::browser::TabId, crate::code_view::CodeView>,
     /// Checkouts indexed for Go to Symbol and Go to File.
     pub(crate) code_indexes: crate::code_search::Indexes,
+    /// Each orchestrator tab's view, by its tab.
+    pub(crate) orchestrators:
+        std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Orchestrator>,
+    pub(crate) orchestrator_live: crate::orchestrator::LiveCache,
+    /// Orchestrator views moved into windows of their own, by their old tab.
+    pub(crate) detached_orchestrators:
+        std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Detached>,
+    /// Orchestrator views' requests, acted on at the next tick.
+    pub(crate) orchestrator_events: Vec<(crate::browser::TabId, crate::orchestrator::Event)>,
+    /// Whether an orchestrator's dispatch dialog ranks hosts by their load.
+    pub(crate) orchestrator_sampling: bool,
     /// The window's width at its last render, which caps side panels.
     pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
@@ -561,6 +572,7 @@ impl HerdrWindow {
         if !self.config.show_system_load
             && !self.devices_overview_open()
             && !self.dispatch_sampling()
+            && !self.orchestrator_sampling
         {
             return self.system_load.poll(Vec::new());
         }
@@ -825,6 +837,11 @@ impl HerdrWindow {
             reviews: Default::default(),
             code_views: Default::default(),
             code_indexes: Default::default(),
+            orchestrators: Default::default(),
+            orchestrator_live: Default::default(),
+            detached_orchestrators: Default::default(),
+            orchestrator_events: Vec::new(),
+            orchestrator_sampling: false,
             viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),
@@ -905,6 +922,7 @@ impl HerdrWindow {
             async {}
         })
         .detach();
+        Self::close_orchestrator_windows_on_release(cx);
         #[cfg(feature = "integration-test")]
         if sidebar_test {
             this._poll = Task::ready(());

@@ -1,7 +1,8 @@
 //! The menu behind a group's "…" button: tabs other than a terminal to open
 //! in the group (a blank browser tab, the focused checkout's review, the
-//! focused workspace's listening ports, its VS Code), closing tabs in the
-//! group, and splitting it. A terminal tab comes from the group's "+". Closing here only
+//! repository's orchestrator, the focused workspace's listening ports, its
+//! VS Code), closing tabs in the group, and splitting it. A terminal tab
+//! comes from the group's "+". Closing here only
 //! ever takes tabs out of this group's strip, as an editor's group menu does:
 //! the tabs stay open in Herdr, in the browser, and in every other group.
 //! Only a tab's own close, unsplit, reaches Herdr, through its confirmation.
@@ -27,6 +28,8 @@ enum Action {
     NewBrowserTab,
     /// The review tab of the checkout the Git chip tracks.
     Review,
+    /// The focused workspace's repository's issues, pull requests, and runs.
+    Orchestrator,
     /// The workspace's VS Code tab, opened in this group.
     VsCode,
     /// One of the focused workspace's listening ports and where it opens.
@@ -48,6 +51,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => "New Browser Tab".into(),
             Self::Review => "Review Changes".into(),
+            Self::Orchestrator => "Orchestrator".into(),
             Self::VsCode => "VS Code".into(),
             Self::Port { link, .. } => link.label().into(),
             Self::Close => "Close".into(),
@@ -61,6 +65,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => Some("icons/globe.svg"),
             Self::Review => Some("icons/diff-unified.svg"),
+            Self::Orchestrator => Some("icons/pulse.svg"),
             Self::VsCode => Some("icons/vscode.svg"),
             Self::Port { .. } => Some("icons/arrow-right.svg"),
             Self::Split => Some("icons/split.svg"),
@@ -79,7 +84,7 @@ impl Action {
     /// Which run of rows this one belongs to; a rule separates runs.
     fn section(&self) -> u8 {
         match self {
-            Self::NewBrowserTab | Self::Review | Self::VsCode => 0,
+            Self::NewBrowserTab | Self::Review | Self::Orchestrator | Self::VsCode => 0,
             Self::Port { .. } => 1,
             Self::Close | Self::CloseOthers | Self::CloseAll => 2,
             Self::Split => 3,
@@ -113,6 +118,9 @@ impl HerdrWindow {
         let mut actions = vec![Action::NewBrowserTab];
         if self.git.tracked().is_some() {
             actions.push(Action::Review);
+        }
+        if self.can_open_orchestrator() {
+            actions.push(Action::Orchestrator);
         }
         if self.code_offered(cx) {
             actions.push(Action::VsCode);
@@ -172,6 +180,7 @@ impl HerdrWindow {
         match action {
             Action::NewBrowserTab => self.open_browser_tab_in(group, window, cx),
             Action::Review => self.open_review(window, cx),
+            Action::Orchestrator => self.open_orchestrator(window, cx),
             Action::VsCode => self.open_code(Some(group), window, cx),
             Action::Port { link, .. } => {
                 let Some((endpoint, workspace)) = self
