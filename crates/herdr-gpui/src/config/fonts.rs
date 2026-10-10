@@ -242,13 +242,14 @@ const SYMBOL_FAMILY_MARKER: &str = "nerd font";
 const MAX_DETECTED_FALLBACKS: usize = 3;
 
 /// Whether `family` is, by its name, a patched face that draws prompt icons
-/// itself: a Nerd Font, one of its abbreviated `NF` builds such as
-/// Powerlevel10k's recommended `MesloLGS NF`, or a Powerline face. Detection
-/// looks for [`SYMBOL_FAMILY_MARKER`] and so misses the abbreviated names.
+/// itself: a Nerd Font, or one of its abbreviated `NF` builds such as
+/// Powerlevel10k's recommended `MesloLGS NF`. Detection looks for
+/// [`SYMBOL_FAMILY_MARKER`] and so misses the abbreviated names. A Powerline
+/// face is not one: it carries the separators and the branch mark, and none
+/// of the icons a Nerd Font prompt draws.
 fn draws_icons(family: &str) -> bool {
     let lowercase = family.to_lowercase();
     lowercase.contains(SYMBOL_FAMILY_MARKER)
-        || lowercase.contains("powerline")
         || lowercase
             .split_whitespace()
             .any(|word| matches!(word, "nf" | "nfm" | "nfp"))

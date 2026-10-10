@@ -52,12 +52,7 @@ fn other_faces_without_icons_are_not_reported() -> anyhow::Result<()> {
 fn a_terminal_face_patched_with_the_icons_is_not_reported() -> anyhow::Result<()> {
     // Detection finds no "Nerd Font" family in any of these, but the terminal
     // face draws the icons itself.
-    for family in [
-        "MesloLGS NF",
-        "JetBrainsMonoNL NFM",
-        "FiraCode NFP",
-        "Meslo LG S for Powerline",
-    ] {
+    for family in ["MesloLGS NF", "JetBrainsMonoNL NFM", "FiraCode NFP"] {
         let mut config = Config::parse(&format!("[terminal]\nfamily = '{family}'"))?;
         config.resolve_fonts(|| {
             let mut installed = without_nerd_fonts();
@@ -90,9 +85,14 @@ fn a_patched_terminal_face_that_is_not_installed_is_still_reported() -> anyhow::
 }
 
 #[test]
-fn an_unpatched_terminal_face_is_still_reported() -> anyhow::Result<()> {
-    // `NF` counts as a word, not as letters inside one.
-    for family in ["JetBrains Mono", "Confetti Mono"] {
+fn a_terminal_face_without_the_icons_is_still_reported() -> anyhow::Result<()> {
+    // `NF` counts as a word, not as letters inside one. A Powerline face
+    // draws separators and the branch mark, but no folder or logo.
+    for family in [
+        "JetBrains Mono",
+        "Confetti Mono",
+        "Meslo LG S for Powerline",
+    ] {
         let mut config = Config::parse(&format!("[terminal]\nfamily = '{family}'"))?;
         config.resolve_fonts(|| {
             let mut installed = without_nerd_fonts();
