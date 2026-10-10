@@ -24,6 +24,7 @@ const MAX_HAYSTACK_GRAPHEMES: usize = 512;
 /// A term found in the name outranks the same term found in the context.
 const NAME_WEIGHT: u32 = 2;
 
+#[derive(Clone)]
 pub(super) struct Fields {
     name: Utf32String,
     context: Utf32String,
