@@ -181,6 +181,46 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("release-notes/CHANGELOG.md dist", publish)
         self.assertNotIn("RELEASE_NOTES", str(MANIFEST.asset_names(VERSION)))
 
+    def test_betas_are_prereleases_kept_out_of_homebrew_until_promoted(self):
+        def jobs_of(name):
+            workflow = (ROOT / ".github/workflows" / name).read_text()
+            sections = re.split(r"^  ([a-z-]+):\n", workflow.split("\njobs:\n", 1)[1], flags=re.M)
+            return workflow, dict(zip(sections[1::2], sections[2::2]))
+        release, jobs = jobs_of("release.yml")
+        self.assertIn("        type: choice\n        options:\n          - stable\n          - beta\n", release)
+        self.assertIn('[[ "$CHANNEL" == stable || "$CHANNEL" == beta ]]', jobs["validate"])
+        publish = jobs["publish"]
+        self.assertIn("channel=(--prerelease --latest=false)", publish)
+        self.assertIn('.isPrerelease == ($channel == "beta")', publish)
+        self.assertIn("needs.validate.outputs.channel == 'stable'", jobs["homebrew"])
+        # Unpromoted betas fold into the next release's notes.
+        self.assertIn("select(.prerelease and (.draft | not))", jobs["changelog"])
+
+        promote, promotion = jobs_of("promote.yml")
+        self.assertEqual(list(promotion), ["audit", "validate", "promote", "homebrew"])
+        self.assertEqual(re.findall(r"^  (\w+):", promote.split("permissions:", 1)[0], re.M),
+                         ["workflow_dispatch"])
+        self.assertIn("group: manual-release\n", promote)
+        for name, job in promotion.items():
+            for condition in ("github.repository == 'penso/herdr-gpui'", "github.ref == 'refs/heads/main'",
+                              "github.actor == 'penso'", "github.triggering_actor == 'penso'"):
+                self.assertIn(condition, job, name)
+            if name != "homebrew":
+                self.assertNotIn("secrets.", job)
+        validate = promotion["validate"]
+        self.assertIn('[[ "$VERSION" =~ ^[1-9][0-9]{7}\\.[1-9][0-9]*$ ]]', validate)
+        self.assertIn(".isDraft == false and .isPrerelease == true", validate)
+        self.assertIn("is not newer than the latest stable", validate)
+        self.assertIn("    environment: release\n", promotion["promote"])
+        self.assertIn("--prerelease=false --latest", promotion["promote"])
+        # Nothing is rebuilt, re-signed or re-uploaded on promotion.
+        for word in ("cargo ", "upload", "gh release create", "SIGNING_KEY", "id-token"):
+            self.assertNotIn(word, promote)
+        # One tap update policy: the promoted job is the release job minus its channel gate.
+        self.assertEqual(promotion["homebrew"].replace("    needs: [validate, promote]\n", ""),
+                         jobs["homebrew"].replace(" &&\n      needs.validate.outputs.channel == 'stable'", "")
+                         .replace("    needs: [validate, publish]\n", ""))
+
     def test_updater_signing_boundary(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         sections = re.split(r"^  ([a-z-]+):\n", workflow.split("\njobs:\n", 1)[1], flags=re.M)

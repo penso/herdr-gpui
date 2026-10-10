@@ -158,7 +158,7 @@ fn periodic_checks_cannot_reset_active_cancellation() -> anyhow::Result<()> {
             .try_recv()
             .context("receive periodic check")?
             .operation,
-        Operation::Check
+        Operation::Check(UpdateChannel::Stable)
     ));
     updater.cancel();
     updater.next_check = Instant::now();
@@ -174,4 +174,38 @@ fn periodic_checks_cannot_reset_active_cancellation() -> anyhow::Result<()> {
     ));
     assert!(receiver.try_recv().is_err());
     Ok(())
+}
+
+#[test]
+fn changing_channel_rechecks_on_that_channel_once_the_worker_is_free() -> anyhow::Result<()> {
+    let (sender, receiver) = mpsc::sync_channel(2);
+    let mut updater = Updater::default();
+    updater.commands = Some(sender);
+    updater.state = State::Checking;
+    updater.set_channel(UpdateChannel::Stable);
+    assert!(
+        updater.next_check > Instant::now(),
+        "an unchanged channel waits"
+    );
+    updater.set_channel(UpdateChannel::Beta);
+    // The worker is still busy with the old channel's check: nothing queues.
+    assert!(!updater.poll());
+    assert!(receiver.try_recv().is_err());
+    updater.state = State::Current;
+    assert!(updater.poll());
+    assert!(matches!(
+        receiver.try_recv().context("receive beta check")?.operation,
+        Operation::Check(UpdateChannel::Beta)
+    ));
+    assert!(updater.next_check > Instant::now());
+    Ok(())
+}
+
+#[test]
+fn a_service_without_a_worker_ignores_channel_changes() {
+    let mut updater = Updater::default();
+    let scheduled = updater.next_check;
+    updater.set_channel(UpdateChannel::Beta);
+    assert_eq!(updater.next_check, scheduled);
+    assert!(!updater.poll());
 }

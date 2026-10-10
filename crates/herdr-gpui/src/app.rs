@@ -329,7 +329,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             .detach();
             // Native test modes and CLI invocations never start an updater worker.
             let updater = if mode == LaunchMode::Normal {
-                updater::Updater::start()
+                updater::Updater::start(cx.global::<InitialAppearance>().config.updates.channel)
             } else {
                 updater::Updater::default()
             };

@@ -4,8 +4,22 @@ set -euo pipefail
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
 # The workflow derives the calendar version from today's UTC date and the tags
-# already published; nothing here chooses or dispatches a version.
-[[ $# == 0 ]] || fail 'Usage: bash scripts/release/dispatch.sh'
+# already published; nothing here chooses a version for a new release. Only a
+# promotion names one: the published beta to make stable.
+usage='Usage: bash scripts/release/dispatch.sh [--beta | --promote VERSION]'
+workflow=release.yml
+channel=stable
+case "$*" in
+    '') ;;
+    --beta) channel=beta ;;
+    --promote\ *)
+        [[ $# == 2 ]] || fail "$usage"
+        workflow=promote.yml
+        version=$2
+        [[ $version =~ ^[1-9][0-9]{7}\.[1-9][0-9]*$ ]] || fail 'Version must be YYYYMMDD.COUNTER (no v prefix)'
+        ;;
+    *) fail "$usage" ;;
+esac
 for command in git gh jq openssl; do
     command -v "$command" >/dev/null || fail "Required command: $command"
 done
@@ -26,14 +40,20 @@ sha=$(git rev-parse HEAD)
 
 # A nonce avoids confusing this dispatch with another run for the same SHA.
 request_id=$(openssl rand -hex 16)
-title="Release @ $sha [$request_id]"
-gh workflow run release.yml --repo "$repo" --ref main \
-    -f "expected_sha=$sha" -f "request_id=$request_id"
+if [[ $workflow == promote.yml ]]; then
+    title="Promote v$version [$request_id]"
+    gh workflow run promote.yml --repo "$repo" --ref main \
+        -f "version=$version" -f "request_id=$request_id"
+else
+    title="Release $channel @ $sha [$request_id]"
+    gh workflow run release.yml --repo "$repo" --ref main \
+        -f "expected_sha=$sha" -f "request_id=$request_id" -f "channel=$channel"
+fi
 printf 'Dispatched %s\n' "$title"
 
 run_id=''
 for ((attempt = 0; attempt < 60; attempt++)); do
-    runs=$(gh run list --repo "$repo" --workflow release.yml --branch main \
+    runs=$(gh run list --repo "$repo" --workflow "$workflow" --branch main \
         --event workflow_dispatch --limit 100 \
         --json databaseId,displayTitle)
     # Match the input SHA in the title, not headSha: a main-HEAD race must still
@@ -53,5 +73,12 @@ printf 'Watching https://github.com/%s/actions/runs/%s (protected jobs may await
 gh run watch "$run_id" --repo "$repo" --exit-status
 conclusion=$(gh run view "$run_id" --repo "$repo" --json conclusion --jq .conclusion)
 [[ "$conclusion" == success ]] || fail "Release run concluded: $conclusion"
-published=$(gh api "repos/$repo/releases/latest" --jq .tag_name 2>/dev/null || printf 'unknown')
-printf 'Release %s completed successfully.\n' "$published"
+if [[ $channel == beta ]]; then
+    published=$(gh api "repos/$repo/releases?per_page=10" \
+        --jq '[.[] | select(.prerelease and (.draft | not))][0].tag_name' 2>/dev/null || printf 'unknown')
+    printf 'Beta %s completed successfully. Promote it with: just release-promote %s\n' \
+        "$published" "${published#v}"
+else
+    published=$(gh api "repos/$repo/releases/latest" --jq .tag_name 2>/dev/null || printf 'unknown')
+    printf 'Release %s completed successfully.\n' "$published"
+fi

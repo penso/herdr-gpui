@@ -41,8 +41,8 @@ class ChangelogTests(unittest.TestCase):
         self.env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                     "HOME": str(self.work), "MOCK_LOG": str(self.log)}
 
-    def generate(self, version="20260920.3", out=None, success=True):
-        result = subprocess.run(["bash", str(SCRIPT), version, str(self.out if out is None else out)],
+    def generate(self, version="20260920.3", out=None, success=True, betas=()):
+        result = subprocess.run(["bash", str(SCRIPT), version, str(self.out if out is None else out), *betas],
                                 env=self.env, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode == 0, success, result.stderr)
         return result
@@ -70,6 +70,25 @@ class ChangelogTests(unittest.TestCase):
             self.assertEqual(call[call.index("--tag") + 1], "v20260920.3")
             self.assertEqual(call[call.index("--config") + 1], "cliff.toml")
         self.assertIn("--strip", notes)
+
+    def test_unpromoted_betas_fold_into_the_release_after_them(self):
+        self.generate(betas=("v20260918.1", "v20260919.12"))
+        changelog, notes = self.calls()
+        for call in (changelog, notes):
+            self.assertEqual(call[call.index("--ignore-tags") + 1], r"^(v20260918\.1|v20260919\.12)$")
+        # --unreleased would stop at the newest beta, so the notes name a range
+        # starting at the newest tag that is not one of the betas.
+        self.assertNotIn("--unreleased", notes)
+        stable = subprocess.run(["git", "-C", str(ROOT), "tag", "--list", "v20*", "--merged", "HEAD",
+                                 "--sort=-v:refname"], capture_output=True, text=True, check=True).stdout.split()
+        if stable:
+            self.assertEqual(notes[-1], f"{stable[0]}..HEAD")
+
+    def test_malformed_beta_tags_are_refused_before_git_cliff_runs(self):
+        for beta in ("20260918.1", "v20260918.01", "v20260918.1|.*", "$(id)", ""):
+            with self.subTest(beta=beta):
+                self.generate(betas=(beta,), success=False)
+        self.assertFalse(self.log.exists())
 
     def test_bad_version_missing_directory_and_existing_output_refused(self):
         for version in ("v20260920.3", "20260920.3-rc1", "1.2", "020260920.3", "$(id)", ""):

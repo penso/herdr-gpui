@@ -137,6 +137,11 @@ the updater runs `brew update` and retries once. The update panel shows progress
 throughout. macOS `.dmg`, experimental Linux packages, and experimental Windows `.zip`s
 are also published on [Releases](https://github.com/penso/herdr-gpui/releases).
 
+Betas are published as GitHub prereleases before being promoted to stable. To try
+them in a standalone install, turn on **Settings > General > Install beta releases**
+(`[updates] channel = "beta"`); turning it off never downgrades. Homebrew installs
+always follow stable releases.
+
 ### Linux packages
 
 Each release publishes x86_64 and ARM64 builds as a `.deb`, an `.rpm`, an Arch
