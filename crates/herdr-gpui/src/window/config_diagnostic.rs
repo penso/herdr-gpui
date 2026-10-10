@@ -2,8 +2,8 @@
 //! terminal area, where Herdr draws its own: this app's GUI config warning,
 //! the missing icon font, then the selected endpoint's daemon `config.toml`
 //! diagnostic.
-use super::HerdrWindow;
-use crate::notifications::safe_text;
+use super::{Flash, HerdrWindow};
+use crate::{fonts::StyledFont, notifications::safe_text};
 use gpui::{prelude::*, *};
 use std::sync::Arc;
 
@@ -19,6 +19,7 @@ impl HerdrWindow {
                 "gui-config-diagnostic",
                 "Herdr GPUI".into(),
                 lines,
+                None,
                 move |this, cx| {
                     if this.gui_config_diagnostic.dismiss(&drawn) {
                         cx.notify();
@@ -29,10 +30,13 @@ impl HerdrWindow {
         });
         let icon_font = self.icon_font_notice.visible().map(|lines| {
             let drawn = lines.clone();
+            let command =
+                crate::icon_font_notice::COMMAND.map(|command| self.command_chip(command, cx));
             self.render_diagnostic_card(
                 "icon-font-notice",
                 "Herdr GPUI".into(),
                 lines,
+                command,
                 move |this, cx| {
                     if this.icon_font_notice.dismiss(&drawn) {
                         cx.notify();
@@ -54,6 +58,7 @@ impl HerdrWindow {
                     "config-diagnostic",
                     safe_text(&endpoint.label, 80),
                     lines,
+                    None,
                     move |this, cx| {
                         this.dismiss_config_diagnostic(
                             &endpoint_id,
@@ -73,32 +78,71 @@ impl HerdrWindow {
             .collect()
     }
 
+    /// A command the card names, in the terminal face on its own chip so it
+    /// reads as something to run. Card text cannot be selected, so a click
+    /// anywhere on the chip copies the command, as its icon says; it is never
+    /// run. A narrow card truncates the text and still copies all of it.
+    fn command_chip(&self, command: &'static str, cx: &mut Context<Self>) -> AnyElement {
+        let chip = div()
+            .id("diagnostic-command")
+            .debug_selector(|| "diagnostic-command".into())
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .p(px(8.))
+            .rounded(px(crate::config::corners::CONTROL))
+            .bg(rgb(self.theme.active))
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                cx.write_to_clipboard(ClipboardItem::new_string(command.into()));
+                this.show_flash(Flash::success("Copied the command"), cx);
+            }))
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_font(&self.config.terminal)
+                    .child(command),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "diagnostic-command-copy".into())
+                    .flex_none()
+                    .child(
+                        svg()
+                            .path("icons/copy.svg")
+                            .size(px(12.))
+                            .text_color(rgb(self.theme.foreground)),
+                    ),
+            );
+        // A row, so the chip keeps to its text and shrinks with the card. It
+        // starts where the text does, past the accent dot and its gap.
+        div()
+            .min_w_0()
+            .pl(px(14.))
+            .flex()
+            .child(chip)
+            .into_any_element()
+    }
+
+    /// `footer` spans the card under its text, for a control the lines cannot
+    /// carry.
     fn render_diagnostic_card(
         &self,
         selector: &'static str,
         label: String,
         lines: &Arc<[String]>,
+        footer: Option<AnyElement>,
         dismiss: impl Fn(&mut Self, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let accent = self.theme.ink(self.theme.palette[3]);
-        div()
-            .id(selector)
-            .debug_selector(move || selector.into())
-            .occlude()
+        let header = div()
             .min_w_0()
-            .max_w(px(MAX_WIDTH))
             .flex()
             .gap(px(8.))
-            .p(px(10.))
-            .rounded(px(crate::config::corners::PANEL))
-            .border_1()
-            .border_color(rgb(accent))
-            .bg(rgb(self.theme.surface))
-            .text_color(rgb(self.theme.foreground))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .child(
                 div()
                     .mt(px(6.))
@@ -149,7 +193,27 @@ impl HerdrWindow {
                         cx.stop_propagation();
                         dismiss(this, cx);
                     })),
-            )
+            );
+        div()
+            .id(selector)
+            .debug_selector(move || selector.into())
+            .occlude()
+            .min_w_0()
+            .max_w(px(MAX_WIDTH))
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(10.))
+            .rounded(px(crate::config::corners::PANEL))
+            .border_1()
+            .border_color(rgb(accent))
+            .bg(rgb(self.theme.surface))
+            .text_color(rgb(self.theme.foreground))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+            .child(header)
+            .children(footer)
     }
 
     /// Dismisses the banner only for the connection and text it was drawn

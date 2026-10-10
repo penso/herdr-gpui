@@ -40,6 +40,7 @@ mod copy_mode;
 mod daemon;
 #[cfg(feature = "daytona")]
 mod daytona;
+mod devices_overview;
 mod diagnostics;
 mod dialog_input;
 mod dispatch;
@@ -96,6 +97,7 @@ mod sessions;
 mod settings_panel;
 mod settings_window;
 mod sidebar;
+mod smooth_scroll;
 mod sound;
 mod state;
 mod state_file;

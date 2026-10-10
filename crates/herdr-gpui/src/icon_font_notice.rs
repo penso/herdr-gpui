@@ -11,12 +11,20 @@ mod tests;
 /// Names the fix without running it: installing fonts is the user's call.
 const TEXT: &str = if cfg!(target_os = "macos") {
     "Prompt icons need a Nerd Font, and none is installed.\n\
-     brew install --cask font-symbols-only-nerd-font\n\
-     Then restart Herdr GPUI."
+     Install one with Homebrew, then restart Herdr GPUI:"
 } else {
     "Prompt icons need a Nerd Font, and none is installed.\n\
      Install Symbols Nerd Font Mono from nerdfonts.com,\n\
      then restart Herdr GPUI."
+};
+
+/// The command that installs one, where a single command does. The card
+/// draws it apart from [`TEXT`] and copies it on a click: card text cannot be
+/// selected, and a command retyped from a notice is a command mistyped.
+pub(crate) const COMMAND: Option<&str> = if cfg!(target_os = "macos") {
+    Some("brew install --cask font-symbols-only-nerd-font")
+} else {
+    None
 };
 
 #[derive(Debug, Default)]
@@ -86,5 +94,10 @@ fn shows_icon(frame: &FrameData) -> bool {
 }
 
 fn is_private_use(c: char) -> bool {
+    // U+F8FF is Apple's logo, which the system faces of its own platform
+    // draw with no icon font; elsewhere it is a box like any other.
+    if c == '\u{f8ff}' && cfg!(target_os = "macos") {
+        return false;
+    }
     matches!(c, '\u{e000}'..='\u{f8ff}' | '\u{f0000}'..='\u{ffffd}' | '\u{100000}'..='\u{10fffd}')
 }

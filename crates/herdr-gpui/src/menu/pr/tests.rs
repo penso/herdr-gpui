@@ -241,7 +241,7 @@ fn live_local_pr_lookup() {
         |target, stop| {
             let (stream, local) =
                 crate::daemon::connect(target, stop, || panic!("must not start daemon"))?;
-            if !local {
+            if !matches!(local, crate::daemon::LocalPeer::Trusted) {
                 return Err(std::io::Error::other("local endpoint validation failed"));
             }
             eprintln!("Live local endpoint validation passed.");

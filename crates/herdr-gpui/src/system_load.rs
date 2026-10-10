@@ -15,8 +15,10 @@ use crate::{
     Error, Result,
     usage::{Host, Shell},
 };
-pub(crate) use render::{gauges, line, tooltip};
-use sample::{Memory, Os, Sample, Ticks};
+pub(crate) use render::{
+    CPU_WARN, DISK_WARN, MEMORY_WARN, gauges, line, severity, storage, tooltip, uptime,
+};
+use sample::{Disk, Memory, Os, Sample, Ticks};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Condvar, Mutex, PoisonError, mpsc},
@@ -41,6 +43,7 @@ enum Source {
         system: Box<sysinfo::System>,
         /// CPU usage is measured between two refreshes, so the first has none.
         primed: bool,
+        disk: HomeDisk,
     },
     Remote {
         shell: Shell,
@@ -55,6 +58,7 @@ impl Source {
             Host::Local => Ok(Self::Local {
                 system: Box::new(sysinfo::System::new()),
                 primed: false,
+                disk: HomeDisk::open(),
             }),
             Host::Ssh(target) => {
                 let mut shell = Shell::connect(target).map_err(remote)?;
@@ -74,7 +78,11 @@ impl Source {
 
     fn sample(&mut self) -> Result<Sample> {
         match self {
-            Self::Local { system, primed } => {
+            Self::Local {
+                system,
+                primed,
+                disk,
+            } => {
                 system.refresh_cpu_usage();
                 system.refresh_memory();
                 let cpu = std::mem::replace(primed, true)
@@ -96,6 +104,8 @@ impl Source {
                         load.five as f32,
                         load.fifteen as f32,
                     ]),
+                    disk: disk.sample(),
+                    uptime: Some(sysinfo::System::uptime()).filter(|seconds| *seconds > 0),
                 })
             }
             Self::Remote { shell, os, ticks } => {
@@ -106,6 +116,48 @@ impl Source {
             }
         }
     }
+}
+
+/// This machine's volume holding the home directory, found once: listing every
+/// mount on each sample would also touch slow network mounts.
+struct HomeDisk {
+    disks: sysinfo::Disks,
+    index: Option<usize>,
+}
+
+impl HomeDisk {
+    fn open() -> Self {
+        let disks = sysinfo::Disks::new_with_refreshed_list_specifics(
+            sysinfo::DiskRefreshKind::nothing().with_storage(),
+        );
+        let index = crate::config::home().ok().and_then(|home| {
+            home_volume(&home, disks.list().iter().map(sysinfo::Disk::mount_point))
+        });
+        Self { disks, index }
+    }
+
+    fn sample(&mut self) -> Option<Disk> {
+        let disk = self.disks.list_mut().get_mut(self.index?)?;
+        disk.refresh_specifics(sysinfo::DiskRefreshKind::nothing().with_storage());
+        Some(Disk {
+            available: disk.available_space().min(disk.total_space()),
+            total: disk.total_space(),
+        })
+        .filter(|disk| disk.total > 0)
+    }
+}
+
+/// The index of the mount point holding `home`: the longest one it lies under.
+fn home_volume<'a>(
+    home: &std::path::Path,
+    mounts: impl IntoIterator<Item = &'a std::path::Path>,
+) -> Option<usize> {
+    mounts
+        .into_iter()
+        .enumerate()
+        .filter(|(_, mount)| home.starts_with(mount))
+        .max_by_key(|(_, mount)| mount.as_os_str().len())
+        .map(|(index, _)| index)
 }
 
 fn remote(error: Error) -> Error {

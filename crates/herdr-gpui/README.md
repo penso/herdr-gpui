@@ -47,10 +47,10 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 `--dev` selects the `herdr-dev` config directory. Connection failure is displayed
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
-without input replay. Detach pauses retries for that endpoint until Reconnect.
-If local Herdr is missing, the installation prompt stays open across background
-retries until dismissed. Its Install button opens the Herdr website; after
-installing Herdr, choose Terminal > Reconnect to try again immediately.
+without input replay. The command palette's **Detach** disconnects the selected
+endpoint without closing the window or stopping the daemon, and pauses retries
+until Reconnect. It follows Herdr's `[keys].detach` binding (default: `Ctrl-B`,
+then `Q`); set `detach = ""` under `[keys]` to leave it unbound.
 A selected host that drops stays selected while it reconnects: its last terminal
 picture stays up, dimmed, under a card with the reason and a Reconnect now button,
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
@@ -633,14 +633,18 @@ space or punctuation trimmed before the ellipsis.
 
 The status bar shows the selected host's CPU and memory: a sparkline of recent
 CPU use and a memory meter, each with its current share, and cores, load
-averages, and memory in gigabytes in its tooltip. With more than one host, each
+averages, memory in gigabytes, free space on the volume holding the home
+directory, and uptime in its tooltip. With more than one host, each
 host row in the sidebar shows its own: right-aligned gauges after the name in
 compact layouts, and the sparkline and meter on a second line otherwise. This
 machine is read in process; each connected Linux or macOS remote host is read
 every two seconds over its own SSH shell, kept open while the host is connected
-(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
-systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
-or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS; `df -Pk
+"$HOME"` on both, with `/proc/uptime` on Linux and `kern.boottime` on macOS).
+Other remote systems, and remote hosts from a Windows client, show it as
+unavailable. Set top-level `show_system_load = false`, or turn off **Show CPU
+and memory** in Settings, to hide it and stop sampling while no
+[Devices overview](#devices-overview) is open.
 
 The coffee cup in the status bar keeps this machine's display on and stops it
 from sleeping when idle, for as long as the cup is full; click it again to let
@@ -775,6 +779,15 @@ spacing:
   differs from the name, and the pull request. Agents are single compact lines.
 - `minimal`: one line per row with only the status dot and the name, for narrow
   sidebars or long lists.
+
+The `devices` layout lists agents by device instead of workspaces. Every
+device gets a header, even when there is only one, with its connection dot
+and how many of its agents are working (`2/5`). The device's agents sit under
+the header in Herdr's normal rows, and the separate agents section is hidden.
+A search field under the heading keeps only the devices whose name, address,
+agents, or workspaces match every word typed. The
+[Devices overview](#devices-overview) shows the same devices with their
+activity and load.
 
 New installs start with `comfortable-rounded`: the first launch writes it into
 the new `config-gpui.local.toml`. Existing override files and migrated personal
@@ -1671,6 +1684,45 @@ keep a huge repository responsive: at most 100,000 files are listed, files over
 1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
 kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
 
+## Devices Overview
+
+The activity card at the top of the device picker (the "All Devices" button
+at the foot of the sidebar), View > Devices Overview, or the command
+palette's "Devices Overview" opens a tab listing every device the window
+connects to. The card itself shows every device's agent activity for the
+last two hours and how many agents are working and blocked now. Like
+any tab, it can share a group with terminals, take a group of its own, or fill
+a window.
+
+- **Agent activity:** working agents, with blocked ones stacked above them, for
+  each of the last 120 minutes, with how many are working now and the peak.
+  "View all devices" adds one lane per device on the same time axis. Darker
+  cells mean more agents were working, red cells mean one was waiting for
+  input, and blank cells mean the device was not connected.
+- **Totals:** working, blocked, and idle or done agents across every device,
+  and how many devices are online.
+- **Devices:** one row per device with a dot per agent, how many are working
+  and blocked, CPU, memory, free space on the volume holding the home
+  directory, and uptime. Clicking a row opens it on that device's agents,
+  working first, with each agent's workspace and state; clicking an agent
+  shows its pane.
+
+The search field narrows the lanes and the table to devices whose name,
+address, agents, or workspaces match every word typed. Load columns wrap in
+narrow tabs. **Add Device** opens SSH setup, or WSL setup on Windows; it is
+unavailable in explicit-socket and development-catalog windows.
+
+The window keeps the activity history from the snapshots it already receives,
+so it starts empty each time the window opens; nothing is saved or asked of
+the daemon. Each minute holds the most agents seen working and waiting at
+once, and minutes the machine slept stay empty. A wall-clock jump forward of
+at least five seconds beyond monotonic elapsed time is treated like sleep;
+backward adjustments do not rewind or pause the history. CPU, memory, disk, and uptime
+come from the same sampling as the status bar's load, and every enabled host
+is sampled while an overview tab is open, even with the status bar's load
+hidden. A cloud machine has no host to sample, so its load columns stay
+empty.
+
 ## Editor Groups
 
 The split button at the right end of the tab strip (or **Split Editor**,
@@ -2324,14 +2376,23 @@ records when reporting the failure.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
   On macOS and Linux, all socket modes (including explicit/inherited sockets)
   require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
-  Linux) at the standard configured session socket, with owned,
-  non-group/world-writable socket and parent. Executable upgrades/removal do not
+  Linux) at the standard configured session socket. The socket must be owned by
+  your user and not group/world-writable; its parent must be owned by your user
+  and not world-writable. Group-writable directories such as `775`, commonly
+  created by a umask of `002`, are accepted. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
   Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
   reviews and logs `Daemon endpoint not trusted as local` with the failed check.
-  `DirectoryPermissions` usually means a umask of 002 created the session
-  directory group-writable; `chmod g-w` on it and reconnect.
+  A local peer or permissions failure also produces an in-app toast once the
+  terminal connects, explaining why Git/PR details are unavailable and how to
+  restore them. It appears once per connection even when daemon notifications
+  are muted; permission failures include a quoted command on its own line for
+  the affected socket or directory and a reminder to reconnect the GUI. Intentionally
+  non-local sockets do not produce this toast.
+  `DirectoryPermissions` means the session directory's ownership could not be
+  verified or it is world-writable; check ownership, remove world-write access
+  with `chmod o-w` on it, and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
@@ -2649,6 +2710,17 @@ records when reporting the failure.
   horizontal by the platform (macOS, X11, Wayland), so it is sent as horizontal
   motion with Shift held, not swapped back. Popups capture wheel input only
   within their displayed bounds; input never falls through to a covered pane.
+- The daemon shows whole rows, at most one surface per render interval (16 ms),
+  so wheel scrollback in a pane draws where the OS's own deltas, momentum
+  included, put the content. Each delta slides in over 48 ms. The wheel asks
+  the daemon for each row as the motion enters it, and the rows are drawn from
+  the presented surface and the earlier ones that showed them. When the
+  gesture stops part-way into a row, the pane rests there; clicks, selection,
+  and links target the cells where they are drawn. Applications reading the
+  wheel, a dragged scrollbar thumb, a frame placing images, an open popup,
+  keyboard scrolling, and any change to the pane's rows besides the scroll move
+  the content to the daemon's whole row. Only the moving pane repaints; other
+  panes replay their cached paint.
 - Direct semantic cell canvas: named ANSI colors, indexed 256-color palette,
   RGB, reset foreground/background, reverse, dim, hidden, bold, italic,
   underline, strikeout, wide-cell skip handling, and cursor shapes.

@@ -1,5 +1,8 @@
 //! Claude plan usage, read with Claude Code's own sign-in: the login keychain
-//! on a Mac, else `.credentials.json` in its config directory.
+//! on a Mac, else `.credentials.json` in its config directory. Other accounts
+//! claude-swap manages are listed beneath it.
+
+mod cswap;
 
 use crate::{
     Result,
@@ -7,8 +10,11 @@ use crate::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
         probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Timestamp, json},
+        ui::Ui,
     },
 };
+use cswap::{Accounts, Other};
+use gpui::{prelude::*, *};
 use serde::Deserialize;
 
 pub(crate) const URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -38,24 +44,65 @@ impl Service for Claude {
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
-        let directory = |rest: &str| HostPath::env_or("CLAUDE_CONFIG_DIR", ".claude", rest);
-        let credentials =
-            keychain(probe).or_else(|| probe.file(&directory(".credentials.json")))?;
-        let token = probe.field(&credentials, &["claudeAiOauth", "accessToken"])?;
-        let email = [directory(".claude.json"), HostPath::home(".claude.json")]
-            .iter()
-            .find_map(|path| probe.file_text(path, &["oauthAccount", "emailAddress"]));
-        let sign_in = SignIn {
-            plan: probe.text(&credentials, &["claudeAiOauth", "subscriptionType"]),
-            tier: probe.text(&credentials, &["claudeAiOauth", "rateLimitTier"]),
-            email,
+        let Accounts { active, others } = cswap::accounts(probe);
+        let report = match signed_in(probe) {
+            Some(report) => report,
+            // Without Claude Code's OAuth sign-in, such as on an API-key
+            // login, cswap's reading of the active account is all there is.
+            None => Ok(Report::new(
+                Provider(&Claude),
+                Account {
+                    email: Some(active.as_ref()?.email.clone()),
+                    plan: None,
+                },
+                active.filter(|active| !active.windows.is_empty())?.windows,
+            )),
         };
-        let request = Request::get(URL)
-            .bearer(&token)
-            .header("anthropic-beta", BETA)
-            .header("User-Agent", AGENT);
-        Some(probe.body(request).and_then(|body| parse(&body, sign_in)))
+        Some(report.map(|report| {
+            if others.is_empty() {
+                report
+            } else {
+                report.with_detail(others)
+            }
+        }))
     }
+
+    fn render(&self, report: &Report, ui: &Ui, _cx: &App) -> AnyElement {
+        let standard = ui.standard(report);
+        let Some(others) = report
+            .detail::<Vec<Other>>()
+            .filter(|others| !others.is_empty())
+        else {
+            return standard;
+        };
+        div()
+            .flex()
+            .flex_col()
+            .child(standard)
+            .child(ui.rule())
+            .child(cswap::render(others, ui))
+            .into_any_element()
+    }
+}
+
+/// The usage of the account Claude Code is signed in with.
+fn signed_in(probe: &mut Probe) -> Option<Result<Report>> {
+    let directory = |rest: &str| HostPath::env_or("CLAUDE_CONFIG_DIR", ".claude", rest);
+    let credentials = keychain(probe).or_else(|| probe.file(&directory(".credentials.json")))?;
+    let token = probe.field(&credentials, &["claudeAiOauth", "accessToken"])?;
+    let email = [directory(".claude.json"), HostPath::home(".claude.json")]
+        .iter()
+        .find_map(|path| probe.file_text(path, &["oauthAccount", "emailAddress"]));
+    let sign_in = SignIn {
+        plan: probe.text(&credentials, &["claudeAiOauth", "subscriptionType"]),
+        tier: probe.text(&credentials, &["claudeAiOauth", "rateLimitTier"]),
+        email,
+    };
+    let request = Request::get(URL)
+        .bearer(&token)
+        .header("anthropic-beta", BETA)
+        .header("User-Agent", AGENT);
+    Some(probe.body(request).and_then(|body| parse(&body, sign_in)))
 }
 
 /// Claude Code keeps its sign-in under the user's account name. Asked by

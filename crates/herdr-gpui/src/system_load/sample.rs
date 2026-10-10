@@ -1,5 +1,5 @@
-//! One reading of a host's CPU and memory, and the text a remote shell prints
-//! for it. Linux and macOS hosts answer with different tools; both answers
+//! One reading of a host's CPU, memory, home disk and uptime, and the text a
+//! remote shell prints for it. Linux and macOS hosts answer with different tools; both answers
 //! parse into the same [`Sample`], counted the way `sysinfo` counts this
 //! machine so a local and a remote host read alike.
 
@@ -22,6 +22,24 @@ impl Memory {
     }
 }
 
+/// The filesystem holding the user's home directory, where checkouts live:
+/// space left to the user and the whole volume, in bytes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Disk {
+    pub available: u64,
+    pub total: u64,
+}
+
+impl Disk {
+    pub fn used_percent(self) -> f32 {
+        if self.total == 0 {
+            return 0.;
+        }
+        let used = self.total.saturating_sub(self.available);
+        (used as f64 / self.total as f64 * 100.).clamp(0., 100.) as f32
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct Sample {
     /// Share of all cores busy, 0..=100. None for a host's first sample when
@@ -31,6 +49,9 @@ pub(crate) struct Sample {
     pub cores: Option<u32>,
     /// 1, 5 and 15 minute load averages, where the OS keeps them.
     pub load: Option<[f32; 3]>,
+    pub disk: Option<Disk>,
+    /// Seconds since the host booted.
+    pub uptime: Option<u64>,
 }
 
 /// Cumulative CPU time from Linux `/proc/stat`, in clock ticks.
@@ -65,16 +86,20 @@ impl Os {
 
     /// The step the remote shell runs for one sample. macOS has no cumulative
     /// CPU counters a shell can read, so `iostat` measures one second itself;
-    /// Linux counters are compared with the previous sample instead.
+    /// Linux counters are compared with the previous sample instead. `df -P`
+    /// keeps each filesystem on one line on both.
     pub fn command(self) -> &'static str {
         match self {
             Self::Linux => {
                 "printf 'cores '; getconf _NPROCESSORS_ONLN; printf 'loadavg '; cat /proc/loadavg; \
-                 head -n 1 /proc/stat; grep -E '^(MemTotal|MemAvailable):' /proc/meminfo"
+                 head -n 1 /proc/stat; grep -E '^(MemTotal|MemAvailable):' /proc/meminfo; \
+                 printf 'uptime '; cat /proc/uptime; printf 'disk '; df -Pk \"$HOME\" | tail -n 1"
             }
             Self::MacOs => {
                 "printf 'cores '; sysctl -n hw.ncpu; printf 'memsize '; sysctl -n hw.memsize; \
-                 vm_stat; printf 'iostat '; iostat -n 0 -c 2 -w 1 | tail -n 1"
+                 vm_stat; printf 'boottime '; sysctl -n kern.boottime; printf 'now '; date +%s; \
+                 printf 'disk '; df -Pk \"$HOME\" | tail -n 1; \
+                 printf 'iostat '; iostat -n 0 -c 2 -w 1 | tail -n 1"
             }
         }
     }
@@ -98,6 +123,10 @@ struct Fields {
     memsize: Option<u64>,
     page_size: Option<u64>,
     pages: [Option<u64>; 4],
+    disk: Option<Disk>,
+    uptime: Option<u64>,
+    boot: Option<u64>,
+    now: Option<u64>,
 }
 
 /// The vm_stat counters macOS counts as memory in use.
@@ -133,6 +162,19 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
                 .split_whitespace()
                 .next()
                 .and_then(|size| size.parse().ok());
+        } else if let Some(rest) = line.strip_prefix("uptime ") {
+            fields.uptime = rest
+                .split_whitespace()
+                .next()
+                .and_then(|seconds| seconds.parse::<f64>().ok())
+                .filter(|seconds| seconds.is_finite() && *seconds >= 0.)
+                .map(|seconds| seconds as u64);
+        } else if let Some(rest) = line.strip_prefix("boottime ") {
+            fields.boot = boot_seconds(rest);
+        } else if let Some(rest) = line.strip_prefix("now ") {
+            fields.now = rest.trim().parse().ok();
+        } else if let Some(rest) = line.strip_prefix("disk ") {
+            fields.disk = disk(rest);
         } else if let Some(rest) = line.strip_prefix("iostat ") {
             // us sy id 1m 5m 15m
             let words: Vec<&str> = rest.split_whitespace().collect();
@@ -183,6 +225,10 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
             memory,
             cores: fields.cores,
             load: fields.load,
+            disk: fields.disk,
+            uptime: fields
+                .uptime
+                .or_else(|| fields.now?.checked_sub(fields.boot?)),
         },
         ticks: fields.ticks,
     })
@@ -217,6 +263,44 @@ fn ticks(rest: &str) -> Option<Ticks> {
     let idle = columns[3].saturating_add(columns.get(4).copied().unwrap_or(0));
     Some(Ticks {
         busy: total.saturating_sub(idle),
+        total,
+    })
+}
+
+/// `{ sec = 1712345678, usec = 123456 } Thu Apr  5 …`, from `kern.boottime`.
+fn boot_seconds(rest: &str) -> Option<u64> {
+    let after = rest.split_once("sec =")?.1;
+    after
+        .split(|c: char| !c.is_ascii_digit())
+        .find(|digits| !digits.is_empty())?
+        .parse()
+        .ok()
+}
+
+/// One `df -Pk` row: `filesystem 1024-blocks used available capacity mount`.
+/// Both the filesystem name and the mount point may contain spaces, so the
+/// row is read around its capacity: the first `NN%` word that follows three
+/// numbers, which are the size, the used space, and the available space.
+fn disk(rest: &str) -> Option<Disk> {
+    let words: Vec<&str> = rest.split_whitespace().collect();
+    let capacity = |word: &str| {
+        word.strip_suffix('%')
+            .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+    };
+    let (total, available) = words.windows(4).find_map(|window| {
+        let [total, used, available, percent] = window else {
+            return None;
+        };
+        if !capacity(percent) {
+            return None;
+        }
+        used.parse::<u64>().ok()?;
+        Some((total.parse::<u64>().ok()?, available.parse::<u64>().ok()?))
+    })?;
+    let total = total.checked_mul(1024)?;
+    let available = available.checked_mul(1024)?;
+    (total > 0).then_some(Disk {
+        available: available.min(total),
         total,
     })
 }

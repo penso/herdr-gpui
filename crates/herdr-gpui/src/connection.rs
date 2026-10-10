@@ -171,7 +171,20 @@ impl ConnectionBridge {
                 })
                 .map(|(stream, local)| {
                     if let Ok(mut state) = startup_inbox.lock() {
-                        state.local_daemon_peer = local;
+                        #[cfg(any(target_os = "macos", target_os = "linux"))]
+                        {
+                            state.local_peer_warning = None;
+                        }
+                        state.local_daemon_peer = match local {
+                            #[cfg(any(target_os = "macos", target_os = "linux"))]
+                            crate::daemon::LocalPeer::Trusted => true,
+                            #[cfg(any(target_os = "macos", target_os = "linux"))]
+                            crate::daemon::LocalPeer::Rejected(warning) => {
+                                state.local_peer_warning = Some(warning);
+                                false
+                            }
+                            crate::daemon::LocalPeer::Unverified => false,
+                        };
                         state.dirty = true;
                     }
                     stream
@@ -278,7 +291,19 @@ impl ConnectionBridge {
         let reload_sound = std::mem::take(&mut state.reload_sound);
         let clipboard_writes = std::mem::take(&mut state.clipboard_writes);
         let bells = std::mem::take(&mut state.bells);
+        // A trust warning belongs to this connection, but the terminal must
+        // finish connecting before it is shown. Drain it only once then.
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        let local_peer_warning = if state.status.is_connected() {
+            state.local_peer_warning.take()
+        } else {
+            None
+        };
         let mut update = state.clone();
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            update.local_peer_warning = local_peer_warning;
+        }
         update.settings_reload = false;
         update.notifications = notifications;
         update.notifications_lost = notifications_lost;

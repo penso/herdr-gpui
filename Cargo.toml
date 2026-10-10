@@ -90,7 +90,7 @@ skrifa               = { default-features = false, features = ["std"], version =
 # engine, no themes (colours come from the app's theme).
 syntect              = { default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"], version = "5.3" }
 # The version GPUI's screen capture already locks; only CPU and memory are read.
-sysinfo              = { default-features = false, features = ["system"], version = "0.39.6" }
+sysinfo              = { default-features = false, features = ["disk", "system"], version = "0.39.6" }
 tar                  = "0.4"
 tempfile             = "3"
 thiserror            = "2"

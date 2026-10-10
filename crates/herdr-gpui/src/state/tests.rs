@@ -7,6 +7,8 @@ mod announcements;
 mod connection_status;
 mod daemon_messages;
 mod focus_acks;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod local_peer_warning;
 mod requests;
 mod surfaces;
 mod version_mismatch;

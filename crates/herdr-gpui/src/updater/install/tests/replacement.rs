@@ -157,6 +157,26 @@ fn mac_replaces_entire_bundle_and_preserves_recovery() -> anyhow::Result<()> {
 #[test]
 fn real_executable_archive_installs_relaunches_and_rolls_back() -> anyhow::Result<()> {
     use sha2::{Digest, Sha256};
+    const ISOLATED: &str = "HERDR_TEST_UPDATER_REPLACEMENT_CHILD";
+    if env::var_os(ISOLATED).is_none() {
+        // Extraction opens the executable for writing. A concurrent test's fork
+        // can inherit that descriptor until exec and make our relaunch fail with
+        // ETXTBSY. Exercise the real extract/swap/exec path in its own process,
+        // with no sibling test threads that can inherit the writable descriptor.
+        assert!(
+            Command::new(env::current_exe()?)
+                .args([
+                    "--exact",
+                    "updater::install::tests::replacement::real_executable_archive_installs_relaunches_and_rolls_back",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env(ISOLATED, "1")
+                .status()?
+                .success()
+        );
+        return Ok(());
+    }
     for fail in [false, true] {
         let root = tempfile::tempdir()?;
         let parent = root.path().canonicalize()?;

@@ -721,7 +721,7 @@ impl TerminalPainter {
                     .filter_map(|pane| Scrollbar::new(pane, cell_width, self.cell_height))
                 {
                     let width =
-                        (f32::from(bar.track.size.width) - 2. * SCROLLBAR_INSET).clamp(2., 6.);
+                        (f32::from(bar.track.size.width) - 2. * SCROLLBAR_INSET).clamp(2., 4.);
                     window.paint_quad(
                         fill(
                             Bounds::new(
