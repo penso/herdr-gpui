@@ -6,7 +6,7 @@
 //! methods for it exist only where that socket does.
 use super::Scope;
 use gpui::Global;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 /// Batches kept at once; the oldest goes first.
 const MAX_KEPT: usize = 16;
@@ -26,7 +26,7 @@ pub(crate) struct Batch {
 
 #[derive(Default)]
 pub(crate) struct Feedback {
-    kept: VecDeque<Batch>,
+    kept: VecDeque<(Batch, Option<Arc<()>>)>,
     /// Panes whose agents are waiting in `browser feedback --wait`.
     waiting: Vec<FeedbackKey>,
 }
@@ -49,11 +49,11 @@ impl Feedback {
         self.waiting = panes;
     }
 
-    pub(crate) fn keep(&mut self, batch: Batch) {
+    pub(crate) fn keep(&mut self, batch: Batch, pending: Option<Arc<()>>) {
         if self.kept.len() >= MAX_KEPT {
             self.kept.pop_front();
         }
-        self.kept.push_back(batch);
+        self.kept.push_back((batch, pending));
     }
 
     /// Everything kept for this daemon and pane, oldest first, joined into one text.
@@ -62,12 +62,12 @@ impl Feedback {
         let (taken, kept): (Vec<_>, Vec<_>) = self
             .kept
             .drain(..)
-            .partition(|batch| &batch.target == target);
+            .partition(|(batch, _)| &batch.target == target);
         self.kept = kept.into();
         (!taken.is_empty()).then(|| {
             taken
                 .into_iter()
-                .map(|batch| batch.text)
+                .map(|(batch, _)| batch.text)
                 .collect::<Vec<_>>()
                 .join("\n")
         })
@@ -75,7 +75,7 @@ impl Feedback {
 
     #[cfg(any(unix, test))]
     pub(crate) fn has(&self, target: &FeedbackKey) -> bool {
-        self.kept.iter().any(|batch| &batch.target == target)
+        self.kept.iter().any(|(batch, _)| &batch.target == target)
     }
 }
 

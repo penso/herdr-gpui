@@ -14,6 +14,8 @@ const MAX_QUOTED_CHARS: usize = 200;
 pub(crate) struct Note {
     pub anchor: Anchor,
     pub comment: String,
+    /// Whether the note went to the agent and was not edited since.
+    pub sent: bool,
 }
 
 /// One line of text: no controls, no runs of whitespace, and bounded.
@@ -35,7 +37,11 @@ impl Note {
     /// A note saying `comment`, or `None` when it says nothing.
     pub(crate) fn new(anchor: Anchor, comment: &str) -> Option<Self> {
         let comment = line(comment, MAX_COMMENT_CHARS);
-        (!comment.is_empty()).then_some(Self { anchor, comment })
+        (!comment.is_empty()).then_some(Self {
+            anchor,
+            comment,
+            sent: false,
+        })
     }
 
     /// Where the note points, as the notes list shows it.

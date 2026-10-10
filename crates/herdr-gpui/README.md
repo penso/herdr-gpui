@@ -1913,6 +1913,13 @@ them to the agent that opened it, so it can change the page.
   screenshot, and your note.
   Page text is cleaned of control characters and marked as quoted data.
   **Copy** puts the same prompt on the clipboard instead.
+- Sent notes stay listed, dimmed and marked sent, so a note can be changed
+  and sent again. Click a note's text to edit it in the composer; saving it
+  marks it unsent. Send then delivers only the notes not sent yet (**Send 2
+  new**), or every note again once all were sent (**Resend all**), and Copy
+  copies the same ones. **Clear sent** removes the sent notes, ending the
+  round. Another Send waits while screenshots are saving, delivery is pending,
+  or the previous batch is still waiting to be collected through `browser feedback`.
 - The prompt goes to the agent one way only. An agent waiting in
   `browser feedback --wait` receives it there. Otherwise it is typed into the
   agent's pane and submitted once Herdr reports the agent idle (or still
@@ -1920,6 +1927,10 @@ them to the agent that opened it, so it can change the page.
   running agent, since Enter there would run it in a shell, nor into an agent
   that is asking you a question; those notes wait for `browser feedback`, as
   do notes for a pane this window does not show.
+  Windows has no `browser feedback` listener: notes that cannot be pasted
+  are copied instead, and the tab can send again. Notes written in a session
+  that is no longer shown are also copied, never handed to another session's
+  agent.
 - Feedback is scoped to the caller's daemon socket and pane together, so two
   local sessions with the same pane ID cannot take each other's notes. Use the
   matching CLI build: older pane-only feedback requests are rejected rather
@@ -1943,7 +1954,7 @@ comments on a pull request.
 - The icons at either end of its header show or hide the list of changed
   files and the notes. A review narrower than 1,000 px starts with both
   hidden so the diff has the room; once toggled, the choice holds. Writing a
-  note always shows the notes, and the notes icon counts the queued ones.
+  note always shows the notes, and the notes icon counts the unsent ones.
   Shown in a narrow group, each panel keeps to 30% of the review.
 
 - **Uncommitted** shows what is not committed yet (`git diff HEAD`).
@@ -2030,6 +2041,11 @@ comments on a pull request.
   (`HEAD`, or the base and commit), so notes from either view stay exact and
   stay queued when you switch. It reaches the agent the same one way as page notes above,
   including `browser feedback`. Without an agent, **Copy** is offered.
+  As with page notes, sent notes stay listed until **Clear sent**: click one
+  to edit it, and Send delivers only new or edited notes, or all of them
+  again once every one was sent. Another Send waits until the previous batch
+  has been delivered or collected through `browser feedback`. The notes icon
+  counts the unsent ones.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is
   cleaned of control characters and bounded (16,384 characters a line,
@@ -2627,6 +2643,21 @@ records when reporting the failure.
   `y` or Enter copies the selection through `pane.selection.read`. Escape
   clears a selection or leaves, as does `q`. Leaving scrolls the pane back to
   where it was.
+- Cmd-Shift-A (`annotate_selection`, also in the command palette) writes a
+  note on the text selected in a pane for an agent to act on, the way
+  Annotate does for a page. A field opens over the pane: Enter adds the note
+  and sends every queued one, Shift-Enter only queues it (up to 20), and
+  Escape drops it. Enter on an empty field sends the queue, including when
+  all 20 slots are full. Notes go to the agent running in that pane, else to the
+  first agent in its workspace, as one prompt per agent: where the text was
+  (workspace and tab), the text fenced and marked as quoted data with its
+  control characters removed, and your note. They are delivered as page
+  notes are (see [Annotating A Page](#annotating-a-page)), and copied when no
+  agent is found. Queued notes remember their original device and daemon;
+  if that daemon is no longer selected when you send or while delivery waits
+  for a busy agent, those notes are copied instead. The whole selection must
+  be on screen. Clipboard fallbacks from one Send are combined, including
+  batches that fail later, so one agent's notes cannot replace another's.
 - A mouse selection dragged past a pane's top or bottom edge scrolls the
   pane, and the selection stays with its text as the pane moves. A selection
   that reaches rows off the screen is copied through `pane.selection.read`;

@@ -190,6 +190,7 @@ project_roots = []
 # quit = "cmd-q"
 # find_next = "cmd-g"
 # find_previous = "cmd-shift-g"
+# annotate_selection = "cmd-shift-a"
 # toggle_full_screen = "ctrl-cmd-f"
 # cycle_windows = "cmd-`"
 # Unbound by default: themes, reconnect, logs, about, worktree_notes,

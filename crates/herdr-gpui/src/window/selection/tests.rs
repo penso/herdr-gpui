@@ -9,7 +9,7 @@ mod clicks_and_scroll;
 mod copy_on_select;
 mod gestures;
 
-fn surface(rows: &[&str], width: u16) -> PaneSurfaceFrame {
+pub(in crate::window) fn surface(rows: &[&str], width: u16) -> PaneSurfaceFrame {
     let height = rows.len() as u16;
     let rect = SurfaceRect {
         x: 0,

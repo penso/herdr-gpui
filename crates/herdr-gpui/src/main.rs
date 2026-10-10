@@ -107,6 +107,7 @@ mod system_load;
 mod tab_menu;
 mod teleport;
 mod terminal;
+mod terminal_notes;
 mod terminal_painter;
 mod theme_picker;
 mod titlebar;
