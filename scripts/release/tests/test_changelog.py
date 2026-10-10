@@ -25,6 +25,35 @@ else:
 """
 
 
+def history(work, env, *commits):
+    """A scratch repository holding the release scripts and `(subject, tag)` commits,
+    so tag selection is tested against known tags rather than the checkout's."""
+    repo = work / "repo"
+    (repo / "scripts/release").mkdir(parents=True)
+    for name in ("generate-changelog.sh", "common.sh"):
+        shutil.copy(SCRIPT.parent / name, repo / "scripts/release" / name)
+    shutil.copy(ROOT / "cliff.toml", repo / "cliff.toml")
+    env = {**env, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com"}
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(repo), *args], env=env, capture_output=True, text=True,
+                       timeout=30, check=True)
+
+    git("init", "-q")
+    for subject, tag in commits:
+        git("commit", "-q", "--allow-empty", "-m", subject)
+        if tag:
+            git("tag", tag)
+    return repo / "scripts/release/generate-changelog.sh"
+
+
+# A stable release, a non-calendar tag, two betas, then the commit being cut.
+BETA_HISTORY = (("feat: one", "v20260901.1"), ("feat: foreign", "v1.0"),
+                ("feat: two", "v20260905.1"), ("feat: three", "v20260906.2"), ("feat: four", None))
+
+
 class ChangelogTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="herdr-changelog-test-")
@@ -41,8 +70,8 @@ class ChangelogTests(unittest.TestCase):
         self.env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                     "HOME": str(self.work), "MOCK_LOG": str(self.log)}
 
-    def generate(self, version="20260920.3", out=None, success=True, betas=()):
-        result = subprocess.run(["bash", str(SCRIPT), version, str(self.out if out is None else out), *betas],
+    def generate(self, version="20260920.3", out=None, success=True, betas=(), script=SCRIPT):
+        result = subprocess.run(["bash", str(script), version, str(self.out if out is None else out), *betas],
                                 env=self.env, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode == 0, success, result.stderr)
         return result
@@ -72,17 +101,29 @@ class ChangelogTests(unittest.TestCase):
         self.assertIn("--strip", notes)
 
     def test_unpromoted_betas_fold_into_the_release_after_them(self):
-        self.generate(betas=("v20260918.1", "v20260919.12"))
+        script = history(self.work, self.env, *BETA_HISTORY)
+        self.generate(script=script, betas=("v20260905.1", "v20260906.2"))
         changelog, notes = self.calls()
         for call in (changelog, notes):
-            self.assertEqual(call[call.index("--ignore-tags") + 1], r"^(v20260918\.1|v20260919\.12)$")
+            self.assertEqual(call[call.index("--ignore-tags") + 1], r"^(v20260905\.1|v20260906\.2)$")
         # --unreleased would stop at the newest beta, so the notes name a range
-        # starting at the newest tag that is not one of the betas.
+        # from the newest calendar tag that is not a beta, skipping both betas
+        # and the foreign tag between them.
         self.assertNotIn("--unreleased", notes)
-        stable = subprocess.run(["git", "-C", str(ROOT), "tag", "--list", "v20*", "--merged", "HEAD",
-                                 "--sort=-v:refname"], capture_output=True, text=True, check=True).stdout.split()
-        if stable:
-            self.assertEqual(notes[-1], f"{stable[0]}..HEAD")
+        self.assertEqual(notes[-1], "v20260901.1..HEAD")
+
+    def test_a_promoted_beta_bounds_the_next_release(self):
+        script = history(self.work, self.env, *BETA_HISTORY)
+        # v20260905.1 was promoted, so GitHub no longer lists it as a prerelease.
+        self.generate(script=script, betas=("v20260906.2",))
+        self.assertEqual(self.calls()[1][-1], "v20260905.1..HEAD")
+
+    def test_betas_with_no_stable_release_before_them_cover_all_history(self):
+        script = history(self.work, self.env, ("feat: one", "v20260905.1"), ("feat: two", None))
+        self.generate(script=script, betas=("v20260905.1",))
+        notes = self.calls()[1]
+        self.assertNotIn("--unreleased", notes)
+        self.assertEqual(notes[-2:], ["--strip", "header"], notes)
 
     def test_malformed_beta_tags_are_refused_before_git_cliff_runs(self):
         for beta in ("20260918.1", "v20260918.01", "v20260918.1|.*", "$(id)", ""):
@@ -129,6 +170,21 @@ class RealChangelogTests(unittest.TestCase):
                                    capture_output=True, text=True, check=True).stdout.split()
         for tag in published:
             self.assertIn(f"## [{tag}]", changelog)
+
+    def test_stable_notes_list_every_unpromoted_beta_change(self):
+        with tempfile.TemporaryDirectory(prefix="herdr-changelog-real-") as temp:
+            work = Path(temp)
+            (work / "out").mkdir()
+            script = history(work, {"PATH": os.environ["PATH"], "HOME": temp}, *BETA_HISTORY)
+            subprocess.run(["bash", str(script), "20260920.3", str(work / "out"),
+                            "v20260905.1", "v20260906.2"], env={"PATH": os.environ["PATH"], "HOME": temp},
+                           capture_output=True, text=True, timeout=180, check=True)
+            notes = (work / "out" / "RELEASE_NOTES.md").read_text()
+        self.assertIn("## [v20260920.3]", notes)
+        for entry in ("- Two", "- Three", "- Four"):
+            self.assertIn(entry, notes)
+        self.assertNotIn("- One", notes)
+        self.assertNotIn("## [v20260906.2]", notes)
 
     def render(self, *messages):
         probes = [argument for message in messages for argument in ("--with-commit", message)]
