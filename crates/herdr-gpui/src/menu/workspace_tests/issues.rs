@@ -170,6 +170,7 @@ fn a_run_whose_workspace_closed_says_so_in_the_view(cx: &mut gpui::TestAppContex
                 id,
                 crate::orchestrator::Event::OpenWorkspace {
                     host: None,
+                    session: None,
                     workspace_id: "w404".into(),
                 },
             ));

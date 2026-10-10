@@ -53,7 +53,7 @@ fn the_run_arrow_asks_to_open_the_run(cx: &mut TestAppContext) {
     assert!(
         matches!(
             events.as_slice(),
-            [Event::OpenWorkspace { host: None, workspace_id }] if workspace_id == "w-r1"
+            [Event::OpenWorkspace { host: None, session: None, workspace_id }] if workspace_id == "w-r1"
         ),
         "{events:?}"
     );

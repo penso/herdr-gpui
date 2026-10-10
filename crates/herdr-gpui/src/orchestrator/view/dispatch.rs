@@ -16,6 +16,9 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+#[cfg(test)]
+mod tests;
+
 /// The dispatch dialog's choices.
 pub(crate) struct Dialog {
     item: String,
@@ -105,6 +108,42 @@ impl Confirm {
 }
 
 impl OrchestratorView {
+    pub(crate) fn load_agents(
+        &mut self,
+        endpoint: Option<String>,
+        target: herdr_client::ConnectTarget,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .service
+            .as_ref()
+            .is_some_and(|service| service.load_agents(endpoint, target))
+        {
+            self.report(crate::orchestrator::Error::Busy, cx);
+        }
+    }
+
+    pub(super) fn select_agent_host(&mut self, cx: &mut Context<Self>) {
+        if let Some(dialog) = &mut self.dialog {
+            dialog.kind = None;
+            self.snapshot.installed = None;
+            self.snapshot.installed_error = None;
+            cx.emit(super::Event::LoadAgents {
+                endpoint: dialog.host.clone(),
+            });
+        }
+    }
+
+    pub(super) fn reconcile_agents(&mut self) {
+        if let Some(dialog) = &mut self.dialog
+            && dialog.host == self.snapshot.installed_endpoint
+            && let Some(installed) = &self.snapshot.installed
+            && !dialog.kind.is_some_and(|kind| installed.contains(&kind))
+        {
+            dialog.kind = installed.first().copied();
+        }
+    }
+
     /// Opens the dispatch dialog for the item with canonical key `item`.
     pub(super) fn open_dispatch(
         &mut self,
@@ -171,6 +210,7 @@ impl OrchestratorView {
             problem: None,
             review,
         });
+        self.select_agent_host(cx);
         window.focus(&focus, cx);
         cx.notify();
     }
@@ -188,7 +228,14 @@ impl OrchestratorView {
         let Some(dialog) = &mut self.dialog else {
             return;
         };
-        let Some(kind) = dialog.kind else {
+        let Some(kind) = dialog.kind.filter(|kind| {
+            dialog.host == self.snapshot.installed_endpoint
+                && self
+                    .snapshot
+                    .installed
+                    .as_ref()
+                    .is_some_and(|agents| agents.contains(kind))
+        }) else {
             dialog.problem = Some("Pick an agent installed on this host.");
             cx.notify();
             return;
@@ -476,14 +523,23 @@ impl OrchestratorView {
             .snapshot
             .installed
             .as_ref()
+            .filter(|_| dialog.host == self.snapshot.installed_endpoint)
             .map(|installed| installed.iter().copied().take(8).collect())
             .unwrap_or_default();
         let tiles = if agents.is_empty() {
-            look.muted(if self.snapshot.installed.is_none() {
-                "Looking for installed agents\u{2026}"
-            } else {
-                "No supported agent is installed on this host."
-            })
+            look.muted(
+                if dialog.host == self.snapshot.installed_endpoint
+                    && self.snapshot.installed_error.is_some()
+                {
+                    "Could not discover agents. Select the host to retry."
+                } else if self.snapshot.installed.is_none()
+                    || dialog.host != self.snapshot.installed_endpoint
+                {
+                    "Looking for installed agents\u{2026}"
+                } else {
+                    "No supported agent is installed on this host."
+                },
+            )
             .into_any_element()
         } else {
             div()

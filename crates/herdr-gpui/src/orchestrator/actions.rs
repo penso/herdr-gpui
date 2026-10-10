@@ -220,7 +220,7 @@ fn herdr(
 }
 
 /// The SSH destination and Herdr session a target names, as sessions record.
-fn place(target: &ConnectTarget) -> (Option<String>, Option<String>) {
+pub(super) fn place(target: &ConnectTarget) -> (Option<String>, Option<String>) {
     match target {
         ConnectTarget::Ssh { target, session } => (Some(target.clone()), Some(session.clone())),
         ConnectTarget::Session { name, .. } => (None, Some(name.clone())),

@@ -27,6 +27,7 @@ fn branches_are_named_as_agent_launcher_names_them() {
 fn workspace(id: &str, branch: &str) -> LiveBranch {
     LiveBranch {
         host: None,
+        session: None,
         workspace_id: id.into(),
         branch: branch.into(),
     }
@@ -36,6 +37,7 @@ fn agent(workspace: &str, status: AgentStatus) -> LiveAgent {
     LiveAgent {
         endpoint: 0,
         host: None,
+        session: None,
         workspace_id: workspace.into(),
         pane_id: "p1".into(),
         status,

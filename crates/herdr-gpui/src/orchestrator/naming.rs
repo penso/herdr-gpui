@@ -82,8 +82,17 @@ fn branch_hash(branch: &str) -> Option<&str> {
 pub(crate) struct LiveBranch {
     /// `None` on this machine, else the SSH destination.
     pub(crate) host: Option<String>,
+    pub(crate) session: Option<String>,
     pub(crate) workspace_id: String,
     pub(crate) branch: String,
+}
+
+pub(super) fn workspace_run_id(
+    host: &Option<String>,
+    session: &Option<String>,
+    workspace: &str,
+) -> String {
+    format!("branch:{host:?}:{session:?}:{workspace}")
 }
 
 /// Runs read off branches for items no recorded run already covers: one per
@@ -116,16 +125,16 @@ pub(crate) fn found_runs(
         };
         let agent = agents
             .iter()
-            .filter(|agent| agent.host == live.host && agent.workspace_id == live.workspace_id)
+            .filter(|agent| {
+                agent.host == live.host
+                    && agent.session == live.session
+                    && agent.workspace_id == live.workspace_id
+            })
             .map(|agent| agent.status)
             .max_by_key(|status| urgency(*status));
         found.push(run(
             item,
-            format!(
-                "branch:{}:{}",
-                live.host.as_deref().unwrap_or(""),
-                live.workspace_id
-            ),
+            workspace_run_id(&live.host, &live.session, &live.workspace_id),
             Workspace {
                 backend: Backend::Herdr,
                 id: live.workspace_id.clone(),

@@ -1416,7 +1416,7 @@ repository allows and names the head commit shown, so GitHub refuses it if the
 branch moved.
 
 **Dispatch agent** opens a dialog: a prompt, an agent installed on the
-repository's host, an optional model (passed as `--model`), a branch
+selected destination host, an optional model (passed as `--model`), a branch
 (`agent/<number>-<slug>-<hash>` as agent-launcher names it, editable), and
 extra instructions. The new worktree is
 created from the main checkout's `HEAD` in the workspace's repository, and the
@@ -1428,7 +1428,8 @@ request's **Review with agent** does the same on an `agent/review-…` branch wi
 read-only prompt: the agent verifies the pull request, reads its diff, and
 reports findings without writing to GitHub. A run's card sends it messages, stops
 it, or removes its worktree; a bead's details can delete it with `bd`. Each of
-those asks first.
+those asks first. Closing the Orchestrator tab or its detached window leaves
+an already-started dispatch running; it does not remove the new worktree.
 
 The hash at the end of a branch name is the item's own, so the Orchestrator
 finds work without its database, such as on another machine: a Herdr workspace

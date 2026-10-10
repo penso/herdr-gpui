@@ -11,6 +11,7 @@ mod conversation;
 mod dialog;
 mod markdown;
 mod rows;
+mod sessions;
 
 fn at(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
@@ -92,6 +93,7 @@ fn live(run: &Run, pane: &str, status: AgentStatus) -> LiveAgent {
     LiveAgent {
         endpoint: 0,
         host: None,
+        session: None,
         workspace_id: format!("w-{}", run.id),
         pane_id: pane.into(),
         status,

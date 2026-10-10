@@ -170,6 +170,7 @@ pub(crate) struct LiveAgent {
     pub(crate) endpoint: usize,
     /// `None` on this machine, else the SSH destination.
     pub(crate) host: Option<String>,
+    pub(crate) session: Option<String>,
     pub(crate) workspace_id: String,
     pub(crate) pane_id: String,
     pub(crate) status: AgentStatus,
@@ -181,6 +182,7 @@ pub(crate) struct LiveAgent {
 pub(crate) fn live_for<'a>(session: &HerdrSession, live: &'a [LiveAgent]) -> Option<&'a LiveAgent> {
     live.iter().find(|agent| {
         agent.host == session.host
+            && agent.session == session.session
             && agent.pane_id == session.pane_id
             && agent.workspace_id == session.workspace_id
     })
@@ -233,9 +235,20 @@ impl<'a> Runs<'a> {
             .workspace
             .as_ref()
             .filter(|workspace| workspace.backend == Backend::Herdr)?;
-        self.live
-            .iter()
-            .find(|agent| agent.host == workspace.host && agent.workspace_id == workspace.id)
+        self.live.iter().find(|agent| {
+            agent.host == workspace.host
+                && agent.workspace_id == workspace.id
+                && if self.runs[run].owner == crate::orchestrator::Owner::Branch {
+                    self.runs[run].id
+                        == super::super::naming::workspace_run_id(
+                            &agent.host,
+                            &agent.session,
+                            &agent.workspace_id,
+                        )
+                } else {
+                    agent.session.is_none()
+                }
+        })
     }
 
     pub(crate) fn status(&self, run: usize) -> Option<Status> {

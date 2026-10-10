@@ -334,10 +334,8 @@ impl HerdrWindow {
                 self.orchestrator_live.branches.clone(),
             );
         }
-        let host_of = |index: usize| match &self.endpoints[index].connection.target {
-            ConnectTarget::Ssh { target, .. } => Some(target.clone()),
-            _ => None,
-        };
+        let place_of =
+            |index: usize| super::actions::place(&self.endpoints[index].connection.target);
         let branches: Vec<LiveBranch> = snapshots
             .iter()
             .enumerate()
@@ -345,7 +343,8 @@ impl HerdrWindow {
             .flat_map(|(index, snapshot)| {
                 snapshot.workspaces.iter().filter_map(move |workspace| {
                     Some(LiveBranch {
-                        host: host_of(index),
+                        host: place_of(index).0,
+                        session: place_of(index).1,
                         workspace_id: workspace.workspace_id.clone(),
                         branch: workspace.branch.clone()?,
                     })
@@ -357,13 +356,11 @@ impl HerdrWindow {
             .enumerate()
             .filter_map(|(index, snapshot)| Some((index, snapshot.as_ref()?)))
             .flat_map(|(index, snapshot)| {
-                let host = match &self.endpoints[index].connection.target {
-                    ConnectTarget::Ssh { target, .. } => Some(target.clone()),
-                    _ => None,
-                };
+                let (host, session) = place_of(index);
                 snapshot.agents.iter().map(move |agent| LiveAgent {
                     endpoint: index,
                     host: host.clone(),
+                    session: session.clone(),
                     workspace_id: agent.workspace_id.clone(),
                     pane_id: agent.pane_id.clone(),
                     status: agent.agent_status,
@@ -395,6 +392,23 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         match event {
+            Event::LoadAgents { endpoint } => {
+                if let Some(view) = self.orchestrator_view(id).cloned() {
+                    let target = match &endpoint {
+                        Some(endpoint) => self
+                            .endpoints
+                            .iter()
+                            .find(|e| &e.id == endpoint)
+                            .map(|e| e.connection.target.clone()),
+                        None => Some(view.read(cx).target().clone()),
+                    };
+                    if let Some(target) = target {
+                        view.update(cx, |view, cx| view.load_agents(endpoint, target, cx));
+                    } else {
+                        self.tell_orchestrator(id, super::Error::HostCannotTake, cx);
+                    }
+                }
+            }
             Event::Dispatch { request, endpoint } => {
                 self.dispatch_elsewhere(id, *request, &endpoint, cx)
             }
@@ -410,8 +424,12 @@ impl HerdrWindow {
                     self.tell_orchestrator(id, super::Error::MenuOpen, cx);
                 }
             }
-            Event::OpenWorkspace { host, workspace_id } => {
-                self.open_run_workspace(id, host.as_deref(), &workspace_id, cx)
+            Event::OpenWorkspace {
+                host,
+                session,
+                workspace_id,
+            } => {
+                self.open_run_workspace(id, host.as_deref(), session.as_deref(), &workspace_id, cx)
             }
             Event::OpenUrl(url) => match WebUrl::try_from(url.as_str()) {
                 Ok(url) => {
@@ -501,13 +519,13 @@ impl HerdrWindow {
         &mut self,
         view: TabId,
         host: Option<&str>,
+        session: Option<&str>,
         workspace_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let fits = |target: &ConnectTarget| match (host, target) {
-            (Some(destination), ConnectTarget::Ssh { target, .. }) => target == destination,
-            (None, ConnectTarget::Local | ConnectTarget::Session { .. }) => true,
-            _ => false,
+        let fits = |target: &ConnectTarget| {
+            let place = super::actions::place(target);
+            place.0.as_deref() == host && place.1.as_deref() == session
         };
         let has = |index: usize| {
             let live = if index == self.selected_endpoint {

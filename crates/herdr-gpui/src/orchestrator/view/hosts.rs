@@ -114,6 +114,7 @@ impl OrchestratorView {
                     if let Some(dialog) = &mut this.dialog {
                         dialog.host = (!current).then(|| endpoint.clone());
                     }
+                    this.select_agent_host(cx);
                     cx.notify();
                 }))
         });

@@ -80,6 +80,10 @@ enum Command {
     Acted { resync: bool },
     /// Look up a pull request's status, checks, and merge state by number.
     LoadPullRequest(u64),
+    LoadAgents {
+        endpoint: Option<String>,
+        target: ConnectTarget,
+    },
 }
 
 /// A pull request looked up for the open item.
@@ -135,6 +139,8 @@ pub(crate) struct Snapshot {
     pub(crate) profiles: Arc<Vec<Profile>>,
     /// The agents installed on the repository's host, once known.
     pub(crate) installed: Option<Arc<Vec<AgentKind>>>,
+    pub(crate) installed_endpoint: Option<String>,
+    pub(crate) installed_error: Option<Arc<Error>>,
     /// The newest pull request lookup.
     pub(crate) pull_request: Option<PullRequestLookup>,
     /// The repository's branches named for items, as each sync read them.
@@ -149,6 +155,11 @@ pub(crate) struct Service {
 }
 
 impl Service {
+    pub(crate) fn load_agents(&self, endpoint: Option<String>, target: ConnectTarget) -> bool {
+        self.commands
+            .try_send(Command::LoadAgents { endpoint, target })
+            .is_ok()
+    }
     pub(crate) fn start(request: Request) -> std::io::Result<Self> {
         let (commands, receiver) = mpsc::sync_channel(COMMANDS);
         let mailbox = Arc::new(Mutex::new(None));
@@ -266,6 +277,20 @@ impl Worker {
                 }
                 Ok(Command::Act(action)) => self.act(action),
                 Ok(Command::LoadPullRequest(number)) => self.load_pull_request(number),
+                Ok(Command::LoadAgents { endpoint, target }) => {
+                    self.snapshot.installed_endpoint = endpoint;
+                    self.snapshot.installed = None;
+                    self.snapshot.installed_error = None;
+                    self.publish();
+                    let result = Host::new(&target)
+                        .map_err(|_| Error::UnsupportedHost)
+                        .and_then(|host| installed(Some(&host), &self.cancelled));
+                    match result {
+                        Ok(agents) => self.snapshot.installed = Some(Arc::new(agents)),
+                        Err(error) => self.snapshot.installed_error = Some(Arc::new(error)),
+                    }
+                    self.publish();
+                }
                 Ok(Command::Acted { resync }) => {
                     if resync {
                         let token = self.request.token.clone();
@@ -308,20 +333,17 @@ impl Worker {
             return;
         }
         let resync = matches!(action, Action::DeleteBead { .. });
-        let (notices, commands, actions, cancelled) = (
+        let (notices, commands, actions) = (
             self.notices.clone(),
             self.commands.clone(),
             self.actions.clone(),
-            self.cancelled.clone(),
         );
-        let spawned = std::thread::Builder::new()
-            .name("herdr-orchestrator-action".into())
-            .spawn(move || {
-                let outcome = super::actions::perform(&site, &action, &cancelled).map_err(Arc::new);
-                push(&notices, Notice { outcome });
-                actions.fetch_sub(1, Ordering::SeqCst);
-                let _ = commands.try_send(Command::Acted { resync });
-            });
+        let spawned = spawn_action(move |cancelled| {
+            let outcome = super::actions::perform(&site, &action, cancelled).map_err(Arc::new);
+            push(&notices, Notice { outcome });
+            actions.fetch_sub(1, Ordering::SeqCst);
+            let _ = commands.try_send(Command::Acted { resync });
+        });
         if let Err(error) = spawned {
             self.actions.fetch_sub(1, Ordering::SeqCst);
             self.notice(Err(Arc::new(Error::Worker(error))));
@@ -411,7 +433,10 @@ impl Worker {
         self.host = Some(host);
         self.reload()?;
         self.publish();
-        self.snapshot.installed = installed(self.host.as_ref(), &self.cancelled).map(Arc::new);
+        match installed(self.host.as_ref(), &self.cancelled) {
+            Ok(agents) => self.snapshot.installed = Some(Arc::new(agents)),
+            Err(error) => self.snapshot.installed_error = Some(Arc::new(error)),
+        }
         self.publish();
         Ok(())
     }
@@ -548,6 +573,18 @@ impl Worker {
     }
 }
 
+/// Once accepted, an action completes even when its view stops observing it.
+fn spawn_action(
+    action: impl FnOnce(&AtomicBool) + Send + 'static,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name("herdr-orchestrator-action".into())
+        .spawn(move || action(&AtomicBool::new(false)))
+}
+
+#[cfg(test)]
+mod tests;
+
 /// Adds `notice`, dropping the oldest past [`MAX_NOTICES`].
 fn push(notices: &Mutex<VecDeque<Notice>>, notice: Notice) {
     if let Ok(mut notices) = notices.lock() {
@@ -559,15 +596,16 @@ fn push(notices: &Mutex<VecDeque<Notice>>, notice: Notice) {
 }
 
 /// The agents installed on `host`, in [`AgentKind::ALL`] order.
-fn installed(host: Option<&Host>, cancelled: &AtomicBool) -> Option<Vec<AgentKind>> {
+fn installed(host: Option<&Host>, cancelled: &AtomicBool) -> Result<Vec<AgentKind>> {
     let binaries = AgentKind::ALL.map(AgentKind::binary);
-    let found = host?.installed_programs(&binaries, cancelled).ok()?;
-    Some(
-        AgentKind::ALL
-            .into_iter()
-            .filter(|kind| found.iter().any(|binary| binary == kind.binary()))
-            .collect(),
-    )
+    let found = host
+        .ok_or(Error::UnsupportedHost)?
+        .installed_programs(&binaries, cancelled)
+        .map_err(super::error::script("Discovering installed agents"))?;
+    Ok(AgentKind::ALL
+        .into_iter()
+        .filter(|kind| found.iter().any(|binary| binary == kind.binary()))
+        .collect())
 }
 
 /// The sources a repository has, and whether this build can read each.

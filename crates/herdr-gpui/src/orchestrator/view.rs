@@ -35,13 +35,20 @@ use std::{collections::HashSet, sync::Arc};
 /// What the view asks its host to do.
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
+    LoadAgents {
+        endpoint: Option<String>,
+    },
     /// Show the pane a run's agent is in, on the endpoint the host listed it
     /// from.
-    OpenRun { endpoint: usize, pane_id: String },
+    OpenRun {
+        endpoint: usize,
+        pane_id: String,
+    },
     /// Show a run's Herdr workspace on the host it is on: `None` for this
     /// machine, else an SSH destination.
     OpenWorkspace {
         host: Option<String>,
+        session: Option<String>,
         workspace_id: String,
     },
     /// Open a web address, such as an issue's page, in a browser tab.
@@ -281,6 +288,7 @@ impl OrchestratorView {
         if let Some(snapshot) = self.service.as_ref().and_then(Service::poll) {
             self.recorded_runs = snapshot.runs.clone();
             self.snapshot = snapshot;
+            self.reconcile_agents();
             self.refresh_rows();
             self.follow_pull_request();
             changed = true;
@@ -629,6 +637,22 @@ impl OrchestratorView {
         match workspace {
             Some(workspace) => cx.emit(Event::OpenWorkspace {
                 host: workspace.host.clone(),
+                session: runs
+                    .session(run)
+                    .and_then(|session| session.session.clone())
+                    .or_else(|| {
+                        let run = self.snapshot.runs.get(run)?;
+                        self.live_branches
+                            .iter()
+                            .find(|branch| {
+                                super::naming::workspace_run_id(
+                                    &branch.host,
+                                    &branch.session,
+                                    &branch.workspace_id,
+                                ) == run.id
+                            })
+                            .and_then(|branch| branch.session.clone())
+                    }),
                 workspace_id: workspace.id.clone(),
             }),
             None => {
