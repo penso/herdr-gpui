@@ -6,6 +6,114 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// Lines of notes kept visible however short the window.
+const MIN_NOTES_LINES: f32 = 4.;
+const MAX_NOTES_LINES: f32 = 14.;
+const THUMB_WIDTH: f32 = 4.;
+const MIN_THUMB: f32 = 16.;
+
+/// The thumb of the notes' scrollbar: where `max` pixels of overflow, scrolled
+/// by `offset` (GPUI's negative scroll offset), sit within `viewport`. `None`
+/// when everything fits, so short notes show no bar.
+pub(crate) fn scroll_thumb(
+    viewport: Bounds<Pixels>,
+    offset: Pixels,
+    max: Pixels,
+) -> Option<Bounds<Pixels>> {
+    let (height, max) = (f32::from(viewport.size.height), f32::from(max));
+    if max < 1. || height <= 0. {
+        return None;
+    }
+    let thumb = (height * height / (height + max))
+        .max(MIN_THUMB)
+        .min(height);
+    let scrolled = (-f32::from(offset)).clamp(0., max);
+    let top = (height - thumb) * scrolled / max;
+    Some(Bounds::new(
+        point(
+            viewport.right() - px(THUMB_WIDTH + 2.),
+            viewport.top() + px(top),
+        ),
+        size(px(THUMB_WIDTH), px(thumb)),
+    ))
+}
+
+/// GitHub's release notes for the offered update: shown so the changes can be
+/// read before installing. Rendered through `release_notes`, so the text is
+/// treated as prose and never as instructions — it comes from GitHub, not from
+/// the signed manifest.
+fn release_notes_section(
+    prepared: &crate::release_notes::Prepared,
+    scroll: &ScrollHandle,
+    notes: &str,
+    theme: &crate::config::Theme,
+    font: &crate::config::FontConfig,
+    mono: &crate::config::FontConfig,
+) -> Div {
+    // Parsed once per body: scrolling redraws without rebuilding lines.
+    let lines = prepared.lines(notes);
+    // Short notes keep their own height rather than a blank minimum.
+    let min_lines = MIN_NOTES_LINES.min(lines.len() as f32);
+    let thumb = rgba((theme.muted << 8) | 0x99);
+    let handle = scroll.clone();
+    div()
+        .debug_selector(|| "app-update-notes".into())
+        .flex()
+        .flex_col()
+        // Shrinks with the window, but never below the heading and the notes'
+        // own minimum: a smaller section would let them draw over what follows.
+        .min_h(px(font.line_height() * (1. + min_lines) + 4.))
+        .gap(px(4.))
+        .child(div().font_weight(FontWeight::SEMIBOLD).child("What's new"))
+        .child(
+            div()
+                .relative()
+                .flex()
+                .flex_col()
+                // In a short window the notes give up height first, so they
+                // scroll inside the dialog instead of pushing it into a second,
+                // outer scroll that the same wheel would also move.
+                .min_h(px(font.line_height() * min_lines))
+                .max_h(px(font.line_height() * MAX_NOTES_LINES))
+                .child(
+                    div()
+                        .id("app-update-notes-body")
+                        .debug_selector(|| "app-update-notes-body".into())
+                        .track_scroll(scroll)
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        // Room for the bar, so it never covers the text.
+                        .pr(px(THUMB_WIDTH + 6.))
+                        .child(crate::release_notes::render(
+                            "app-update-notes",
+                            &lines,
+                            theme,
+                            mono,
+                        )),
+                )
+                // Painted after the notes lay out, so the thumb follows this
+                // frame's scroll position rather than the previous one's.
+                .child(
+                    canvas(
+                        |_, _, _| (),
+                        move |_, (), window, _| {
+                            if let Some(bounds) = scroll_thumb(
+                                handle.bounds(),
+                                handle.offset().y,
+                                handle.max_offset().y,
+                            ) {
+                                window.paint_quad(
+                                    fill(bounds, thumb).corner_radii(px(THUMB_WIDTH / 2.)),
+                                );
+                            }
+                        },
+                    )
+                    .absolute()
+                    .inset_0(),
+                ),
+        )
+}
+
 fn update_progress(state: &State, accent: Hsla, track: Hsla) -> Option<Div> {
     let progress = match state {
         State::Downloading { received, total } if *total > 0 && received < total => {
@@ -51,6 +159,8 @@ impl HerdrWindow {
             return;
         }
         self.menu.page = Some(Page::AppUpdate);
+        // Every opening starts at the top of the notes.
+        self.app_update_notes_scroll.set_offset(Point::default());
         self.update_preview = Some(state);
     }
 
@@ -64,8 +174,13 @@ impl HerdrWindow {
             return;
         }
         self.menu.page = Some(Page::AppUpdate);
+        // Every opening starts at the top of the notes.
+        self.app_update_notes_scroll.set_offset(Point::default());
+        // The preview exists to exercise the dialog, so it carries a real body:
+        // without one the notes section cannot be reviewed at all.
         self.update_preview = preview.then(|| State::Available {
             version: "9999.0.0".into(),
+            notes: crate::updater::PREVIEW_NOTES.into(),
         });
     }
 
@@ -132,12 +247,25 @@ impl HerdrWindow {
             State::Error(error) => (format!("Update failed: {error}"), Some(UpdateAction::Check)),
         };
         let latest = match state {
-            State::Available { version }
+            State::Available { version, .. }
             | State::Ready { version }
-            | State::Homebrew { version }
+            | State::Homebrew { version, .. }
             | State::Restart { version } => version.as_str(),
             State::Current => APP_VERSION,
             _ => "Not yet known",
+        };
+        // Notes are shown while an update is on offer, not once it is under way.
+        let notes = match state {
+            State::Available { notes, .. } | State::Homebrew { notes, .. } => Some(notes.as_str()),
+            _ => None,
+        };
+        // The dialog shows a bounded excerpt; the release page has the whole text.
+        let notes_page = match state {
+            State::Available { version, .. }
+            | State::Homebrew { version, .. }
+            | State::Ready { version }
+            | State::Restart { version } => Some(crate::updater::release_page(version)),
+            _ => None,
         };
         let panel = div()
             .debug_selector(|| "app-update-panel".into())
@@ -223,6 +351,18 @@ impl HerdrWindow {
                             })),
                     )
                     .child(div().font_weight(FontWeight::SEMIBOLD).child(message))
+                    // Only when there is something to read: a release published
+                    // without notes leaves the dialog exactly as it was.
+                    .when_some(notes.filter(|notes| !notes.trim().is_empty()), |body, notes| {
+                        body.child(release_notes_section(
+                            &self.app_update_notes,
+                            &self.app_update_notes_scroll,
+                            notes,
+                            theme,
+                            font,
+                            &self.config.terminal,
+                        ))
+                    })
                     .children(update_progress(state, accent.into(), rgb(theme.active).into()))
                     .child(div().text_color(rgb(theme.subtext())).child(
                         "Downloads are verified before installation. Your daemon and terminal sessions stay running.",
@@ -260,9 +400,27 @@ impl HerdrWindow {
                     .child("Manual Releases")
                     .on_click(|_, _, cx| {
                         cx.stop_propagation();
-                        cx.open_url("https://github.com/penso/herdr-gpui/releases");
+                        cx.open_url(crate::updater::RELEASES_PAGE);
                     }),
-            );
+            )
+            .when_some(notes_page, |buttons, url| {
+                buttons.child(
+                    div()
+                        .id("app-update-notes-page")
+                        .debug_selector(|| "app-update-notes-page".into())
+                        .px(px(12.))
+                        .py(px(8.))
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .cursor_pointer()
+                        .text_color(rgb(theme.muted))
+                        .hover(|s| s.bg(rgb(theme.active)).text_color(rgb(theme.foreground)))
+                        .child("Release Notes")
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            cx.open_url(&url);
+                        }),
+                )
+            });
         if let Some(action) = action {
             let label = match action {
                 UpdateAction::Check if matches!(state, State::Error(_)) => "Retry",
@@ -288,7 +446,8 @@ impl HerdrWindow {
                         // Preview actions must never reach the service, including cancellation.
                         if let Some(state) = this.update_preview.take() {
                             match state {
-                                State::Available { version } | State::Homebrew { version } => {
+                                State::Available { version, .. }
+                                | State::Homebrew { version, .. } => {
                                     this.update_preview = Some(State::Ready { version });
                                 }
                                 State::Ready { .. } => this.dismiss_menu(window, cx),

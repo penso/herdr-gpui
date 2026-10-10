@@ -69,6 +69,10 @@ mod superset_dots;
 #[cfg(test)]
 mod text_width;
 #[cfg(test)]
+mod update_notes;
+#[cfg(test)]
+mod update_notes_scrollbar;
+#[cfg(test)]
 mod update_panel;
 #[cfg(test)]
 mod workspace_menu;
@@ -411,6 +415,25 @@ pub(crate) fn snapshot(workspace_count: usize) -> ClientShellSnapshot {
     })).unwrap()
 }
 
+#[cfg(test)]
+/// Draw one preview state in a freshly opened panel and return its bounds.
+pub(crate) fn draw_update_state(
+    cx: &mut gpui::VisualTestContext,
+    view: &Entity<HerdrWindow>,
+    state: &crate::updater::State,
+) -> (Bounds<Pixels>, Option<Bounds<Pixels>>) {
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_app_update(false, window, cx);
+            view.update_preview = Some(state.clone());
+            cx.notify();
+        });
+        full_draw(window, cx).clear(cx);
+    });
+    let panel = cx.debug_bounds("app-update-panel").unwrap();
+    (panel, cx.debug_bounds("app-update-action"))
+}
+
 /// A frame that renders every view. The sidebar is a cached view, which GPUI
 /// replays without recording debug bounds; these tests measure layout, so each
 /// of their frames is a full one, as every frame was before the cache.
@@ -428,6 +451,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         updater: crate::updater::Updater::default(),
         update_preview: None,
         daemon_text: Default::default(),
+        app_update_notes: Default::default(),
+        app_update_notes_scroll: gpui::ScrollHandle::new(),
         removal: None,
         worktree_script: None,
         editor_open: None,

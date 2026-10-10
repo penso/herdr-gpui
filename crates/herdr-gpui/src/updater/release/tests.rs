@@ -3,6 +3,7 @@ use anyhow::Context as _;
 use ed25519_dalek::{Signer, SigningKey};
 
 mod beta_channel;
+mod null_body;
 
 #[test]
 fn request_profiles_allow_slow_archives_with_finite_deadlines() {
@@ -366,6 +367,51 @@ fn redirects_require_exact_https_authorities() {
     }
 }
 
+/// Adding `notes` to `Offer` must not make two offers with the same signed
+/// material compare unequal: `install::authenticate` rebuilds an offer from a
+/// signed request and has no notes, so comparing whole offers rejected valid
+/// downloads whenever a release published notes.
+#[test]
+fn offers_compare_on_signed_material_not_notes() {
+    let offer = |notes: &str, signature: u8| Offer {
+        manifest: Manifest {
+            schema: 1,
+            version: "20260920.2".into(),
+            assets: Vec::new(),
+        },
+        asset: Asset {
+            target: "aarch64-apple-darwin".into(),
+            name: "Herdr.tar.gz".into(),
+            size: 1,
+            sha256: "00".repeat(32),
+        },
+        manifest_bytes: vec![1, 2, 3],
+        signature: vec![signature; 64],
+        notes: notes.into(),
+    };
+    let checked = offer("### Added\n- Something", 4);
+    assert!(checked.same_signed_manifest(&offer("", 4)));
+    // The signature is signed material, so a different one is a different offer.
+    assert!(!checked.same_signed_manifest(&offer("", 9)));
+}
+
+#[test]
+fn a_release_body_is_optional_and_kept_verbatim() -> anyhow::Result<()> {
+    let mut value = serde_json::json!({"tag_name":"v20260920.2", "draft":false, "prerelease":false, "assets":[{
+        "name":"update-manifest.json", "size":100,
+        "browser_download_url":"https://github.com/penso/herdr-gpui/releases/download/v20260920.2/update-manifest.json"
+    }]});
+    // A release published without notes still parses; there is simply nothing to show.
+    assert_eq!(parse_release(&serde_json::to_vec(&value)?)?.body, None);
+    let notes = "### Added\n- Something new";
+    value["body"] = notes.into();
+    assert_eq!(
+        parse_release(&serde_json::to_vec(&value)?)?.body.as_deref(),
+        Some(notes)
+    );
+    Ok(())
+}
+
 #[test]
 fn release_metadata_rejects_unstable_and_untrusted_names() -> anyhow::Result<()> {
     let value = serde_json::json!({"tag_name":"v20260920.2", "draft":false, "prerelease":false, "assets":[{
@@ -413,4 +459,16 @@ fn release_metadata_rejects_unstable_and_untrusted_names() -> anyhow::Result<()>
     bad["assets"][0]["browser_download_url"] = "https://evil.test/a".into();
     assert!(parse_release(&serde_json::to_vec(&bad)?).is_err());
     Ok(())
+}
+
+#[test]
+fn a_release_page_comes_from_the_version_alone() {
+    assert_eq!(
+        release_page("20261008.1"),
+        "https://github.com/penso/herdr-gpui/releases/tag/v20261008.1"
+    );
+    // Not a calendar version, so no tag is guessed from it.
+    for version in ["9999.0.0", "20261008.1/../../evil", "", "dev"] {
+        assert_eq!(release_page(version), RELEASES_PAGE, "{version}");
+    }
 }

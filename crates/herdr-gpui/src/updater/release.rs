@@ -23,6 +23,7 @@ const METADATA_LIMIT: usize = 1024 * 1024;
 /// Each listed release carries its full asset metadata (~2 KiB per asset), so
 /// the short page the beta channel reads needs more room than one release.
 const RELEASE_LIST_LIMIT: usize = 4 * 1024 * 1024;
+pub(crate) const RELEASES_PAGE: &str = "https://github.com/penso/herdr-gpui/releases";
 /// GitHub's latest release is never a prerelease: this is the stable channel.
 const LATEST_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releases/latest";
 /// The newest published releases of both kinds, for the beta channel.
@@ -45,12 +46,28 @@ pub(super) struct Asset {
     pub(super) sha256: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(super) struct Offer {
     pub(super) manifest: Manifest,
     pub(super) asset: Asset,
     pub(super) manifest_bytes: Vec<u8>,
     pub(super) signature: Vec<u8>,
+    /// GitHub's own release notes, shown before updating. Display-only and
+    /// **untrusted**: unlike `manifest`, this is not covered by the signature,
+    /// so it is only ever rendered as text.
+    pub(super) notes: String,
+}
+
+impl Offer {
+    /// Whether another offer carries the same signed material.
+    ///
+    /// `notes` is deliberately excluded. It is not covered by the signature, and
+    /// the offer rebuilt from a signed request (`install::authenticate`) has
+    /// none — comparing whole offers would reject a valid download whenever a
+    /// release publishes notes.
+    pub(super) fn same_signed_manifest(&self, other: &Self) -> bool {
+        self.manifest_bytes == other.manifest_bytes && self.signature == other.signature
+    }
 }
 
 /// Releases are calendar versions: an eight-digit `YYYYMMDD` date and a same-day
@@ -172,6 +189,19 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
     }
 }
 
+/// Where a release's notes can be read in full, in the browser.
+///
+/// Built from the version, which reaches the UI only after the signed manifest
+/// confirmed it, never from the release JSON's `html_url`: unsigned metadata
+/// must not choose the page this opens. Anything that is not a calendar version
+/// gets the release list instead of a guessed tag.
+pub(crate) fn release_page(version: &str) -> String {
+    if parse_version(version).is_none() {
+        return RELEASES_PAGE.into();
+    }
+    format!("{RELEASES_PAGE}/tag/v{version}")
+}
+
 fn release_url(version: &str, name: &str) -> String {
     format!("https://github.com/penso/herdr-gpui/releases/download/v{version}/{name}")
 }
@@ -289,6 +319,12 @@ struct Release {
     draft: bool,
     prerelease: bool,
     assets: Vec<ReleaseAsset>,
+    /// The release body. GitHub omits it or sends `null` for a release cut
+    /// without notes; either way there is simply nothing to show, and the
+    /// release must still parse, since one note-less release in the beta
+    /// listing would otherwise fail the whole check.
+    #[serde(default)]
+    body: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -443,6 +479,7 @@ pub(super) fn check(
         asset,
         manifest_bytes,
         signature,
+        notes: release.body.unwrap_or_default(),
     }))
 }
 

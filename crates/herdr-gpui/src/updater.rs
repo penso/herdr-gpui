@@ -14,6 +14,8 @@ mod unsupported;
 #[cfg(not(unix))]
 use unsupported::{brew, install};
 
+pub(crate) use release::{RELEASES_PAGE, release_page};
+
 use std::{
     ffi::OsString,
     process::ExitCode,
@@ -28,6 +30,11 @@ use std::{
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
+/// The sample release body the QA preview shows, so the notes section can be
+/// reviewed without waiting for a real release. Shared with the layout test so
+/// the two cannot drift.
+pub(crate) const PREVIEW_NOTES: &str = "### Added\n- Release notes are shown before you update.\n\n### Fixed\n- A sample fix, so the preview shows a realistic body.";
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum State {
     Disabled(String),
@@ -36,6 +43,9 @@ pub(super) enum State {
     Current,
     Available {
         version: String,
+        /// GitHub's release notes for this version, shown before updating.
+        /// Untrusted text, not covered by the signed manifest.
+        notes: String,
     },
     Downloading {
         received: u64,
@@ -48,6 +58,7 @@ pub(super) enum State {
     /// Homebrew owns this installation, so Homebrew performs the upgrade.
     Homebrew {
         version: String,
+        notes: String,
     },
     Upgrading {
         detail: String,
@@ -454,12 +465,14 @@ fn worker(
                     match (&offer, homebrew, prepared.is_some()) {
                         (Some(offer), true, _) => State::Homebrew {
                             version: offer.manifest.version.clone(),
+                            notes: offer.notes.clone(),
                         },
                         (Some(offer), false, true) => State::Ready {
                             version: offer.manifest.version.clone(),
                         },
                         (Some(offer), false, false) => State::Available {
                             version: offer.manifest.version.clone(),
+                            notes: offer.notes.clone(),
                         },
                         (None, ..) => State::Current,
                     }

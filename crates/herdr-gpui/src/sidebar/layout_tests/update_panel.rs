@@ -1,26 +1,57 @@
 use super::*;
 
-/// Draw one preview state in a freshly opened panel and return its bounds.
-#[cfg(test)]
-fn draw_update_state(
-    cx: &mut gpui::VisualTestContext,
-    view: &Entity<HerdrWindow>,
-    state: &crate::updater::State,
-) -> (Bounds<Pixels>, Option<Bounds<Pixels>>) {
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.open_app_update(false, window, cx);
-            view.update_preview = Some(state.clone());
-            cx.notify();
-        });
-        full_draw(window, cx).clear(cx);
-    });
-    let panel = cx.debug_bounds("app-update-panel").unwrap();
-    (panel, cx.debug_bounds("app-update-action"))
-}
-
 // `debug_bounds` keeps the last frame that drew an element, so a state that
 // must show no button is only provable before any button has been drawn.
+#[gpui::test]
+fn an_offered_update_shows_its_release_notes(cx: &mut gpui::TestAppContext) {
+    use crate::updater::State;
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        crate::bind_keys(cx);
+        let view = cx.new(|cx| fixture_window(window, cx));
+        cx.observe(&view, |_, _, cx| cx.notify()).detach();
+        SidebarFixture(view)
+    });
+    let view = cx.update(|_, cx| fixture.read(cx).0.clone());
+
+    // Absence is only provable before any notes have been drawn, so the release
+    // without notes is drawn first.
+    let without = State::Available {
+        version: "9999.0.0".into(),
+        notes: String::new(),
+    };
+    draw_update_state(cx, &view, &without);
+    assert!(
+        cx.debug_bounds("app-update-notes").is_none(),
+        "a release without notes adds no section"
+    );
+
+    let with = State::Available {
+        version: "9999.0.0".into(),
+        // Longer than the cap, so the body must scroll rather than grow.
+        notes: (1..=40)
+            .map(|line| format!("- Change number {line}\n"))
+            .collect(),
+    };
+    draw_update_state(cx, &view, &with);
+    assert!(
+        cx.debug_bounds("app-update-notes").is_some(),
+        "the offered update shows its notes"
+    );
+    let Some(body) = cx.debug_bounds("app-update-notes-body") else {
+        panic!("the notes body is drawn");
+    };
+    let cap = cx.update(|_, cx| px(view.read(cx).config.ui.line_height() * 14.));
+    assert!(
+        body.size.height <= cap + px(1.),
+        "long notes scroll within the cap: {:?} > {cap:?}",
+        body.size.height
+    );
+    assert!(
+        cx.debug_bounds("app-update-action").is_some(),
+        "the update button stays visible below long notes"
+    );
+}
+
 #[gpui::test]
 fn a_homebrew_upgrade_in_progress_offers_nothing_to_interrupt(cx: &mut gpui::TestAppContext) {
     use crate::updater::State;
@@ -234,6 +265,7 @@ fn the_homebrew_update_states_stay_inside_the_panel(cx: &mut gpui::TestAppContex
     let states = [
         State::Homebrew {
             version: "9999.0.0".into(),
+            notes: String::new(),
         },
         State::Restart {
             version: "9999.0.0".into(),
