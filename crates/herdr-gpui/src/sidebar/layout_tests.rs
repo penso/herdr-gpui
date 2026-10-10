@@ -27,6 +27,8 @@ mod configured_rows;
 #[cfg(test)]
 mod device_footer;
 #[cfg(test)]
+mod devices_layout;
+#[cfg(test)]
 mod host_agents;
 #[cfg(test)]
 mod host_groups;
@@ -48,6 +50,8 @@ mod preferences_panel;
 mod probes;
 #[cfg(test)]
 mod row_drag;
+#[cfg(test)]
+mod search;
 #[cfg(test)]
 mod selection_scroll;
 #[cfg(test)]
@@ -462,7 +466,6 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         deliveries: Default::default(),
         notes_width: crate::panel_resize::NOTES,
         review_files_width: crate::panel_resize::REVIEW_FILES,
-        code_width: crate::panel_resize::CODE,
         reviews: Default::default(),
         code_views: Default::default(),
         code_indexes: Default::default(),
@@ -470,6 +473,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         pr_actions: Default::default(),
         usage: Default::default(),
         system_load: Default::default(),
+        devices_overview: Default::default(),
         checkpoints: Default::default(),
         port_forwards: Default::default(),
         #[cfg(feature = "cloud")]
@@ -495,6 +499,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sessions_anchor: Default::default(),
         activation_deadline: None,
         pending_navigation: None,
+        strip_navigation_fits: true,
         pending_toast: None,
         toasts_hidden: false,
         pending_releases: Vec::new(),
@@ -559,6 +564,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sidebar_scroll: Default::default(),
         sidebar_revealed: Default::default(),
         sidebar_pin_reveal: Default::default(),
+        sidebar_search: crate::sidebar::SidebarSearch::new(cx),
         _poll: Task::ready(()),
         _activation: cx.observe_window_activation(window, |_, _, _| {}),
         _appearance: cx.observe_window_appearance(window, |this, _, cx| {

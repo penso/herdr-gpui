@@ -15,6 +15,7 @@ mod rail;
 mod render;
 mod reorder;
 mod row;
+mod search;
 mod sticky;
 mod tokens;
 mod view;
@@ -31,12 +32,13 @@ pub(crate) mod layout_tests;
 pub(crate) mod native_tests;
 
 pub(crate) use {
-    agents::{Indicators, agent_name, state_label, status_indicator},
+    agents::{Indicators, agent_name, state_label, status_indicator, status_text},
     hover::{HoverMenu, HoverRest},
     metrics::{ARROW_RESERVE, HOST_ARROW_WIDTH, HOST_GAP, ICON_RESERVE, LABEL_GAP, STATUS_WIDTH},
     rail::SidebarMode,
     reorder::WorkspaceDrag,
     row::{compact, github_mark, label_text, styled as styled_token},
+    search::SidebarSearch,
     view::SidebarView,
     workspaces::workspace_label,
 };

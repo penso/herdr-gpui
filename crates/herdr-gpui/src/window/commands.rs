@@ -7,6 +7,7 @@ use crate::{
     app::InitialAppearance,
     config::{Config, FONT_SIZE_RANGE, FONT_SIZE_STEP, LayoutMode},
     controls::{self, Command},
+    endpoint::Step,
     log_window,
     menu::WorkspaceAction,
     navigation::{NavigationTarget, OwnedNavigationTarget},
@@ -59,6 +60,33 @@ impl HerdrWindow {
             return false;
         }
         self.dispatch_navigation(target, cx)
+    }
+
+    /// Back or Forward along the selected endpoint's focus trail. The trail
+    /// remembers the step only once its request is queued, so a press while
+    /// an earlier one is still landing leaves that one in charge.
+    pub(crate) fn travel(&mut self, step: Step, cx: &mut Context<Self>) {
+        let Some(snapshot) = self.live.snapshot.clone() else {
+            return;
+        };
+        let Some((index, pane)) = self.endpoints[self.selected_endpoint]
+            .history
+            .peek(step, &snapshot)
+            .map(|(index, pane)| (index, pane.to_owned()))
+        else {
+            return;
+        };
+        if self.navigate(NavigationTarget::Pane(&pane), cx) {
+            self.endpoints[self.selected_endpoint].history.begin(index);
+        }
+    }
+
+    pub(crate) fn can_travel(&self, step: Step) -> bool {
+        self.live.snapshot.as_deref().is_some_and(|snapshot| {
+            self.endpoints[self.selected_endpoint]
+                .history
+                .can(step, snapshot)
+        })
     }
 
     /// Complete an accepted navigation even if its context menu has since opened.
@@ -240,16 +268,8 @@ impl HerdrWindow {
                 self.split_active_group(window, cx);
                 return;
             }
-            Command::ToggleCode => {
-                self.toggle_code(window, cx);
-                return;
-            }
-            Command::MoveCodeToGroup => {
-                self.move_code_to_group(window, cx);
-                return;
-            }
-            Command::MoveCodeToPanel => {
-                self.move_code_to_panel(window, cx);
+            Command::OpenCode => {
+                self.open_code(None, window, cx);
                 return;
             }
             Command::InstallBrowserSkill => {
@@ -366,6 +386,10 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
+            Command::DevicesOverview => {
+                self.open_devices_overview(window, cx);
+                return;
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP
@@ -435,6 +459,15 @@ impl HerdrWindow {
                 {
                     self.navigate(NavigationTarget::Pane(&pane), cx);
                 }
+                window.focus(&self.focus, cx);
+                return;
+            }
+            Command::Back | Command::Forward => {
+                let step = match command {
+                    Command::Back => Step::Back,
+                    _ => Step::Forward,
+                };
+                self.travel(step, cx);
                 window.focus(&self.focus, cx);
                 return;
             }

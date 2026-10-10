@@ -114,7 +114,7 @@ impl HerdrWindow {
         );
     }
 
-    fn write_preference(
+    pub(crate) fn write_preference(
         &mut self,
         save: impl FnOnce() -> crate::Result<()> + Send + 'static,
         cx: &mut Context<Self>,
@@ -632,8 +632,6 @@ pub struct Chrome {
     pub notes_width: Option<f32>,
     /// The review's file list's width, once dragged.
     pub review_files_width: Option<f32>,
-    /// The VS Code panel's width, once dragged.
-    pub code_width: Option<f32>,
 }
 
 pub struct Preferences {
@@ -816,7 +814,6 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         agent_sort,
         notes_width: panel_width("notes_width_px"),
         review_files_width: panel_width("review_files_width_px"),
-        code_width: panel_width("code_width_px"),
     })
 }
 
@@ -856,7 +853,6 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                 "review_files_width_px": chrome
                     .review_files_width
                     .filter(|width| width.is_finite() && *width > 0.0),
-                "code_width_px": chrome.code_width.filter(|width| width.is_finite() && *width > 0.0),
             }),
         )?;
         file.write_all(b"\n")?;

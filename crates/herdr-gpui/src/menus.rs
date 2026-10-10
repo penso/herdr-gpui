@@ -1,5 +1,7 @@
-//! The native menu bar. Every item dispatches the same `Command` the palette
-//! and the keymap use, so a command exists in one place only.
+//! Shared definitions for the macOS native and Linux in-window menu bars.
+//! Every item dispatches the same action the palette and the keymap use.
+
+pub(crate) mod in_window;
 
 use crate::{
     CheckForUpdates, Quit, RunCommand, ShowLogs,
@@ -20,22 +22,34 @@ use gpui::{App, Menu, MenuItem, OsAction};
 #[cfg(feature = "qa-menu")]
 use herdr_client::protocol::SemanticNotificationKind;
 
+/// Only headings are needed while the Linux menus are closed.
+struct Headings(Vec<(gpui::SharedString, bool)>);
+impl gpui::Global for Headings {}
+
 /// Installs the menu bar, checking the layout the latest config picked.
 pub(crate) fn install(cx: &mut App) {
     let layout = cx
         .try_global::<crate::app::InitialAppearance>()
         .map_or_else(Layout::default, |appearance| appearance.config.layout);
-    cx.set_menus(menus(layout));
+    let menus = menus(layout);
+    cx.set_global(Headings(
+        menus
+            .iter()
+            .map(|menu| (menu.name.clone(), menu.disabled))
+            .collect(),
+    ));
+    cx.set_menus(menus);
 }
 
-/// View > Layout: Herdr's densities, their rounded versions, then the
-/// layouts with a design of their own, the one in use checked.
+/// View > Layout: Herdr's densities, their rounded versions, the layouts
+/// with a design of their own, then Devices, which lists agents by device;
+/// the one in use checked.
 fn layout_menu(current: LayoutMode) -> MenuItem {
     let items = LayoutMode::ALL
         .iter()
         .enumerate()
         .flat_map(|(index, &mode)| {
-            let group = matches!(index, 3 | 6).then(MenuItem::separator);
+            let group = matches!(index, 3 | 6 | 9).then(MenuItem::separator);
             group.into_iter().chain([
                 MenuItem::action(mode.label(), SetLayout { mode }).checked(mode == current)
             ])
@@ -183,6 +197,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 layout_menu(layout.mode),
+                MenuItem::action(
+                    "Devices Overview",
+                    RunCommand {
+                        command: Command::DevicesOverview,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Toggle Full Screen",
@@ -219,6 +239,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     "Previous Tab",
                     RunCommand {
                         command: Command::PreviousTab,
+                    },
+                ),
+                MenuItem::action(
+                    "Back",
+                    RunCommand {
+                        command: Command::Back,
+                    },
+                ),
+                MenuItem::action(
+                    "Forward",
+                    RunCommand {
+                        command: Command::Forward,
                     },
                 ),
                 MenuItem::action(
@@ -282,21 +314,9 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::action(
-                    "Toggle VS Code",
+                    "Open VS Code",
                     RunCommand {
-                        command: Command::ToggleCode,
-                    },
-                ),
-                MenuItem::action(
-                    "Move VS Code to Group",
-                    RunCommand {
-                        command: Command::MoveCodeToGroup,
-                    },
-                ),
-                MenuItem::action(
-                    "Move VS Code to Panel",
-                    RunCommand {
-                        command: Command::MoveCodeToPanel,
+                        command: Command::OpenCode,
                     },
                 ),
                 MenuItem::separator(),

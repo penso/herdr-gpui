@@ -14,8 +14,9 @@ fn the_sidebar_follows_the_selection_without_undoing_manual_scrolling(
     let mut snapshot = cx
         .update(|_, cx| view.update(cx, |view, _| view.live.snapshot.take()))
         .unwrap();
-    // Reserve the new footer while retaining this test's original list viewport.
-    cx.simulate_resize(size(px(800.), px(640.)));
+    // Reserve the footer and the search field while retaining this test's
+    // original list viewport.
+    cx.simulate_resize(size(px(800.), px(712.)));
     cx.run_until_parked();
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     // The fixture's grouped worktrees stay contiguous, so w30 is the 31st row.

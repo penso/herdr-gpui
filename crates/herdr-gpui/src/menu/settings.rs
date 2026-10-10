@@ -389,6 +389,8 @@ impl HerdrWindow {
                 | Command::GoToFile
                 | Command::WorktreeNotes
                 | Command::LastPane
+                | Command::Back
+                | Command::Forward
                 | Command::PreviousWorkspace
                 | Command::NextWorkspace
                 | Command::WorkspaceNumber(_)
@@ -397,10 +399,9 @@ impl HerdrWindow {
                 | Command::AgentNumber(_) => 1,
                 Command::NewWindow
                 | Command::ToggleSidebar
-                | Command::ToggleCode
-                | Command::MoveCodeToGroup
-                | Command::MoveCodeToPanel
+                | Command::OpenCode
                 | Command::ToggleStatusBar
+                | Command::DevicesOverview
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize

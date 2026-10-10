@@ -26,25 +26,25 @@ fn the_server_address_is_saved_and_removed_keeping_the_rest() -> anyhow::Result<
     let path = temp.0.join("config.toml");
     let url = crate::browser::WebUrl::try_from("http://127.0.0.1:8000/?tkn=x")?;
     // A missing file starts from the local template.
-    Config::save_code_url_path(Some(&url), &path)?;
+    Config::save_code_path(&CodeEdit::Url(Some(url.clone())), &path)?;
     let saved = Config::parse(&fs::read_to_string(&path)?)?;
     assert_eq!(saved.code.url.as_ref(), Some(&url));
 
     let original = "theme = 'Nord' # keep\n[code]\nurl = 'http://127.0.0.1:1/' # server\n";
     fs::write(&path, original)?;
-    Config::save_code_url_path(Some(&url), &path)?;
+    Config::save_code_path(&CodeEdit::Url(Some(url.clone())), &path)?;
     assert_eq!(
         fs::read_to_string(&path)?,
         original.replace("'http://127.0.0.1:1/'", "\"http://127.0.0.1:8000/?tkn=x\"")
     );
     // Removing the address drops the table it leaves empty.
-    Config::save_code_url_path(None, &path)?;
+    Config::save_code_path(&CodeEdit::Url(None), &path)?;
     assert_eq!(fs::read_to_string(&path)?, "theme = 'Nord' # keep\n");
-    Config::save_code_url_path(None, &path)?;
+    Config::save_code_path(&CodeEdit::Url(None), &path)?;
     assert_eq!(fs::read_to_string(&path)?, "theme = 'Nord' # keep\n");
 
     fs::write(&path, "code = 'yes'\n")?;
-    let error = Config::save_code_url_path(Some(&url), &path)
+    let error = Config::save_code_path(&CodeEdit::Url(Some(url.clone())), &path)
         .err()
         .context("a code key that is not a table must be rejected")?;
     assert!(

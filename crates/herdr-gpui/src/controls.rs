@@ -33,6 +33,7 @@ pub enum Command {
     TabNumber(u8),
     ToggleSidebar,
     ToggleStatusBar,
+    DevicesOverview,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -55,15 +56,16 @@ pub enum Command {
     NewBrowserTab,
     InstallBrowserSkill,
     SplitEditor,
-    ToggleCode,
-    MoveCodeToGroup,
-    MoveCodeToPanel,
+    OpenCode,
     ToggleFullScreen,
     CycleWindows,
     MoveTabPrevious,
     MoveTabNext,
     RenameTab,
     LastPane,
+    /// Back through the panes this endpoint has focused.
+    Back,
+    Forward,
     SwapLeft,
     SwapRight,
     SwapUp,
@@ -304,6 +306,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "last_pane",
         label: "Last Pane",
         shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::Back,
+        name: "back",
+        label: "Back",
+        shortcuts: &["cmd-["],
+    },
+    CommandInfo {
+        command: Command::Forward,
+        name: "forward",
+        label: "Forward",
+        shortcuts: &["cmd-]"],
     },
     CommandInfo {
         command: Command::SwapLeft,
@@ -552,6 +566,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &[],
     },
     CommandInfo {
+        command: Command::DevicesOverview,
+        name: "devices_overview",
+        label: "Devices Overview",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -666,21 +686,9 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-\\"],
     },
     CommandInfo {
-        command: Command::ToggleCode,
-        name: "toggle_code",
-        label: "Toggle VS Code",
-        shortcuts: &[],
-    },
-    CommandInfo {
-        command: Command::MoveCodeToGroup,
-        name: "move_code_to_group",
-        label: "Move VS Code to Group",
-        shortcuts: &[],
-    },
-    CommandInfo {
-        command: Command::MoveCodeToPanel,
-        name: "move_code_to_panel",
-        label: "Move VS Code to Panel",
+        command: Command::OpenCode,
+        name: "open_code",
+        label: "Open VS Code",
         shortcuts: &[],
     },
     CommandInfo {
@@ -841,6 +849,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::CopyMode
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
+        | Command::DevicesOverview
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
@@ -861,15 +870,15 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::NewBrowserTab
         | Command::InstallBrowserSkill
         | Command::SplitEditor
-        | Command::ToggleCode
-        | Command::MoveCodeToGroup
-        | Command::MoveCodeToPanel
+        | Command::OpenCode
         | Command::ToggleFullScreen
         | Command::CycleWindows
         // These need state beyond the snapshot, such as the sidebar's order
         // or a dialog, so the window runs them.
         | Command::RenameTab
         | Command::LastPane
+        | Command::Back
+        | Command::Forward
         | Command::ResizeMode
         | Command::RenamePane
         | Command::PreviousWorkspace

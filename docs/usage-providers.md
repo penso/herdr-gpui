@@ -13,6 +13,26 @@ Detection, local and remote fetching, caching, refresh timing, the status
 bar, and the panel all work from the trait. A provider only says how to
 find its sign-in, how to ask its service, and how to read the answer.
 
+## ChatGPT usage through OpenCode
+
+ChatGPT subscriptions used through OpenCode appear as **Codex** in the status
+bar. Detection first checks `$CODEX_HOME/auth.json` (`~/.codex/auth.json` by
+default). When that file has no OAuth access token, it checks the `openai`
+OAuth entry in `$XDG_DATA_HOME/opencode/auth.json`
+(`~/.local/share/opencode/auth.json` by default). No additional configuration
+is needed when Usage is enabled in Settings > Status bar.
+
+Use OpenCode's ChatGPT browser or device login; an OpenAI API key does not
+provide ChatGPT subscription limits. OpenCode's own Zen/Go billing is tracked
+by the separate OpenCode providers.
+
+Detection follows the selected host, including SSH hosts. Each usage refresh
+reads the current saved token; OpenCode handles renewing its sign-in. If both
+Codex and OpenCode have OAuth credentials, Codex takes precedence, including
+when its usage request fails, so a failure does not switch the shown account.
+SSH hosts need `python3` or `jq` to read the JSON sign-in; detection is skipped
+when neither parser is available.
+
 ## The trait
 
 ```rust
@@ -96,6 +116,10 @@ in one SSH shell session. A `Secret` read on a remote host stays there as a
 shell variable; requests using it run there with `curl`. Never turn a
 secret into a `String` except through `text` for values that are not
 secret (emails, plan names, ids shown to the user).
+
+Remote JSON field extraction requires `python3` or `jq` on the host. Without
+either, field reads return no value rather than guessing by key name, which
+could select another account's credentials from a shared file.
 
 | Call | Returns | Use |
 | --- | --- | --- |

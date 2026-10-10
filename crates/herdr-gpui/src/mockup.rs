@@ -5,10 +5,12 @@
 //! `HERDR_MOCKUP_FILE` (see `build.rs`). `--mockup` then shows the variants
 //! side by side in the app's own theme and fonts, so the design the user
 //! picks is the code that ships, not an HTML approximation of it. The user
-//! picks variants, writes notes, and sends them back to the agent as a file.
+//! picks variants, writes notes, and sends them back to the agent: into its
+//! Herdr pane through the running Herdr GPUI, or else as a file.
 //!
 //! The mode never connects to a daemon, answers the control socket, or writes
-//! the user's settings: it only reads them for the first frame's look.
+//! the user's settings: it only reads them for the first frame's look. "Send
+//! to agent" is its one request to the running app's control socket.
 
 // Unused while an agent's file replaces it, but always compiled and tested.
 #[cfg_attr(herdr_mockup_scratch, allow(dead_code))]
@@ -183,6 +185,7 @@ pub(crate) fn run(options: MockupOptions) -> std::process::ExitCode {
                                 themes,
                                 theme: initial,
                                 feedback,
+                                send_notes: crate::control::send_notes,
                             },
                             window,
                             cx,

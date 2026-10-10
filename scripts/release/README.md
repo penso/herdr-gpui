@@ -10,14 +10,16 @@ prerelease/build suffixes, or leading zeros.
 
 Packaging and `just bundle` require Python 3 and read a versioned identity record
 embedded in the supplied executable, never the packaging checkout's Git state.
-Linked-worktree binaries select `assets/icons/herdr-square-worktree-1024.png` or
-`assets/icons/Herdr-worktree.icns` and `Herdr-worktree.car`; other builds use the
-standard assets. On
-Linux a release installs `herdr-icon-square-clean.svg` as the hicolor `scalable`
-icon, because icon themes list no size above 512x512; the worktree PNG goes to
-`share/pixmaps`, the lookup fallback. Distribution packages are built only from
-the release layout. The
-installed icon keeps its standard filename. No binary is executed, so foreign
+On Linux, linked-worktree binaries select `assets/icons/herdr-linux-worktree.svg`;
+other builds select `assets/icons/herdr-linux.svg`. Both circular variants are
+installed as `share/icons/hicolor/scalable/apps/herdr-gpui.svg`, so manual archives
+and distribution packages use the same layout without a pixmaps fallback.
+Regenerate both SVGs with `just icons-linux`; see the
+[icon guide](../../assets/icons/README.md#linux-desktops) for the composition and
+desktop lookup behavior. On macOS, linked-worktree binaries select
+`assets/icons/Herdr-worktree.icns` and `Herdr-worktree.car`; other builds use
+`Herdr.icns` and `Herdr.car`. The installed icons keep their standard filenames.
+No binary is executed, so foreign
 Linux architectures and both macOS slices work on the packaging host. macOS
 inputs must have identical identities (branch and PR included). Missing, malformed,
 or conflicting records fail closed; older binaries must be rebuilt.

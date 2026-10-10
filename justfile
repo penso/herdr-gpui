@@ -69,7 +69,8 @@ test-perf budget="30":
     HERDR_PERF_P95_MS="{{budget}}" target/release/herdr-gpui --performance-test
 
 # Compare UI variants written as GPUI code in `file` (the built-in demo when
-# empty) in a native window. "Send to agent" writes `feedback`; `capture` gets
+# empty) in a native window. "Send to agent" types the notes into the calling
+# Herdr pane through the running Herdr GPUI, else writes `feedback`; `capture` gets
 # a PNG of the window once it has drawn. Debug build, no daemon. The process
 # left running is the app itself, so its PID is the one to stop.
 # See .claude/skills/gpui-mockup.
@@ -90,8 +91,12 @@ mockup file="" feedback="" capture="":
 build-release:
     cargo build --locked --release -p herdr-gpui
 
-# Regenerate the checked-in artwork on macOS (requires brew install librsvg).
-icons:
+# Regenerate circular Linux artwork on any platform (Python standard library).
+icons-linux:
+    python3 scripts/generate-linux-icons.py
+
+# Regenerate all checked-in artwork on macOS (requires brew install librsvg).
+icons: icons-linux
     swift scripts/generate-icons.swift
 
 # Local, unsigned GUI-only bundle. Never installs or packages a daemon.
@@ -130,7 +135,10 @@ test-build: build-release
 check-file-size:
     bash scripts/check-file-size.sh
 
-ci: format-check check-file-size lint test
+test-mockup-wait:
+    python3 .claude/skills/gpui-mockup/scripts/test_wait.py
+
+ci: format-check check-file-size lint test test-mockup-wait
 
 # Cross type-check the Windows target without a Windows machine. CI lints the
 # MSVC target on a Windows runner; this uses the GNU target because a Mac or

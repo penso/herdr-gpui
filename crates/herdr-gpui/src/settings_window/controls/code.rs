@@ -1,10 +1,14 @@
-//! The Code page: the address of the `code serve-web` server the VS Code
-//! panel shows, and a check that it answers.
+//! The Code page: where VS Code tabs' `code serve-web` server comes
+//! from. The app starts one itself (see [`start`]), or the user gives the
+//! address of their own, which a check asks whether it answers.
 use super::*;
 use crate::{
     browser::WebUrl,
     code_server::{self, Server},
+    config::{CodeEdit, CodeMode},
 };
+
+mod start;
 
 /// The page's state: its address field and the last connection test.
 pub(in crate::settings_window) struct CodeSettings {
@@ -17,6 +21,9 @@ pub(in crate::settings_window) struct CodeSettings {
     /// The address a running save writes, checked against the reload that
     /// ends it.
     saving: Option<Option<WebUrl>>,
+    /// Choices of mode and license made while another save or a reload ran,
+    /// saved in order once the window is free, after any address.
+    queued: Vec<CodeEdit>,
     test: Test,
     /// Fences out a test answer once the address has changed since.
     generation: u64,
@@ -32,6 +39,7 @@ impl Default for CodeSettings {
             field: None,
             pending: None,
             saving: None,
+            queued: Vec::new(),
             test: Test::Idle,
             generation: 0,
             probe: code_server::probe,
@@ -72,7 +80,7 @@ enum Test {
 #[derive(Clone)]
 pub(in crate::settings_window) struct CodeIo {
     pub(in crate::settings_window) write:
-        std::sync::Arc<dyn Fn(Option<WebUrl>) -> crate::Result<()> + Send + Sync>,
+        std::sync::Arc<dyn Fn(CodeEdit) -> crate::Result<()> + Send + Sync>,
     pub(in crate::settings_window) load: fn() -> crate::Result<crate::settings_window::Loaded>,
 }
 
@@ -208,14 +216,34 @@ impl SettingsWindow {
         if self.busy() {
             return;
         }
-        let Some(url) = self.code.pending.take() else {
-            return;
-        };
-        if self.config.code.url == url {
+        if let Some(url) = self.code.pending.take()
+            && self.config.code.url != url
+        {
+            self.code.saving = Some(url.clone());
+            self.save_code_edit(CodeEdit::Url(url), cx);
             return;
         }
-        self.code.saving = Some(url.clone());
-        self.save_code_url(url, cx);
+        // One save at a time: the end of each calls this again.
+        if !self.code.queued.is_empty() {
+            let edit = self.code.queued.remove(0);
+            self.save_code_edit(edit, cx);
+        }
+    }
+
+    /// Saves a choice of mode or license now, or once the window is free,
+    /// rather than drop it while another save or a reload runs. A later
+    /// choice of mode replaces one still waiting.
+    pub(in crate::settings_window) fn queue_code_edit(
+        &mut self,
+        edit: CodeEdit,
+        cx: &mut Context<Self>,
+    ) {
+        let same = std::mem::discriminant(&edit);
+        self.code
+            .queued
+            .retain(|queued| std::mem::discriminant(queued) != same);
+        self.code.queued.push(edit);
+        self.flush_code_url(cx);
     }
 
     /// The address still waiting for another save to finish, as a write for
@@ -224,25 +252,37 @@ impl SettingsWindow {
     pub(in crate::settings_window) fn take_shutdown_code_url(
         &mut self,
     ) -> Option<impl FnOnce() -> crate::Result<()> + Send + 'static + use<>> {
-        let url = self.code.pending.take()?;
+        let edits: Vec<CodeEdit> = self
+            .code
+            .pending
+            .take()
+            .map(CodeEdit::Url)
+            .into_iter()
+            .chain(std::mem::take(&mut self.code.queued))
+            .collect();
+        if edits.is_empty() {
+            return None;
+        }
         #[cfg(test)]
         let io = self.code.io.as_ref().map(|io| io.write.clone());
         Some(move || {
-            #[cfg(test)]
-            if let Some(write) = io {
-                return write(url);
-            }
-            Config::save_code_url(url)
+            edits.into_iter().try_for_each(|edit| {
+                #[cfg(test)]
+                if let Some(write) = &io {
+                    return write(edit);
+                }
+                Config::save_code(edit)
+            })
         })
     }
 
-    fn save_code_url(&mut self, url: Option<WebUrl>, cx: &mut Context<Self>) {
+    fn save_code_edit(&mut self, edit: CodeEdit, cx: &mut Context<Self>) {
         #[cfg(test)]
         if let Some(io) = self.code.io.clone() {
-            self.save_with(move || (io.write)(url), io.load, false, cx);
+            self.save_with(move || (io.write)(edit), io.load, false, cx);
             return;
         }
-        self.save_native(move || Config::save_code_url(url), cx);
+        self.save_native(move || Config::save_code(edit), cx);
     }
 
     fn code_url_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -300,6 +340,21 @@ impl SettingsWindow {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        let mode = self.code_mode(cx);
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(24.))
+            .child(self.render_code_mode(mode, cx))
+            .map(|page| match mode {
+                Some(CodeMode::Start) => page.child(self.render_code_start(cx)),
+                Some(CodeMode::Address) => page.child(self.render_code_address(cx)),
+                None => page,
+            })
+    }
+
+    /// The address of the user's own server, and its check.
+    fn render_code_address(&self, cx: &mut Context<Self>) -> Div {
         let field = match &self.code.field {
             Some(field) => div()
                 .debug_selector(|| "settings-code-url".into())
@@ -330,8 +385,7 @@ impl SettingsWindow {
             .when(can_test, |button| {
                 button.on_click(cx.listener(|this, _, _, cx| this.test_code_connection(cx)))
             });
-        let card = self
-            .control_card("Server")
+        self.control_card("Server")
             .child(self.control_note(
                 "Start a server with `code serve-web`, then paste the address it prints, with \
                  its ?tkn= token.",
@@ -350,8 +404,7 @@ impl SettingsWindow {
                     .gap(px(12.))
                     .child(button)
                     .children(self.render_code_test_result()),
-            );
-        div().flex().flex_col().gap(px(24.)).child(card)
+            )
     }
 
     /// What the last test found: an icon, what it means, and what the

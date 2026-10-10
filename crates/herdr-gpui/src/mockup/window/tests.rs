@@ -1,8 +1,22 @@
 use super::*;
 use core::prelude::v1::test;
 
+/// Herdr GPUI as seen from outside a Herdr pane. Tests never reach the real
+/// control socket, which would type into the developer's own agent.
+fn unreachable(_: String) -> crate::Result<crate::control::NotesTo> {
+    Err(crate::Error::ControlUnsupported)
+}
+
 fn open(
     feedback: Option<PathBuf>,
+    cx: &mut TestAppContext,
+) -> (Entity<MockupWindow>, &mut VisualTestContext) {
+    open_sending(feedback, unreachable, cx)
+}
+
+fn open_sending(
+    feedback: Option<PathBuf>,
+    send_notes: feedback::SendNotes,
     cx: &mut TestAppContext,
 ) -> (Entity<MockupWindow>, &mut VisualTestContext) {
     cx.update(|cx| cx.bind_keys(key_bindings()));
@@ -14,6 +28,7 @@ fn open(
                 themes: super::super::themes(&Config::default(), None),
                 theme: 0,
                 feedback,
+                send_notes,
             },
             window,
             cx,
@@ -154,6 +169,33 @@ fn theme_changes_reach_variants_and_notes(cx: &mut TestAppContext) {
     });
 }
 
+static SENT: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn to_agent(text: String) -> crate::Result<crate::control::NotesTo> {
+    SENT.lock().unwrap().push(text);
+    Ok(crate::control::NotesTo::Agent)
+}
+
+#[gpui::test]
+fn picks_and_notes_go_to_the_agent_and_not_the_file(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("feedback.md");
+    let (view, cx) = open_sending(Some(path.clone()), to_agent, cx);
+    let pick = cx.debug_bounds("mockup-pick-C").unwrap();
+    cx.simulate_click(pick.center(), Modifiers::default());
+    let send = cx.debug_bounds("mockup-send").unwrap();
+    cx.simulate_click(send.center(), Modifiers::default());
+    cx.run_until_parked();
+    let sent = SENT.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert!(sent[0].contains("Picked: C\n"), "{}", sent[0]);
+    assert!(!path.exists());
+    view.read_with(cx, |view, _| {
+        assert!(!view.sending);
+        assert_eq!(view.status.as_ref(), "Sent to the agent");
+    });
+}
+
 #[gpui::test]
 fn picks_and_notes_are_sent_to_the_feedback_file(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
@@ -175,7 +217,7 @@ fn picks_and_notes_are_sent_to_the_feedback_file(cx: &mut TestAppContext) {
     assert!(text.contains("- A ("), "{text}");
     view.read_with(cx, |view, _| {
         assert!(!view.sending);
-        assert!(view.status.starts_with("Sent to "), "{}", view.status);
+        assert!(view.status.starts_with("Saved to "), "{}", view.status);
     });
     // Sending again replaces the file with the current state.
     let send = cx.debug_bounds("mockup-send").unwrap();

@@ -73,7 +73,8 @@ fn workspace_popover_header_and_right_click_retargeting(cx: &mut gpui::TestAppCo
         view.live.status = crate::state::ConnectionStatus::Connected;
         view
     });
-    cx.simulate_resize(size(px(800.), px(600.)));
+    // Tall enough that the search field leaves both rows in view.
+    cx.simulate_resize(size(px(800.), px(672.)));
     cx.run_until_parked();
     for (index, (selector, id, label, branch)) in [
         ("row-agent-launcher", "w3", "agent-launcher", "develop"),

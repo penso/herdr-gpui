@@ -111,6 +111,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) activation_deadline: Option<std::time::Instant>,
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,
+    /// Whether the leftmost strip gave Back and Forward their full width
+    /// when it was last laid out; see `HerdrWindow::strip_leading`.
+    pub(crate) strip_navigation_fits: bool,
     pub(crate) pending_toast: Option<u64>,
     pub(crate) toasts_hidden: bool,
     pub(crate) pending_releases: Vec<endpoint::Release>,
@@ -195,8 +198,6 @@ pub(crate) struct HerdrWindow {
     pub(crate) notes_width: crate::panel_resize::PanelWidth,
     /// The review's list of changed files.
     pub(crate) review_files_width: crate::panel_resize::PanelWidth,
-    /// The VS Code panel's width, one for the window's every workspace.
-    pub(crate) code_width: crate::panel_resize::PanelWidth,
     /// Each review tab's state, by its tab.
     pub(crate) reviews: std::collections::HashMap<crate::browser::TabId, crate::review::Review>,
     /// Code tabs' views, by tab.
@@ -210,6 +211,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) pr_actions: crate::pr_actions::Actions,
     pub(crate) usage: crate::usage::Usage,
     pub(crate) system_load: crate::system_load::SystemLoad,
+    /// The Devices overview's activity history and open tabs.
+    pub(crate) devices_overview: crate::devices_overview::Overview,
     /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
     pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
@@ -262,6 +265,7 @@ pub(crate) struct HerdrWindow {
     /// A spaces row revealed last frame, which the next render moves out from
     /// under the pinned host header if it landed there.
     pub(crate) sidebar_pin_reveal: std::cell::Cell<Option<usize>>,
+    pub(crate) sidebar_search: sidebar::SidebarSearch,
     pub(crate) _poll: Task<()>,
     pub(crate) _activation: Subscription,
     pub(crate) _appearance: Subscription,
@@ -377,9 +381,6 @@ impl HerdrWindow {
         }
         if self.review_files_width.chosen().is_none() {
             self.review_files_width.restore(chrome.review_files_width);
-        }
-        if self.code_width.chosen().is_none() {
-            self.code_width.restore(chrome.code_width);
         }
         if !self.agent_sort_modified
             && let Some(sort) = chrome.agent_sort
@@ -506,6 +507,7 @@ impl HerdrWindow {
         if self.update_usage(cx) {
             cx.notify();
         }
+        self.poll_devices_overview(cx);
         if self.update_system_load() {
             cx.notify();
         }
@@ -553,9 +555,12 @@ impl HerdrWindow {
     }
 
     /// CPU and memory are sampled for every enabled host, while they are
-    /// shown or a host picker ranks hosts by them.
+    /// shown, a Devices overview is open, or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load && !self.dispatch_sampling() {
+        if !self.config.show_system_load
+            && !self.devices_overview_open()
+            && !self.dispatch_sampling()
+        {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -760,6 +765,7 @@ impl HerdrWindow {
             selection_epoch: 0,
             activation_deadline: None,
             pending_navigation: None,
+            strip_navigation_fits: true,
             pending_toast: None,
             toasts_hidden: false,
             pending_releases: Vec::new(),
@@ -815,7 +821,6 @@ impl HerdrWindow {
             deliveries: Default::default(),
             notes_width: crate::panel_resize::NOTES,
             review_files_width: crate::panel_resize::REVIEW_FILES,
-            code_width: crate::panel_resize::CODE,
             reviews: Default::default(),
             code_views: Default::default(),
             code_indexes: Default::default(),
@@ -823,6 +828,7 @@ impl HerdrWindow {
             pr_actions: Default::default(),
             usage: Default::default(),
             system_load: Default::default(),
+            devices_overview: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
             #[cfg(feature = "cloud")]
@@ -852,6 +858,7 @@ impl HerdrWindow {
             sidebar_scroll: Default::default(),
             sidebar_revealed: Default::default(),
             sidebar_pin_reveal: Default::default(),
+            sidebar_search: sidebar::SidebarSearch::new(cx),
             _poll: poll,
             sidebar_view,
             surface_signal: cx.new(|_| SurfaceSignal),

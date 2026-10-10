@@ -23,6 +23,8 @@ use std::{
 
 mod cancellation;
 mod completion;
+#[cfg(any(target_os = "macos", windows))]
+mod covered_pages;
 mod progress;
 
 const HOST: &str = "upload-test.invalid";

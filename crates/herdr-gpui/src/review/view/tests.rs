@@ -94,10 +94,14 @@ fn note(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext, row: RowId
     });
 }
 
-fn kept(cx: &mut gpui::VisualTestContext) -> Option<String> {
+fn kept(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext) -> Option<String> {
+    let target = view.read_with(cx, |view, _| crate::browser::FeedbackKey {
+        scope: crate::browser::scope(&view.endpoints[0]),
+        pane_id: "w0:p1".into(),
+    });
     cx.update(|_, cx| {
         cx.default_global::<crate::browser::Feedback>()
-            .take("w0:p1")
+            .take(&target)
     })
 }
 
@@ -148,7 +152,7 @@ fn notes_on_lines_reach_the_agent_that_made_the_changes(cx: &mut gpui::TestAppCo
             view.poll_deliveries(cx);
         });
     });
-    let text = kept(cx).unwrap();
+    let text = kept(&view, cx).unwrap();
     assert!(text.starts_with("Review notes on your changes in /work/repo"));
     assert!(text.contains(
         "\n1. On `src/lib.rs:2` (added line)\n   Code: `fn b() { todo!() }`\n   Note: Implement this\n"
@@ -169,7 +173,7 @@ fn without_an_agent_the_notes_are_copied(cx: &mut gpui::TestAppContext) {
         .update(|_, cx| cx.read_from_clipboard())
         .and_then(|item| item.text());
     assert!(copied.is_some_and(|text| text.contains("`src/lib.rs:2` (removed line")));
-    assert!(kept(cx).is_none());
+    assert!(kept(&view, cx).is_none());
 }
 
 #[gpui::test]

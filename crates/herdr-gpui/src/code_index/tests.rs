@@ -157,7 +157,15 @@ fn a_listing_keeps_sorted_names_inside_the_checkout() {
 
 fn git(dir: &Path, args: &[&str]) {
     let status = std::process::Command::new("git")
-        .args(["-c", "user.email=t@t", "-c", "user.name=t", "-C"])
+        .args([
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
+            "-C",
+        ])
         .arg(dir)
         .args(args)
         .output()

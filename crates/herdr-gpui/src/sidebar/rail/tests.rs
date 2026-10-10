@@ -108,11 +108,15 @@ fn collapsed_sidebar_is_a_rail_in_every_layout_that_navigates(cx: &mut TestAppCo
             assert!(!view.sidebar_visible);
         });
     }
-    // The rail has no expand control of its own; the one sidebar toggle,
-    // leading the tab row, expands the sidebar again.
+    // The titlebar's one sidebar toggle expands the sidebar again.
     assert!(cx.debug_bounds("rail-expand").is_none());
     let expand = cx.debug_bounds("toggle-sidebar").unwrap();
-    assert!(expand.left() >= cx.debug_bounds("sidebar-rail").unwrap().right());
+    let rail = cx.debug_bounds("sidebar-rail").unwrap();
+    if cfg!(target_os = "macos") {
+        assert!(expand.left() >= rail.right());
+    } else {
+        assert!(expand.left() >= rail.left() && expand.right() <= rail.right());
+    }
     cx.simulate_click(expand.center(), Modifiers::default());
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     assert!(view.read_with(cx, |view, _| view.sidebar_visible));

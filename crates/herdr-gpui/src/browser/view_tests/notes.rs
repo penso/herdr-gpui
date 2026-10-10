@@ -58,10 +58,18 @@ fn noted_tab(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> crate::b
     tab
 }
 
-fn kept(cx: &mut VisualTestContext) -> Option<String> {
+fn recipient(view: &Entity<HerdrWindow>, cx: &VisualTestContext) -> crate::browser::FeedbackKey {
+    view.read_with(cx, |view, _| crate::browser::FeedbackKey {
+        scope: scope(&view.endpoints[0]),
+        pane_id: "w0:p1".into(),
+    })
+}
+
+fn kept(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> Option<String> {
+    let target = recipient(view, cx);
     cx.update(|_, cx| {
         cx.default_global::<crate::browser::Feedback>()
-            .take("w0:p1")
+            .take(&target)
     })
 }
 
@@ -72,21 +80,22 @@ fn notes_reach_the_agent_that_opened_the_page(cx: &mut gpui::TestAppContext) {
     // The agent's pane is not in this window: the notes wait for it.
     let tab = noted_tab(&view, cx);
     cx.update(|_, cx| view.update(cx, |view, cx| view.send_notes(&tab, cx)));
-    let text = kept(cx).unwrap();
+    let text = kept(&view, cx).unwrap();
     assert!(text.contains("On <button> at `#save`"), "{text}");
     assert!(text.contains("Note: Make it blue"), "{text}");
-    assert!(kept(cx).is_none(), "taken once");
+    assert!(kept(&view, cx).is_none(), "taken once");
 
     // An agent waiting in `browser feedback --wait` gets them directly.
     let tab = noted_tab(&view, cx);
+    let target = recipient(&view, cx);
     cx.update(|_, cx| {
         cx.default_global::<crate::browser::Feedback>()
-            .set_waiting(vec!["w0:p1".into()]);
+            .set_waiting(vec![target]);
         view.update(cx, |view, cx| view.send_notes(&tab, cx));
         cx.default_global::<crate::browser::Feedback>()
             .set_waiting(Vec::new());
     });
-    assert!(kept(cx).is_some());
+    assert!(kept(&view, cx).is_some());
 
     // A working agent's pane is typed into once it is idle; this fixture has
     // no connection, so the paste fails and the notes are kept instead.
@@ -100,14 +109,14 @@ fn notes_reach_the_agent_that_opened_the_page(cx: &mut gpui::TestAppContext) {
             assert_eq!(view.deliveries.len(), 1, "held while busy");
         });
     });
-    assert!(kept(cx).is_none());
+    assert!(kept(&view, cx).is_none());
     with_agent(&view, cx, "idle");
     cx.update(|_, cx| view.update(cx, |view, cx| view.poll_deliveries(cx)));
     view.read_with(cx, |view, _| {
         assert_eq!(view.deliveries.len(), 0);
         assert_eq!(view.browser.annotations.queued(tab.id), 0);
     });
-    assert!(kept(cx).is_some_and(|text| text.contains("Make it blue")));
+    assert!(kept(&view, cx).is_some_and(|text| text.contains("Make it blue")));
 }
 
 #[gpui::test]
@@ -131,7 +140,7 @@ fn a_pane_without_an_agent_is_never_typed_into(cx: &mut gpui::TestAppContext) {
             assert_eq!(view.deliveries.len(), 0);
         });
     });
-    assert!(kept(cx).is_some_and(|text| text.contains("Make it blue")));
+    assert!(kept(&view, cx).is_some_and(|text| text.contains("Make it blue")));
 }
 
 #[gpui::test]
@@ -158,5 +167,5 @@ fn an_agent_asking_a_question_is_not_typed_into(cx: &mut gpui::TestAppContext) {
             assert_eq!(view.deliveries.len(), 0);
         });
     });
-    assert!(kept(cx).is_some());
+    assert!(kept(&view, cx).is_some());
 }

@@ -13,6 +13,7 @@ mod annotate;
 mod annotate_view;
 mod code;
 mod code_group;
+mod code_start;
 mod code_view;
 mod feedback;
 mod group_motion;
@@ -39,7 +40,7 @@ mod view_tests;
 
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use annotate_view::Annotations;
-pub(crate) use feedback::{Batch, Feedback};
+pub(crate) use feedback::{Batch, Feedback, FeedbackKey};
 pub(crate) use group_motion::Fold;
 #[cfg(test)]
 pub(crate) use groups::GroupIds;

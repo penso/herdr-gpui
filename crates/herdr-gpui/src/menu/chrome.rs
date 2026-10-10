@@ -12,8 +12,6 @@ use herdr_client::Method;
 /// How far past its panel a popover counts as covering, for the native pages
 /// that step aside for it.
 const COVER_MARGIN: f32 = 8.;
-/// The widest a popover grows, for keeping it clear of the VS Code column.
-const POPOVER_REACH: f32 = 480.;
 
 impl HerdrWindow {
     pub(crate) fn show_install_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -58,9 +56,14 @@ impl HerdrWindow {
         {
             crate::agent_skill::AgentSkill::choose(crate::agent_skill::Choice::Declined, cx);
         }
+        let return_focus = self
+            .menu
+            .application
+            .as_ref()
+            .and_then(|menu| menu.return_focus.clone());
         self.menu.reset();
         self.apply_shared_theme(cx);
-        window.focus(&self.focus, cx);
+        window.focus(return_focus.as_ref().unwrap_or(&self.focus), cx);
         cx.notify();
     }
 
@@ -176,6 +179,9 @@ impl HerdrWindow {
     }
 
     pub(crate) fn render_menu(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        if self.menu.page == Some(Page::Application) {
+            return self.render_application_menu(window, cx);
+        }
         if self.menu.page == Some(Page::Sessions) && self.menu.session_edit.is_some() {
             let theme = &self.theme;
             let font = &self.config.ui;
@@ -254,8 +260,8 @@ impl HerdrWindow {
         }
     }
 
-    /// Whether the open menu is a dialog that dims the Herdr realm behind
-    /// it, rather than a popover beside what opened it.
+    /// Whether the open menu is a dialog that dims the window behind it,
+    /// rather than a popover beside what opened it.
     pub(crate) fn menu_dims(&self) -> bool {
         let Some(page) = self.menu.page else {
             return false;
@@ -263,20 +269,16 @@ impl HerdrWindow {
         let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
         let footer_anchored =
             matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
-        !footer_anchored && !matches!(page, Page::Usage(_)) && !page.pointer_anchored()
+        !footer_anchored
+            && !matches!(page, Page::Usage(_) | Page::Application)
+            && !page.pointer_anchored()
     }
 
     fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let page = self.menu.page.unwrap_or(Page::Menu);
         let font = &self.config.ui;
         let theme = &self.theme;
-        // Menus size and centre themselves in the Herdr realm, clear of the
-        // VS Code column.
-        let realm = self.herdr_realm();
-        let viewport = match realm {
-            Some(width) => size(width, window.viewport_size().height),
-            None => window.viewport_size(),
-        };
+        let viewport = window.viewport_size();
         let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
         let footer_anchored =
             matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
@@ -694,7 +696,7 @@ impl HerdrWindow {
         let dims = self.menu_dims();
         let cover = self.menu.cover.clone();
         if dims {
-            cover.set(super::state::Cover::dimmed(realm));
+            cover.set(super::state::Cover::All);
         }
         let panel = panel.when(!dims, |panel| {
             panel.child(
@@ -717,10 +719,7 @@ impl HerdrWindow {
             .top_0()
             .left_0()
             .bottom_0()
-            .map(|overlay| match realm {
-                Some(width) => overlay.w(width),
-                None => overlay.right_0(),
-            })
+            .right_0()
             .when(dims, |overlay| {
                 overlay
                     .flex()
@@ -779,22 +778,11 @@ impl HerdrWindow {
                 } else {
                     self.menu.anchor
                 };
-                // Beside the VS Code column, a popover that could reach into
-                // it hangs leftward from the pointer instead, in the realm.
-                let (position, hang_left) = match realm {
-                    Some(width) => {
-                        let x = position.x.min(width - px(MENU_MARGIN));
-                        (point(x, position.y), x + px(POPOVER_REACH) > width)
-                    }
-                    None => (position, false),
-                };
                 anchored()
                     .position(position)
                     // The "…" button sits at a strip's right end, so its menu
                     // hangs leftward from it, as an editor's does.
-                    .when(page == Page::Group || hang_left, |menu| {
-                        menu.anchor(Anchor::TopRight)
-                    })
+                    .when(page == Page::Group, |menu| menu.anchor(Anchor::TopRight))
                     .snap_to_window_with_margin(Edges::all(px(12.)))
                     .child(panel)
                     .into_any_element()

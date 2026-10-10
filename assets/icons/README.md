@@ -4,26 +4,66 @@ The application icons combine Herdr's ram and terminal prompt with flat ivory
 and graphite colors, without window controls, gradients, or shadows. The ram path is adapted from
 [Herdr's logo](https://github.com/herdrdev/herdr/blob/HEAD/assets/logo.svg),
 licensed under Apache-2.0. Changes include placement, scaling, flat colors,
-and the surrounding tile. See the root [NOTICE](../../NOTICE)
+and the surrounding tile or circle. See the root [NOTICE](../../NOTICE)
 and [LICENSE](../../LICENSE) for distribution attribution and license terms.
-Transparent margins keep the rounded tile aligned with other macOS Dock icons.
+Transparent margins keep the artwork aligned with other desktop icons.
 
-| macOS / README | Linux |
+| macOS / About box | Linux |
 | --- | --- |
-| <img src="herdr-ui-icon-clean.png" width="128" height="128" alt="Rounded Herdr icon"> | <img src="herdr-icon-square-clean.png" width="128" height="128" alt="Square Herdr icon"> |
+| <img src="herdr-ui-icon-clean.png" width="128" height="128" alt="Rounded Herdr icon"> | <img src="herdr-linux.svg" width="128" height="128" alt="Circular Herdr icon"> |
 
 `herdr-ui-icon-clean.svg` is the rounded tile source artwork;
-`herdr-icon-square-clean.svg` is the full-square variant.
-Their generated 1024x1024 PNG exports serve the README and About box
-(rounded); Linux packages install the square SVG itself as the scalable icon.
+`herdr-icon-square-clean.svg` is the legacy full-square variant. It remains an
+input to `scripts/generate-icons.swift`, which regenerates its normal and red
+PNG exports; Linux packaging no longer installs those square assets.
+The rounded 1024x1024 PNG export serves the About box; Linux packages install
+`herdr-linux.svg`, a circular composition of the same ram, as the scalable icon.
 On macOS, install the SVG renderer with
 `brew install librsvg` and Xcode 26 or later, then run `just icons` after
-changing either SVG.
+changing the source SVG.
 The generator uses `rsvg-convert` to rasterize the vector artwork directly at
 each iconset resolution, rather than downsampling a PNG, and Apple's `iconutil`
 to package `Herdr.icns`. It also compiles `Herdr.car` (see below) and
 regenerates the PNG exports.
 Assets are checked in, so ordinary builds do not require Swift, librsvg, or Xcode.
+
+### Linux desktops
+
+The tarball, Debian, RPM, Arch, and Nix packages install the circular SVG at
+`share/icons/hicolor/scalable/apps/herdr-gpui.svg`. The circle and transparent
+margins are part of the artwork: the desktop need not mask a square image.
+The ram is smaller and centered, retaining the full silhouette inside the circle
+rather than cropping the macOS composition. The circle is 896px across on a
+1024px canvas, with 64px margins.
+The desktop entry uses `Icon=herdr-gpui`; its filename and `StartupWMClass` match
+the app's `so.pen.herdr-gpui` identity for Wayland and X11 window association.
+Linked-worktree packages select the circular red `herdr-linux-worktree.svg`
+instead, installed at the same scalable icon path.
+
+Run `just icons-linux` on any platform to regenerate both Linux SVGs from the ram
+path and attribution in `herdr-ui-icon-clean.svg`. It needs only Python's standard
+library; the red palette matches the flat colors of the macOS worktree export.
+`just icons` also runs this generator before generating the macOS assets.
+
+This follows freedesktop icon lookup conventions used by GNOME, KDE Plasma, and
+common launchers on Arch and Omarchy (Hyprland); no distribution-specific artwork
+is needed. SVG support and icon-theme overrides belong to the desktop or launcher,
+so identical rendering on every Linux setup is not guaranteed. A custom theme may
+replace the icon. Tarball users must install the desktop entry and icon under an
+XDG data prefix (such as `~/.local/share`); extracting the archive alone does not
+register it. After replacing an installed icon, the launcher may need its icon
+cache refreshed or a new desktop session before it displays the change.
+
+To try the artwork locally without rebuilding or reinstalling the executable:
+
+```sh
+install -Dm644 assets/icons/herdr-linux.svg \
+  ~/.local/share/icons/hicolor/scalable/apps/herdr-gpui.svg
+gtk-update-icon-cache --force --ignore-theme-index ~/.local/share/icons/hicolor
+```
+
+This user-local icon overrides the packaged icon. Remove that SVG when you want
+future artwork changes to come from package upgrades again, then refresh the cache.
 
 ### macOS sizing
 
@@ -43,8 +83,8 @@ The flattened `.icns` icons follow Apple's
 
 The generator fits the source SVG's 896px rounded tile to these bounds before
 rasterizing. Both the normal and red worktree icons use the same margins,
-including the embedded 1024px PNG used by the About box. The full-square
-Linux artwork uses its original canvas.
+including the embedded 1024px PNG used by the About box. The circular Linux
+artwork uses its own composition and margins instead of Apple's sizing.
 
 All five logical sizes (16, 32, 128, 256, 512) include 1x and Retina 2x
 representations, as described in Apple's

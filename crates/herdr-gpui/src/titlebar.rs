@@ -1,11 +1,12 @@
 //! Native chrome and GitHub account access.
 mod decorations;
+mod navigation;
 mod status;
 mod tabs;
 
 pub(crate) use tabs::{Ends, strip_height};
 
-use decorations::controls;
+pub(crate) use decorations::controls;
 pub(crate) use decorations::frame;
 
 use crate::{HerdrWindow, fonts::StyledFont, menu::Page};
@@ -15,8 +16,16 @@ use gpui::{prelude::*, *};
 /// comfortable size for the pointer.
 const AVATAR: f32 = 20.;
 
+const SIDEBAR_TOGGLE_SIZE: f32 = 28.;
+const SIDEBAR_TOGGLE_MARGIN: f32 = 4.;
+
 /// Native chrome the window draws above its body; popups must clear it.
 pub(super) const HEIGHT: f32 = 34.;
+
+/// The narrowest window whose header keeps Back and Forward. Below it they
+/// give way, so the account and window controls stay reachable; the keys and
+/// mouse buttons still travel.
+const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -209,8 +218,20 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         // The toggle leads the bar so it stays put whether or not the sidebar
-        // below it is showing, and can always bring the sidebar back.
-        render(self.theme.surface, Some(self.sidebar_toggle(cx)), window)
+        // below it is showing, and can always bring the sidebar back. Back
+        // and Forward follow it, as in Finder and Files.
+        let leading = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .h_full()
+            .child(self.sidebar_toggle(cx))
+            .when(
+                f32::from(window.viewport_size().width) >= NAVIGATION_MIN_WIDTH,
+                |leading| leading.child(self.navigation(cx)),
+            )
+            .into_any_element();
+        render(self.theme.surface, Some(leading), window)
             .child(
                 div()
                     .debug_selector(|| "titlebar-center".into())
@@ -230,8 +251,8 @@ impl HerdrWindow {
             .debug_selector(|| "toggle-sidebar".into())
             .flex_none()
             .self_center()
-            .mr(px(4.))
-            .size(px(28.))
+            .mr(px(SIDEBAR_TOGGLE_MARGIN))
+            .size(px(SIDEBAR_TOGGLE_SIZE))
             .flex()
             .items_center()
             .justify_center()
@@ -256,7 +277,6 @@ impl HerdrWindow {
             .flex_none()
             .items_center()
             .children(self.render_git_button(cx))
-            .children(self.render_code_toggle(cx))
             .child(
                 div()
                     .debug_selector(|| "titlebar-account-slot".into())
@@ -320,9 +340,11 @@ impl HerdrWindow {
                             ),
                     ),
             )
-            .children(controls(window, &self.theme, |window, _| {
-                window.remove_window();
-            }))
+            .when(!cfg!(target_os = "linux"), |end| {
+                end.children(controls(window, &self.theme, |window, _| {
+                    window.remove_window();
+                }))
+            })
     }
 }
 
@@ -524,13 +546,19 @@ mod tests {
                 window.refresh();
                 let _ = window.draw(cx);
             });
+            let menu_bottom = cx
+                .debug_bounds("application-menu-bar")
+                .map_or(px(0.), |bar| bar.bottom());
             assert_eq!(
                 cx.debug_bounds("titlebar").unwrap(),
-                Bounds::new(point(px(0.), px(0.)), size(px(width), px(34.)))
+                Bounds::new(point(px(0.), menu_bottom), size(px(width), px(34.)))
             );
             assert_eq!(
                 cx.debug_bounds("titlebar-avatar").unwrap(),
-                Bounds::new(point(px(width - 34.), px(3.)), size(px(28.), px(28.)))
+                Bounds::new(
+                    point(px(width - 34.), menu_bottom + px(3.)),
+                    size(px(28.), px(28.))
+                )
             );
             let banner_height = if env!("HERDR_BUILD_WORKTREE") == "1" {
                 22.
@@ -539,7 +567,7 @@ mod tests {
             };
             assert_eq!(
                 cx.debug_bounds("window-body").unwrap().top(),
-                px(34. + banner_height)
+                menu_bottom + px(34. + banner_height)
             );
         }
         let bounds = cx.debug_bounds("titlebar-avatar").unwrap();
@@ -570,9 +598,6 @@ mod tests {
 
 #[cfg(test)]
 mod git_button_tests;
-
-#[cfg(test)]
-mod code_toggle_tests;
 
 #[cfg(all(test, target_os = "macos"))]
 #[allow(clippy::unwrap_used)]
@@ -647,9 +672,14 @@ mod native_chrome_tests {
                     window.refresh();
                     let _ = window.draw(cx);
                 });
+                // The draggable center starts where Back and Forward end.
+                let leading = cx.debug_bounds("titlebar-navigation").unwrap().right();
                 assert_eq!(
                     cx.debug_bounds("titlebar-center").unwrap(),
-                    Bounds::new(point(px(112.), px(0.)), size(px(width - 152.), px(34.)))
+                    Bounds::new(
+                        point(leading, px(0.)),
+                        size(px(width - 40.) - leading, px(34.))
+                    )
                 );
                 let body = cx.debug_bounds("window-body").unwrap();
                 let banner_height = if env!("HERDR_BUILD_WORKTREE") == "1" {

@@ -65,7 +65,9 @@ pub(super) fn check_row_geometry(cx: &mut gpui::VisualTestContext) {
     assert!(cx.debug_bounds("github-sidebar-child").is_none());
     assert!(cx.debug_bounds("github-review").is_none());
     let footer = cx.debug_bounds("device-footer").unwrap();
-    assert!(spaces.size.height + footer.size.height / 2. > px(200.));
+    // The search field above the spaces list is that half's share too.
+    let field = cx.debug_bounds("sidebar-search").unwrap();
+    assert!(spaces.size.height + field.size.height + footer.size.height / 2. > px(200.));
     assert!(agents.size.height + footer.size.height / 2. > px(200.));
     assert!(agents.bottom() <= footer.top());
     let parent = cx.debug_bounds("name-agent-launcher").unwrap();
@@ -227,6 +229,9 @@ pub(super) fn check_collapse_toggle(
         })
     });
     for collapsed in [true, false] {
+        // A changed selection can scroll the row as chrome grows above it.
+        // Settle that layout before measuring the click target.
+        cx.update(|window, cx| full_draw(window, cx).clear(cx));
         let arrow = cx.debug_bounds("collapse-3").unwrap();
         cx.simulate_click(arrow.center(), Default::default());
         cx.update(|window, cx| {

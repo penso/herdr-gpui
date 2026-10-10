@@ -65,6 +65,23 @@ fn symbol_cascade(window: &mut Window, cx: &mut App) -> Result<&'static str> {
 
 pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
     #[cfg(target_os = "linux")]
+    if std::env::var_os("HERDR_TEST_APPLICATION_MENUS").is_some() {
+        cx.spawn(
+            async move |cx| match crate::menus::in_window::native::run(handle, cx).await {
+                Ok(()) => {
+                    eprintln!("APPLICATION MENUS native PASS");
+                    std::process::exit(0);
+                }
+                Err(error) => {
+                    eprintln!("APPLICATION MENUS native FAIL: {error:#}");
+                    std::process::exit(1);
+                }
+            },
+        )
+        .detach();
+        return;
+    }
+    #[cfg(target_os = "linux")]
     if let Ok(field) = std::env::var("HERDR_TEST_INPUT_SHUTDOWN") {
         input_shutdown::start(handle, field, cx);
         return;

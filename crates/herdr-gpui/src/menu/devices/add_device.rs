@@ -98,7 +98,7 @@ pub(super) struct LocalSpace {
 
 impl HerdrWindow {
     /// Show an empty Add Device form with the target field focused.
-    pub(super) fn open_add_device(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::menu) fn open_add_device(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let fields = std::array::from_fn(|index| {
             let input = cx.new(SearchInput::new);
             input.update(cx, |input, cx| {

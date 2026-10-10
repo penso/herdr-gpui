@@ -617,3 +617,6 @@ fn a_bottom_strip_still_reorders_by_dragging(cx: &mut TestAppContext) {
     draw(cx);
     view.read_with(cx, |view, _| assert!(view.tab_drag.is_none()));
 }
+
+/// A chosen page's tab stays in view as its title comes in.
+mod page_title;

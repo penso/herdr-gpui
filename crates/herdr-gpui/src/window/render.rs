@@ -590,6 +590,9 @@ impl Render for HerdrWindow {
                         Some(crate::browser::Location::Code { .. }) => {
                             self.render_code_tab(slot, &tab, gap, cx)
                         }
+                        Some(crate::browser::Location::Devices) => {
+                            self.render_devices_tab(slot, &tab, gap, cx)
+                        }
                         _ => self.render_review_tab(slot, &tab, gap, cx),
                     }
                 }
@@ -615,7 +618,6 @@ impl Render for HerdrWindow {
             groups.push(self.render_group(slot, body, ends, window, cx));
         }
         let content = self.render_groups(groups, cx);
-        let content = self.render_beside_code(content, cx);
         // Not `||`: asking forgets group motion that has finished.
         if self.groups_moving() | self.tabs_growing() | self.annotations_moving() {
             window.request_animation_frame();
@@ -625,12 +627,14 @@ impl Render for HerdrWindow {
             window.request_animation_frame();
         }
         let root = div()
+            .capture_key_down(cx.listener(Self::application_menu_shortcut))
             .on_modifiers_changed(cx.listener(Self::double_shift_modifiers))
             .capture_any_mouse_down(cx.listener(|this, _, _, _| this.shift_taps.cancel()))
             .child({
                 let entity = cx.weak_entity();
+                let menu_bounds = self.menu.application_bar.content.clone();
                 canvas(
-                    |_, _, _| (),
+                    move |bounds, _, _| menu_bounds.set(bounds),
                     move |_, _, window, _| {
                         let scroll_entity = entity.clone();
                         window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
@@ -708,6 +712,20 @@ impl Render for HerdrWindow {
             .on_action(cx.listener(|this, _: &RingBellPreview, window, cx| {
                 this.preview_bell(window, cx);
             }))
+            // A mouse's side buttons walk the focus trail, as they do pages
+            // in a browser or folders in a file manager.
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Back, window, cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Forward, window, cx);
+                }),
+            )
             .size_full()
             .relative()
             .flex()
@@ -716,6 +734,9 @@ impl Render for HerdrWindow {
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
+            .when(cfg!(target_os = "linux"), |root| {
+                root.child(self.render_application_bar(window, cx))
+            })
             .when(!merged, |root| root.child(self.render_titlebar(window, cx)))
             // Under the traffic lights a banner would hide them, so with no
             // header it moves to the window's foot.

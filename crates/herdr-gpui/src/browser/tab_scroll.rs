@@ -49,9 +49,10 @@ impl Thumb {
 #[derive(Default)]
 struct Strip {
     handle: ScrollHandle,
-    /// The tab last brought into view, so a strip the user scrolled away
-    /// stays put until the choice changes.
-    revealed: Option<Pick>,
+    /// The tab last brought into view, and how wide it was then, so a strip
+    /// the user scrolled away stays put until the choice changes, or the tab
+    /// grows past what was brought into view.
+    revealed: Option<(Pick, f32)>,
     /// Where on the thumb the pointer took hold of it.
     grab: f32,
     /// The frames spent bringing `revealed` into view; at `MAX_TRIES` it is
@@ -89,27 +90,36 @@ impl TabScroll {
     }
 
     /// Brings the tab at `index`, `pick`, into view when it is newly chosen,
-    /// or every frame while `growing`, so a tab opening at the far end is
-    /// followed until it has its full width. Whether the strip needs another
-    /// frame to do it.
+    /// when its `width` changes, or every frame while `growing`, so a tab
+    /// opening at the far end is followed until it has its full width. A
+    /// page's title comes in after its tab opened, often once it is whole,
+    /// and its tab then widens past the strip's edge, taking its close
+    /// button out of view. Whether the strip needs another frame to do it.
     pub(crate) fn reveal(
         &mut self,
         group: GroupId,
         pick: &Pick,
         index: usize,
+        width: f32,
         growing: bool,
     ) -> bool {
         let strip = self.strips.entry(group).or_default();
-        if strip.revealed.as_ref() != Some(pick) {
-            strip.revealed = Some(pick.clone());
+        let same = strip
+            .revealed
+            .as_ref()
+            .is_some_and(|(revealed, at)| revealed == pick && (at - width).abs() < 0.5);
+        if !same {
+            strip.revealed = Some((pick.clone(), width));
             strip.tries = 0;
         } else if !growing && strip.tries >= MAX_TRIES {
             return false;
         }
         // GPUI scrolls to an item by the strip's last layout, before this
         // frame's; a strip not yet laid out, or since resized, can miss, so
-        // it tries again until the last layout shows the tab.
-        if strip.shows(index) && !growing {
+        // it tries again until the last layout shows the tab. The frame that
+        // changes the choice or the width lays the tab out anew, so the last
+        // layout cannot yet say it shows.
+        if same && strip.shows(index) && !growing {
             strip.tries = MAX_TRIES;
             return false;
         }

@@ -497,8 +497,8 @@ clipboard copied notification, plus all six clipboard positions. Notifications
 provides a native in-app switch, a bounded delay stepper (0-3600 seconds), and
 four corner choices. Each notification and clipboard field has a **Follow shared**
 action that removes only its local override; effective values are shown after
-reload. Appearance provides switches for **Show agents** and **High contrast**,
-and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
+reload. Appearance provides switches for **Show agents**, **Show search**, and
+**High contrast**, and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
 custom sound paths and per-agent sound policies remain shared-file settings, not
 read-only preference rows in this window. Configuration paths and installation
 status are diagnostic facts rather than editable preference values.
@@ -609,6 +609,12 @@ The pane dialog's **Do not ask again** checkbox (click it or press Space) saves
 **Show agents** control in **Settings > Appearance > Sidebar layout** saves
 `show_agents` immediately, independently of the layout draft saved on close.
 
+A search field at the top of the sidebar finds devices, worktrees, and
+branches by name; while it holds text, results grouped by kind replace the
+spaces list. Up and Down move through them, Enter opens one, and Escape
+clears the search. Set top-level `show_sidebar_search = false`, or turn off
+**Show search** in **Settings > Appearance > Sidebar layout**, to hide it.
+
 `[usage]` provides independent switches in `config-gpui.local.toml`:
 
 ```toml
@@ -627,14 +633,18 @@ space or punctuation trimmed before the ellipsis.
 
 The status bar shows the selected host's CPU and memory: a sparkline of recent
 CPU use and a memory meter, each with its current share, and cores, load
-averages, and memory in gigabytes in its tooltip. With more than one host, each
+averages, memory in gigabytes, free space on the volume holding the home
+directory, and uptime in its tooltip. With more than one host, each
 host row in the sidebar shows its own: right-aligned gauges after the name in
 compact layouts, and the sparkline and meter on a second line otherwise. This
 machine is read in process; each connected Linux or macOS remote host is read
 every two seconds over its own SSH shell, kept open while the host is connected
-(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
-systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
-or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS; `df -Pk
+"$HOME"` on both, with `/proc/uptime` on Linux and `kern.boottime` on macOS).
+Other remote systems, and remote hosts from a Windows client, show it as
+unavailable. Set top-level `show_system_load = false`, or turn off **Show CPU
+and memory** in Settings, to hide it and stop sampling while no
+[Devices overview](#devices-overview) is open.
 
 The coffee cup in the status bar keeps this machine's display on and stops it
 from sleeping when idle, for as long as the cup is full; click it again to let
@@ -694,8 +704,10 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-The sidebar button at the left of the titlebar (the sidebar's top row, or the
-leftmost tab strip while the sidebar is collapsed) hides or shows the sidebar.
+The sidebar button at the left of the titlebar hides or shows the sidebar.
+On Linux and Windows it stays in the same position when the sidebar collapses
+to a rail. The leftmost tab strip takes the button when the sidebar is hidden
+or the rail cannot fit it beside macOS's traffic lights.
 It stays available when the sidebar is hidden; the existing View menu command and shortcut still work.
 In **Settings > General**, toggle **Show usage** to turn the bottom quota display on or off.
 The choice is saved to `config-gpui.local.toml` and follows the existing `[usage] show` setting.
@@ -767,6 +779,15 @@ spacing:
   differs from the name, and the pull request. Agents are single compact lines.
 - `minimal`: one line per row with only the status dot and the name, for narrow
   sidebars or long lists.
+
+The `devices` layout lists agents by device instead of workspaces. Every
+device gets a header, even when there is only one, with its connection dot
+and how many of its agents are working (`2/5`). The device's agents sit under
+the header in Herdr's normal rows, and the separate agents section is hidden.
+A search field under the heading keeps only the devices whose name, address,
+agents, or workspaces match every word typed. The
+[Devices overview](#devices-overview) shows the same devices with their
+activity and load.
 
 New installs start with `comfortable-rounded`: the first launch writes it into
 the new `config-gpui.local.toml`. Existing override files and migrated personal
@@ -992,8 +1013,8 @@ audio deduplication. Native playback and device-switch/unplug behavior require m
 With Herdr's tab bar at the top (`ui.tab_bar_position = "top"`, the default),
 the tab row is the title bar, as in Chrome or Conductor, and the window draws
 no separate header. Strips along the top grow to the header's 34px. The
-sidebar column starts with a row holding the traffic-light clearance and the
-sidebar toggle; with the sidebar collapsed to its rail or hidden, the leftmost
+sidebar column starts with a row holding the traffic-light clearance, the
+sidebar toggle, and Back and Forward; with the sidebar collapsed to its rail or hidden, the leftmost
 group's strip leads with whatever clearance the column leaves and the toggle.
 The rightmost group's strip ends with the header's status text, Git button,
 account, and window controls. Every strip keeps at least 40px of empty room
@@ -1003,6 +1024,22 @@ tab bar, or a lone tab hidden by `hide_tab_bar_when_single_tab`, brings back
 the full-width header described below, and so does a window with no strips.
 The worktree banner moves to the window's foot in this layout so it never sits
 under the traffic lights.
+
+Back and Forward follow the sidebar toggle, in the header or in the expanded
+sidebar's first row; a sidebar dragged too narrow for them, or collapsed,
+hands them to the leftmost strip with the toggle. They walk the panes this connection has
+focused, across tabs and workspaces, the way a browser walks its pages: going
+somewhere new drops what was ahead, closed panes are stepped over, and the
+trail (at most 100 panes) starts over when the daemon restarts. `back`
+(Cmd-[) and `forward` (Cmd-]) do the same from the keyboard, and so do a
+mouse's side buttons anywhere in the window. Each platform draws the pair its
+own way: macOS joins two chevrons in one segmented bezel as Finder and Xcode
+do, Windows uses Fluent's subtle arrow buttons as File Explorer does, and
+Linux uses GNOME's flat rounded header bar buttons. A header narrower than
+320px leaves them out so the account and window controls stay reachable, and
+a strip squeezed by the sidebar, a panel, or a split gives up its tabs' room
+first, then drops the pair whole before the trailing controls would be
+pushed out.
 
 macOS keeps `Some(TitlebarOptions)` and the native Herdr window title/traffic lights,
 with transparent chrome and lights positioned at (9, 9) logical pixels. A full-width
@@ -1647,6 +1684,45 @@ keep a huge repository responsive: at most 100,000 files are listed, files over
 1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
 kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
 
+## Devices Overview
+
+The activity card at the top of the device picker (the "All Devices" button
+at the foot of the sidebar), View > Devices Overview, or the command
+palette's "Devices Overview" opens a tab listing every device the window
+connects to. The card itself shows every device's agent activity for the
+last two hours and how many agents are working and blocked now. Like
+any tab, it can share a group with terminals, take a group of its own, or fill
+a window.
+
+- **Agent activity:** working agents, with blocked ones stacked above them, for
+  each of the last 120 minutes, with how many are working now and the peak.
+  "View all devices" adds one lane per device on the same time axis. Darker
+  cells mean more agents were working, red cells mean one was waiting for
+  input, and blank cells mean the device was not connected.
+- **Totals:** working, blocked, and idle or done agents across every device,
+  and how many devices are online.
+- **Devices:** one row per device with a dot per agent, how many are working
+  and blocked, CPU, memory, free space on the volume holding the home
+  directory, and uptime. Clicking a row opens it on that device's agents,
+  working first, with each agent's workspace and state; clicking an agent
+  shows its pane.
+
+The search field narrows the lanes and the table to devices whose name,
+address, agents, or workspaces match every word typed. Load columns wrap in
+narrow tabs. **Add Device** opens SSH setup, or WSL setup on Windows; it is
+unavailable in explicit-socket and development-catalog windows.
+
+The window keeps the activity history from the snapshots it already receives,
+so it starts empty each time the window opens; nothing is saved or asked of
+the daemon. Each minute holds the most agents seen working and waiting at
+once, and minutes the machine slept stay empty. A wall-clock jump forward of
+at least five seconds beyond monotonic elapsed time is treated like sleep;
+backward adjustments do not rewind or pause the history. CPU, memory, disk, and uptime
+come from the same sampling as the status bar's load, and every enabled host
+is sampled while an overview tab is open, even with the status bar's load
+hidden. A cloud machine has no host to sample, so its load columns stay
+empty.
+
 ## Editor Groups
 
 The split button at the right end of the tab strip (or **Split Editor**,
@@ -1739,7 +1815,10 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
   fall over it, and for a dialog, which dims the whole window. A page the menu
   does not reach keeps showing. On macOS a page that steps aside leaves a
   picture of itself, taken as the menu opens; on Windows its place is empty
-  until the menu closes. Toasts that fall over a page are hidden behind it.
+  until the menu closes. A page also steps aside while a toast or the
+  file-transfer card falls over it, as when a page or VS Code fills the
+  right-hand group or the whole editor area, so they stay visible and
+  clickable; a page they do not reach keeps showing.
 - Linux has no embedded pages yet: browser tab requests open the system
   browser, and local files and annotations are unavailable.
 
@@ -1776,6 +1855,11 @@ them to the agent that opened it, so it can change the page.
   running agent, since Enter there would run it in a shell, nor into an agent
   that is asking you a question; those notes wait for `browser feedback`, as
   do notes for a pane this window does not show.
+- Feedback is scoped to the caller's daemon socket and pane together, so two
+  local sessions with the same pane ID cannot take each other's notes. Use the
+  matching CLI build: older pane-only feedback requests are rejected rather
+  than guessed. The mockup receiver still watches its file fallback when an
+  older running app rejects scoped feedback.
 - Tabs you open yourself have no agent to send to; **Copy** is offered
   instead.
 
@@ -1947,13 +2031,61 @@ herdr-gpui browser skill > ~/.claude/skills/herdr-gpui-browser/SKILL.md
 
 ## VS Code
 
-The VS Code panel shows VS Code to the right of a space's editor groups,
-beside every tab of that space, for reading code and reviewing diffs while
-agents work in the terminals. It is a second frontend beside Herdr's: the
+VS Code opens as a tab of a space's editor groups, like a browser tab, for
+reading code and reviewing diffs while agents work in the terminals: split
+the group to see it beside a terminal, or show it alone. It is a second frontend beside Herdr's: the
 page comes from VS Code's own web server, `code serve-web`, and the app adds
 nothing to what that server serves.
 
-Herdr GPUI starts no server. Start one yourself:
+**Settings > Code** chooses where that server comes from.
+
+**Start VS Code automatically**, the default once VS Code is found, has the
+app run the server itself. It looks for VS Code's `code` command on your
+login shell's `PATH`, then, on macOS, in
+`/Applications/Visual Studio Code.app`, and runs the `code-tunnel` program
+beside it, which is what `code serve-web` runs:
+
+```sh
+code-tunnel serve-web --host 127.0.0.1 --port <port> \
+  --connection-token-file <state>/vscode-token --accept-server-license-terms
+```
+
+- The server is Microsoft software under the
+  [VS Code Server License Terms](https://aka.ms/vscode-server-license). The
+  app never accepts them for you: the VS Code tab and the settings page show them
+  with **Accept and start**, and only after that does the app pass
+  `--accept-server-license-terms`. The acceptance is saved as
+  `license_accepted = true` under `[code]`.
+- It starts the first time a VS Code tab needs a page, never before, and says "Starting VS Code… (the first run downloads it)"
+  until VS Code answers: the first start downloads the server build.
+- The port is picked once and saved as `port` under `[code]`, since VS Code
+  keeps its settings in the storage of the page's address. If another
+  program holds that port, the VS Code tab and the settings page say so; quit it,
+  or remove `port` to have a new one picked (VS Code then starts without the
+  settings it kept). The app sends nothing to a port it does not hold, since
+  the token must reach only its own server. It asks that server for its
+  version alone, never with the token, once its own `serve-web` says it
+  listens there, and counts the answer only if `serve-web` still runs after
+  it; a page, which must carry the token, is made only while it runs.
+- The connection token is made once and kept in `vscode-token` in the app's
+  state folder (`~/.local/state/herdr/gpui` unless `XDG_STATE_HOME` is set),
+  readable only by you on macOS; on Windows it has your profile folder's
+  permissions. It is passed by that file's path,
+  never shown, and never logged; messages name only the host and port.
+- The app owns that one process. It stops it when it quits: it asks the
+  server and what it started to stop, and kills them if they have not after
+  a moment. On macOS the server runs in a process group of its own, made
+  for it, since `serve-web` leaves its server running when only it
+  is stopped; Windows ends the server's process tree with `taskkill /T`. If
+  the server stops or fails, the VS Code tab shows **Cannot reach the VS Code
+  server** with the reason, and the app starts it again, waiting 1 second,
+  then twice as long each time, up to a minute.
+- Spaces on SSH hosts still see this computer's VS Code: their folders are on
+  another machine, so their pages open an empty window. Running the server on
+  the host would need it started there and its port forwarded, which the app
+  does not do.
+
+**Use an address** keeps a server you run yourself, as before:
 
 ```sh
 code serve-web --host 127.0.0.1 --port 8000 --accept-server-license-terms
@@ -1964,56 +2096,49 @@ address in **Settings > Code**, which saves it in `config-gpui.local.toml`:
 
 ```toml
 [code]
+mode = "address"
 url = "http://127.0.0.1:8000/?tkn=..."
 ```
 
-Keep the port fixed: VS Code keeps its settings in the page's storage, which
-belongs to one address.
+A config with a `url` but no `mode`, as written before there was a choice,
+keeps using its address. Keep the port fixed: VS Code keeps its settings in
+the page's storage, which belongs to one address.
 
 - **Test connection** on that page asks the server whether it answers. A
   server that does shows its build's commit; one that does not says why: the
   connection was refused, the token was refused, or the address is not a
   VS Code server. Messages name only the host and port, never the token.
-- The VS Code button at the right end of the title bar shows or hides the
-  panel. It appears once a server is set, in builds that can show pages.
-  **Toggle VS Code** in the Terminal menu or the command palette does the
-  same, as does a key you bind to `toggle_code` under `[keybindings]`. It has
-  no default key.
-- Each space shows or hides the panel on its own and has its own page. The page
-  opens on the address above, then goes wherever it navigates, and comes back
-  there after a restart. A hidden page keeps running, so it keeps its state;
-  closing the space in Herdr closes its page. A space's page first opens the
-  folder the space started in, as its first tab's first terminal reports it,
-  when the space is on this computer; a space on an SSH host opens an empty
+- **VS Code** in an editor group's **…** menu, beside the VS Code icon,
+  opens the space's VS Code tab in that group. The row appears once a
+  server is set, or VS Code is found to start, in builds that can show
+  pages. **Open VS Code** in the Terminal menu or the command palette opens
+  it in the group in use, as does a key you bind to `open_code` under
+  `[keybindings]`. It has no default key.
+- Each space has one VS Code tab, listed in its strips with its other tabs.
+  Opening it again shows that same tab in the group it is opened from, so
+  one group can show VS Code beside another showing a terminal, or a lone
+  group can show it alone. It splits, resizes, and is covered by dialogs as
+  any page is, and its page keeps running, keeping its state, while no group
+  shows it; closing the space in Herdr closes it. It still waits for its
+  server, and no agent opens pages in it.
+- The page opens on the address above, then goes wherever it navigates, and
+  comes back there after a restart. A space's page first opens the folder
+  the space started in, as its first tab's first terminal reports it, when
+  the space is on this computer; a space on an SSH host opens an empty
   window, since its folder is on another machine than the server. **Open
   Folder** in VS Code picks another; the page then remembers it.
 - The app asks the server whether it answers before it opens a page, since a
-  page that cannot load stays blank. While the server does not answer, the
-  panel says so and why, and asks again every 5 seconds. Setting a new address
-  closes the pages still on the old server, so they reopen on the new one. A
-  new token for the same server reopens each page where it was, with the new
-  token, and so does a restart.
-- Drag the panel's left edge to resize it; double-click the edge to return to
-  the default width. The width is one for the window, saved with the
-  sidebar's, and the panel takes at most 60% of the window.
-- The window then has two realms. Herdr's dialogs, menus, and toasts stay in
-  its own, left of the panel: dialogs dim and centre there, and VS Code stays
-  live beside them, deciding for itself what to dim. When the Herdr realm is
-  narrower than 480 px, dialogs take the whole window again and the page steps
-  aside while they show.
-- **Move VS Code to Group** in the Terminal menu or the command palette moves
-  a space's VS Code into a new editor group, split off to the right of the
-  group in use, as a tab of the strips: it splits, resizes, and is covered
-  by dialogs as any page is. **Move VS Code to Panel** puts it back. The page
-  moves with it and keeps its state, and it stays the space's one VS Code
-  page: it still waits for its server, no agent opens pages in it, and
-  closing it in a strip closes it, so the next **Toggle VS Code** opens a new
-  one in the panel. While it is in a group, the title bar button and
-  **Toggle VS Code** show it there. Bind them to `move_code_to_group` and
-  `move_code_to_panel`; they have no default keys.
-- The page is a [browser tab](#browser-tabs), listed in the strips only while
-  it is in a group, so the same rules apply: `http` and `https` only, native
-  web views drawn above the window, and no pages on Linux.
+  page that cannot load stays blank. Linux builds show no pages, so they
+  never start VS Code either. While the server does not answer, the tab says
+  so and why, and asks again every 5 seconds. Setting a new address moves
+  each VS Code tab to the new server, where it stays in its group with its
+  folder. A new token for the same server reopens each page where it was,
+  with the new token, and so does a restart.
+- VS Code fills its tab, without a browser tab's address bar, back,
+  forward, reload, or **Annotate**: it is an editor, not a page to browse.
+  Its page is otherwise a [browser tab](#browser-tabs)'s, so the same rules
+  apply: `http` and `https` only, native web views drawn above the window,
+  and no pages on Linux.
 - The keyboard goes to whatever has focus. While a page has it, this one or a
   browser tab's, the page's own shortcuts win, as a terminal program's do
   while its pane has focus. On macOS, Cut, Copy, and Paste act on the page,
@@ -2251,14 +2376,23 @@ records when reporting the failure.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
   On macOS and Linux, all socket modes (including explicit/inherited sockets)
   require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
-  Linux) at the standard configured session socket, with owned,
-  non-group/world-writable socket and parent. Executable upgrades/removal do not
+  Linux) at the standard configured session socket. The socket must be owned by
+  your user and not group/world-writable; its parent must be owned by your user
+  and not world-writable. Group-writable directories such as `775`, commonly
+  created by a umask of `002`, are accepted. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
   Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
   reviews and logs `Daemon endpoint not trusted as local` with the failed check.
-  `DirectoryPermissions` usually means a umask of 002 created the session
-  directory group-writable; `chmod g-w` on it and reconnect.
+  A local peer or permissions failure also produces an in-app toast once the
+  terminal connects, explaining why Git/PR details are unavailable and how to
+  restore them. It appears once per connection even when daemon notifications
+  are muted; permission failures include a quoted command on its own line for
+  the affected socket or directory and a reminder to reconnect the GUI. Intentionally
+  non-local sockets do not produce this toast.
+  `DirectoryPermissions` means the session directory's ownership could not be
+  verified or it is world-writable; check ownership, remove world-write access
+  with `chmod o-w` on it, and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
@@ -2789,8 +2923,17 @@ X11/Wayland backends are retained. Linux uses Vulkan; macOS GPUI's
 the separate downloadable build-time Metal compiler. Integrated Linux ARM64
 compilation, Clippy, default/all-feature tests, and release CLI checks were
 verified in Ubuntu 24.04, not native desktop rendering or input. Linux Cmd bindings mean
-Super and can conflict with desktop shortcuts; global macOS menus are not
-available. Tests cover wire colors,
+Super and can conflict with desktop shortcuts. Linux shows an **in-window menu
+bar** using the same Herdr, File, Edit, View, Terminal, and Window definitions as
+macOS (plus QA in `qa-menu` builds). It remains visible with the sidebar hidden
+and collapses to **Menu** in narrow windows. In client-decorated windows, the
+minimize, maximize, and close buttons share its right edge. Drag the empty
+menu-bar background to move the window; it also supports the title bar's
+double-click and right-click behavior. Press **F10** to open a menu; arrows
+navigate, Enter selects, and Escape or F10 dismisses. Submenus open in the same
+panel; their back header returns to the parent. The menu shows current layout
+checkmarks and configured shortcuts, and restores the previous input focus on
+dismissal. Desktop-global menus are not exported. Tests cover wire colors,
 cell modifiers, viewport bounds, semantic key selection, revision coherence,
 creation request parameters, workspace-local tab cycling, wheel accumulation,
 pane-relative hit testing, and popup routing.
@@ -2800,6 +2943,17 @@ rejection, Unicode composition, and headless right-click/input routing.
 sizes, but does not validate OS IME candidate-window delivery or live daemon
 worktree creation/close.
 They do not replace an interactive smoke test against a live daemon.
+
+On an active Linux desktop, exercise the menu bar in an isolated, daemon-free
+native window with:
+
+```sh
+cargo test --locked -p herdr-gpui --features integration-test --test live_gui native_application_menus -- --ignored --nocapture --test-threads=1
+```
+
+This checks native painting and geometry at wide and narrow sizes, action
+dispatch, focus restoration, and input isolation using GPUI-injected events;
+it does not verify compositor-delivered keyboard input or OS IME behavior.
 
 Selection regressions cover unflagged CJK continuation cells, real spaces,
 partial wide characters, emoji/combining text, popup/pane boundaries, and headless

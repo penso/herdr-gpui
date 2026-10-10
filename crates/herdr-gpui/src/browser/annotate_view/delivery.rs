@@ -63,10 +63,12 @@ impl HerdrWindow {
     pub(in crate::browser) fn send_notes(&mut self, tab: &Tab, cx: &mut Context<Self>) {
         // The queue is cleared at once, so a second Send cannot repeat it
         // while screenshots are still being saved.
-        let pane_id = tab.origin.clone();
-        let here = super::super::view::scope(&self.endpoints[self.selected_endpoint]) == tab.scope;
+        let target = tab.origin.as_ref().map(|pane| crate::browser::FeedbackKey {
+            scope: tab.scope.clone(),
+            pane_id: pane.clone(),
+        });
         self.with_notes_prompt(tab, cx, move |this, text, cx| {
-            this.deliver_notes(pane_id, here, text, cx);
+            let _ = this.deliver_notes(target, text, cx);
         });
         self.clear_notes(tab.id, cx);
     }

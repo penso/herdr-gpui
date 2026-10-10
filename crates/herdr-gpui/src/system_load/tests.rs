@@ -238,3 +238,5 @@ fn a_remote_shell_is_sampled_with_the_host_command() {
     assert!(sample.memory.is_some_and(|memory| memory.total > 0));
     assert!(sample.cores.is_some());
 }
+
+mod disk_uptime;

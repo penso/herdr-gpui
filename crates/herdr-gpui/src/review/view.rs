@@ -524,33 +524,39 @@ impl HerdrWindow {
     }
 
     /// The queued notes as the agent's prompt, with where they go.
-    fn review_prompt(&self, id: TabId) -> Option<(String, Option<String>, bool)> {
+    fn review_prompt(&self, id: TabId) -> Option<(String, Option<crate::browser::FeedbackKey>)> {
         let review = self.reviews.get(&id)?;
         let loaded = review.loaded()?;
         if review.notes.is_empty() {
             return None;
         }
         let text = notes::prompt(&loaded.source.checkout, &review.notes);
-        let pane = review.agent.as_ref().map(|agent| agent.pane_id.clone());
-        Some((text, pane, review.endpoint == self.selected_endpoint))
+        let target = review
+            .agent
+            .as_ref()
+            .map(|agent| crate::browser::FeedbackKey {
+                scope: crate::browser::scope(&self.endpoints[review.endpoint]),
+                pane_id: agent.pane_id.clone(),
+            });
+        Some((text, target))
     }
 
     /// Sends the notes to the agent; the queue is cleared at once so a
     /// second press cannot repeat it. The tab stays open for the next round.
     pub(crate) fn send_review(&mut self, id: TabId, cx: &mut Context<Self>) {
-        let Some((text, pane, here)) = self.review_prompt(id) else {
+        let Some((text, target)) = self.review_prompt(id) else {
             return;
         };
         if let Some(review) = self.reviews.get_mut(&id) {
             review.notes.clear();
             review.refresh_marks();
         }
-        self.deliver_notes(pane, here, text, cx);
+        let _ = self.deliver_notes(target, text, cx);
         cx.notify();
     }
 
     fn copy_review(&mut self, id: TabId, cx: &mut Context<Self>) {
-        let Some((text, _, _)) = self.review_prompt(id) else {
+        let Some((text, _)) = self.review_prompt(id) else {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));

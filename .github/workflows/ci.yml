@@ -135,6 +135,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Check source file sizes
         run: bash scripts/check-file-size.sh
+      - name: Test mockup feedback receiver
+        run: python3 .claude/skills/gpui-mockup/scripts/test_wait.py
       - name: Lint every target and feature
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Lint without default features

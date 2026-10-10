@@ -38,6 +38,9 @@ confirm_close_tab = true
 confirm_close_pane = true
 # Show the Agents section below Spaces in the sidebar.
 show_agents = true
+# Show the search field at the top of the sidebar, which finds devices,
+# worktrees, and branches. Also under Settings > Appearance > Sidebar layout.
+show_sidebar_search = true
 # Show CPU and memory: the selected host's in the status bar, and each host's
 # on its sidebar row. Connected remote hosts are read over SSH every couple of
 # seconds; false stops all sampling. Also under Settings > Status bar.
@@ -88,7 +91,8 @@ keep_selection_after_copy = true
 # Add "-rounded" to any of them ("normal-rounded", "compact-rounded",
 # "comfortable-rounded") for inset rows with rounded, bordered highlights.
 # "superset" (single-line rows), "orca" (cards), and "minimal" (status and name
-# only) draw rows with a design of their own. View > Layout lists them all.
+# only) draw rows with a design of their own. "devices" lists each device with
+# its agents under it, and a search over them. View > Layout lists them all.
 layout = "normal"
 
 [palette]
@@ -265,12 +269,19 @@ size = 14
 size = 12
 # fallback = ["Symbols Nerd Font Mono"]
 
-# The VS Code panel beside a space's editor groups (macOS and Windows only),
-# showing what VS Code's own web server serves. Start one with
-# `code serve-web --host 127.0.0.1 --port 8000`, then set the address it
-# prints, with its ?tkn= token, here or in Settings > Code. The title bar's
-# VS Code button appears once it is set.
+# VS Code as a tab of a space's editor groups (macOS and Windows only),
+# showing what VS Code's own web server, `code serve-web`, serves. Settings >
+# Code edits this table. mode = "start" has the app run that server when a
+# VS Code tab first needs it, once you accept VS Code's server license there
+# (license_accepted); it is the default when VS Code is found and no url is
+# set. port is picked once and kept, since VS Code keeps its settings per
+# address. mode = "address" uses a server you run at url, with its ?tkn=
+# token; a url without a mode does too. Show VS Code appears in each editor
+# group's … menu once either is possible.
 # [code]
+# mode = "start"
+# port = 51234
+# license_accepted = true
 # url = "http://127.0.0.1:8000/?tkn=..."
 
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.

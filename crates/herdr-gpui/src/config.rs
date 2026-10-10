@@ -79,6 +79,8 @@ pub struct Config {
     pub confirm_close_tab: bool,
     pub confirm_close_pane: bool,
     pub show_agents: bool,
+    /// The search field at the top of the sidebar's spaces list.
+    pub show_sidebar_search: bool,
     /// CPU and memory of the selected host in the status bar.
     pub show_system_load: bool,
     /// Snapshot a checkout's files each time one of its agents starts or
@@ -186,14 +188,45 @@ pub enum LinkTarget {
     BrowserTab,
 }
 
-/// The VS Code panel beside a space's editor groups, served by
+/// VS Code as a tab of a space's editor groups, served by
 /// `code serve-web`. Each space that shows it gets
-/// its own page, which starts at `url` and then goes wherever it navigates.
+/// its own page, which starts at the server's address and then goes
+/// wherever it navigates.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct CodeConfig {
-    /// `None` leaves the panel empty, with a hint to set it.
+    /// Where the server comes from. Unset, it is `address` when `url` is
+    /// set, as before there was a choice, else `start` once VS Code is found.
+    pub(crate) mode: Option<CodeMode>,
+    /// The server to use in `address` mode. `None` leaves the panel empty,
+    /// with a hint to set it.
     pub(crate) url: Option<crate::browser::WebUrl>,
+    /// The port of the server the app starts, picked once and kept: VS Code
+    /// keeps its settings in the storage of the page's origin.
+    pub(crate) port: Option<std::num::NonZeroU16>,
+    /// The user accepted VS Code's server license in the app. Until then
+    /// the app starts nothing, since it would accept it for them.
+    pub(crate) license_accepted: bool,
+}
+
+/// Where VS Code tabs' server comes from.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CodeMode {
+    /// The app starts `code serve-web` itself.
+    Start,
+    /// A server the user runs, at `url`.
+    Address,
+}
+
+/// One change to the `[code]` table.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum CodeEdit {
+    /// Sets the address, or removes it with `None`.
+    Url(Option<crate::browser::WebUrl>),
+    Mode(CodeMode),
+    Port(std::num::NonZeroU16),
+    AcceptLicense,
 }
 
 /// Where a clicked file path opens. Alt-click (Option on macOS) opens it in
@@ -379,6 +412,7 @@ impl Default for Config {
             confirm_close_tab: true,
             confirm_close_pane: true,
             show_agents: true,
+            show_sidebar_search: true,
             show_system_load: true,
             agent_checkpoints: true,
             show_listening_ports: true,
@@ -424,6 +458,7 @@ struct Settings {
     confirm_close_tab: Option<bool>,
     confirm_close_pane: Option<bool>,
     show_agents: Option<bool>,
+    show_sidebar_search: Option<bool>,
     show_system_load: Option<bool>,
     agent_checkpoints: Option<bool>,
     show_listening_ports: Option<bool>,
@@ -774,6 +809,7 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.confirm_close_pane = settings.confirm_close_pane.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
+        config.show_sidebar_search = settings.show_sidebar_search.unwrap_or(true);
         config.show_system_load = settings.show_system_load.unwrap_or(true);
         config.agent_checkpoints = settings.agent_checkpoints.unwrap_or(true);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);
