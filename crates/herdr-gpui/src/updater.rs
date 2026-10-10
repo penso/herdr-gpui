@@ -1,5 +1,7 @@
 //! GUI-local update service. Workers own all transport, staging, and process waits.
+mod channel;
 mod error;
+pub use channel::UpdateChannel;
 pub use error::UpdateError;
 use error::{Result, UpdateError as Error};
 #[cfg(unix)]
@@ -74,7 +76,7 @@ impl State {
 
 #[derive(Clone, Copy)]
 enum Operation {
-    Check,
+    Check(UpdateChannel),
     Download,
     Install,
     Upgrade,
@@ -106,6 +108,9 @@ pub(super) struct Updater {
     relaunched: bool,
     committed: bool,
     next_check: Instant,
+    channel: UpdateChannel,
+    /// The channel of the last queued check, which produced any current offer.
+    checked: UpdateChannel,
 }
 
 impl Default for Updater {
@@ -121,6 +126,8 @@ impl Default for Updater {
             relaunched: false,
             committed: false,
             next_check: Instant::now() + CHECK_INTERVAL,
+            channel: UpdateChannel::default(),
+            checked: UpdateChannel::default(),
         }
     }
 }
@@ -137,8 +144,9 @@ impl Updater {
         updater
     }
 
-    pub(super) fn start() -> Self {
+    pub(super) fn start(channel: UpdateChannel) -> Self {
         let mut updater = Self::default();
+        updater.channel = channel;
         let Some(key) = option_env!("HERDR_UPDATE_PUBLIC_KEY") else {
             return updater;
         };
@@ -168,6 +176,21 @@ impl Updater {
             }
         }
         updater
+    }
+
+    /// Follows `[updates] channel`. A change rechecks as soon as the worker
+    /// is free, so turning betas on offers a waiting one now rather than at
+    /// the next hourly check, and turning them off drops a beta offer, even
+    /// one already downloaded or still downloading. Neither direction ever
+    /// offers a downgrade.
+    pub(super) fn set_channel(&mut self, channel: UpdateChannel) {
+        if self.channel == channel {
+            return;
+        }
+        self.channel = channel;
+        if self.commands.is_some() {
+            self.next_check = Instant::now();
+        }
     }
 
     pub(super) fn state(&self) -> &State {
@@ -201,6 +224,9 @@ impl Updater {
                 self.generation = generation;
                 self.state = state;
                 self.next_check = Instant::now() + CHECK_INTERVAL;
+                if let Operation::Check(channel) = operation {
+                    self.checked = channel;
+                }
             }
             Err(mpsc::TrySendError::Full(_)) => (),
             Err(mpsc::TrySendError::Disconnected(_)) => {
@@ -209,9 +235,11 @@ impl Updater {
         }
     }
 
+    /// A staged download is kept rather than rechecked, unless it came from
+    /// a channel the user has since left.
     pub(super) fn check(&mut self) {
-        if !matches!(self.state, State::Ready { .. }) {
-            self.send(Operation::Check, State::Checking);
+        if !matches!(self.state, State::Ready { .. }) || self.checked != self.channel {
+            self.send(Operation::Check(self.channel), State::Checking);
         }
     }
 
@@ -382,6 +410,16 @@ fn cask() -> Option<brew::Cask> {
     brew::detect(&bundle, install::effective_uid().ok()?)
 }
 
+fn version(offer: Option<&release::Offer>) -> Option<&str> {
+    offer.map(|offer| offer.manifest.version.as_str())
+}
+
+/// A download staged for `previous` is kept only when a recheck offers that
+/// same release again, as when a beta is promoted while it waits.
+fn restage<T>(staged: Option<T>, previous: Option<&str>, found: Option<&str>) -> Option<T> {
+    staged.filter(|_| found.is_some() && found == previous)
+}
+
 fn worker(
     commands: Receiver<Command>,
     mailbox: Arc<Mutex<Option<Mailbox>>>,
@@ -397,18 +435,33 @@ fn worker(
         }
         let generation = command.generation;
         let result: Result<State> = match command.operation {
-            Operation::Check => {
+            Operation::Check(channel) => {
                 publish(&mailbox, generation, State::Checking, None);
-                release::check(crate::APP_VERSION, key, &cancelled).map(|found| {
+                // Only a channel change rechecks with a download staged, and
+                // that download survives only if the same release is offered.
+                let staged = prepared.take();
+                // The tap only ever carries stable releases, so a Homebrew
+                // installation never chases a beta it could not upgrade to.
+                let homebrew = cask().is_some();
+                let channel = if homebrew {
+                    UpdateChannel::Stable
+                } else {
+                    channel
+                };
+                release::check(crate::APP_VERSION, key, channel, &cancelled).map(|found| {
+                    prepared = restage(staged, version(offer.as_ref()), version(found.as_ref()));
                     offer = found;
-                    match (&offer, cask().is_some()) {
-                        (Some(offer), true) => State::Homebrew {
+                    match (&offer, homebrew, prepared.is_some()) {
+                        (Some(offer), true, _) => State::Homebrew {
                             version: offer.manifest.version.clone(),
                         },
-                        (Some(offer), false) => State::Available {
+                        (Some(offer), false, true) => State::Ready {
                             version: offer.manifest.version.clone(),
                         },
-                        (None, _) => State::Current,
+                        (Some(offer), false, false) => State::Available {
+                            version: offer.manifest.version.clone(),
+                        },
+                        (None, ..) => State::Current,
                     }
                 })
             }

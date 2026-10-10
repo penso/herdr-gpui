@@ -188,6 +188,15 @@ immutable release has exactly 86 assets. Missing or additional files fail closed
 The publication job verifies downloaded draft bytes and the complete exact asset
 set before making it public; Homebrew still verifies and uses only the final DMG.
 
+## Beta Channel
+
+`just release-beta` publishes a normal release as a GitHub prerelease and skips
+Homebrew; `just release-promote VERSION` runs `.github/workflows/promote.yml` to
+make that published beta the latest stable release and update the tap, without
+rebuilding or re-uploading anything. `generate-changelog.sh VERSION OUTPUT_DIR
+[BETA_TAG...]` folds the listed unpromoted beta tags into the release after them.
+See [beta releases and promotion](../../docs/updating.md#beta-releases-and-promotion).
+
 ## Homebrew
 
 `homebrew/Casks/herdr-gpui.rb` is deliberately a template, not an installable
