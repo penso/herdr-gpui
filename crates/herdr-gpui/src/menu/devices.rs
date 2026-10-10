@@ -75,9 +75,11 @@ impl HerdrWindow {
             .filter(|provider| match provider {
                 #[cfg(feature = "coder")]
                 crate::cloud::CloudProvider::Coder => self.coder_configured(),
-                // The row opens Daytona's Settings tab, which sets it up.
                 #[cfg(feature = "daytona")]
-                crate::cloud::CloudProvider::Daytona => true,
+                crate::cloud::CloudProvider::Daytona => {
+                    self.config.daytona.api_url.is_some()
+                        || std::env::var_os("HERDR_DAYTONA_API_URL").is_some()
+                }
             })
             .collect()
     }
