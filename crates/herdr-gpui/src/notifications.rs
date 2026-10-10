@@ -1,5 +1,5 @@
 //! Bounded presentation data with snapshot-validated navigation hints.
-use crate::navigation::NavigationTarget;
+use crate::{icons::AgentIcon, navigation::NavigationTarget};
 use herdr_client::protocol::ClientShellSnapshot;
 use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind, ToastHerdrPosition};
 use std::{
@@ -21,6 +21,8 @@ pub(crate) struct Notice {
     pub title: String,
     pub body: Option<String>,
     pub kind: SemanticNotificationKind,
+    /// The sending agent's mark, when Herdr named an agent this build knows.
+    pub agent: Option<AgentIcon>,
     pub position: ToastHerdrPosition,
     pub expires: Instant,
     pub workspace_id: Option<String>,
@@ -104,6 +106,13 @@ impl Notice {
                 .map(|body| safe_text(&body, 512))
                 .filter(|body| !body.trim().is_empty()),
             kind: notification.kind,
+            agent: notification
+                .agent
+                .as_deref()
+                // Identities are short labels; skip folding anything longer.
+                .filter(|agent| agent.len() <= 32)
+                .map(|agent| AgentIcon::from_identity(Some(&agent.to_ascii_lowercase())))
+                .filter(|icon| *icon != AgentIcon::Generic),
             position: notification
                 .position
                 .unwrap_or(ToastHerdrPosition::BottomRight),

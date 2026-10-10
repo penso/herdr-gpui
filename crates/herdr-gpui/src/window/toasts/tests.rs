@@ -5,6 +5,8 @@ use crate::{
 use gpui::{TestAppContext, px, size};
 use std::time::Instant;
 
+mod badge;
+
 #[gpui::test]
 fn targeted_previews_use_only_current_snapshot_ids(cx: &mut TestAppContext) {
     use herdr_client::protocol::{ClientShellSnapshot, SemanticNotificationKind};

@@ -7,6 +7,8 @@ use gpui::{prelude::*, *};
 use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind, ToastHerdrPosition};
 use std::{sync::TryLockError, task::Poll, time::Instant};
 
+mod badge;
+
 impl HerdrWindow {
     pub(crate) fn click_toast(
         &mut self,
@@ -255,6 +257,7 @@ impl HerdrWindow {
                 let inbox = endpoint.connection.inbox.clone();
                 let generation = endpoint.generation;
                 let id = *id;
+                let badge = badge::badge(notice);
                 let accent = self.theme.ink(match notice.kind {
                     SemanticNotificationKind::NeedsAttention => self.theme.palette[3],
                     SemanticNotificationKind::Finished => self.theme.palette[2],
@@ -277,14 +280,18 @@ impl HerdrWindow {
                         .max_h((viewport.height - px(132.)) / visible_limit as f32)
                         .rounded(px(crate::config::corners::PANEL))
                         .border_1()
-                        .border_color(rgb(accent))
+                        .border_color(rgb(crate::config::mix(
+                            self.theme.surface,
+                            self.theme.foreground,
+                            14,
+                        )))
                         .bg(rgb(self.theme.surface))
                         .text_color(rgb(self.theme.foreground))
                         .text_font(&self.config.ui)
                         .text_size(px(self.config.ui.size))
                         .p(px(10.))
                         .flex()
-                        .gap(px(8.))
+                        .gap(px(10.))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
@@ -306,6 +313,12 @@ impl HerdrWindow {
                             })
                         })
                         .child(
+                            badge::circle(badge.mark, &self.theme, accent).debug_selector({
+                                let endpoint_id = endpoint.id.clone();
+                                move || format!("toast-badge-{endpoint_id}-{id}")
+                            }),
+                        )
+                        .child(
                             div()
                                 .flex_1()
                                 .min_w_0()
@@ -319,7 +332,12 @@ impl HerdrWindow {
                                         .text_color(rgb(self.theme.muted))
                                         .child(safe_text(&endpoint.label, 80)),
                                 )
-                                .child(div().truncate().child(notice.title.clone()))
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(badge.title.to_owned()),
+                                )
                                 .when_some(notice.body.clone(), |d, body| {
                                     d.child(div().max_h(px(48.)).overflow_hidden().child(body))
                                 }),
