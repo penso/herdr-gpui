@@ -2,6 +2,8 @@ use super::*;
 use anyhow::Context as _;
 use ed25519_dalek::{Signer, SigningKey};
 
+mod beta_channel;
+
 #[test]
 fn request_profiles_allow_slow_archives_with_finite_deadlines() {
     for (profile, total, body) in [
@@ -344,6 +346,7 @@ fn transport_io_failures_keep_sources_and_do_not_masquerade_as_cancellation() ->
 fn redirects_require_exact_https_authorities() {
     for value in [
         LATEST_URL,
+        RELEASES_URL,
         "https://github.com/a",
         "https://release-assets.githubusercontent.com/a?signature=x",
     ] {

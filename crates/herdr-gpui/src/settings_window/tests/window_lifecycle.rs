@@ -41,6 +41,7 @@ fn command_w_closes_only_settings(cx: &mut TestAppContext) {
         view.theme_io = Some(themes::ThemeIo {
             write: Arc::new(|_, _| panic!("closing without a theme edit must not write")),
             load: Arc::new(|| panic!("closing without a theme edit must not reload")),
+            shared: None,
             resolve: None,
         });
         window.focus(&view.focus, cx);
@@ -64,6 +65,7 @@ fn control_w_closes_only_settings(cx: &mut TestAppContext) {
         view.theme_io = Some(themes::ThemeIo {
             write: Arc::new(|_, _| panic!("closing without a theme edit must not write")),
             load: Arc::new(|| panic!("closing without a theme edit must not reload")),
+            shared: None,
             resolve: None,
         });
         window.focus(&view.focus, cx);

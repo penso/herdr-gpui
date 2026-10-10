@@ -125,7 +125,18 @@ here only for readability:
   `pkeyutl -sign -rawin`. Any whitespace change requires regenerating the signature.
 
 The client discovers the latest stable release through
-`https://api.github.com/repos/penso/herdr-gpui/releases/latest`. Manifest, signature,
+`https://api.github.com/repos/penso/herdr-gpui/releases/latest`, which GitHub
+never resolves to a prerelease. With `[updates] channel = "beta"` (Settings >
+General > Install beta releases) it instead reads the ten newest releases from
+`https://api.github.com/repos/penso/herdr-gpui/releases?per_page=10` and picks the
+highest calendar version among published releases of either kind, ignoring drafts
+and non-calendar tags; that listing is bounded at 4 MiB. A beta carries the same
+signed manifest as any release, so the channel changes which release is offered,
+never how it is authenticated. A Homebrew-managed installation always checks the
+stable channel, since the tap only receives stable releases. Switching channels
+rechecks at once and never downgrades. That recheck also covers a beta that is
+already downloaded or still downloading: leaving the beta channel discards it
+unless stable now offers the same release. Manifest, signature,
 and archive downloads use version-specific GitHub release URLs. The authenticated
 version must match the release tag after removing its `v` prefix; archive names and sizes must also match the
 release metadata. SHA-256 and length are checked before extraction.
@@ -204,6 +215,25 @@ commands on trusted build outputs first.
    re-downloads and verifies the exact set and hashes before publication. The
    separately approved Homebrew job uses only the verified published DMG.
 
+### Beta Releases And Promotion
+
+`just release-beta` dispatches the same workflow with `channel=beta`. Every
+step above runs unchanged, so a beta is a complete signed, notarized, attested
+release; the draft is created as a GitHub prerelease, titled `(beta)`, not marked
+latest, and the Homebrew job is skipped. Betas take the next calendar version
+like any release. Release notes fold every unpromoted beta into the release after
+it, listing the changes since the newest non-beta tag.
+
+`just release-promote VERSION` dispatches `promote.yml`. After checking that
+`vVERSION` is a published prerelease whose tag is still on `main` and that it is
+newer than the latest stable release, its protected `release` job clears the
+prerelease flag, marks it latest and drops `(beta)` from the title. Immutable
+releases keep their tag and assets locked; only those fields change, so stable
+users receive exactly the bytes, manifest and provenance beta users already ran.
+The approved `homebrew` job then updates the tap with the steps release.yml uses.
+A beta that should not ship is simply never promoted; the next release
+supersedes it.
+
 Apple code signing and notarization are independent of the Ed25519 manifest
 signature and remain required. Manual Linux archives preserve desktop/icon/license
 installation; updater archives only replace the existing executable. Their matching
@@ -247,8 +277,8 @@ Run the standalone contract tests locally:
 ```sh
 OPENSSL="$(brew --prefix openssl@3)/bin/openssl" \
   python3 -m unittest discover -s scripts -p 'test_update_manifest.py' -v
-actionlint .github/workflows/release.yml .github/workflows/updater.yml
-zizmor --offline .github/workflows/release.yml .github/workflows/updater.yml
+actionlint .github/workflows/release.yml .github/workflows/promote.yml .github/workflows/updater.yml
+zizmor --offline .github/workflows/release.yml .github/workflows/promote.yml .github/workflows/updater.yml
 git diff --check
 ```
 

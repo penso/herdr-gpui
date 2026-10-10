@@ -21,6 +21,7 @@ pub(crate) mod status_bar;
 #[cfg(feature = "cloud")]
 mod table;
 mod theme;
+mod updates;
 pub(crate) mod watch;
 
 pub use coder::CoderConfig;
@@ -56,6 +57,7 @@ use std::{
 pub use theme::Theme;
 pub(crate) use theme::ThemeName;
 pub(crate) use theme::mix;
+pub use updates::{UpdateChannel, UpdatesConfig};
 
 const DEFAULT_CONFIG: &str = include_str!("../config-gpui.example.toml");
 // Compare the first line so Windows checkouts and editors can use CRLF.
@@ -115,6 +117,8 @@ pub struct Config {
     pub(crate) notification_overrides: NotificationSettings,
     pub clipboard_toast: ClipboardToast,
     pub bell: BellConfig,
+    /// Which releases the in-app updater offers.
+    pub updates: UpdatesConfig,
     pub layout: Layout,
     /// Spacing overrides, host colours, and selection marking for the sidebar.
     pub sidebar_style: SidebarStyle,
@@ -430,6 +434,7 @@ impl Default for Config {
             notification_overrides: NotificationSettings::default(),
             clipboard_toast: ClipboardToast::default(),
             bell: BellConfig::default(),
+            updates: UpdatesConfig::default(),
             layout: Layout::default(),
             sidebar_style: SidebarStyle::default(),
             sidebar_layout: SidebarLayout::default(),
@@ -482,6 +487,7 @@ struct Settings {
     notifications: NotificationSettings,
     clipboard_toast: ClipboardToastSettings,
     bell: BellConfig,
+    updates: UpdatesConfig,
     layout: Layout,
     keybindings: BTreeMap<String, Binding>,
     pane_keys: PaneKeys,
@@ -781,6 +787,7 @@ impl Config {
             .resolve(NotificationConfig::default());
         config.clipboard_toast = settings.clipboard_toast.resolve(base.clipboard_toast);
         config.bell = settings.bell;
+        config.updates = settings.updates;
         config.sidebar_layout = base.sidebar_layout.clone();
         if !settings.layout.sidebar_gap.is_finite()
             || !(0.0..=MAX_SIDEBAR_GAP).contains(&settings.layout.sidebar_gap)

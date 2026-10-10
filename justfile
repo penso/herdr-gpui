@@ -209,6 +209,15 @@ changelog-release version output:
 release:
     bash scripts/release/dispatch.sh
 
+# Owner-only beta: a GitHub prerelease that only `[updates] channel = "beta"`
+# installs see, kept out of Homebrew until promoted.
+release-beta:
+    bash scripts/release/dispatch.sh --beta
+
+# Owner-only: make a published beta the latest stable release, then update Homebrew.
+release-promote version:
+    bash scripts/release/dispatch.sh --promote "{{version}}"
+
 # Local universal signed/notarized DMG; does not publish anything.
 dmg $VERSION:
     bash scripts/release/build-macos.sh "$VERSION"

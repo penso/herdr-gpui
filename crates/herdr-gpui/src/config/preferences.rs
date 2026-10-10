@@ -19,6 +19,8 @@ pub(crate) enum Preference {
     StatusBar(status_bar::Edit),
     /// `[usage] inline`: whether the sidebar draws the daemon's configured rows.
     UsageInline(bool),
+    /// `[updates] channel`: whether the updater also offers beta releases.
+    UpdateChannel(UpdateChannel),
 }
 
 impl Config {
@@ -99,6 +101,9 @@ impl Config {
                     (Some("status_bar"), key, Some(value))
                 }
                 Preference::UsageInline(value) => (Some("usage"), "inline", Some(value.into())),
+                Preference::UpdateChannel(channel) => {
+                    (Some("updates"), "channel", Some(channel.as_str().into()))
+                }
                 Preference::SidebarGap(value) => {
                     if !value.is_finite() || !(0.0..=MAX_SIDEBAR_GAP).contains(&value) {
                         return Err(Error::InvalidSidebarGap);
@@ -169,6 +174,7 @@ mod tests {
             Preference::ClipboardEnabled(Some(false)),
             Preference::ClipboardPosition(Some(ClipboardToastPosition::TopCenter)),
             Preference::SidebarGap(7.5),
+            Preference::UpdateChannel(UpdateChannel::Beta),
         ] {
             Config::save_preference_path(edit, &path)?;
         }
@@ -186,6 +192,7 @@ mod tests {
         assert_eq!(table["show_listening_ports"].as_bool(), Some(false));
         assert_eq!(table["show_sidebar_search"].as_bool(), Some(false));
         assert_eq!(table["layout"]["mode"].as_str(), Some("orca"));
+        assert_eq!(table["updates"]["channel"].as_str(), Some("beta"));
         assert_eq!(table["layout"]["sidebar_gap"].as_float(), Some(7.5));
         assert_eq!(
             table["notifications"]["delay_seconds"].as_integer(),

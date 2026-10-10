@@ -1,5 +1,5 @@
 name: Release
-run-name: Release @ ${{ inputs.expected_sha }} [${{ inputs.request_id }}]
+run-name: Release ${{ inputs.channel }} @ ${{ inputs.expected_sha }} [${{ inputs.request_id }}]
 
 on:
   workflow_dispatch:
@@ -13,6 +13,14 @@ on:
         required: false
         default: ''
         type: string
+      channel:
+        description: stable publishes to everyone and Homebrew; beta publishes a prerelease to promote later
+        required: false
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
 
 permissions: {}
 
@@ -61,6 +69,7 @@ jobs:
     outputs:
       sha: ${{ steps.validate.outputs.sha }}
       version: ${{ steps.validate.outputs.version }}
+      channel: ${{ steps.validate.outputs.channel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,10 +80,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           REQUEST_ID: ${{ inputs.request_id }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$REQUEST_ID" =~ ^[a-zA-Z0-9-]{0,64}$ ]]
+          [[ "$CHANNEL" == stable || "$CHANNEL" == beta ]]
           [[ "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
           [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
           [[ "$(gh api repos/penso/herdr-gpui/git/ref/heads/main --jq .object.sha)" == "$EXPECTED_SHA" ]]
@@ -83,8 +94,8 @@ jobs:
           version=$(gh api --paginate repos/penso/herdr-gpui/git/matching-refs/tags/v --jq '.[].ref' |
             python3 scripts/release/next-version.py "$(date -u +%Y%m%d)")
           [[ "$version" =~ ^[1-9][0-9]{7}\.[1-9][0-9]*$ ]]
-          printf 'version=%s\nsha=%s\n' "$version" "$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
-          printf 'Publishing v%s\n' "$version"
+          printf 'version=%s\nsha=%s\nchannel=%s\n' "$version" "$EXPECTED_SHA" "$CHANNEL" >> "$GITHUB_OUTPUT"
+          printf 'Publishing %s v%s\n' "$CHANNEL" "$version"
       - name: Validate embedded updater public key
         env:
           HERDR_UPDATE_PUBLIC_KEY: ${{ vars.HERDR_UPDATE_PUBLIC_KEY }}
@@ -310,10 +321,23 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: cargo install git-cliff --locked --version 2.12.0
+      # Betas that were never promoted fold into this release's notes, so a
+      # stable release lists everything since the previous stable one.
       - name: Generate the changelog and release notes from git history
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir release-notes
-          bash scripts/release/generate-changelog.sh "$VERSION" release-notes
+          # A plain assignment, so `set -e` stops on a failed request instead
+          # of silently dropping the betas and shortening the notes.
+          prereleases=$(gh api --paginate repos/penso/herdr-gpui/releases \
+            --jq '.[] | select(.prerelease and (.draft | not)) | .tag_name')
+          betas=()
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then betas+=("$tag"); fi
+          done <<< "$prereleases"
+          bash scripts/release/generate-changelog.sh "$VERSION" release-notes ${betas[@]+"${betas[@]}"}
           cat release-notes/RELEASE_NOTES.md
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -533,6 +557,7 @@ jobs:
     env:
       VERSION: ${{ needs.validate.outputs.version }}
       RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      CHANNEL: ${{ needs.validate.outputs.channel }}
       GH_REPO: penso/herdr-gpui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -572,8 +597,16 @@ jobs:
           PY
           gh api repos/penso/herdr-gpui/git/refs -X POST \
             -f "ref=refs/tags/v$VERSION" -f "sha=$RELEASE_SHA"
+          # A beta is a GitHub prerelease: /releases/latest, and so the stable
+          # updater channel and Homebrew, never see it until promote.yml flips it.
+          channel=()
+          title="Herdr GPUI $VERSION"
+          if [[ "$CHANNEL" == beta ]]; then
+            channel=(--prerelease --latest=false)
+            title="$title (beta)"
+          fi
           gh release create "v$VERSION" --verify-tag --target "$RELEASE_SHA" --draft \
-            --title "Herdr GPUI $VERSION" \
+            ${channel[@]+"${channel[@]}"} --title "$title" \
             --notes-file release-notes/RELEASE_NOTES.md \
             dist/*
       - name: Verify uploaded draft bytes and exact asset set before publication
@@ -582,20 +615,23 @@ jobs:
         run: |
           set -euo pipefail
           expected=$(python3 scripts/release/artifact-manifest.py names "$VERSION" dist | jq -R . | jq -s .)
-          gh release view "v$VERSION" --json isDraft,assets | \
-            jq -e --argjson expected "$expected" \
-              '.isDraft and (([.assets[].name] | sort) == ($expected | sort))'
+          gh release view "v$VERSION" --json isDraft,isPrerelease,assets | \
+            jq -e --argjson expected "$expected" --arg channel "$CHANNEL" \
+              '.isDraft and .isPrerelease == ($channel == "beta") and (([.assets[].name] | sort) == ($expected | sort))'
           gh release download "v$VERSION" --dir verified
           cmp dist/SHA256SUMS verified/SHA256SUMS
           python3 scripts/release/artifact-manifest.py verify "$VERSION" verified
           [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release edit "v$VERSION" --draft=false
 
+  # Betas stay out of the tap; promote.yml updates it when one is promoted.
+  # Keep these steps identical to promote.yml's homebrew job.
   homebrew:
     needs: [validate, publish]
     if: >-
       github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
-      github.actor == 'penso' && github.triggering_actor == 'penso'
+      github.actor == 'penso' && github.triggering_actor == 'penso' &&
+      needs.validate.outputs.channel == 'stable'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: homebrew
@@ -615,7 +651,7 @@ jobs:
           RELEASE_SHA: ${{ needs.validate.outputs.sha }}
         run: |
           set -euo pipefail
-          gh release view "v$VERSION" --json isDraft | jq -e '.isDraft == false'
+          gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
           [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release download "v$VERSION" --dir final \
             --pattern "Herdr-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS

@@ -1,7 +1,7 @@
 //! Project opening retains the local connection and palette identities through
 //! background validation and the correlated daemon response.
 
-use super::{LocalTarget, ProjectOperation, projects};
+use super::{LocalTarget, ProjectOperation, project_create, projects};
 use crate::{Error, HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
@@ -160,6 +160,57 @@ impl HerdrWindow {
                         }
                         cx.notify();
                     }
+                    Err(error) => this.palette_project_error(error, cx),
+                }
+            });
+        });
+        if let Some(palette) = &mut self.menu.palette {
+            palette.project_operation = ProjectOperation::Validating { _task: task };
+        }
+        cx.notify();
+    }
+
+    /// Create the directory (or clone into it), then open it through
+    /// `activate_project`, which resolves the new path and looks for an
+    /// existing workspace off the UI thread exactly as for any other project.
+    pub(super) fn create_project(
+        &mut self,
+        project: project_create::NewProject,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(palette) = &self.menu.palette else {
+            return;
+        };
+        let Some(target) = palette.local_target.clone() else {
+            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            return;
+        };
+        if let Err(error) = self.local_project_connection(&target) {
+            return self.palette_project_error(error, cx);
+        }
+        let token = palette.search.clone();
+        let config = self.config.palette.clone();
+        let materialise = cx
+            .background_executor()
+            .spawn(async move { project_create::materialise(&project, &|| false) });
+        if let Some(palette) = &mut self.menu.palette {
+            palette.error = None;
+        }
+        let task = cx.spawn_in(window, async move |this, cx| {
+            let created = materialise.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if this
+                    .menu
+                    .palette
+                    .as_ref()
+                    .is_none_or(|palette| palette.search != token)
+                    || this.config.palette != config
+                {
+                    return;
+                }
+                match created {
+                    Ok(project) => this.activate_project(project, window, cx),
                     Err(error) => this.palette_project_error(error, cx),
                 }
             });

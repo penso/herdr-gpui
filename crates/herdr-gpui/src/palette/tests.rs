@@ -101,6 +101,7 @@ fn command_badges_mark_daemon_commands_and_go_to_badges_mark_agent_status(cx: &m
                     } => "waiting",
                     Action::Go { .. } => "Workspace",
                     Action::Project(_) => "Project",
+                    Action::NewProject(_) => "Project",
                     Action::Note { .. } => "Note",
                 };
                 assert_eq!(entry.badge, expected, "{}", entry.label);

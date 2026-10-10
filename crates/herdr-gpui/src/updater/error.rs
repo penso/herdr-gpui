@@ -108,6 +108,8 @@ pub enum UpdateError {
     MetadataLimit,
     #[error("GitHub release is not a stable vYYYYMMDD.COUNTER release")]
     UnstableRelease,
+    #[error("GitHub lists no published vYYYYMMDD.COUNTER release")]
+    NoPublishedRelease,
     #[error("GitHub release has too many assets")]
     ReleaseAssetCount,
     #[error("Invalid GitHub release asset metadata")]

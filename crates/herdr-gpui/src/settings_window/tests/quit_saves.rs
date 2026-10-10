@@ -29,6 +29,7 @@ fn close_and_quit_serialize_font_theme_and_final_layout(cx: &mut TestAppContext)
                             Ok(())
                         }),
                         load: Arc::new(fixture_load),
+                        shared: None,
                         resolve: None,
                     });
                     let layouts = writes.clone();
@@ -262,6 +263,7 @@ fn quit_shared_theme_uses_only_successfully_reconciled_preceding_snapshot(cx: &m
                         load: Arc::new(|| {
                             panic!("shutdown must not reload/retry the theme writer")
                         }),
+                        shared: None,
                         resolve: None,
                     });
                     let preceding = operations.clone();
