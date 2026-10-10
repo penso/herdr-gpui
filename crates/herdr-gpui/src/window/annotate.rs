@@ -8,31 +8,12 @@
 use super::{Flash, HerdrWindow};
 use crate::{
     Error,
+    agent_notes::Origin,
     search_input::SearchInput,
     terminal_notes::{self, MAX_NOTES, Note},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::ClientShellSnapshot;
-
-/// Endpoint positions can be reused, and a device can switch daemon sessions.
-#[derive(Clone, PartialEq, Eq)]
-struct Origin {
-    endpoint: String,
-    boot_id: String,
-}
-
-impl Origin {
-    fn current(&self, view: &HerdrWindow) -> bool {
-        view.endpoints
-            .get(view.selected_endpoint)
-            .is_some_and(|endpoint| endpoint.id == self.endpoint)
-            && view
-                .live
-                .snapshot
-                .as_ref()
-                .is_some_and(|snapshot| snapshot.boot_id == self.boot_id)
-    }
-}
 
 /// A queued note and the daemon whose agent it goes to.
 struct Queued {
@@ -139,12 +120,12 @@ impl HerdrWindow {
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let focus = input.read(cx).focus.clone();
+        let Some(origin) = Origin::of(self) else {
+            return;
+        };
         self.terminal_notes.composer = Some(Composer {
             input,
-            origin: Origin {
-                endpoint: self.endpoints[self.selected_endpoint].id.clone(),
-                boot_id: snapshot.boot_id.clone(),
-            },
+            origin,
             pane_id,
             target,
             place,

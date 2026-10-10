@@ -50,7 +50,7 @@ fn reused_pane_ids_do_not_mix_notes_from_different_daemons(cx: &mut TestAppConte
             view.poll_deliveries(cx);
         });
     });
-    let sent = kept(cx, "w0:p1").unwrap();
+    let sent = delivered(cx, "w0:p1").unwrap();
     assert!(sent.contains("Current session."));
     assert!(!sent.contains("Original session."));
 }

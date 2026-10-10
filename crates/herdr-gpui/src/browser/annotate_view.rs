@@ -38,8 +38,10 @@ struct TabNotes {
     editing: Option<usize>,
     notes: Vec<Note>,
     sending: crate::agent_notes::PendingSend,
+    input: Option<Entity<SearchInput>>,
 }
 
+#[derive(Default)]
 pub(crate) struct Annotations {
     tabs: HashMap<TabId, TabNotes>,
     /// Each tab's notes panel, sliding open and closed beside its page.
@@ -47,25 +49,23 @@ pub(crate) struct Annotations {
     /// When each note a tab's panel draws was added, while it grows into the
     /// list; `None` for a note that is whole.
     drawn: HashMap<TabId, Vec<Option<Instant>>>,
-    pub(super) input: Entity<SearchInput>,
     /// Numbers screenshots, to match each to its draft or note.
     captures: u64,
 }
 
 impl Annotations {
-    pub(crate) fn new(cx: &mut App) -> Self {
+    pub(super) fn input(&mut self, id: TabId, cx: &mut App) -> Entity<SearchInput> {
+        let tab = self.tabs.entry(id).or_default();
+        if let Some(input) = &tab.input {
+            return input.clone();
+        }
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
             input.set_placeholder("Describe the change\u{2026}", cx);
             input
         });
-        Self {
-            tabs: HashMap::new(),
-            panels: HashMap::new(),
-            drawn: HashMap::new(),
-            input,
-            captures: 0,
-        }
+        tab.input = Some(input.clone());
+        input
     }
 
     pub(crate) fn armed(&self, id: TabId) -> bool {
@@ -300,7 +300,7 @@ impl HerdrWindow {
         // The page holds the keyboard natively; the note is typed here.
         #[cfg(any(target_os = "macos", windows))]
         self.browser.pages.blur(id, cx);
-        let input = self.browser.annotations.input.clone();
+        let input = self.browser.annotations.input(id, cx);
         input.update(cx, |input, cx| input.clear(cx));
         let focus = input.read(cx).focus.clone();
         window.focus(&focus, cx);
@@ -383,7 +383,7 @@ impl HerdrWindow {
         notes.editing = Some(index);
         #[cfg(any(target_os = "macos", windows))]
         self.browser.pages.blur(id, cx);
-        let input = self.browser.annotations.input.clone();
+        let input = self.browser.annotations.input(id, cx);
         input.update(cx, |input, cx| input.set_text_selected(&comment, cx));
         let focus = input.read(cx).focus.clone();
         window.focus(&focus, cx);
@@ -402,7 +402,8 @@ impl HerdrWindow {
     /// Adds the draft as a note, or saves the note being edited, which then
     /// counts as not sent.
     pub(super) fn add_note(&mut self, id: TabId, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.browser.annotations.input.read(cx).text().to_owned();
+        let input = self.browser.annotations.input(id, cx);
+        let text = input.read(cx).text().to_owned();
         if let Some(index) = self.tab_notes(id).editing {
             let notes = self.tab_notes(id);
             let Some(anchor) = notes.notes.get(index).map(|note| note.anchor.clone()) else {
@@ -419,10 +420,7 @@ impl HerdrWindow {
                 note.sent = false;
             }
             notes.editing = None;
-            self.browser
-                .annotations
-                .input
-                .update(cx, |input, cx| input.clear(cx));
+            input.update(cx, |input, cx| input.clear(cx));
             window.focus(&self.focus, cx);
             cx.notify();
             return;
@@ -439,10 +437,7 @@ impl HerdrWindow {
         note.capture = draft.capture;
         let notes = self.tab_notes(id);
         notes.notes.push(note);
-        self.browser
-            .annotations
-            .input
-            .update(cx, |input, cx| input.clear(cx));
+        input.update(cx, |input, cx| input.clear(cx));
         self.refresh_markers(id, cx);
         window.focus(&self.focus, cx);
         cx.notify();
@@ -493,8 +488,8 @@ mod tests {
     #[gpui::test]
     fn new_notes_grow_in_and_the_panel_slides(cx: &mut gpui::TestAppContext) {
         let id = TabId::test(7);
-        cx.update(|cx| {
-            let mut annotations = Annotations::new(cx);
+        cx.update(|_| {
+            let mut annotations = Annotations::default();
             let start = Instant::now();
             // Notes a panel has when it first draws are whole.
             annotations.observe_notes(id, 2, start);

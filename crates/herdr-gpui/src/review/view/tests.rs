@@ -96,8 +96,17 @@ fn note(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext, row: RowId
 
 fn kept(cx: &mut gpui::VisualTestContext) -> Option<String> {
     cx.update(|_, cx| {
-        cx.default_global::<crate::browser::Feedback>()
-            .take("w0:p1")
+        if cfg!(unix) {
+            cx.default_global::<crate::browser::Feedback>()
+                .take("w0:p1")
+        } else {
+            let text = cx
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .filter(|text| !text.is_empty());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new()));
+            text
+        }
     })
 }
 
@@ -170,7 +179,12 @@ fn without_an_agent_the_notes_are_copied(cx: &mut gpui::TestAppContext) {
         .update(|_, cx| cx.read_from_clipboard())
         .and_then(|item| item.text());
     assert!(copied.is_some_and(|text| text.contains("`src/lib.rs:2` (removed line")));
-    assert!(kept(cx).is_none());
+    assert!(
+        cx.update(|_, cx| cx
+            .default_global::<crate::browser::Feedback>()
+            .take("w0:p1"))
+            .is_none()
+    );
 }
 
 #[gpui::test]
@@ -220,6 +234,7 @@ mod find_again;
 mod keys;
 mod layout;
 mod loading;
+mod origin;
 mod panel_editing;
 mod pending_send;
 mod resend;

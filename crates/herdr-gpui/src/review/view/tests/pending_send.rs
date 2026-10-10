@@ -28,8 +28,10 @@ fn pending_review_notes_are_sent_once_and_resend_after_collection(cx: &mut gpui:
             view.poll_deliveries(cx);
             assert_eq!(view.deliveries.len(), 0);
             // Failed paste hands the pending batch to feedback, still once.
-            view.send_review(the(view), cx);
-            assert_eq!(view.deliveries.len(), 0);
+            if cfg!(unix) {
+                view.send_review(the(view), cx);
+                assert_eq!(view.deliveries.len(), 0);
+            }
         });
     });
     let original = kept(cx).unwrap();

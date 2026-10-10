@@ -256,7 +256,7 @@ impl HerdrWindow {
             ignore_whitespace: false,
             split_ratio: rows::EVEN_SPLIT,
             agent,
-            endpoint: self.selected_endpoint,
+            origin: crate::agent_notes::Origin::of(self),
             state: State::Loading,
             starts: vec![0],
             reading: HashSet::new(),

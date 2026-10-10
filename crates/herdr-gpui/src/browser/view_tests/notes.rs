@@ -1,5 +1,6 @@
 use super::*;
 
+mod page_editing;
 mod pending_send;
 mod resend;
 
@@ -52,7 +53,7 @@ fn noted_tab(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> crate::b
             view.toggle_annotating(tab.id, window, cx);
             view.page_posted(tab.id, "not json", window, cx);
             view.page_posted(tab.id, PICK, window, cx);
-            let input = view.browser.annotations.input.clone();
+            let input = view.browser.annotations.input(tab.id, cx);
             input.update(cx, |input, cx| input.set_text_selected("Make it blue", cx));
             view.add_note(tab.id, window, cx);
             assert_eq!(view.browser.annotations.queued(tab.id), 1);
@@ -63,8 +64,17 @@ fn noted_tab(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> crate::b
 
 fn kept(cx: &mut VisualTestContext) -> Option<String> {
     cx.update(|_, cx| {
-        cx.default_global::<crate::browser::Feedback>()
-            .take("w0:p1")
+        if cfg!(unix) {
+            cx.default_global::<crate::browser::Feedback>()
+                .take("w0:p1")
+        } else {
+            let text = cx
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .filter(|text| !text.is_empty());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new()));
+            text
+        }
     })
 }
 

@@ -121,7 +121,7 @@ pub(crate) struct Review {
     split_ratio: f32,
     agent: Option<Agent>,
     /// The endpoint the agent's daemon was on when the review opened.
-    endpoint: usize,
+    origin: Option<crate::agent_notes::Origin>,
     state: State,
     /// Where each file's rows start in the list as drawn, then the total.
     starts: Vec<usize>,
@@ -603,7 +603,10 @@ impl HerdrWindow {
             text,
             indexes,
             pane,
-            review.endpoint == self.selected_endpoint,
+            review
+                .origin
+                .as_ref()
+                .is_some_and(|origin| origin.current(self)),
         ))
     }
 

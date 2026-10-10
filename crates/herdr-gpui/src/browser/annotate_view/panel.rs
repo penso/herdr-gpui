@@ -15,6 +15,7 @@ impl HerdrWindow {
         let theme = self.theme.clone();
         let armed = self.browser.annotations.armed(id);
         let notes = self.tab_notes(id);
+        let input = notes.input.clone();
         let regions = notes.regions;
         let editing = notes.editing;
         let pending = notes
@@ -94,7 +95,7 @@ impl HerdrWindow {
                             }
                             cx.stop_propagation();
                         }))
-                        .child(self.browser.annotations.input.clone()),
+                        .children(input),
                 )
                 .child(
                     div().flex().gap_1().child(

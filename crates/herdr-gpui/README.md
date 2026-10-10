@@ -1783,6 +1783,10 @@ them to the agent that opened it, so it can change the page.
   running agent, since Enter there would run it in a shell, nor into an agent
   that is asking you a question; those notes wait for `browser feedback`, as
   do notes for a pane this window does not show.
+  Windows has no `browser feedback` listener: notes that cannot be pasted
+  are copied instead, and the tab can send again. Pending batches whose
+  original daemon is no longer selected are also copied, never handed to
+  another session's agent.
 - Tabs you open yourself have no agent to send to; **Copy** is offered
   instead.
 
@@ -2492,8 +2496,9 @@ records when reporting the failure.
   control characters removed, and your note. They are delivered as page
   notes are (see [Annotating A Page](#annotating-a-page)), and copied when no
   agent is found. Queued notes remember their original device and daemon;
-  if that daemon is no longer selected when you send, those notes are copied
-  instead. The whole selection must be on screen.
+  if that daemon is no longer selected when you send or while delivery waits
+  for a busy agent, those notes are copied instead. The whole selection must
+  be on screen.
 - A mouse selection dragged past a pane's top or bottom edge scrolls the
   pane, and the selection stays with its text as the pane moves. A selection
   that reaches rows off the screen is copied through `pane.selection.read`;

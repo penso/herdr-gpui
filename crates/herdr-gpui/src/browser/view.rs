@@ -110,7 +110,7 @@ impl Browser {
             code_server: Default::default(),
             workspaces: None,
             #[cfg(any(target_os = "macos", windows))]
-            annotations: Annotations::new(cx),
+            annotations: Annotations::default(),
             #[cfg(any(target_os = "macos", windows))]
             cover_page: None,
             #[cfg(any(target_os = "macos", windows))]

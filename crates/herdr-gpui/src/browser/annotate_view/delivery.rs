@@ -89,8 +89,11 @@ impl HerdrWindow {
         };
         let (indexes, notes) = self.notes_round(tab);
         let pane_id = tab.origin.clone();
-        let here = super::super::view::scope(&self.endpoints[self.selected_endpoint]) == tab.scope;
+        let origin = crate::agent_notes::Origin::of(self);
+        let scope = tab.scope.clone();
         self.with_notes_prompt(tab, notes, save, cx, move |this, text, cx| {
+            let here = origin.as_ref().is_some_and(|origin| origin.current(this))
+                && super::super::view::scope(&this.endpoints[this.selected_endpoint]) == scope;
             this.deliver_notes(pane_id, here, text, Some(pending), cx);
         });
         self.mark_notes_sent(tab.id, &indexes, cx);
