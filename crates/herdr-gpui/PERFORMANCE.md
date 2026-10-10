@@ -166,3 +166,27 @@ entity-level scene caching, no daemon/protocol changes, and no new handling of
 terminal graphics/hyperlinks. Native checks exercise changed foregrounds, centered
 popup drawing, beam and underline cursors, and fresh/cached glyph equality; they
 are not a screenshot pixel-diff test or exhaustive Unicode/font-fallback suite.
+
+## Scrollback Cadence
+
+Scroll judder is not paint cost: a release `--performance-test` warm scroll paints
+at p50/p95 5.62/7.85 ms. It is the daemon's cadence. Herdr renders at most once per
+16 ms (`MIN_RENDER_INTERVAL`), so 1-line wheel events at 120 Hz against Herdr 0.9.3
+arrive as 116 surfaces for 240 inputs, gaps p50/p95 17.44/18.50 ms, mostly 2-row
+(1: 6, 2: 94, 3: 15) jumps out of phase with the display.
+
+`smooth_scroll` draws a pane where the OS's wheel deltas put it, rather than
+timing the daemon's jumps. Each delta slides in over 48 ms, which covers that
+cadence plus transport, and the wheel asks the daemon for each row as the motion
+enters it, so the rows to draw are normally on screen already. They are filled
+from the presented surface and up to four earlier ones. The OS's own momentum
+easing therefore reaches the screen unchanged, and the drawing trails it by about
+24 ms. When the gesture stops part-way into a row, the pane rests there, and hit
+testing follows the drawn offset. Rows that no surface has shown yet are never
+drawn; the drawing waits for them. Scrollbar drags, keyboard scrolling, and
+scrolling by other clients land on the daemon's row.
+
+Cost: only the moving pane's region repaints, every display frame while the
+gesture lasts and for 48 ms after it. Other panes replay their cached scene, and
+a resting pane keeps its cached paint. The extra main-thread time is mostly Metal
+drawing and presenting those frames, not terminal painting.

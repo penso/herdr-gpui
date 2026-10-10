@@ -185,6 +185,10 @@ impl Endpoint {
 
     /// Refreshes state derived from `live` after it is replaced.
     pub(crate) fn sync_live(&mut self) {
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if let Some(warning) = self.live.local_peer_warning.take() {
+            self.toasts.receive([warning.notice(Instant::now())]);
+        }
         // Without surface support there is no navigation fence to watch, so
         // a travel waits for the next focus change instead.
         let navigating = self.live.snapshot.is_some()

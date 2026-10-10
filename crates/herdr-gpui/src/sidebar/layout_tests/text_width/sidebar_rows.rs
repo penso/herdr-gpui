@@ -229,6 +229,9 @@ pub(super) fn check_collapse_toggle(
         })
     });
     for collapsed in [true, false] {
+        // A changed selection can scroll the row as chrome grows above it.
+        // Settle that layout before measuring the click target.
+        cx.update(|window, cx| full_draw(window, cx).clear(cx));
         let arrow = cx.debug_bounds("collapse-3").unwrap();
         cx.simulate_click(arrow.center(), Default::default());
         cx.update(|window, cx| {

@@ -1,13 +1,15 @@
 //! The title bar folded into the tab row, as Chrome and Conductor draw it.
 //! With Herdr's tab bar at the top the window keeps no header of its own: the
 //! sidebar's column starts with the traffic-light clearance, the sidebar
-//! toggle, and Back and Forward, the leftmost group's strip takes them when
-//! the sidebar is not expanded or too narrow for them, and the rightmost one ends with the bar's git button, account,
+//! toggle, and Back and Forward. The leftmost group's strip takes the controls
+//! that no longer fit in the sidebar, and the rightmost one ends with git, account,
 //! and window controls, with the header's usage text before them. Every
 //! strip keeps empty room that moves the window, however many tabs it holds;
 //! more tabs than fit still scroll.
 
-use super::{HEIGHT, LEADING, movable, navigation::Style};
+use super::{
+    HEIGHT, LEADING, SIDEBAR_TOGGLE_MARGIN, SIDEBAR_TOGGLE_SIZE, movable, navigation::Style,
+};
 use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition, sidebar::SidebarMode};
 use gpui::{prelude::*, *};
 
@@ -22,7 +24,7 @@ pub(crate) const DRAG_ROOM: f32 = 40.;
 const NAVIGATION_SHRINK: f32 = 0.001;
 
 /// The sidebar toggle's 28px button and the 4px after it.
-const SIDEBAR_TOGGLE: f32 = 32.;
+const SIDEBAR_TOGGLE: f32 = SIDEBAR_TOGGLE_SIZE + SIDEBAR_TOGGLE_MARGIN;
 /// Room kept after Back and Forward at the sidebar header's end.
 const SIDEBAR_END: f32 = 8.;
 
@@ -51,6 +53,14 @@ impl HerdrWindow {
         self.tab_bar_position() == TabBarPosition::Top && !self.strip_hidden(first, cx)
     }
 
+    /// Keep the toggle anchored in the sidebar whenever it fits. The rail has
+    /// room on Linux/Windows, but not beside macOS's traffic-light clearance.
+    fn sidebar_header_has_toggle(&self, window: &Window) -> bool {
+        self.sidebar_mode()
+            .width(self.sidebar_width, f32::from(window.viewport_size().width))
+            .is_some_and(|width| width >= LEADING + SIDEBAR_TOGGLE)
+    }
+
     /// Whether Back and Forward fit in the expanded sidebar's header after
     /// the traffic lights and the toggle. A sidebar dragged narrower than
     /// that hands them to the leftmost strip instead.
@@ -63,10 +73,9 @@ impl HerdrWindow {
             && column >= LEADING + SIDEBAR_TOGGLE + Style::NATIVE.width() + SIDEBAR_END
     }
 
-    /// The sidebar column's first row, level with the strips beside it: the
-    /// traffic lights' clearance, then the toggle and Back and Forward while
-    /// the sidebar is expanded. A collapsed rail is too narrow for them, so
-    /// the leftmost strip takes them and what remains of the clearance.
+    /// The sidebar column's first row, level with the strips beside it. It
+    /// keeps the toggle whenever it fits, and Back and Forward when expanded
+    /// and wide enough. Remaining controls move to the leftmost strip.
     pub(crate) fn sidebar_header(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         let header = div()
             .debug_selector(|| "sidebar-titlebar".into())
@@ -78,7 +87,7 @@ impl HerdrWindow {
             .overflow_hidden()
             .bg(rgb(self.theme.sidebar_background()))
             .child(div().flex_none().w(px(LEADING)).h_full())
-            .when(self.sidebar_mode() == SidebarMode::Expanded, |header| {
+            .when(self.sidebar_header_has_toggle(window), |header| {
                 header.child(self.sidebar_toggle(cx))
             })
             .when(self.navigation_in_sidebar(window), |header| {
@@ -140,9 +149,9 @@ impl HerdrWindow {
             .overflow_hidden()
             .items_center();
         let mode = self.sidebar_mode();
-        // An expanded sidebar too narrow for Back and Forward keeps the
-        // toggle, and they open the content beside it.
-        if mode == SidebarMode::Expanded {
+        // Keep the toggle in the rail or expanded sidebar when it fits;
+        // Back and Forward alone lead the content beside it.
+        if self.sidebar_header_has_toggle(window) {
             return Some(leading.pl(px(6.)).child(self.strip_navigation(cx)));
         }
         let column = mode

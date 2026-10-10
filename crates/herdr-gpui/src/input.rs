@@ -201,7 +201,9 @@ impl EntityInputHandler for HerdrWindow {
         }
         let surface = self.live.surface.as_deref();
         let cell_height = self.config.terminal.line_height();
-        let cursor = input_cursor_bounds(surface, self.bounds.origin, self.cell_width, cell_height);
+        let mut cursor =
+            input_cursor_bounds(surface, self.bounds.origin, self.cell_width, cell_height);
+        cursor.origin.y += self.ime_shift();
         Some(self.painter.borrow().composition_bounds(
             &self.marked,
             range,

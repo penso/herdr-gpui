@@ -359,6 +359,7 @@ impl HerdrWindow {
                 | Command::ClosePane
                 | Command::CloseTab
                 | Command::NewBrowserTab
+                | Command::OpenOrchestrator
                 | Command::SplitEditor
                 | Command::MoveTabPrevious
                 | Command::MoveTabNext
@@ -401,6 +402,7 @@ impl HerdrWindow {
                 | Command::ToggleSidebar
                 | Command::OpenCode
                 | Command::ToggleStatusBar
+                | Command::DevicesOverview
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize
@@ -409,6 +411,7 @@ impl HerdrWindow {
                 | Command::Sessions
                 | Command::Themes
                 | Command::Palette
+                | Command::Detach
                 | Command::Reconnect
                 | Command::Quit
                 | Command::Logs

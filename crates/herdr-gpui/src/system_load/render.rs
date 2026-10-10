@@ -18,8 +18,10 @@ const GAUGE_WIDTH: f32 = 3.;
 const ITEM_GAP: f32 = 5.;
 /// Glyphs a share takes at most: `100%`.
 const SHARE_GLYPHS: f32 = 4.;
-const CPU_WARN: f32 = 75.;
-const MEMORY_WARN: f32 = 80.;
+pub(crate) const CPU_WARN: f32 = 75.;
+pub(crate) const MEMORY_WARN: f32 = 80.;
+/// A home volume this full is worth a look.
+pub(crate) const DISK_WARN: f32 = 80.;
 const CRITICAL: f32 = 90.;
 
 impl HerdrWindow {
@@ -171,7 +173,8 @@ fn share(value: f32, warn: f32, stale: bool, theme: &Theme, glyph: Option<f32>) 
         .child(format!("{value:.0}%"))
 }
 
-fn severity(value: f32, warn: f32, theme: &Theme, normal: u32) -> u32 {
+/// `normal` below `warn`, yellow from it, red once critical.
+pub(crate) fn severity(value: f32, warn: f32, theme: &Theme, normal: u32) -> u32 {
     if value >= CRITICAL {
         theme.ink(theme.palette[1])
     } else if value >= warn {
@@ -268,11 +271,48 @@ fn details(reading: &Reading, host: &Host) -> String {
                 memory.percent()
             ));
         }
+        if let Some(disk) = sample.disk {
+            lines.push(format!(
+                "Disk {} free of {} ({:.0}% used)",
+                storage(disk.available),
+                storage(disk.total),
+                disk.used_percent()
+            ));
+        }
+        if let Some(seconds) = sample.uptime {
+            lines.push(format!("Up {}", uptime(seconds)));
+        }
     }
     if let Some(error) = reading.error() {
         lines.push(error.to_owned());
     }
     lines.join("\n")
+}
+
+/// A volume's size in binary units, as short as a table column wants:
+/// `6.8 GB`, `381 GB`, `1.2 TB`.
+pub(crate) fn storage(bytes: u64) -> String {
+    let gigabytes = bytes as f64 / f64::from(1u32 << 30);
+    if gigabytes >= 1024. {
+        format!("{:.1} TB", gigabytes / 1024.)
+    } else if gigabytes >= 10. {
+        format!("{gigabytes:.0} GB")
+    } else {
+        format!("{gigabytes:.1} GB")
+    }
+}
+
+/// How long a host has been up, in its two largest units: `116d 0h`,
+/// `3h 12m`, `12m`.
+pub(crate) fn uptime(seconds: u64) -> String {
+    let (days, hours, minutes) = (seconds / 86_400, seconds / 3600 % 24, seconds / 60 % 60);
+    if days > 0 {
+        format!("{days}d {hours}h")
+    } else if hours > 0 {
+        format!("{hours}h {minutes}m")
+    } else {
+        format!("{minutes}m")
+    }
 }
 
 /// Binary gigabytes, as Activity Monitor and `free -h` count them.

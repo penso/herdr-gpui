@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 99] = [
+    let expected: &[(Command, &[&str])] = &[
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -89,6 +89,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (AgentNumber(9), &[]),
         (ToggleSidebar, &["cmd-b"]),
         (ToggleStatusBar, &[]),
+        (DevicesOverview, &[]),
         (IncreaseFontSize, &["cmd-=", "cmd-+"]),
         (DecreaseFontSize, &["cmd--"]),
         (ResetFontSize, &["cmd-0"]),
@@ -101,10 +102,12 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (Palette, &["cmd-shift-p"]),
         (GoToSymbol, &["cmd-shift-o"]),
         (GoToFile, &["cmd-o"]),
+        (Detach, &[]),
         (Reconnect, &[]),
         (Quit, &["cmd-q"]),
         (About, &[]),
         (NewBrowserTab, &["cmd-shift-b"]),
+        (OpenOrchestrator, &[]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
         (OpenCode, &[]),
@@ -123,7 +126,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     );
     let names: std::collections::HashSet<_> = COMMANDS.iter().map(|info| info.name).collect();
     assert_eq!(names.len(), COMMANDS.len());
-    for (info, (command, shortcuts)) in COMMANDS.iter().zip(expected) {
+    for (info, &(command, shortcuts)) in COMMANDS.iter().zip(expected) {
         assert_eq!(info.command, command);
         assert_eq!(info.shortcuts, shortcuts);
         assert!(!info.name.is_empty());
@@ -176,6 +179,7 @@ fn gui_commands_never_send_daemon_requests() {
         Command::Themes,
         Command::WorkspacePicker,
         Command::Palette,
+        Command::Detach,
         Command::Reconnect,
         Command::Quit,
         Command::About,

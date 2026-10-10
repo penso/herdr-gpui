@@ -29,7 +29,7 @@ percent-encoding     = "2"
 pbkdf2               = { default-features = false, features = ["hmac"], version = "0.13.0" }
 base64               = "0.23.1"
 bincode              = { default-features = false, features = ["serde", "std"], version = "2" }
-chrono               = { default-features = false, features = ["clock"], version = "0.4" }
+chrono               = { default-features = false, features = ["clock", "serde"], version = "0.4" }
 cocoa                = "0.27"
 config_loader        = { default-features = false, features = ["toml"], package = "config", version = "0.15.25" }
 core-graphics        = "0.25"
@@ -90,7 +90,7 @@ skrifa               = { default-features = false, features = ["std"], version =
 # engine, no themes (colours come from the app's theme).
 syntect              = { default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"], version = "5.3" }
 # The version GPUI's screen capture already locks; only CPU and memory are read.
-sysinfo              = { default-features = false, features = ["system"], version = "0.39.6" }
+sysinfo              = { default-features = false, features = ["disk", "system"], version = "0.39.6" }
 tar                  = "0.4"
 tempfile             = "3"
 thiserror            = "2"
@@ -101,6 +101,6 @@ tracing-subscriber   = { default-features = false, features = ["registry", "std"
 unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
-uuid                 = { features = ["serde"], version = "1" }
+uuid                 = { features = ["serde", "v4", "v5"], version = "1" }
 windows-sys          = { features = ["Win32_Foundation", "Win32_System_Pipes"], version = "0.61.2" }
 zeroize              = "=1.9.0"

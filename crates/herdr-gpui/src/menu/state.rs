@@ -48,6 +48,8 @@ impl Cover {
 
 pub(crate) struct MenuState {
     pub page: Option<Page>,
+    pub(crate) application: Option<crate::menus::in_window::OpenMenu>,
+    pub(crate) application_bar: crate::menus::in_window::Geometry,
     /// Written by the menu's layout, read when presenting pages.
     pub(crate) cover: std::rc::Rc<std::cell::Cell<Cover>>,
     pub(super) device_setup: Option<super::devices::Setup>,
@@ -263,6 +265,8 @@ impl MenuState {
     pub fn new(cx: &App) -> Self {
         Self {
             page: None,
+            application: None,
+            application_bar: Default::default(),
             cover: Default::default(),
             device_setup: None,
             wsl_setup: None,
@@ -321,6 +325,7 @@ impl MenuState {
     }
 
     pub fn reset(&mut self) {
+        self.application = None;
         self.cover.set(Cover::Unknown);
         self.device_setup = None;
         self.wsl_setup = None;

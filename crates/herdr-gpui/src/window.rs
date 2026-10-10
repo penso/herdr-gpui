@@ -205,12 +205,25 @@ pub(crate) struct HerdrWindow {
         std::collections::HashMap<crate::browser::TabId, crate::code_view::CodeView>,
     /// Checkouts indexed for Go to Symbol and Go to File.
     pub(crate) code_indexes: crate::code_search::Indexes,
+    /// Each orchestrator tab's view, by its tab.
+    pub(crate) orchestrators:
+        std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Orchestrator>,
+    pub(crate) orchestrator_live: crate::orchestrator::LiveCache,
+    /// Orchestrator views moved into windows of their own, by their old tab.
+    pub(crate) detached_orchestrators:
+        std::collections::HashMap<crate::browser::TabId, crate::orchestrator::Detached>,
+    /// Orchestrator views' requests, acted on at the next tick.
+    pub(crate) orchestrator_events: Vec<(crate::browser::TabId, crate::orchestrator::Event)>,
+    /// Whether an orchestrator's dispatch dialog ranks hosts by their load.
+    pub(crate) orchestrator_sampling: bool,
     /// The window's width at its last render, which caps side panels.
     pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
     pub(crate) pr_actions: crate::pr_actions::Actions,
     pub(crate) usage: crate::usage::Usage,
     pub(crate) system_load: crate::system_load::SystemLoad,
+    /// The Devices overview's activity history and open tabs.
+    pub(crate) devices_overview: crate::devices_overview::Overview,
     /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
     pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
@@ -505,6 +518,7 @@ impl HerdrWindow {
         if self.update_usage(cx) {
             cx.notify();
         }
+        self.poll_devices_overview(cx);
         if self.update_system_load() {
             cx.notify();
         }
@@ -552,9 +566,13 @@ impl HerdrWindow {
     }
 
     /// CPU and memory are sampled for every enabled host, while they are
-    /// shown or a host picker ranks hosts by them.
+    /// shown, a Devices overview is open, or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load && !self.dispatch_sampling() {
+        if !self.config.show_system_load
+            && !self.devices_overview_open()
+            && !self.dispatch_sampling()
+            && !self.orchestrator_sampling
+        {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -818,10 +836,16 @@ impl HerdrWindow {
             reviews: Default::default(),
             code_views: Default::default(),
             code_indexes: Default::default(),
+            orchestrators: Default::default(),
+            orchestrator_live: Default::default(),
+            detached_orchestrators: Default::default(),
+            orchestrator_events: Vec::new(),
+            orchestrator_sampling: false,
             viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),
             system_load: Default::default(),
+            devices_overview: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
             #[cfg(feature = "cloud")]
@@ -897,6 +921,7 @@ impl HerdrWindow {
             async {}
         })
         .detach();
+        Self::close_orchestrator_windows_on_release(cx);
         #[cfg(feature = "integration-test")]
         if sidebar_test {
             this._poll = Task::ready(());

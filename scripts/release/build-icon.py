@@ -42,14 +42,11 @@ def main():
     if sys.argv[1] == "macos":
         name = "Herdr-worktree" if worktree == b"1" else "Herdr"
         print(icons / f"{name}.icns", icons / f"{name}.car", sep="\n")
-    # Linux: the source, then its path under the install prefix. Icon themes
-    # only search the sizes their index lists, which stop at 512x512, so a
-    # release installs the vector artwork as the scalable icon. The worktree
-    # tint exists only as a PNG, so it goes to pixmaps, where lookup falls back.
-    elif worktree == b"1":
-        print(icons / "herdr-square-worktree-1024.png", "share/pixmaps/herdr-gpui.png", sep="\n")
+    # Linux: both palettes use scalable artwork with a circular silhouette.
+    # Desktop shells need not supply their own shape mask or PNG fallback.
     else:
-        print(icons / "herdr-icon-square-clean.svg", "share/icons/hicolor/scalable/apps/herdr-gpui.svg", sep="\n")
+        name = "herdr-linux-worktree.svg" if worktree == b"1" else "herdr-linux.svg"
+        print(icons / name, "share/icons/hicolor/scalable/apps/herdr-gpui.svg", sep="\n")
 
 
 if __name__ == "__main__":

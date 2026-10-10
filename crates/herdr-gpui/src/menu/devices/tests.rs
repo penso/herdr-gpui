@@ -12,6 +12,8 @@ use herdr_client::protocol::{ClientMessage, ClientShellSnapshot};
 use herdr_client::{HostProbe, protocol::ClientPaneInputEvent};
 use std::sync::Arc;
 
+#[cfg(feature = "cloud")]
+mod cloud_providers;
 mod local_network;
 
 #[test]

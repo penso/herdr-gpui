@@ -189,6 +189,10 @@ On macOS both build a local bundle identified as `so.pen.herdr-gpui.dev`, so
 it never shares a Dock tile or icon cache with an installed release.
 Without `just`: `cargo run --locked --release -p herdr-gpui --features qa-menu`.
 
+Running `cargo test` or `just ci` on Unix also requires `python3` and `jq` on
+PATH: the usage-provider tests exercise each JSON parser explicitly. The Ubuntu
+dependency helper below installs both; on macOS, use `brew install python jq`.
+
 Install the Herdr daemon separately. The app starts an already-installed local
 `herdr server` when the target session is absent, but never installs or upgrades
 a daemon. Explicitly confirming session deletion stops that named session first;

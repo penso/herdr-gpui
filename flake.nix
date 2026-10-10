@@ -96,7 +96,7 @@
           postInstall = ''
             install -Dm644 scripts/release/so.pen.herdr-gpui.desktop \
               $out/share/applications/so.pen.herdr-gpui.desktop
-            install -Dm644 assets/icons/herdr-icon-square-clean.svg \
+            install -Dm644 assets/icons/herdr-linux.svg \
               $out/share/icons/hicolor/scalable/apps/herdr-gpui.svg
           '';
           postFixup = ''
