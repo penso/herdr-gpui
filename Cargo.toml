@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/herdr-client", "crates/herdr-gpui", "crates/herdr-protocol"]
+members  = ["crates/herdr-client", "crates/herdr-companion", "crates/herdr-gpui", "crates/herdr-protocol"]
 resolver = "2"
 
 [workspace.package]
@@ -26,6 +26,8 @@ anyhow               = "1"
 aes                  = "0.9.3"
 cbc                  = { features = ["block-padding"], version = "0.2.1" }
 percent-encoding     = "2"
+# Pure encoder only; the companion renders QR codes as terminal text.
+qrcode               = { default-features = false, version = "0.14.1" }
 pbkdf2               = { default-features = false, features = ["hmac"], version = "0.13.0" }
 base64               = "0.23.1"
 bincode              = { default-features = false, features = ["serde", "std"], version = "2" }

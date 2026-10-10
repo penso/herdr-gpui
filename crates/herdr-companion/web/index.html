@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f1114" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Herdr">
+<title>Herdr Companion</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<section id="setup" class="setup" hidden>
+  <img src="/icon.svg" alt="" width="64" height="64">
+  <h1>Herdr Companion</h1>
+  <p>Enter the token from <code>HERDR_COMPANION_TOKEN</code> on the machine running Herdr. It stays on this device.</p>
+  <form id="setup-form">
+    <input id="setup-token" type="password" autocomplete="current-password" placeholder="Token" required minlength="24">
+    <button class="primary" type="submit">Connect</button>
+    <p id="setup-error" class="error" role="alert"></p>
+  </form>
+</section>
+
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <span class="status-dot" id="conn" title="Connection"></span>
+    <h1 id="title">Inbox</h1>
+    <button class="icon-btn" id="new-agent" aria-label="Start an agent">＋</button>
+    <button class="icon-btn" id="settings" aria-label="Settings">⚙︎</button>
+  </header>
+  <p id="banner" class="banner" hidden></p>
+  <main class="content">
+    <section id="tab-inbox" class="tab"></section>
+    <section id="tab-agents" class="tab" hidden></section>
+    <section id="tab-activity" class="tab" hidden></section>
+  </main>
+  <nav class="tabbar">
+    <button data-tab="inbox" class="active">Inbox <span class="badge" id="inbox-count" hidden></span></button>
+    <button data-tab="agents">Agents</button>
+    <button data-tab="activity">Activity</button>
+  </nav>
+</div>
+
+<section id="agent" class="panel" hidden>
+  <header class="topbar">
+    <button class="icon-btn" id="agent-back" aria-label="Back">‹</button>
+    <div class="panel-title">
+      <h1 id="agent-name"></h1>
+      <p id="agent-sub" class="muted"></p>
+    </div>
+    <button class="icon-btn danger" id="agent-interrupt" aria-label="Interrupt (Esc)" title="Interrupt">■</button>
+  </header>
+  <div class="segmented" role="tablist">
+    <button data-view="chat" class="active">Chat</button>
+    <button data-view="screen">Screen</button>
+  </div>
+  <p id="agent-activity" class="activity-line" hidden></p>
+  <div id="agent-chat" class="chat"></div>
+  <div id="agent-screen" class="screen" hidden>
+    <pre id="screen-text"></pre>
+    <div class="keypad" id="keypad"></div>
+  </div>
+  <form id="composer" class="composer">
+    <textarea id="composer-text" rows="1" placeholder="Reply to the agent…" enterkeyhint="send"></textarea>
+    <button class="primary" type="submit">Send</button>
+  </form>
+</section>
+
+<dialog id="sheet" class="sheet"></dialog>
+</body>
+</html>

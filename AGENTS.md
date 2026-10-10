@@ -24,6 +24,7 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 | --- | --- |
 | `crates/herdr-protocol` | Generation-1 wire types, framing, validation, and atomic surface patches |
 | `crates/herdr-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
+| `crates/herdr-companion` | Headless bridge and embedded web app for phones: Claude Code HTTP hooks in; decisions, agent status, transcripts, and a bounded event feed out; replies, keys, and new agents through Herdr's JSON API; never depends on GPUI |
 | `crates/herdr-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
 | `crates/test-support/sandbox.rs` | Shared isolated process setup for opt-in integration tests; not a production crate |
 
