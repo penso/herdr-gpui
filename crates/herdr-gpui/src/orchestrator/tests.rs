@@ -10,6 +10,9 @@ mod location;
 mod naming;
 mod prompt;
 mod repo;
+/// The worker reads the repository through a host script, which only Unix
+/// hosts run; Windows reports `ScriptUnsupported`, as the app does there.
+#[cfg(unix)]
 mod service;
 mod store;
 
