@@ -95,6 +95,16 @@ fn expand(
     Ok(path)
 }
 
+/// Expand one configured root to a path, **without touching the filesystem**.
+///
+/// A palette row is rebuilt on every keystroke, so this must stay pure: the
+/// root is validated when the project is actually created, off the UI thread.
+/// Discovery canonicalizes because it has to read the directory anyway.
+pub(super) fn expand_root(root: &str) -> Result<PathBuf> {
+    let home = crate::config::home().ok();
+    expand(root, |name| std::env::var_os(name), home.as_deref())
+}
+
 pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
     let home = crate::config::home().ok();
     let mut collection = Collection::default();

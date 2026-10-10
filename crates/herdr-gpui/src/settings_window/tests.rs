@@ -13,6 +13,9 @@ mod navigation_resize;
 mod navigation_scroll;
 mod quit_saves;
 mod theme_drafts;
+// Saving a shared Herdr theme is Unix-only.
+#[cfg(unix)]
+mod theme_recovery;
 mod theme_sources;
 mod window_commands;
 mod window_lifecycle;
@@ -37,6 +40,7 @@ fn recording_themes(writes: Arc<Mutex<Vec<String>>>, fail: bool) -> themes::Them
     let disk = Arc::new(Mutex::new("Default".to_owned()));
     let saved = disk.clone();
     themes::ThemeIo {
+        shared: None,
         resolve: None,
         write: Arc::new(move |name, shared| {
             assert!(shared.is_none());

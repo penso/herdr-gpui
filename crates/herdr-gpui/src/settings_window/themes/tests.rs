@@ -24,6 +24,7 @@ pub(super) fn fixture(window: &mut Window, cx: &mut Context<SettingsWindow>) -> 
     view.theme_io = Some(ThemeIo {
         write: std::sync::Arc::new(|_, _| Ok(())),
         load: std::sync::Arc::new(|| Ok(super::super::tests::fixture())),
+        shared: None,
         resolve: None,
     });
     view
