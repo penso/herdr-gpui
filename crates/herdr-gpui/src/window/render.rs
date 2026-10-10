@@ -632,12 +632,14 @@ impl Render for HerdrWindow {
             window.request_animation_frame();
         }
         let root = div()
+            .capture_key_down(cx.listener(Self::application_menu_shortcut))
             .on_modifiers_changed(cx.listener(Self::double_shift_modifiers))
             .capture_any_mouse_down(cx.listener(|this, _, _, _| this.shift_taps.cancel()))
             .child({
                 let entity = cx.weak_entity();
+                let menu_bounds = self.menu.application_bar.content.clone();
                 canvas(
-                    |_, _, _| (),
+                    move |bounds, _, _| menu_bounds.set(bounds),
                     move |_, _, window, _| {
                         let scroll_entity = entity.clone();
                         window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
@@ -737,6 +739,9 @@ impl Render for HerdrWindow {
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
+            .when(cfg!(target_os = "linux"), |root| {
+                root.child(self.render_application_bar(window, cx))
+            })
             .when(!merged, |root| root.child(self.render_titlebar(window, cx)))
             // Under the traffic lights a banner would hide them, so with no
             // header it moves to the window's foot.

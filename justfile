@@ -91,8 +91,12 @@ mockup file="" feedback="" capture="":
 build-release:
     cargo build --locked --release -p herdr-gpui
 
-# Regenerate the checked-in artwork on macOS (requires brew install librsvg).
-icons:
+# Regenerate circular Linux artwork on any platform (Python standard library).
+icons-linux:
+    python3 scripts/generate-linux-icons.py
+
+# Regenerate all checked-in artwork on macOS (requires brew install librsvg).
+icons: icons-linux
     swift scripts/generate-icons.swift
 
 # Local, unsigned GUI-only bundle. Never installs or packages a daemon.

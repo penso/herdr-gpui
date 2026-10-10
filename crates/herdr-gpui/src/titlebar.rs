@@ -6,7 +6,7 @@ mod tabs;
 
 pub(crate) use tabs::{Ends, strip_height};
 
-use decorations::controls;
+pub(crate) use decorations::controls;
 pub(crate) use decorations::frame;
 
 use crate::{HerdrWindow, fonts::StyledFont, menu::Page};
@@ -15,6 +15,9 @@ use gpui::{prelude::*, *};
 /// Avatar or signed-out GitHub icon. Smaller than the hit target, which stays a
 /// comfortable size for the pointer.
 const AVATAR: f32 = 20.;
+
+const SIDEBAR_TOGGLE_SIZE: f32 = 28.;
+const SIDEBAR_TOGGLE_MARGIN: f32 = 4.;
 
 /// Native chrome the window draws above its body; popups must clear it.
 pub(super) const HEIGHT: f32 = 34.;
@@ -248,8 +251,8 @@ impl HerdrWindow {
             .debug_selector(|| "toggle-sidebar".into())
             .flex_none()
             .self_center()
-            .mr(px(4.))
-            .size(px(28.))
+            .mr(px(SIDEBAR_TOGGLE_MARGIN))
+            .size(px(SIDEBAR_TOGGLE_SIZE))
             .flex()
             .items_center()
             .justify_center()
@@ -337,9 +340,11 @@ impl HerdrWindow {
                             ),
                     ),
             )
-            .children(controls(window, &self.theme, |window, _| {
-                window.remove_window();
-            }))
+            .when(!cfg!(target_os = "linux"), |end| {
+                end.children(controls(window, &self.theme, |window, _| {
+                    window.remove_window();
+                }))
+            })
     }
 }
 
@@ -541,13 +546,19 @@ mod tests {
                 window.refresh();
                 let _ = window.draw(cx);
             });
+            let menu_bottom = cx
+                .debug_bounds("application-menu-bar")
+                .map_or(px(0.), |bar| bar.bottom());
             assert_eq!(
                 cx.debug_bounds("titlebar").unwrap(),
-                Bounds::new(point(px(0.), px(0.)), size(px(width), px(34.)))
+                Bounds::new(point(px(0.), menu_bottom), size(px(width), px(34.)))
             );
             assert_eq!(
                 cx.debug_bounds("titlebar-avatar").unwrap(),
-                Bounds::new(point(px(width - 34.), px(3.)), size(px(28.), px(28.)))
+                Bounds::new(
+                    point(px(width - 34.), menu_bottom + px(3.)),
+                    size(px(28.), px(28.))
+                )
             );
             let banner_height = if env!("HERDR_BUILD_WORKTREE") == "1" {
                 22.
@@ -556,7 +567,7 @@ mod tests {
             };
             assert_eq!(
                 cx.debug_bounds("window-body").unwrap().top(),
-                px(34. + banner_height)
+                menu_bottom + px(34. + banner_height)
             );
         }
         let bounds = cx.debug_bounds("titlebar-avatar").unwrap();

@@ -111,7 +111,13 @@ impl HerdrWindow {
         }
         let endpoint = &mut self.endpoints[self.selected_endpoint];
         if self.selected_generation != endpoint.generation {
+            // The install instructions have no daemon-bound target. A background
+            // retry must not dismiss them before the user can follow the link.
+            let installing = self.menu.page == Some(crate::menu::Page::Install);
             self.reset_selected(cx);
+            if installing {
+                self.menu.page = Some(crate::menu::Page::Install);
+            }
         }
         let endpoint = &mut self.endpoints[self.selected_endpoint];
         if selected_changed {

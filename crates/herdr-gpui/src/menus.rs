@@ -1,5 +1,7 @@
-//! The native menu bar. Every item dispatches the same `Command` the palette
-//! and the keymap use, so a command exists in one place only.
+//! Shared definitions for the macOS native and Linux in-window menu bars.
+//! Every item dispatches the same action the palette and the keymap use.
+
+pub(crate) mod in_window;
 
 use crate::{
     CheckForUpdates, Quit, RunCommand, ShowLogs,
@@ -20,12 +22,23 @@ use gpui::{App, Menu, MenuItem, OsAction};
 #[cfg(feature = "qa-menu")]
 use herdr_client::protocol::SemanticNotificationKind;
 
+/// Only headings are needed while the Linux menus are closed.
+struct Headings(Vec<(gpui::SharedString, bool)>);
+impl gpui::Global for Headings {}
+
 /// Installs the menu bar, checking the layout the latest config picked.
 pub(crate) fn install(cx: &mut App) {
     let layout = cx
         .try_global::<crate::app::InitialAppearance>()
         .map_or_else(Layout::default, |appearance| appearance.config.layout);
-    cx.set_menus(menus(layout));
+    let menus = menus(layout);
+    cx.set_global(Headings(
+        menus
+            .iter()
+            .map(|menu| (menu.name.clone(), menu.disabled))
+            .collect(),
+    ));
+    cx.set_menus(menus);
 }
 
 /// View > Layout: Herdr's densities, their rounded versions, then the

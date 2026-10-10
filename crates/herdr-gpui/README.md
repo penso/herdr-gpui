@@ -48,6 +48,9 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
 without input replay. Detach pauses retries for that endpoint until Reconnect.
+If local Herdr is missing, the installation prompt stays open across background
+retries until dismissed. Its Install button opens the Herdr website; after
+installing Herdr, choose Terminal > Reconnect to try again immediately.
 A selected host that drops stays selected while it reconnects: its last terminal
 picture stays up, dimmed, under a card with the reason and a Reconnect now button,
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
@@ -697,8 +700,10 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-The sidebar button at the left of the titlebar (the sidebar's top row, or the
-leftmost tab strip while the sidebar is collapsed) hides or shows the sidebar.
+The sidebar button at the left of the titlebar hides or shows the sidebar.
+On Linux and Windows it stays in the same position when the sidebar collapses
+to a rail. The leftmost tab strip takes the button when the sidebar is hidden
+or the rail cannot fit it beside macOS's traffic lights.
 It stays available when the sidebar is hidden; the existing View menu command and shortcut still work.
 In **Settings > General**, toggle **Show usage** to turn the bottom quota display on or off.
 The choice is saved to `config-gpui.local.toml` and follows the existing `[usage] show` setting.
@@ -2918,8 +2923,17 @@ X11/Wayland backends are retained. Linux uses Vulkan; macOS GPUI's
 the separate downloadable build-time Metal compiler. Integrated Linux ARM64
 compilation, Clippy, default/all-feature tests, and release CLI checks were
 verified in Ubuntu 24.04, not native desktop rendering or input. Linux Cmd bindings mean
-Super and can conflict with desktop shortcuts; global macOS menus are not
-available. Tests cover wire colors,
+Super and can conflict with desktop shortcuts. Linux shows an **in-window menu
+bar** using the same Herdr, File, Edit, View, Terminal, and Window definitions as
+macOS (plus QA in `qa-menu` builds). It remains visible with the sidebar hidden
+and collapses to **Menu** in narrow windows. In client-decorated windows, the
+minimize, maximize, and close buttons share its right edge. Drag the empty
+menu-bar background to move the window; it also supports the title bar's
+double-click and right-click behavior. Press **F10** to open a menu; arrows
+navigate, Enter selects, and Escape or F10 dismisses. Submenus open in the same
+panel; their back header returns to the parent. The menu shows current layout
+checkmarks and configured shortcuts, and restores the previous input focus on
+dismissal. Desktop-global menus are not exported. Tests cover wire colors,
 cell modifiers, viewport bounds, semantic key selection, revision coherence,
 creation request parameters, workspace-local tab cycling, wheel accumulation,
 pane-relative hit testing, and popup routing.
@@ -2929,6 +2943,17 @@ rejection, Unicode composition, and headless right-click/input routing.
 sizes, but does not validate OS IME candidate-window delivery or live daemon
 worktree creation/close.
 They do not replace an interactive smoke test against a live daemon.
+
+On an active Linux desktop, exercise the menu bar in an isolated, daemon-free
+native window with:
+
+```sh
+cargo test --locked -p herdr-gpui --features integration-test --test live_gui native_application_menus -- --ignored --nocapture --test-threads=1
+```
+
+This checks native painting and geometry at wide and narrow sizes, action
+dispatch, focus restoration, and input isolation using GPUI-injected events;
+it does not verify compositor-delivered keyboard input or OS IME behavior.
 
 Selection regressions cover unflagged CJK continuation cells, real spaces,
 partial wide characters, emoji/combining text, popup/pane boundaries, and headless

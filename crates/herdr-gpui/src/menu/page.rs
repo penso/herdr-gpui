@@ -4,6 +4,8 @@
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Page {
     Menu,
+    /// The Linux window's application menu, from the native menu definitions.
+    Application,
     About,
     Preferences,
     Devices,

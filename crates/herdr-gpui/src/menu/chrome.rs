@@ -56,9 +56,14 @@ impl HerdrWindow {
         {
             crate::agent_skill::AgentSkill::choose(crate::agent_skill::Choice::Declined, cx);
         }
+        let return_focus = self
+            .menu
+            .application
+            .as_ref()
+            .and_then(|menu| menu.return_focus.clone());
         self.menu.reset();
         self.apply_shared_theme(cx);
-        window.focus(&self.focus, cx);
+        window.focus(return_focus.as_ref().unwrap_or(&self.focus), cx);
         cx.notify();
     }
 
@@ -174,6 +179,9 @@ impl HerdrWindow {
     }
 
     pub(crate) fn render_menu(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        if self.menu.page == Some(Page::Application) {
+            return self.render_application_menu(window, cx);
+        }
         if self.menu.page == Some(Page::Sessions) && self.menu.session_edit.is_some() {
             let theme = &self.theme;
             let font = &self.config.ui;
@@ -261,7 +269,9 @@ impl HerdrWindow {
         let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
         let footer_anchored =
             matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
-        !footer_anchored && !matches!(page, Page::Usage(_)) && !page.pointer_anchored()
+        !footer_anchored
+            && !matches!(page, Page::Usage(_) | Page::Application)
+            && !page.pointer_anchored()
     }
 
     fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
