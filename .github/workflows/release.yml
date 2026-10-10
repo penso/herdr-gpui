@@ -329,11 +329,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir release-notes
+          # A plain assignment, so `set -e` stops on a failed request instead
+          # of silently dropping the betas and shortening the notes.
+          prereleases=$(gh api --paginate repos/penso/herdr-gpui/releases \
+            --jq '.[] | select(.prerelease and (.draft | not)) | .tag_name')
           betas=()
           while IFS= read -r tag; do
-            [[ -n "$tag" ]] && betas+=("$tag")
-          done < <(gh api --paginate repos/penso/herdr-gpui/releases \
-            --jq '.[] | select(.prerelease and (.draft | not)) | .tag_name')
+            if [[ -n "$tag" ]]; then betas+=("$tag"); fi
+          done <<< "$prereleases"
           bash scripts/release/generate-changelog.sh "$VERSION" release-notes ${betas[@]+"${betas[@]}"}
           cat release-notes/RELEASE_NOTES.md
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -195,6 +195,10 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn("needs.validate.outputs.channel == 'stable'", jobs["homebrew"])
         # Unpromoted betas fold into the next release's notes.
         self.assertIn("select(.prerelease and (.draft | not))", jobs["changelog"])
+        # The listing is a checked assignment: `set -e` ignores a failure inside
+        # process substitution, which would silently drop the betas.
+        self.assertIn("prereleases=$(gh api --paginate", jobs["changelog"])
+        self.assertNotIn("< <(", jobs["changelog"])
 
         promote, promotion = jobs_of("promote.yml")
         self.assertEqual(list(promotion), ["audit", "validate", "promote", "homebrew"])
