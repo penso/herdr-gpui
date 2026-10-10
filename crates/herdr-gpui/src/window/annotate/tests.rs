@@ -7,6 +7,8 @@ use gpui::{
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 use std::sync::Arc;
 
+mod queue_safety;
+
 /// Workspace `w0` with pane `w0:p1`, and an agent in it with
 /// `status` when one is given; otherwise the workspace's agent, if any, is in
 /// `w0:p2`.

@@ -2482,12 +2482,15 @@ records when reporting the failure.
   note on the text selected in a pane for an agent to act on, the way
   Annotate does for a page. A field opens over the pane: Enter adds the note
   and sends every queued one, Shift-Enter only queues it (up to 20), and
-  Escape drops it. Notes go to the agent running in that pane, else to the
+  Escape drops it. Enter on an empty field sends the queue, including when
+  all 20 slots are full. Notes go to the agent running in that pane, else to the
   first agent in its workspace, as one prompt per agent: where the text was
   (workspace and tab), the text fenced and marked as quoted data with its
   control characters removed, and your note. They are delivered as page
   notes are (see [Annotating A Page](#annotating-a-page)), and copied when no
-  agent is found. The whole selection must be on screen.
+  agent is found. Queued notes remember their original device and daemon;
+  if that daemon is no longer selected when you send, those notes are copied
+  instead. The whole selection must be on screen.
 - A mouse selection dragged past a pane's top or bottom edge scrolls the
   pane, and the selection stays with its text as the pane moves. A selection
   that reaches rows off the screen is copied through `pane.selection.read`;

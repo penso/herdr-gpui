@@ -66,6 +66,7 @@ impl HerdrWindow {
                     // Hiding the notes drops a note being written.
                     if !shown {
                         review.draft = None;
+                        review.editing = None;
                     }
                     review.notes_shown = Some(shown);
                 }

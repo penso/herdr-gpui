@@ -14,17 +14,36 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::ClientShellSnapshot;
 
-/// A queued note and the endpoint whose agent it goes to.
+/// Endpoint positions can be reused, and a device can switch daemon sessions.
+#[derive(Clone, PartialEq, Eq)]
+struct Origin {
+    endpoint: String,
+    boot_id: String,
+}
+
+impl Origin {
+    fn current(&self, view: &HerdrWindow) -> bool {
+        view.endpoints
+            .get(view.selected_endpoint)
+            .is_some_and(|endpoint| endpoint.id == self.endpoint)
+            && view
+                .live
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.boot_id == self.boot_id)
+    }
+}
+
+/// A queued note and the daemon whose agent it goes to.
 struct Queued {
-    endpoint: usize,
+    origin: Origin,
     note: Note,
 }
 
 /// The note being written, about text selected in `pane_id`.
 struct Composer {
     input: Entity<SearchInput>,
-    endpoint: usize,
-    boot_id: String,
+    origin: Origin,
     pane_id: String,
     target: Option<String>,
     place: String,
@@ -113,13 +132,6 @@ impl HerdrWindow {
                     return;
                 }
             };
-        if self.terminal_notes.queued.len() >= MAX_NOTES {
-            self.show_flash(
-                Flash::warning(format!("{MAX_NOTES} notes are queued; send them first")),
-                cx,
-            );
-            return;
-        }
         let (target, place) = destination(&snapshot, &pane_id);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
@@ -129,8 +141,10 @@ impl HerdrWindow {
         let focus = input.read(cx).focus.clone();
         self.terminal_notes.composer = Some(Composer {
             input,
-            endpoint: self.selected_endpoint,
-            boot_id: snapshot.boot_id.clone(),
+            origin: Origin {
+                endpoint: self.endpoints[self.selected_endpoint].id.clone(),
+                boot_id: snapshot.boot_id.clone(),
+            },
             pane_id,
             target,
             place,
@@ -166,13 +180,12 @@ impl HerdrWindow {
         let Some(composer) = &self.terminal_notes.composer else {
             return;
         };
-        let current = composer.endpoint == self.selected_endpoint
+        let current = composer.origin.current(self)
             && self.live.snapshot.as_ref().is_some_and(|snapshot| {
-                snapshot.boot_id == composer.boot_id
-                    && snapshot
-                        .panes
-                        .iter()
-                        .any(|pane| pane.pane_id == composer.pane_id)
+                snapshot
+                    .panes
+                    .iter()
+                    .any(|pane| pane.pane_id == composer.pane_id)
             })
             && (!self.live.surface_ready()
                 || self.live.surface.as_deref().is_some_and(|surface| {
@@ -207,8 +220,17 @@ impl HerdrWindow {
         );
         match note {
             Some(note) => {
-                let endpoint = composer.endpoint;
-                self.terminal_notes.queued.push(Queued { endpoint, note });
+                if self.terminal_notes.queued.len() >= MAX_NOTES {
+                    self.show_flash(
+                        Flash::warning(format!(
+                            "{MAX_NOTES} notes are queued; clear the field and press Enter to send them"
+                        )),
+                        cx,
+                    );
+                    return;
+                }
+                let origin = composer.origin.clone();
+                self.terminal_notes.queued.push(Queued { origin, note });
             }
             None if send && !self.terminal_notes.queued.is_empty() => {}
             None => {
@@ -235,15 +257,31 @@ impl HerdrWindow {
     /// Sends the queued notes, one batch per agent, in the order they were
     /// written.
     pub(crate) fn send_terminal_notes(&mut self, cx: &mut Context<Self>) {
-        let mut queued = std::mem::take(&mut self.terminal_notes.queued);
+        let (mut queued, copied): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.terminal_notes.queued)
+                .into_iter()
+                .partition(|queued| queued.origin.current(self) && queued.note.target.is_some());
         while let Some(first) = queued.first() {
-            let (endpoint, target) = (first.endpoint, first.note.target.clone());
+            let (origin, target) = (first.origin.clone(), first.note.target.clone());
             let (batch, rest): (Vec<_>, Vec<_>) = queued
                 .into_iter()
-                .partition(|queued| queued.endpoint == endpoint && queued.note.target == target);
+                .partition(|queued| queued.origin == origin && queued.note.target == target);
             queued = rest;
             let text = terminal_notes::prompt(batch.iter().map(|queued| &queued.note));
-            self.deliver_notes(target, endpoint == self.selected_endpoint, text, cx);
+            self.deliver_notes(target, true, text, cx);
+        }
+        if !copied.is_empty() {
+            // Feedback is keyed only by pane ID, so even its fallback could
+            // hand an old daemon's notes to an unrelated agent. Copy instead.
+            let stale = copied.iter().any(|queued| !queued.origin.current(self));
+            let text = terminal_notes::prompt(copied.iter().map(|queued| &queued.note));
+            self.deliver_notes(None, false, text, cx);
+            if stale {
+                self.show_flash(
+                    Flash::warning("Notes whose original daemon is not selected were copied"),
+                    cx,
+                );
+            }
         }
     }
 

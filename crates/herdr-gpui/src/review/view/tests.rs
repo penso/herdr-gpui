@@ -220,6 +220,7 @@ mod find_again;
 mod keys;
 mod layout;
 mod loading;
+mod panel_editing;
 mod resend;
 mod resize;
 mod scale;
