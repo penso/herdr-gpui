@@ -268,14 +268,14 @@ impl HerdrWindow {
                 .partition(|queued| queued.origin == origin && queued.note.target == target);
             queued = rest;
             let text = terminal_notes::prompt(batch.iter().map(|queued| &queued.note));
-            self.deliver_notes(target, true, text, cx);
+            self.deliver_notes(target, true, text, None, cx);
         }
         if !copied.is_empty() {
             // Feedback is keyed only by pane ID, so even its fallback could
             // hand an old daemon's notes to an unrelated agent. Copy instead.
             let stale = copied.iter().any(|queued| !queued.origin.current(self));
             let text = terminal_notes::prompt(copied.iter().map(|queued| &queued.note));
-            self.deliver_notes(None, false, text, cx);
+            self.deliver_notes(None, false, text, None, cx);
             if stale {
                 self.show_flash(
                     Flash::warning("Notes whose original daemon is not selected were copied"),

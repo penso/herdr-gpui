@@ -221,6 +221,7 @@ mod keys;
 mod layout;
 mod loading;
 mod panel_editing;
+mod pending_send;
 mod resend;
 mod resize;
 mod scale;

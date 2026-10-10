@@ -1774,7 +1774,8 @@ them to the agent that opened it, so it can change the page.
   marks it unsent. Send then delivers only the notes not sent yet (**Send 2
   new**), or every note again once all were sent (**Resend all**), and Copy
   copies the same ones. **Clear sent** removes the sent notes, ending the
-  round.
+  round. Another Send waits while screenshots are saving, delivery is pending,
+  or the previous batch is still waiting to be collected through `browser feedback`.
 - The prompt goes to the agent one way only. An agent waiting in
   `browser feedback --wait` receives it there. Otherwise it is typed into the
   agent's pane and submitted once Herdr reports the agent idle (or still
@@ -1889,7 +1890,9 @@ comments on a pull request.
   including `browser feedback`. Without an agent, **Copy** is offered.
   As with page notes, sent notes stay listed until **Clear sent**: click one
   to edit it, and Send delivers only new or edited notes, or all of them
-  again once every one was sent. The notes icon counts the unsent ones.
+  again once every one was sent. Another Send waits until the previous batch
+  has been delivered or collected through `browser feedback`. The notes icon
+  counts the unsent ones.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is
   cleaned of control characters and bounded (16,384 characters a line,

@@ -1,5 +1,6 @@
 use super::*;
 
+mod pending_send;
 mod resend;
 
 const PICK: &str = r##"{"kind":"pick","target":{"kind":"element","selector":"#save","tag":"button","text":"Save","html":"<button id=\"save\">Save</button>"}}"##;

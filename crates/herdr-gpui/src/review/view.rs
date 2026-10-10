@@ -165,6 +165,7 @@ pub(crate) struct Review {
     selection: Option<selection::Selection>,
     selecting: bool,
     notes: Vec<Note>,
+    sending: crate::agent_notes::PendingSend,
     /// Each noted row and its note's number, recomputed when either changes.
     marks: HashMap<RowId, usize>,
     input: Entity<SearchInput>,
@@ -607,10 +608,21 @@ impl HerdrWindow {
     }
 
     /// Sends the notes not sent yet, or all again, to the agent. They are
-    /// marked sent at once so a second press does not repeat them; they stay
-    /// listed, to be edited and sent again, until Clear sent.
+    /// marked sent at once and stay listed until Clear sent. Another send
+    /// waits until this batch is delivered or collected through feedback.
     pub(crate) fn send_review(&mut self, id: TabId, cx: &mut Context<Self>) {
         let Some((text, indexes, pane, here)) = self.review_prompt(id) else {
+            return;
+        };
+        let Some(pending) = self
+            .reviews
+            .get_mut(&id)
+            .and_then(|review| review.sending.start())
+        else {
+            self.show_flash(
+                Flash::warning("The previous notes are still pending delivery"),
+                cx,
+            );
             return;
         };
         if let Some(review) = self.reviews.get_mut(&id) {
@@ -620,7 +632,7 @@ impl HerdrWindow {
                 }
             }
         }
-        self.deliver_notes(pane, here, text, cx);
+        self.deliver_notes(pane, here, text, Some(pending), cx);
         cx.notify();
     }
 

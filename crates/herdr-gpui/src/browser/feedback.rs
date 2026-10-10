@@ -5,7 +5,7 @@
 //! leaves it here. Only the Unix control socket fetches or waits, so the
 //! methods for it exist only where that socket does.
 use gpui::Global;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 /// Batches kept at once; the oldest goes first.
 const MAX_KEPT: usize = 16;
@@ -19,7 +19,7 @@ pub(crate) struct Batch {
 
 #[derive(Default)]
 pub(crate) struct Feedback {
-    kept: VecDeque<Batch>,
+    kept: VecDeque<(Batch, Option<Arc<()>>)>,
     /// Panes whose agents are waiting in `browser feedback --wait`.
     waiting: Vec<String>,
 }
@@ -42,11 +42,11 @@ impl Feedback {
         self.waiting = panes;
     }
 
-    pub(crate) fn keep(&mut self, batch: Batch) {
+    pub(crate) fn keep(&mut self, batch: Batch, pending: Option<Arc<()>>) {
         if self.kept.len() >= MAX_KEPT {
             self.kept.pop_front();
         }
-        self.kept.push_back(batch);
+        self.kept.push_back((batch, pending));
     }
 
     /// Everything kept for `pane_id`, oldest first, joined into one text.
@@ -55,12 +55,12 @@ impl Feedback {
         let (taken, kept): (Vec<_>, Vec<_>) = self
             .kept
             .drain(..)
-            .partition(|batch| batch.pane_id == pane_id);
+            .partition(|(batch, _)| batch.pane_id == pane_id);
         self.kept = kept.into();
         (!taken.is_empty()).then(|| {
             taken
                 .into_iter()
-                .map(|batch| batch.text)
+                .map(|(batch, _)| batch.text)
                 .collect::<Vec<_>>()
                 .join("\n")
         })
@@ -68,7 +68,7 @@ impl Feedback {
 
     #[cfg(any(unix, test))]
     pub(crate) fn has(&self, pane_id: &str) -> bool {
-        self.kept.iter().any(|batch| batch.pane_id == pane_id)
+        self.kept.iter().any(|(batch, _)| batch.pane_id == pane_id)
     }
 }
 
@@ -87,15 +87,15 @@ mod tests {
     fn batches_are_taken_once_per_pane_and_bounded() {
         let mut feedback = Feedback::default();
         assert!(feedback.take("p1").is_none());
-        feedback.keep(batch("p1", "one"));
-        feedback.keep(batch("p2", "other"));
-        feedback.keep(batch("p1", "two"));
+        feedback.keep(batch("p1", "one"), None);
+        feedback.keep(batch("p2", "other"), None);
+        feedback.keep(batch("p1", "two"), None);
         assert!(feedback.has("p1"));
         assert_eq!(feedback.take("p1").as_deref(), Some("one\ntwo"));
         assert!(feedback.take("p1").is_none());
         assert_eq!(feedback.take("p2").as_deref(), Some("other"));
         for index in 0..MAX_KEPT + 2 {
-            feedback.keep(batch("p", &index.to_string()));
+            feedback.keep(batch("p", &index.to_string()), None);
         }
         assert!(
             feedback

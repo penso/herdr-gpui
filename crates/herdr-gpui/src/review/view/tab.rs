@@ -284,6 +284,7 @@ impl HerdrWindow {
             selection: None,
             selecting: false,
             notes: Vec::new(),
+            sending: Default::default(),
             marks: HashMap::new(),
             input,
             scroll: ListState::new(0, ListAlignment::Top, px(super::OVERDRAW)),

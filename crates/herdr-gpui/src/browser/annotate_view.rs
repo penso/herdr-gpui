@@ -37,6 +37,7 @@ struct TabNotes {
     /// The note whose text the composer is changing, instead of a draft.
     editing: Option<usize>,
     notes: Vec<Note>,
+    sending: crate::agent_notes::PendingSend,
 }
 
 pub(crate) struct Annotations {

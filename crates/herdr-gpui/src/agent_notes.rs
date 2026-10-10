@@ -12,7 +12,26 @@ use herdr_client::protocol::{
     AgentStatus, ClientKeyCode, ClientKeyKind, ClientPaneInputEvent, ClientShellAgent,
     ClientShellSnapshot,
 };
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Weak},
+    time::{Duration, Instant},
+};
+
+/// A tab cannot resend while its previous batch is saving, waiting for an
+/// agent, or still held for feedback. The delivery owns the strong reference.
+#[derive(Default)]
+pub(crate) struct PendingSend(Weak<()>);
+
+impl PendingSend {
+    pub(crate) fn start(&mut self) -> Option<Arc<()>> {
+        if self.0.strong_count() > 0 {
+            return None;
+        }
+        let pending = Arc::new(());
+        self.0 = Arc::downgrade(&pending);
+        Some(pending)
+    }
+}
 
 /// How long a batch waits for a busy agent before it is pasted anyway, or,
 /// when the agent is asking a question, kept for `browser feedback`.
@@ -26,6 +45,7 @@ struct Delivery {
     boot_id: String,
     text: String,
     until: Instant,
+    pending: Option<Arc<()>>,
 }
 
 /// The window's notes still waiting for their agents.
@@ -105,6 +125,7 @@ impl HerdrWindow {
         pane_id: Option<String>,
         here: bool,
         text: String,
+        pending: Option<Arc<()>>,
         cx: &mut Context<Self>,
     ) {
         let text = typable(&text);
@@ -128,7 +149,7 @@ impl HerdrWindow {
         });
         let flash = if waiting {
             cx.default_global::<Feedback>()
-                .keep(crate::browser::Batch { pane_id, text });
+                .keep(crate::browser::Batch { pane_id, text }, pending);
             Flash::success("Notes sent to the waiting agent")
         } else if let Some((snapshot, found)) =
             shown.and_then(|snapshot| Some((snapshot, agent(snapshot, &pane_id)?)))
@@ -142,6 +163,7 @@ impl HerdrWindow {
                 boot_id: snapshot.boot_id.clone(),
                 text,
                 until: Instant::now() + HOLD,
+                pending,
             });
             if busy {
                 Flash::success("Notes will go to the agent once it is idle")
@@ -151,11 +173,11 @@ impl HerdrWindow {
         } else if shown.is_some() {
             // A shell, not an agent: Enter there would run the notes.
             cx.default_global::<Feedback>()
-                .keep(crate::browser::Batch { pane_id, text });
+                .keep(crate::browser::Batch { pane_id, text }, pending);
             Flash::warning("No agent runs in that pane; notes kept for `browser feedback`")
         } else {
             cx.default_global::<Feedback>()
-                .keep(crate::browser::Batch { pane_id, text });
+                .keep(crate::browser::Batch { pane_id, text }, pending);
             Flash::warning("The agent's pane is not here; notes kept for `browser feedback`")
         };
         self.show_flash(flash, cx);
@@ -197,10 +219,13 @@ impl HerdrWindow {
                 Some(AgentStatus::Idle | AgentStatus::Done | AgentStatus::Working)
             );
             if waiting || present.is_none() || !typable {
-                cx.default_global::<Feedback>().keep(crate::browser::Batch {
-                    pane_id: delivery.pane_id,
-                    text: delivery.text,
-                });
+                cx.default_global::<Feedback>().keep(
+                    crate::browser::Batch {
+                        pane_id: delivery.pane_id,
+                        text: delivery.text,
+                    },
+                    delivery.pending,
+                );
                 if !waiting {
                     self.show_flash(
                         Flash::warning("The agent is not ready; notes kept for `browser feedback`"),
@@ -231,10 +256,13 @@ impl HerdrWindow {
             });
         if let Err(error) = pasted {
             tracing::warn!(%error, "Could not paste notes into the agent's pane");
-            cx.default_global::<Feedback>().keep(crate::browser::Batch {
-                pane_id: delivery.pane_id,
-                text: delivery.text,
-            });
+            cx.default_global::<Feedback>().keep(
+                crate::browser::Batch {
+                    pane_id: delivery.pane_id,
+                    text: delivery.text,
+                },
+                delivery.pending,
+            );
             self.show_flash(
                 Flash::warning("Could not reach the agent; notes kept for `browser feedback`"),
                 cx,
@@ -243,6 +271,7 @@ impl HerdrWindow {
         }
         let timer = cx.background_executor().clone();
         let boot_id = delivery.boot_id;
+        let pending = delivery.pending;
         cx.spawn(async move |this, cx| {
             timer.timer(SUBMIT_DELAY).await;
             this.update(cx, |this, _| {
@@ -258,6 +287,7 @@ impl HerdrWindow {
                 }
             })
             .ok();
+            drop(pending);
         })
         .detach();
     }

@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{HerdrWindow, window::Flash};
 use gpui::{prelude::*, *};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 impl HerdrWindow {
     /// The notes Send delivers, with their places in the list: those not
@@ -26,6 +26,7 @@ impl HerdrWindow {
         &mut self,
         tab: &Tab,
         notes: Vec<annotate::Note>,
+        save: impl FnOnce(&[Option<Arc<Image>>]) -> crate::Result<Vec<Option<PathBuf>>> + Send + 'static,
         cx: &mut Context<Self>,
         then: impl FnOnce(&mut Self, String, &mut Context<Self>) + 'static,
     ) {
@@ -39,9 +40,7 @@ impl HerdrWindow {
             return;
         }
         let images: Vec<Option<Arc<Image>>> = notes.iter().map(|note| note.image.clone()).collect();
-        let saving = cx
-            .background_executor()
-            .spawn(async move { save_screenshots(&images) });
+        let saving = cx.background_executor().spawn(async move { save(&images) });
         let tab = tab.clone();
         cx.spawn(async move |this, cx| {
             let paths = saving.await;
@@ -61,7 +60,7 @@ impl HerdrWindow {
 
     pub(super) fn copy_notes(&mut self, tab: &Tab, cx: &mut Context<Self>) {
         let (_, notes) = self.notes_round(tab);
-        self.with_notes_prompt(tab, notes, cx, |this, text, cx| {
+        self.with_notes_prompt(tab, notes, save_screenshots, cx, |this, text, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             this.show_flash(Flash::success("Notes copied"), cx);
         });
@@ -72,14 +71,31 @@ impl HerdrWindow {
     /// otherwise into its pane once it is idle, and kept for `browser
     /// feedback` when its pane is gone.
     pub(in crate::browser) fn send_notes(&mut self, tab: &Tab, cx: &mut Context<Self>) {
-        // They are marked sent at once, so a second Send cannot repeat them
-        // while screenshots are still being saved.
+        self.send_notes_with(tab, save_screenshots, cx);
+    }
+
+    fn send_notes_with(
+        &mut self,
+        tab: &Tab,
+        save: impl FnOnce(&[Option<Arc<Image>>]) -> crate::Result<Vec<Option<PathBuf>>> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(pending) = self.tab_notes(tab.id).sending.start() else {
+            self.show_flash(
+                Flash::warning("The previous notes are still pending delivery"),
+                cx,
+            );
+            return;
+        };
         let (indexes, notes) = self.notes_round(tab);
         let pane_id = tab.origin.clone();
         let here = super::super::view::scope(&self.endpoints[self.selected_endpoint]) == tab.scope;
-        self.with_notes_prompt(tab, notes, cx, move |this, text, cx| {
-            this.deliver_notes(pane_id, here, text, cx);
+        self.with_notes_prompt(tab, notes, save, cx, move |this, text, cx| {
+            this.deliver_notes(pane_id, here, text, Some(pending), cx);
         });
         self.mark_notes_sent(tab.id, &indexes, cx);
     }
 }
+
+#[cfg(test)]
+mod tests;
