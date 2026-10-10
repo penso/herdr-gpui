@@ -50,6 +50,28 @@ pub(crate) fn agent<'a>(
         .find(|agent| agent.pane_id == pane_id)
 }
 
+/// Which of a list's notes Send delivers, given whether each was sent: the
+/// ones not sent yet, or all of them again once every one was. Sent notes
+/// stay listed, so an edit or a lost paste can be sent again.
+pub(crate) fn round(sent: impl IntoIterator<Item = bool>) -> Vec<usize> {
+    let sent: Vec<bool> = sent.into_iter().collect();
+    let new: Vec<usize> = (0..sent.len()).filter(|&index| !sent[index]).collect();
+    if new.is_empty() {
+        (0..sent.len()).collect()
+    } else {
+        new
+    }
+}
+
+/// What the Send button says for `total` notes, `unsent` of them not sent.
+pub(crate) fn send_label(total: usize, unsent: usize) -> String {
+    match unsent {
+        0 => "Resend all".into(),
+        _ if unsent == total => "Send to agent".into(),
+        _ => format!("Send {unsent} new"),
+    }
+}
+
 /// Notes as they may be typed into a pane. Each kind of note cleans the
 /// untrusted text it quotes, but this is the one way out, so a control that
 /// slipped through cannot end the bracketed paste early or press keys in the

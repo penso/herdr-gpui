@@ -1,5 +1,7 @@
 use super::*;
 
+mod resend;
+
 const PICK: &str = r##"{"kind":"pick","target":{"kind":"element","selector":"#save","tag":"button","text":"Save","html":"<button id=\"save\">Save</button>"}}"##;
 
 /// A snapshot where pane `w0:p1` runs an agent with `status`.

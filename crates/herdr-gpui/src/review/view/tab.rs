@@ -280,6 +280,7 @@ impl HerdrWindow {
             revealed: Cell::new(None),
             search: search::Search::new(search),
             draft: None,
+            editing: None,
             selection: None,
             selecting: false,
             notes: Vec::new(),

@@ -28,7 +28,11 @@ impl Review {
     pub(super) fn shows(&self, panel: Panel) -> bool {
         match panel {
             Panel::Files => self.files_shown.unwrap_or_else(|| self.wide()),
-            Panel::Notes => self.draft.is_some() || self.notes_shown.unwrap_or_else(|| self.wide()),
+            Panel::Notes => {
+                self.draft.is_some()
+                    || self.editing.is_some()
+                    || self.notes_shown.unwrap_or_else(|| self.wide())
+            }
         }
     }
 }
@@ -90,7 +94,9 @@ impl HerdrWindow {
             Panel::Notes => ("review-toggle-notes", "icons/panel-right.svg", "Notes"),
         };
         let count = match panel {
-            Panel::Notes if !review.notes.is_empty() => Some(review.notes.len()),
+            // Only notes the agent does not have yet.
+            Panel::Notes => Some(review.notes.iter().filter(|note| !note.sent).count())
+                .filter(|&count| count > 0),
             _ => None,
         };
         let (foreground, surface) = (theme.foreground, theme.surface);

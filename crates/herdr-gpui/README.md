@@ -1747,6 +1747,12 @@ them to the agent that opened it, so it can change the page.
   screenshot, and your note.
   Page text is cleaned of control characters and marked as quoted data.
   **Copy** puts the same prompt on the clipboard instead.
+- Sent notes stay listed, dimmed and marked sent, so a note can be changed
+  and sent again. Click a note's text to edit it in the composer; saving it
+  marks it unsent. Send then delivers only the notes not sent yet (**Send 2
+  new**), or every note again once all were sent (**Resend all**), and Copy
+  copies the same ones. **Clear sent** removes the sent notes, ending the
+  round.
 - The prompt goes to the agent one way only. An agent waiting in
   `browser feedback --wait` receives it there. Otherwise it is typed into the
   agent's pane and submitted once Herdr reports the agent idle (or still
@@ -1772,7 +1778,7 @@ comments on a pull request.
 - The icons at either end of its header show or hide the list of changed
   files and the notes. A review narrower than 1,000 px starts with both
   hidden so the diff has the room; once toggled, the choice holds. Writing a
-  note always shows the notes, and the notes icon counts the queued ones.
+  note always shows the notes, and the notes icon counts the unsent ones.
   Shown in a narrow group, each panel keeps to 30% of the review.
 
 - **Uncommitted** shows what is not committed yet (`git diff HEAD`).
@@ -1859,6 +1865,9 @@ comments on a pull request.
   (`HEAD`, or the base and commit), so notes from either view stay exact and
   stay queued when you switch. It reaches the agent the same one way as page notes above,
   including `browser feedback`. Without an agent, **Copy** is offered.
+  As with page notes, sent notes stay listed until **Clear sent**: click one
+  to edit it, and Send delivers only new or edited notes, or all of them
+  again once every one was sent. The notes icon counts the unsent ones.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is
   cleaned of control characters and bounded (16,384 characters a line,

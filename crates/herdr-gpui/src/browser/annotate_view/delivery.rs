@@ -10,16 +10,25 @@ use gpui::{prelude::*, *};
 use std::sync::Arc;
 
 impl HerdrWindow {
-    /// The queued notes as a prompt, after their screenshots are saved to
-    /// files the agent can read. Saving runs off the UI thread; `then` gets
-    /// the prompt back on it.
+    /// The notes Send delivers, with their places in the list: those not
+    /// sent yet, or all of them again.
+    fn notes_round(&mut self, tab: &Tab) -> (Vec<usize>, Vec<annotate::Note>) {
+        let notes = &self.tab_notes(tab.id).notes;
+        let indexes = crate::agent_notes::round(notes.iter().map(|note| note.sent));
+        let round = indexes.iter().map(|&index| notes[index].clone()).collect();
+        (indexes, round)
+    }
+
+    /// `notes` as a prompt, after their screenshots are saved to files the
+    /// agent can read. Saving runs off the UI thread; `then` gets the prompt
+    /// back on it.
     fn with_notes_prompt(
         &mut self,
         tab: &Tab,
+        notes: Vec<annotate::Note>,
         cx: &mut Context<Self>,
         then: impl FnOnce(&mut Self, String, &mut Context<Self>) + 'static,
     ) {
-        let notes = self.tab_notes(tab.id).notes.clone();
         if notes.is_empty() {
             return;
         }
@@ -51,23 +60,26 @@ impl HerdrWindow {
     }
 
     pub(super) fn copy_notes(&mut self, tab: &Tab, cx: &mut Context<Self>) {
-        self.with_notes_prompt(tab, cx, |this, text, cx| {
+        let (_, notes) = self.notes_round(tab);
+        self.with_notes_prompt(tab, notes, cx, |this, text, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             this.show_flash(Flash::success("Notes copied"), cx);
         });
     }
 
-    /// Sends the queued notes to the agent that opened the page: to it
-    /// directly when it waits in `browser feedback`, otherwise into its pane
-    /// once it is idle, and kept for `browser feedback` when its pane is gone.
+    /// Sends the notes not sent yet, or all again, to the agent that opened
+    /// the page: to it directly when it waits in `browser feedback`,
+    /// otherwise into its pane once it is idle, and kept for `browser
+    /// feedback` when its pane is gone.
     pub(in crate::browser) fn send_notes(&mut self, tab: &Tab, cx: &mut Context<Self>) {
-        // The queue is cleared at once, so a second Send cannot repeat it
+        // They are marked sent at once, so a second Send cannot repeat them
         // while screenshots are still being saved.
+        let (indexes, notes) = self.notes_round(tab);
         let pane_id = tab.origin.clone();
         let here = super::super::view::scope(&self.endpoints[self.selected_endpoint]) == tab.scope;
-        self.with_notes_prompt(tab, cx, move |this, text, cx| {
+        self.with_notes_prompt(tab, notes, cx, move |this, text, cx| {
             this.deliver_notes(pane_id, here, text, cx);
         });
-        self.clear_notes(tab.id, cx);
+        self.mark_notes_sent(tab.id, &indexes, cx);
     }
 }

@@ -158,6 +158,8 @@ pub(crate) struct Review {
     search: search::Search,
     /// The row a note is being written for.
     draft: Option<RowId>,
+    /// The note whose text the composer is changing, instead of a draft.
+    editing: Option<usize>,
     /// The code selected to copy, and whether a press on the code is still
     /// being dragged to extend it.
     selection: Option<selection::Selection>,
@@ -455,7 +457,7 @@ impl HerdrWindow {
         };
         if review.notes.len() >= MAX_NOTES {
             self.show_flash(
-                Flash::warning("Send or remove notes before adding more"),
+                Flash::warning("Clear sent notes or remove some before adding more"),
                 cx,
             );
             return;
@@ -467,6 +469,7 @@ impl HerdrWindow {
             return;
         }
         review.draft = Some(row);
+        review.editing = None;
         let input = review.input.clone();
         input.update(cx, |input, cx| input.clear(cx));
         let focus = input.read(cx).focus.clone();
@@ -484,6 +487,28 @@ impl HerdrWindow {
             return;
         };
         let text = review.input.read(cx).text().to_owned();
+        if let Some(index) = review.editing {
+            let Some(anchor) = review.notes.get(index).map(|note| note.anchor.clone()) else {
+                review.editing = None;
+                return;
+            };
+            let Some(edited) = Note::new(anchor, &text) else {
+                self.show_flash(Flash::warning("Write what should change first"), cx);
+                return;
+            };
+            if let Some(review) = self.reviews.get_mut(&id) {
+                if let Some(note) = review.notes.get_mut(index) {
+                    note.comment = edited.comment;
+                    note.sent = false;
+                }
+                review.editing = None;
+                review.input.update(cx, |input, cx| input.clear(cx));
+                let focus = review.focus.clone();
+                window.focus(&focus, cx);
+            }
+            cx.notify();
+            return;
+        }
         let Some(anchor) = review
             .draft
             .zip(review.loaded())
@@ -507,6 +532,7 @@ impl HerdrWindow {
     fn cancel_review_note(&mut self, id: TabId, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(review) = self.reviews.get_mut(&id) {
             review.draft = None;
+            review.editing = None;
             let focus = review.focus.clone();
             window.focus(&focus, cx);
         }
@@ -518,39 +544,88 @@ impl HerdrWindow {
             && index < review.notes.len()
         {
             review.notes.remove(index);
+            review.editing = None;
             review.refresh_marks();
         }
         cx.notify();
     }
 
-    /// The queued notes as the agent's prompt, with where they go.
-    fn review_prompt(&self, id: TabId) -> Option<(String, Option<String>, bool)> {
+    /// Puts note `index`'s text in the composer to change it.
+    fn edit_review_note(
+        &mut self,
+        id: TabId,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(review) = self.reviews.get_mut(&id) else {
+            return;
+        };
+        let Some(comment) = review.notes.get(index).map(|note| note.comment.clone()) else {
+            return;
+        };
+        review.draft = None;
+        review.editing = Some(index);
+        let input = review.input.clone();
+        input.update(cx, |input, cx| input.set_text_selected(&comment, cx));
+        let focus = input.read(cx).focus.clone();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    /// Removes the notes the agent already has, ending that round.
+    fn clear_sent_review_notes(&mut self, id: TabId, cx: &mut Context<Self>) {
+        if let Some(review) = self.reviews.get_mut(&id) {
+            review.notes.retain(|note| !note.sent);
+            review.editing = None;
+            review.refresh_marks();
+        }
+        cx.notify();
+    }
+
+    /// The notes Send delivers, those not sent yet or all again, as the
+    /// agent's prompt, with their places in the list and where they go.
+    fn review_prompt(&self, id: TabId) -> Option<(String, Vec<usize>, Option<String>, bool)> {
         let review = self.reviews.get(&id)?;
         let loaded = review.loaded()?;
         if review.notes.is_empty() {
             return None;
         }
-        let text = notes::prompt(&loaded.source.checkout, &review.notes);
+        let indexes = crate::agent_notes::round(review.notes.iter().map(|note| note.sent));
+        let round: Vec<Note> = indexes
+            .iter()
+            .map(|&index| review.notes[index].clone())
+            .collect();
+        let text = notes::prompt(&loaded.source.checkout, &round);
         let pane = review.agent.as_ref().map(|agent| agent.pane_id.clone());
-        Some((text, pane, review.endpoint == self.selected_endpoint))
+        Some((
+            text,
+            indexes,
+            pane,
+            review.endpoint == self.selected_endpoint,
+        ))
     }
 
-    /// Sends the notes to the agent; the queue is cleared at once so a
-    /// second press cannot repeat it. The tab stays open for the next round.
+    /// Sends the notes not sent yet, or all again, to the agent. They are
+    /// marked sent at once so a second press does not repeat them; they stay
+    /// listed, to be edited and sent again, until Clear sent.
     pub(crate) fn send_review(&mut self, id: TabId, cx: &mut Context<Self>) {
-        let Some((text, pane, here)) = self.review_prompt(id) else {
+        let Some((text, indexes, pane, here)) = self.review_prompt(id) else {
             return;
         };
         if let Some(review) = self.reviews.get_mut(&id) {
-            review.notes.clear();
-            review.refresh_marks();
+            for index in indexes {
+                if let Some(note) = review.notes.get_mut(index) {
+                    note.sent = true;
+                }
+            }
         }
         self.deliver_notes(pane, here, text, cx);
         cx.notify();
     }
 
     fn copy_review(&mut self, id: TabId, cx: &mut Context<Self>) {
-        let Some((text, _, _)) = self.review_prompt(id) else {
+        let Some((text, ..)) = self.review_prompt(id) else {
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
