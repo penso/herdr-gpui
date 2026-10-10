@@ -23,8 +23,10 @@ fn page(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestCont
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.code.io = Some(CodeIo {
-                write: Arc::new(move |url| {
-                    recorded.lock().unwrap().push(url);
+                write: Arc::new(move |edit| {
+                    if let CodeEdit::Url(url) = edit {
+                        recorded.lock().unwrap().push(url);
+                    }
                     Ok(())
                 }),
                 load: skill_load,
@@ -100,7 +102,7 @@ fn answers(_: &WebUrl) -> crate::Result<Server> {
 }
 
 fn unreachable(_: &WebUrl) -> crate::Result<Server> {
-    Err(crate::Error::CodeNotServer { status: 404 })
+    Err(code_server::Error::NotServer { status: 404 }.into())
 }
 
 #[gpui::test]
@@ -209,7 +211,7 @@ fn an_address_whose_save_failed_stays_in_the_field(cx: &mut TestAppContext) {
         view.code.io = Some(CodeIo {
             write: Arc::new(move |_| {
                 *counted.lock().unwrap() += 1;
-                Err(crate::Error::CodeTokenRefused)
+                Err(code_server::Error::TokenRefused.into())
             }),
             load: skill_load,
         });
@@ -317,3 +319,8 @@ fn quitting_saves_an_address_waiting_for_another_save(cx: &mut TestAppContext) {
         )]
     );
 }
+
+/// Starting VS Code, its license, and the choice of an address instead.
+/// Only builds that show pages offer to start it.
+#[cfg(any(target_os = "macos", windows))]
+mod start;

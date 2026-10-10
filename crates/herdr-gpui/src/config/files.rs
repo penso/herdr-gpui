@@ -198,17 +198,15 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
-    /// Persist the VS Code server's address, or remove it with `None`,
-    /// keeping the rest of the local file.
-    pub(crate) fn save_code_url(url: Option<crate::browser::WebUrl>) -> Result<()> {
+    /// Persist one change to the `[code]` table, keeping the rest of the
+    /// local file.
+    pub(crate) fn save_code(edit: super::CodeEdit) -> Result<()> {
         let (_lock, local) = Self::prepare_files(&Self::path()?)?;
-        Self::save_code_url_path(url.as_ref(), &local)
+        Self::save_code_path(&edit, &local)
     }
 
-    pub(super) fn save_code_url_path(
-        url: Option<&crate::browser::WebUrl>,
-        path: &Path,
-    ) -> Result<()> {
+    pub(super) fn save_code_path(edit: &super::CodeEdit, path: &Path) -> Result<()> {
+        use super::{CodeEdit, CodeMode};
         let result = (|| -> Result<()> {
             let text = match fs::read_to_string(path) {
                 Ok(text) => text,
@@ -216,18 +214,29 @@ impl Config {
                 Err(error) => return Err(error.into()),
             };
             let mut document = text.parse::<toml_edit::DocumentMut>()?;
-            match url {
-                Some(url) => {
+            let (key, value): (_, Option<toml_edit::Value>) = match edit {
+                CodeEdit::Url(url) => ("url", url.as_ref().map(|url| url.as_str().into())),
+                CodeEdit::Mode(mode) => (
+                    "mode",
+                    Some(match mode {
+                        CodeMode::Start => "start".into(),
+                        CodeMode::Address => "address".into(),
+                    }),
+                ),
+                CodeEdit::Port(port) => ("port", Some(i64::from(port.get()).into())),
+                CodeEdit::AcceptLicense => ("license_accepted", Some(true.into())),
+            };
+            match value {
+                Some(mut value) => {
                     let code = document
                         .entry("code")
                         .or_insert(toml_edit::Item::Table(toml_edit::Table::new()))
                         .as_table_like_mut()
                         .ok_or(Error::InvalidCodeTable)?;
-                    let mut value = toml_edit::Value::from(url.as_str());
-                    if let Some(previous) = code.get("url").and_then(toml_edit::Item::as_value) {
+                    if let Some(previous) = code.get(key).and_then(toml_edit::Item::as_value) {
                         *value.decor_mut() = previous.decor().clone();
                     }
-                    code.insert("url", toml_edit::Item::Value(value));
+                    code.insert(key, toml_edit::Item::Value(value));
                 }
                 None => {
                     let Some(code) = document
@@ -236,7 +245,7 @@ impl Config {
                     else {
                         return Ok(());
                     };
-                    code.remove("url");
+                    code.remove(key);
                     if code.is_empty() {
                         document.remove("code");
                     }

@@ -165,6 +165,28 @@ impl CodeView {
         }
     }
 
+    /// The row at the top of the view, or the row a pending jump will put
+    /// there. A uniform list never records its rows' bounds in its scroll
+    /// handle, so `ScrollHandle::logical_scroll_top` always says row 0 once
+    /// drawn; the row comes from the scroll offset and the row height, as
+    /// the list itself works out which rows to draw.
+    fn top_row(&self) -> usize {
+        let state = self.scroll.0.borrow();
+        if let Some(item) = &state.deferred_scroll_to_item {
+            return item.item_index;
+        }
+        let count = self.text().map_or(0, |text| text.lines.len());
+        let Some(size) = state.last_item_size.filter(|_| count > 0) else {
+            return 0;
+        };
+        let height = size.contents.height / count as f32;
+        if height <= Pixels::ZERO {
+            return 0;
+        }
+        // Negative or NaN rows saturate to 0.
+        (-state.base_handle.offset().y / height).floor() as usize
+    }
+
     /// The marked line, and how many lines the read file has.
     #[cfg(test)]
     pub(crate) fn shown(&self) -> (Option<u32>, Option<usize>) {
@@ -183,9 +205,8 @@ impl CodeView {
     /// The 1-based line the editor opens at: the marked one, or the top
     /// line in view.
     fn editor_line(&self) -> u32 {
-        self.marked.unwrap_or_else(|| {
-            u32::try_from(self.scroll.logical_scroll_top_index() + 1).unwrap_or(1)
-        })
+        self.marked
+            .unwrap_or_else(|| u32::try_from(self.top_row() + 1).unwrap_or(1))
     }
 }
 
@@ -418,7 +439,7 @@ impl HerdrWindow {
             return false;
         };
         let count = view.text().map_or(0, |text| text.lines.len());
-        let top = view.scroll.logical_scroll_top_index();
+        let top = view.top_row();
         let page = 20;
         let row = match (keystroke.key.as_str(), modifiers.shift) {
             ("j" | "down", false) => top + 1,

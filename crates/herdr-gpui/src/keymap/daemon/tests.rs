@@ -1,5 +1,7 @@
 use super::*;
 
+mod literal_plus;
+
 fn keys(text: &str) -> DaemonKeys {
     let table: toml::Table = text.parse().unwrap();
     DaemonKeys::from_table(table.get("keys").and_then(toml::Value::as_table))

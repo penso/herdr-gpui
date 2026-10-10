@@ -1,6 +1,7 @@
 use super::*;
 
 mod bold_color;
+mod layout_chords;
 mod wheel;
 
 #[test]

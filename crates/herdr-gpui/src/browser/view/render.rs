@@ -175,6 +175,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id = tab.id;
+        let code = tab.place.is_code();
         let loaded = tab.location.is_some();
         let external = match &tab.location {
             Some(Location::Web { url }) => Some(url.clone()),
@@ -355,9 +356,8 @@ impl HerdrWindow {
             ));
         let content = match (page, &failure) {
             (Some(page), None) => self.page_area(id, page).into_any_element(),
-            // The VS Code tab says, as its panel does, why its page is not
-            // there yet.
-            _ if tab.place.is_code() => self.render_code_status(failure.clone()),
+            // The VS Code tab says why its page is not there yet.
+            _ if tab.place.is_code() => self.render_code_status(failure.clone(), cx),
             _ => div()
                 .flex_1()
                 .min_h_0()
@@ -394,14 +394,16 @@ impl HerdrWindow {
             // the keyboard; nothing here types into a terminal. A focus
             // handle belongs to one element, so a drawn terminal keeps it.
             .when(keyboard, |browser| browser.track_focus(&self.focus))
-            .child(toolbar)
+            // VS Code fills its tab: it is an editor, not a page to browse,
+            // so it has no address, navigation, or notes of a browser's.
+            .when(!code, |browser| browser.child(toolbar))
             .child(
                 div()
                     .flex()
                     .flex_1()
                     .min_h_0()
                     .child(div().flex().flex_col().flex_1().min_w_0().child(content))
-                    .children(panel),
+                    .children(panel.filter(|_| !code)),
             )
             .into_any_element()
     }

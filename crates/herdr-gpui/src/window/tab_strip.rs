@@ -199,6 +199,11 @@ impl HerdrWindow {
         // Leaving tabs slot in among these below; `None` marks where.
         let mut places: Vec<Option<Pick>> =
             listed.iter().map(|tab| Some(tab.pick.clone())).collect();
+        // The chosen tab's width, which changes as a page's title comes in.
+        let chosen_width = pick
+            .as_ref()
+            .and_then(|pick| listed.iter().find(|tab| &tab.pick == pick))
+            .map_or(0., |tab| tab.width);
         self.observe_strip(slot.id, listed, now);
         let scroll = self.strip_scroll(slot.id);
         let mut built: Vec<(Pick, Stateful<Div>)> = Vec::new();
@@ -376,7 +381,7 @@ impl HerdrWindow {
                 .iter()
                 .position(|place| place.as_ref() == Some(pick))?;
             Some((index, pick))
-        }) && self.reveal_tab(slot.id, pick, index)
+        }) && self.reveal_tab(slot.id, pick, index, chosen_width)
         {
             window.request_animation_frame();
         }

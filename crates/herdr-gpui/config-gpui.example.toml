@@ -266,12 +266,19 @@ size = 14
 size = 12
 # fallback = ["Symbols Nerd Font Mono"]
 
-# The VS Code panel beside a space's editor groups (macOS and Windows only),
-# showing what VS Code's own web server serves. Start one with
-# `code serve-web --host 127.0.0.1 --port 8000`, then set the address it
-# prints, with its ?tkn= token, here or in Settings > Code. The title bar's
-# VS Code button appears once it is set.
+# VS Code as a tab of a space's editor groups (macOS and Windows only),
+# showing what VS Code's own web server, `code serve-web`, serves. Settings >
+# Code edits this table. mode = "start" has the app run that server when a
+# VS Code tab first needs it, once you accept VS Code's server license there
+# (license_accepted); it is the default when VS Code is found and no url is
+# set. port is picked once and kept, since VS Code keeps its settings per
+# address. mode = "address" uses a server you run at url, with its ?tkn=
+# token; a url without a mode does too. Show VS Code appears in each editor
+# group's … menu once either is possible.
 # [code]
+# mode = "start"
+# port = 51234
+# license_accepted = true
 # url = "http://127.0.0.1:8000/?tkn=..."
 
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.

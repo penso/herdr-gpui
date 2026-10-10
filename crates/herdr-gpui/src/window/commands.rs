@@ -240,16 +240,8 @@ impl HerdrWindow {
                 self.split_active_group(window, cx);
                 return;
             }
-            Command::ToggleCode => {
-                self.toggle_code(window, cx);
-                return;
-            }
-            Command::MoveCodeToGroup => {
-                self.move_code_to_group(window, cx);
-                return;
-            }
-            Command::MoveCodeToPanel => {
-                self.move_code_to_panel(window, cx);
+            Command::OpenCode => {
+                self.open_code(None, window, cx);
                 return;
             }
             Command::InstallBrowserSkill => {

@@ -1,8 +1,21 @@
 //! Asking a `code serve-web` server whether it is there. A page that cannot
-//! load reports nothing back through the web view, so the VS Code panel and
+//! load reports nothing back through the web view, so the VS Code tab and
 //! its settings page probe the server over plain HTTP first. Blocking: run it
 //! off the UI thread.
-use crate::{Error, Result, browser::WebUrl};
+//!
+//! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
+//! command, [`token`] keeps the connection token, [`supervisor`] runs the
+//! child process, and [`launcher`] ties them to the windows and the config.
+mod cli;
+mod error;
+pub(crate) mod launcher;
+pub(crate) mod supervisor;
+mod token;
+
+pub use error::Error;
+pub(crate) use launcher::{Launcher, Startup};
+
+use crate::{Result, browser::WebUrl};
 use std::{fmt, io::Read, time::Duration};
 
 /// How long each request may take.
@@ -37,32 +50,8 @@ impl Server {
 /// address's connection token. `/version` needs no token, so a server that
 /// answers it but refuses the address has the wrong one.
 pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(TIMEOUT))
-        .max_redirects(0)
-        .http_status_as_error(false)
-        .build()
-        .into();
-    let unreachable = |source: ureq::Error| Error::CodeUnreachable {
-        address: url.address(),
-        reason: NoAnswer::from(&source),
-        source,
-    };
-    let mut response = agent
-        .get(format!("{}/version", url.origin()))
-        .call()
-        .map_err(unreachable)?;
-    let status = response.status().as_u16();
-    let mut body = String::new();
-    let read = response
-        .body_mut()
-        .as_reader()
-        .take(VERSION_BYTES)
-        .read_to_string(&mut body);
-    let server = Some(status)
-        .filter(|status| *status == 200 && read.is_ok())
-        .and_then(|_| Server::from_version(&body))
-        .ok_or(Error::CodeNotServer { status })?;
+    let (agent, unreachable) = (agent(), unreachable(url));
+    let server = ask_version(&agent, url)?;
     // The token is accepted with a redirect that sets its cookie.
     match agent
         .get(url.as_str())
@@ -72,9 +61,51 @@ pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
         .as_u16()
     {
         200..=399 => Ok(server),
-        401 | 403 => Err(Error::CodeTokenRefused),
-        status => Err(Error::CodeStatus(status)),
+        401 | 403 => Err(Error::TokenRefused.into()),
+        status => Err(Error::Status(status).into()),
     }
+}
+
+/// Asks the server at `url` for its version alone, sending nothing of the
+/// address's token: for the server the app started, whose token it wrote,
+/// so that no question carries the token to whatever answers the port.
+pub(crate) fn version(url: &WebUrl) -> Result<Server> {
+    ask_version(&agent(), url)
+}
+
+fn agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(TIMEOUT))
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
+fn unreachable(url: &WebUrl) -> impl Fn(ureq::Error) -> Error + '_ {
+    move |source| Error::Unreachable {
+        address: url.address(),
+        reason: NoAnswer::from(&source),
+        source,
+    }
+}
+
+fn ask_version(agent: &ureq::Agent, url: &WebUrl) -> Result<Server> {
+    let mut response = agent
+        .get(format!("{}/version", url.origin()))
+        .call()
+        .map_err(unreachable(url))?;
+    let status = response.status().as_u16();
+    let mut body = String::new();
+    let read = response
+        .body_mut()
+        .as_reader()
+        .take(VERSION_BYTES)
+        .read_to_string(&mut body);
+    Ok(Some(status)
+        .filter(|status| *status == 200 && read.is_ok())
+        .and_then(|_| Server::from_version(&body))
+        .ok_or(Error::NotServer { status })?)
 }
 
 /// Why a request got no answer.

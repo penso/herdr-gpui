@@ -78,6 +78,7 @@ mod osc52;
 mod palette;
 mod pane_menu;
 mod panel_resize;
+mod plugin_values;
 mod port_forward;
 mod pr_actions;
 mod preferences;

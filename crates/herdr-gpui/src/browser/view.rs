@@ -13,7 +13,7 @@ use gpui::{prelude::*, *};
 use present::Freeze;
 use std::collections::{HashMap, HashSet};
 
-mod present;
+pub(in crate::browser) mod present;
 mod render;
 #[cfg(unix)]
 mod requests;
@@ -79,6 +79,10 @@ pub(crate) struct Browser {
     /// Where the status bar last drew, which the band sits above.
     #[cfg(any(target_os = "macos", windows))]
     pub(super) status_bar: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    /// Where the window's toasts and file-transfer card drew. Pages draw
+    /// above them, so those they reach step aside, as for a menu.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) overlays: std::rc::Rc<std::cell::RefCell<present::Overlays>>,
 }
 
 impl Browser {
@@ -113,6 +117,8 @@ impl Browser {
             tooltip_band: None,
             #[cfg(any(target_os = "macos", windows))]
             status_bar: Default::default(),
+            #[cfg(any(target_os = "macos", windows))]
+            overlays: Default::default(),
         }
     }
 }

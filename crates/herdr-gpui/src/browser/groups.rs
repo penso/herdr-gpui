@@ -96,8 +96,6 @@ pub(crate) struct Layout {
     groups: Vec<Group>,
     active: GroupId,
     clock: u64,
-    /// Whether the VS Code panel shows to the right of the groups.
-    pub(super) code: bool,
 }
 
 /// A layout as saved across restarts: each group's tab and width, left to
@@ -107,9 +105,6 @@ pub(crate) struct Layout {
 pub(crate) struct SavedLayout {
     groups: Vec<SavedGroup>,
     active: usize,
-    /// Layouts saved before the VS Code panel existed have it hidden.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    code: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -145,13 +140,12 @@ impl SavedLayout {
 }
 
 impl Layout {
-    /// The layout to save, or `None` for one group following the terminal
-    /// beside a hidden VS Code panel, which is what a workspace shows without one.
+    /// The layout to save, or `None` for one group following the terminal,
+    /// which is what a workspace shows without one.
     pub(crate) fn saved(&self) -> Option<SavedLayout> {
         if self.groups.len() == 1
             && self.groups[0].pick.is_none()
             && self.groups[0].hidden.is_empty()
-            && !self.code
         {
             return None;
         }
@@ -170,7 +164,6 @@ impl Layout {
                 .iter()
                 .position(|group| group.id == self.active)
                 .unwrap_or(0),
-            code: self.code,
         })
     }
 
@@ -196,7 +189,6 @@ impl Layout {
             groups,
             active,
             clock: 1,
-            code: saved.code,
         }
     }
 
@@ -212,7 +204,6 @@ impl Layout {
             }],
             active: id,
             clock: 0,
-            code: false,
         }
     }
 

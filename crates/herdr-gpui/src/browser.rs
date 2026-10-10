@@ -13,6 +13,7 @@ mod annotate;
 mod annotate_view;
 mod code;
 mod code_group;
+mod code_start;
 mod code_view;
 mod feedback;
 mod group_motion;

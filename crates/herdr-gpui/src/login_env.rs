@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
-use std::process::Command;
+use std::{ffi::OsString, process::Command};
 
-/// Called only by the daemon connection worker, never by a GPUI render/update.
+/// Called only by worker threads, such as the daemon connection's and the
+/// VS Code server's, never by a GPUI render/update.
 pub(crate) fn apply(command: &mut Command) {
     #[cfg(unix)]
     if let Some(environment) = unix::resolve() {
@@ -12,6 +13,21 @@ pub(crate) fn apply(command: &mut Command) {
     }
     #[cfg(windows)]
     let _ = command;
+}
+
+/// The `PATH` that [`apply`] gives a command, for finding a program on it.
+/// Blocking the first time on Unix, like [`apply`]: run it off the UI thread.
+pub(crate) fn path() -> Option<OsString> {
+    #[cfg(unix)]
+    return match unix::resolve() {
+        Some(environment) => environment
+            .iter()
+            .find(|(key, _)| key == "PATH")
+            .map(|(_, value)| value.clone()),
+        None => Some(crate::local_path::local_path()),
+    };
+    #[cfg(windows)]
+    std::env::var_os("PATH")
 }
 
 #[cfg(unix)]

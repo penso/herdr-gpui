@@ -212,3 +212,5 @@ fn reopening_a_code_tab_reads_its_file_again(cx: &mut TestAppContext) {
         assert_eq!(code.text().unwrap().line(2), "fn newer() {}");
     });
 }
+
+mod top_row;

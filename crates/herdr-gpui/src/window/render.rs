@@ -617,7 +617,6 @@ impl Render for HerdrWindow {
             groups.push(self.render_group(slot, body, ends, window, cx));
         }
         let content = self.render_groups(groups, cx);
-        let content = self.render_beside_code(content, cx);
         // Not `||`: asking forgets group motion that has finished.
         if self.groups_moving() | self.tabs_growing() | self.annotations_moving() {
             window.request_animation_frame();

@@ -16,6 +16,8 @@ pub(crate) enum Preference {
     ClipboardPosition(Option<ClipboardToastPosition>),
     SidebarGap(f32),
     StatusBar(status_bar::Edit),
+    /// `[usage] inline`: whether the sidebar draws the daemon's configured rows.
+    UsageInline(bool),
 }
 
 impl Config {
@@ -92,6 +94,7 @@ impl Config {
                     let (key, value) = edit.entry();
                     (Some("status_bar"), key, Some(value))
                 }
+                Preference::UsageInline(value) => (Some("usage"), "inline", Some(value.into())),
                 Preference::SidebarGap(value) => {
                     if !value.is_finite() || !(0.0..=MAX_SIDEBAR_GAP).contains(&value) {
                         return Err(Error::InvalidSidebarGap);

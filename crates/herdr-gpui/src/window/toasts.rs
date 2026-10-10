@@ -217,10 +217,7 @@ impl HerdrWindow {
         }
         let visible_limit =
             ((viewport.height.to_f64() as usize).saturating_sub(108) / 108).clamp(1, VISIBLE_LIMIT);
-        // Toasts keep left of the VS Code column, however narrow, since its
-        // page would hide them.
-        let realm = self.beside_code().unwrap_or(viewport.width);
-        let beside = viewport.width - realm;
+        let realm = viewport.width;
         let narrow = realm < px(720.);
         let width = (realm - px(24.)).max(px(0.)).min(px(340.));
         let visible: Vec<_> = self
@@ -398,13 +395,35 @@ impl HerdrWindow {
                             position,
                             ToastHerdrPosition::TopRight | ToastHerdrPosition::BottomRight
                         ),
-                        |d| d.right(px(12.) + beside),
+                        |d| d.right(px(12.)),
                     )
                     .children(cards)
+                    .child(self.overlay_probe())
                     .into_any_element(),
             )
         })
         .collect()
+    }
+}
+
+impl HerdrWindow {
+    /// Whether toasts or the file-transfer card show now, as their renders
+    /// decide: nothing shows over an open menu or in a window too small.
+    /// Only builds that show pages step them aside for these.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(crate) fn overlays_shown(&self) -> bool {
+        if self.menu.page.is_some() {
+            return false;
+        }
+        self.file_transfer.is_some()
+            || (!self.toasts_hidden
+                && self.endpoints.iter().any(|endpoint| {
+                    endpoint
+                        .toasts
+                        .entries
+                        .iter()
+                        .any(|(_, notice)| notice.visible)
+                }))
     }
 }
 

@@ -6,6 +6,7 @@ mod bitmap_fonts;
 mod bold_color;
 mod code;
 mod code_navigation;
+mod code_start;
 mod default_fonts;
 mod discovery;
 mod fonts;
@@ -17,12 +18,14 @@ mod loading;
 mod missing_fonts;
 mod notification_settings;
 mod preferences;
+mod sidebar_scope;
 mod sidebar_settings;
 mod sidebar_style;
 mod status_bar;
 mod system_themes;
 mod theme_files;
 mod themes;
+mod usage_inline;
 
 struct TempDirectory(PathBuf);
 

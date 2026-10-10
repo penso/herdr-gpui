@@ -441,22 +441,29 @@ pub(super) fn triggers(entry: &str) -> Vec<(Option<u8>, Trigger)> {
 /// One daemon keystroke, `+`-separated as Herdr writes it, in GPUI's terms.
 /// Herdr's `hyper` modifier has no GPUI equivalent, so it matches nothing.
 fn keystroke(text: &str) -> Option<Keystroke> {
+    let text = text.trim();
+    // Herdr publishes a literal plus as the key after the final separator
+    // (`ctrl++`), so an empty token there is the key, not a missing one.
+    if text == "+" {
+        return Some(plus(Modifiers::default()));
+    }
+    if let Some(modifiers) = text.strip_suffix("++") {
+        return Some(plus(modifier_combo(modifiers)?));
+    }
     let mut modifiers = Modifiers::default();
     let mut key = None;
     for part in text.split('+') {
         let part = part.trim();
-        if part.is_empty() {
+        if part.is_empty() || part.eq_ignore_ascii_case("hyper") {
             return None;
         }
-        match part.to_ascii_lowercase().as_str() {
-            "ctrl" | "control" => modifiers.control = true,
-            "shift" => modifiers.shift = true,
-            "alt" | "option" | "meta" => modifiers.alt = true,
-            "cmd" | "command" | "super" => modifiers.platform = true,
-            "hyper" => return None,
-            _ if key.is_none() => key = Some(part),
-            _ => return None,
+        if set_modifier(&mut modifiers, part) {
+            continue;
         }
+        if key.is_some() {
+            return None;
+        }
+        key = Some(part);
     }
     let key = key?;
     let named = match key.to_ascii_lowercase().as_str() {
@@ -506,6 +513,36 @@ fn keystroke(text: &str) -> Option<Keystroke> {
         key,
         key_char: None,
     })
+}
+
+fn plus(modifiers: Modifiers) -> Keystroke {
+    Keystroke {
+        modifiers,
+        key: "+".to_owned(),
+        key_char: None,
+    }
+}
+
+/// The modifiers before a literal plus. As in Herdr, every token must name
+/// one, so `ctrl+++` and `x++` spell nothing.
+fn modifier_combo(text: &str) -> Option<Modifiers> {
+    let mut modifiers = Modifiers::default();
+    text.split('+')
+        .all(|part| set_modifier(&mut modifiers, part.trim()))
+        .then_some(modifiers)
+}
+
+/// Sets the modifier Herdr's `token` names; false for any other token,
+/// including `hyper`, which GPUI lacks.
+fn set_modifier(modifiers: &mut Modifiers, token: &str) -> bool {
+    match token.to_ascii_lowercase().as_str() {
+        "ctrl" | "control" => modifiers.control = true,
+        "shift" => modifiers.shift = true,
+        "alt" | "option" | "meta" => modifiers.alt = true,
+        "cmd" | "command" | "super" => modifiers.platform = true,
+        _ => return false,
+    }
+    true
 }
 
 #[cfg(test)]

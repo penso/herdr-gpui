@@ -1,5 +1,4 @@
-//! The notes and VS Code panels' widths are remembered with the rest of the
-//! chrome.
+//! The notes panel's width is remembered with the rest of the chrome.
 use super::*;
 
 #[core::prelude::v1::test]
@@ -9,7 +8,6 @@ fn the_notes_width_round_trips_and_a_damaged_one_is_forgotten() {
     let chrome = Chrome {
         notes_width: Some(420.),
         review_files_width: Some(280.),
-        code_width: Some(700.),
         ..Chrome::default()
     };
     write_chrome(&path, chrome).unwrap();
@@ -25,7 +23,6 @@ fn the_notes_width_round_trips_and_a_damaged_one_is_forgotten() {
         .unwrap();
         let read = read_chrome(&path).unwrap();
         assert_eq!(read.notes_width, None, "{damaged}");
-        assert_eq!(read.code_width, None, "{damaged}");
         assert_eq!(read.sidebar_width, Some(250.), "{damaged}");
     }
 }

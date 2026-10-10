@@ -10,6 +10,7 @@ mod config_watch;
 mod layout_drafts;
 mod load_save;
 mod navigation_resize;
+mod navigation_scroll;
 mod quit_saves;
 mod theme_drafts;
 mod theme_sources;

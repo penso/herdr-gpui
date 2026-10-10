@@ -46,7 +46,6 @@ impl HerdrWindow {
                 agent_sort: self.agent_sort_modified.then_some(self.agent_sort),
                 notes_width: self.notes_width.chosen(),
                 review_files_width: self.review_files_width.chosen(),
-                code_width: self.code_width.chosen(),
             });
         }
     }
