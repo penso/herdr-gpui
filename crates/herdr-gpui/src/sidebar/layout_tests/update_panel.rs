@@ -1,24 +1,5 @@
 use super::*;
 
-/// Draw one preview state in a freshly opened panel and return its bounds.
-#[cfg(test)]
-fn draw_update_state(
-    cx: &mut gpui::VisualTestContext,
-    view: &Entity<HerdrWindow>,
-    state: &crate::updater::State,
-) -> (Bounds<Pixels>, Option<Bounds<Pixels>>) {
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.open_app_update(false, window, cx);
-            view.update_preview = Some(state.clone());
-            cx.notify();
-        });
-        full_draw(window, cx).clear(cx);
-    });
-    let panel = cx.debug_bounds("app-update-panel").unwrap();
-    (panel, cx.debug_bounds("app-update-action"))
-}
-
 // `debug_bounds` keeps the last frame that drew an element, so a state that
 // must show no button is only provable before any button has been drawn.
 #[gpui::test]

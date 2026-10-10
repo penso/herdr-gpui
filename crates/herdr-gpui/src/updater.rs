@@ -14,6 +14,8 @@ mod unsupported;
 #[cfg(not(unix))]
 use unsupported::{brew, install};
 
+pub(crate) use release::{RELEASES_PAGE, release_page};
+
 use std::{
     ffi::OsString,
     process::ExitCode,

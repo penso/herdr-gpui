@@ -23,6 +23,7 @@ const METADATA_LIMIT: usize = 1024 * 1024;
 /// Each listed release carries its full asset metadata (~2 KiB per asset), so
 /// the short page the beta channel reads needs more room than one release.
 const RELEASE_LIST_LIMIT: usize = 4 * 1024 * 1024;
+pub(crate) const RELEASES_PAGE: &str = "https://github.com/penso/herdr-gpui/releases";
 /// GitHub's latest release is never a prerelease: this is the stable channel.
 const LATEST_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releases/latest";
 /// The newest published releases of both kinds, for the beta channel.
@@ -186,6 +187,19 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+/// Where a release's notes can be read in full, in the browser.
+///
+/// Built from the version, which reaches the UI only after the signed manifest
+/// confirmed it, never from the release JSON's `html_url`: unsigned metadata
+/// must not choose the page this opens. Anything that is not a calendar version
+/// gets the release list instead of a guessed tag.
+pub(crate) fn release_page(version: &str) -> String {
+    if parse_version(version).is_none() {
+        return RELEASES_PAGE.into();
+    }
+    format!("{RELEASES_PAGE}/tag/v{version}")
 }
 
 fn release_url(version: &str, name: &str) -> String {

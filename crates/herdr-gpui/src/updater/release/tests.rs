@@ -456,3 +456,15 @@ fn release_metadata_rejects_unstable_and_untrusted_names() -> anyhow::Result<()>
     assert!(parse_release(&serde_json::to_vec(&bad)?).is_err());
     Ok(())
 }
+
+#[test]
+fn a_release_page_comes_from_the_version_alone() {
+    assert_eq!(
+        release_page("20261008.1"),
+        "https://github.com/penso/herdr-gpui/releases/tag/v20261008.1"
+    );
+    // Not a calendar version, so no tag is guessed from it.
+    for version in ["9999.0.0", "20261008.1/../../evil", "", "dev"] {
+        assert_eq!(release_page(version), RELEASES_PAGE, "{version}");
+    }
+}
