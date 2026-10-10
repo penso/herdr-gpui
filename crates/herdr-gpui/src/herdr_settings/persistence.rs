@@ -1,19 +1,21 @@
 //! Descriptor-relative Unix persistence. The lock coordinates this adapter's
 //! writers, not arbitrary editors: the last comparison is optimistic, not a
 //! filesystem compare-and-swap. No portable rename API can eliminate that final
-//! race with a non-cooperating writer. Config symlinks are never followed;
-//! root-owned system directory aliases (e.g. macOS /var) are permitted.
+//! race with a non-cooperating writer. Symlinks are expanded only by `resolve`;
+//! every later open refuses to follow anything. A link retargeted during a save
+//! leaves the same files as a save that finished just before it; one retargeted
+//! between load and save resolves to a different file, which is a conflict.
 use super::Error;
 use rustix::fs::{
-    AtFlags, FileType, FlockOperation, Mode, OFlags, flock, linkat, mkdirat, open, openat,
-    renameat, statat, unlinkat,
+    AtFlags, FlockOperation, Mode, OFlags, flock, linkat, mkdirat, open, openat, renameat, statat,
+    unlinkat,
 };
 use std::{
     ffi::{OsStr, OsString},
     fs::{self, File, Metadata},
     io::{Read, Write},
     os::unix::fs::{MetadataExt, PermissionsExt},
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -74,11 +76,16 @@ fn parts(path: &Path) -> Result<(&Path, &OsStr), Error> {
     ))
 }
 
+/// Only this user or root may own a directory on the config path, and no one
+/// else may write to it unless root owns it with the sticky bit set (`/tmp`).
+fn trusted_dir(meta: &Metadata, uid: u32) -> bool {
+    (meta.uid() == uid || meta.uid() == 0)
+        && (meta.mode() & 0o022 == 0 || (meta.uid() == 0 && meta.mode() & 0o1000 != 0))
+}
+
 fn directory(path: &Path, create: bool) -> Result<File, Error> {
-    if !path.is_absolute() {
-        return Err(Error::UnsafePath);
-    }
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let uid = rustix::process::geteuid().as_raw();
     let mut dir = File::from(open("/", flags, Mode::empty()).map_err(io)?);
     for component in path.components() {
         let name = match component {
@@ -86,22 +93,10 @@ fn directory(path: &Path, create: bool) -> Result<File, Error> {
             Component::Normal(name) => name,
             _ => return Err(Error::UnsafePath),
         };
-        let parent = dir.metadata()?;
-        let uid = rustix::process::geteuid().as_raw();
-        if (parent.uid() != 0 && parent.uid() != uid)
-            || (parent.mode() & 0o022 != 0 && !(parent.uid() == 0 && parent.mode() & 0o1000 != 0))
-        {
+        if !trusted_dir(&dir.metadata()?, uid) {
             return Err(Error::UnsafePath);
         }
-        let mut flags = flags;
         match statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW) {
-            Ok(meta) if FileType::from_raw_mode(meta.st_mode) == FileType::Symlink => {
-                // Only immutable-to-this-user system aliases may be traversed.
-                if meta.st_uid != 0 || parent.uid() != 0 || parent.mode() & 0o022 != 0 {
-                    return Err(Error::UnsafePath);
-                }
-                flags.remove(OFlags::NOFOLLOW);
-            }
             Err(rustix::io::Errno::NOENT) if create => {
                 match mkdirat(&dir, name, Mode::RUSR | Mode::WUSR | Mode::XUSR) {
                     Ok(()) | Err(rustix::io::Errno::EXIST) => {}
@@ -119,10 +114,56 @@ fn directory(path: &Path, create: bool) -> Result<File, Error> {
         )?);
     }
     let meta = dir.metadata()?;
-    if meta.uid() != rustix::process::geteuid().as_raw() || meta.mode() & 0o022 != 0 {
+    if meta.uid() != uid || meta.mode() & 0o022 != 0 {
         return Err(Error::UnsafePath);
     }
     Ok(dir)
+}
+
+/// Herdr reads config.toml through symlinks, so dotfile managers commonly link
+/// it, or a directory above it, elsewhere. The path as given is checked first:
+/// every existing entry must sit in a trusted directory, and any link on it must
+/// belong to this user or root, so another user cannot plant or swap a link even
+/// in a sticky directory. Links are then expanded once, as the kernel would,
+/// keeping a not-yet-created tail as given. `directory` and `read_at` revalidate
+/// the physical path without following anything, so a link swapped in afterwards
+/// is refused, and saves replace the link's target in its own directory while
+/// leaving the link in place. Links nested inside a link's target are not
+/// checked here; only the physical path they lead to is.
+fn resolve(path: &Path) -> Result<PathBuf, Error> {
+    // A relative path would leave the working directory's ancestors unchecked.
+    if !path.is_absolute() {
+        return Err(Error::UnsafePath);
+    }
+    let uid = rustix::process::geteuid().as_raw();
+    let mut real = None;
+    for existing in path.ancestors() {
+        let entry = match fs::symlink_metadata(existing) {
+            Ok(entry) => entry,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        if entry.file_type().is_symlink() && entry.uid() != uid && entry.uid() != 0 {
+            return Err(Error::UnsafePath);
+        }
+        if let Some(parent) = existing.parent().filter(|p| !p.as_os_str().is_empty())
+            && !trusted_dir(&fs::metadata(parent)?, uid)
+        {
+            return Err(Error::UnsafePath);
+        }
+        if real.is_none() {
+            match fs::canonicalize(existing) {
+                Ok(target) => {
+                    let missing = path.strip_prefix(existing).map_err(|_| Error::UnsafePath)?;
+                    real = Some(target.join(missing));
+                }
+                // A dangling link stays as given, and `read_at` refuses it.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    real.ok_or(Error::UnsafePath)
 }
 
 fn validate_file(meta: &Metadata) -> Result<(), Error> {
@@ -177,7 +218,8 @@ fn read_at(dir: &File, name: &OsStr) -> Result<Snapshot, Error> {
 }
 
 pub(super) fn read(path: &Path) -> Result<Snapshot, Error> {
-    let (parent, name) = parts(path)?;
+    let path = resolve(path)?;
+    let (parent, name) = parts(&path)?;
     let dir = match directory(parent, false) {
         Ok(dir) => dir,
         Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -216,7 +258,8 @@ pub(super) fn save(path: &Path, original: &Snapshot, text: &str) -> Result<Snaps
     if text.len() as u64 > LIMIT {
         return Err(Error::TooLarge);
     }
-    let (parent, name) = parts(path)?;
+    let path = resolve(path)?;
+    let (parent, name) = parts(&path)?;
     let dir = directory(parent, true)?;
     let mut lock_name = OsString::from(".");
     lock_name.push(name);
