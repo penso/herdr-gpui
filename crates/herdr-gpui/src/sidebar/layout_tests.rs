@@ -49,6 +49,8 @@ mod probes;
 #[cfg(test)]
 mod row_drag;
 #[cfg(test)]
+mod search;
+#[cfg(test)]
 mod selection_scroll;
 #[cfg(test)]
 mod sidebar_cache;
@@ -495,6 +497,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sessions_anchor: Default::default(),
         activation_deadline: None,
         pending_navigation: None,
+        strip_navigation_fits: true,
         pending_toast: None,
         toasts_hidden: false,
         pending_releases: Vec::new(),
@@ -559,6 +562,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sidebar_scroll: Default::default(),
         sidebar_revealed: Default::default(),
         sidebar_pin_reveal: Default::default(),
+        sidebar_search: crate::sidebar::SidebarSearch::new(cx),
         _poll: Task::ready(()),
         _activation: cx.observe_window_activation(window, |_, _, _| {}),
         _appearance: cx.observe_window_appearance(window, |this, _, cx| {

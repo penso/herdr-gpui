@@ -586,7 +586,7 @@ impl HerdrWindow {
 
     /// The notes Send delivers, those not sent yet or all again, as the
     /// agent's prompt, with their places in the list and where they go.
-    fn review_prompt(&self, id: TabId) -> Option<(String, Vec<usize>, Option<String>, bool)> {
+    fn review_prompt(&self, id: TabId) -> Option<(String, Vec<usize>, Option<String>)> {
         let review = self.reviews.get(&id)?;
         let loaded = review.loaded()?;
         if review.notes.is_empty() {
@@ -599,22 +599,14 @@ impl HerdrWindow {
             .collect();
         let text = notes::prompt(&loaded.source.checkout, &round);
         let pane = review.agent.as_ref().map(|agent| agent.pane_id.clone());
-        Some((
-            text,
-            indexes,
-            pane,
-            review
-                .origin
-                .as_ref()
-                .is_some_and(|origin| origin.current(self)),
-        ))
+        Some((text, indexes, pane))
     }
 
     /// Sends the notes not sent yet, or all again, to the agent. They are
     /// marked sent at once and stay listed until Clear sent. Another send
     /// waits until this batch is delivered or collected through feedback.
     pub(crate) fn send_review(&mut self, id: TabId, cx: &mut Context<Self>) {
-        let Some((text, indexes, pane, here)) = self.review_prompt(id) else {
+        let Some((text, indexes, pane)) = self.review_prompt(id) else {
             return;
         };
         let Some(pending) = self
@@ -635,7 +627,14 @@ impl HerdrWindow {
                 }
             }
         }
-        if let Some(text) = self.deliver_notes(pane, here, text, Some(pending), None, cx) {
+        let origin = self
+            .reviews
+            .get(&id)
+            .and_then(|review| review.origin.clone());
+        if let Some(text) = self
+            .deliver_from(origin.as_ref(), pane, text, Some(pending), cx)
+            .copy()
+        {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         cx.notify();

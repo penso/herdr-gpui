@@ -35,7 +35,7 @@ fn reused_pane_ids_do_not_mix_notes_from_different_daemons(cx: &mut TestAppConte
     assert!(text.contains("Original session."));
     assert!(!text.contains("Current session."));
     assert!(
-        kept(cx, "w0:p1").is_none(),
+        kept(&view, cx, "w0:p1").is_none(),
         "stale notes must not enter feedback"
     );
 
@@ -50,7 +50,7 @@ fn reused_pane_ids_do_not_mix_notes_from_different_daemons(cx: &mut TestAppConte
             view.poll_deliveries(cx);
         });
     });
-    let sent = delivered(cx, "w0:p1").unwrap();
+    let sent = delivered(&view, cx, "w0:p1").unwrap();
     assert!(sent.contains("Current session."));
     if cfg!(unix) {
         assert!(
@@ -62,7 +62,7 @@ fn reused_pane_ids_do_not_mix_notes_from_different_daemons(cx: &mut TestAppConte
         // preserving the stale notes that were already copied there.
         assert_eq!(sent.matches("Original session.").count(), 1);
         assert_eq!(sent.matches("Current session.").count(), 1);
-        assert!(kept(cx, "w0:p1").is_none());
+        assert!(kept(&view, cx, "w0:p1").is_none());
     }
 }
 
@@ -81,7 +81,7 @@ fn replacing_an_endpoint_does_not_retarget_queued_notes(cx: &mut TestAppContext)
         });
     });
     assert!(copied(cx).contains("Original device."));
-    assert!(kept(cx, "w0:p1").is_none());
+    assert!(kept(&view, cx, "w0:p1").is_none());
 }
 
 #[gpui::test]

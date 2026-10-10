@@ -250,28 +250,25 @@ impl HerdrWindow {
                 .partition(|queued| queued.origin == origin && queued.note.target == target);
             queued = rest;
             let text = terminal_notes::prompt(batch.iter().map(|queued| &queued.note));
-            clipboard.extend(self.deliver_notes(
-                target,
-                true,
-                text,
-                None,
-                Some(clipboard.clone()),
-                cx,
-            ));
+            let target = target.map(|pane_id| crate::browser::FeedbackKey {
+                scope: crate::browser::scope(&self.endpoints[self.selected_endpoint]),
+                pane_id,
+            });
+            clipboard.extend(
+                self.deliver_notes(target, text, None, Some(clipboard.clone()), cx)
+                    .copy(),
+            );
         }
         if !copied.is_empty() {
-            // Feedback is keyed only by pane ID, so even its fallback could
-            // hand an old daemon's notes to an unrelated agent. Copy instead.
+            // Feedback is keyed by daemon, not session: once the session a
+            // note was written in is gone, its pane ID may name another
+            // pane, so even the fallback could reach the wrong agent.
             let stale = copied.iter().any(|queued| !queued.origin.current(self));
             let text = terminal_notes::prompt(copied.iter().map(|queued| &queued.note));
-            clipboard.extend(self.deliver_notes(
-                None,
-                false,
-                text,
-                None,
-                Some(clipboard.clone()),
-                cx,
-            ));
+            clipboard.extend(
+                self.deliver_notes(None, text, None, Some(clipboard.clone()), cx)
+                    .copy(),
+            );
             if stale {
                 self.show_flash(
                     Flash::warning("Notes whose original daemon is not selected were copied"),

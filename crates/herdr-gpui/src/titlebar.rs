@@ -1,5 +1,6 @@
 //! Native chrome and GitHub account access.
 mod decorations;
+mod navigation;
 mod status;
 mod tabs;
 
@@ -17,6 +18,11 @@ const AVATAR: f32 = 20.;
 
 /// Native chrome the window draws above its body; popups must clear it.
 pub(super) const HEIGHT: f32 = 34.;
+
+/// The narrowest window whose header keeps Back and Forward. Below it they
+/// give way, so the account and window controls stay reachable; the keys and
+/// mouse buttons still travel.
+const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -209,8 +215,20 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         // The toggle leads the bar so it stays put whether or not the sidebar
-        // below it is showing, and can always bring the sidebar back.
-        render(self.theme.surface, Some(self.sidebar_toggle(cx)), window)
+        // below it is showing, and can always bring the sidebar back. Back
+        // and Forward follow it, as in Finder and Files.
+        let leading = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .h_full()
+            .child(self.sidebar_toggle(cx))
+            .when(
+                f32::from(window.viewport_size().width) >= NAVIGATION_MIN_WIDTH,
+                |leading| leading.child(self.navigation(cx)),
+            )
+            .into_any_element();
+        render(self.theme.surface, Some(leading), window)
             .child(
                 div()
                     .debug_selector(|| "titlebar-center".into())
@@ -643,9 +661,14 @@ mod native_chrome_tests {
                     window.refresh();
                     let _ = window.draw(cx);
                 });
+                // The draggable center starts where Back and Forward end.
+                let leading = cx.debug_bounds("titlebar-navigation").unwrap().right();
                 assert_eq!(
                     cx.debug_bounds("titlebar-center").unwrap(),
-                    Bounds::new(point(px(112.), px(0.)), size(px(width - 152.), px(34.)))
+                    Bounds::new(
+                        point(leading, px(0.)),
+                        size(px(width - 40.) - leading, px(34.))
+                    )
                 );
                 let body = cx.debug_bounds("window-body").unwrap();
                 let banner_height = if env!("HERDR_BUILD_WORKTREE") == "1" {

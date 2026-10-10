@@ -89,12 +89,16 @@ impl HerdrWindow {
         };
         let (indexes, notes) = self.notes_round(tab);
         let pane_id = tab.origin.clone();
-        let origin = crate::agent_notes::Origin::of(self);
-        let scope = tab.scope.clone();
+        // The page's daemon must still be the one shown, in the session
+        // shown now, once the screenshots are saved.
+        let origin = crate::agent_notes::Origin::of(self).filter(|_| {
+            crate::browser::scope(&self.endpoints[self.selected_endpoint]) == tab.scope
+        });
         self.with_notes_prompt(tab, notes, save, cx, move |this, text, cx| {
-            let here = origin.as_ref().is_some_and(|origin| origin.current(this))
-                && super::super::view::scope(&this.endpoints[this.selected_endpoint]) == scope;
-            if let Some(text) = this.deliver_notes(pane_id, here, text, Some(pending), None, cx) {
+            if let Some(text) = this
+                .deliver_from(origin.as_ref(), pane_id, text, Some(pending), cx)
+                .copy()
+            {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
             }
         });

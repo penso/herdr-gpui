@@ -112,6 +112,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) activation_deadline: Option<std::time::Instant>,
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,
+    /// Whether the leftmost strip gave Back and Forward their full width
+    /// when it was last laid out; see `HerdrWindow::strip_leading`.
+    pub(crate) strip_navigation_fits: bool,
     pub(crate) pending_toast: Option<u64>,
     pub(crate) toasts_hidden: bool,
     pub(crate) pending_releases: Vec<endpoint::Release>,
@@ -263,6 +266,7 @@ pub(crate) struct HerdrWindow {
     /// A spaces row revealed last frame, which the next render moves out from
     /// under the pinned host header if it landed there.
     pub(crate) sidebar_pin_reveal: std::cell::Cell<Option<usize>>,
+    pub(crate) sidebar_search: sidebar::SidebarSearch,
     pub(crate) _poll: Task<()>,
     pub(crate) _activation: Subscription,
     pub(crate) _appearance: Subscription,
@@ -759,6 +763,7 @@ impl HerdrWindow {
             selection_epoch: 0,
             activation_deadline: None,
             pending_navigation: None,
+            strip_navigation_fits: true,
             pending_toast: None,
             toasts_hidden: false,
             pending_releases: Vec::new(),
@@ -851,6 +856,7 @@ impl HerdrWindow {
             sidebar_scroll: Default::default(),
             sidebar_revealed: Default::default(),
             sidebar_pin_reveal: Default::default(),
+            sidebar_search: sidebar::SidebarSearch::new(cx),
             _poll: poll,
             sidebar_view,
             surface_signal: cx.new(|_| SurfaceSignal),

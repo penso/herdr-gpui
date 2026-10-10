@@ -7,8 +7,12 @@ fn sent_notes_cannot_enter_another_daemons_feedback(cx: &mut TestAppContext) {
     write(&view, cx, "Only for the original daemon.");
     cx.simulate_keystrokes("enter");
     cx.update(|_, cx| {
+        let waiter = crate::browser::FeedbackKey {
+            scope: crate::browser::scope(&view.read(cx).endpoints[0]),
+            pane_id: "w0:p1".into(),
+        };
         cx.default_global::<crate::browser::Feedback>()
-            .set_waiting(vec!["w0:p1".into()]);
+            .set_waiting(vec![waiter]);
         view.update(cx, |view, cx| {
             assert_eq!(view.deliveries.len(), 1);
             let mut snapshot = (**view.live.snapshot.as_ref().unwrap()).clone();
@@ -19,7 +23,7 @@ fn sent_notes_cannot_enter_another_daemons_feedback(cx: &mut TestAppContext) {
         });
     });
     assert!(
-        kept(cx, "w0:p1").is_none(),
+        kept(&view, cx, "w0:p1").is_none(),
         "even a waiter with the same pane ID cannot receive stale notes"
     );
     let text = cx
@@ -56,7 +60,7 @@ fn sent_notes_survive_endpoint_reordering_but_not_replacement(cx: &mut TestAppCo
             assert_eq!(view.deliveries.len(), 0);
         });
     });
-    assert!(kept(cx, "w0:p1").is_none());
+    assert!(kept(&view, cx, "w0:p1").is_none());
     let text = cx
         .update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text()))
         .unwrap();

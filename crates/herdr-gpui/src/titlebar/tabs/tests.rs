@@ -60,6 +60,12 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
     let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
     assert_eq!(toggle.left(), px(LEADING));
     assert!(header.contains(&toggle.center()));
+    // Back and Forward follow the toggle in the sidebar's header, so the
+    // strip leads with its tabs.
+    let navigation = cx.debug_bounds("titlebar-navigation").unwrap();
+    assert!(header.contains(&navigation.center()));
+    assert!(navigation.left() >= toggle.right());
+    assert!(navigation.right() <= header.right());
     assert!(cx.debug_bounds("strip-titlebar-leading").is_none());
     // The strip ends with the account at the window's right edge.
     let new_tab = cx.debug_bounds("new-tab").unwrap();
@@ -100,6 +106,9 @@ fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppCo
         let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
         let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
         assert!(leading.contains(&toggle.center()), "{mode}");
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        assert!(leading.contains(&back.center()), "{mode}");
+        assert!(back.left() >= toggle.right(), "{mode}");
         assert_eq!(leading.top(), px(0.), "{mode}");
         // Clear of the traffic lights, whatever the column beside it covers.
         assert!(toggle.left() >= px(LEADING), "{mode}");
@@ -177,5 +186,85 @@ fn a_bottom_tab_bar_keeps_the_header(cx: &mut TestAppContext) {
         "strip-titlebar-room",
     ] {
         assert!(cx.debug_bounds(gone).is_none(), "{gone}");
+    }
+}
+
+/// Collapses the sidebar entirely, so the leftmost strip leads with the
+/// clearance, the toggle, and Back and Forward on every platform.
+fn hide_sidebar(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.settings.shared = Some(
+                crate::herdr_settings::Settings::parse_text(
+                    "[ui]\nsidebar_collapsed_mode = 'hidden'",
+                )
+                .unwrap(),
+            );
+            view.toggle_sidebar();
+            cx.notify();
+        })
+    });
+    draw(cx);
+}
+
+#[gpui::test]
+fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    hide_sidebar(&view, cx);
+    // The least row that holds everything but the tabs, which shrink away
+    // first: measured, since the clearance and controls differ by platform.
+    let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
+    let new_tab = cx.debug_bounds("new-tab").unwrap();
+    let room = cx.debug_bounds("strip-titlebar-room").unwrap();
+    let needed =
+        f32::from(leading.right() + (px(1200.) - new_tab.left()) - room.size.width) + DRAG_ROOM;
+    // Too narrow for Back and Forward, wide enough for the rest.
+    let width = needed - Style::NATIVE.width() / 2.;
+    for _ in 0..2 {
+        cx.simulate_resize(size(px(width), px(600.)));
+        draw(cx);
+    }
+    let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
+    assert!(avatar.right() <= px(width), "{avatar:?} in {width}");
+    assert!(cx.debug_bounds("titlebar-back").is_none());
+    assert!(!view.read_with(cx, |view, _| view.strip_navigation_fits));
+    // Given the room back, they return, and stay put across frames.
+    for _ in 0..3 {
+        cx.simulate_resize(size(px(1200.), px(600.)));
+        draw(cx);
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        assert!(
+            cx.debug_bounds("strip-titlebar-leading")
+                .unwrap()
+                .contains(&back.center())
+        );
+    }
+}
+
+#[gpui::test]
+fn a_narrow_sidebar_hands_back_and_forward_to_the_strip(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    // What the header needs differs by platform: the traffic lights'
+    // clearance and each style's buttons.
+    let needed = LEADING + SIDEBAR_TOGGLE + Style::NATIVE.width() + SIDEBAR_END;
+    for width in [None, Some(160.)] {
+        cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.sidebar_width = width;
+                cx.notify();
+            })
+        });
+        draw(cx);
+        let header = cx.debug_bounds("sidebar-titlebar").unwrap();
+        let in_sidebar = f32::from(header.size.width) >= needed;
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        let forward = cx.debug_bounds("titlebar-forward").unwrap();
+        assert_eq!(header.contains(&back.center()), in_sidebar, "{width:?}");
+        assert_eq!(
+            cx.debug_bounds("strip-titlebar-leading").is_some(),
+            !in_sidebar
+        );
+        // Never cut off by the sidebar's edge.
+        assert!(!in_sidebar || forward.right() <= header.right());
     }
 }

@@ -11,6 +11,8 @@ use herdr_client::protocol::{
 };
 use std::sync::Arc;
 
+mod titlebar_navigation;
+
 /// A coherent surface for `snapshot`, as the daemon projects one.
 pub(super) fn surface(snapshot: &ClientShellSnapshot, pane: &str) -> Arc<PaneSurfaceFrame> {
     let rect = SurfaceRect {

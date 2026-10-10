@@ -27,7 +27,7 @@ fn moving_the_selected_host_keeps_its_notes_deliverable(cx: &mut TestAppContext)
             assert_eq!(view.terminal_notes.queued(), 0);
         });
     });
-    assert!(kept(cx, "w0:p1").is_none());
+    assert!(kept(&view, cx, "w0:p1").is_none());
 }
 
 #[gpui::test]

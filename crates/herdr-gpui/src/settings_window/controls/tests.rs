@@ -2,6 +2,7 @@ use super::*;
 use core::prelude::v1::test;
 
 mod session_restore;
+mod sidebar_search;
 
 pub(super) fn skill_fixture(
     window: &mut Window,

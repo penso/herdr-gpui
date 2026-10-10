@@ -34,7 +34,7 @@ fn pending_review_notes_are_sent_once_and_resend_after_collection(cx: &mut gpui:
             }
         });
     });
-    let original = kept(cx).unwrap();
+    let original = kept(&view, cx).unwrap();
     assert_eq!(original.matches("Note: Implement this once.").count(), 1);
     assert!(!original.contains("Edited once."));
     for _ in 0..2 {
@@ -45,7 +45,7 @@ fn pending_review_notes_are_sent_once_and_resend_after_collection(cx: &mut gpui:
                 view.poll_deliveries(cx);
             });
         });
-        let sent = kept(cx).unwrap();
+        let sent = kept(&view, cx).unwrap();
         assert_eq!(sent.matches("Note: Edited once.").count(), 1);
     }
 }

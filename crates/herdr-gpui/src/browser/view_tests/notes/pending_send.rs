@@ -22,7 +22,13 @@ fn page_notes_wait_for_busy_delivery_and_feedback_before_resend(cx: &mut gpui::T
             }
         });
     });
-    assert_eq!(kept(cx).unwrap().matches("Note: Make it blue").count(), 1);
+    assert_eq!(
+        kept(&view, cx)
+            .unwrap()
+            .matches("Note: Make it blue")
+            .count(),
+        1
+    );
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             view.send_notes(&tab, cx);
@@ -30,5 +36,11 @@ fn page_notes_wait_for_busy_delivery_and_feedback_before_resend(cx: &mut gpui::T
             view.poll_deliveries(cx);
         });
     });
-    assert_eq!(kept(cx).unwrap().matches("Note: Make it blue").count(), 1);
+    assert_eq!(
+        kept(&view, cx)
+            .unwrap()
+            .matches("Note: Make it blue")
+            .count(),
+        1
+    );
 }

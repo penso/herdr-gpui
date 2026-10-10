@@ -15,6 +15,7 @@ mod rail;
 mod render;
 mod reorder;
 mod row;
+mod search;
 mod sticky;
 mod tokens;
 mod view;
@@ -37,6 +38,7 @@ pub(crate) use {
     rail::SidebarMode,
     reorder::WorkspaceDrag,
     row::{compact, github_mark, label_text, styled as styled_token},
+    search::SidebarSearch,
     view::SidebarView,
     workspaces::workspace_label,
 };

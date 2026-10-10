@@ -55,8 +55,10 @@ pub(super) struct Setup {
     /// Offered themes, by name; `theme` indexes the first one shown.
     pub themes: Vec<(SharedString, Theme)>,
     pub theme: usize,
-    /// Where "Send to agent" writes; without one it only prints.
+    /// Where "Send to agent" writes when the agent cannot be reached
+    /// through Herdr GPUI; without one it only prints.
     pub feedback: Option<PathBuf>,
+    pub send_notes: feedback::SendNotes,
 }
 
 struct Card {
@@ -77,7 +79,8 @@ pub(super) struct MockupWindow {
     cards: Vec<Card>,
     overall: Entity<SearchInput>,
     feedback: Option<PathBuf>,
-    /// Whether a write is running; sends wait for it.
+    send_notes: feedback::SendNotes,
+    /// Whether a send is running; sends wait for it.
     sending: bool,
     status: SharedString,
     focus: FocusHandle,
@@ -127,6 +130,7 @@ impl MockupWindow {
             themes,
             theme,
             feedback,
+            send_notes,
         } = setup;
         let look = Look {
             theme: themes
@@ -170,11 +174,9 @@ impl MockupWindow {
             solo: None,
             cards,
             overall,
-            status: match &feedback {
-                Some(path) => format!("Send writes {}", path.display()).into(),
-                None => "Send prints to the terminal".into(),
-            },
+            status: "Pick variants, add notes, then send them to the agent".into(),
             feedback,
+            send_notes,
             sending: false,
             focus,
         }
@@ -241,26 +243,23 @@ impl MockupWindow {
         let text = self.report(cx);
         // The terminal copy is for an agent that reads the process output.
         println!("{text}");
-        let Some(path) = self.feedback.clone() else {
-            self.status = "Sent: printed to the terminal".into();
-            cx.notify();
-            return;
-        };
         self.sending = true;
         self.status = "Sending...".into();
         cx.notify();
+        let path = self.feedback.clone();
+        let send_notes = self.send_notes;
         cx.spawn(async move |this, cx| {
-            let target = path.clone();
-            let written = cx
+            let sent = cx
                 .background_executor()
-                .spawn(async move { feedback::write(&target, text.as_bytes()) })
+                .spawn(async move { feedback::deliver(text, path.as_deref(), send_notes) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.sending = false;
-                this.status = match written {
-                    Ok(()) => {
-                        println!("mockup: feedback written {}", path.display());
-                        format!("Sent to {}", path.display()).into()
+                this.status = match sent {
+                    // The skill reads this line to know where the notes went.
+                    Ok(sent) => {
+                        println!("mockup: sent: {}", sent.status());
+                        sent.status().into()
                     }
                     Err(error) => {
                         eprintln!("mockup: {error}");

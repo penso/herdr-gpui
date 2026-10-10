@@ -201,7 +201,12 @@ impl SearchInput {
         self.did_edit(changed, cx);
     }
 
+    /// Restyles the field. An unchanged look is a no-op, so a parent may
+    /// call this from its own render without redrawing the field each frame.
     pub fn set_appearance(&mut self, font: FontConfig, theme: Theme, cx: &mut Context<Self>) {
+        if self.font == font && self.theme == theme {
+            return;
+        }
         self.font = font;
         self.theme = theme;
         self.layout = None;

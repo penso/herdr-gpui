@@ -1,19 +1,30 @@
 //! The title bar folded into the tab row, as Chrome and Conductor draw it.
 //! With Herdr's tab bar at the top the window keeps no header of its own: the
-//! sidebar's column starts with the traffic-light clearance and the sidebar
-//! toggle, the leftmost group's strip takes them when the sidebar is not
-//! expanded, and the rightmost one ends with the bar's git button, account,
+//! sidebar's column starts with the traffic-light clearance, the sidebar
+//! toggle, and Back and Forward, the leftmost group's strip takes them when
+//! the sidebar is not expanded or too narrow for them, and the rightmost one ends with the bar's git button, account,
 //! and window controls, with the header's usage text before them. Every
 //! strip keeps empty room that moves the window, however many tabs it holds;
 //! more tabs than fit still scroll.
 
-use super::{HEIGHT, LEADING, movable};
+use super::{HEIGHT, LEADING, movable, navigation::Style};
 use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition, sidebar::SidebarMode};
 use gpui::{prelude::*, *};
 
 /// Empty room a strip keeps after its tabs so the window can always be
 /// moved from it, even when its tabs overflow.
 pub(crate) const DRAG_ROOM: f32 = 40.;
+
+/// How readily the strip's leading controls give up width: far less than the
+/// tabs, which shrink first, so they only narrow once the tabs have none.
+/// Flex shrinking weighs this by the base width, so it stays negligible next
+/// to any tab row.
+const NAVIGATION_SHRINK: f32 = 0.001;
+
+/// The sidebar toggle's 28px button and the 4px after it.
+const SIDEBAR_TOGGLE: f32 = 32.;
+/// Room kept after Back and Forward at the sidebar header's end.
+const SIDEBAR_END: f32 = 8.;
 
 /// Which window corners a group's strip reaches, so the bar's leading and
 /// trailing parts land in the strips at the window's edges.
@@ -40,10 +51,22 @@ impl HerdrWindow {
         self.tab_bar_position() == TabBarPosition::Top && !self.strip_hidden(first, cx)
     }
 
+    /// Whether Back and Forward fit in the expanded sidebar's header after
+    /// the traffic lights and the toggle. A sidebar dragged narrower than
+    /// that hands them to the leftmost strip instead.
+    fn navigation_in_sidebar(&self, window: &Window) -> bool {
+        let mode = self.sidebar_mode();
+        let column = mode
+            .width(self.sidebar_width, f32::from(window.viewport_size().width))
+            .unwrap_or(0.);
+        mode == SidebarMode::Expanded
+            && column >= LEADING + SIDEBAR_TOGGLE + Style::NATIVE.width() + SIDEBAR_END
+    }
+
     /// The sidebar column's first row, level with the strips beside it: the
-    /// traffic lights' clearance, then the toggle while the sidebar is
-    /// expanded. A collapsed rail is too narrow for both, so the leftmost
-    /// strip takes the toggle and what remains of the clearance.
+    /// traffic lights' clearance, then the toggle and Back and Forward while
+    /// the sidebar is expanded. A collapsed rail is too narrow for them, so
+    /// the leftmost strip takes them and what remains of the clearance.
     pub(crate) fn sidebar_header(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         let header = div()
             .debug_selector(|| "sidebar-titlebar".into())
@@ -57,6 +80,9 @@ impl HerdrWindow {
             .child(div().flex_none().w(px(LEADING)).h_full())
             .when(self.sidebar_mode() == SidebarMode::Expanded, |header| {
                 header.child(self.sidebar_toggle(cx))
+            })
+            .when(self.navigation_in_sidebar(window), |header| {
+                header.child(self.navigation(cx))
             });
         movable(header, window)
     }
@@ -92,22 +118,38 @@ impl HerdrWindow {
     }
 
     /// What leads the leftmost strip: whatever clearance the sidebar column
-    /// leaves the traffic lights, and the toggle when the sidebar header does
-    /// not show it.
+    /// leaves the traffic lights, then the toggle and Back and Forward when
+    /// the sidebar header does not show them. Nothing when it shows both.
     pub(crate) fn strip_leading(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
-        let mode = self.sidebar_mode();
-        if mode == SidebarMode::Expanded {
+        if self.navigation_in_sidebar(window) {
             return None;
+        }
+        // Unlike the header, the strip shares its row with tabs and the
+        // trailing controls, at a width set by the sidebar, panels and group
+        // shares. The leading part may shrink, after the tabs and before
+        // anything else, so the window controls are never pushed out.
+        let leading = div()
+            .debug_selector(|| "strip-titlebar-leading".into())
+            // These controls belong to the window. Exclude the group's
+            // capture handler before it can switch connections and history;
+            // stopping propagation in a button's bubble handler is too late.
+            .block_mouse_except_scroll()
+            .flex()
+            .flex_shrink(NAVIGATION_SHRINK)
+            .min_w_0()
+            .overflow_hidden()
+            .items_center();
+        let mode = self.sidebar_mode();
+        // An expanded sidebar too narrow for Back and Forward keeps the
+        // toggle, and they open the content beside it.
+        if mode == SidebarMode::Expanded {
+            return Some(leading.pl(px(6.)).child(self.strip_navigation(cx)));
         }
         let column = mode
             .width(self.sidebar_width, f32::from(window.viewport_size().width))
             .unwrap_or(0.);
         Some(
-            div()
-                .debug_selector(|| "strip-titlebar-leading".into())
-                .flex()
-                .flex_none()
-                .items_center()
+            leading
                 .child(movable(
                     div()
                         .flex_none()
@@ -115,8 +157,49 @@ impl HerdrWindow {
                         .w(px((LEADING - column).max(0.))),
                     window,
                 ))
-                .child(self.sidebar_toggle(cx)),
+                .child(self.sidebar_toggle(cx))
+                .child(self.strip_navigation(cx)),
         )
+    }
+
+    /// Back and Forward in a slot that keeps their width but is the one part
+    /// of the leading controls that can shrink. They draw only when the slot
+    /// last got its full width, so a squeezed strip drops them whole rather
+    /// than clipping a button. The slot's size never depends on whether they
+    /// draw, so the choice cannot flip from one frame to the next.
+    fn strip_navigation(&self, cx: &mut Context<Self>) -> Div {
+        let width = Style::NATIVE.width();
+        let view = cx.entity().downgrade();
+        div()
+            .relative()
+            .flex()
+            .items_center()
+            .self_stretch()
+            .w(px(width))
+            .min_w_0()
+            // The only part of the leading controls that shrinks, so all of
+            // their lost width comes out of it.
+            .flex_shrink(1.)
+            .overflow_hidden()
+            .child(
+                canvas(
+                    move |bounds, _, cx| {
+                        let fits = bounds.size.width >= px(width - 0.5);
+                        let _ = view.update(cx, |this, cx| {
+                            if this.strip_navigation_fits != fits {
+                                this.strip_navigation_fits = fits;
+                                cx.notify();
+                            }
+                        });
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            .when(self.strip_navigation_fits, |slot| {
+                slot.child(self.navigation(cx))
+            })
     }
 
     /// What ends the rightmost strip: the same controls the header ends with.

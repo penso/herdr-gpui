@@ -6,7 +6,7 @@ fn send(
     cx: &mut VisualTestContext,
 ) -> String {
     cx.update(|_, cx| view.update(cx, |view, cx| view.send_notes(tab, cx)));
-    kept(cx).unwrap()
+    kept(view, cx).unwrap()
 }
 
 /// Sent notes stay listed; Send then delivers only new or edited ones, all

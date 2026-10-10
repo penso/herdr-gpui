@@ -13,9 +13,13 @@ fn retained_review_notes_cannot_target_a_replacement_session(cx: &mut gpui::Test
             view.send_review(the(view), cx);
             assert_eq!(view.deliveries.len(), 0);
         });
+        let target = crate::browser::FeedbackKey {
+            scope: crate::browser::scope(&view.read(cx).endpoints[0]),
+            pane_id: "w0:p1".into(),
+        };
         assert!(
             cx.default_global::<crate::browser::Feedback>()
-                .take("w0:p1")
+                .take(&target)
                 .is_none()
         );
         let text = cx

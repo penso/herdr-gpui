@@ -44,9 +44,13 @@ fn pending_send_covers_screenshot_saving_and_failure(cx: &mut TestAppContext) {
         });
         cx.run_until_parked();
         cx.update(|_, cx| {
+            let target = crate::browser::FeedbackKey {
+                scope: scope(&view.read(cx).endpoints[0]),
+                pane_id: "w0:p1".into(),
+            };
             let text = if cfg!(unix) {
                 cx.default_global::<crate::browser::Feedback>()
-                    .take("w0:p1")
+                    .take(&target)
             } else {
                 cx.read_from_clipboard().and_then(|item| item.text())
             }

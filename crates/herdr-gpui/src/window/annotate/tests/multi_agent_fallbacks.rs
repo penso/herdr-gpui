@@ -46,8 +46,8 @@ fn unavailable_agents_and_shell_notes_all_survive_one_send(cx: &mut TestAppConte
     cx.update(|_, cx| view.update(cx, |view, cx| view.send_terminal_notes(cx)));
     let text = if cfg!(unix) {
         [
-            kept(cx, "missing-one").unwrap(),
-            kept(cx, "missing-two").unwrap(),
+            kept(&view, cx, "missing-one").unwrap(),
+            kept(&view, cx, "missing-two").unwrap(),
             clipboard(cx),
         ]
         .join("\n")
@@ -80,7 +80,11 @@ fn failed_pastes_for_two_agents_are_recovered_together(cx: &mut TestAppContext) 
         });
     });
     let text = if cfg!(unix) {
-        [kept(cx, "w0:p1").unwrap(), kept(cx, "w0:p2").unwrap()].join("\n")
+        [
+            kept(&view, cx, "w0:p1").unwrap(),
+            kept(&view, cx, "w0:p2").unwrap(),
+        ]
+        .join("\n")
     } else {
         clipboard(cx)
     };
@@ -128,8 +132,8 @@ fn later_paste_failures_preserve_the_sends_earlier_clipboard_notes(cx: &mut Test
     let text = if cfg!(unix) {
         [
             clipboard(cx),
-            kept(cx, "w0:p1").unwrap(),
-            kept(cx, "w0:p2").unwrap(),
+            kept(&view, cx, "w0:p1").unwrap(),
+            kept(&view, cx, "w0:p2").unwrap(),
         ]
         .join("\n")
     } else {

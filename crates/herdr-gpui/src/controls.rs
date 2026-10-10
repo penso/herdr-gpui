@@ -62,6 +62,9 @@ pub enum Command {
     MoveTabNext,
     RenameTab,
     LastPane,
+    /// Back through the panes this endpoint has focused.
+    Back,
+    Forward,
     SwapLeft,
     SwapRight,
     SwapUp,
@@ -302,6 +305,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "last_pane",
         label: "Last Pane",
         shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::Back,
+        name: "back",
+        label: "Back",
+        shortcuts: &["cmd-["],
+    },
+    CommandInfo {
+        command: Command::Forward,
+        name: "forward",
+        label: "Forward",
+        shortcuts: &["cmd-]"],
     },
     CommandInfo {
         command: Command::SwapLeft,
@@ -854,6 +869,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         // or a dialog, so the window runs them.
         | Command::RenameTab
         | Command::LastPane
+        | Command::Back
+        | Command::Forward
         | Command::ResizeMode
         | Command::RenamePane
         | Command::PreviousWorkspace

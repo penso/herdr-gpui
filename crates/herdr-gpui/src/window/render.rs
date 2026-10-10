@@ -709,6 +709,20 @@ impl Render for HerdrWindow {
             .on_action(cx.listener(|this, _: &RingBellPreview, window, cx| {
                 this.preview_bell(window, cx);
             }))
+            // A mouse's side buttons walk the focus trail, as they do pages
+            // in a browser or folders in a file manager.
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Back, window, cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Forward, window, cx);
+                }),
+            )
             .size_full()
             .relative()
             .flex()

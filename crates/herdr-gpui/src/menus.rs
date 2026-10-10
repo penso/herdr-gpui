@@ -222,6 +222,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::action(
+                    "Back",
+                    RunCommand {
+                        command: Command::Back,
+                    },
+                ),
+                MenuItem::action(
+                    "Forward",
+                    RunCommand {
+                        command: Command::Forward,
+                    },
+                ),
+                MenuItem::action(
                     "Toggle Pane Zoom",
                     RunCommand {
                         command: Command::Zoom,

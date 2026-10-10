@@ -390,6 +390,8 @@ impl HerdrWindow {
                 | Command::GoToFile
                 | Command::WorktreeNotes
                 | Command::LastPane
+                | Command::Back
+                | Command::Forward
                 | Command::PreviousWorkspace
                 | Command::NextWorkspace
                 | Command::WorkspaceNumber(_)
