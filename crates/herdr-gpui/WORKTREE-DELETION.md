@@ -20,6 +20,8 @@ build dependency and has not been modified.
    Only `dirty_worktree_requires_force` enables force; the dialog restates the
    discarded-files warning and requires a new confirmation before sending the
    same method with `force: true`.
+   Held Enter repeats are consumed without submitting; force requires a fresh
+   keypress or a click on **Force remove**.
 5. Dismiss on a matching `worktree_removed` result (workspace, path and force).
    Pushed snapshots, not optimistic client mutations, update the sidebar.
 

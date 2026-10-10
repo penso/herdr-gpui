@@ -243,6 +243,16 @@ impl HerdrWindow {
                     cx.notify();
                 }
             }
+            // A held key can outlive a dirty-worktree refusal and the switch
+            // to Force remove. Destructive consent requires a fresh press.
+            "enter"
+                if event.is_held
+                    && matches!(
+                        self.menu.page,
+                        Some(Page::Dialog(
+                            WorkspaceAction::Close | WorkspaceAction::DeleteWorktree
+                        ))
+                    ) => {}
             "enter" if matches!(self.menu.page, Some(Page::Dialog(_))) => {
                 self.submit_workspace_dialog(window, cx)
             }

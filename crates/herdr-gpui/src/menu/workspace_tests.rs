@@ -15,6 +15,7 @@ mod targets;
 mod tiles;
 mod worktree_create;
 mod worktree_delete;
+mod worktree_delete_keys;
 mod worktree_delete_recovery;
 
 /// Presses the open workspace dialog's submit, for `endpoint::lifecycle_tests`.
