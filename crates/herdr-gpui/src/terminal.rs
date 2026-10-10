@@ -223,6 +223,20 @@ impl WheelAccumulator {
         };
         WheelSteps { lines, columns }
     }
+
+    /// Forgets the vertical motion kept between events, once another path
+    /// has consumed it.
+    pub(crate) fn drop_lines(&mut self) {
+        self.lines = WheelRemainder::default();
+    }
+}
+
+/// The rows `event` scrolls, up into history being positive.
+pub(crate) fn wheel_rows(event: &ScrollWheelEvent, cell_height: f32) -> f32 {
+    match event.delta {
+        ScrollDelta::Pixels(delta) => delta.y.to_f64() as f32 / cell_height,
+        ScrollDelta::Lines(delta) => delta.y,
+    }
 }
 
 pub struct WheelTarget {

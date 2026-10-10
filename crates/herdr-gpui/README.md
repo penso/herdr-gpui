@@ -2710,6 +2710,17 @@ records when reporting the failure.
   horizontal by the platform (macOS, X11, Wayland), so it is sent as horizontal
   motion with Shift held, not swapped back. Popups capture wheel input only
   within their displayed bounds; input never falls through to a covered pane.
+- The daemon shows whole rows, at most one surface per render interval (16 ms),
+  so wheel scrollback in a pane draws where the OS's own deltas, momentum
+  included, put the content. Each delta slides in over 48 ms. The wheel asks
+  the daemon for each row as the motion enters it, and the rows are drawn from
+  the presented surface and the earlier ones that showed them. When the
+  gesture stops part-way into a row, the pane rests there; clicks, selection,
+  and links target the cells where they are drawn. Applications reading the
+  wheel, a dragged scrollbar thumb, a frame placing images, an open popup,
+  keyboard scrolling, and any change to the pane's rows besides the scroll move
+  the content to the daemon's whole row. Only the moving pane repaints; other
+  panes replay their cached paint.
 - Direct semantic cell canvas: named ANSI colors, indexed 256-color palette,
   RGB, reset foreground/background, reverse, dim, hidden, bold, italic,
   underline, strikeout, wide-cell skip handling, and cursor shapes.
