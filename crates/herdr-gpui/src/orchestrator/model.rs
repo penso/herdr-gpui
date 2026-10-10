@@ -271,6 +271,13 @@ pub(crate) struct Run {
     pub(crate) owner: Owner,
 }
 
+impl Run {
+    /// When the run began, unknown for one found from its branch.
+    pub(crate) fn started(&self) -> Option<DateTime<Utc>> {
+        (self.owner != Owner::Branch).then_some(self.started_at)
+    }
+}
+
 /// Where a run's agent lives in Herdr, written by the run's owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct HerdrSession {

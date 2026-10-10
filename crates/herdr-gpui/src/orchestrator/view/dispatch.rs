@@ -349,8 +349,19 @@ impl OrchestratorView {
                 .flex()
                 .items_center()
                 .justify_center()
+                .p_4()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(card)
+                // A short window or large text scrolls the card rather than
+                // pushing its fields and buttons out of reach.
+                .child(
+                    div()
+                        .id("orchestrator-overlay-card")
+                        .debug_selector(|| "orchestrator-overlay-card".into())
+                        .max_h_full()
+                        .max_w_full()
+                        .overflow_y_scroll()
+                        .child(card),
+                )
                 .into_any_element(),
         )
     }

@@ -237,7 +237,24 @@ impl Store {
 
     /// Writes a run herdr-gpui dispatched, with its Herdr session, in one
     /// transaction. Inserts or updates; a run owned elsewhere is refused.
+    /// Only a new run is saved this way; later writes use [`Self::update_run`].
     pub(crate) fn save_run(&mut self, run: &Run, session: Option<&HerdrSession>) -> Result<()> {
+        self.write_run(run, session, false)
+    }
+
+    /// Writes a run that already exists, as [`Self::save_run`] does, but
+    /// refuses one removed since it was read, so an action finishing late
+    /// never brings a removed run and its session back.
+    pub(crate) fn update_run(&mut self, run: &Run, session: Option<&HerdrSession>) -> Result<()> {
+        self.write_run(run, session, true)
+    }
+
+    fn write_run(
+        &mut self,
+        run: &Run,
+        session: Option<&HerdrSession>,
+        existing: bool,
+    ) -> Result<()> {
         self.writable()?;
         if run.owner != Owner::HerdrGpui {
             return Err(Error::NotOwner(run.id.clone()));
@@ -246,6 +263,16 @@ impl Store {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         refuse_foreign(&transaction, &run.id)?;
+        if existing {
+            let found: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM runs WHERE id = ?1)",
+                [&run.id],
+                |row| row.get(0),
+            )?;
+            if !found {
+                return Err(Error::RunNotFound(run.id.clone()));
+            }
+        }
         let workspace = run
             .workspace
             .as_ref()

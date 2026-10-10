@@ -145,6 +145,14 @@ fn own_runs_round_trip_with_their_session() {
         store.delete_run("4f7c"),
         Err(Error::RunNotFound(id)) if id == "4f7c"
     ));
+    // An action that read the run before it was removed cannot bring it,
+    // or its session, back.
+    assert!(matches!(
+        store.update_run(&saved, Some(&session("4f7c"))),
+        Err(Error::RunNotFound(id)) if id == "4f7c"
+    ));
+    assert!(store.runs().unwrap().is_empty());
+    assert!(store.sessions().unwrap().is_empty());
 }
 
 #[test]

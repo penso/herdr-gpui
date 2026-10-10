@@ -122,7 +122,7 @@ pub(crate) fn perform(
             }
             found.state = RunState::Cancelled;
             found.updated_at = Utc::now();
-            store.save_run(&found, Some(&session))?;
+            store.update_run(&found, Some(&session))?;
         }
         Action::Send { run, text } => {
             let (_, _, session, host) = own_run(site, run)?;
@@ -303,7 +303,11 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
         run.state = RunState::Failed;
         run.message = Some(error.to_string().chars().take(500).collect());
         run.updated_at = Utc::now();
-        store.save_run(&run, kept.as_ref())?;
+        // A run removed meanwhile stays removed; the failure is still told.
+        match store.update_run(&run, kept.as_ref()) {
+            Ok(()) | Err(Error::RunNotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
     }
     outcome
 }
@@ -409,7 +413,7 @@ fn launch(
         agent_name: name.to_owned(),
         updated_at: run.updated_at,
     };
-    store.save_run(run, Some(&herdr_session))?;
+    store.update_run(run, Some(&herdr_session))?;
     let mut start = vec![
         "agent",
         "start",
@@ -435,6 +439,6 @@ fn launch(
     )?;
     run.state = RunState::Running;
     run.updated_at = Utc::now();
-    store.save_run(run, Some(&herdr_session))?;
+    store.update_run(run, Some(&herdr_session))?;
     Ok(())
 }

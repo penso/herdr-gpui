@@ -492,7 +492,7 @@ impl OrchestratorView {
                             .child(div().flex_1())
                             .child(look.dot(color, 8.))
                             .child(div().text_color(rgb(color)).child(row.status.label()))
-                            .child(look.muted(age(Some(run.started_at), chrono::Utc::now()))),
+                            .child(look.muted(age(run.started(), chrono::Utc::now()))),
                     )
                     .when(!branch.is_empty(), |el| {
                         el.child(

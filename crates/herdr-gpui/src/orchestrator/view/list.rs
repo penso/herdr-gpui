@@ -460,7 +460,7 @@ impl OrchestratorView {
                 .w(px(36.))
                 .text_size(look.small())
                 .text_color(rgb(theme.muted))
-                .child(age(Some(run.started_at), chrono::Utc::now())),
+                .child(age(run.started(), chrono::Utc::now())),
         )
         .child(div().flex_none().w(px(100.)).flex().child(look.badge(
             run.owner.as_str(),

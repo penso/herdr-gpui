@@ -403,7 +403,8 @@ impl OrchestratorView {
         cx.notify();
     }
 
-    /// The account GitHub is read as; a change syncs again at once.
+    /// The account GitHub is read as; a change syncs again at once and reads
+    /// the open pull request again.
     pub(crate) fn set_github(
         &mut self,
         token: Option<Arc<SecretString>>,
@@ -423,6 +424,11 @@ impl OrchestratorView {
         if let Some(service) = &self.service {
             service.refresh(token);
         }
+        // What the old account read goes, and the open pull request is read
+        // again as the new one: a lookup made signed out was dropped.
+        self.pr.track(None);
+        self.reload_pull_request();
+        self.follow_pull_request();
         cx.notify();
     }
 
