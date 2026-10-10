@@ -7,7 +7,6 @@ use crate::{
     HerdrWindow,
     browser::{Feedback, FeedbackKey},
     connection::ConnectionBridge,
-    control::NotesTo,
     terminal::InputTarget,
     window::Flash,
 };
@@ -351,7 +350,8 @@ impl HerdrWindow {
         target: &crate::control::Target<'_>,
         text: &str,
         cx: &mut Context<Self>,
-    ) -> Option<NotesTo> {
+    ) -> Option<crate::control::NotesTo> {
+        use crate::control::NotesTo;
         let pane = target.pane?;
         let ours = target.daemon.is_none_or(|daemon| {
             self.endpoints[self.selected_endpoint]
