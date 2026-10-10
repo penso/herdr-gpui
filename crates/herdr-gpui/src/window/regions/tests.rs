@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{HerdrWindow, Owner, partition};
+use super::{HerdrWindow, Look, Owner, partition};
 use crate::sidebar::layout_tests::fixture_window;
 use crate::terminal_painter::Layer;
 use gpui::{Entity, EntityId, TestAppContext, VisualTestContext};
@@ -8,6 +8,8 @@ use herdr_client::protocol::{
     CellData, CursorState, FrameData, PaneSurfaceFrame, PaneSurfacePane, SurfaceRect,
 };
 use std::sync::Arc;
+
+mod slides;
 
 fn rect(x: u16, y: u16, width: u16, height: u16) -> SurfaceRect {
     SurfaceRect {
@@ -55,6 +57,16 @@ fn frame(rows: &[&str]) -> FrameData {
         cursor: None,
         hyperlinks: vec![],
         graphics: vec![],
+    }
+}
+
+fn look() -> Look {
+    Look {
+        font: gpui::font("Menlo"),
+        font_size: 14.,
+        cell_width: 8.5,
+        cell_height: 17.,
+        theme: crate::config::Theme::default(),
     }
 }
 

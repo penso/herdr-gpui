@@ -5,9 +5,15 @@
 use super::HerdrWindow;
 use crate::{
     connection::ConnectionBridge,
-    terminal::{WheelAccumulator, key_input, pane_key_input, wheel_target},
+    terminal::{
+        InputTarget, WheelAccumulator, cursor_offset, key_input, pane_key_input, wheel_rows,
+        wheel_target,
+    },
 };
-use gpui::{Context, KeyDownEvent, KeyUpEvent, ScrollWheelEvent, Window};
+use gpui::{
+    Bounds, Context, KeyDownEvent, KeyUpEvent, Pixels, Point, ScrollWheelEvent, Window, point, px,
+    size,
+};
 
 impl HerdrWindow {
     pub(crate) fn open_terminal_link(
@@ -22,8 +28,8 @@ impl HerdrWindow {
         };
         if event.down.button != gpui::MouseButton::Left
             || event.down.click_count != 1
-            || (event.up.position.x - event.down.position.x).abs() > gpui::px(4.)
-            || (event.up.position.y - event.down.position.y).abs() > gpui::px(4.)
+            || (event.up.position.x - event.down.position.x).abs() > px(4.)
+            || (event.up.position.y - event.down.position.y).abs() > px(4.)
         {
             return;
         }
@@ -50,7 +56,7 @@ impl HerdrWindow {
     /// application still receives it everywhere else.
     pub(crate) fn link_modifier_held(
         &self,
-        position: gpui::Point<gpui::Pixels>,
+        position: Point<Pixels>,
         modifiers: gpui::Modifiers,
     ) -> bool {
         modifiers.shift
@@ -63,7 +69,7 @@ impl HerdrWindow {
     /// Whether a left click here would open a link, which the pointer shows.
     pub(crate) fn terminal_link_hovered(
         &self,
-        position: gpui::Point<gpui::Pixels>,
+        position: Point<Pixels>,
         modifiers: gpui::Modifiers,
     ) -> bool {
         let web = (self.terminal_link_at(position).is_some()
@@ -76,17 +82,89 @@ impl HerdrWindow {
         web || (modifiers.secondary() && self.file_link_at(position).is_some())
     }
 
-    pub(crate) fn terminal_link_at(&self, position: gpui::Point<gpui::Pixels>) -> Option<String> {
+    /// Whether wheel scrolling may draw panes between rows. Images paint with
+    /// the whole grid, which never slides, a dragged thumb places the content
+    /// exactly where the pointer put it, and a popup stays on its rows.
+    pub(crate) fn slides_allowed(&self) -> bool {
+        self.scrollbar_drag.is_none()
+            && (self.live.surface.as_ref()).is_none_or(|surface| {
+                surface.graphics.placements.is_empty() && surface.popup.is_none()
+            })
+    }
+
+    /// The pane drawn mid-row after a wheel scroll, in pixels from the grid's
+    /// origin, and how far below its grid position its content is drawn.
+    fn scroll_shift(&self) -> Option<(Bounds<Pixels>, Pixels)> {
+        let (rect, offset) = self.presentation.scroll.offset()?;
+        let (cell_width, cell_height) = (self.cell_width, self.config.terminal.line_height());
+        let pane = Bounds::new(
+            point(
+                px(f32::from(rect.x) * cell_width),
+                px(f32::from(rect.y) * cell_height),
+            ),
+            size(
+                px(f32::from(rect.width) * cell_width),
+                px(f32::from(rect.height) * cell_height),
+            ),
+        );
+        Some((pane, px(offset * cell_height)))
+    }
+
+    /// How far below its grid position the content at grid pixel `cell` is
+    /// drawn, with the pane that clips it.
+    pub(crate) fn shift_at(&self, cell: Point<Pixels>) -> Option<(Bounds<Pixels>, Pixels)> {
+        self.scroll_shift().filter(|(pane, _)| pane.contains(&cell))
+    }
+
+    /// `position` in the terminal grid's pixels where the content drawn there
+    /// sits, and whether the live surface holds it: the sliver uncovered at a
+    /// pane's edge shows a row from an earlier frame, mapped to the edge row.
+    fn drawn_at(&self, position: Point<Pixels>) -> ((f32, f32), bool) {
+        let mut grid = position - self.bounds.origin;
+        let mut held = true;
+        if let Some((pane, shift)) = self.shift_at(grid) {
+            grid.y -= shift;
+            held = pane.contains(&grid);
+            grid.y = grid.y.clamp(pane.top(), pane.bottom() - px(1.));
+        }
+        ((f32::from(grid.x), f32::from(grid.y)), held)
+    }
+
+    /// `position` in the terminal grid's pixels, for clicks and selection.
+    pub(crate) fn grid_position(&self, position: Point<Pixels>) -> (f32, f32) {
+        self.drawn_at(position).0
+    }
+
+    /// `position` in the terminal grid's pixels, or `None` over a row the live
+    /// surface does not hold, so links never resolve against another row.
+    pub(crate) fn drawn_position(&self, position: Point<Pixels>) -> Option<(f32, f32)> {
+        let (grid, held) = self.drawn_at(position);
+        held.then_some(grid)
+    }
+
+    /// How far below its grid cell the input cursor is drawn, which an IME
+    /// composition and its candidate window follow.
+    pub(crate) fn ime_shift(&self) -> Pixels {
+        let Some(cursor) = (self.live.surface.as_deref()).and_then(|s| s.frame.cursor.as_ref())
+        else {
+            return px(0.);
+        };
+        let cell = cursor_offset(cursor, self.cell_width, self.config.terminal.line_height());
+        self.shift_at(cell).map_or(px(0.), |(_, shift)| shift)
+    }
+
+    pub(crate) fn terminal_link_at(&self, position: Point<Pixels>) -> Option<String> {
         if self.menu.page.is_some()
             || !self.live.surface_ready()
             || !self.bounds.contains(&position)
         {
             return None;
         }
+        let (x, y) = self.drawn_position(position)?;
         crate::terminal::link_at(
             self.live.surface.as_deref()?,
-            f32::from(position.x - self.bounds.origin.x),
-            f32::from(position.y - self.bounds.origin.y),
+            x,
+            y,
             self.cell_width,
             self.config.terminal.line_height(),
         )
@@ -116,18 +194,37 @@ impl HerdrWindow {
             self.wheel = WheelAccumulator::default();
             return;
         };
-        let steps = self
+        let mut steps = self
             .wheel
             .steps(&target, event, self.cell_width, cell_height);
+        // Scrollback follows the OS's motion exactly; anything else, such as an
+        // application reading the wheel, gets whole steps as they accumulate.
+        let smooth = match &target.target {
+            InputTarget::Pane(id) if self.slides_allowed() => {
+                self.presentation.wheel(id, wheel_rows(event, cell_height))
+            }
+            InputTarget::Pane(_) | InputTarget::Popup(_) => None,
+        };
+        if let Some(lines) = smooth {
+            steps.lines = lines;
+            // The motion is spent here; the whole-line path must not count it again.
+            self.wheel.drop_lines();
+        }
         cx.stop_propagation();
         for input in target.wheel_events(steps, event.modifiers) {
             let result =
                 ConnectionBridge::send_input(handle, &snapshot.boot_id, &target.target, input);
             if let Err(error) = result {
                 self.local_error = Some(format!("Wheel input not sent: {error}"));
+                // The rows asked for never left, so nothing may wait on them.
+                self.presentation.scroll.clear();
                 cx.notify();
-                return;
+                break;
             }
+        }
+        if smooth.is_some() {
+            // The drawing moves with every delta, before any surface lands.
+            self.redraw_terminal(cx);
         }
     }
 

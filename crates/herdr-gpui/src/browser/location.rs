@@ -37,12 +37,63 @@ pub(crate) enum Location {
     Review {
         checkout: ReviewCheckout,
     },
+    /// A repository's issues, pull requests, and agent runs, drawn by the
+    /// app, never a page.
+    Orchestrator {
+        repo: OrchestratorRepo,
+    },
     /// A local source file, drawn read-only by the app, never a page.
     Code {
         file: crate::code_view::CodeFile,
     },
     /// Every device this window connects to, drawn by the app, never a page.
     Devices,
+}
+
+/// The checkout an orchestrator tab lists the repository of, on the tab's
+/// endpoint, which may be an SSH host. Saved with the tabs, so it is checked
+/// again whenever it is read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "SavedOrchestratorRepo")]
+pub(crate) struct OrchestratorRepo {
+    pub(crate) checkout: String,
+}
+
+#[derive(Deserialize)]
+struct SavedOrchestratorRepo {
+    checkout: String,
+}
+
+impl TryFrom<SavedOrchestratorRepo> for OrchestratorRepo {
+    type Error = crate::orchestrator::Error;
+
+    fn try_from(saved: SavedOrchestratorRepo) -> crate::orchestrator::Result<Self> {
+        Self::new(saved.checkout)
+    }
+}
+
+impl OrchestratorRepo {
+    /// An absolute, bounded path without control characters; a remote one
+    /// is a POSIX path whatever this machine's own convention.
+    pub(crate) fn new(checkout: String) -> crate::orchestrator::Result<Self> {
+        let valid = !checkout.is_empty()
+            && checkout.len() <= 4096
+            && !checkout.chars().any(char::is_control)
+            && (checkout.starts_with('/') || Path::new(&checkout).is_absolute());
+        if !valid {
+            return Err(crate::orchestrator::Error::InvalidCheckout);
+        }
+        Ok(Self { checkout })
+    }
+
+    /// The checkout's folder name, for the tab title.
+    pub(crate) fn name(&self) -> &str {
+        self.checkout
+            .trim_end_matches(['/', '\\'])
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(&self.checkout)
+    }
 }
 
 /// The local checkout a review tab shows. Saved with the tabs, so it is
@@ -119,7 +170,9 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
             // Never loaded: a review is drawn by the app.
-            Self::Review { .. } | Self::Code { .. } | Self::Devices => "about:blank".to_owned(),
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices => {
+                "about:blank".to_owned()
+            }
         }
     }
 
@@ -127,7 +180,7 @@ impl Location {
     pub(crate) fn is_page(&self) -> bool {
         !matches!(
             self,
-            Self::Review { .. } | Self::Code { .. } | Self::Devices
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices
         )
     }
 
@@ -138,6 +191,7 @@ impl Location {
             Self::Local { file } => file.path().display().to_string(),
             Self::Review { checkout } => format!("Review of {}", checkout.branch),
             Self::Code { file } => file.path.clone(),
+            Self::Orchestrator { repo } => format!("Orchestrator of {}", repo.name()),
             Self::Devices => "Devices overview".to_owned(),
         }
     }
@@ -149,6 +203,7 @@ impl Location {
             Self::Local { file } => file.entry.rsplit('/').next().unwrap_or_default().to_owned(),
             Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
             Self::Code { file } => file.name().to_owned(),
+            Self::Orchestrator { repo } => format!("Orchestrator \u{00b7} {}", repo.name()),
             Self::Devices => "Devices".to_owned(),
         }
     }

@@ -191,6 +191,28 @@ pub(super) fn fetch_with_backoff(
     parse_graphql(response, &owner, &repo, branch, head.as_ref())
 }
 
+/// Any pull request of `owner/repo` by its number, for views that list pull
+/// requests rather than follow a branch. Runs on a background worker.
+pub(crate) fn by_number(
+    owner: &str,
+    repo: &str,
+    number: u64,
+    token: &secrecy::SecretString,
+    cancelled: impl Fn() -> bool,
+    cooldown: &mut Option<Duration>,
+) -> Result {
+    let response = crate::github::graphql(
+        "pull_request",
+        token,
+        NUMBER_QUERY,
+        serde_json::json!({"owner":owner,"repo":repo,"number":number}),
+        TIMEOUT,
+        cancelled,
+        cooldown,
+    )?;
+    super::parse::parse_by_number(response, owner, repo, number)
+}
+
 /// The remote head configured for this local branch, independent of its local name.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Head {

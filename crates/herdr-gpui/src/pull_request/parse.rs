@@ -70,11 +70,27 @@ pub(super) fn parse_numbered(
     if pr.is_null() {
         return Ok(None);
     }
+    if pr["isCrossRepository"] != true && pr["number"].as_u64() == Some(number) {
+        return Ok(None);
+    }
+    response["data"]["repository"]["pullRequest"] = pr;
+    parse_by_number(response, owner, repo, number)
+}
+
+/// Any pull request of `owner/repo` by number, held to the same identity
+/// checks against its own head repository and branch.
+pub(super) fn parse_by_number(
+    mut response: serde_json::Value,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) -> Result {
+    let pr = response["data"]["repository"]["pullRequest"].take();
+    if pr.is_null() {
+        return Ok(None);
+    }
     if pr["number"].as_u64() != Some(number) {
         return Err(Error::PrIdentity);
-    }
-    if pr["isCrossRepository"] != true {
-        return Ok(None);
     }
     let (Some(head_owner), Some(head_repo), Some(branch)) = (
         pr["headRepositoryOwner"]["login"].as_str(),
