@@ -7,6 +7,7 @@ mod beads;
 mod github;
 mod keys;
 mod location;
+mod naming;
 mod prompt;
 mod repo;
 mod service;

@@ -3,7 +3,7 @@
 //! agents and GitHub account from the window's tick, and acting on its
 //! events. The view itself is an entity that knows nothing of tabs.
 
-use super::{Event, LiveAgent, Look, OrchestratorView, Request, Timing};
+use super::{Event, LiveAgent, LiveBranch, Look, OrchestratorView, Request, Timing};
 use crate::{
     HerdrWindow, NavigationTarget,
     browser::{Location, OrchestratorRepo, Slot, Store, Tab, TabId, WebUrl},
@@ -29,12 +29,13 @@ impl Orchestrator {
     }
 }
 
-/// The live agents last handed to the views, and the snapshots they came
-/// from, so they are rebuilt only when a snapshot changes.
+/// The live agents and workspace branches last handed to the views, and the
+/// snapshots they came from, so they are rebuilt only when a snapshot changes.
 #[derive(Default)]
 pub(crate) struct LiveCache {
     from: Vec<usize>,
     agents: Arc<Vec<LiveAgent>>,
+    branches: Arc<Vec<LiveBranch>>,
 }
 
 impl HerdrWindow {
@@ -166,8 +167,24 @@ impl HerdrWindow {
         }
     }
 
-    fn github_account(&self) -> (Option<Arc<secrecy::SecretString>>, Option<String>) {
-        match self.pr_profile() {
+    /// The GitHub account a view on `target` reads and writes with: the SSH
+    /// host's own account when it has one, as the GitHub page picks it for
+    /// that host, else the main account. Never the host shown now, so a
+    /// detached view keeps its account when another host is selected.
+    pub(super) fn github_account(
+        &self,
+        target: &ConnectTarget,
+    ) -> (Option<Arc<secrecy::SecretString>>, Option<String>) {
+        let host = self
+            .endpoints
+            .iter()
+            .filter(|endpoint| matches!(endpoint.connection.target, ConnectTarget::Ssh { .. }))
+            .find(|endpoint| &endpoint.connection.target == target)
+            .and_then(|endpoint| self.menu.github_hosts.get(&endpoint.id));
+        let profile =
+            host.and_then(|auth| auth.profile.as_ref())
+                .or(self.menu.github.profile.as_ref());
+        match profile {
             Some(profile) => (Some(profile.token.clone()), Some(profile.login.clone())),
             None => (None, None),
         }
@@ -185,15 +202,16 @@ impl HerdrWindow {
         else {
             return;
         };
-        let (token, login) = self.github_account();
         let Some((_, workspace_id)) = self.browser_key() else {
             return;
         };
+        let target = self.endpoints[self.selected_endpoint]
+            .connection
+            .target
+            .clone();
+        let (token, login) = self.github_account(&target);
         let request = Request {
-            target: self.endpoints[self.selected_endpoint]
-                .connection
-                .target
-                .clone(),
+            target,
             checkout: repo.checkout,
             workspace_id,
             token,
@@ -277,21 +295,22 @@ impl HerdrWindow {
             };
             view.update(cx, |view, cx| view.set_hosts(hosts, cx));
         }
-        let live = self.live_agents();
+        let (live, branches) = self.live_agents();
         let look = self.look();
-        let (token, login) = self.github_account();
         for (_, view) in views {
+            let (token, login) = self.github_account(view.read(cx).target());
             view.update(cx, |view, cx| {
                 view.poll(cx);
                 view.set_look(look.clone(), cx);
-                view.set_live(live.clone(), cx);
-                view.set_github(token.clone(), login.clone(), cx);
+                view.set_live(live.clone(), branches.clone(), cx);
+                view.set_github(token, login, cx);
             });
         }
     }
 
-    /// Every agent on a connected host, rebuilt only when a snapshot changed.
-    fn live_agents(&mut self) -> Arc<Vec<LiveAgent>> {
+    /// Every agent and workspace branch on a connected host, rebuilt only
+    /// when a snapshot changed.
+    fn live_agents(&mut self) -> (Arc<Vec<LiveAgent>>, Arc<Vec<LiveBranch>>) {
         let snapshots: Vec<_> = (0..self.endpoints.len())
             .map(|index| {
                 let live = if index == self.selected_endpoint {
@@ -310,8 +329,29 @@ impl HerdrWindow {
             .map(|snapshot| snapshot.as_ref().map_or(0, |s| Arc::as_ptr(s) as usize))
             .collect();
         if from == self.orchestrator_live.from {
-            return self.orchestrator_live.agents.clone();
+            return (
+                self.orchestrator_live.agents.clone(),
+                self.orchestrator_live.branches.clone(),
+            );
         }
+        let host_of = |index: usize| match &self.endpoints[index].connection.target {
+            ConnectTarget::Ssh { target, .. } => Some(target.clone()),
+            _ => None,
+        };
+        let branches: Vec<LiveBranch> = snapshots
+            .iter()
+            .enumerate()
+            .filter_map(|(index, snapshot)| Some((index, snapshot.as_ref()?)))
+            .flat_map(|(index, snapshot)| {
+                snapshot.workspaces.iter().filter_map(move |workspace| {
+                    Some(LiveBranch {
+                        host: host_of(index),
+                        workspace_id: workspace.workspace_id.clone(),
+                        branch: workspace.branch.clone()?,
+                    })
+                })
+            })
+            .collect();
         let agents: Vec<LiveAgent> = snapshots
             .iter()
             .enumerate()
@@ -339,8 +379,12 @@ impl HerdrWindow {
         self.orchestrator_live = LiveCache {
             from,
             agents: Arc::new(agents),
+            branches: Arc::new(branches),
         };
-        self.orchestrator_live.agents.clone()
+        (
+            self.orchestrator_live.agents.clone(),
+            self.orchestrator_live.branches.clone(),
+        )
     }
 
     fn orchestrator_event(

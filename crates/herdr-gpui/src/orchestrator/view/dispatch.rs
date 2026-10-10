@@ -63,6 +63,11 @@ impl Confirm {
                 "Sends Esc, then Ctrl-C to the agent. The worktree is kept.".into(),
                 "Stop",
             ),
+            Self::Remove { branch, .. } if branch.is_empty() => (
+                "Remove run?".into(),
+                "Forgets this failed run. It has no worktree to remove.".into(),
+                "Remove",
+            ),
             Self::Remove { branch, .. } => (
                 "Remove worktree?".into(),
                 format!(
@@ -70,10 +75,13 @@ impl Confirm {
                 ),
                 "Remove",
             ),
-            Self::Merge { method, .. } => (
-                format!("{}?", method.action()),
-                "Merges the pull request at the head commit shown here; GitHub refuses if it moved."
-                    .into(),
+            Self::Merge { method, target } => (
+                format!("{} #{}?", method.action(), target.number),
+                format!(
+                    "Merges pull request #{} at head commit {}; GitHub refuses if the branch moved since.",
+                    target.number,
+                    target.head().get(..12).unwrap_or(target.head()),
+                ),
                 "Merge",
             ),
             Self::DeleteBead { id, .. } => (
@@ -128,8 +136,8 @@ impl OrchestratorView {
             return;
         };
         let branch_name = match (&found.pull_request, review) {
-            (Some(pr), true) => format!("review/pr-{}", pr.number),
-            _ => prompt::branch(found),
+            (Some(_), true) => crate::orchestrator::naming::review_branch(found),
+            _ => crate::orchestrator::naming::branch(found),
         };
         let field = |placeholder: &str, text: &str, cx: &mut Context<Self>| {
             let (ui, theme) = (self.look.ui.clone(), self.look.theme.clone());

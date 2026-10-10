@@ -908,6 +908,7 @@ impl HerdrWindow {
             async {}
         })
         .detach();
+        Self::close_orchestrator_windows_on_release(cx);
         #[cfg(feature = "integration-test")]
         if sidebar_test {
             this._poll = Task::ready(());

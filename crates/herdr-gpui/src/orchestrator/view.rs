@@ -127,6 +127,11 @@ pub(crate) struct OrchestratorView {
     snapshot: Snapshot,
     look: Look,
     live: Arc<Vec<LiveAgent>>,
+    /// Herdr workspaces' branches on connected hosts, for finding work.
+    live_branches: Arc<Vec<super::LiveBranch>>,
+    /// The runs the database records; the snapshot's runs add those found
+    /// from branches.
+    recorded_runs: Arc<Vec<super::Run>>,
     /// The signed-in GitHub login, for "Mine".
     login: Option<String>,
     tab: Tab,
@@ -148,6 +153,9 @@ pub(crate) struct OrchestratorView {
     issue_rows: Vec<ItemRow>,
     pull_request_rows: Vec<ItemRow>,
     run_lines: Vec<RunLine>,
+    /// Items runs work on that are no longer listed, so those runs still
+    /// open a page with their controls.
+    stand_ins: Vec<Item>,
     /// The open item's description, parsed once per change of its text.
     description: markdown::Markdown,
     /// The previewed item's description, likewise.
@@ -215,6 +223,8 @@ impl OrchestratorView {
             snapshot,
             look,
             live: Arc::default(),
+            live_branches: Arc::default(),
+            recorded_runs: Arc::default(),
             login: None,
             tab: Tab::default(),
             sort: Sort::default(),
@@ -234,6 +244,7 @@ impl OrchestratorView {
             issue_rows: Vec::new(),
             pull_request_rows: Vec::new(),
             run_lines: Vec::new(),
+            stand_ins: Vec::new(),
             description: markdown::Markdown::default(),
             preview_markdown: markdown::Markdown::default(),
             dialog: None,
@@ -268,6 +279,7 @@ impl OrchestratorView {
             changed = true;
         }
         if let Some(snapshot) = self.service.as_ref().and_then(Service::poll) {
+            self.recorded_runs = snapshot.runs.clone();
             self.snapshot = snapshot;
             self.refresh_rows();
             self.follow_pull_request();
@@ -276,7 +288,6 @@ impl OrchestratorView {
         if self.pr.poll() {
             // A comment or merge landed: read the pull request and list again.
             if self.pr.take_settled() {
-                self.reload_pull_request();
                 self.refresh();
             }
             self.fetch_avatars(cx);
@@ -377,11 +388,17 @@ impl OrchestratorView {
         cx.notify();
     }
 
-    pub(crate) fn set_live(&mut self, live: Arc<Vec<LiveAgent>>, cx: &mut Context<Self>) {
-        if live == self.live {
+    pub(crate) fn set_live(
+        &mut self,
+        live: Arc<Vec<LiveAgent>>,
+        branches: Arc<Vec<super::LiveBranch>>,
+        cx: &mut Context<Self>,
+    ) {
+        if live == self.live && branches == self.live_branches {
             return;
         }
         self.live = live;
+        self.live_branches = branches;
         self.refresh_rows();
         cx.notify();
     }
@@ -409,13 +426,30 @@ impl OrchestratorView {
         cx.notify();
     }
 
+    /// Syncs again, and reads the open pull request's status and
+    /// conversation again, which a sync alone leaves as they were.
     fn refresh(&mut self) {
         if let Some(service) = &self.service {
             service.refresh(self.request.token.clone());
         }
+        self.reload_pull_request();
+        self.reload_conversation();
     }
 
     fn refresh_rows(&mut self) {
+        let found = super::naming::found_runs(
+            &self.snapshot.items,
+            &self.recorded_runs,
+            &self.live_branches,
+            &self.snapshot.branches,
+            &self.live,
+        );
+        self.snapshot.runs = if found.is_empty() {
+            self.recorded_runs.clone()
+        } else {
+            Arc::new(self.recorded_runs.iter().cloned().chain(found).collect())
+        };
+        self.stand_ins = stand_ins(&self.snapshot);
         let items = &self.snapshot.items;
         let runs = Runs::new(&self.snapshot.runs, &self.snapshot.sessions, &self.live);
         self.issue_rows = rows::issue_rows(
@@ -435,7 +469,14 @@ impl OrchestratorView {
             self.mine,
             self.sort,
         );
-        self.run_lines = rows::run_lines(&runs, items, &self.query, self.active_runs);
+        let listed: Vec<Item>;
+        let titled = if self.stand_ins.is_empty() {
+            items.as_slice()
+        } else {
+            listed = items.iter().chain(&self.stand_ins).cloned().collect();
+            listed.as_slice()
+        };
+        self.run_lines = rows::run_lines(&runs, titled, &self.query, self.active_runs);
         if self.selected.is_none() || !self.selection_listed() {
             self.selected = self.keys().into_iter().next();
         }
@@ -472,10 +513,13 @@ impl OrchestratorView {
             .is_some_and(|selected| self.keys().contains(selected))
     }
 
+    /// The item `key` names, or the stand-in of one a run works on that is
+    /// no longer listed.
     fn item(&self, key: &str) -> Option<&Item> {
         self.snapshot
             .items
             .iter()
+            .chain(&self.stand_ins)
             .find(|item| item.key.canonical() == key)
     }
 
@@ -572,9 +616,9 @@ impl OrchestratorView {
             return;
         }
         let workspace = self.snapshot.runs.get(run).and_then(|run| {
-            run.workspace
-                .as_ref()
-                .filter(|workspace| workspace.backend == super::Backend::Herdr)
+            run.workspace.as_ref().filter(|workspace| {
+                workspace.backend == super::Backend::Herdr && !workspace.id.is_empty()
+            })
         });
         match workspace {
             Some(workspace) => cx.emit(Event::OpenWorkspace {
@@ -738,4 +782,25 @@ impl Render for OrchestratorView {
             .children(merge_menu)
             .children(overlay)
     }
+}
+
+/// A stand-in for each item a run works on that the snapshot no longer lists.
+fn stand_ins(snapshot: &Snapshot) -> Vec<Item> {
+    let listed: HashSet<String> = snapshot
+        .items
+        .iter()
+        .map(|item| item.key.canonical())
+        .collect();
+    let mut keys: Vec<&str> = snapshot
+        .runs
+        .iter()
+        .map(|run| run.item_key.as_str())
+        .filter(|key| !listed.contains(*key))
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys.into_iter()
+        .filter_map(|key| key.parse().ok())
+        .map(Item::stand_in)
+        .collect()
 }

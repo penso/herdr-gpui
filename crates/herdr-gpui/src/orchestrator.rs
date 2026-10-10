@@ -15,6 +15,7 @@ mod error;
 mod github;
 mod location;
 mod model;
+mod naming;
 mod prompt;
 mod repo;
 mod service;
@@ -33,6 +34,7 @@ pub(crate) use model::{
     Activity, Checkpoint, HerdrSession, Item, ItemKey, Owner, Provider, PullRequest, Run, RunState,
     SourceKey,
 };
+pub(crate) use naming::LiveBranch;
 #[cfg(test)]
 pub(crate) use service::SourceStatus;
 pub(crate) use service::{Notice, Request, Service, Snapshot, SyncState, Timing};

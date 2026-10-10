@@ -47,6 +47,22 @@ fn version_zero(path: &Path) {
              '{\"comments\":0,\"review_comments\":null,\"commits\":null}');",
         )
         .unwrap();
+    private(path);
+}
+
+/// The modes agent-launcher gives its database and directory.
+fn private(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path, mode| {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        mode(path.parent().unwrap(), 0o700);
+        mode(path, 0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 #[test]
@@ -210,4 +226,30 @@ fn a_linked_database_is_refused() {
     std::fs::write(&elsewhere, b"").unwrap();
     std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
     assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+}
+
+/// An existing database others could read is refused rather than written,
+/// as is one in a directory others could list; private ones, as
+/// agent-launcher makes them, open.
+#[test]
+#[cfg(unix)]
+fn a_database_others_can_read_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |path: &Path, mode| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = database(&dir);
+    let folder = path.parent().unwrap().to_owned();
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(&path, b"").unwrap();
+
+    mode(&folder, 0o700);
+    mode(&path, 0o644);
+    assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+    mode(&path, 0o600);
+    mode(&folder, 0o755);
+    assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+    mode(&folder, 0o700);
+    assert!(Store::open(&path).is_ok());
 }

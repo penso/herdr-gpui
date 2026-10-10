@@ -80,3 +80,31 @@ fn checkpoints_keep_agent_launcher_markers() {
         Some(at("2026-10-09T02:24:37.055082Z"))
     );
 }
+
+#[test]
+fn canonical_keys_parse_back_and_stand_in_for_unlisted_items() {
+    for key in [
+        item(&github(), "pr/369", "Find bar").key,
+        ItemKey {
+            source: SourceKey {
+                repository: "acme:wid%gets".into(),
+                ..github()
+            },
+            native_id: "a:b%3A".into(),
+        },
+    ] {
+        assert_eq!(key.canonical().parse::<ItemKey>().unwrap(), key);
+    }
+    for bad in [
+        "github:github.com:penso/herdr-gpui",
+        "nope:h:r:1",
+        "github:h:r:",
+    ] {
+        assert!(bad.parse::<ItemKey>().is_err(), "{bad}");
+    }
+    let pr = Item::stand_in(item(&github(), "pr/369", "Find bar").key);
+    assert_eq!(
+        (pr.identifier.as_str(), pr.state.as_str()),
+        ("#369", "unlisted")
+    );
+}

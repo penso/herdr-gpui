@@ -328,7 +328,7 @@ fn refuse_foreign(transaction: &Transaction<'_>, id: &str) -> Result<()> {
         })
         .optional()?;
     match owner.map(|owner| owner.parse::<Owner>()).transpose()? {
-        Some(Owner::AgentLauncher) => Err(Error::NotOwner(id.to_owned())),
+        Some(Owner::AgentLauncher | Owner::Branch) => Err(Error::NotOwner(id.to_owned())),
         Some(Owner::HerdrGpui) | None => Ok(()),
     }
 }
@@ -602,7 +602,9 @@ mod private {
     }
 
     /// The directory or file must be ours, not a link, and the file must have
-    /// one name. Permissions are not widened or repaired.
+    /// one name. Neither may grant the group or others anything: issue
+    /// bodies, run messages, and paths go in. Permissions are not repaired;
+    /// agent-launcher makes both private, so a shared one passes.
     fn check(path: &Path, directory: bool) -> Result<()> {
         let metadata = fs::symlink_metadata(path).map_err(|source| Error::Prepare {
             path: path.to_owned(),
@@ -624,7 +626,9 @@ mod private {
     #[cfg(unix)]
     fn owned(metadata: &fs::Metadata, directory: bool) -> bool {
         use std::os::unix::fs::MetadataExt;
-        metadata.uid() == rustix::process::getuid().as_raw() && (directory || metadata.nlink() == 1)
+        metadata.uid() == rustix::process::getuid().as_raw()
+            && metadata.mode() & 0o077 == 0
+            && (directory || metadata.nlink() == 1)
     }
 
     #[cfg(not(unix))]

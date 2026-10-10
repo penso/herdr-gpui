@@ -44,6 +44,11 @@ fn component(value: &str) -> String {
     value.replace('%', "%25").replace(':', "%3A")
 }
 
+/// Reverses [`component`]: `%3A` first, so an escaped `%253A` stays `%3A`.
+fn uncomponent(value: &str) -> String {
+    value.replace("%3A", ":").replace("%25", "%")
+}
+
 /// One synced source: a provider's view of one repository.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SourceKey {
@@ -78,6 +83,29 @@ impl ItemKey {
     }
 }
 
+/// Parses [`ItemKey::canonical`]: escaped components never hold a `:`.
+impl FromStr for ItemKey {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        let parts: Vec<&str> = value.split(':').collect();
+        let [provider, host, repository, native_id] = parts[..] else {
+            return Err(Error::ItemKey(value.to_owned()));
+        };
+        if native_id.is_empty() {
+            return Err(Error::ItemKey(value.to_owned()));
+        }
+        Ok(Self {
+            source: SourceKey {
+                provider: provider.parse()?,
+                host: uncomponent(host),
+                repository: uncomponent(repository),
+            },
+            native_id: uncomponent(native_id),
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct PullRequest {
     pub(crate) number: u64,
@@ -89,6 +117,35 @@ pub(crate) struct PullRequest {
     pub(crate) head_sha: String,
     /// The repository holding the head branch, as `owner/name`.
     pub(crate) head_repository: Option<String>,
+}
+
+impl Item {
+    /// What a run's page shows when its item is no longer listed, such as
+    /// an issue closed since: the key alone, so the run keeps its controls.
+    pub(crate) fn stand_in(key: ItemKey) -> Self {
+        let number = key.native_id.strip_prefix("pr/").unwrap_or(&key.native_id);
+        let identifier = match key.source.provider {
+            Provider::Beads => key.native_id.clone(),
+            _ => format!("#{number}"),
+        };
+        Self {
+            key,
+            identifier,
+            title: "No longer listed".into(),
+            description: None,
+            state: "unlisted".into(),
+            url: None,
+            author: None,
+            labels: Vec::new(),
+            parent_id: None,
+            blocked_by: Vec::new(),
+            priority: None,
+            created_at: None,
+            updated_at: None,
+            pull_request: None,
+            activity: None,
+        }
+    }
 }
 
 /// Provider-reported engagement counts.
@@ -139,6 +196,8 @@ pub(crate) struct Checkpoint {
 pub(crate) enum Owner {
     AgentLauncher,
     HerdrGpui,
+    /// No application: a run found from its item's branch, never stored.
+    Branch,
 }
 
 impl Owner {
@@ -146,6 +205,7 @@ impl Owner {
         match self {
             Self::AgentLauncher => "agent-launcher",
             Self::HerdrGpui => "herdr-gpui",
+            Self::Branch => "branch",
         }
     }
 }

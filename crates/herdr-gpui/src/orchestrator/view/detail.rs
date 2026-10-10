@@ -599,7 +599,7 @@ impl OrchestratorView {
 
     /// A run card's buttons: open its pane while Herdr shows it; for the
     /// newest run herdr-gpui owns, a message field, Send, and Stop; Remove
-    /// for any run herdr-gpui owns that has a worktree.
+    /// for any run herdr-gpui owns that has a worktree or failed.
     fn run_controls(
         &self,
         run: &crate::orchestrator::Run,
@@ -618,6 +618,9 @@ impl OrchestratorView {
             .map(|workspace| workspace.branch.clone())
             .unwrap_or_default();
         let (stop_run, remove_run, agent) = (run.id.clone(), run.id.clone(), run.agent.clone());
+        // A failed run with no worktree is still forgotten through Remove.
+        let removable =
+            run.workspace.is_some() || run.state == crate::orchestrator::RunState::Failed;
         div()
             .flex()
             .flex_wrap()
@@ -658,7 +661,7 @@ impl OrchestratorView {
                         })),
                 )
             })
-            .when(own && writable && run.workspace.is_some(), |el| {
+            .when(own && writable && removable, |el| {
                 el.child(
                     look.icon_button(("orchestrator-card-remove", index), "icons/trash.svg")
                         .on_click(cx.listener(move |this, _, _, cx| {

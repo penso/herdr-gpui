@@ -37,7 +37,8 @@ agent-launcher wrote it and check that migration keeps its rows.
 | `github.rs`, `beads.rs` | The sources: one full listing each. |
 | `service.rs` | The worker thread per open view: sync, reload, and the action queue. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
-| `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts, branch names. |
+| `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts. |
+| `naming.rs` | agent-launcher's branch names, and runs found from branches. |
 | `view/` | The view entity: inbox, preview, item pages, dialogs. Pure row logic is in `view/rows.rs`. |
 | `tab.rs` | Hosting the view in a tab: opening, restoring, the tick, and events. |
 | `window.rs` | Hosting the same view in a window of its own, still fed from the main window's tick. |
@@ -49,6 +50,22 @@ script call, and the UI reads the newest `Snapshot` from a coalescing mailbox.
 
 Live agent status comes from each connected host's Herdr snapshot, matched to
 runs by host, workspace, and pane; it is never written back to the database.
+
+## Branches name their item
+
+Dispatch names a branch as agent-launcher does: `agent/<identifier>-<title>-<hash>`,
+where `<hash>` is the first eight hex digits of a UUIDv5 (URL namespace) of the
+item's canonical key. A read-only review uses `agent/review-<identifier>-<title>-<hash>`.
+The hash makes the branch the item's own, so work is found without a database:
+
+- a Herdr workspace on a connected host whose branch ends in an item's hash,
+  working when an agent is in it and stopped when none is;
+- a branch under `refs/heads/agent/` in the repository, read on each sync, that
+  no workspace shows.
+
+Each becomes a run owned by `branch`, shown like any other but never written,
+and only when no recorded run already has that branch. It opens its workspace;
+it has no Stop, Send, or Remove, since no application owns it.
 
 ## Adding GitLab
 

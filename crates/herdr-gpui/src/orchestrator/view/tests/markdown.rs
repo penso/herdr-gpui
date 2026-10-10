@@ -32,3 +32,16 @@ fn bodies_become_markdown_lines_once_per_change() {
     let changed = markdown.lines("Other");
     assert!(!std::rc::Rc::ptr_eq(&first, &changed));
 }
+
+#[test]
+fn code_keeps_its_html_and_prose_decodes_entities() {
+    let body = "Use `<div>` here.\n```html\n<div>example</div>\n<!-- note -->\n```\nAfter <b>bold</b>&nbsp;&amp;&nbsp;`&amp;`";
+    assert_eq!(
+        without_html(body),
+        "Use `<div>` here.\n```html\n<div>example</div>\n<!-- note -->\n```\nAfter bold & `&amp;`"
+    );
+    // An entity for a tag stays the character, not a tag to strip.
+    assert_eq!(without_html("&lt;b&gt; &amp;lt;"), "<b> &lt;");
+    // An unclosed span is a lone backtick.
+    assert_eq!(without_html("a ` b <b>c</b>"), "a ` b c");
+}

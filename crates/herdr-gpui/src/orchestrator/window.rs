@@ -1,7 +1,8 @@
 //! The orchestrator in a window of its own. The same view entity a tab
 //! hosted moves into it; the main window keeps polling it and feeding it the
 //! theme, live agents, and GitHub account from its tick, and acts on its
-//! events, until the window closes.
+//! events, until the window closes. The window closes with the main window
+//! that hosts it, since nothing else would poll it or act on its events.
 
 use super::{OrchestratorView, tab::Orchestrator};
 use crate::{
@@ -79,6 +80,27 @@ impl HerdrWindow {
                 self.show_flash(Flash::warning("Could not open a new window"), cx);
             }
         }
+    }
+
+    /// Closes this window's detached orchestrators when it goes. Called once,
+    /// as the window is made.
+    pub(crate) fn close_orchestrator_windows_on_release(cx: &mut Context<Self>) {
+        cx.on_release(|this, cx| {
+            let windows: Vec<AnyWindowHandle> = this
+                .detached_orchestrators
+                .values()
+                .map(|detached| detached.window)
+                .collect();
+            if windows.is_empty() {
+                return;
+            }
+            cx.defer(move |cx| {
+                for window in windows {
+                    let _ = window.update(cx, |_, window, _| window.remove_window());
+                }
+            });
+        })
+        .detach();
     }
 
     /// Forgets detached views whose windows closed.

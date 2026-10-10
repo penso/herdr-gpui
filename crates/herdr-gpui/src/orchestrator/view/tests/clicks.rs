@@ -37,7 +37,7 @@ fn the_run_arrow_asks_to_open_the_run(cx: &mut TestAppContext) {
     let theirs = run("r1", &issue, RunState::Failed, "2026-10-04T01:00:00Z");
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            view.snapshot.runs = Arc::new(vec![theirs]);
+            view.recorded_runs = Arc::new(vec![theirs]);
             view.tab = Tab::Runs;
             view.refresh_rows();
             cx.notify();

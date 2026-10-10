@@ -326,3 +326,26 @@ fn a_lost_worker_reports_instead_of_resending() {
         Some(Error::PrActionWorker.to_string().as_str())
     );
 }
+
+#[test]
+fn a_closed_pull_request_can_be_read_but_never_written() {
+    let mut pr = fixture().unwrap();
+    pr.state = State::Merged;
+    let closed = Target::for_reading(&pr).unwrap();
+    assert_eq!(closed.number, 8);
+    let mut actions = Actions::default();
+    actions.track(Some(closed));
+    assert!(actions.load_comments(token()).is_ok());
+    for action in [
+        Action::Comment("hi".into()),
+        Action::Merge(MergeMethod::Merge),
+    ] {
+        assert!(matches!(
+            actions.start(action, &[MergeMethod::Merge], token()),
+            Err(Error::PrActionTarget)
+        ));
+    }
+    // An open one reads and writes alike.
+    let open = Target::for_reading(&fixture().unwrap()).unwrap();
+    assert_eq!(Some(&open), Some(&target()));
+}

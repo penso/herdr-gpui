@@ -70,9 +70,23 @@ pub(crate) struct Target {
     pub url: String,
     id: String,
     head: String,
+    /// Whether comments and merges may be sent: only an open pull request's
+    /// target allows them. A closed one's is for reading its conversation.
+    writable: bool,
 }
 
 impl Target {
+    /// A target for reading `pr`'s conversation, whatever its state. Writes
+    /// through it are refused unless the pull request is open.
+    pub fn for_reading(pr: &PullRequest) -> crate::Result<Self> {
+        Self::of(pr, pr.state == State::Open)
+    }
+
+    /// The head commit a merge through this target names.
+    pub fn head(&self) -> &str {
+        &self.head
+    }
+
     /// The same pull request, whatever its head commit.
     pub fn same_pull_request(&self, other: &Self) -> bool {
         self.number == other.number
@@ -85,7 +99,16 @@ impl TryFrom<&PullRequest> for Target {
     type Error = Error;
 
     fn try_from(pr: &PullRequest) -> crate::Result<Self> {
-        if pr.state != State::Open || pr.id.is_empty() || pr.head_ref_oid.is_empty() {
+        if pr.state != State::Open {
+            return Err(Error::PrActionTarget);
+        }
+        Self::of(pr, true)
+    }
+}
+
+impl Target {
+    fn of(pr: &PullRequest, writable: bool) -> crate::Result<Self> {
+        if pr.id.is_empty() || pr.head_ref_oid.is_empty() {
             return Err(Error::PrActionTarget);
         }
         // Parsing re-wrote the URL to exactly this shape after checking it.
@@ -113,6 +136,7 @@ impl TryFrom<&PullRequest> for Target {
             url: pr.url.clone(),
             id: pr.id.clone(),
             head: pr.head_ref_oid.clone(),
+            writable,
         })
     }
 }
@@ -337,7 +361,11 @@ impl Actions {
         if self.running.is_some() {
             return Err(Error::PrActionBusy);
         }
-        let target = self.target.clone().ok_or(Error::PrActionTarget)?;
+        let target = self
+            .target
+            .clone()
+            .filter(|target| target.writable)
+            .ok_or(Error::PrActionTarget)?;
         let action = match action {
             Action::Comment(body) => {
                 let body = body.trim();

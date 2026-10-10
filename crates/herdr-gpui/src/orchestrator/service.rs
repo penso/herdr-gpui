@@ -8,6 +8,7 @@ use super::{
     actions::{Action, Site},
     beads, database_path, github,
     location::database_path_in,
+    naming,
     prompt::{self, Profile},
     repo::{self, RepoInfo},
 };
@@ -136,6 +137,8 @@ pub(crate) struct Snapshot {
     pub(crate) installed: Option<Arc<Vec<AgentKind>>>,
     /// The newest pull request lookup.
     pub(crate) pull_request: Option<PullRequestLookup>,
+    /// The repository's branches named for items, as each sync read them.
+    pub(crate) branches: Arc<Vec<String>>,
 }
 
 pub(crate) struct Service {
@@ -450,6 +453,11 @@ impl Worker {
         let Some(info) = self.snapshot.repo.clone() else {
             return;
         };
+        if let Some(host) = &self.host
+            && let Some(branches) = naming::local_branches(host, &info.main_root, &self.cancelled)
+        {
+            self.snapshot.branches = Arc::new(branches);
+        }
         for (key, supported) in sources(&info) {
             if self.cancelled() {
                 return;

@@ -32,6 +32,8 @@ pub(crate) enum Error {
     },
     #[error("Unknown issue provider {0:?}")]
     Provider(String),
+    #[error("Not an item key: {0:?}")]
+    ItemKey(String),
     #[error("Unknown run owner {0:?}")]
     Owner(String),
     #[error(

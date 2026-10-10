@@ -40,6 +40,14 @@ impl Look {
         px(self.ui.size - 1.)
     }
 
+    /// A list row `base` pixels tall at the usual text size, grown in step
+    /// with larger text so its lines never spill into the next row.
+    pub(crate) fn row(&self, base: f32) -> f32 {
+        /// The text size row heights are designed for.
+        const DESIGNED: f32 = 14.;
+        base * (self.ui.size / DESIGNED).max(1.)
+    }
+
     pub(crate) fn tiny(&self) -> Pixels {
         px((self.ui.size - 2.).max(9.))
     }

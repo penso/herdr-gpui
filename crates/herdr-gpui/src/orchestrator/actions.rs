@@ -85,7 +85,7 @@ impl Action {
             Self::Dispatch(_) => "Agent started",
             Self::Stop { .. } => "Agent stopped",
             Self::Send { .. } => "Message sent",
-            Self::Remove { .. } => "Worktree removed",
+            Self::Remove { .. } => "Run removed",
             Self::DeleteBead { .. } => "Bead deleted",
         }
     }
@@ -134,10 +134,12 @@ pub(crate) fn perform(
             )?;
         }
         Action::Remove { run } => {
-            let (mut store, found, _, host) = own_run(site, run)?;
-            if let Some(workspace) = &found.workspace {
+            let (mut store, found, session) = owned(site, run)?;
+            // A run with no session, such as one that failed before its
+            // worktree was made, has nothing on a host to remove.
+            if let (Some(workspace), Some(session)) = (&found.workspace, &session) {
                 herdr(
-                    &host,
+                    &host_of(site, session)?,
                     &[
                         "worktree",
                         "remove",
@@ -159,6 +161,14 @@ pub(crate) fn perform(
 /// A run herdr-gpui owns, with its session and the host its agent is on,
 /// read fresh from the database.
 fn own_run(site: &Site, id: &str) -> Result<(Store, Run, HerdrSession, Host)> {
+    let (store, run, session) = owned(site, id)?;
+    let session = session.ok_or_else(|| Error::RunNotFound(id.to_owned()))?;
+    let host = host_of(site, &session)?;
+    Ok((store, run, session, host))
+}
+
+/// A run herdr-gpui owns and its session, if it has one, read fresh.
+fn owned(site: &Site, id: &str) -> Result<(Store, Run, Option<HerdrSession>)> {
     let store = Store::open(&site.database)?;
     let run = store
         .runs()?
@@ -171,10 +181,8 @@ fn own_run(site: &Site, id: &str) -> Result<(Store, Run, HerdrSession, Host)> {
     let session = store
         .sessions()?
         .into_iter()
-        .find(|session| session.run_id == id)
-        .ok_or_else(|| Error::RunNotFound(id.to_owned()))?;
-    let host = host_of(site, &session)?;
-    Ok((store, run, session, host))
+        .find(|session| session.run_id == id);
+    Ok((store, run, session))
 }
 
 /// The host a session's agent is on: the repository's own unless the run was
@@ -273,18 +281,29 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
     });
     if let Err(error) = &outcome {
         // Undo the checkout of a run that never got going; the branch stays.
+        // A checkout that would not go keeps its session, which names the
+        // host, so Remove can try again; one that went is no longer the run's.
+        let mut kept = None;
         if let Some((host, workspace)) = created {
-            let _ = herdr(
+            let removed = herdr(
                 &host,
                 &["worktree", "remove", "--workspace", &workspace, "--force"],
                 "Removing the worktree",
                 &AtomicBool::new(false),
             );
+            if removed.is_ok() {
+                run.workspace = None;
+            } else {
+                kept = store
+                    .sessions()?
+                    .into_iter()
+                    .find(|session| session.run_id == run.id);
+            }
         }
         run.state = RunState::Failed;
         run.message = Some(error.to_string().chars().take(500).collect());
         run.updated_at = Utc::now();
-        store.save_run(&run, None)?;
+        store.save_run(&run, kept.as_ref())?;
     }
     outcome
 }

@@ -36,14 +36,77 @@ impl Markdown {
     }
 }
 
-/// `body` without HTML comments and the tags above. A `<` that opens no
-/// known tag is text and stays.
+/// `body` without HTML comments and the tags above. Code is left as
+/// written: fenced blocks and inline code spans, where a tag is the example.
+/// A `<` that opens no known tag is text and stays.
 pub(crate) fn without_html(body: &str) -> String {
     let mut out = String::with_capacity(body.len());
+    let mut prose = String::new();
+    let mut fenced = false;
+    for line in body.split_inclusive('\n') {
+        if line.trim_start().starts_with("```") {
+            if !fenced {
+                out.push_str(&prose_without_html(&prose));
+                prose.clear();
+            }
+            fenced = !fenced;
+            out.push_str(line);
+        } else if fenced {
+            out.push_str(line);
+        } else {
+            prose.push_str(line);
+        }
+    }
+    out.push_str(&prose_without_html(&prose));
+    out
+}
+
+/// Entities GitHub bodies use in prose, decoded; `&amp;` last, so an
+/// escaped `&amp;lt;` reads `&lt;`.
+const ENTITIES: &[(&str, &str)] = &[
+    ("&nbsp;", " "),
+    ("&lt;", "<"),
+    ("&gt;", ">"),
+    ("&quot;", "\""),
+    ("&#39;", "'"),
+    ("&amp;", "&"),
+];
+
+/// Prose text with its entities decoded.
+fn push_text(out: &mut String, text: &str) {
+    if !text.contains('&') {
+        out.push_str(text);
+        return;
+    }
+    let decoded = ENTITIES
+        .iter()
+        .fold(text.to_owned(), |text, (entity, value)| {
+            text.replace(entity, value)
+        });
+    out.push_str(&decoded);
+}
+
+/// Text outside fenced blocks without its HTML; inline code spans stay.
+fn prose_without_html(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
     let mut rest = body;
-    while let Some(start) = rest.find('<') {
-        out.push_str(&rest[..start]);
+    while let Some(start) = rest.find(['<', '`']) {
+        push_text(&mut out, &rest[..start]);
         let tail = &rest[start..];
+        if let Some(code) = tail.strip_prefix('`') {
+            // A span runs to the next backtick; an unclosed one is text.
+            match code.find('`') {
+                Some(end) => {
+                    out.push_str(&tail[..end + 2]);
+                    rest = &code[end + 1..];
+                }
+                None => {
+                    out.push('`');
+                    rest = code;
+                }
+            }
+            continue;
+        }
         if let Some(comment) = tail.strip_prefix("<!--") {
             rest = comment.find("-->").map_or("", |end| &comment[end + 3..]);
             continue;
@@ -70,6 +133,6 @@ pub(crate) fn without_html(body: &str) -> String {
         }
         rest = &tail[end + 1..];
     }
-    out.push_str(rest);
+    push_text(&mut out, rest);
     out
 }

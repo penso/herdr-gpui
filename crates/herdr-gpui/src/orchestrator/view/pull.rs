@@ -36,7 +36,7 @@ impl OrchestratorView {
     pub(super) fn follow_pull_request(&mut self) {
         let target = self
             .open_pull_request()
-            .and_then(|pr| pr_actions::Target::try_from(pr).ok());
+            .and_then(|pr| pr_actions::Target::for_reading(pr).ok());
         self.pr.track(target);
         let wants =
             matches!(&self.detail, Some(detail) if detail.tab == super::DetailTab::Conversation);
@@ -100,6 +100,20 @@ impl OrchestratorView {
         cx.notify();
     }
 
+    /// Reads the conversation again while its page shows; the comments read
+    /// before stay until the new ones arrive.
+    pub(super) fn reload_conversation(&mut self) {
+        let shown =
+            matches!(&self.detail, Some(detail) if detail.tab == super::DetailTab::Conversation);
+        if shown
+            && self.pr.target().is_some()
+            && self.pr.running().is_none()
+            && let Some(token) = self.request.token.clone()
+        {
+            let _ = self.pr.load_comments(token);
+        }
+    }
+
     pub(super) fn render_checks(&self, item: &Item) -> AnyElement {
         let look = &self.look;
         let theme = &look.theme;
@@ -113,19 +127,12 @@ impl OrchestratorView {
             .flex_col()
             .gap_1();
         let Some(pr) = self.open_pull_request() else {
-            let text = match self.snapshot.pull_request.as_ref() {
+            let text = match self.lookup_problem(item) {
                 _ if self.request.token.is_none() => {
                     "Sign in to GitHub to read the checks.".to_owned()
                 }
-                Some(lookup)
-                    if Some(lookup.number) == item.pull_request.as_ref().map(|pr| pr.number) =>
-                {
-                    match lookup.result.as_ref() {
-                        Err(error) => error.to_string(),
-                        Ok(_) => "GitHub reports no such pull request.".to_owned(),
-                    }
-                }
-                _ => "Reading the checks\u{2026}".to_owned(),
+                Some(problem) => problem,
+                None => "Reading the checks\u{2026}".to_owned(),
             };
             return column.child(look.muted(text)).into_any_element();
         };
@@ -158,6 +165,20 @@ impl OrchestratorView {
                     .child(format!("{} \u{00b7} {}", pr.lifecycle(), pr.merge_status())),
             );
         column.into_any_element()
+    }
+
+    /// Why `item`'s pull request lookup came back without one: its error,
+    /// or GitHub knowing no such pull request. `None` while it is read.
+    pub(super) fn lookup_problem(&self, item: &Item) -> Option<String> {
+        let lookup = self.snapshot.pull_request.as_ref()?;
+        if Some(lookup.number) != item.pull_request.as_ref().map(|pr| pr.number) {
+            return None;
+        }
+        match lookup.result.as_ref() {
+            Err(error) => Some(error.to_string()),
+            Ok(Some(_)) => None,
+            Ok(None) => Some("GitHub reports no such pull request.".to_owned()),
+        }
     }
 
     /// The merge methods GitHub allows here, as a small menu under the button.

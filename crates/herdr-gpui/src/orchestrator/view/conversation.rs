@@ -263,6 +263,13 @@ impl OrchestratorView {
                     } => self.render_review(index, author, review, &threads, now, cx),
                 });
             }
+        } else if let Some(problem) = self
+            .detail
+            .as_ref()
+            .and_then(|detail| self.item(&detail.key))
+            .and_then(|item| self.lookup_problem(item))
+        {
+            column = column.child(look.muted(problem));
         } else {
             column = column.child(look.muted("Reading the conversation\u{2026}"));
         }
