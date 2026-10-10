@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 mod clicks_and_scroll;
 mod copy_on_select;
 mod gestures;
+mod overwritten;
 
 pub(in crate::window) fn surface(rows: &[&str], width: u16) -> PaneSurfaceFrame {
     let height = rows.len() as u16;
