@@ -1,5 +1,3 @@
-set windows-shell := ["cmd.exe", "/c"]
-
 default:
     @just --list
 
@@ -94,7 +92,15 @@ build-release:
     cargo build --locked --release -p herdr-gpui
 
 # Compile and install the release executable into Cargo's bin directory.
+[unix]
 install:
+    cargo install --locked --force --path crates/herdr-gpui --bin herdr-gpui
+
+# Only installation bypasses the POSIX shell used by the other recipes.
+[windows]
+[extension(".cmd")]
+install:
+    #!cmd.exe /c
     cargo install --locked --force --path crates/herdr-gpui --bin herdr-gpui
 
 # Regenerate circular Linux artwork on any platform (Python standard library).
