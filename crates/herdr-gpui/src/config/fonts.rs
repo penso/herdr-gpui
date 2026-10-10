@@ -241,6 +241,19 @@ const SYMBOL_FAMILY_MARKER: &str = "nerd font";
 /// detection keeps only the best-ranked few families.
 const MAX_DETECTED_FALLBACKS: usize = 3;
 
+/// Whether `family` is, by its name, a patched face that draws prompt icons
+/// itself: a Nerd Font, one of its abbreviated `NF` builds such as
+/// Powerlevel10k's recommended `MesloLGS NF`, or a Powerline face. Detection
+/// looks for [`SYMBOL_FAMILY_MARKER`] and so misses the abbreviated names.
+fn draws_icons(family: &str) -> bool {
+    let lowercase = family.to_lowercase();
+    lowercase.contains(SYMBOL_FAMILY_MARKER)
+        || lowercase.contains("powerline")
+        || lowercase
+            .split_whitespace()
+            .any(|word| matches!(word, "nf" | "nfm" | "nfp"))
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct FontConfig {
     pub family: String,
@@ -384,10 +397,15 @@ impl Config {
         if faces.iter().all(|face| face.fallbacks.is_some()) {
             return;
         }
+        // A terminal face patched with the icons needs no cascade to draw
+        // them, unless it is one of the configured families this machine lacks.
+        let [_, _, terminal, _] = &faces;
+        let terminal_draws_icons =
+            draws_icons(&terminal.family) && !self.missing_fonts.contains(&terminal.family);
         let detected = symbol_fallbacks(installed);
         // Only the terminal draws prompts; an explicit `fallback`, even `[]`,
         // is a choice the user already made.
-        self.icon_font_missing = detected.is_empty() && terminal_detects;
+        self.icon_font_missing = detected.is_empty() && terminal_detects && !terminal_draws_icons;
         for face in faces {
             if face.fallbacks.is_none() {
                 face.fallbacks = Some(detected.clone());

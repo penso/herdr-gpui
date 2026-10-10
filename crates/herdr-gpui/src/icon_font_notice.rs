@@ -94,5 +94,10 @@ fn shows_icon(frame: &FrameData) -> bool {
 }
 
 fn is_private_use(c: char) -> bool {
+    // U+F8FF is Apple's logo, which the system faces of its own platform
+    // draw with no icon font; elsewhere it is a box like any other.
+    if c == '\u{f8ff}' && cfg!(target_os = "macos") {
+        return false;
+    }
     matches!(c, '\u{e000}'..='\u{f8ff}' | '\u{f0000}'..='\u{ffffd}' | '\u{100000}'..='\u{10fffd}')
 }

@@ -47,3 +47,59 @@ fn other_faces_without_icons_are_not_reported() -> anyhow::Result<()> {
     assert!(!config.icon_font_missing);
     Ok(())
 }
+
+#[test]
+fn a_terminal_face_patched_with_the_icons_is_not_reported() -> anyhow::Result<()> {
+    // Detection finds no "Nerd Font" family in any of these, but the terminal
+    // face draws the icons itself.
+    for family in [
+        "MesloLGS NF",
+        "JetBrainsMonoNL NFM",
+        "FiraCode NFP",
+        "Meslo LG S for Powerline",
+    ] {
+        let mut config = Config::parse(&format!("[terminal]\nfamily = '{family}'"))?;
+        config.resolve_fonts(|| {
+            let mut installed = without_nerd_fonts();
+            installed.push(family.to_owned());
+            installed
+        });
+        assert!(!config.icon_font_missing, "{family}");
+        assert!(config.missing_fonts.is_empty(), "{family}");
+    }
+    // The platform finds a family whatever the case it is written in.
+    let mut config = Config::parse("[terminal]\nfamily = 'meslolgs nf'")?;
+    config.resolve_fonts(|| {
+        let mut installed = without_nerd_fonts();
+        installed.push("MesloLGS NF".into());
+        installed
+    });
+    assert!(!config.icon_font_missing);
+    Ok(())
+}
+
+#[test]
+fn a_patched_terminal_face_that_is_not_installed_is_still_reported() -> anyhow::Result<()> {
+    // A config copied from another machine names the font without bringing
+    // it: nothing draws the icons, so its name must not hide the notice.
+    let mut config = Config::parse("[terminal]\nfamily = 'MesloLGS NF'")?;
+    config.resolve_fonts(without_nerd_fonts);
+    assert!(config.icon_font_missing);
+    assert_eq!(config.missing_fonts, ["MesloLGS NF"]);
+    Ok(())
+}
+
+#[test]
+fn an_unpatched_terminal_face_is_still_reported() -> anyhow::Result<()> {
+    // `NF` counts as a word, not as letters inside one.
+    for family in ["JetBrains Mono", "Confetti Mono"] {
+        let mut config = Config::parse(&format!("[terminal]\nfamily = '{family}'"))?;
+        config.resolve_fonts(|| {
+            let mut installed = without_nerd_fonts();
+            installed.push(family.to_owned());
+            installed
+        });
+        assert!(config.icon_font_missing, "{family}");
+    }
+    Ok(())
+}

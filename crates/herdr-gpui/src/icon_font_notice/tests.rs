@@ -51,6 +51,15 @@ fn private_use_icons_need_a_font_but_painted_separators_do_not() {
 }
 
 #[test]
+fn apples_logo_needs_an_icon_font_only_off_its_own_platform() {
+    // macOS system faces carry U+F8FF; a prompt showing only that draws.
+    let logo = frame(1, &["a", "\u{f8ff}"]);
+    assert_eq!(shows_icon(&logo.frame), !cfg!(target_os = "macos"));
+    // Its neighbor in the block is an icon everywhere.
+    assert!(shows_icon(&frame(1, &["\u{f8fe}"]).frame));
+}
+
+#[test]
 fn appears_only_when_an_icon_font_is_missing_and_an_icon_is_shown() {
     let mut notice = IconFontNotice::default();
     let icon = frame(1, &["\u{f179}"]);
