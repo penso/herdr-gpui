@@ -17,6 +17,8 @@ fn a_leading_emoji_becomes_the_mark_and_leaves_the_title() {
         ("👩‍💻 Review ready", "👩‍💻", "Review ready"),
         ("🇫🇷 Bonjour", "🇫🇷", "Bonjour"),
         ("👍🏽 Approved", "👍🏽", "Approved"),
+        ("©️ Copyright", "©️", "Copyright"),
+        ("1️⃣ Step", "1️⃣", "Step"),
     ] {
         let notice = notice(title, Some("claude"), SemanticNotificationKind::Finished);
         assert_eq!(
@@ -40,6 +42,11 @@ fn titles_without_a_separate_leading_emoji_keep_their_text() {
         "A note",
         "→ arrow",
         "界 wide text",
+        // Text-presentation symbols and bare digits are not emoji.
+        "⌘ Shortcut",
+        "⚠ Disk almost full",
+        "© Copyright",
+        "1 Step",
     ] {
         let notice = notice(title, None, SemanticNotificationKind::Custom);
         assert_eq!(badge(&notice).mark, Mark::Icon("icons/note.svg"), "{title}");

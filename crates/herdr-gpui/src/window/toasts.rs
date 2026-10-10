@@ -332,12 +332,22 @@ impl HerdrWindow {
                                         .text_color(rgb(self.theme.muted))
                                         .child(safe_text(&endpoint.label, 80)),
                                 )
-                                .child(
+                                .child({
+                                    let title = SharedString::from(badge.title.to_owned());
                                     div()
+                                        // Names the drawn text, so tests can
+                                        // tell which title reached the screen.
+                                        .debug_selector({
+                                            let endpoint_id = endpoint.id.clone();
+                                            let title = title.clone();
+                                            move || {
+                                                format!("toast-title-{endpoint_id}-{id}: {title}")
+                                            }
+                                        })
                                         .truncate()
                                         .font_weight(FontWeight::MEDIUM)
-                                        .child(badge.title.to_owned()),
-                                )
+                                        .child(title)
+                                })
                                 .when_some(notice.body.clone(), |d, body| {
                                     d.child(
                                         div()

@@ -3,6 +3,7 @@
 //! the sending agent's mark, then an icon for the notification kind.
 use crate::notifications::Notice;
 use herdr_client::protocol::SemanticNotificationKind;
+use unicode_properties::{EmojiStatus, UnicodeEmoji};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Bounds one emoji grapheme, generously enough for ZWJ family sequences.
@@ -48,7 +49,7 @@ pub(super) fn badge(notice: &Notice) -> Badge<'_> {
 /// that merely is or starts with a symbol keeps it.
 fn leading_emoji(title: &str) -> Option<(&str, &str)> {
     let first = title.graphemes(true).next()?;
-    if first.len() > EMOJI_BYTES || !first.chars().next().is_some_and(pictographic) {
+    if first.len() > EMOJI_BYTES || !emoji(first) {
         return None;
     }
     let rest = &title[first.len()..];
@@ -59,20 +60,19 @@ fn leading_emoji(title: &str) -> Option<(&str, &str)> {
     (!rest.is_empty()).then_some((first, rest))
 }
 
-/// An approximation of Unicode's `Extended_Pictographic` blocks that covers
-/// the emoji a sender would type, including flags and dingbats.
-fn pictographic(c: char) -> bool {
-    matches!(
-        c,
-        '\u{1F000}'..='\u{1FAFF}'
-            | '\u{2300}'..='\u{23FF}'
-            | '\u{2600}'..='\u{27BF}'
-            | '\u{2B00}'..='\u{2BFF}'
-            | '\u{3030}'
-            | '\u{303D}'
-            | '\u{3297}'
-            | '\u{3299}'
-    )
+/// Whether a grapheme presents as an emoji: its base defaults to emoji
+/// presentation (🚀, flags), or it is an emoji that a U+FE0F selector asks to
+/// present as one (©️, ⚠️, 1️⃣). Symbols like ⌘ and bare digits are text.
+fn emoji(grapheme: &str) -> bool {
+    let Some(base) = grapheme.chars().next() else {
+        return false;
+    };
+    match base.emoji_status() {
+        EmojiStatus::EmojiPresentation
+        | EmojiStatus::EmojiPresentationAndModifierBase
+        | EmojiStatus::EmojiPresentationAndEmojiComponent => true,
+        _ => base.is_emoji_char() && grapheme.contains('\u{FE0F}'),
+    }
 }
 
 /// The round badge: a neutral disc showing who sent the notice, with a dot

@@ -98,6 +98,7 @@ toml                 = "1.1"
 toml_edit            = "0.25"
 tracing              = "0.1"
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
+unicode-properties   = { version = "0.1.4", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
