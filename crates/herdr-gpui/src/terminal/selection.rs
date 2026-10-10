@@ -460,7 +460,8 @@ impl Selection {
     }
 
     /// A hash of the text in each selected row the surface shows, by content
-    /// row. Text only: a recolor or the cursor passing leaves the choice valid.
+    /// row. Text only: a recolor, the cursor passing, or a pane wide enough to
+    /// pad a row with more blanks leaves the choice valid.
     fn row_hashes(
         &self,
         surface: &PaneSurfaceFrame,
@@ -480,8 +481,14 @@ impl Selection {
                 let cells = frame
                     .cells
                     .get(offset + usize::from(columns.start)..offset + usize::from(columns.end))?;
+                // Trailing blanks are padding, as a copy trims them: a row
+                // selected to the edge gains more of them when the pane widens.
+                let text = cells
+                    .iter()
+                    .rposition(|cell| !shown(cell).trim().is_empty())
+                    .map_or(&cells[..0], |last| &cells[..=last]);
                 let mut hasher = DefaultHasher::new();
-                cells.iter().for_each(|cell| shown(cell).hash(&mut hasher));
+                text.iter().for_each(|cell| shown(cell).hash(&mut hasher));
                 Some((top.saturating_add(u32::from(row - first)), hasher.finish()))
             })
             .collect()

@@ -87,3 +87,47 @@ fn a_dragging_selection_survives_rewritten_text(cx: &mut TestAppContext) {
         assert!(view.selection.as_ref().is_some_and(|s| s.dragging()));
     });
 }
+
+/// Widening the pane pads rows selected through to its edge with more
+/// blanks. The text is unchanged, so the highlight stays.
+#[gpui::test]
+fn a_kept_highlight_survives_a_wider_pane(cx: &mut TestAppContext) {
+    let frame = |width: u16, revision: u64, view: &HerdrWindow| {
+        let mut frame = surface(&["one", "two", "three"], width);
+        let snapshot = view.live.snapshot.as_ref().unwrap();
+        frame.boot_id = snapshot.boot_id.clone();
+        frame.projection_revision = snapshot.revision;
+        frame.surface_revision = revision;
+        Arc::new(frame)
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.surface = Some(frame(12, 1, &view));
+        view
+    });
+    cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear(cx);
+    });
+    let (origin, cell) = view.read_with(cx, |view, _| {
+        (
+            view.bounds.origin,
+            (view.cell_width, view.config.terminal.line_height()),
+        )
+    });
+    let at = |column: f32, row: f32| -> Point<Pixels> {
+        origin + point(px(column * cell.0), px(row * cell.1))
+    };
+    // From the first row's start to the third row's end: the first and
+    // middle rows run to the pane's edge.
+    cx.simulate_mouse_down(at(0., 0.), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(at(5., 2.), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(at(5., 2.), MouseButton::Left, Modifiers::default());
+
+    view.update(cx, |view, cx| {
+        assert!(view.selection_retained());
+        view.live.surface = Some(frame(20, 2, view));
+        view.follow_selection(cx);
+        assert!(view.selection_retained(), "a wider pane keeps it");
+    });
+}
