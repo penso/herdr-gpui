@@ -7,6 +7,8 @@ use std::{fs, path::Path};
 #[cfg(unix)]
 mod edits;
 mod pane_history;
+#[cfg(unix)]
+mod permissions;
 mod reading;
 mod save_safety;
 // Saving is Unix-only; Windows refuses every shared edit.

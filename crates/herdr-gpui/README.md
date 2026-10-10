@@ -553,6 +553,16 @@ On Windows shared
 settings are readable, but shared-file writes are unsupported; native settings
 remain editable through the Windows-capable local override writer.
 
+On Unix, group- or other-writable config files and user-owned directories are
+refused. For example, a `664` config under a `775` directory
+cannot load shared settings or Herdr theme previews. The error identifies the
+offending path and its mode. Remove group/other write permission from that path
+with `chmod go-w`, then click **Reload** in Settings. For the default paths,
+`chmod go-w ~/.config/herdr ~/.config/herdr/config.toml` changes `775` to `755`
+and `664` to `644` without changing the config contents or read permissions.
+If another ancestor or a symlink's target is writable, correct the path named
+by the next error too. The app does not change permissions automatically.
+
 Existing native theme selections remain overrides. Choose **Follow Herdr** to
 use the shared theme, all 18 upstream palettes, custom colors, and automatic
 light/dark selection. Selecting a shared theme disables upstream auto-switching,

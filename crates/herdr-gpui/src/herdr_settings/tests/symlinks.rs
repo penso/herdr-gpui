@@ -136,12 +136,18 @@ fn links_in_directories_others_can_write_are_refused() -> anyhow::Result<()> {
     fs::set_permissions(&open, fs::Permissions::from_mode(0o777))?;
 
     // Another user could swap this link, even though its target is private.
-    assert!(matches!(persistence::read(&path), Err(Error::UnsafePath)));
+    assert!(matches!(
+        persistence::read(&path),
+        Err(Error::InsecurePermissions { .. })
+    ));
     let error = settings
         .save(Edit::Sound(false))
         .err()
         .ok_or_else(|| anyhow::anyhow!("saved through a link others can swap"))?;
-    assert!(matches!(source(&error), Some(Error::UnsafePath)));
+    assert!(matches!(
+        source(&error),
+        Some(Error::InsecurePermissions { .. })
+    ));
     assert!(Settings::load_path(private.join("config.toml"))?.sound_enabled);
     Ok(())
 }

@@ -63,12 +63,18 @@ fn late_files_hardlinks_permissions_and_size_are_protected() -> anyhow::Result<(
     fs::remove_file(&path)?;
     fs::write(&path, "")?;
     fs::set_permissions(&path, fs::Permissions::from_mode(0o666))?;
-    assert!(matches!(persistence::read(&path), Err(Error::UnsafePath)));
+    assert!(matches!(
+        persistence::read(&path),
+        Err(Error::InsecurePermissions { .. })
+    ));
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     fs::write(&path, " ".repeat(1024 * 1024 + 1))?;
     assert!(matches!(persistence::read(&path), Err(Error::TooLarge)));
     fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o777))?;
-    assert!(matches!(persistence::read(&path), Err(Error::UnsafePath)));
+    assert!(matches!(
+        persistence::read(&path),
+        Err(Error::InsecurePermissions { .. })
+    ));
     fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o700))?;
     Ok(())
 }
