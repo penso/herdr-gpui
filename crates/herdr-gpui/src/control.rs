@@ -21,6 +21,7 @@ use gpui::App;
 pub use protocol::ErrorCode;
 #[cfg(any(unix, feature = "mockup"))]
 use protocol::NotesRequest;
+#[cfg(any(unix, feature = "mockup"))]
 pub(crate) use protocol::NotesTo;
 use protocol::{
     BrowserOpen, Caller, FeedbackRequest, MAX_WAIT_SECONDS, OpenedIn, Page, Request, Response,
