@@ -1429,6 +1429,67 @@ Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.
 
+## Orchestrator
+
+The Orchestrator row of a group's "…" menu, the Open Orchestrator command, or
+the Orchestrator row of a workspace's popover opens a tab listing that
+workspace's repository: its GitHub issues and pull requests, its
+[Beads](https://github.com/steveyegge/beads) issues when the main checkout has
+a `.beads` folder, and the agent runs dispatched for them. It works for the
+local session and saved SSH hosts.
+
+- **Issues** lists open GitHub issues and beads together. A bead's children sit
+  under it; filters narrow to Beads, items with a run, or blocked ones; five
+  sorts are offered. Search matches every word you type across title, id,
+  author, labels, state, and body, case-insensitively unless a word has a
+  capital, and keeps a match's parents in view.
+- **Pull requests** lists open ones and the 50 most recently closed or merged,
+  with their diff size and activity.
+- **Runs** lists every run, grouped by what needs you first. Its status comes
+  from Herdr's live view of each connected host.
+
+Selecting a row shows it in the preview, whose left edge drags to resize or
+close it; Enter or a double-click opens its page. An issue's page shows its
+description as plain text with Markdown structure, its runs, and its details. A
+pull request's page also has its conversation, read as on GitHub: authors'
+avatars, Markdown comments, each review holding its inline threads with
+resolved ones folded, and a summary of verdicts on top; you can comment there.
+It also shows the checks, review decision, and merge state. Merge offers the methods the
+repository allows and names the head commit shown, so GitHub refuses it if the
+branch moved.
+
+**Dispatch agent** opens a dialog: a prompt, an agent installed on the
+selected destination host, an optional model (passed as `--model`), a branch
+(`agent/<number>-<slug>-<hash>` as agent-launcher names it, editable), and
+extra instructions. The new worktree is
+created from the main checkout's `HEAD` in the workspace's repository, and the
+agent starts in it with the prompt. With more than one host connected, the
+dialog also ranks the hosts as [Smart Dispatch](#smart-dispatch) does; picking
+another one sets the repository up there the same way and starts the agent
+there, and its run card then acts on that host. A pull
+request's **Review with agent** does the same on an `agent/review-…` branch with a
+read-only prompt: the agent verifies the pull request, reads its diff, and
+reports findings without writing to GitHub. A run's card sends it messages, stops
+it, or removes its worktree; a bead's details can delete it with `bd`. Each of
+those asks first. Closing the Orchestrator tab or its detached window leaves
+an already-started dispatch running; it does not remove the new worktree.
+
+The hash at the end of a branch name is the item's own, so the Orchestrator
+finds work without its database, such as on another machine: a Herdr workspace
+on an item's branch shows as that item's run, working or stopped by whether an
+agent is in it, and so does an `agent/…` branch in the repository that no
+workspace shows. These runs open their workspace but have no controls.
+
+The tab shares its data with agent-launcher,
+so both can be open on one repository at once: each lists the other's runs,
+updates only its own, and uses agent-launcher's prompt profiles from
+`~/.config/agent-launcher/agents/<name>/prompt.md` (the built-in prompt when
+none is chosen). Issues and runs are kept in agent-launcher's per-repository
+database under the platform data directory. GitHub is read as the account used
+for pull requests on that host; GitLab remotes and GitHub Enterprise are listed
+as not supported yet. The window button in the tab's header moves the view into
+a window of its own.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane

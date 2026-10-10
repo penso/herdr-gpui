@@ -27,6 +27,9 @@ pub struct SearchInput {
     /// Draw one `*` per character instead of the text, and keep it off the
     /// clipboard: for secrets typed into settings.
     masked: bool,
+    /// Whether it draws its own border, background, and padding. A field
+    /// set inside a frame its owner draws turns this off.
+    framed: bool,
 }
 
 // Internal offsets are UTF-8 boundaries; only the platform input API uses UTF-16.
@@ -145,6 +148,7 @@ impl SearchInput {
             bounds: None,
             scroll: px(0.),
             selecting: false,
+            framed: true,
             masked: false,
         }
     }
@@ -154,6 +158,12 @@ impl SearchInput {
     pub(crate) fn set_masked(&mut self, masked: bool, cx: &mut Context<Self>) {
         self.masked = masked;
         self.layout = None;
+        cx.notify();
+    }
+
+    /// Draw only the text, inside a frame the owner draws.
+    pub(crate) fn set_frameless(&mut self, cx: &mut Context<Self>) {
+        self.framed = false;
         cx.notify();
     }
 
@@ -443,12 +453,15 @@ impl Render for SearchInput {
         div()
             .debug_selector(|| "theme-search".into())
             .w_full()
-            .px_2()
-            .py_1()
-            .rounded(px(crate::config::corners::CONTROL))
-            .border_1()
-            .border_color(rgb(self.theme.active))
-            .bg(rgb(self.theme.background))
+            .when(self.framed, |field| {
+                field
+                    .px_2()
+                    .py_1()
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(rgb(self.theme.active))
+                    .bg(rgb(self.theme.background))
+            })
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.font)
             .text_size(px(self.font.size))

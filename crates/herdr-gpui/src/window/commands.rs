@@ -264,6 +264,10 @@ impl HerdrWindow {
                 self.open_browser_tab(None, window, cx);
                 return;
             }
+            Command::OpenOrchestrator => {
+                self.open_orchestrator(window, cx);
+                return;
+            }
             Command::SplitEditor => {
                 self.split_active_group(window, cx);
                 return;

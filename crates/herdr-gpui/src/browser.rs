@@ -46,7 +46,7 @@ pub(crate) use group_motion::Fold;
 pub(crate) use groups::GroupIds;
 pub(crate) use groups::{GroupId, Pick, Shown, Slot};
 pub(crate) use layouts::Layouts;
-pub(crate) use location::{LocalFile, Location, ReviewCheckout};
+pub(crate) use location::{LocalFile, Location, OrchestratorRepo, ReviewCheckout};
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use native::Pages;
 pub(crate) use store::{Scope, Store, Tab, TabId};
