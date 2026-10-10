@@ -209,3 +209,55 @@ fn a_service_without_a_worker_ignores_channel_changes() {
     assert_eq!(updater.next_check, scheduled);
     assert!(!updater.poll());
 }
+
+#[test]
+fn leaving_a_channel_rechecks_even_a_staged_download() -> anyhow::Result<()> {
+    let (sender, receiver) = mpsc::sync_channel(2);
+    let mut updater = Updater::default();
+    updater.commands = Some(sender);
+    updater.state = State::Idle;
+    updater.set_channel(UpdateChannel::Beta);
+    updater.check();
+    receiver.try_recv().context("receive beta check")?;
+    // The beta finished downloading; on its own channel it is kept, not rechecked.
+    updater.state = State::Ready {
+        version: "20260920.2".into(),
+    };
+    updater.check();
+    assert!(receiver.try_recv().is_err());
+    // Opting out rechecks on stable, including when the download finished
+    // only after the switch.
+    updater.state = State::Downloading {
+        received: 1,
+        total: 2,
+    };
+    updater.set_channel(UpdateChannel::Stable);
+    assert!(!updater.poll(), "the download still occupies the worker");
+    updater.state = State::Ready {
+        version: "20260920.2".into(),
+    };
+    assert!(updater.poll());
+    assert!(matches!(
+        receiver
+            .try_recv()
+            .context("receive stable check")?
+            .operation,
+        Operation::Check(UpdateChannel::Stable)
+    ));
+    assert_eq!(updater.state, State::Checking);
+    Ok(())
+}
+
+#[test]
+fn a_staged_download_survives_only_a_recheck_offering_the_same_release() {
+    let beta = Some("20260920.2");
+    assert_eq!(
+        restage(Some(()), beta, beta),
+        Some(()),
+        "promoted while staged"
+    );
+    assert_eq!(restage(Some(()), beta, Some("20260919.1")), None);
+    assert_eq!(restage(Some(()), beta, None), None, "stable is older");
+    assert_eq!(restage(Some(()), None, None), None);
+    assert_eq!(restage::<()>(None, beta, beta), None);
+}

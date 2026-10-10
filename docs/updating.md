@@ -134,7 +134,9 @@ and non-calendar tags; that listing is bounded at 4 MiB. A beta carries the same
 signed manifest as any release, so the channel changes which release is offered,
 never how it is authenticated. A Homebrew-managed installation always checks the
 stable channel, since the tap only receives stable releases. Switching channels
-rechecks at once and never downgrades. Manifest, signature,
+rechecks at once and never downgrades. That recheck also covers a beta that is
+already downloaded or still downloading: leaving the beta channel discards it
+unless stable now offers the same release. Manifest, signature,
 and archive downloads use version-specific GitHub release URLs. The authenticated
 version must match the release tag after removing its `v` prefix; archive names and sizes must also match the
 release metadata. SHA-256 and length are checked before extraction.
