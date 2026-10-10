@@ -74,9 +74,17 @@ fn capitalized(word: &str) -> String {
 }
 
 impl HerdrWindow {
-    /// The cloud providers set up in the config, in picker order.
+    /// The cloud providers set up in the config or environment, in picker order.
     #[cfg(feature = "cloud")]
     fn cloud_providers(&self) -> Vec<crate::cloud::CloudProvider> {
+        self.cloud_providers_with_env(|name| std::env::var_os(name))
+    }
+
+    #[cfg(feature = "cloud")]
+    fn cloud_providers_with_env(
+        &self,
+        var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> Vec<crate::cloud::CloudProvider> {
         if crate::cloud::unavailable().is_some() {
             return Vec::new();
         }
@@ -85,10 +93,13 @@ impl HerdrWindow {
             .copied()
             .filter(|provider| match provider {
                 #[cfg(feature = "coder")]
-                crate::cloud::CloudProvider::Coder => self.coder_configured(),
-                // The row opens Daytona's Settings tab, which sets it up.
+                crate::cloud::CloudProvider::Coder => {
+                    self.config.coder.url.is_some() || var("HERDR_CODER_URL").is_some()
+                }
                 #[cfg(feature = "daytona")]
-                crate::cloud::CloudProvider::Daytona => true,
+                crate::cloud::CloudProvider::Daytona => {
+                    self.config.daytona.api_url.is_some() || var("HERDR_DAYTONA_API_URL").is_some()
+                }
             })
             .collect()
     }

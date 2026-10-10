@@ -16,18 +16,16 @@ fn coder_row_appears_only_when_configured_and_its_dialog_fits(cx: &mut gpui::Tes
     cx.simulate_click(picker, Modifiers::default());
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     let rows = view.read_with(cx, |view, _| view.endpoints.len() + 2);
-    // Debug selectors are looked up by static name. Daytona's row, always
-    // offered, follows Coder's; with Coder unconfigured it moves up one.
-    let daytona = usize::from(cfg!(feature = "daytona"));
+    // Debug selectors are looked up by static name. Configured providers follow
+    // the saved devices, with Coder first when it is configured.
     let row = |index: usize| -> &'static str {
         Box::leak(format!("device-row-{index}").into_boxed_str())
     };
-    let coder_row = row(rows + daytona);
-    if std::env::var_os("HERDR_CODER_URL").is_none() {
+    let coder_row = row(rows);
+    if std::env::var_os("HERDR_CODER_URL").is_none()
+        && std::env::var_os("HERDR_DAYTONA_API_URL").is_none()
+    {
         assert!(cx.debug_bounds(coder_row).is_none());
-        if daytona == 1 && crate::cloud::unavailable().is_none() {
-            assert!(cx.debug_bounds(row(rows)).is_some(), "Daytona's row");
-        }
     }
     cx.simulate_keystrokes("escape");
     cx.update(|window, cx| {
