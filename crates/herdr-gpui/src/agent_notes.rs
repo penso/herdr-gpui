@@ -13,9 +13,38 @@ use herdr_client::protocol::{
     ClientShellSnapshot,
 };
 use std::{
+    cell::RefCell,
+    rc::Rc,
     sync::{Arc, Weak},
     time::{Duration, Instant},
 };
+
+/// Clipboard recovery for one terminal Send, shared by its agent batches so
+/// a later failed paste still includes notes copied by an earlier fallback.
+#[derive(Clone, Default)]
+pub(crate) struct Copies(Rc<RefCell<Vec<String>>>);
+
+impl Copies {
+    pub(crate) fn extend(&self, texts: impl IntoIterator<Item = String>) {
+        self.0.borrow_mut().extend(texts);
+    }
+
+    pub(crate) fn text(&self) -> Option<String> {
+        let texts = self.0.borrow();
+        (!texts.is_empty()).then(|| texts.join("\n"))
+    }
+}
+
+fn collect_copy(collected: &mut Vec<Copies>, group: Option<Copies>, text: Option<String>) {
+    let Some(text) = text else {
+        return;
+    };
+    let group = group.unwrap_or_default();
+    group.extend([text]);
+    if !collected.iter().any(|other| Rc::ptr_eq(&other.0, &group.0)) {
+        collected.push(group);
+    }
+}
 
 /// A tab cannot resend while its previous batch is saving, waiting for an
 /// agent, or still held for feedback. The delivery owns the strong reference.
@@ -73,6 +102,7 @@ struct Delivery {
     text: String,
     until: Instant,
     pending: Option<Arc<()>>,
+    copies: Option<Copies>,
 }
 
 /// The window's notes still waiting for their agents.
@@ -144,52 +174,58 @@ fn enter() -> ClientPaneInputEvent {
 }
 
 /// Only Unix has a control listener that can collect feedback. Elsewhere,
-/// copying both preserves the notes and releases the pending-send token.
+/// return the text for the caller to copy together with other fallback batches.
 fn keep_or_copy(
     batch: crate::browser::Batch,
     pending: Option<Arc<()>>,
     reason: &str,
     cx: &mut App,
-) -> Flash {
+) -> (Flash, Option<String>) {
     if cfg!(unix) {
         cx.default_global::<Feedback>().keep(batch, pending);
-        Flash::warning(format!("{reason}; notes kept for `browser feedback`"))
+        (
+            Flash::warning(format!("{reason}; notes kept for `browser feedback`")),
+            None,
+        )
     } else {
-        cx.write_to_clipboard(ClipboardItem::new_string(batch.text));
-        Flash::warning(format!(
-            "{reason}; notes copied (browser feedback is unavailable)"
-        ))
+        (
+            Flash::warning(format!(
+                "{reason}; notes copied (browser feedback is unavailable)"
+            )),
+            Some(batch.text),
+        )
     }
 }
 
 impl HerdrWindow {
     /// Sends `text` to the agent in `pane_id`. `here` says whether this
     /// window shows the daemon that pane belongs to; only then can it be
-    /// typed into. `None` copies the notes, since no agent asked for them.
+    /// typed into. Returns fallback text for the caller to combine into one
+    /// clipboard write, including when no agent asked for the notes.
+    #[must_use]
     pub(crate) fn deliver_notes(
         &mut self,
         pane_id: Option<String>,
         here: bool,
         text: String,
         pending: Option<Arc<()>>,
+        copies: Option<Copies>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<String> {
         let text = typable(&text);
         let Some(pane_id) = pane_id else {
-            cx.write_to_clipboard(ClipboardItem::new_string(text));
             self.show_flash(
                 Flash::success("No agent to send to, so the notes were copied"),
                 cx,
             );
-            return;
+            return Some(text);
         };
         if !here {
-            cx.write_to_clipboard(ClipboardItem::new_string(text));
             self.show_flash(
                 Flash::warning("The original daemon is not selected; notes copied"),
                 cx,
             );
-            return;
+            return Some(text);
         }
         let waiting = cfg!(unix)
             && cx
@@ -202,10 +238,10 @@ impl HerdrWindow {
                 .iter()
                 .any(|candidate| candidate.pane_id == pane_id)
         });
-        let flash = if waiting {
+        let (flash, copied) = if waiting {
             cx.default_global::<Feedback>()
                 .keep(crate::browser::Batch { pane_id, text }, pending);
-            Flash::success("Notes sent to the waiting agent")
+            (Flash::success("Notes sent to the waiting agent"), None)
         } else if let Some((snapshot, found)) =
             shown.and_then(|snapshot| Some((snapshot, agent(snapshot, &pane_id)?)))
         {
@@ -222,12 +258,14 @@ impl HerdrWindow {
                 text,
                 until: Instant::now() + HOLD,
                 pending,
+                copies,
             });
-            if busy {
+            let flash = if busy {
                 Flash::success("Notes will go to the agent once it is idle")
             } else {
                 Flash::success("Notes sent to the agent")
-            }
+            };
+            (flash, None)
         } else if shown.is_some() {
             // A shell, not an agent: Enter there would run the notes.
             keep_or_copy(
@@ -245,6 +283,7 @@ impl HerdrWindow {
             )
         };
         self.show_flash(flash, cx);
+        copied
     }
 
     /// Pastes held notes into agents that became idle. Runs every tick.
@@ -254,12 +293,14 @@ impl HerdrWindow {
         }
         let now = Instant::now();
         let deliveries = std::mem::take(&mut self.deliveries.0);
-        let mut stale = Vec::new();
+        let mut copied = Vec::new();
+        let mut stale = false;
         for delivery in deliveries {
             // Feedback only knows a pane ID, so it cannot safely hold a
             // batch after its endpoint or daemon has changed, even for a waiter.
             if !delivery.origin.current(self) {
-                stale.push(delivery.text);
+                collect_copy(&mut copied, delivery.copies, Some(delivery.text));
+                stale = true;
                 continue;
             }
             let waiting = cfg!(unix)
@@ -291,7 +332,7 @@ impl HerdrWindow {
                 Some(AgentStatus::Idle | AgentStatus::Done | AgentStatus::Working)
             );
             if waiting || present.is_none() || !typable {
-                let flash = keep_or_copy(
+                let (flash, text) = keep_or_copy(
                     crate::browser::Batch {
                         pane_id: delivery.pane_id,
                         text: delivery.text,
@@ -300,15 +341,24 @@ impl HerdrWindow {
                     "The agent is not ready",
                     cx,
                 );
+                collect_copy(&mut copied, delivery.copies, text);
                 if !waiting {
                     self.show_flash(flash, cx);
                 }
                 continue;
             }
-            self.paste_into_pane(delivery, cx);
+            let group = delivery.copies.clone();
+            collect_copy(&mut copied, group, self.paste_into_pane(delivery, cx));
         }
-        if !stale.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(stale.join("\n")));
+        if !copied.is_empty() {
+            let text = copied
+                .iter()
+                .filter_map(Copies::text)
+                .collect::<Vec<_>>()
+                .join("\n");
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+        }
+        if stale {
             self.show_flash(
                 Flash::warning("The original daemon is not selected; pending notes copied"),
                 cx,
@@ -316,7 +366,7 @@ impl HerdrWindow {
         }
     }
 
-    fn paste_into_pane(&mut self, delivery: Delivery, cx: &mut Context<Self>) {
+    fn paste_into_pane(&mut self, delivery: Delivery, cx: &mut Context<Self>) -> Option<String> {
         let target = InputTarget::Pane(delivery.pane_id.clone());
         let pasted = self.endpoints[self.selected_endpoint]
             .connection
@@ -334,7 +384,7 @@ impl HerdrWindow {
             });
         if let Err(error) = pasted {
             tracing::warn!(%error, "Could not paste notes into the agent's pane");
-            let flash = keep_or_copy(
+            let (flash, copied) = keep_or_copy(
                 crate::browser::Batch {
                     pane_id: delivery.pane_id,
                     text: delivery.text,
@@ -344,7 +394,7 @@ impl HerdrWindow {
                 cx,
             );
             self.show_flash(flash, cx);
-            return;
+            return copied;
         }
         let timer = cx.background_executor().clone();
         let origin = delivery.origin;
@@ -370,6 +420,7 @@ impl HerdrWindow {
             drop(pending);
         })
         .detach();
+        None
     }
 }
 

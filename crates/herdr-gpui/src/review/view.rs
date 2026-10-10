@@ -635,7 +635,9 @@ impl HerdrWindow {
                 }
             }
         }
-        self.deliver_notes(pane, here, text, Some(pending), cx);
+        if let Some(text) = self.deliver_notes(pane, here, text, Some(pending), None, cx) {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
+        }
         cx.notify();
     }
 

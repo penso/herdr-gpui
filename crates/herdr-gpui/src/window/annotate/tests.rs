@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 mod delayed_origin;
 mod host_batches;
+mod multi_agent_fallbacks;
 mod queue_safety;
 
 /// Workspace `w0` with pane `w0:p1`, and an agent in it with

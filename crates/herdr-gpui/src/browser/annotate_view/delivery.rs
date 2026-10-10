@@ -94,7 +94,9 @@ impl HerdrWindow {
         self.with_notes_prompt(tab, notes, save, cx, move |this, text, cx| {
             let here = origin.as_ref().is_some_and(|origin| origin.current(this))
                 && super::super::view::scope(&this.endpoints[this.selected_endpoint]) == scope;
-            this.deliver_notes(pane_id, here, text, Some(pending), cx);
+            if let Some(text) = this.deliver_notes(pane_id, here, text, Some(pending), None, cx) {
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+            }
         });
         self.mark_notes_sent(tab.id, &indexes, cx);
     }

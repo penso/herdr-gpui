@@ -2498,7 +2498,8 @@ records when reporting the failure.
   agent is found. Queued notes remember their original device and daemon;
   if that daemon is no longer selected when you send or while delivery waits
   for a busy agent, those notes are copied instead. The whole selection must
-  be on screen.
+  be on screen. Clipboard fallbacks from one Send are combined, including
+  batches that fail later, so one agent's notes cannot replace another's.
 - A mouse selection dragged past a pane's top or bottom edge scrolls the
   pane, and the selection stays with its text as the pane moves. A selection
   that reaches rows off the screen is copied through `pane.selection.read`;

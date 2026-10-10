@@ -1,5 +1,6 @@
 use super::*;
 
+mod copies;
 mod pending_send;
 
 #[test]

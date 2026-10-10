@@ -238,6 +238,7 @@ impl HerdrWindow {
     /// Sends the queued notes, one batch per agent, in the order they were
     /// written.
     pub(crate) fn send_terminal_notes(&mut self, cx: &mut Context<Self>) {
+        let clipboard = crate::agent_notes::Copies::default();
         let (mut queued, copied): (Vec<_>, Vec<_>) =
             std::mem::take(&mut self.terminal_notes.queued)
                 .into_iter()
@@ -249,20 +250,37 @@ impl HerdrWindow {
                 .partition(|queued| queued.origin == origin && queued.note.target == target);
             queued = rest;
             let text = terminal_notes::prompt(batch.iter().map(|queued| &queued.note));
-            self.deliver_notes(target, true, text, None, cx);
+            clipboard.extend(self.deliver_notes(
+                target,
+                true,
+                text,
+                None,
+                Some(clipboard.clone()),
+                cx,
+            ));
         }
         if !copied.is_empty() {
             // Feedback is keyed only by pane ID, so even its fallback could
             // hand an old daemon's notes to an unrelated agent. Copy instead.
             let stale = copied.iter().any(|queued| !queued.origin.current(self));
             let text = terminal_notes::prompt(copied.iter().map(|queued| &queued.note));
-            self.deliver_notes(None, false, text, None, cx);
+            clipboard.extend(self.deliver_notes(
+                None,
+                false,
+                text,
+                None,
+                Some(clipboard.clone()),
+                cx,
+            ));
             if stale {
                 self.show_flash(
                     Flash::warning("Notes whose original daemon is not selected were copied"),
                     cx,
                 );
             }
+        }
+        if let Some(text) = clipboard.text() {
+            cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
     }
 
