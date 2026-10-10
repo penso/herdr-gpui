@@ -239,6 +239,7 @@ pub(crate) fn wheel_rows(event: &ScrollWheelEvent, cell_height: f32) -> f32 {
     }
 }
 
+#[derive(PartialEq)]
 pub struct WheelTarget {
     pub target: InputTarget,
     pub(crate) mouse_reporting: bool,

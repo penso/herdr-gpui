@@ -26,6 +26,7 @@ mod image_paste_native;
 mod input_gap;
 mod install_prompt;
 mod keyboard;
+mod mouse_cell_motion;
 mod mouse_gestures;
 mod mouse_targets;
 mod plugin_selection;
