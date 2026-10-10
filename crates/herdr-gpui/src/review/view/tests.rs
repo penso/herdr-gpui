@@ -183,7 +183,18 @@ fn without_an_agent_the_notes_are_copied(cx: &mut gpui::TestAppContext) {
         .update(|_, cx| cx.read_from_clipboard())
         .and_then(|item| item.text());
     assert!(copied.is_some_and(|text| text.contains("`src/lib.rs:2` (removed line")));
-    assert!(kept(&view, cx).is_none());
+    // Nothing is kept for `browser feedback` either. Read it directly: on
+    // Windows `kept` reads the clipboard, which holds the copied notes.
+    let target = view.read_with(cx, |view, _| crate::browser::FeedbackKey {
+        scope: crate::browser::scope(&view.endpoints[0]),
+        pane_id: "w0:p1".into(),
+    });
+    assert!(
+        cx.update(|_, cx| cx
+            .default_global::<crate::browser::Feedback>()
+            .take(&target))
+            .is_none()
+    );
 }
 
 #[gpui::test]
