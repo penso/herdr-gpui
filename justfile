@@ -1,3 +1,5 @@
+set windows-shell := ["cmd.exe", "/c"]
+
 default:
     @just --list
 
@@ -90,6 +92,10 @@ mockup file="" feedback="" capture="":
 
 build-release:
     cargo build --locked --release -p herdr-gpui
+
+# Compile and install the release executable into Cargo's bin directory.
+install:
+    cargo install --locked --force --path crates/herdr-gpui --bin herdr-gpui
 
 # Regenerate circular Linux artwork on any platform (Python standard library).
 icons-linux:
