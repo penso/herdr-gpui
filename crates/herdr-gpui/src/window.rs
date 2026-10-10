@@ -402,6 +402,7 @@ impl HerdrWindow {
     }
 
     fn tick(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.updater.set_channel(self.config.updates.channel);
         if self.updater.poll() {
             match self.updater.commit_restart() {
                 Ok(true) => {

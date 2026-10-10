@@ -116,19 +116,26 @@ impl SettingsWindow {
             WindowAppearance::Light | WindowAppearance::VibrantLight
         );
         let work = cx.background_executor().spawn(async move {
+            let shared = match shared {
+                None if choices.iter().any(|choice| choice.scope == Scope::Herdr) => {
+                    herdr_settings::Settings::load().ok()
+                }
+                shared => shared,
+            };
             choices
                 .into_iter()
                 .map(|choice| {
                     config.theme = choice.name.clone();
                     let result = match choice.scope {
-                        Scope::Herdr => shared
-                            .as_ref()
-                            .ok_or(crate::Error::MissingHome)
-                            .and_then(|shared| shared.preview_theme(&choice.name, light))
-                            .map(|theme| theme.with_contrast(config.contrast)),
-                        Scope::App => config.theme(light),
+                        Scope::Herdr => shared.as_ref().and_then(|shared| {
+                            shared
+                                .preview_theme(&choice.name, light)
+                                .map(|theme| theme.with_contrast(config.contrast))
+                                .ok()
+                        }),
+                        Scope::App => config.theme(light).ok(),
                     };
-                    (choice, result.ok())
+                    (choice, result)
                 })
                 .collect()
         });

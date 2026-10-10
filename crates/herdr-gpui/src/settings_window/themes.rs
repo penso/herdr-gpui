@@ -33,6 +33,10 @@ pub(super) struct ThemeIntent {
     pub(super) revision: u64,
     choice: Choice,
     theme: Option<Theme>,
+    /// The shared snapshot a Herdr theme was resolved against. It is the save's
+    /// expected state when the window holds none, so an external edit made
+    /// since then is a conflict rather than silently replaced.
+    shared: Option<herdr_settings::Settings>,
 }
 
 #[derive(Default)]
@@ -94,7 +98,11 @@ pub(super) struct ThemeIo {
     pub write: std::sync::Arc<ThemeWriter>,
     pub load: std::sync::Arc<dyn Fn() -> crate::Result<super::Loaded> + Send + Sync>,
     pub resolve: Option<std::sync::Arc<ThemeResolver>>,
+    pub shared: Option<std::sync::Arc<SharedLoader>>,
 }
+
+#[cfg(test)]
+type SharedLoader = dyn Fn() -> crate::Result<herdr_settings::Settings> + Send + Sync;
 
 #[cfg(test)]
 type ThemeResolver = dyn Fn(&str) -> crate::Result<Theme> + Send + Sync;
@@ -257,7 +265,7 @@ impl SettingsWindow {
     {
         let choice = intent.choice.clone();
         let config = self.config.clone();
-        let shared = self.shared.clone();
+        let shared = self.shared.clone().or_else(|| intent.shared.clone());
         #[cfg(test)]
         let io = self.theme_io.clone();
         move |refreshed| {
@@ -271,8 +279,10 @@ impl SettingsWindow {
             }
             match choice.scope {
                 Scope::App => config.save_theme(&choice.name),
+                // Every resolved Herdr intent carries a snapshot; a load here
+                // only reports the real failure if one never resolved.
                 Scope::Herdr => shared
-                    .ok_or(crate::Error::MissingHome)?
+                    .map_or_else(herdr_settings::Settings::load, Ok)?
                     .save(Edit::Theme(choice.name))
                     .map(|_| ()),
             }
@@ -290,18 +300,20 @@ impl SettingsWindow {
         }
         let validate = self.theme_loader(intent.choice.clone());
         let write = self.theme_operation(&intent);
-        Some(move |shared| {
-            if intent.theme.is_none() {
-                validate()?;
-            }
-            write(shared)
+        Some(move |shared: Option<herdr_settings::Settings>| {
+            let resolved = match intent.theme {
+                Some(_) => None,
+                None => validate()?.1,
+            };
+            write(shared.or(resolved))
         })
     }
 
     fn theme_loader(
         &self,
         choice: Choice,
-    ) -> impl FnOnce() -> crate::Result<Theme> + Send + 'static + use<> {
+    ) -> impl FnOnce() -> crate::Result<(Theme, Option<herdr_settings::Settings>)> + Send + 'static + use<>
+    {
         let mut config = self.config.clone();
         config.theme = choice.name;
         config.contrast = Contrast::Standard;
@@ -309,23 +321,30 @@ impl SettingsWindow {
         let light = self.theme_light;
         #[cfg(test)]
         let resolve = self.theme_io.as_ref().and_then(|io| io.resolve.clone());
+        #[cfg(test)]
+        let recover = self.theme_io.as_ref().and_then(|io| io.shared.clone());
         move || {
             #[cfg(test)]
             if let Some(resolve) = resolve {
-                return resolve(ThemeName::side(&config.theme, light));
+                return Ok((resolve(ThemeName::side(&config.theme, light))?, None));
             }
             match (choice.scope, shared) {
-                (Scope::Herdr, Some(shared)) => shared
-                    .preview_theme(&config.theme, light)
-                    .map(|theme| theme.with_contrast(config.contrast)),
-                (Scope::Herdr, None) => Err(crate::Error::MissingHome),
+                (Scope::Herdr, shared) => {
+                    // A shared config that failed to load is read again, so the
+                    // error names the real cause and a fixed file is picked up.
+                    let shared = match shared {
+                        Some(shared) => shared,
+                        #[cfg(test)]
+                        None if let Some(recover) = recover => recover()?,
+                        None => herdr_settings::Settings::load()?,
+                    };
+                    let theme = shared.preview_theme(&config.theme, light)?;
+                    Ok((theme.with_contrast(config.contrast), Some(shared)))
+                }
                 (Scope::App, Some(shared)) if ThemeName::side(&config.theme, light) == FOLLOW => {
-                    shared.theme(light)
+                    Ok((shared.theme(light)?, None))
                 }
-                (Scope::App, None) if ThemeName::side(&config.theme, light) == FOLLOW => {
-                    Err(crate::Error::MissingHome)
-                }
-                _ => config.theme(light),
+                _ => Ok((config.theme(light)?, None)),
             }
         }
     }
@@ -354,10 +373,15 @@ impl SettingsWindow {
             (Scope::App, _) => self.prepared_app_theme(&choice.name, self.theme_light),
             _ => None,
         };
+        let shared = match choice.scope {
+            Scope::Herdr => self.shared.clone(),
+            Scope::App => None,
+        };
         self.theme_intent = Some(ThemeIntent {
             revision: self.theme_revision,
             choice,
             theme,
+            shared,
         });
         let draft = cx.default_global::<ThemeDraft>();
         if !draft.active {
@@ -405,7 +429,10 @@ impl SettingsWindow {
                         && current.revision == intent.revision
                     {
                         match result {
-                            Ok(theme) => {
+                            Ok((theme, shared)) => {
+                                if shared.is_some() {
+                                    current.shared = shared;
+                                }
                                 let name = ThemeName::side(&intent.choice.name, light);
                                 if intent.choice.scope == Scope::App && name != FOLLOW {
                                     if this.theme_cache.len() == 64 {
@@ -654,12 +681,6 @@ impl SettingsWindow {
         browser.attempted = Some(revision);
         let contrast = browser.contrast;
         let light = crate::app::light_appearance(cx);
-        if choice.scope == Scope::Herdr && self.shared.is_none() {
-            browser.preview_error = Some(
-                "Herdr settings are unavailable. Reload settings to preview shared themes.".into(),
-            );
-            return;
-        }
         browser.running = Some(revision);
         let mut config = self.config.clone();
         config.theme = choice.name.clone();
@@ -667,11 +688,12 @@ impl SettingsWindow {
         let shared = self.shared.clone();
         let task = cx.background_executor().spawn(async move {
             // Config::theme already applies contrast; do not apply it twice.
-            match (choice.scope, shared) {
-                (Scope::Herdr, Some(shared)) => shared
+            match choice.scope {
+                Scope::Herdr => shared
+                    .map_or_else(herdr_settings::Settings::load, Ok)?
                     .preview_theme(&config.theme, light)
                     .map(|theme| theme.with_contrast(contrast)),
-                _ => config.theme(light),
+                Scope::App => config.theme(light),
             }
         });
         cx.spawn(async move |this, cx| {

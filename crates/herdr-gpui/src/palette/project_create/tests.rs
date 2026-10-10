@@ -40,17 +40,11 @@ fn refuses_a_bare_owner_repo() {
     assert_eq!(parse_repo("just-a-name"), None);
 }
 
-/// An absolute root with nothing to expand. `HOME` is unset on Windows.
-fn absolute_root() -> anyhow::Result<String> {
-    std::env::temp_dir()
-        .into_os_string()
-        .into_string()
-        .map_err(|path| anyhow::anyhow!("temp dir is not UTF-8: {path:?}"))
-}
-
 #[test]
 fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
-    let root = absolute_root()?;
+    // An absolute root expands to itself; HOME is unset on Windows runners.
+    let dir = tempfile::tempdir()?;
+    let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(std::slice::from_ref(&root), "brand-new")? else {
         anyhow::bail!("expected a plan for a plain name");
     };
@@ -62,7 +56,9 @@ fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
 
 #[test]
 fn plans_a_clone_and_names_it_after_the_repository() -> anyhow::Result<()> {
-    let root = absolute_root()?;
+    // An absolute root expands to itself; HOME is unset on Windows runners.
+    let dir = tempfile::tempdir()?;
+    let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(
         std::slice::from_ref(&root),
         "https://github.com/owner/thing.git",

@@ -97,6 +97,7 @@ fn close_while_latest_external_choice_loads_saves_only_that_choice(cx: &mut Test
                         writes.lock().unwrap().push(name);
                         Ok(())
                     }),
+                    shared: None,
                     resolve: Some(Arc::new(move |name| {
                         loads.lock().unwrap().push(name.to_owned());
                         Ok(Theme::builtin("Nord").unwrap())
