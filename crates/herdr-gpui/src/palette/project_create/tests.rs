@@ -42,7 +42,9 @@ fn refuses_a_bare_owner_repo() {
 
 #[test]
 fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
-    let root = std::env::var("HOME")?;
+    // Any absolute folder will do; Windows sets no HOME.
+    let dir = tempfile::tempdir()?;
+    let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(std::slice::from_ref(&root), "brand-new")? else {
         anyhow::bail!("expected a plan for a plain name");
     };
@@ -54,7 +56,9 @@ fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
 
 #[test]
 fn plans_a_clone_and_names_it_after_the_repository() -> anyhow::Result<()> {
-    let root = std::env::var("HOME")?;
+    // Any absolute folder will do; Windows sets no HOME.
+    let dir = tempfile::tempdir()?;
+    let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(
         std::slice::from_ref(&root),
         "https://github.com/owner/thing.git",
