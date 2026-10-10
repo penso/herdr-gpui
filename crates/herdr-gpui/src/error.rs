@@ -40,6 +40,17 @@ pub enum Error {
     PaletteProjectResponse,
     #[error("Workspace directories changed. Select the project again.")]
     PaletteProjectStateChanged,
+    #[error("A folder of that name already exists in the project root")]
+    PaletteProjectExists,
+    #[error("The first configured project root is not available")]
+    PaletteProjectRootMissing,
+    #[error("Could not create the project folder: {source}")]
+    PaletteProjectCreate {
+        #[source]
+        source: io::Error,
+    },
+    #[error("git clone failed: {0}")]
+    PaletteProjectClone(String),
     #[error("Invalid saved window geometry or too many saved windows")]
     InvalidWindowState,
     #[error("Sound configuration exceeds 1 MiB")]

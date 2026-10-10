@@ -1,7 +1,7 @@
 //! Project opening retains the local connection and palette identities through
 //! background validation and the correlated daemon response.
 
-use super::{LocalTarget, ProjectOperation, projects};
+use super::{LocalTarget, ProjectOperation, project_create, projects};
 use crate::{Error, HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
@@ -144,6 +144,90 @@ impl HerdrWindow {
                 if let Some(workspace) = existing {
                     this.dismiss_menu(window, cx);
                     this.navigate_endpoint(crate::endpoint::LOCAL, NavigationTarget::Workspace(&workspace), cx);
+                    return;
+                }
+                let request = this.endpoints[index].connection.request_dialog(
+                    &target.boot, Method::WorkspaceCreate,
+                    json!({"cwd": project.path, "label": project.label, "focus": true, "trust_repository": false}),
+                );
+                match request {
+                    Ok(id) => {
+                        if index == this.selected_endpoint {
+                            this.fence_focus_change(None);
+                        }
+                        if let Some(palette) = &mut this.menu.palette {
+                            palette.project_operation = ProjectOperation::Awaiting(id);
+                        }
+                        cx.notify();
+                    }
+                    Err(error) => this.palette_project_error(error, cx),
+                }
+            });
+        });
+        if let Some(palette) = &mut self.menu.palette {
+            palette.project_operation = ProjectOperation::Validating { _task: task };
+        }
+        cx.notify();
+    }
+
+    /// Create the directory (or clone into it), then open it exactly as
+    /// `activate_project` opens a directory that already exists.
+    pub(super) fn create_project(
+        &mut self,
+        project: project_create::NewProject,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(palette) = &self.menu.palette else {
+            return;
+        };
+        let Some(target) = palette.local_target.clone() else {
+            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            return;
+        };
+        if let Err(error) = self.local_project_connection(&target) {
+            return self.palette_project_error(error, cx);
+        }
+        let token = palette.search.clone();
+        let config = self.config.palette.clone();
+        let creating = project.clone();
+        let materialise = cx
+            .background_executor()
+            .spawn(async move { project_create::materialise(&creating, &|| false) });
+        if let Some(palette) = &mut self.menu.palette {
+            palette.error = None;
+        }
+        let task = cx.spawn_in(window, async move |this, cx| {
+            let created = materialise.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if this
+                    .menu
+                    .palette
+                    .as_ref()
+                    .is_none_or(|palette| palette.search != token)
+                    || this.config.palette != config
+                {
+                    return;
+                }
+                if !this.menu_target_current() {
+                    this.palette_project_error(Error::PaletteSessionChanged, cx);
+                    return;
+                }
+                let (index, snapshot) = match this.local_project_connection(&target) {
+                    Ok(current) => current,
+                    Err(error) => return this.palette_project_error(error, cx),
+                };
+                if let Err(error) = created {
+                    return this.palette_project_error(error, cx);
+                }
+                // A directory that already has a workspace is gone to, not created twice.
+                if let Some(workspace) = projects::workspace_for_path(&snapshot, &project.path) {
+                    this.dismiss_menu(window, cx);
+                    this.navigate_endpoint(
+                        crate::endpoint::LOCAL,
+                        NavigationTarget::Workspace(&workspace),
+                        cx,
+                    );
                     return;
                 }
                 let request = this.endpoints[index].connection.request_dialog(
