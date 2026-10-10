@@ -29,7 +29,9 @@ impl HerdrWindow {
             return None;
         }
         // Spans the terminal area so a narrow window shrinks the cards rather
-        // than pushing them off the left edge.
+        // than pushing them off the left edge. Each card sits in its own row:
+        // a column only shrinks its children along its height, so a card with
+        // a long line kept its full width there.
         Some(
             div()
                 .absolute()
@@ -38,9 +40,12 @@ impl HerdrWindow {
                 .right(px(8.))
                 .flex()
                 .flex_col()
-                .items_end()
                 .gap(px(8.))
-                .children(cards)
+                .children(
+                    cards
+                        .into_iter()
+                        .map(|card| div().flex().justify_end().child(card)),
+                )
                 .into_any_element(),
         )
     }
