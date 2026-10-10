@@ -19,6 +19,7 @@ mod missing_fonts;
 mod notification_settings;
 mod preferences;
 mod sidebar_scope;
+mod sidebar_search;
 mod sidebar_settings;
 mod sidebar_style;
 mod status_bar;

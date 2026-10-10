@@ -47,6 +47,13 @@ impl HerdrWindow {
         let spaces_custom = self.config.usage.inline
             && self.config.sidebar_layout.spaces != crate::config::SpaceLayout::default();
         let theme = &self.theme;
+        self.sidebar_search.input.update(cx, |input, cx| {
+            input.set_appearance(self.config.ui.clone(), theme.clone(), cx);
+        });
+        // A hidden field keeps whatever it held, but never filters the list.
+        let searchable = self.config.show_sidebar_search;
+        let search = (searchable && self.sidebar_search.query().is_some())
+            .then(|| self.sidebar_search_results(self.sidebar_search_hits(), indicators, look, cx));
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -600,6 +607,9 @@ impl HerdrWindow {
                     .min_h_0()
                     .overflow_hidden()
                     .child(header("spaces", font, theme, look))
+                    .when(searchable, |section| {
+                        section.child(self.sidebar_search_field(look, cx))
+                    })
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
@@ -610,8 +620,10 @@ impl HerdrWindow {
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .child(spaces)
-                            .children(pinned_host),
+                            .map(|list| match search {
+                                Some(results) => list.child(results),
+                                None => list.child(spaces).children(pinned_host),
+                            }),
                     )
                     .child(
                         div()

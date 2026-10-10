@@ -3,7 +3,9 @@
 //! reads one bounded request, hands it to the UI through a bounded queue,
 //! and writes back the answer the UI gives it. A feedback request may wait
 //! minutes for the user, so connections cannot share one thread.
-use super::protocol::{ErrorCode, MAX_MESSAGE, MAX_WAIT_SECONDS, Request, Response};
+use super::protocol::{
+    ErrorCode, FeedbackRequest, MAX_MESSAGE, MAX_WAIT_SECONDS, Request, Response,
+};
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
     os::unix::{
@@ -12,12 +14,12 @@ use std::{
     },
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
         mpsc::{self, Receiver, SyncSender, TrySendError},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const IO_TIMEOUT: Duration = Duration::from_secs(2);
@@ -43,19 +45,55 @@ fn answer_timeout(request: &Request) -> Duration {
 /// A request waiting for the UI's answer.
 pub(crate) struct Incoming {
     pub request: Request,
-    reply: SyncSender<Response>,
+    reply: Arc<Mutex<Reply>>,
+}
+
+struct Reply {
+    live: bool,
+    sender: SyncSender<Response>,
+}
+
+pub(crate) enum Event {
+    Request(Incoming),
+    Undelivered {
+        request: FeedbackRequest,
+        text: String,
+    },
 }
 
 impl Incoming {
     pub(crate) fn respond(self, response: Response) {
-        // The caller may have given up already; there is no one to tell.
-        let _ = self.reply.try_send(response);
+        let _ = self.try_respond(response);
+    }
+
+    pub(crate) fn is_live(&self) -> bool {
+        self.reply
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .live
+    }
+
+    /// Return ownership if the worker stopped waiting, so notes can be kept.
+    pub(crate) fn try_respond(self, response: Response) -> Result<(), Response> {
+        let reply = self
+            .reply
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !reply.live {
+            return Err(response);
+        }
+        reply
+            .sender
+            .try_send(response)
+            .map_err(|error| match error {
+                TrySendError::Full(response) | TrySendError::Disconnected(response) => response,
+            })
     }
 }
 
 pub(crate) struct Server {
     path: PathBuf,
-    requests: Receiver<Incoming>,
+    requests: Receiver<Event>,
 }
 
 impl Server {
@@ -124,13 +162,16 @@ impl Server {
     }
 
     /// Requests that arrived since the last call.
-    pub(crate) fn drain(&self) -> impl Iterator<Item = Incoming> + '_ {
+    pub(crate) fn drain(&self) -> impl Iterator<Item = Event> + '_ {
         self.requests.try_iter()
     }
 
     #[cfg(test)]
-    fn next(&self) -> Option<Incoming> {
-        self.requests.recv_timeout(Duration::from_secs(5)).ok()
+    pub(super) fn next(&self) -> Option<Incoming> {
+        match self.requests.recv_timeout(Duration::from_secs(5)).ok()? {
+            Event::Request(incoming) => Some(incoming),
+            Event::Undelivered { .. } => None,
+        }
     }
 }
 
@@ -154,14 +195,14 @@ fn write_line(mut writer: impl Write, message: &impl serde::Serialize) -> crate:
     Ok(())
 }
 
-fn answer(line: crate::Result<Vec<u8>>, queue: &SyncSender<Incoming>) -> Response {
-    let request = match line.and_then(|line| Ok(serde_json::from_slice::<Request>(&line)?)) {
-        Ok(request) => request,
-        Err(error) => return Response::error(ErrorCode::InvalidRequest, error.to_string()),
-    };
+fn answer(request: Request, queue: &SyncSender<Event>, stream: &UnixStream) -> Response {
     let timeout = answer_timeout(&request);
-    let (reply, answer) = mpsc::sync_channel(1);
-    match queue.try_send(Incoming { request, reply }) {
+    let (sender, answer) = mpsc::sync_channel(1);
+    let reply = Arc::new(Mutex::new(Reply { live: true, sender }));
+    match queue.try_send(Event::Request(Incoming {
+        request,
+        reply: reply.clone(),
+    })) {
         Ok(()) => {}
         Err(TrySendError::Full(_)) => {
             return Response::error(ErrorCode::Busy, "Herdr GPUI is handling other requests");
@@ -170,9 +211,29 @@ fn answer(line: crate::Result<Vec<u8>>, queue: &SyncSender<Incoming>) -> Respons
             return Response::error(ErrorCode::NoWindow, "Herdr GPUI is shutting down");
         }
     }
-    answer.recv_timeout(timeout).unwrap_or_else(|_| {
-        Response::error(ErrorCode::Timeout, "Herdr GPUI did not answer in time")
-    })
+    let until = Instant::now() + timeout;
+    loop {
+        if let Ok(response) = answer.recv_timeout(Duration::from_millis(50)) {
+            return response;
+        }
+        if Instant::now() >= until || peer_closed(stream) {
+            // No I/O under this lock. Serialize cancellation with try_respond,
+            // retaining a response that raced the disconnect instead of dropping it.
+            let mut reply = reply
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            reply.live = false;
+            return answer.try_recv().unwrap_or_else(|_| {
+                Response::error(ErrorCode::Timeout, "Herdr GPUI did not answer in time")
+            });
+        }
+    }
+}
+
+/// A request is one line only. EOF, another byte, or an I/O error ends it;
+/// WouldBlock means the peer is still waiting. Runs only on the socket worker.
+fn peer_closed(mut stream: &UnixStream) -> bool {
+    !matches!(stream.read(&mut [0]), Err(error) if matches!(error.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted))
 }
 
 /// Answers a connection over the bound without reading it.
@@ -184,7 +245,7 @@ fn refuse(stream: &UnixStream) {
     }
 }
 
-fn serve(stream: UnixStream, queue: &SyncSender<Incoming>) {
+fn serve(stream: UnixStream, queue: &SyncSender<Event>) {
     let prepared = stream
         .set_read_timeout(Some(IO_TIMEOUT))
         .and_then(|()| stream.set_write_timeout(Some(IO_TIMEOUT)));
@@ -192,9 +253,43 @@ fn serve(stream: UnixStream, queue: &SyncSender<Incoming>) {
         tracing::debug!(%error, "Control connection setup failed");
         return;
     }
-    let response = answer(read_line(&stream), queue);
-    if let Err(error) = write_line(&stream, &response) {
+    let request = read_line(&stream).and_then(|line| Ok(serde_json::from_slice::<Request>(&line)?));
+    let (request, response) = match request {
+        Ok(request) => {
+            if let Err(error) = stream.set_nonblocking(true) {
+                tracing::debug!(%error, "Control disconnect monitoring failed");
+                return;
+            }
+            let response = answer(request.clone(), queue, &stream);
+            (Some(request), response)
+        }
+        Err(error) => (
+            None,
+            Response::error(ErrorCode::InvalidRequest, error.to_string()),
+        ),
+    };
+    finish_response(&stream, queue, request, response);
+}
+
+fn finish_response(
+    stream: &UnixStream,
+    queue: &SyncSender<Event>,
+    request: Option<Request>,
+    response: Response,
+) {
+    let written = stream
+        .set_nonblocking(false)
+        .map_err(crate::Error::from)
+        .and_then(|()| write_line(stream, &response));
+    if let Err(error) = written {
         tracing::debug!(%error, "Control response failed");
+        if let (Some(Request::Feedback(request)), Response::Feedback { text: Some(text) }) =
+            (request, response)
+        {
+            // Bounded backpressure is safe here, off the UI thread. The queue
+            // and connection limits also bound notes awaiting their return.
+            let _ = queue.send(Event::Undelivered { request, text });
+        }
     }
 }
 
@@ -220,6 +315,8 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::super::protocol::{BrowserOpen, Caller, FeedbackRequest, OpenedIn, Page};
     use super::*;
+
+    mod cancellation;
 
     fn open(url: &str) -> Request {
         Request::Open(BrowserOpen {
@@ -311,6 +408,7 @@ mod tests {
                     &path,
                     &Request::Feedback(FeedbackRequest {
                         pane_id: "w_1:p1".into(),
+                        daemon_socket: Some("/tmp/daemon.sock".into()),
                         wait_seconds: 30,
                     }),
                 )
@@ -343,6 +441,7 @@ mod tests {
         let wait = |wait_seconds| {
             answer_timeout(&Request::Feedback(FeedbackRequest {
                 pane_id: "p".into(),
+                daemon_socket: Some("/tmp/daemon.sock".into()),
                 wait_seconds,
             }))
         };

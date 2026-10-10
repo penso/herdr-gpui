@@ -79,6 +79,8 @@ pub struct Config {
     pub confirm_close_tab: bool,
     pub confirm_close_pane: bool,
     pub show_agents: bool,
+    /// The search field at the top of the sidebar's spaces list.
+    pub show_sidebar_search: bool,
     /// CPU and memory of the selected host in the status bar.
     pub show_system_load: bool,
     /// Snapshot a checkout's files each time one of its agents starts or
@@ -410,6 +412,7 @@ impl Default for Config {
             confirm_close_tab: true,
             confirm_close_pane: true,
             show_agents: true,
+            show_sidebar_search: true,
             show_system_load: true,
             agent_checkpoints: true,
             show_listening_ports: true,
@@ -455,6 +458,7 @@ struct Settings {
     confirm_close_tab: Option<bool>,
     confirm_close_pane: Option<bool>,
     show_agents: Option<bool>,
+    show_sidebar_search: Option<bool>,
     show_system_load: Option<bool>,
     agent_checkpoints: Option<bool>,
     show_listening_ports: Option<bool>,
@@ -805,6 +809,7 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.confirm_close_pane = settings.confirm_close_pane.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
+        config.show_sidebar_search = settings.show_sidebar_search.unwrap_or(true);
         config.show_system_load = settings.show_system_load.unwrap_or(true);
         config.agent_checkpoints = settings.agent_checkpoints.unwrap_or(true);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);

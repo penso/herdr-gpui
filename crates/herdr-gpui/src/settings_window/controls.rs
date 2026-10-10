@@ -970,6 +970,15 @@ impl SettingsWindow {
                     this.save_native(move || Config::save_show_agents(show), cx);
                 })),
             )
+            .child(self.preference_switch(
+                "settings-sidebar-search",
+                "Show search",
+                self.config.show_sidebar_search,
+                crate::config::preferences::Preference::ShowSidebarSearch(
+                    !self.config.show_sidebar_search,
+                ),
+                cx,
+            ))
             .child(self.sidebar_gap_control(cx))
     }
 }

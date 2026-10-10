@@ -494,8 +494,8 @@ clipboard copied notification, plus all six clipboard positions. Notifications
 provides a native in-app switch, a bounded delay stepper (0-3600 seconds), and
 four corner choices. Each notification and clipboard field has a **Follow shared**
 action that removes only its local override; effective values are shown after
-reload. Appearance provides switches for **Show agents** and **High contrast**,
-and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
+reload. Appearance provides switches for **Show agents**, **Show search**, and
+**High contrast**, and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
 custom sound paths and per-agent sound policies remain shared-file settings, not
 read-only preference rows in this window. Configuration paths and installation
 status are diagnostic facts rather than editable preference values.
@@ -605,6 +605,12 @@ The pane dialog's **Do not ask again** checkbox (click it or press Space) saves
 `confirm_close_pane = false` to `config-gpui.local.toml` once the close is sent. Saved edits apply automatically. The
 **Show agents** control in **Settings > Appearance > Sidebar layout** saves
 `show_agents` immediately, independently of the layout draft saved on close.
+
+A search field at the top of the sidebar finds devices, worktrees, and
+branches by name; while it holds text, results grouped by kind replace the
+spaces list. Up and Down move through them, Enter opens one, and Escape
+clears the search. Set top-level `show_sidebar_search = false`, or turn off
+**Show search** in **Settings > Appearance > Sidebar layout**, to hide it.
 
 `[usage]` provides independent switches in `config-gpui.local.toml`:
 
@@ -989,8 +995,8 @@ audio deduplication. Native playback and device-switch/unplug behavior require m
 With Herdr's tab bar at the top (`ui.tab_bar_position = "top"`, the default),
 the tab row is the title bar, as in Chrome or Conductor, and the window draws
 no separate header. Strips along the top grow to the header's 34px. The
-sidebar column starts with a row holding the traffic-light clearance and the
-sidebar toggle; with the sidebar collapsed to its rail or hidden, the leftmost
+sidebar column starts with a row holding the traffic-light clearance, the
+sidebar toggle, and Back and Forward; with the sidebar collapsed to its rail or hidden, the leftmost
 group's strip leads with whatever clearance the column leaves and the toggle.
 The rightmost group's strip ends with the header's status text, Git button,
 account, and window controls. Every strip keeps at least 40px of empty room
@@ -1000,6 +1006,22 @@ tab bar, or a lone tab hidden by `hide_tab_bar_when_single_tab`, brings back
 the full-width header described below, and so does a window with no strips.
 The worktree banner moves to the window's foot in this layout so it never sits
 under the traffic lights.
+
+Back and Forward follow the sidebar toggle, in the header or in the expanded
+sidebar's first row; a sidebar dragged too narrow for them, or collapsed,
+hands them to the leftmost strip with the toggle. They walk the panes this connection has
+focused, across tabs and workspaces, the way a browser walks its pages: going
+somewhere new drops what was ahead, closed panes are stepped over, and the
+trail (at most 100 panes) starts over when the daemon restarts. `back`
+(Cmd-[) and `forward` (Cmd-]) do the same from the keyboard, and so do a
+mouse's side buttons anywhere in the window. Each platform draws the pair its
+own way: macOS joins two chevrons in one segmented bezel as Finder and Xcode
+do, Windows uses Fluent's subtle arrow buttons as File Explorer does, and
+Linux uses GNOME's flat rounded header bar buttons. A header narrower than
+320px leaves them out so the account and window controls stay reachable, and
+a strip squeezed by the sidebar, a panel, or a split gives up its tabs' room
+first, then drops the pair whole before the trailing controls would be
+pushed out.
 
 macOS keeps `Some(TitlebarOptions)` and the native Herdr window title/traffic lights,
 with transparent chrome and lights positioned at (9, 9) logical pixels. A full-width
@@ -1837,6 +1859,11 @@ them to the agent that opened it, so it can change the page.
   running agent, since Enter there would run it in a shell, nor into an agent
   that is asking you a question; those notes wait for `browser feedback`, as
   do notes for a pane this window does not show.
+- Feedback is scoped to the caller's daemon socket and pane together, so two
+  local sessions with the same pane ID cannot take each other's notes. Use the
+  matching CLI build: older pane-only feedback requests are rejected rather
+  than guessed. The mockup receiver still watches its file fallback when an
+  older running app rejects scoped feedback.
 - Tabs you open yourself have no agent to send to; **Copy** is offered
   instead.
 

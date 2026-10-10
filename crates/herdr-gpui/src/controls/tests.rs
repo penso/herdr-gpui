@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 98] = [
+    let expected: [(Command, &[&str]); 100] = [
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -46,6 +46,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NextPane, &["cmd-alt-]"]),
         (PreviousPane, &["cmd-alt-["]),
         (LastPane, &[]),
+        (Back, &["cmd-["]),
+        (Forward, &["cmd-]"]),
         (SwapLeft, &[]),
         (SwapRight, &[]),
         (SwapUp, &[]),
@@ -186,6 +188,8 @@ fn gui_commands_never_send_daemon_requests() {
         Command::CycleWindows,
         Command::RenameTab,
         Command::LastPane,
+        Command::Back,
+        Command::Forward,
         Command::ResizeMode,
         Command::RenamePane,
         Command::PreviousWorkspace,

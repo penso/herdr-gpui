@@ -241,7 +241,7 @@ const SYMBOL_FAMILY_MARKER: &str = "nerd font";
 /// detection keeps only the best-ranked few families.
 const MAX_DETECTED_FALLBACKS: usize = 3;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FontConfig {
     pub family: String,
     pub size: f32,
