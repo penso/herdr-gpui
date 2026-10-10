@@ -186,6 +186,7 @@ impl Render for HerdrWindow {
             .map(|(slot, _)| *slot);
         let terminal_gap = terminal_slot.map_or(sidebar_gap, slot_gap);
         let find_bar = self.render_find_bar(surface.as_deref(), terminal_gap, cx);
+        let terminal_note = self.render_terminal_note(surface.as_deref(), terminal_gap, cx);
         let copy_badge = self.render_copy_mode_badge(surface.as_deref(), terminal_gap);
         let terminal = div()
             .id("terminal")
@@ -498,6 +499,7 @@ impl Render for HerdrWindow {
             )
             .children(self.render_reconnecting(cx))
             .when_some(find_bar, |terminal, bar| terminal.child(bar))
+            .when_some(terminal_note, |terminal, note| terminal.child(note))
             .when_some(copy_badge, |terminal, badge| terminal.child(badge))
             // Direct feedback for the user's own gesture, not a daemon notice:
             // it sits over the cells it copied and needs no dismissing.

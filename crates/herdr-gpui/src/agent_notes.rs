@@ -50,6 +50,16 @@ pub(crate) fn agent<'a>(
         .find(|agent| agent.pane_id == pane_id)
 }
 
+/// Notes as they may be typed into a pane. Each kind of note cleans the
+/// untrusted text it quotes, but this is the one way out, so a control that
+/// slipped through cannot end the bracketed paste early or press keys in the
+/// agent's prompt. Line breaks are the only control kept.
+fn typable(text: &str) -> String {
+    text.chars()
+        .filter(|c| *c == '\n' || !crate::notifications::unsafe_char(*c))
+        .collect()
+}
+
 fn enter() -> ClientPaneInputEvent {
     ClientPaneInputEvent::Key {
         code: ClientKeyCode::Enter,
@@ -75,6 +85,7 @@ impl HerdrWindow {
         text: String,
         cx: &mut Context<Self>,
     ) {
+        let text = typable(&text);
         let Some(pane_id) = pane_id else {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             self.show_flash(
@@ -229,3 +240,6 @@ impl HerdrWindow {
         .detach();
     }
 }
+
+#[cfg(test)]
+mod tests;

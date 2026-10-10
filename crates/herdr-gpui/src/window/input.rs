@@ -157,7 +157,7 @@ impl HerdrWindow {
         self.held_keys.forget(&event.keystroke.key);
         // A keystroke bubbling out of the find field is the field's: an
         // unhandled one is still on its way to the field's IME.
-        if self.find_focused(window, cx) {
+        if self.find_focused(window, cx) || self.terminal_note_focused(window, cx) {
             return;
         }
         // Copy mode owns the keyboard: its keys run and nothing else is typed.

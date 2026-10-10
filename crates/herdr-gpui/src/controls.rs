@@ -27,6 +27,7 @@ pub enum Command {
     FindNext,
     FindPrevious,
     CopyMode,
+    AnnotateSelection,
     EditScrollback,
     ClosePane,
     CloseTab,
@@ -399,6 +400,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "copy_mode",
         label: "Copy Mode",
         shortcuts: &["cmd-shift-c"],
+    },
+    CommandInfo {
+        command: Command::AnnotateSelection,
+        name: "annotate_selection",
+        label: "Annotate Selection for the Agent",
+        shortcuts: &["cmd-shift-a"],
     },
     CommandInfo {
         command: Command::EditScrollback,
@@ -832,6 +839,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::FindNext
         | Command::FindPrevious
         | Command::CopyMode
+        | Command::AnnotateSelection
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
         | Command::IncreaseFontSize
