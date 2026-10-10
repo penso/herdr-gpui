@@ -47,10 +47,10 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 `--dev` selects the `herdr-dev` config directory. Connection failure is displayed
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
-without input replay. Detach pauses retries for that endpoint until Reconnect.
-If local Herdr is missing, the installation prompt stays open across background
-retries until dismissed. Its Install button opens the Herdr website; after
-installing Herdr, choose Terminal > Reconnect to try again immediately.
+without input replay. The command palette's **Detach** disconnects the selected
+endpoint without closing the window or stopping the daemon, and pauses retries
+until Reconnect. It follows Herdr's `[keys].detach` binding (default: `Ctrl-B`,
+then `Q`); set `detach = ""` under `[keys]` to leave it unbound.
 A selected host that drops stays selected while it reconnects: its last terminal
 picture stays up, dimmed, under a card with the reason and a Reconnect now button,
 until the new connection presents its own frame. Keys typed meanwhile are not sent,

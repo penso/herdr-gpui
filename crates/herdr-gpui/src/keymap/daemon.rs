@@ -5,8 +5,6 @@
 //! skipped rather than turned into a GUI config error.
 //!
 //! Herdr actions with no GUI command, each for a reason:
-//! - `detach`: closing the window already leaves the daemon running, and a
-//!   window cannot stay open without a connection.
 //! - `open_worktree` and `remove_worktree`: the workspace menu offers both,
 //!   but each needs a menu row as the target, not just the focused one.
 //! - `navigate_pane_*`: the workspace picker is a search field here, with no
@@ -66,6 +64,7 @@ impl Indexed {
 /// Daemon actions with a GUI equivalent, each with Herdr's default binding.
 /// The module documentation lists the actions missing here, and why.
 const ACTIONS: &[(&str, Target, &str)] = &[
+    ("detach", Target::Command(Command::Detach), "prefix+q"),
     ("help", Target::Command(Command::Keybinds), "prefix+?"),
     ("settings", Target::Command(Command::Settings), "prefix+s"),
     (

@@ -47,6 +47,7 @@ pub enum Command {
     GoToSymbol,
     /// Go to a file in the focused pane's checkout.
     GoToFile,
+    Detach,
     Reconnect,
     Quit,
     Logs,
@@ -643,6 +644,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-o"],
     },
     CommandInfo {
+        command: Command::Detach,
+        name: "detach",
+        label: "Detach",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::Reconnect,
         name: "reconnect",
         label: "Reconnect",
@@ -854,6 +861,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Palette
         | Command::GoToSymbol
         | Command::GoToFile
+        | Command::Detach
         | Command::Reconnect
         | Command::Quit
         | Command::Logs
