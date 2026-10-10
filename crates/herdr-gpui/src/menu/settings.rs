@@ -398,9 +398,7 @@ impl HerdrWindow {
                 | Command::AgentNumber(_) => 1,
                 Command::NewWindow
                 | Command::ToggleSidebar
-                | Command::ToggleCode
-                | Command::MoveCodeToGroup
-                | Command::MoveCodeToPanel
+                | Command::OpenCode
                 | Command::ToggleStatusBar
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize

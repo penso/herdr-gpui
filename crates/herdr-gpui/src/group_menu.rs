@@ -1,7 +1,8 @@
 //! The menu behind a group's "…" button: tabs other than a terminal to open
 //! in the group (a blank browser tab, the focused checkout's review, the
-//! repository's orchestrator, the focused workspace's listening ports), closing tabs in the group, and
-//! splitting it. A terminal tab comes from the group's "+". Closing here only
+//! repository's orchestrator, the focused workspace's listening ports, its
+//! VS Code), closing tabs in the group, and splitting it. A terminal tab
+//! comes from the group's "+". Closing here only
 //! ever takes tabs out of this group's strip, as an editor's group menu does:
 //! the tabs stay open in Herdr, in the browser, and in every other group.
 //! Only a tab's own close, unsplit, reaches Herdr, through its confirmation.
@@ -29,6 +30,8 @@ enum Action {
     Review,
     /// The focused workspace's repository's issues, pull requests, and runs.
     Orchestrator,
+    /// The workspace's VS Code tab, opened in this group.
+    VsCode,
     /// One of the focused workspace's listening ports and where it opens.
     Port {
         number: u16,
@@ -49,6 +52,7 @@ impl Action {
             Self::NewBrowserTab => "New Browser Tab".into(),
             Self::Review => "Review Changes".into(),
             Self::Orchestrator => "Orchestrator".into(),
+            Self::VsCode => "VS Code".into(),
             Self::Port { link, .. } => link.label().into(),
             Self::Close => "Close".into(),
             Self::CloseOthers => "Close Others".into(),
@@ -62,6 +66,7 @@ impl Action {
             Self::NewBrowserTab => Some("icons/globe.svg"),
             Self::Review => Some("icons/diff-unified.svg"),
             Self::Orchestrator => Some("icons/pulse.svg"),
+            Self::VsCode => Some("icons/vscode.svg"),
             Self::Port { .. } => Some("icons/arrow-right.svg"),
             Self::Split => Some("icons/split.svg"),
             Self::Close | Self::CloseOthers | Self::CloseAll => None,
@@ -79,7 +84,7 @@ impl Action {
     /// Which run of rows this one belongs to; a rule separates runs.
     fn section(&self) -> u8 {
         match self {
-            Self::NewBrowserTab | Self::Review | Self::Orchestrator => 0,
+            Self::NewBrowserTab | Self::Review | Self::Orchestrator | Self::VsCode => 0,
             Self::Port { .. } => 1,
             Self::Close | Self::CloseOthers | Self::CloseAll => 2,
             Self::Split => 3,
@@ -116,6 +121,9 @@ impl HerdrWindow {
         }
         if self.can_open_orchestrator() {
             actions.push(Action::Orchestrator);
+        }
+        if self.code_offered(cx) {
+            actions.push(Action::VsCode);
         }
         if let Some((_, _, listed)) = self.focused_listening_ports() {
             actions.extend(listed.ports.iter().filter_map(|port| {
@@ -173,6 +181,7 @@ impl HerdrWindow {
             Action::NewBrowserTab => self.open_browser_tab_in(group, window, cx),
             Action::Review => self.open_review(window, cx),
             Action::Orchestrator => self.open_orchestrator(window, cx),
+            Action::VsCode => self.open_code(Some(group), window, cx),
             Action::Port { link, .. } => {
                 let Some((endpoint, workspace)) = self
                     .focused_listening_ports()
@@ -296,6 +305,8 @@ impl HerdrWindow {
                     .primary(Command::NewBrowserTab)
                     .to_owned()
                     .into(),
+                // It has no default key; one bound to open_code shows.
+                Action::VsCode => self.keymap().primary(Command::OpenCode).to_owned().into(),
                 Action::Port { process, .. } => process.clone().into(),
                 _ => "".into(),
             };

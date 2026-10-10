@@ -19,7 +19,7 @@ chrono.workspace               = true
 config_loader.workspace        = true
 ed25519-dalek.workspace        = true
 flate2.workspace               = true
-getrandom                      = { optional = true, workspace = true }
+getrandom.workspace            = true
 gpui.workspace                 = true
 # Unlike gpui 0.2.2, the platform crate enables nothing by default: without
 # font-kit (macOS) or a Linux backend, text silently goes to a no-op system.
@@ -63,7 +63,7 @@ gpui = { features = ["test-support"], workspace = true }
 default = ["coder", "daytona"]
 # Machines from cloud providers as devices: the shared device list, background
 # jobs, and connector. Turned on by each provider below; not useful alone.
-cloud = ["herdr-client/cloud", "dep:getrandom"]
+cloud = ["herdr-client/cloud"]
 # Coder workspaces as devices, with OAuth2 sign-in.
 coder = ["cloud", "herdr-client/coder", "dep:base64"]
 # Daytona sandboxes as devices, with an API key and its SSH gateway.

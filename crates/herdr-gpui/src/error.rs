@@ -406,21 +406,8 @@ pub enum Error {
     UsageJson(serde_json::error::Category),
     #[error("Could not reach this host over SSH to read usage.")]
     UsageUnreachable,
-    /// Only the host and port are named: the address's query may hold the
-    /// server's connection token.
-    #[error("{reason} at {address}.")]
-    CodeUnreachable {
-        address: String,
-        reason: crate::code_server::NoAnswer,
-        #[source]
-        source: ureq::Error,
-    },
-    #[error("This address is not a VS Code server (HTTP {status}).")]
-    CodeNotServer { status: u16 },
-    #[error("The server refused the connection token. Use the address it prints, with its ?tkn=.")]
-    CodeTokenRefused,
-    #[error("The VS Code server answered HTTP {0}.")]
-    CodeStatus(u16),
+    #[error(transparent)]
+    Code(#[from] crate::code_server::Error),
     #[error("curl is not installed on this host, so usage cannot be read.")]
     UsageMissingCurl,
     #[error("Remote usage needs SSH, which this platform's client does not support.")]

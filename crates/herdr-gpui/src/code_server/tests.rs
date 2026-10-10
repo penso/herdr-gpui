@@ -64,19 +64,22 @@ fn a_refused_token_is_told_apart_from_a_missing_server() {
     let forbidden =
         "HTTP/1.1 403 Forbidden\r\ncontent-length: 10\r\nconnection: close\r\n\r\nForbidden.";
     let address = serve(vec![version(COMMIT), forbidden.into()]);
-    assert!(matches!(probe(&url(address)), Err(Error::CodeTokenRefused)));
+    assert!(matches!(
+        probe(&url(address)),
+        Err(crate::Error::Code(Error::TokenRefused))
+    ));
 
     let missing = "HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
     let address = serve(vec![missing.into()]);
     assert!(matches!(
         probe(&url(address)),
-        Err(Error::CodeNotServer { status: 404 })
+        Err(crate::Error::Code(Error::NotServer { status: 404 }))
     ));
 
     let address = serve(vec![version("hello")]);
     assert!(matches!(
         probe(&url(address)),
-        Err(Error::CodeNotServer { status: 200 })
+        Err(crate::Error::Code(Error::NotServer { status: 200 }))
     ));
 }
 
@@ -85,7 +88,7 @@ fn a_closed_port_is_unreachable() {
     // Nothing listens on port 1. A freed ephemeral port could be taken by a
     // parallel test's server meanwhile, so it is not used here.
     let error = probe(&WebUrl::try_from("http://127.0.0.1:1/?tkn=secret").unwrap()).unwrap_err();
-    let Error::CodeUnreachable { address, .. } = &error else {
+    let crate::Error::Code(Error::Unreachable { address, .. }) = &error else {
         panic!("{error:?}");
     };
     assert_eq!(address, "127.0.0.1:1");
@@ -106,7 +109,7 @@ fn an_unreachable_server_is_named_by_host_and_port_alone() {
     );
     assert_eq!(NoAnswer::Timeout.to_string(), "No answer within 3 seconds");
     let url = WebUrl::try_from("http://127.0.0.1:8000/?tkn=secret").unwrap();
-    let error = Error::CodeUnreachable {
+    let error = Error::Unreachable {
         address: url.address(),
         reason: NoAnswer::from(&refused),
         source: refused,

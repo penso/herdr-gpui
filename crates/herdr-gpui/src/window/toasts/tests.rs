@@ -240,5 +240,3 @@ fn notifications_honor_all_corners_and_global_card_limit(cx: &mut TestAppContext
         assert_eq!(view.selected_endpoint, 0);
     });
 }
-
-mod vs_code_realm;

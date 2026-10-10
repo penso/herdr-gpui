@@ -32,9 +32,7 @@ fn a_new_vs_code_page_opens_its_workspace_folder(cx: &mut gpui::TestAppContext) 
             view.browser.code_server.probe = answers;
         })
     });
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| view.command(Command::ToggleCode, window, cx))
-    });
+    cx.update(|window, cx| view.update(cx, |view, cx| view.command(Command::OpenCode, window, cx)));
     cx.run_until_parked();
     // The server answered; the next tick opens the tab.
     cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));

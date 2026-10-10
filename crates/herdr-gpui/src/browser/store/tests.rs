@@ -3,7 +3,7 @@ use super::*;
 
 fn url(value: &str) -> Option<Location> {
     Some(Location::Web {
-        url: super::super::WebUrl::try_from(value).unwrap(),
+        url: WebUrl::try_from(value).unwrap(),
     })
 }
 
@@ -170,58 +170,64 @@ fn an_agent_reopening_its_page_reuses_the_tab() {
     assert_eq!(ids, [mine]);
 }
 
+/// A workspace's VS Code tab is listed in its strips like any tab, and is
+/// still its one VS Code tab, never handed to an agent.
 #[test]
-fn a_workspace_has_one_panel_tab_kept_out_of_its_strips() {
+fn a_workspace_has_one_vs_code_tab_listed_in_its_strips() {
     let mut store = Store::default();
     let (local, remote) = (Scope::endpoint("local"), Scope::endpoint("ssh:box"));
-    let page = url("http://127.0.0.1:8000/").unwrap();
+    let page = url("http://127.0.0.1:8000/");
     let strip = store.open(local.clone(), "w_1", None, None).unwrap();
     assert!(store.code_tab(&local, "w_1").is_none());
-    let panel = store
+    let code = store
         .open_code_tab(local.clone(), "w_1", page.clone())
         .unwrap();
-    assert_ne!(panel, strip);
+    assert_ne!(code, strip);
     // Opening it again finds the same tab, wherever it went since.
-    store.visited(panel, url("http://127.0.0.1:8000/?folder=/x"), None);
+    store.visited(code, url("http://127.0.0.1:8000/?folder=/x"), None);
     assert_eq!(
         store.open_code_tab(local.clone(), "w_1", page.clone()),
-        Some(panel)
+        Some(code)
     );
     assert_eq!(
-        store.get(panel).unwrap().location,
+        store.get(code).unwrap().location,
         url("http://127.0.0.1:8000/?folder=/x")
     );
+    // One opened before its server's address is known gets it later.
+    let waiting = store.open_code_tab(local.clone(), "w_2", None).unwrap();
+    assert_eq!(store.get(waiting).unwrap().location, None);
     // Each workspace of each daemon has its own.
     let other = store
         .open_code_tab(remote.clone(), "w_1", page.clone())
         .unwrap();
-    assert_ne!(other, panel);
-    assert_eq!(store.code_tab(&local, "w_1").map(|tab| tab.id), Some(panel));
-    assert!(store.code_tab(&local, "w_2").is_none());
-    // Strips list only their own tabs.
+    assert_ne!(other, code);
+    assert_eq!(store.code_tab(&local, "w_1").map(|tab| tab.id), Some(code));
+    // The strips list it with the workspace's other tabs.
     let listed: Vec<_> = store
         .in_workspace(&local, "w_1")
         .map(|tab| tab.id)
         .collect();
-    assert_eq!(listed, [strip]);
-    assert!(store.in_workspace(&remote, "w_1").next().is_none());
-    // An agent showing the same page gets a strip tab, not the panel.
+    assert_eq!(listed, [strip, code]);
+    // An agent showing the same page gets a tab of its own.
+    let page = page.unwrap();
     assert_eq!(store.opened_before(&local, "w_1", None, &page), None);
-    // The panel goes with its workspace.
+    // It goes with its workspace.
     assert!(store.forget_workspaces(&local, &["w_1".to_owned()]));
     assert!(store.code_tab(&local, "w_1").is_none());
     assert!(store.code_tab(&remote, "w_1").is_some());
 }
 
+/// Development builds saved the tab as in a side panel (`code`) or moved
+/// to the groups (`code_group`); both restore as the VS Code tab.
 #[test]
-fn saved_panel_tabs_round_trip_and_older_files_hold_strip_tabs() {
+fn saved_vs_code_tabs_round_trip_and_older_places_still_read() {
     let mut store = Store::default();
     let scope = Scope::endpoint("local");
     store
         .open(scope.clone(), "w_1", url("https://a.test/"), None)
         .unwrap();
     store
-        .open_code_tab(scope.clone(), "w_1", url("http://127.0.0.1:8000/").unwrap())
+        .open_code_tab(scope.clone(), "w_1", url("http://127.0.0.1:8000/"))
         .unwrap();
     let bytes = serde_json::to_vec(&Saved {
         tabs: store.tabs.clone(),
@@ -234,6 +240,12 @@ fn saved_panel_tabs_round_trip_and_older_files_hold_strip_tabs() {
         r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":""}]}"#;
     let tabs = parse(old.as_bytes()).unwrap();
     assert_eq!(tabs[0].place, Place::Group);
+    for place in ["code", "code_group"] {
+        let saved = format!(
+            r#"{{"tabs":[{{"id":0,"scope":"local","workspace_id":"w","location":null,"title":"","place":"{place}"}}]}}"#
+        );
+        assert_eq!(parse(saved.as_bytes()).unwrap()[0].place, Place::Code);
+    }
     for invalid in [
         r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":"","origin":"w:p1","place":"code"}]}"#,
         r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":"","place":"sidebar"}]}"#,
@@ -257,51 +269,4 @@ fn the_store_is_bounded() {
             .open(Scope::endpoint("local"), "w", url("https://a.test/"), None)
             .is_none()
     );
-}
-
-/// Moved to the groups, the VS Code tab is listed in its workspace's
-/// strips, and is still its one VS Code tab, never handed to an agent.
-#[test]
-fn a_vs_code_tab_moves_between_its_panel_and_the_strips() {
-    let mut store = Store::default();
-    let scope = Scope::endpoint("local");
-    let page = url("http://127.0.0.1:8000/").unwrap();
-    let strip = store
-        .open(scope.clone(), "w_1", url("https://a.test/"), None)
-        .unwrap();
-    let code = store
-        .open_code_tab(scope.clone(), "w_1", page.clone())
-        .unwrap();
-    // Only a VS Code tab moves, and only to a VS Code place it is not in.
-    assert!(!store.move_code_tab(strip, Place::Code));
-    assert!(!store.move_code_tab(code, Place::Group));
-    assert!(!store.move_code_tab(code, Place::Code));
-    assert!(store.move_code_tab(code, Place::CodeGroup));
-
-    let listed: Vec<_> = store
-        .in_workspace(&scope, "w_1")
-        .map(|tab| tab.id)
-        .collect();
-    assert_eq!(listed, [strip, code]);
-    assert_eq!(store.code_tab(&scope, "w_1").map(|tab| tab.id), Some(code));
-    assert_eq!(
-        store.open_code_tab(scope.clone(), "w_1", page.clone()),
-        Some(code)
-    );
-    assert_eq!(store.opened_before(&scope, "w_1", None, &page), None);
-
-    // It is saved where it is.
-    let bytes = serde_json::to_vec(&Saved {
-        tabs: store.tabs.clone(),
-    })
-    .unwrap();
-    let restored = Store::with_tabs(parse(&bytes).unwrap(), None);
-    assert_eq!(restored.get(code).unwrap().place, Place::CodeGroup);
-
-    assert!(store.move_code_tab(code, Place::Code));
-    let listed: Vec<_> = store
-        .in_workspace(&scope, "w_1")
-        .map(|tab| tab.id)
-        .collect();
-    assert_eq!(listed, [strip]);
 }

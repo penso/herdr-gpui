@@ -157,13 +157,12 @@ impl HerdrWindow {
     /// Brings `group`'s chosen tab, at `index` in its strip, into view when
     /// the choice changes or while the tab grows in. Whether the strip needs
     /// another frame to do it.
-    /// `extent` is how far the strip's measured tabs reach to its right edge.
     pub(crate) fn reveal_tab(
         &mut self,
         group: GroupId,
         pick: &Pick,
         index: usize,
-        extent: f32,
+        width: f32,
     ) -> bool {
         let growing = self
             .browser
@@ -172,7 +171,7 @@ impl HerdrWindow {
             .is_some();
         self.browser
             .tab_scroll
-            .reveal(group, pick, index, extent, growing)
+            .reveal(group, pick, index, width, growing)
     }
 
     /// The thumb `group`'s strip draws, when its tabs outgrow it.
@@ -206,6 +205,12 @@ impl HerdrWindow {
     /// another frame.
     pub(crate) fn tabs_growing(&self) -> bool {
         self.browser.appear.animating()
+    }
+
+    /// Ends every tab's growing and shrinking at once, as a moment later.
+    #[cfg(test)]
+    pub(crate) fn settle_tabs(&mut self) {
+        self.browser.appear = Default::default();
     }
 
     /// Narrows and fades `tab` while it grows into the strip; a whole tab

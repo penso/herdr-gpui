@@ -6,6 +6,7 @@ mod bitmap_fonts;
 mod bold_color;
 mod code;
 mod code_navigation;
+mod code_start;
 mod default_fonts;
 mod discovery;
 mod fonts;

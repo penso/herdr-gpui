@@ -195,8 +195,6 @@ pub(crate) struct HerdrWindow {
     pub(crate) notes_width: crate::panel_resize::PanelWidth,
     /// The review's list of changed files.
     pub(crate) review_files_width: crate::panel_resize::PanelWidth,
-    /// The VS Code panel's width, one for the window's every workspace.
-    pub(crate) code_width: crate::panel_resize::PanelWidth,
     /// Each review tab's state, by its tab.
     pub(crate) reviews: std::collections::HashMap<crate::browser::TabId, crate::review::Review>,
     /// Code tabs' views, by tab.
@@ -388,9 +386,6 @@ impl HerdrWindow {
         }
         if self.review_files_width.chosen().is_none() {
             self.review_files_width.restore(chrome.review_files_width);
-        }
-        if self.code_width.chosen().is_none() {
-            self.code_width.restore(chrome.code_width);
         }
         if !self.agent_sort_modified
             && let Some(sort) = chrome.agent_sort
@@ -827,7 +822,6 @@ impl HerdrWindow {
             deliveries: Default::default(),
             notes_width: crate::panel_resize::NOTES,
             review_files_width: crate::panel_resize::REVIEW_FILES,
-            code_width: crate::panel_resize::CODE,
             reviews: Default::default(),
             code_views: Default::default(),
             code_indexes: Default::default(),
