@@ -131,3 +131,46 @@ fn a_kept_highlight_survives_a_wider_pane(cx: &mut TestAppContext) {
         assert!(view.selection_retained(), "a wider pane keeps it");
     });
 }
+
+/// Blanks inside a row's selection are text, not padding: only a row
+/// selected through to the edge ignores its trailing blanks, as a copy does.
+#[gpui::test]
+fn a_kept_highlight_retires_when_selected_blanks_change(cx: &mut TestAppContext) {
+    let frame = |row: &str, revision: u64, view: &HerdrWindow| {
+        let mut frame = surface(&[row], 12);
+        let snapshot = view.live.snapshot.as_ref().unwrap();
+        frame.boot_id = snapshot.boot_id.clone();
+        frame.projection_revision = snapshot.revision;
+        frame.surface_revision = revision;
+        Arc::new(frame)
+    };
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        view.live.surface = Some(frame("ab  cd", 1, &view));
+        view
+    });
+    cx.update(|window, cx| {
+        window.refresh();
+        window.draw(cx).clear(cx);
+    });
+    let (origin, cell) = view.read_with(cx, |view, _| {
+        (
+            view.bounds.origin,
+            (view.cell_width, view.config.terminal.line_height()),
+        )
+    });
+    let at = |column: f32, row: f32| -> Point<Pixels> {
+        origin + point(px(column * cell.0), px(row * cell.1))
+    };
+    // "ab  ", ending mid-row on the blanks.
+    cx.simulate_mouse_down(at(0., 0.), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(at(4., 0.), MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(at(4., 0.), MouseButton::Left, Modifiers::default());
+
+    view.update(cx, |view, cx| {
+        assert!(view.selection_retained());
+        view.live.surface = Some(frame("ab\u{a0}\u{a0}cd", 2, view));
+        view.follow_selection(cx);
+        assert!(view.selection.is_none(), "changed blanks retire it");
+    });
+}

@@ -474,19 +474,23 @@ impl Selection {
         ) else {
             return Vec::new();
         };
-        let (top, first) = (region.top, region.rows.start);
+        let (top, first, edge) = (region.top, region.rows.start, region.columns.end);
         self.spans(region)
             .filter_map(|(row, columns)| {
                 let offset = usize::from(row) * usize::from(frame.width);
                 let cells = frame
                     .cells
                     .get(offset + usize::from(columns.start)..offset + usize::from(columns.end))?;
-                // Trailing blanks are padding, as a copy trims them: a row
-                // selected to the edge gains more of them when the pane widens.
-                let text = cells
-                    .iter()
-                    .rposition(|cell| !shown(cell).trim().is_empty())
-                    .map_or(&cells[..0], |last| &cells[..=last]);
+                // A row selected to the edge gains blanks when the pane widens.
+                // They are padding there, and only there, as `text` trims them.
+                let text = if columns.end >= edge {
+                    cells
+                        .iter()
+                        .rposition(|cell| !shown(cell).trim_end().is_empty())
+                        .map_or(&cells[..0], |last| &cells[..=last])
+                } else {
+                    cells
+                };
                 let mut hasher = DefaultHasher::new();
                 text.iter().for_each(|cell| shown(cell).hash(&mut hasher));
                 Some((top.saturating_add(u32::from(row - first)), hasher.finish()))
