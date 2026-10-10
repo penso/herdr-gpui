@@ -73,6 +73,11 @@ pub(crate) enum Error {
         "shared Herdr config must be a single-link regular file you own, in directories only you or root can write, reached only through symlinks you or root own"
     )]
     UnsafePath,
+    #[cfg(unix)]
+    #[error(
+        "shared Herdr config path {path:?} is writable by group or others (mode {mode:04o}); remove group/other write permission with chmod go-w on this path, then Reload settings"
+    )]
+    InsecurePermissions { path: PathBuf, mode: u32 },
     #[error("shared Herdr config exceeds the 1 MiB limit")]
     TooLarge,
     #[error("ui.toast.delay_seconds must be between 0 and 3600")]

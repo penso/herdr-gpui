@@ -78,24 +78,38 @@ fn parts(path: &Path) -> Result<(&Path, &OsStr), Error> {
 
 /// Only this user or root may own a directory on the config path, and no one
 /// else may write to it unless root owns it with the sticky bit set (`/tmp`).
-fn trusted_dir(meta: &Metadata, uid: u32) -> bool {
-    (meta.uid() == uid || meta.uid() == 0)
-        && (meta.mode() & 0o022 == 0 || (meta.uid() == 0 && meta.mode() & 0o1000 != 0))
+fn validate_directory(meta: &Metadata, uid: u32, path: &Path) -> Result<(), Error> {
+    if meta.uid() != uid && meta.uid() != 0 {
+        return Err(Error::UnsafePath);
+    }
+    if meta.uid() == 0 && meta.mode() & 0o1000 != 0 {
+        return Ok(());
+    }
+    validate_permissions(meta, path)
+}
+
+fn validate_permissions(meta: &Metadata, path: &Path) -> Result<(), Error> {
+    if meta.mode() & 0o022 != 0 {
+        return Err(Error::InsecurePermissions {
+            path: path.to_owned(),
+            mode: meta.mode() & 0o7777,
+        });
+    }
+    Ok(())
 }
 
 fn directory(path: &Path, create: bool) -> Result<File, Error> {
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
     let uid = rustix::process::geteuid().as_raw();
     let mut dir = File::from(open("/", flags, Mode::empty()).map_err(io)?);
+    let mut current_path = PathBuf::from("/");
     for component in path.components() {
         let name = match component {
             Component::RootDir | Component::CurDir => continue,
             Component::Normal(name) => name,
             _ => return Err(Error::UnsafePath),
         };
-        if !trusted_dir(&dir.metadata()?, uid) {
-            return Err(Error::UnsafePath);
-        }
+        validate_directory(&dir.metadata()?, uid, &current_path)?;
         match statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW) {
             Err(rustix::io::Errno::NOENT) if create => {
                 match mkdirat(&dir, name, Mode::RUSR | Mode::WUSR | Mode::XUSR) {
@@ -112,11 +126,13 @@ fn directory(path: &Path, create: bool) -> Result<File, Error> {
                 _ => io(error),
             },
         )?);
+        current_path.push(name);
     }
     let meta = dir.metadata()?;
-    if meta.uid() != uid || meta.mode() & 0o022 != 0 {
+    if meta.uid() != uid {
         return Err(Error::UnsafePath);
     }
+    validate_permissions(&meta, path)?;
     Ok(dir)
 }
 
@@ -146,10 +162,8 @@ fn resolve(path: &Path) -> Result<PathBuf, Error> {
         if entry.file_type().is_symlink() && entry.uid() != uid && entry.uid() != 0 {
             return Err(Error::UnsafePath);
         }
-        if let Some(parent) = existing.parent().filter(|p| !p.as_os_str().is_empty())
-            && !trusted_dir(&fs::metadata(parent)?, uid)
-        {
-            return Err(Error::UnsafePath);
+        if let Some(parent) = existing.parent().filter(|p| !p.as_os_str().is_empty()) {
+            validate_directory(&fs::metadata(parent)?, uid, parent)?;
         }
         if real.is_none() {
             match fs::canonicalize(existing) {
@@ -166,18 +180,18 @@ fn resolve(path: &Path) -> Result<PathBuf, Error> {
     real.ok_or(Error::UnsafePath)
 }
 
-fn validate_file(meta: &Metadata) -> Result<(), Error> {
+fn validate_file(meta: &Metadata, path: &Path) -> Result<(), Error> {
     if !meta.is_file()
         || meta.uid() != rustix::process::geteuid().as_raw()
-        || meta.mode() & 0o7022 != 0
+        || meta.mode() & 0o7000 != 0
         || meta.nlink() != 1
     {
         return Err(Error::UnsafePath);
     }
-    Ok(())
+    validate_permissions(meta, path)
 }
 
-fn read_at(dir: &File, name: &OsStr) -> Result<Snapshot, Error> {
+fn read_at(dir: &File, name: &OsStr, path: &Path) -> Result<Snapshot, Error> {
     let mut snapshot = Snapshot {
         directory: Some(Identity::of(&dir.metadata()?)),
         ..Snapshot::default()
@@ -194,7 +208,7 @@ fn read_at(dir: &File, name: &OsStr) -> Result<Snapshot, Error> {
         Err(error) => return Err(io(error)),
     };
     let before = file.metadata()?;
-    validate_file(&before)?;
+    validate_file(&before, path)?;
     if before.len() > LIMIT {
         return Err(Error::TooLarge);
     }
@@ -227,7 +241,7 @@ pub(super) fn read(path: &Path) -> Result<Snapshot, Error> {
         }
         Err(error) => return Err(error),
     };
-    read_at(&dir, name)
+    read_at(&dir, name, &path)
 }
 
 fn unchanged(original: &Snapshot, current: &Snapshot) -> Result<(), Error> {
@@ -275,14 +289,14 @@ pub(super) fn save(path: &Path, original: &Snapshot, text: &str) -> Result<Snaps
         )
         .map_err(io)?,
     );
-    validate_file(&lock.metadata()?)?;
+    validate_file(&lock.metadata()?, &parent.join(&lock_name))?;
     match flock(&lock, FlockOperation::NonBlockingLockExclusive) {
         Ok(()) => {}
         Err(rustix::io::Errno::WOULDBLOCK) => return Err(Error::Busy),
         Err(error) => return Err(io(error)),
     }
     let _lock = LockGuard(lock);
-    let current = read_at(&dir, name)?;
+    let current = read_at(&dir, name, &path)?;
     unchanged(original, &current)?;
 
     static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -322,7 +336,7 @@ pub(super) fn save(path: &Path, original: &Snapshot, text: &str) -> Result<Snaps
             file.set_permissions(fs::Permissions::from_mode(identity.mode & 0o777))?;
         }
         file.sync_all()?;
-        unchanged(&current, &read_at(&dir, name)?)?;
+        unchanged(&current, &read_at(&dir, name, &path)?)?;
         if Identity::of(&directory(parent, false)?.metadata()?) != Identity::of(&dir.metadata()?) {
             return Err(Error::Conflict);
         }
