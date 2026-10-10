@@ -22,11 +22,16 @@ const AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// What a drag needs beyond the selection itself: where the pointer last was,
 /// so the selection can follow the pane as it scrolls under a still pointer,
-/// and the copy the daemon is reading for a released selection.
+/// the last scroll it asked for, and the copy the daemon is reading for a
+/// released selection.
 #[derive(Default)]
 pub(crate) struct Follow {
     pointer: Option<Point<Pixels>>,
     scrolled: Option<Instant>,
+    /// The pane and offset of the drag's last `pane.scroll`. The daemon's
+    /// answer can arrive before the frame that shows it, so the next step
+    /// continues from here instead of repeating this one.
+    sent: Option<(String, u64)>,
     read: Option<(Arc<Mutex<Inbox>>, String)>,
 }
 
@@ -43,6 +48,7 @@ impl HerdrWindow {
         // A click hands the terminal back from copy mode.
         self.leave_copy_mode(cx);
         let cleared = self.selection.take().is_some();
+        self.selection_follow.sent = None;
         if let Some(surface) = self.selectable_surface(position) {
             let (x, y) = self.grid_position(position);
             self.selection = Selection::begin(
@@ -266,6 +272,7 @@ impl HerdrWindow {
                 state.drag_request = Some(request.clone());
                 self.live.drag_request = Some(request);
                 self.selection_follow.scrolled = Some(now);
+                self.selection_follow.sent = Some((pane_id, offset));
             }
             Err(error) => {
                 drop(state);
@@ -277,7 +284,8 @@ impl HerdrWindow {
     }
 
     /// The pane under a pane selection and the offset one step further in the
-    /// direction the pointer is held past its edge, faster the further out.
+    /// direction the pointer is held past its edge: a row per row the pointer
+    /// is out, up to a pane height, so a pointer held outside the window pages.
     fn selection_autoscroll(&self, pointer: Point<Pixels>) -> Option<(String, u64)> {
         let selection = self.selection.as_ref()?;
         let pane_id = selection.pane_id()?;
@@ -288,20 +296,31 @@ impl HerdrWindow {
         let (_, y) = self.grid_position(pointer);
         let top = f32::from(pane.inner_rect.y) * cell_height;
         let bottom = top + f32::from(pane.inner_rect.height) * cell_height;
-        let rows = |distance: f32| ((distance / cell_height).ceil() as u64).clamp(1, 5);
-        let offset = if y < top {
-            scroll
-                .offset_from_bottom
+        let page = u64::from(pane.inner_rect.height).max(1);
+        let rows = |distance: f32| ((distance / cell_height).ceil() as u64).clamp(1, page);
+        // Whichever of the frame and the last request is further along: an
+        // answered step may not be painted yet, and a wheel may have gone
+        // further than the drag asked.
+        let sent = self
+            .selection_follow
+            .sent
+            .as_ref()
+            .filter(|(id, _)| id == pane_id)
+            .map(|(_, offset)| *offset);
+        let shown = scroll.offset_from_bottom;
+        let (from, offset) = if y < top {
+            let from = sent.map_or(shown, |sent| sent.max(shown));
+            let offset = from
                 .saturating_add(rows(top - y))
-                .min(scroll.max_offset_from_bottom)
+                .min(scroll.max_offset_from_bottom);
+            (from, offset)
         } else if y >= bottom {
-            scroll
-                .offset_from_bottom
-                .saturating_sub(rows(y - bottom + 1.))
+            let from = sent.map_or(shown, |sent| sent.min(shown));
+            (from, from.saturating_sub(rows(y - bottom + 1.)))
         } else {
             return None;
         };
-        (offset != scroll.offset_from_bottom).then(|| (pane_id.to_owned(), offset))
+        (offset != from).then(|| (pane_id.to_owned(), offset))
     }
 
     /// Copies a selection the daemon has read back, once.

@@ -5,6 +5,7 @@ use herdr_client::protocol::*;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod autoscroll;
 mod clicks_and_scroll;
 mod copy_on_select;
 mod gestures;
