@@ -180,6 +180,8 @@ fn authenticate(request: &Request) -> Result<release::Offer> {
         asset,
         manifest_bytes: request.manifest.clone(),
         signature: request.signature.clone(),
+        // The signed request carries no notes; only the release check has them.
+        notes: String::new(),
     })
 }
 
@@ -239,7 +241,7 @@ pub(super) fn prepare(
         token,
     };
     let authenticated = authenticate(&request)?;
-    if authenticated != *offer {
+    if !authenticated.same_signed_manifest(offer) {
         return Err(Error::UnauthenticatedOffer);
     }
     let bytes = serde_json::to_vec(&request)?;

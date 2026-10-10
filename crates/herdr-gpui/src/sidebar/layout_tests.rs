@@ -428,6 +428,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         updater: crate::updater::Updater::default(),
         update_preview: None,
         daemon_text: Default::default(),
+        app_update_notes: Default::default(),
         removal: None,
         worktree_script: None,
         editor_open: None,

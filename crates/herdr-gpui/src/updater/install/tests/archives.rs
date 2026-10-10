@@ -160,6 +160,7 @@ fn digest_is_checked_before_extraction_and_staging_is_private() -> anyhow::Resul
         asset,
         manifest_bytes: vec![],
         signature: vec![],
+        notes: String::new(),
     };
     assert!(candidate(stage.path(), &installation, &offer, &AtomicBool::new(false)).is_err());
     assert_eq!(fs::read_dir(stage.path())?.count(), 1);

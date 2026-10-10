@@ -497,6 +497,7 @@ pub(super) fn check_app_update(
                     } else {
                         crate::updater::State::Available {
                             version: "9999.0.0".into(),
+                            notes: crate::updater::PREVIEW_NOTES.into(),
                         }
                     })
                 );

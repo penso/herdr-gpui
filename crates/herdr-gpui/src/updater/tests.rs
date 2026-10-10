@@ -58,12 +58,14 @@ fn only_a_waiting_release_marks_an_update_available() {
     for state in [
         State::Available {
             version: "20260920.2".into(),
+            notes: String::new(),
         },
         State::Ready {
             version: "20260920.2".into(),
         },
         State::Homebrew {
             version: "20260920.2".into(),
+            notes: String::new(),
         },
         State::Restart {
             version: "20260920.2".into(),

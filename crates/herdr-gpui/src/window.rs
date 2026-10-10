@@ -80,6 +80,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) update_preview: Option<updater::State>,
     /// Prepared daemon announcement and release notes text.
     pub(crate) daemon_text: crate::release_notes::DaemonText,
+    /// The App Updates dialog's own notes cache, so scrolling and redraws do not
+    /// re-parse the release body.
+    pub(crate) app_update_notes: crate::release_notes::Prepared,
     pub(crate) config: config::Config,
     /// The terminal size the last loaded config asked for. Increase/decrease
     /// write straight to `config.terminal.size`, so this is what Reset Font
@@ -747,6 +750,7 @@ impl HerdrWindow {
             updater: updater::Updater::default(),
             update_preview: None,
             daemon_text: Default::default(),
+            app_update_notes: Default::default(),
             configured_terminal_size: config.terminal.size,
             status_bar_visible: config.status_bar.show,
             gui_config_diagnostic: {

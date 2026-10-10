@@ -38,12 +38,28 @@ pub(super) struct Asset {
     pub(super) sha256: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(super) struct Offer {
     pub(super) manifest: Manifest,
     pub(super) asset: Asset,
     pub(super) manifest_bytes: Vec<u8>,
     pub(super) signature: Vec<u8>,
+    /// GitHub's own release notes, shown before updating. Display-only and
+    /// **untrusted**: unlike `manifest`, this is not covered by the signature,
+    /// so it is only ever rendered as text.
+    pub(super) notes: String,
+}
+
+impl Offer {
+    /// Whether another offer carries the same signed material.
+    ///
+    /// `notes` is deliberately excluded. It is not covered by the signature, and
+    /// the offer rebuilt from a signed request (`install::authenticate`) has
+    /// none — comparing whole offers would reject a valid download whenever a
+    /// release publishes notes.
+    pub(super) fn same_signed_manifest(&self, other: &Self) -> bool {
+        self.manifest_bytes == other.manifest_bytes && self.signature == other.signature
+    }
 }
 
 /// Releases are calendar versions: an eight-digit `YYYYMMDD` date and a same-day
@@ -282,6 +298,10 @@ struct Release {
     draft: bool,
     prerelease: bool,
     assets: Vec<ReleaseAsset>,
+    /// The release body. Optional: a release published before this field, or one
+    /// cut without notes, simply has none.
+    #[serde(default)]
+    body: String,
 }
 
 #[derive(Deserialize)]
@@ -399,6 +419,7 @@ pub(super) fn check(
         asset,
         manifest_bytes,
         signature,
+        notes: release.body,
     }))
 }
 

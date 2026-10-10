@@ -246,6 +246,7 @@ fn real_executable_archive_installs_relaunches_and_rolls_back() -> anyhow::Resul
             asset,
             manifest_bytes: vec![],
             signature: vec![],
+            notes: String::new(),
         };
         let cancel = AtomicBool::new(false);
         // No signing-key bypass in production: this fixture enters below

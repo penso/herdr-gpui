@@ -6,6 +6,39 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// GitHub's release notes for the offered update: shown so the changes can be
+/// read before installing. Rendered through `release_notes`, so the text is
+/// treated as prose and never as instructions — it comes from GitHub, not from
+/// the signed manifest.
+fn release_notes_section(
+    prepared: &crate::release_notes::Prepared,
+    notes: &str,
+    theme: &crate::config::Theme,
+    font: &crate::config::FontConfig,
+    mono: &crate::config::FontConfig,
+) -> Div {
+    div()
+        .debug_selector(|| "app-update-notes".into())
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .child(div().font_weight(FontWeight::SEMIBOLD).child("What's new"))
+        .child(
+            div()
+                .id("app-update-notes-body")
+                .debug_selector(|| "app-update-notes-body".into())
+                .max_h(px(font.line_height() * 14.))
+                .overflow_y_scroll()
+                // Parsed once per body: scrolling redraws without rebuilding lines.
+                .child(crate::release_notes::render(
+                    "app-update-notes",
+                    &prepared.lines(notes),
+                    theme,
+                    mono,
+                )),
+        )
+}
+
 fn update_progress(state: &State, accent: Hsla, track: Hsla) -> Option<Div> {
     let progress = match state {
         State::Downloading { received, total } if *total > 0 && received < total => {
@@ -64,8 +97,11 @@ impl HerdrWindow {
             return;
         }
         self.menu.page = Some(Page::AppUpdate);
+        // The preview exists to exercise the dialog, so it carries a real body:
+        // without one the notes section cannot be reviewed at all.
         self.update_preview = preview.then(|| State::Available {
             version: "9999.0.0".into(),
+            notes: crate::updater::PREVIEW_NOTES.into(),
         });
     }
 
@@ -132,12 +168,17 @@ impl HerdrWindow {
             State::Error(error) => (format!("Update failed: {error}"), Some(UpdateAction::Check)),
         };
         let latest = match state {
-            State::Available { version }
+            State::Available { version, .. }
             | State::Ready { version }
-            | State::Homebrew { version }
+            | State::Homebrew { version, .. }
             | State::Restart { version } => version.as_str(),
             State::Current => APP_VERSION,
             _ => "Not yet known",
+        };
+        // Notes are shown while an update is on offer, not once it is under way.
+        let notes = match state {
+            State::Available { notes, .. } | State::Homebrew { notes, .. } => Some(notes.as_str()),
+            _ => None,
         };
         let panel = div()
             .debug_selector(|| "app-update-panel".into())
@@ -223,6 +264,17 @@ impl HerdrWindow {
                             })),
                     )
                     .child(div().font_weight(FontWeight::SEMIBOLD).child(message))
+                    // Only when there is something to read: a release published
+                    // without notes leaves the dialog exactly as it was.
+                    .when_some(notes.filter(|notes| !notes.trim().is_empty()), |body, notes| {
+                        body.child(release_notes_section(
+                            &self.app_update_notes,
+                            notes,
+                            theme,
+                            font,
+                            &self.config.terminal,
+                        ))
+                    })
                     .children(update_progress(state, accent.into(), rgb(theme.active).into()))
                     .child(div().text_color(rgb(theme.subtext())).child(
                         "Downloads are verified before installation. Your daemon and terminal sessions stay running.",
@@ -288,7 +340,8 @@ impl HerdrWindow {
                         // Preview actions must never reach the service, including cancellation.
                         if let Some(state) = this.update_preview.take() {
                             match state {
-                                State::Available { version } | State::Homebrew { version } => {
+                                State::Available { version, .. }
+                                | State::Homebrew { version, .. } => {
                                     this.update_preview = Some(State::Ready { version });
                                 }
                                 State::Ready { .. } => this.dismiss_menu(window, cx),
