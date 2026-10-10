@@ -57,6 +57,12 @@ pub(crate) fn unsafe_char(c: char) -> bool {
 }
 
 impl Notice {
+    /// Local diagnostics carry recovery instructions that must not be clipped
+    /// to the daemon toast's short body preview.
+    pub(crate) fn is_local_feedback(&self) -> bool {
+        self.client_local
+    }
+
     pub fn preview(mut self) -> Self {
         self.client_local = true;
         self
@@ -67,6 +73,29 @@ impl Notice {
     pub fn local_feedback(notification: SemanticNotification, now: Instant) -> Self {
         let mut notice = Self::new(notification, now);
         notice.client_local = true;
+        notice
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    pub(crate) fn local_feedback_multiline(
+        mut notification: SemanticNotification,
+        now: Instant,
+    ) -> Self {
+        // Local recovery instructions may put a copyable command on its own
+        // line. Keep those line breaks, with the same scan bound and all other
+        // control/direction characters removed as for daemon notifications.
+        let body = notification
+            .body
+            .take()
+            .map(|body| {
+                body.chars()
+                    .take(512)
+                    .filter(|c| *c == '\n' || !unsafe_char(*c))
+                    .collect::<String>()
+            })
+            .filter(|body| !body.trim().is_empty());
+        let mut notice = Self::local_feedback(notification, now);
+        notice.body = body;
         notice
     }
 
@@ -478,6 +507,9 @@ pub(crate) fn take_system(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    mod local_feedback;
 
     pub fn notification(title: &str) -> SemanticNotification {
         SemanticNotification {

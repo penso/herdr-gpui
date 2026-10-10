@@ -40,6 +40,7 @@ mod copy_mode;
 mod daemon;
 #[cfg(feature = "daytona")]
 mod daytona;
+mod devices_overview;
 mod diagnostics;
 mod dialog_input;
 mod dispatch;

@@ -19,7 +19,10 @@ fn configured_sidebar_rows_render_all_lines_within_the_row(cx: &mut gpui::TestAp
     });
     cx.simulate_resize(size(px(800.), px(900.)));
     cx.run_until_parked();
-    for mode in LayoutMode::ALL {
+    for mode in LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
         for width in [160., 320.] {
             view.update(cx, |view, cx| {
                 view.config.layout.mode = mode;

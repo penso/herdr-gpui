@@ -53,6 +53,8 @@ pub enum LayoutMode {
     Orca,
     /// One line per row with only the status and the name.
     Minimal,
+    /// Each device with its agents under it, and a search over them.
+    Devices,
 }
 
 impl Default for LayoutMode {
@@ -73,10 +75,11 @@ impl LayoutMode {
         "superset",
         "orca",
         "minimal",
+        "devices",
     ];
 
     /// Every named layout, in the order menus list them.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::new(Density::Normal, Style::Flat),
         Self::new(Density::Compact, Style::Flat),
         Self::new(Density::Comfortable, Style::Flat),
@@ -86,6 +89,7 @@ impl LayoutMode {
         Self::Superset,
         Self::Orca,
         Self::Minimal,
+        Self::Devices,
     ];
 
     pub const fn new(density: Density, style: Style) -> Self {
@@ -97,7 +101,7 @@ impl LayoutMode {
     pub const fn density(self) -> Density {
         match self {
             Self::Classic { density, .. } => density,
-            Self::Superset | Self::Minimal => Density::Normal,
+            Self::Superset | Self::Minimal | Self::Devices => Density::Normal,
             Self::Orca => Density::Comfortable,
         }
     }
@@ -106,9 +110,15 @@ impl LayoutMode {
     pub const fn style(self) -> Style {
         match self {
             Self::Classic { style, .. } => style,
-            Self::Superset | Self::Minimal => Style::Flat,
+            Self::Superset | Self::Minimal | Self::Devices => Style::Flat,
             Self::Orca => Style::Rounded,
         }
+    }
+
+    /// Whether the spaces list shows workspaces. The Devices layout lists
+    /// each device's agents there instead.
+    pub const fn lists_workspaces(self) -> bool {
+        !matches!(self, Self::Devices)
     }
 
     /// The config value that selects it.
@@ -125,6 +135,7 @@ impl LayoutMode {
             Self::Superset => "superset",
             Self::Orca => "orca",
             Self::Minimal => "minimal",
+            Self::Devices => "devices",
         }
     }
 
@@ -142,6 +153,7 @@ impl LayoutMode {
             Self::Superset => "Superset",
             Self::Orca => "Orca",
             Self::Minimal => "Minimal",
+            Self::Devices => "Devices",
         }
     }
 }

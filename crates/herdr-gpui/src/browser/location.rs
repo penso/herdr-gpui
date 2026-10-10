@@ -46,6 +46,8 @@ pub(crate) enum Location {
     Code {
         file: crate::code_view::CodeFile,
     },
+    /// Every device this window connects to, drawn by the app, never a page.
+    Devices,
 }
 
 /// The checkout an orchestrator tab lists the repository of, on the tab's
@@ -168,7 +170,7 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
             // Never loaded: a review is drawn by the app.
-            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } => {
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices => {
                 "about:blank".to_owned()
             }
         }
@@ -178,7 +180,7 @@ impl Location {
     pub(crate) fn is_page(&self) -> bool {
         !matches!(
             self,
-            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. }
+            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices
         )
     }
 
@@ -190,6 +192,7 @@ impl Location {
             Self::Review { checkout } => format!("Review of {}", checkout.branch),
             Self::Code { file } => file.path.clone(),
             Self::Orchestrator { repo } => format!("Orchestrator of {}", repo.name()),
+            Self::Devices => "Devices overview".to_owned(),
         }
     }
 
@@ -201,6 +204,7 @@ impl Location {
             Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
             Self::Code { file } => file.name().to_owned(),
             Self::Orchestrator { repo } => format!("Orchestrator \u{00b7} {}", repo.name()),
+            Self::Devices => "Devices".to_owned(),
         }
     }
 

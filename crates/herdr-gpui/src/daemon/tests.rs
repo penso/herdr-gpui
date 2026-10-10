@@ -2,6 +2,9 @@ use super::*;
 use std::os::unix::net::UnixListener;
 use std::sync::atomic::AtomicUsize;
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod endpoint_classification;
+
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 fn socket() -> PathBuf {
@@ -38,7 +41,7 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
     let dir = root.join("session");
     std::fs::create_dir(&dir).unwrap();
-    // Not the caller's umask: 002 would leave it group-writable and untrusted.
+    // Not the caller's umask: permission variants are checked explicitly below.
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = dir.join("herdr-client.sock");
     let listener = UnixListener::bind(&path).unwrap();
@@ -57,13 +60,16 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
         peer_matches_local_endpoint(&stream, &path, &dir.join("forwarded.sock")),
         Err(UntrustedEndpoint::NotSocket)
     );
-    assert!(!is_local_peer(
-        &stream,
-        &ConnectTarget::Ssh {
-            target: "remote".into(),
-            session: "default".into(),
-        },
-        &path,
+    assert!(matches!(
+        local_peer(
+            &stream,
+            &ConnectTarget::Ssh {
+                target: "remote".into(),
+                session: "default".into(),
+            },
+            &path,
+        ),
+        LocalPeer::Unverified
     ));
     let forwarded = dir.join("forwarded.sock");
     let proxy = UnixListener::bind(&forwarded).unwrap();
@@ -92,8 +98,13 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
         Err(UntrustedEndpoint::SocketPermissions)
     );
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
-    // A umask of 002 leaves a daemon-created session directory like this.
-    for mode in [0o775, 0o777] {
+    // A umask of 002 leaves a user-owned daemon directory group-writable.
+    // Trust still comes from the kernel peer and the protected socket.
+    for mode in [0o700, 0o755, 0o770, 0o775] {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert_eq!(peer_matches_local_endpoint(&stream, &path, &path), Ok(()));
+    }
+    for mode in [0o707, 0o777] {
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
         assert_eq!(
             peer_matches_local_endpoint(&stream, &path, &path),

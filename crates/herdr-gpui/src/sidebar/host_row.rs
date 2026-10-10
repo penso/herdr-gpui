@@ -59,14 +59,22 @@ impl HerdrWindow {
                 (font.size * 0.8).round(),
             )
         });
-        // The removal pulse and the gauges take their room from the
-        // label, not from the status.
+        // The Devices layout counts the agents listed under the header.
+        let working = (!self.config.layout.mode.lists_workspaces())
+            .then(|| self.working_summary(endpoint))
+            .flatten();
+        let working_width = working.as_ref().map_or(0., |text| {
+            text.chars().count() as f32 * super::metrics::glyph_width(font) + host_gap
+        });
+        // The removal pulse, the count, and the gauges take their room from
+        // the label, not from the status.
         let label_width = (host_label_width
             - if removing {
                 STATUS_WIDTH + host_gap
             } else {
                 0.
             }
+            - working_width
             - gauges.as_ref().map_or(0., |(width, _)| width + host_gap))
         .max(0.);
         let lines = 1. + if load_line.is_some() { 1. } else { 0. };
@@ -173,6 +181,15 @@ impl HerdrWindow {
                                     .child(label_text(&endpoint.label)),
                             ),
                     )
+                    .when_some(working, |row, text| {
+                        row.child(
+                            div()
+                                .debug_selector(|| format!("{prefix}host-working-{endpoint_id}"))
+                                .flex_none()
+                                .text_color(rgb(theme.muted))
+                                .child(text),
+                        )
+                    })
                     .when_some(
                         gauges.zip(load).zip(host.clone()),
                         |row, (((_, gauges), reading), host)| {
@@ -224,6 +241,18 @@ impl HerdrWindow {
                 this.select_endpoint(&select_id, cx);
                 window.focus(&this.focus, cx);
             }))
+    }
+
+    /// `2/5`: a connected host's working agents of all its agents.
+    fn working_summary(&self, endpoint: &Endpoint) -> Option<String> {
+        let index = self.endpoints.iter().position(|e| e.id == endpoint.id)?;
+        let live = if index == self.selected_endpoint {
+            &self.live
+        } else {
+            &endpoint.live
+        };
+        let tally = crate::devices_overview::online_tally(endpoint, live)?;
+        Some(format!("{}/{}", tally.working, tally.total()))
     }
 
     /// Each host header the spaces list last laid out, at its current scroll

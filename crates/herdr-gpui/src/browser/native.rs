@@ -268,7 +268,8 @@ impl Pages {
             Location::Web { .. }
             | Location::Review { .. }
             | Location::Code { .. }
-            | Location::Orchestrator { .. } => None,
+            | Location::Orchestrator { .. }
+            | Location::Devices => None,
         };
         let builder = with_handlers(wry::WebViewBuilder::new(), Source::Tab(id), &self.outbox)
             .with_url(location.page_url())

@@ -59,7 +59,10 @@ fn left(cx: &mut gpui::VisualTestContext, selector: &'static str) -> f32 {
 /// icon slot puts its label further right than a child's.
 #[gpui::test]
 fn indent_override_sets_every_nesting_level(cx: &mut gpui::TestAppContext) {
-    for mode in crate::config::LayoutMode::ALL {
+    for mode in crate::config::LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
         let flat = draw(
             cx,
             mode,

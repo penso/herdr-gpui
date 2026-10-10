@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod local_peer_warning;
+
 fn bridge() -> ConnectionBridge {
     ConnectionBridge::new(ConnectTarget::Socket("/unused-connection-test.sock".into()))
 }

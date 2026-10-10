@@ -390,6 +390,10 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
+            Command::DevicesOverview => {
+                self.open_devices_overview(window, cx);
+                return;
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP

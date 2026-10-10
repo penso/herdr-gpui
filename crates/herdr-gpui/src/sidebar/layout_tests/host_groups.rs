@@ -117,7 +117,10 @@ fn multi_host_rows_scope_duplicate_ids_and_keep_agents_when_host_collapses(
 fn duplicate_repository_parents_lead_one_group_in_every_layout_and_host(
     cx: &mut gpui::TestAppContext,
 ) {
-    for mode in crate::config::LayoutMode::ALL {
+    for mode in crate::config::LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
         let (_view, cx) = cx.add_window_view(|window, cx| {
             let mut view = fixture_window(window, cx);
             view.config.layout.mode = mode;

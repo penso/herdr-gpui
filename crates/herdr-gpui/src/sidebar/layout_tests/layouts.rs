@@ -429,7 +429,10 @@ fn choosing_a_layout_redraws_the_sidebar_and_saves_it(cx: &mut gpui::TestAppCont
 fn every_layout_looks_different(cx: &mut gpui::TestAppContext) {
     use crate::config::LayoutMode;
     let mut seen: Vec<(LayoutMode, Vec<Pixels>)> = Vec::new();
-    for mode in LayoutMode::ALL {
+    for mode in LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
         // A fresh window per layout: debug bounds outlive their elements.
         let (_, cx) = cx.add_window_view(|window, cx| {
             let mut view = fixture_window(window, cx);

@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 use herdr_client::{ConnectTarget, Stream};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod warning;
 use std::{
     env, io,
     path::{Path, PathBuf},
@@ -9,6 +11,16 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) use warning::LocalPeerWarning;
+
+pub(crate) enum LocalPeer {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    Trusted,
+    Unverified,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    Rejected(LocalPeerWarning),
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("Could not start herdr server: {0}. Install Herdr and use Terminal > Reconnect.")]
@@ -24,7 +36,7 @@ pub fn connect(
     target: &ConnectTarget,
     stop: &AtomicBool,
     on_start: impl FnOnce(),
-) -> io::Result<(Stream, bool)> {
+) -> io::Result<(Stream, LocalPeer)> {
     let socket = target
         .socket_path()
         .map_err(|error| io::Error::new(error.kind(), error))?;
@@ -51,7 +63,7 @@ pub fn connect(
                 }
         ),
     )?;
-    let local = is_local_peer(&stream, target, &socket);
+    let local = local_peer(&stream, target, &socket);
     Ok((stream, local))
 }
 
@@ -93,42 +105,54 @@ pub(crate) fn executable() -> PathBuf {
 /// Trust the user's standard local endpoint, not an upgrade-sensitive executable.
 /// A same-user proxy deliberately installed at that endpoint is within this trust
 /// boundary; this is not remote-origin attestation.
-fn is_local_peer(stream: &Stream, target: &ConnectTarget, socket: &Path) -> bool {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    {
-        // Remote targets have no local endpoint; that is not worth reporting.
-        let Ok(expected) = target.local_session_socket_path() else {
-            return false;
-        };
-        peer_matches_local_endpoint(stream, socket, &expected)
-            .inspect_err(|reason| {
-                // Local Git actions and reviews disappear without this; name the
-                // failed check, not the user's paths.
-                tracing::info!(?reason, "Daemon endpoint not trusted as local");
-            })
-            .is_ok()
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn local_peer(stream: &Stream, target: &ConnectTarget, socket: &Path) -> LocalPeer {
+    // Remote targets have no local endpoint; that is not worth reporting.
+    let Ok(expected) = target.local_session_socket_path() else {
+        return LocalPeer::Unverified;
+    };
+    match peer_matches_local_endpoint(stream, socket, &expected) {
+        Ok(()) => LocalPeer::Trusted,
+        Err(reason) => {
+            // Local Git actions and reviews disappear without this; name the
+            // failed check, not the user's paths.
+            tracing::info!(?reason, "Daemon endpoint not trusted as local");
+            match reason {
+                // Explicit/forwarded sockets need not name a local session.
+                // Their absence from the local trust boundary is not a fault
+                // the user can fix with permissions.
+                UntrustedEndpoint::NotSocket | UntrustedEndpoint::OtherSocket => {
+                    LocalPeer::Unverified
+                }
+                _ => LocalPeer::Rejected(LocalPeerWarning::new(reason, expected)),
+            }
+        }
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    {
-        let _ = (stream, target, socket);
-        false
-    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn local_peer(_stream: &Stream, _target: &ConnectTarget, _socket: &Path) -> LocalPeer {
+    LocalPeer::Unverified
 }
 
 /// Which local endpoint check refused the connection.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UntrustedEndpoint {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum UntrustedEndpoint {
     /// The peer is another user, or its credentials could not be read.
+    #[error("The daemon's user could not be verified as your user.")]
     PeerUser,
     /// The standard session socket is missing or is not a socket (e.g. a symlink).
+    #[error("The standard local endpoint is missing or is not a socket.")]
     NotSocket,
     /// The dialed socket is not the standard session socket.
+    #[error("This is not the standard local session socket.")]
     OtherSocket,
     /// The socket is not owned by this user or is group/world-writable.
+    #[error("The daemon socket has untrusted ownership or write permissions.")]
     SocketPermissions,
-    /// The socket's directory is not owned by this user or is group/world-writable,
-    /// as a umask of 002 leaves it.
+    /// The socket's directory is not owned by this user or is world-writable.
+    #[error("The daemon socket directory must be owned by your user and not world-writable.")]
     DirectoryPermissions,
 }
 
@@ -152,11 +176,16 @@ fn peer_matches_local_endpoint(
     socket: &Path,
     expected: &Path,
 ) -> Result<(), UntrustedEndpoint> {
+    check_local_endpoint(socket, expected, || peer_uid(stream))
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn check_local_endpoint(
+    socket: &Path,
+    expected: &Path,
+    peer_uid: impl FnOnce() -> nix::Result<nix::unistd::Uid>,
+) -> Result<(), UntrustedEndpoint> {
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
-    let uid = nix::unistd::geteuid();
-    if !peer_uid(stream).is_ok_and(|peer| peer == uid) {
-        return Err(UntrustedEndpoint::PeerUser);
-    }
     // Do not allow the standard socket itself to redirect to another location.
     if !std::fs::symlink_metadata(expected).is_ok_and(|metadata| metadata.file_type().is_socket()) {
         return Err(UntrustedEndpoint::NotSocket);
@@ -169,6 +198,12 @@ fn peer_matches_local_endpoint(
     if !socket.canonicalize().is_ok_and(|socket| socket == expected) {
         return Err(UntrustedEndpoint::OtherSocket);
     }
+    // Only diagnose the local daemon after identifying its endpoint. A foreign
+    // peer on an intentionally non-local socket cannot be fixed by restarting it.
+    let uid = nix::unistd::geteuid();
+    if !peer_uid().is_ok_and(|peer| peer == uid) {
+        return Err(UntrustedEndpoint::PeerUser);
+    }
     let parent = expected.parent().ok_or(UntrustedEndpoint::OtherSocket)?;
     let owned = |metadata: &std::fs::Metadata| {
         metadata.uid() == uid.as_raw() && metadata.mode() & 0o022 == 0
@@ -178,7 +213,12 @@ fn peer_matches_local_endpoint(
     {
         return Err(UntrustedEndpoint::SocketPermissions);
     }
-    if !std::fs::metadata(parent).is_ok_and(|metadata| metadata.is_dir() && owned(&metadata)) {
+    // A normal 002 umask creates 0775 directories. Group write alone does not
+    // attest a peer: its kernel UID and the socket's stricter permissions were
+    // checked above. Still require this user's directory and reject world write.
+    if !std::fs::metadata(parent).is_ok_and(|metadata| {
+        metadata.is_dir() && metadata.uid() == uid.as_raw() && metadata.mode() & 0o002 == 0
+    }) {
         return Err(UntrustedEndpoint::DirectoryPermissions);
     }
     Ok(())

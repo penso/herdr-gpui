@@ -33,6 +33,7 @@ pub enum Command {
     TabNumber(u8),
     ToggleSidebar,
     ToggleStatusBar,
+    DevicesOverview,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -566,6 +567,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &[],
     },
     CommandInfo {
+        command: Command::DevicesOverview,
+        name: "devices_overview",
+        label: "Devices Overview",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -843,6 +850,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::CopyMode
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
+        | Command::DevicesOverview
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
