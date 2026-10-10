@@ -4,6 +4,7 @@ mod fonts;
 pub(super) mod plugins;
 mod preferences;
 mod status_bar;
+mod updates;
 
 use super::{Section, SettingsWindow, remote_history::HostState};
 use crate::{
@@ -721,6 +722,7 @@ impl SettingsWindow {
             .child(self.render_tab_bar_controls(cx))
             .child(self.render_session_controls(cx))
             .child(self.render_skill_controls(cx))
+            .child(self.render_update_controls(cx))
             .child(self.clipboard_controls(cx))
             .child(self.control_card("Configuration")
                 .child(self.control_note("GUI local overrides"))

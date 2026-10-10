@@ -60,6 +60,31 @@ git log --oneline "$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_nam
 Dispatch is long-running. Run it with `run_in_background` so a slow build does
 not hit a foreground timeout.
 
+## Beta, then promote
+
+A beta is a full release published as a GitHub prerelease. Only installs with
+`[updates] channel = "beta"` (Settings > General > Install beta releases) are
+offered it; the stable channel, `/releases/latest` and Homebrew never see it.
+
+```sh
+just release-beta                 # dispatch.sh --beta: same run, prerelease, no homebrew job
+just release-promote 20261010.1   # dispatch.sh --promote: promote.yml, flips it to stable
+```
+
+Same preconditions as `just release`, and the same rule: never dispatch either
+unless the owner asked for it. "Ship a beta" means `release-beta`; "promote" means
+`release-promote` with the exact beta version the owner names (list candidates with
+`gh release list --repo penso/herdr-gpui --limit 10`). Promotion rebuilds nothing:
+it refuses anything that is not a published prerelease newer than the latest
+stable, then its `promote` job (environment **`release`**) clears the prerelease
+flag and its `homebrew` job (environment **`homebrew`**) updates the tap. Approve
+both gates as below. A failed beta is not deleted or edited; it is simply never
+promoted, and the next release supersedes it.
+
+Unpromoted betas fold into the next release's notes, so a stable release lists
+everything since the previous stable one. `release.yml` and `promote.yml` share the
+`manual-release` concurrency group: one waits for the other.
+
 ## The run stops for approvals
 
 Jobs run roughly: `audit` (shown as "Release Workflow Security") and `validate`,
@@ -105,7 +130,8 @@ gh run view <run-id> --repo penso/herdr-gpui --json status,conclusion,jobs
 
 Because the watcher owns the final summary, losing it also means nothing local
 will print the published tag. Confirm with
-`gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name`.
+`gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name`. A beta is never
+`latest`; find it with `gh release list --repo penso/herdr-gpui --limit 5`.
 
 ## The release notes write themselves
 

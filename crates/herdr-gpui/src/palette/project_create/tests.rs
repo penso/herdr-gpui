@@ -42,7 +42,7 @@ fn refuses_a_bare_owner_repo() {
 
 #[test]
 fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
-    // Any absolute folder will do; Windows sets no HOME.
+    // An absolute root expands to itself; HOME is unset on Windows runners.
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(std::slice::from_ref(&root), "brand-new")? else {
@@ -56,7 +56,7 @@ fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
 
 #[test]
 fn plans_a_clone_and_names_it_after_the_repository() -> anyhow::Result<()> {
-    // Any absolute folder will do; Windows sets no HOME.
+    // An absolute root expands to itself; HOME is unset on Windows runners.
     let dir = tempfile::tempdir()?;
     let root = dir.path().to_string_lossy().into_owned();
     let Some(plan) = plan(

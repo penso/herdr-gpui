@@ -1,0 +1,162 @@
+name: Promote
+run-name: Promote v${{ inputs.version }} [${{ inputs.request_id }}]
+
+# Promotes a published beta (a GitHub prerelease made by release.yml) to the
+# stable release in place. Nothing is rebuilt or re-signed: stable users get
+# the exact bytes, signed update manifest and provenance the beta shipped.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Beta version to promote (YYYYMMDD.COUNTER, no v)
+        required: true
+        type: string
+      request_id:
+        description: Optional unique dispatch correlation ID (set by just release-promote)
+        required: false
+        default: ''
+        type: string
+
+permissions: {}
+
+# Shares release.yml's group, so a promotion never races a release or tap update.
+concurrency:
+  group: manual-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    name: Promote Workflow Security
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'penso/herdr-gpui' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'penso' && github.triggering_actor == 'penso'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          online-audits: false
+
+  validate:
+    needs: audit
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'penso/herdr-gpui' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'penso' && github.triggering_actor == 'penso'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.validate.outputs.sha }}
+      version: ${{ steps.validate.outputs.version }}
+    steps:
+      - id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[1-9][0-9]{7}\.[1-9][0-9]*$ ]]
+          [[ "$REQUEST_ID" =~ ^[a-zA-Z0-9-]{0,64}$ ]]
+          # Only a published beta is promoted; a draft or stable release is refused.
+          gh release view "v$VERSION" --repo penso/herdr-gpui --json isDraft,isPrerelease |
+            jq -e '.isDraft == false and .isPrerelease == true'
+          sha=$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          # The beta was cut from main; refuse a tag that no longer is on it.
+          status=$(gh api "repos/penso/herdr-gpui/compare/$sha...main" --jq .status)
+          [[ "$status" == ahead || "$status" == identical ]]
+          # Promoting under a newer stable release would move "latest" backwards.
+          latest=$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name)
+          python3 - "$latest" "v$VERSION" <<'PY'
+          import re, sys
+          def key(tag):
+              match = re.fullmatch(r"v([1-9][0-9]{7})\.([1-9][0-9]*)", tag)
+              if not match:
+                  raise SystemExit(f"Unexpected release tag: {tag}")
+              return int(match[1]), int(match[2])
+          latest, candidate = map(key, sys.argv[1:])
+          if candidate <= latest:
+              raise SystemExit(f"{sys.argv[2]} is not newer than the latest stable {sys.argv[1]}")
+          PY
+          printf 'version=%s\nsha=%s\n' "$VERSION" "$sha" >> "$GITHUB_OUTPUT"
+          printf 'Promoting v%s (%s) over %s\n' "$VERSION" "$sha" "$latest"
+
+  promote:
+    needs: validate
+    if: >-
+      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.actor == 'penso' && github.triggering_actor == 'penso'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      GH_REPO: penso/herdr-gpui
+    steps:
+      # Immutable releases keep their tag and assets locked; only the
+      # prerelease flag, latest status and title change here.
+      - name: Mark the beta as the latest stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          gh release edit "v$VERSION" --prerelease=false --latest --title "Herdr GPUI $VERSION"
+          gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
+          [[ "$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name)" == "v$VERSION" ]]
+
+  # Keep these steps identical to release.yml's homebrew job.
+  homebrew:
+    needs: [validate, promote]
+    if: >-
+      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.actor == 'penso' && github.triggering_actor == 'penso'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: homebrew
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      GH_REPO: penso/herdr-gpui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
+      - name: Download published final DMG and validate its published checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
+          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          gh release download "v$VERSION" --dir final \
+            --pattern "Herdr-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
+          checksum=$(python3 scripts/release/artifact-manifest.py dmg "$VERSION" final)
+          bash scripts/release/render-cask.sh "$VERSION" "$checksum" > rendered-cask.rb
+      - name: Commit only the tap cask using its dedicated deploy key
+        env:
+          HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb
