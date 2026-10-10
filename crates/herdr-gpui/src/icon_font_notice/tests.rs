@@ -58,7 +58,10 @@ fn appears_only_when_an_icon_font_is_missing_and_an_icon_is_shown() {
     assert!(!notice.observe(true, Some(&frame(2, &["a"]))));
     assert!(!notice.observe(true, None));
     assert!(notice.observe(true, Some(&frame(3, &["\u{f179}"]))));
-    assert_eq!(notice.visible().map(|lines| lines.len()), Some(3));
+    assert_eq!(
+        notice.visible().map(|lines| lines.len()),
+        Some(TEXT.lines().count())
+    );
     // The prompt scrolling away keeps the explanation.
     assert!(!notice.observe(true, Some(&frame(4, &["a"]))));
     assert!(notice.visible().is_some());

@@ -3,6 +3,8 @@ use gpui::{TestAppContext, VisualTestContext, px, size};
 use herdr_client::protocol::ClientShellSnapshot;
 use std::sync::Arc;
 
+mod command_chip;
+
 fn set_diagnostic(
     view: &gpui::Entity<crate::HerdrWindow>,
     index: usize,
