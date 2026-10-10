@@ -100,8 +100,17 @@ fn kept(view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext) -> Option<
         pane_id: "w0:p1".into(),
     });
     cx.update(|_, cx| {
-        cx.default_global::<crate::browser::Feedback>()
-            .take(&target)
+        if cfg!(unix) {
+            cx.default_global::<crate::browser::Feedback>()
+                .take(&target)
+        } else {
+            let text = cx
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .filter(|text| !text.is_empty());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new()));
+            text
+        }
     })
 }
 
@@ -131,13 +140,14 @@ fn notes_on_lines_reach_the_agent_that_made_the_changes(cx: &mut gpui::TestAppCo
     assert_eq!(file.size.width, added.size.width);
     assert!(file.size.width > gpui::px(400.));
 
-    // The agent is working: the notes wait for it, and the queue is
-    // emptied at once so Send cannot repeat them.
+    // The agent is working: the notes wait for it, and are marked sent at
+    // once so Send does not repeat them.
     cx.update(|_, cx| view.update(cx, |view, cx| view.send_review(the(view), cx)));
     view.read_with(cx, |view, _| {
         assert_eq!(view.deliveries.len(), 1);
         assert!(view.menu.page.is_none());
-        assert!(view.reviews.values().next().unwrap().notes.is_empty());
+        let notes = &view.reviews.values().next().unwrap().notes;
+        assert!(notes.len() == 2 && notes.iter().all(|note| note.sent));
     });
     cx.update(|_, cx| view.update(cx, |view, cx| view.poll_deliveries(cx)));
     assert_eq!(view.read_with(cx, |view, _| view.deliveries.len()), 1);
@@ -173,7 +183,18 @@ fn without_an_agent_the_notes_are_copied(cx: &mut gpui::TestAppContext) {
         .update(|_, cx| cx.read_from_clipboard())
         .and_then(|item| item.text());
     assert!(copied.is_some_and(|text| text.contains("`src/lib.rs:2` (removed line")));
-    assert!(kept(&view, cx).is_none());
+    // Nothing is kept for `browser feedback` either. Read it directly: on
+    // Windows `kept` reads the clipboard, which holds the copied notes.
+    let target = view.read_with(cx, |view, _| crate::browser::FeedbackKey {
+        scope: crate::browser::scope(&view.endpoints[0]),
+        pane_id: "w0:p1".into(),
+    });
+    assert!(
+        cx.update(|_, cx| cx
+            .default_global::<crate::browser::Feedback>()
+            .take(&target))
+            .is_none()
+    );
 }
 
 #[gpui::test]
@@ -223,6 +244,10 @@ mod find_again;
 mod keys;
 mod layout;
 mod loading;
+mod origin;
+mod panel_editing;
+mod pending_send;
+mod resend;
 mod resize;
 mod scale;
 mod scope;

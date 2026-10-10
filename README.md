@@ -137,6 +137,11 @@ the updater runs `brew update` and retries once. The update panel shows progress
 throughout. macOS `.dmg`, experimental Linux packages, and experimental Windows `.zip`s
 are also published on [Releases](https://github.com/penso/herdr-gpui/releases).
 
+Betas are published as GitHub prereleases before being promoted to stable. To try
+them in a standalone install, turn on **Settings > General > Install beta releases**
+(`[updates] channel = "beta"`); turning it off never downgrades. Homebrew installs
+always follow stable releases.
+
 ### Linux packages
 
 Each release publishes x86_64 and ARM64 builds as a `.deb`, an `.rpm`, an Arch
@@ -188,6 +193,22 @@ just run
 On macOS both build a local bundle identified as `so.pen.herdr-gpui.dev`, so
 it never shares a Dock tile or icon cache with an installed release.
 Without `just`: `cargo run --locked --release -p herdr-gpui --features qa-menu`.
+
+To compile and install the optimized executable on macOS, Linux, or Windows:
+
+```sh
+just install
+```
+
+This installs `herdr-gpui` (`herdr-gpui.exe` on Windows) into Cargo's bin
+directory, normally `~/.cargo/bin` or `%USERPROFILE%\.cargo\bin`, and replaces
+an earlier installation. Keep that directory on `PATH`; set `CARGO_INSTALL_ROOT`
+to use a different installation root (the executable goes in its `bin` directory).
+The build uses the pinned lockfile and default features, without the QA menu.
+On macOS this installs the standalone executable; use Homebrew above for the
+full app bundle. Linux needs the build dependencies below; Windows needs the
+Visual Studio C++ build tools and Windows SDK for the MSVC Rust toolchain.
+Without `just`: `cargo install --locked --force --path crates/herdr-gpui --bin herdr-gpui`.
 
 Running `cargo test` or `just ci` on Unix also requires `python3` and `jq` on
 PATH: the usage-provider tests exercise each JSON parser explicitly. The Ubuntu

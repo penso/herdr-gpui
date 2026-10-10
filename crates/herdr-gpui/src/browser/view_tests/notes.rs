@@ -1,5 +1,9 @@
 use super::*;
 
+mod page_editing;
+mod pending_send;
+mod resend;
+
 const PICK: &str = r##"{"kind":"pick","target":{"kind":"element","selector":"#save","tag":"button","text":"Save","html":"<button id=\"save\">Save</button>"}}"##;
 
 /// A snapshot where pane `w0:p1` runs an agent with `status`.
@@ -49,7 +53,7 @@ fn noted_tab(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> crate::b
             view.toggle_annotating(tab.id, window, cx);
             view.page_posted(tab.id, "not json", window, cx);
             view.page_posted(tab.id, PICK, window, cx);
-            let input = view.browser.annotations.input.clone();
+            let input = view.browser.annotations.input(tab.id, cx);
             input.update(cx, |input, cx| input.set_text_selected("Make it blue", cx));
             view.add_note(tab.id, window, cx);
             assert_eq!(view.browser.annotations.queued(tab.id), 1);
@@ -68,8 +72,17 @@ fn recipient(view: &Entity<HerdrWindow>, cx: &VisualTestContext) -> crate::brows
 fn kept(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> Option<String> {
     let target = recipient(view, cx);
     cx.update(|_, cx| {
-        cx.default_global::<crate::browser::Feedback>()
-            .take(&target)
+        if cfg!(unix) {
+            cx.default_global::<crate::browser::Feedback>()
+                .take(&target)
+        } else {
+            let text = cx
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .filter(|text| !text.is_empty());
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new()));
+            text
+        }
     })
 }
 

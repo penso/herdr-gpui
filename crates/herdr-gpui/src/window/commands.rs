@@ -375,6 +375,10 @@ impl HerdrWindow {
                 self.enter_copy_mode(window, cx);
                 return;
             }
+            Command::AnnotateSelection => {
+                self.annotate_selection(window, cx);
+                return;
+            }
             Command::EditScrollback if !self.live.supports_edit_scrollback => {
                 self.show_flash(
                     Flash::warning("Opening scrollback needs a newer Herdr daemon"),

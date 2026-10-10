@@ -3,6 +3,7 @@
 //! split by responsibility across the submodules below; the fields live here
 //! because every one of them describes this window's own presentation state.
 
+mod annotate;
 mod announcement;
 mod clipboard;
 mod commands;
@@ -197,6 +198,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) git: git::Git,
     /// Notes waiting for their agents to be ready for them.
     pub(crate) deliveries: crate::agent_notes::Deliveries,
+    /// Notes on selected terminal text, written or queued.
+    pub(crate) terminal_notes: annotate::TerminalNotes,
     /// The notes panel beside a review or an annotated page; both share it.
     pub(crate) notes_width: crate::panel_resize::PanelWidth,
     /// The review's list of changed files.
@@ -405,6 +408,7 @@ impl HerdrWindow {
     }
 
     fn tick(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.updater.set_channel(self.config.updates.channel);
         if self.updater.poll() {
             match self.updater.commit_restart() {
                 Ok(true) => {
@@ -481,6 +485,7 @@ impl HerdrWindow {
         self.flush_scrollbar(cx);
         self.flush_split(cx);
         self.poll_find(window, cx);
+        self.follow_terminal_note(window, cx);
         self.follow_selection(cx);
         self.poll_copy_mode(cx);
         #[cfg(target_os = "macos")]
@@ -835,6 +840,7 @@ impl HerdrWindow {
             fan_out: None,
             git: git::Git::default(),
             deliveries: Default::default(),
+            terminal_notes: Default::default(),
             notes_width: crate::panel_resize::NOTES,
             review_files_width: crate::panel_resize::REVIEW_FILES,
             reviews: Default::default(),

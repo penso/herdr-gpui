@@ -1,6 +1,7 @@
 //! Blocking release transport and authentication. Run only on a worker thread.
 //! The caller supplies the compile-time HERDR_UPDATE_PUBLIC_KEY, never a secret.
 
+use super::UpdateChannel;
 use super::error::{Result, UpdateError as Error};
 use std::{
     fs::{File, OpenOptions},
@@ -19,7 +20,13 @@ use std::os::unix::fs::OpenOptionsExt;
 const MANIFEST_LIMIT: usize = 64 * 1024;
 const ARCHIVE_LIMIT: u64 = 256 * 1024 * 1024;
 const METADATA_LIMIT: usize = 1024 * 1024;
+/// Each listed release carries its full asset metadata (~2 KiB per asset), so
+/// the short page the beta channel reads needs more room than one release.
+const RELEASE_LIST_LIMIT: usize = 4 * 1024 * 1024;
+/// GitHub's latest release is never a prerelease: this is the stable channel.
 const LATEST_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releases/latest";
+/// The newest published releases of both kinds, for the beta channel.
+const RELEASES_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releases?per_page=10";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -246,7 +253,7 @@ fn request(
             .header("User-Agent", "herdr-gpui-updater")
             .header(
                 "Accept",
-                if url == LATEST_URL {
+                if url == LATEST_URL || url == RELEASES_URL {
                     "application/vnd.github+json"
                 } else {
                     "application/octet-stream"
@@ -311,16 +318,45 @@ struct ReleaseAsset {
     browser_download_url: String,
 }
 
+/// The stable channel: GitHub's latest release, which must not be a prerelease.
 fn parse_release(bytes: &[u8]) -> Result<Release> {
     if bytes.len() > METADATA_LIMIT {
         return Err(Error::MetadataLimit);
     }
-    let mut release: Release = serde_json::from_slice(bytes).map_err(Error::ReleaseJson)?;
+    let release: Release = serde_json::from_slice(bytes).map_err(Error::ReleaseJson)?;
+    validate_release(release, UpdateChannel::Stable)
+}
+
+/// The beta channel: the highest-versioned published release, beta or stable.
+/// GitHub lists newest-created first, but a promoted beta keeps its creation
+/// date, so every listed release is compared by version rather than position.
+/// Releases whose tags are not calendar versions are never candidates.
+fn parse_releases(bytes: &[u8]) -> Result<Release> {
+    if bytes.len() > RELEASE_LIST_LIMIT {
+        return Err(Error::MetadataLimit);
+    }
+    let releases: Vec<Release> = serde_json::from_slice(bytes).map_err(Error::ReleaseJson)?;
+    let (_, newest) = releases
+        .into_iter()
+        .filter(|release| !release.draft)
+        .filter_map(|release| {
+            let version = parse_version(release.version.strip_prefix('v')?)?;
+            Some((version, release))
+        })
+        .max_by_key(|(version, _)| *version)
+        .ok_or(Error::NoPublishedRelease)?;
+    validate_release(newest, UpdateChannel::Beta)
+}
+
+fn validate_release(mut release: Release, channel: UpdateChannel) -> Result<Release> {
     let version = release
         .version
         .strip_prefix('v')
         .ok_or(Error::ReleaseVersion)?;
-    if release.draft || release.prerelease || parse_version(version).is_none() {
+    if release.draft
+        || (release.prerelease && channel == UpdateChannel::Stable)
+        || parse_version(version).is_none()
+    {
         return Err(Error::UnstableRelease);
     }
     release.version = version.to_owned();
@@ -352,6 +388,7 @@ fn parse_release(bytes: &[u8]) -> Result<Release> {
 pub(super) fn check(
     current_version: &str,
     key_hex: &str,
+    channel: UpdateChannel,
     cancel: &AtomicBool,
 ) -> Result<Option<Offer>> {
     cancelled(cancel)?;
@@ -360,14 +397,21 @@ pub(super) fn check(
     let Some(target) = target() else {
         return Ok(None);
     };
+    let (url, limit) = match channel {
+        UpdateChannel::Stable => (LATEST_URL, METADATA_LIMIT),
+        UpdateChannel::Beta => (RELEASES_URL, RELEASE_LIST_LIMIT),
+    };
     let metadata = read_bounded(
-        request(LATEST_URL, RequestProfile::Metadata, cancel)?
+        request(url, RequestProfile::Metadata, cancel)?
             .into_body()
             .into_reader(),
-        METADATA_LIMIT,
+        limit,
         cancel,
     )?;
-    let release = parse_release(&metadata)?;
+    let release = match channel {
+        UpdateChannel::Stable => parse_release(&metadata)?,
+        UpdateChannel::Beta => parse_releases(&metadata)?,
+    };
     if parse_version(&release.version).ok_or(Error::ReleaseVersion)? <= current {
         return Ok(None);
     }

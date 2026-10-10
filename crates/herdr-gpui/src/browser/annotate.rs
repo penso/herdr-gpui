@@ -330,6 +330,8 @@ pub(crate) struct Note {
     pub image: Option<Arc<gpui::Image>>,
     /// The screenshot still on its way for this note.
     pub capture: Option<u64>,
+    /// Whether the note went to the agent and was not edited since.
+    pub sent: bool,
 }
 
 impl Note {
@@ -340,6 +342,7 @@ impl Note {
             comment,
             image: None,
             capture: None,
+            sent: false,
         })
     }
 }

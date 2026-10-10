@@ -1,3 +1,5 @@
+set windows-shell := ["cmd.exe", "/c"]
+
 default:
     @just --list
 
@@ -90,6 +92,10 @@ mockup file="" feedback="" capture="":
 
 build-release:
     cargo build --locked --release -p herdr-gpui
+
+# Compile and install the release executable into Cargo's bin directory.
+install:
+    cargo install --locked --force --path crates/herdr-gpui --bin herdr-gpui
 
 # Regenerate circular Linux artwork on any platform (Python standard library).
 icons-linux:
@@ -202,6 +208,15 @@ changelog-release version output:
 # Owner-only remote release; CI derives the YYYYMMDD.COUNTER version itself.
 release:
     bash scripts/release/dispatch.sh
+
+# Owner-only beta: a GitHub prerelease that only `[updates] channel = "beta"`
+# installs see, kept out of Homebrew until promoted.
+release-beta:
+    bash scripts/release/dispatch.sh --beta
+
+# Owner-only: make a published beta the latest stable release, then update Homebrew.
+release-promote version:
+    bash scripts/release/dispatch.sh --promote "{{version}}"
 
 # Local universal signed/notarized DMG; does not publish anything.
 dmg $VERSION:

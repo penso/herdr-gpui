@@ -21,6 +21,7 @@ use gpui::App;
 pub use protocol::ErrorCode;
 #[cfg(any(unix, feature = "mockup"))]
 use protocol::NotesRequest;
+#[cfg(any(unix, feature = "mockup"))]
 pub(crate) use protocol::NotesTo;
 use protocol::{
     BrowserOpen, Caller, FeedbackRequest, MAX_WAIT_SECONDS, OpenedIn, Page, Request, Response,
@@ -265,10 +266,13 @@ fn notes(request: &NotesRequest, cx: &mut App) -> Response {
     } else {
         NotesTo::Kept
     };
-    feedback.keep(crate::browser::Batch {
-        target: recipient,
-        text,
-    });
+    feedback.keep(
+        crate::browser::Batch {
+            target: recipient,
+            text,
+        },
+        None,
+    );
     Response::NotesSent { to }
 }
 
@@ -348,7 +352,7 @@ fn respond_feedback(
         incoming.try_respond(Response::Feedback { text })
     {
         cx.default_global::<Feedback>()
-            .keep(crate::browser::Batch { target, text });
+            .keep(crate::browser::Batch { target, text }, None);
     }
 }
 
@@ -416,13 +420,16 @@ pub(crate) fn install(cx: &mut App) {
                         socket::Event::Request(incoming) => incoming,
                         socket::Event::Undelivered { request, text } => {
                             if let Some(daemon) = request.daemon_socket {
-                                cx.default_global::<Feedback>().keep(crate::browser::Batch {
-                                    target: FeedbackKey {
-                                        scope: Scope::local(Path::new(&daemon)),
-                                        pane_id: request.pane_id,
+                                cx.default_global::<Feedback>().keep(
+                                    crate::browser::Batch {
+                                        target: FeedbackKey {
+                                            scope: Scope::local(Path::new(&daemon)),
+                                            pane_id: request.pane_id,
+                                        },
+                                        text,
                                     },
-                                    text,
-                                });
+                                    None,
+                                );
                             }
                             continue;
                         }

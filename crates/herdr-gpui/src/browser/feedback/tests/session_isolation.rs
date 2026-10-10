@@ -9,16 +9,22 @@ fn identical_pane_ids_in_different_sessions_never_share_notes_or_waiters() {
     assert_eq!(feedback.waiting(), std::slice::from_ref(&second));
     assert!(feedback.is_waiting(&second));
     assert!(!feedback.is_waiting(&first));
-    feedback.keep(Batch {
-        target: first.clone(),
-        text: "first only".into(),
-    });
+    feedback.keep(
+        Batch {
+            target: first.clone(),
+            text: "first only".into(),
+        },
+        None,
+    );
     assert!(!feedback.has(&second));
     assert_eq!(feedback.take(&second), None);
-    feedback.keep(Batch {
-        target: second.clone(),
-        text: "second only".into(),
-    });
+    feedback.keep(
+        Batch {
+            target: second.clone(),
+            text: "second only".into(),
+        },
+        None,
+    );
     assert_eq!(feedback.take(&first).as_deref(), Some("first only"));
     assert_eq!(feedback.take(&second).as_deref(), Some("second only"));
 }

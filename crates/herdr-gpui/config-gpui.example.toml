@@ -137,6 +137,11 @@ project_roots = []
 # Play the system alert sound.
 # sound = false
 
+# Which releases the in-app updater offers. "beta" also installs prereleases,
+# which are promoted to stable once they prove out; Homebrew only sees stable.
+# [updates]
+# channel = "stable"
+
 # To customize spacing too, REPLACE the top-level layout above with this table:
 # [layout]
 # mode = "normal"
@@ -185,6 +190,7 @@ project_roots = []
 # quit = "cmd-q"
 # find_next = "cmd-g"
 # find_previous = "cmd-shift-g"
+# annotate_selection = "cmd-shift-a"
 # toggle_full_screen = "ctrl-cmd-f"
 # cycle_windows = "cmd-`"
 # Unbound by default: themes, reconnect, logs, about, worktree_notes,

@@ -34,9 +34,14 @@ struct TabNotes {
     /// Whether a drag draws a region rather than selecting text.
     regions: bool,
     pending: Option<Draft>,
+    /// The note whose text the composer is changing, instead of a draft.
+    editing: Option<usize>,
     notes: Vec<Note>,
+    sending: crate::agent_notes::PendingSend,
+    input: Option<Entity<SearchInput>>,
 }
 
+#[derive(Default)]
 pub(crate) struct Annotations {
     tabs: HashMap<TabId, TabNotes>,
     /// Each tab's notes panel, sliding open and closed beside its page.
@@ -44,25 +49,23 @@ pub(crate) struct Annotations {
     /// When each note a tab's panel draws was added, while it grows into the
     /// list; `None` for a note that is whole.
     drawn: HashMap<TabId, Vec<Option<Instant>>>,
-    pub(super) input: Entity<SearchInput>,
     /// Numbers screenshots, to match each to its draft or note.
     captures: u64,
 }
 
 impl Annotations {
-    pub(crate) fn new(cx: &mut App) -> Self {
+    pub(super) fn input(&mut self, id: TabId, cx: &mut App) -> Entity<SearchInput> {
+        let tab = self.tabs.entry(id).or_default();
+        if let Some(input) = &tab.input {
+            return input.clone();
+        }
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
             input.set_placeholder("Describe the change\u{2026}", cx);
             input
         });
-        Self {
-            tabs: HashMap::new(),
-            panels: HashMap::new(),
-            drawn: HashMap::new(),
-            input,
-            captures: 0,
-        }
+        tab.input = Some(input.clone());
+        input
     }
 
     pub(crate) fn armed(&self, id: TabId) -> bool {
@@ -71,24 +74,38 @@ impl Annotations {
 
     /// Whether the notes panel shows beside the page.
     pub(crate) fn open(&self, id: TabId) -> bool {
-        self.tabs
-            .get(&id)
-            .is_some_and(|tab| tab.armed || tab.pending.is_some() || !tab.notes.is_empty())
+        self.tabs.get(&id).is_some_and(|tab| {
+            tab.armed || tab.pending.is_some() || tab.editing.is_some() || !tab.notes.is_empty()
+        })
     }
 
     pub(crate) fn ids(&self) -> impl Iterator<Item = TabId> + '_ {
         self.tabs.keys().copied()
     }
 
+    /// Notes not sent yet.
     #[cfg(test)]
     pub(super) fn queued(&self, id: TabId) -> usize {
-        self.tabs.get(&id).map_or(0, |tab| tab.notes.len())
+        self.tabs
+            .get(&id)
+            .map_or(0, |tab| tab.notes.iter().filter(|note| !note.sent).count())
     }
 
     pub(crate) fn forget(&mut self, id: TabId) {
         self.tabs.remove(&id);
         self.panels.remove(&id);
         self.drawn.remove(&id);
+    }
+
+    /// Every listed note's comment and whether it was sent.
+    #[cfg(test)]
+    pub(super) fn listed(&self, id: TabId) -> Vec<(String, bool)> {
+        self.tabs.get(&id).map_or_else(Vec::new, |tab| {
+            tab.notes
+                .iter()
+                .map(|note| (note.comment.clone(), note.sent))
+                .collect()
+        })
     }
 
     #[cfg(test)]
@@ -187,6 +204,7 @@ impl HerdrWindow {
             );
         } else {
             notes.pending = None;
+            notes.editing = None;
             self.disarm_page(id, cx);
             window.focus(&self.focus, cx);
         }
@@ -250,7 +268,7 @@ impl HerdrWindow {
         if self.tab_notes(id).notes.len() >= MAX_NOTES {
             self.reveal_page(id, cx);
             self.show_flash(
-                Flash::warning("Send or remove notes before adding more"),
+                Flash::warning("Clear sent notes or remove some before adding more"),
                 cx,
             );
             return;
@@ -272,7 +290,9 @@ impl HerdrWindow {
         if capture.is_none() {
             self.reveal_page(id, cx);
         }
-        self.tab_notes(id).pending = Some(Draft {
+        let notes = self.tab_notes(id);
+        notes.editing = None;
+        notes.pending = Some(Draft {
             anchor,
             image: None,
             capture,
@@ -280,7 +300,7 @@ impl HerdrWindow {
         // The page holds the keyboard natively; the note is typed here.
         #[cfg(any(target_os = "macos", windows))]
         self.browser.pages.blur(id, cx);
-        let input = self.browser.annotations.input.clone();
+        let input = self.browser.annotations.input(id, cx);
         input.update(cx, |input, cx| input.clear(cx));
         let focus = input.read(cx).focus.clone();
         window.focus(&focus, cx);
@@ -347,8 +367,64 @@ impl HerdrWindow {
         }
     }
 
+    /// Puts note `index`'s text in the composer to change it.
+    pub(super) fn edit_note(
+        &mut self,
+        id: TabId,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let notes = self.tab_notes(id);
+        let Some(comment) = notes.notes.get(index).map(|note| note.comment.clone()) else {
+            return;
+        };
+        notes.pending = None;
+        notes.editing = Some(index);
+        #[cfg(any(target_os = "macos", windows))]
+        self.browser.pages.blur(id, cx);
+        let input = self.browser.annotations.input(id, cx);
+        input.update(cx, |input, cx| input.set_text_selected(&comment, cx));
+        let focus = input.read(cx).focus.clone();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    /// Drops the draft or the edit in the composer.
+    pub(super) fn cancel_note(&mut self, id: TabId, window: &mut Window, cx: &mut Context<Self>) {
+        let notes = self.tab_notes(id);
+        notes.pending = None;
+        notes.editing = None;
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// Adds the draft as a note, or saves the note being edited, which then
+    /// counts as not sent.
     pub(super) fn add_note(&mut self, id: TabId, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.browser.annotations.input.read(cx).text().to_owned();
+        let input = self.browser.annotations.input(id, cx);
+        let text = input.read(cx).text().to_owned();
+        if let Some(index) = self.tab_notes(id).editing {
+            let notes = self.tab_notes(id);
+            let Some(anchor) = notes.notes.get(index).map(|note| note.anchor.clone()) else {
+                notes.editing = None;
+                return;
+            };
+            let Some(edited) = Note::new(anchor, &text) else {
+                self.show_flash(Flash::warning("Write what should change first"), cx);
+                return;
+            };
+            let notes = self.tab_notes(id);
+            if let Some(note) = notes.notes.get_mut(index) {
+                note.comment = edited.comment;
+                note.sent = false;
+            }
+            notes.editing = None;
+            input.update(cx, |input, cx| input.clear(cx));
+            window.focus(&self.focus, cx);
+            cx.notify();
+            return;
+        }
         let Some(draft) = self.tab_notes(id).pending.take() else {
             return;
         };
@@ -361,10 +437,7 @@ impl HerdrWindow {
         note.capture = draft.capture;
         let notes = self.tab_notes(id);
         notes.notes.push(note);
-        self.browser
-            .annotations
-            .input
-            .update(cx, |input, cx| input.clear(cx));
+        input.update(cx, |input, cx| input.clear(cx));
         self.refresh_markers(id, cx);
         window.focus(&self.focus, cx);
         cx.notify();
@@ -380,13 +453,28 @@ impl HerdrWindow {
         let notes = self.tab_notes(id);
         if index < notes.notes.len() {
             notes.notes.remove(index);
+            notes.editing = None;
         }
         self.refresh_markers(id, cx);
         cx.notify();
     }
 
-    fn clear_notes(&mut self, id: TabId, cx: &mut Context<Self>) {
-        self.tab_notes(id).notes.clear();
+    /// Marks notes `indexes` sent, as Send delivers them.
+    fn mark_notes_sent(&mut self, id: TabId, indexes: &[usize], cx: &mut Context<Self>) {
+        let notes = self.tab_notes(id);
+        for &index in indexes {
+            if let Some(note) = notes.notes.get_mut(index) {
+                note.sent = true;
+            }
+        }
+        cx.notify();
+    }
+
+    /// Removes the notes the agent already has, ending that round.
+    pub(super) fn clear_sent_notes(&mut self, id: TabId, cx: &mut Context<Self>) {
+        let notes = self.tab_notes(id);
+        notes.notes.retain(|note| !note.sent);
+        notes.editing = None;
         self.refresh_markers(id, cx);
         cx.notify();
     }
@@ -400,8 +488,8 @@ mod tests {
     #[gpui::test]
     fn new_notes_grow_in_and_the_panel_slides(cx: &mut gpui::TestAppContext) {
         let id = TabId::test(7);
-        cx.update(|cx| {
-            let mut annotations = Annotations::new(cx);
+        cx.update(|_| {
+            let mut annotations = Annotations::default();
             let start = Instant::now();
             // Notes a panel has when it first draws are whole.
             annotations.observe_notes(id, 2, start);

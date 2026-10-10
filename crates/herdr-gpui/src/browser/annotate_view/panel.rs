@@ -15,21 +15,33 @@ impl HerdrWindow {
         let theme = self.theme.clone();
         let armed = self.browser.annotations.armed(id);
         let notes = self.tab_notes(id);
+        let input = notes.input.clone();
         let regions = notes.regions;
-        let pending = notes.pending.as_ref().map(|draft| {
-            (
-                draft.anchor.summary(),
-                draft.image.clone(),
-                draft.capture.is_some(),
-            )
-        });
+        let editing = notes.editing;
+        let pending = notes
+            .pending
+            .as_ref()
+            .map(|draft| {
+                (
+                    draft.anchor.summary(),
+                    draft.image.clone(),
+                    draft.capture.is_some(),
+                )
+            })
+            .or_else(|| {
+                let note = notes.notes.get(editing?)?;
+                Some((note.anchor.summary(), note.image.clone(), false))
+            });
         let list: Vec<(usize, Note)> = notes.notes.iter().cloned().enumerate().collect();
+        let unsent = list.iter().filter(|(_, note)| !note.sent).count();
+        let send_label = crate::agent_notes::send_label(list.len(), unsent);
+        let any_sent = unsent < list.len();
         let now = Instant::now();
         self.browser.annotations.observe_notes(id, list.len(), now);
         let origin = tab.origin.is_some();
         let tab_for_send = tab.clone();
         let tab_for_copy = tab.clone();
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: SharedString, primary: bool| {
             let background = if primary {
                 theme.primary()
             } else {
@@ -78,33 +90,44 @@ impl HerdrWindow {
                         .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                             match event.keystroke.key.as_str() {
                                 "enter" => this.add_note(id, window, cx),
-                                "escape" => {
-                                    this.tab_notes(id).pending = None;
-                                    window.focus(&this.focus, cx);
-                                    cx.notify();
-                                }
+                                "escape" => this.cancel_note(id, window, cx),
                                 _ => return,
                             }
                             cx.stop_propagation();
                         }))
-                        .child(self.browser.annotations.input.clone()),
+                        .children(input),
                 )
-                .child(div().flex().gap_1().child(
-                    button("annotation-add", "Add note", true).on_click(
-                        cx.listener(move |this, _, window, cx| this.add_note(id, window, cx)),
+                .child(
+                    div().flex().gap_1().child(
+                        button(
+                            "annotation-add",
+                            if editing.is_some() {
+                                "Save note"
+                            } else {
+                                "Add note"
+                            }
+                            .into(),
+                            true,
+                        )
+                        .on_click(
+                            cx.listener(move |this, _, window, cx| this.add_note(id, window, cx)),
+                        ),
                     ),
-                ))
+                )
         });
         let growth: Vec<Option<f32>> = (0..list.len())
             .map(|index| self.browser.annotations.note_growth(id, index, now))
             .collect();
         let rows = list.into_iter().map(|(index, note)| {
+            let sent = note.sent;
             div()
                 .id(("annotation-note", index))
                 // A new note opens into the list and fades in.
                 .when_some(growth[index], |row, k| {
                     row.max_h(px(320. * k)).overflow_hidden().opacity(k)
                 })
+                .when(sent && growth[index].is_none(), |row| row.opacity(0.6))
+                .when(editing == Some(index), |row| row.bg(rgb(theme.active)))
                 .flex()
                 .gap_2()
                 .p_2()
@@ -132,9 +155,23 @@ impl HerdrWindow {
                             div()
                                 .text_color(rgb(theme.muted))
                                 .truncate()
-                                .child(note.anchor.summary()),
+                                .child(if sent {
+                                    format!("{} \u{b7} sent", note.anchor.summary())
+                                } else {
+                                    note.anchor.summary()
+                                }),
                         )
-                        .child(div().child(note.comment))
+                        // Clicking the text edits it.
+                        .child(
+                            div()
+                                .id(("annotation-edit", index))
+                                .debug_selector(move || format!("annotation-edit-{index}"))
+                                .cursor_text()
+                                .child(note.comment)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.edit_note(id, index, window, cx);
+                                })),
+                        )
                         .children(note.image.clone().map(thumbnail)),
                 )
                 .child(
@@ -186,11 +223,11 @@ impl HerdrWindow {
                             .child(
                                 // Drag draws a region while this is on;
                                 // Shift-drag draws one either way.
-                                button("annotation-region", "Region", regions).on_click(
+                                button("annotation-region", "Region".into(), regions).on_click(
                                     cx.listener(move |this, _, _, cx| this.toggle_regions(id, cx)),
                                 ),
                             )
-                            .child(button("annotation-page", "Note on page", false).on_click(
+                            .child(button("annotation-page", "Note on page".into(), false).on_click(
                                 cx.listener(move |this, _, window, cx| {
                                     this.begin_note(id, Anchor::Page, None, window, cx);
                                 }),
@@ -223,13 +260,20 @@ impl HerdrWindow {
                         .border_t_1()
                         .border_color(rgb(theme.active))
                         .when(origin, |row| {
-                            row.child(button("annotation-send", "Send to agent", true).on_click(
+                            row.child(button("annotation-send", send_label.into(), true).on_click(
                                 cx.listener(move |this, _, _, cx| this.send_notes(&tab_for_send, cx)),
                             ))
                         })
-                        .child(button("annotation-copy", "Copy", !origin).on_click(cx.listener(
-                            move |this, _, _, cx| this.copy_notes(&tab_for_copy, cx),
-                        ))),
+                        .child(button("annotation-copy", "Copy".into(), !origin).on_click(
+                            cx.listener(move |this, _, _, cx| this.copy_notes(&tab_for_copy, cx)),
+                        ))
+                        .when(any_sent, |row| {
+                            row.child(
+                                button("annotation-clear-sent", "Clear sent".into(), false).on_click(
+                                    cx.listener(move |this, _, _, cx| this.clear_sent_notes(id, cx)),
+                                ),
+                            )
+                        }),
                 )
             });
         self.resizable_panel(
