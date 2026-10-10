@@ -197,47 +197,6 @@ impl Action {
     }
 }
 
-/// The palette row offering to make the typed name — or clone the typed URL —
-/// under the first configured project root.
-fn new_project_entry(roots: &[String], query: &str) -> Option<Entry> {
-    let plan = project_create::plan(roots, query).ok().flatten()?;
-    let (label, detail) = match &plan.source {
-        project_create::Source::Folder => (
-            format!("Create folder \"{}\"", plan.label),
-            format!("New project in {}", plan.path.display()),
-        ),
-        project_create::Source::Clone { url } => (
-            format!("Clone \"{}\"", plan.label),
-            format!("git clone {url} into {}", plan.path.display()),
-        ),
-    };
-    Some(Entry::with_keywords(
-        label,
-        detail,
-        "Project",
-        Action::NewProject(plan),
-        None,
-        // The raw query, so the row is offered for exactly what was typed.
-        query,
-    ))
-}
-
-impl Palette {
-    /// The base entries plus the row the current query would create, if any.
-    ///
-    /// `pending` is rebuilt rather than appended to, so the row can change with
-    /// the query without accumulating.
-    fn rebuild_pending(&mut self, roots: &[String]) {
-        let mut entries: Vec<Entry> = self.base.iter().cloned().collect();
-        if !self.query.trim().is_empty()
-            && let Some(entry) = new_project_entry(roots, &self.query)
-        {
-            entries.push(entry);
-        }
-        self.pending = entries.into();
-    }
-}
-
 #[derive(Clone)]
 struct Target {
     boot: String,

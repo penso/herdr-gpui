@@ -6,9 +6,10 @@
 //! `palette.project_roots` entry the user configured, which is the same
 //! convention project discovery already uses.
 
-use super::projects;
+use super::{Action, Entry, Palette, projects};
 use crate::{Error, pull_request::run};
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, Instant},
@@ -98,42 +99,101 @@ pub(super) fn plan(roots: &[String], text: &str) -> Result<Option<NewProject>, E
     }))
 }
 
-/// Make the directory, or clone into it. Blocking: callers run it off the UI thread.
+/// Make the directory, or clone into it, returning the project to open.
+/// Blocking: callers run it off the UI thread.
 pub(super) fn materialise(
     project: &NewProject,
     cancelled: &impl Fn() -> bool,
-) -> Result<(), Error> {
+) -> Result<projects::Project, Error> {
     let Some(root) = project.path.parent() else {
         return Err(Error::PaletteProjectRootMissing);
     };
     if !root.is_dir() {
         return Err(Error::PaletteProjectRootMissing);
     }
-    // Claim the destination atomically. This is the whole concurrency story:
-    // whichever attempt creates the directory owns it, a second one fails here
-    // instead of sharing it, and only the owner may remove it on failure. An
-    // `exists()` check cannot do this — two windows can both pass it.
-    std::fs::create_dir(&project.path).map_err(claim_error)?;
-    let Source::Clone { url } = &project.source else {
-        return Ok(());
-    };
-    let deadline = Instant::now() + CLONE_TIMEOUT;
-    // `git clone` accepts a destination that already exists and is empty, which
-    // is exactly the directory just claimed. Cloning straight into it, rather
-    // than beside it and moving it, means there is no step that could replace
-    // another window's folder.
-    let mut command = clone_command(url, &project.path);
-    let result = match run(&mut command, deadline, cancelled) {
-        Ok((true, _)) => Ok(()),
-        Ok((false, output)) => Err(Error::PaletteProjectClone(output.trim().to_owned())),
-        // A timeout kills the child and lands here, so this arm cleans up too.
-        Err(error) => Err(error),
-    };
-    if result.is_err() {
-        // Only the directory this attempt claimed is removed.
-        let _ = std::fs::remove_dir_all(&project.path);
+    match &project.source {
+        // Claim the destination atomically: whichever attempt creates it owns
+        // it, and a second fails here instead of sharing it.
+        Source::Folder => fs::create_dir(&project.path).map_err(claim_error)?,
+        Source::Clone { url } => clone(url, root, &project.path, &project.label, cancelled)?,
     }
-    result
+    let path = fs::canonicalize(&project.path)
+        .map_err(|error| Error::from(error).at_path(&project.path))?;
+    Ok(projects::Project {
+        path,
+        label: project.label.clone(),
+    })
+}
+
+/// Clone into a hidden staging folder beside the destination, then publish it.
+///
+/// An unfinished clone is never visible as a project: discovery skips dot
+/// folders, so nobody can open it and save files that a failed clone would
+/// then remove. The staging folder is created atomically under a fresh name,
+/// so cleanup only ever removes the folder this attempt made.
+fn clone(
+    url: &str,
+    root: &Path,
+    destination: &Path,
+    label: &str,
+    cancelled: &impl Fn() -> bool,
+) -> Result<(), Error> {
+    // Not a guarantee (`publish` is), only a way not to download a repository
+    // that has nowhere to go.
+    if destination.symlink_metadata().is_ok() {
+        return Err(Error::PaletteProjectExists);
+    }
+    let staging = staging_dir(root, label)?;
+    let deadline = Instant::now() + CLONE_TIMEOUT;
+    // `git clone` accepts a destination that exists and is empty.
+    let mut command = clone_command(url, staging.path());
+    match run(&mut command, deadline, cancelled)? {
+        (true, _) => {}
+        (false, output) => return Err(Error::PaletteProjectClone(output.trim().to_owned())),
+    }
+    publish(staging.path(), destination)?;
+    // Moved into place: there is nothing left for the guard to remove.
+    let _ = staging.keep();
+    Ok(())
+}
+
+/// A uniquely named hidden folder in `root`, removed when dropped.
+pub(super) fn staging_dir(root: &Path, label: &str) -> Result<tempfile::TempDir, Error> {
+    let prefix = format!(".{label}.clone-");
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix);
+    // The folder becomes the project, so it gets ordinary umask-derived
+    // permissions rather than tempfile's private 0700.
+    #[cfg(unix)]
+    builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777));
+    builder
+        .tempdir_in(root)
+        .map_err(|source| Error::PaletteProjectCreate { source })
+}
+
+/// Move a finished clone to `destination` without replacing anything there.
+///
+/// `rename` replaces an empty directory on Unix, so the destination is first
+/// claimed with an atomic `create_dir`: an existing folder, empty or not, is
+/// refused. The rename then replaces only the empty folder just claimed, and
+/// fails rather than replacing it if anything was written there meanwhile.
+#[cfg(unix)]
+pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
+    fs::create_dir(destination).map_err(claim_error)?;
+    fs::rename(staging, destination).map_err(|source| {
+        // Non-recursive, so this removes the claim only while it is still empty.
+        let _ = fs::remove_dir(destination);
+        Error::PaletteProjectCreate { source }
+    })
+}
+
+/// Windows never renames a directory over an existing one.
+#[cfg(windows)]
+pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
+    if destination.symlink_metadata().is_ok() {
+        return Err(Error::PaletteProjectExists);
+    }
+    fs::rename(staging, destination).map_err(claim_error)
 }
 
 /// An existing name is the ordinary case; anything else is a real failure.
@@ -162,128 +222,46 @@ pub(super) fn clone_command(url: &str, destination: &Path) -> Command {
     command
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// The palette row offering to make the typed name — or clone the typed URL —
+/// under the first configured project root.
+fn new_project_entry(roots: &[String], query: &str) -> Option<Entry> {
+    let plan = plan(roots, query).ok().flatten()?;
+    let (label, detail) = match &plan.source {
+        Source::Folder => (
+            format!("Create folder \"{}\"", plan.label),
+            format!("New project in {}", plan.path.display()),
+        ),
+        Source::Clone { url } => (
+            format!("Clone \"{}\"", plan.label),
+            format!("git clone {url} into {}", plan.path.display()),
+        ),
+    };
+    Some(Entry::with_keywords(
+        label,
+        detail,
+        "Project",
+        Action::NewProject(plan),
+        None,
+        // The raw query, so the row is offered for exactly what was typed.
+        query,
+    ))
+}
 
-    #[test]
-    fn accepts_plain_folder_names() {
-        assert_eq!(parse_name("my-project").as_deref(), Some("my-project"));
-        assert_eq!(
-            parse_name("  spaced name  ").as_deref(),
-            Some("spaced name")
-        );
-        assert_eq!(parse_name("v2.0").as_deref(), Some("v2.0"));
-    }
-
-    #[test]
-    fn refuses_names_that_are_not_one_segment() {
-        for bad in ["", "   ", ".", "..", ".hidden", "a/b", "a\\b", "a:b"] {
-            assert_eq!(parse_name(bad), None, "should refuse {bad:?}");
+impl Palette {
+    /// The base entries plus the row the current query would create, if any.
+    ///
+    /// `pending` is rebuilt rather than appended to, so the row can change with
+    /// the query without accumulating.
+    pub(super) fn rebuild_pending(&mut self, roots: &[String]) {
+        let mut entries: Vec<Entry> = self.base.iter().cloned().collect();
+        if !self.query.trim().is_empty()
+            && let Some(entry) = new_project_entry(roots, &self.query)
+        {
+            entries.push(entry);
         }
-    }
-
-    #[test]
-    fn recognises_explicit_repository_urls() {
-        assert_eq!(
-            parse_repo("https://github.com/owner/repo.git"),
-            Some(("https://github.com/owner/repo.git".into(), "repo".into()))
-        );
-        assert_eq!(
-            parse_repo("git@github.com:owner/repo.git"),
-            Some(("git@github.com:owner/repo.git".into(), "repo".into()))
-        );
-        assert_eq!(
-            parse_repo("ssh://git@host/owner/repo"),
-            Some(("ssh://git@host/owner/repo".into(), "repo".into()))
-        );
-    }
-
-    #[test]
-    fn refuses_a_bare_owner_repo() {
-        // Choosing a forge for the user is not ours to do.
-        assert_eq!(parse_repo("owner/repo"), None);
-        assert_eq!(parse_repo("just-a-name"), None);
-    }
-
-    #[test]
-    fn plans_a_folder_in_the_first_root() -> anyhow::Result<()> {
-        let root = std::env::var("HOME")?;
-        let Some(plan) = plan(std::slice::from_ref(&root), "brand-new")? else {
-            anyhow::bail!("expected a plan for a plain name");
-        };
-        assert_eq!(plan.path, PathBuf::from(&root).join("brand-new"));
-        assert_eq!(plan.label, "brand-new");
-        assert_eq!(plan.source, Source::Folder);
-        Ok(())
-    }
-
-    #[test]
-    fn plans_a_clone_and_names_it_after_the_repository() -> anyhow::Result<()> {
-        let root = std::env::var("HOME")?;
-        let Some(plan) = plan(
-            std::slice::from_ref(&root),
-            "https://github.com/owner/thing.git",
-        )?
-        else {
-            anyhow::bail!("expected a plan for a repository URL");
-        };
-        assert_eq!(plan.path, PathBuf::from(root).join("thing"));
-        assert_eq!(
-            plan.source,
-            Source::Clone {
-                url: "https://github.com/owner/thing.git".into()
-            }
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn plans_nothing_without_a_root() -> anyhow::Result<()> {
-        assert_eq!(plan(&[], "anything")?, None);
-        Ok(())
-    }
-
-    #[test]
-    fn the_clone_command_passes_url_and_destination_as_data() {
-        let command = clone_command("https://example.test/a.git", Path::new("/tmp/a"));
-        let args: Vec<_> = command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(
-            args,
-            vec![
-                "-c",
-                "core.fsmonitor=false",
-                "clone",
-                "--",
-                "https://example.test/a.git",
-                "/tmp/a"
-            ]
-        );
-        let prompt = command
-            .get_envs()
-            .find(|(key, _)| *key == "GIT_TERMINAL_PROMPT")
-            .and_then(|(_, value)| value)
-            .map(|value| value.to_string_lossy().into_owned());
-        assert_eq!(prompt.as_deref(), Some("0"));
-    }
-
-    #[test]
-    fn a_second_project_of_the_same_name_is_refused() -> anyhow::Result<()> {
-        let directory = std::env::temp_dir().join(format!("herdr-plan-{}", std::process::id()));
-        std::fs::create_dir_all(&directory)?;
-        let project = NewProject {
-            path: directory.clone(),
-            label: "taken".into(),
-            source: Source::Folder,
-        };
-        assert!(matches!(
-            materialise(&project, &|| false),
-            Err(Error::PaletteProjectExists)
-        ));
-        std::fs::remove_dir_all(&directory)?;
-        Ok(())
+        self.pending = entries.into();
     }
 }
+
+#[cfg(test)]
+mod tests;

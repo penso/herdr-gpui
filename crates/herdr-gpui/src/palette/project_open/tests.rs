@@ -291,3 +291,43 @@ fn dismissing_a_queued_local_creation_cannot_resume_input_against_an_old_surface
         })
     });
 }
+
+/// A project created through a symlinked root is matched by its resolved path,
+/// so a workspace another window opened there is focused, not opened twice.
+#[cfg(unix)]
+#[gpui::test]
+fn a_created_project_under_a_symlinked_root_reuses_its_workspace(cx: &mut TestAppContext) {
+    let root = tempfile::tempdir().unwrap();
+    let real = std::fs::canonicalize(root.path()).unwrap().join("real");
+    std::fs::create_dir(&real).unwrap();
+    let link = root.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let peer = MockPeer::advertising(&["workspace.create"]);
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            Arc::make_mut(view.live.snapshot.as_mut().unwrap()).panes[0].cwd =
+                Some(real.join("fresh").to_string_lossy().into_owned());
+            attach_local(view, &peer);
+            view.open_palette(Filter::All, window, cx);
+            view.activate_palette(
+                Action::NewProject(project_create::NewProject {
+                    path: link.join("fresh"),
+                    label: "fresh".into(),
+                    source: project_create::Source::Folder,
+                }),
+                window,
+                cx,
+            );
+        })
+    });
+    cx.run_until_parked();
+    assert!(real.join("fresh").is_dir());
+    view.read_with(cx, |view, _| {
+        assert!(view.menu.palette.is_none());
+        assert_eq!(
+            view.pending_navigation,
+            Some(NavigationTarget::Workspace("w1".into()))
+        );
+    });
+}

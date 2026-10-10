@@ -170,8 +170,9 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    /// Create the directory (or clone into it), then open it exactly as
-    /// `activate_project` opens a directory that already exists.
+    /// Create the directory (or clone into it), then open it through
+    /// `activate_project`, which resolves the new path and looks for an
+    /// existing workspace off the UI thread exactly as for any other project.
     pub(super) fn create_project(
         &mut self,
         project: project_create::NewProject,
@@ -190,10 +191,9 @@ impl HerdrWindow {
         }
         let token = palette.search.clone();
         let config = self.config.palette.clone();
-        let creating = project.clone();
         let materialise = cx
             .background_executor()
-            .spawn(async move { project_create::materialise(&creating, &|| false) });
+            .spawn(async move { project_create::materialise(&project, &|| false) });
         if let Some(palette) = &mut self.menu.palette {
             palette.error = None;
         }
@@ -209,41 +209,8 @@ impl HerdrWindow {
                 {
                     return;
                 }
-                if !this.menu_target_current() {
-                    this.palette_project_error(Error::PaletteSessionChanged, cx);
-                    return;
-                }
-                let (index, snapshot) = match this.local_project_connection(&target) {
-                    Ok(current) => current,
-                    Err(error) => return this.palette_project_error(error, cx),
-                };
-                if let Err(error) = created {
-                    return this.palette_project_error(error, cx);
-                }
-                // A directory that already has a workspace is gone to, not created twice.
-                if let Some(workspace) = projects::workspace_for_path(&snapshot, &project.path) {
-                    this.dismiss_menu(window, cx);
-                    this.navigate_endpoint(
-                        crate::endpoint::LOCAL,
-                        NavigationTarget::Workspace(&workspace),
-                        cx,
-                    );
-                    return;
-                }
-                let request = this.endpoints[index].connection.request_dialog(
-                    &target.boot, Method::WorkspaceCreate,
-                    json!({"cwd": project.path, "label": project.label, "focus": true, "trust_repository": false}),
-                );
-                match request {
-                    Ok(id) => {
-                        if index == this.selected_endpoint {
-                            this.fence_focus_change(None);
-                        }
-                        if let Some(palette) = &mut this.menu.palette {
-                            palette.project_operation = ProjectOperation::Awaiting(id);
-                        }
-                        cx.notify();
-                    }
+                match created {
+                    Ok(project) => this.activate_project(project, window, cx),
                     Err(error) => this.palette_project_error(error, cx),
                 }
             });
