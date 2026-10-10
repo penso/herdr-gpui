@@ -3,6 +3,7 @@ use anyhow::Context as _;
 use ed25519_dalek::{Signer, SigningKey};
 
 mod beta_channel;
+mod null_body;
 
 #[test]
 fn request_profiles_allow_slow_archives_with_finite_deadlines() {
@@ -401,10 +402,13 @@ fn a_release_body_is_optional_and_kept_verbatim() -> anyhow::Result<()> {
         "browser_download_url":"https://github.com/penso/herdr-gpui/releases/download/v20260920.2/update-manifest.json"
     }]});
     // A release published without notes still parses; there is simply nothing to show.
-    assert_eq!(parse_release(&serde_json::to_vec(&value)?)?.body, "");
+    assert_eq!(parse_release(&serde_json::to_vec(&value)?)?.body, None);
     let notes = "### Added\n- Something new";
     value["body"] = notes.into();
-    assert_eq!(parse_release(&serde_json::to_vec(&value)?)?.body, notes);
+    assert_eq!(
+        parse_release(&serde_json::to_vec(&value)?)?.body.as_deref(),
+        Some(notes)
+    );
     Ok(())
 }
 

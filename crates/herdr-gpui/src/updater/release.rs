@@ -319,10 +319,12 @@ struct Release {
     draft: bool,
     prerelease: bool,
     assets: Vec<ReleaseAsset>,
-    /// The release body. Optional: a release published before this field, or one
-    /// cut without notes, simply has none.
+    /// The release body. GitHub omits it or sends `null` for a release cut
+    /// without notes; either way there is simply nothing to show, and the
+    /// release must still parse, since one note-less release in the beta
+    /// listing would otherwise fail the whole check.
     #[serde(default)]
-    body: String,
+    body: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -477,7 +479,7 @@ pub(super) fn check(
         asset,
         manifest_bytes,
         signature,
-        notes: release.body,
+        notes: release.body.unwrap_or_default(),
     }))
 }
 
