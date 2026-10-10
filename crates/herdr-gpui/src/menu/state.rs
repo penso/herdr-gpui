@@ -155,11 +155,9 @@ impl Deletion {
     }
 }
 
-/// A queued `worktree.remove`. The dialog closes as soon as the request is
-/// queued, because the daemon's own snapshot drops the workspace once the
-/// removal lands; holding the popover open adds nothing. What still needs a
-/// home is sidebar progress and a refusal, which becomes the window's local
-/// error. A dirty checkout arms the next dialog with force.
+/// A queued `worktree.remove`, retained even if its confirmation is dismissed.
+/// It drives sidebar progress and reports a refusal in the matching open dialog
+/// and the window's local error. A dirty checkout enables a force confirmation.
 pub(crate) struct Removal {
     /// Same fence as the menu target: a response from a replaced connection is
     /// not this removal's.

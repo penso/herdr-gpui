@@ -84,12 +84,10 @@ fn deletion_lookup_names_the_checkout_and_reports_errors(cx: &mut gpui::TestAppC
     });
 }
 
-/// Confirming a removal closes the popover, because the daemon drops the
-/// workspace from its own snapshot when the removal lands. A refusal still
-/// has to reach the user, and a dirty checkout arms the next dialog with
-/// force instead of repeating the same refusal.
+/// A removal whose confirmation was dismissed still reports a refusal, and a
+/// dirty checkout arms the next dialog with force instead of repeating it.
 #[gpui::test]
-fn queued_removal_closes_the_dialog_and_reports_refusals(cx: &mut gpui::TestAppContext) {
+fn dismissed_removal_reports_refusals(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {

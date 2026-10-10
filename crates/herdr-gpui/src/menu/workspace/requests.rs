@@ -10,10 +10,9 @@ use crate::{
 use gpui::*;
 
 impl HerdrWindow {
-    /// The dialog closes as soon as a removal is queued, so its response is
-    /// tracked on the window instead. Only a refusal is reported: success shows
-    /// up as the workspace leaving the daemon's snapshot.
-    fn update_pending_removal(&mut self, cx: &mut Context<Self>) {
+    /// Track the response even if the user dismisses the confirmation while
+    /// waiting. Only the matching, still-open dialog may be changed by it.
+    fn update_pending_removal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(removal) = &self.removal else {
             return;
         };
@@ -42,19 +41,45 @@ impl HerdrWindow {
         let Some(removal) = self.removal.take() else {
             return;
         };
+        let dialog_open = self.menu.page == Some(Page::Dialog(WorkspaceAction::DeleteWorktree))
+            && self.menu.endpoint_target == removal.endpoint
+            && self.menu.target.as_ref().is_some_and(|target| {
+                target.id == removal.workspace && target.boot_id == removal.boot_id
+            });
         let (force, error) = match result {
-            Err(error) => (removal.force, error.to_string()),
+            Err(error) => {
+                tracing::warn!(category = "request_rejected", "Worktree removal failed");
+                (removal.force, error.to_string())
+            }
             Ok(response) => {
-                let Some(error) = response.get("error") else {
+                let Some(error) = response.get("error").filter(|error| !error.is_null()) else {
+                    tracing::debug!("Worktree removal completed");
+                    if dialog_open {
+                        self.dismiss_menu(window, cx);
+                    }
                     return;
                 };
                 let (code, message) = endpoint_error(error);
+                // Log the known refusal category, never checkout paths or Git's
+                // potentially private diagnostic payload.
+                let category = match code {
+                    "dirty_worktree_requires_force" => "dirty_worktree_requires_force",
+                    "worktree_remove_failed" => "worktree_remove_failed",
+                    _ => "daemon_refusal",
+                };
+                tracing::warn!(category, force = removal.force, "Worktree removal failed");
                 (
                     removal.force || code == "dirty_worktree_requires_force",
                     format!("{code}: {message}"),
                 )
             }
         };
+        if dialog_open {
+            if let Some(deletion) = &mut self.menu.deletion {
+                deletion.force = force;
+            }
+            self.menu.error = Some(error.clone());
+        }
         if force {
             // Keep the record so reopening the dialog asks for the force removal
             // rather than repeating the refused one.
@@ -71,7 +96,7 @@ impl HerdrWindow {
     /// Apply the daemon's answer to whichever worktree dialog is waiting for it,
     /// and to a removal whose dialog has already closed.
     pub(crate) fn update_workspace_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.update_pending_removal(cx);
+        self.update_pending_removal(window, cx);
         if let Some(check) = &mut self.menu.close_check
             && check.poll()
         {
@@ -334,6 +359,13 @@ impl HerdrWindow {
                 }
             }
             if action == WorkspaceAction::DeleteWorktree {
+                if self.removal.as_ref().is_some_and(|removal| {
+                    removal.pending_for(self.menu.endpoint_target, &target.boot_id, &target.id)
+                }) {
+                    return Ok(Submission::Awaiting {
+                        focus_changed: false,
+                    });
+                }
                 let deletion = self
                     .menu
                     .deletion
@@ -380,7 +412,8 @@ impl HerdrWindow {
                     });
                 }
                 self.queue_worktree_removal(&boot, &workspace, force)?;
-                return Ok(Submission::Queued {
+                self.menu.error = None;
+                return Ok(Submission::Awaiting {
                     focus_changed: true,
                 });
             }
@@ -426,8 +459,6 @@ impl HerdrWindow {
                     self.fence_focus_change(None);
                 }
                 match submission {
-                    // The daemon's snapshot drops the workspace when the removal
-                    // lands, so there is nothing left to wait for here.
                     Submission::Queued { .. } => self.dismiss_menu(window, cx),
                     Submission::Awaiting { .. } => cx.notify(),
                 }
