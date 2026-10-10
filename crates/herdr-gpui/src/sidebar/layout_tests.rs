@@ -27,6 +27,8 @@ mod configured_rows;
 #[cfg(test)]
 mod device_footer;
 #[cfg(test)]
+mod devices_layout;
+#[cfg(test)]
 mod host_agents;
 #[cfg(test)]
 mod host_groups;
@@ -471,6 +473,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         pr_actions: Default::default(),
         usage: Default::default(),
         system_load: Default::default(),
+        devices_overview: Default::default(),
         checkpoints: Default::default(),
         port_forwards: Default::default(),
         #[cfg(feature = "cloud")]

@@ -33,6 +33,7 @@ pub enum Command {
     TabNumber(u8),
     ToggleSidebar,
     ToggleStatusBar,
+    DevicesOverview,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -46,6 +47,7 @@ pub enum Command {
     GoToSymbol,
     /// Go to a file in the focused pane's checkout.
     GoToFile,
+    Detach,
     Reconnect,
     Quit,
     Logs,
@@ -564,6 +566,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &[],
     },
     CommandInfo {
+        command: Command::DevicesOverview,
+        name: "devices_overview",
+        label: "Devices Overview",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -634,6 +642,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "go_to_file",
         label: "Go to File",
         shortcuts: &["cmd-o"],
+    },
+    CommandInfo {
+        command: Command::Detach,
+        name: "detach",
+        label: "Detach",
+        shortcuts: &[],
     },
     CommandInfo {
         command: Command::Reconnect,
@@ -835,6 +849,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::CopyMode
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
+        | Command::DevicesOverview
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
@@ -846,6 +861,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Palette
         | Command::GoToSymbol
         | Command::GoToFile
+        | Command::Detach
         | Command::Reconnect
         | Command::Quit
         | Command::Logs

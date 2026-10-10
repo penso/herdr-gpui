@@ -211,6 +211,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) pr_actions: crate::pr_actions::Actions,
     pub(crate) usage: crate::usage::Usage,
     pub(crate) system_load: crate::system_load::SystemLoad,
+    /// The Devices overview's activity history and open tabs.
+    pub(crate) devices_overview: crate::devices_overview::Overview,
     /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
     pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
@@ -505,6 +507,7 @@ impl HerdrWindow {
         if self.update_usage(cx) {
             cx.notify();
         }
+        self.poll_devices_overview(cx);
         if self.update_system_load() {
             cx.notify();
         }
@@ -552,9 +555,12 @@ impl HerdrWindow {
     }
 
     /// CPU and memory are sampled for every enabled host, while they are
-    /// shown or a host picker ranks hosts by them.
+    /// shown, a Devices overview is open, or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load && !self.dispatch_sampling() {
+        if !self.config.show_system_load
+            && !self.devices_overview_open()
+            && !self.dispatch_sampling()
+        {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -822,6 +828,7 @@ impl HerdrWindow {
             pr_actions: Default::default(),
             usage: Default::default(),
             system_load: Default::default(),
+            devices_overview: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
             #[cfg(feature = "cloud")]

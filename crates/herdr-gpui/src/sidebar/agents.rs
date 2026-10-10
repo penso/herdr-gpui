@@ -218,7 +218,7 @@ impl Indicators {
         }
     }
 
-    pub(super) fn color(self, status: AgentStatus) -> u32 {
+    pub(crate) fn color(self, status: AgentStatus) -> u32 {
         self.colors[match status {
             AgentStatus::Unknown => 0,
             AgentStatus::Idle => 1,
@@ -306,7 +306,7 @@ pub(super) fn status_mark(
 /// The word the daemon's `state_text` token shows for a status when its
 /// sidebar config asks for it. Lowercase, matching the daemon's status names
 /// and what the terminal client prints.
-pub(super) fn status_text(status: AgentStatus) -> &'static str {
+pub(crate) fn status_text(status: AgentStatus) -> &'static str {
     match status {
         AgentStatus::Working => "working",
         AgentStatus::Blocked => "blocked",

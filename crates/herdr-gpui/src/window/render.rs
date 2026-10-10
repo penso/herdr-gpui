@@ -590,6 +590,9 @@ impl Render for HerdrWindow {
                         Some(crate::browser::Location::Code { .. }) => {
                             self.render_code_tab(slot, &tab, gap, cx)
                         }
+                        Some(crate::browser::Location::Devices) => {
+                            self.render_devices_tab(slot, &tab, gap, cx)
+                        }
                         _ => self.render_review_tab(slot, &tab, gap, cx),
                     }
                 }

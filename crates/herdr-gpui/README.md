@@ -47,10 +47,10 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 `--dev` selects the `herdr-dev` config directory. Connection failure is displayed
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
-without input replay. Detach pauses retries for that endpoint until Reconnect.
-If local Herdr is missing, the installation prompt stays open across background
-retries until dismissed. Its Install button opens the Herdr website; after
-installing Herdr, choose Terminal > Reconnect to try again immediately.
+without input replay. The command palette's **Detach** disconnects the selected
+endpoint without closing the window or stopping the daemon, and pauses retries
+until Reconnect. It follows Herdr's `[keys].detach` binding (default: `Ctrl-B`,
+then `Q`); set `detach = ""` under `[keys]` to leave it unbound.
 A selected host that drops stays selected while it reconnects: its last terminal
 picture stays up, dimmed, under a card with the reason and a Reconnect now button,
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
@@ -634,14 +634,18 @@ space or punctuation trimmed before the ellipsis.
 
 The status bar shows the selected host's CPU and memory: a sparkline of recent
 CPU use and a memory meter, each with its current share, and cores, load
-averages, and memory in gigabytes in its tooltip. With more than one host, each
+averages, memory in gigabytes, free space on the volume holding the home
+directory, and uptime in its tooltip. With more than one host, each
 host row in the sidebar shows its own: right-aligned gauges after the name in
 compact layouts, and the sparkline and meter on a second line otherwise. This
 machine is read in process; each connected Linux or macOS remote host is read
 every two seconds over its own SSH shell, kept open while the host is connected
-(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
-systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
-or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+(`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS; `df -Pk
+"$HOME"` on both, with `/proc/uptime` on Linux and `kern.boottime` on macOS).
+Other remote systems, and remote hosts from a Windows client, show it as
+unavailable. Set top-level `show_system_load = false`, or turn off **Show CPU
+and memory** in Settings, to hide it and stop sampling while no
+[Devices overview](#devices-overview) is open.
 
 The coffee cup in the status bar keeps this machine's display on and stops it
 from sleeping when idle, for as long as the cup is full; click it again to let
@@ -776,6 +780,15 @@ spacing:
   differs from the name, and the pull request. Agents are single compact lines.
 - `minimal`: one line per row with only the status dot and the name, for narrow
   sidebars or long lists.
+
+The `devices` layout lists agents by device instead of workspaces. Every
+device gets a header, even when there is only one, with its connection dot
+and how many of its agents are working (`2/5`). The device's agents sit under
+the header in Herdr's normal rows, and the separate agents section is hidden.
+A search field under the heading keeps only the devices whose name, address,
+agents, or workspaces match every word typed. The
+[Devices overview](#devices-overview) shows the same devices with their
+activity and load.
 
 New installs start with `comfortable-rounded`: the first launch writes it into
 the new `config-gpui.local.toml`. Existing override files and migrated personal
@@ -1671,6 +1684,45 @@ C and C++ functions are not listed. Only local checkouts are indexed. Limits
 keep a huge repository responsive: at most 100,000 files are listed, files over
 1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
 kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
+
+## Devices Overview
+
+The activity card at the top of the device picker (the "All Devices" button
+at the foot of the sidebar), View > Devices Overview, or the command
+palette's "Devices Overview" opens a tab listing every device the window
+connects to. The card itself shows every device's agent activity for the
+last two hours and how many agents are working and blocked now. Like
+any tab, it can share a group with terminals, take a group of its own, or fill
+a window.
+
+- **Agent activity:** working agents, with blocked ones stacked above them, for
+  each of the last 120 minutes, with how many are working now and the peak.
+  "View all devices" adds one lane per device on the same time axis. Darker
+  cells mean more agents were working, red cells mean one was waiting for
+  input, and blank cells mean the device was not connected.
+- **Totals:** working, blocked, and idle or done agents across every device,
+  and how many devices are online.
+- **Devices:** one row per device with a dot per agent, how many are working
+  and blocked, CPU, memory, free space on the volume holding the home
+  directory, and uptime. Clicking a row opens it on that device's agents,
+  working first, with each agent's workspace and state; clicking an agent
+  shows its pane.
+
+The search field narrows the lanes and the table to devices whose name,
+address, agents, or workspaces match every word typed. Load columns wrap in
+narrow tabs. **Add Device** opens SSH setup, or WSL setup on Windows; it is
+unavailable in explicit-socket and development-catalog windows.
+
+The window keeps the activity history from the snapshots it already receives,
+so it starts empty each time the window opens; nothing is saved or asked of
+the daemon. Each minute holds the most agents seen working and waiting at
+once, and minutes the machine slept stay empty. A wall-clock jump forward of
+at least five seconds beyond monotonic elapsed time is treated like sleep;
+backward adjustments do not rewind or pause the history. CPU, memory, disk, and uptime
+come from the same sampling as the status bar's load, and every enabled host
+is sampled while an overview tab is open, even with the status bar's load
+hidden. A cloud machine has no host to sample, so its load columns stay
+empty.
 
 ## Editor Groups
 
