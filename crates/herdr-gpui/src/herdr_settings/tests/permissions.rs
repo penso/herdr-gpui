@@ -6,16 +6,30 @@ fn load_error(path: PathBuf) -> anyhow::Result<crate::Error> {
         .ok_or_else(|| anyhow::anyhow!("loaded a writable config path"))
 }
 
-fn permission_error(error: &crate::Error, expected_path: &Path, expected_mode: u32) {
-    assert!(matches!(
-        source(error),
-        Some(Error::InsecurePermissions { path, mode })
-            if path == expected_path && *mode == expected_mode
-    ));
+fn permission_error(
+    error: &crate::Error,
+    expected_path: &Path,
+    expected_mode: u32,
+) -> anyhow::Result<()> {
+    let Some(Error::InsecurePermissions { path, mode }) = source(error) else {
+        panic!("expected InsecurePermissions, got {:?}", source(error));
+    };
+    // The path goes into a `chmod go-w` command, which refuses `file/`.
+    assert!(
+        !path.as_os_str().as_encoded_bytes().ends_with(b"/"),
+        "{path:?}"
+    );
+    // A file is named by its resolved path, and macOS temp dirs resolve
+    // from /var to /private/var, so compare where both paths lead.
+    assert_eq!(
+        (fs::canonicalize(path)?, *mode),
+        (fs::canonicalize(expected_path)?, expected_mode)
+    );
     let message = error.to_string();
     assert!(message.contains("writable by group or others"));
     assert!(message.contains("chmod go-w"));
     assert!(message.contains("Reload settings"));
+    Ok(())
 }
 
 #[test]
@@ -29,7 +43,7 @@ fn group_writable_config_reports_path_and_recovers_after_chmod() -> anyhow::Resu
     fs::set_permissions(&path, fs::Permissions::from_mode(0o664))?;
 
     let error = load_error(path.clone())?;
-    permission_error(&error, &path, 0o664);
+    permission_error(&error, &path, 0o664)?;
     assert_eq!(fs::read_to_string(&path)?, text);
     assert_eq!(fs::metadata(&path)?.permissions().mode() & 0o777, 0o664);
 
@@ -55,9 +69,9 @@ fn group_writable_parent_reports_directory_then_file() -> anyhow::Result<()> {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o664))?;
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o775))?;
 
-    permission_error(&load_error(path.clone())?, &parent, 0o775);
+    permission_error(&load_error(path.clone())?, &parent, 0o775)?;
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o755))?;
-    permission_error(&load_error(path.clone())?, &path, 0o664);
+    permission_error(&load_error(path.clone())?, &path, 0o664)?;
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644))?;
     assert_eq!(Settings::load_path(path)?.theme_name, "vesper");
     Ok(())
@@ -77,7 +91,7 @@ fn writable_ancestor_reports_the_ancestor_path() -> anyhow::Result<()> {
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o700))?;
     fs::set_permissions(&ancestor, fs::Permissions::from_mode(0o775))?;
 
-    permission_error(&load_error(path)?, &ancestor, 0o775);
+    permission_error(&load_error(path)?, &ancestor, 0o775)?;
     Ok(())
 }
 
@@ -99,7 +113,7 @@ fn writable_lock_reports_the_lock_and_leaves_config_unchanged() -> anyhow::Resul
             .ok_or_else(|| anyhow::anyhow!("saved through writable path"))?,
         &lock,
         0o664,
-    );
+    )?;
     assert_eq!(fs::read(path)?, original);
     Ok(())
 }
@@ -121,7 +135,7 @@ fn permissions_changed_after_load_prevent_saving() -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("saved through writable path"))?,
         &path,
         0o664,
-    );
+    )?;
     assert_eq!(fs::read(path)?, original);
     Ok(())
 }
