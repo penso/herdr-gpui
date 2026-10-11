@@ -162,7 +162,9 @@ class RealChangelogTests(unittest.TestCase):
                            capture_output=True, text=True, timeout=180, check=True)
             changelog = (Path(temp) / "CHANGELOG.md").read_text()
         self.assertIn("# Changelog", changelog)
-        self.assertIn("## [v20260920.3]", changelog)
+        # No "## [v20260920.3]" check: that section is rightly absent when nothing
+        # user-facing is unreleased, such as on a release commit. The beta test
+        # below covers the heading against a scratch history.
         # Merge commits and skipped types never reach a user-facing changelog.
         self.assertNotIn("Merge pull request", changelog)
         self.assertNotIn("### Chore", changelog)
@@ -197,11 +199,17 @@ class RealChangelogTests(unittest.TestCase):
         self.assertNotIn("## [v20260906.2]", notes)
 
     def render(self, *messages):
+        # A scratch history whose head is never tagged, so the probes are always
+        # unreleased; in the checkout, a release commit at HEAD renders nothing.
         probes = [argument for message in messages for argument in ("--with-commit", message)]
-        return subprocess.run(["git-cliff", "--config", "cliff.toml", "--unreleased",
-                               "--tag", "v20260920.3", "--strip", "header", *probes],
-                              cwd=ROOT, capture_output=True, text=True, timeout=180,
-                              check=True).stdout.split("## [v20260920.3]")[0]
+        with tempfile.TemporaryDirectory(prefix="herdr-changelog-render-") as temp:
+            env = {"PATH": os.environ["PATH"], "HOME": temp}
+            repo = history(Path(temp), env, ("feat: base", "v20260901.1"),
+                           ("test: head", None)).parents[2]
+            return subprocess.run(["git-cliff", "--config", "cliff.toml", "--unreleased",
+                                   "--tag", "v20260920.3", "--strip", "header", *probes],
+                                  cwd=repo, env=env, capture_output=True, text=True,
+                                  timeout=180, check=True).stdout.split("## [v20260920.3]")[0]
 
     def test_the_type_chooses_the_group_and_the_subject_is_the_entry(self):
         rendered = self.render("feat(sidebar): add a pinned section",
