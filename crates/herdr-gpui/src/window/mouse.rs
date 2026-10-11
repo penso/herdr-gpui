@@ -249,6 +249,7 @@ impl HerdrWindow {
                 return false;
             }
             let hit = self.gesture_hit(gesture, event.position);
+            let waits = hit.is_none() && self.gesture_waits(gesture);
             let kind = button(gesture.button).map(ClientMouseKind::Drag);
             if let (Some(hit), Some(kind)) = (hit, kind) {
                 // Like a terminal's button-event tracking, motion is reported
@@ -262,12 +263,29 @@ impl HerdrWindow {
                 {
                     gesture.hit = hit;
                 }
-            } else {
+            } else if !waits {
                 self.cancel_terminal_mouse(cx);
             }
             return true;
         }
         false
+    }
+
+    /// Whether a gesture's frame is only catching up: the surface for the
+    /// latest snapshot has not arrived, or the frame is sized for another
+    /// client. It is still the same press on the same connection, so the
+    /// application keeps its button until the next coherent frame decides,
+    /// rather than taking an early release as the end of its selection.
+    fn gesture_waits(&self, gesture: &Gesture) -> bool {
+        self.menu.page.is_none()
+            && gesture.epoch == self.selection_epoch
+            && gesture.generation == self.selected_generation
+            && self
+                .live
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.boot_id == gesture.boot)
+            && (!self.live.surface_ready() || !self.surface_matches_options())
     }
 
     pub(crate) fn terminal_mouse_hover(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
