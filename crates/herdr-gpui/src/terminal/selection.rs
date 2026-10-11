@@ -15,6 +15,7 @@ use herdr_client::{
     protocol::{CellData, FrameData, PaneSurfaceFrame},
     scrollback::{TextPoint, TextRange},
 };
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Range;
 use unicode_width::UnicodeWidthStr;
 
@@ -350,6 +351,9 @@ pub(crate) struct Selection {
     anchor: Edge,
     head: Edge,
     dragging: bool,
+    /// A hash of each selected row on screen when the drag ended, by content
+    /// row; see [`Self::remember_text`].
+    seen: Vec<(u32, u64)>,
 }
 
 impl Selection {
@@ -376,6 +380,7 @@ impl Selection {
             anchor: origin.0,
             head: origin.1,
             dragging: true,
+            seen: Vec::new(),
         })
     }
 
@@ -417,6 +422,80 @@ impl Selection {
     /// Ends the drag. `false` when the gesture had already finished.
     pub(crate) fn release(&mut self) -> bool {
         std::mem::replace(&mut self.dragging, false)
+    }
+
+    /// Remembers the text the selected rows on screen hold, so a kept
+    /// highlight can tell when the terminal writes over it.
+    pub(crate) fn remember_text(
+        &mut self,
+        surface: &PaneSurfaceFrame,
+        cell_width: f32,
+        cell_height: f32,
+    ) {
+        self.seen = self.row_hashes(surface, cell_width, cell_height);
+    }
+
+    /// False once a remembered row shows other text: the screen was cleared or
+    /// rewritten, or history trimmed under it, and the highlight would mark
+    /// cells the user never chose. Rows not on screen, then or now, are not
+    /// evidence either way.
+    pub(crate) fn text_unchanged(
+        &self,
+        surface: &PaneSurfaceFrame,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> bool {
+        self.seen.is_empty()
+            || self
+                .row_hashes(surface, cell_width, cell_height)
+                .iter()
+                .all(|(row, hash)| {
+                    // Spans run in row order, so `seen` is sorted by row.
+                    self.seen
+                        .binary_search_by_key(row, |(seen, _)| *seen)
+                        .ok()
+                        .and_then(|index| self.seen.get(index))
+                        .is_none_or(|(_, seen)| seen == hash)
+                })
+    }
+
+    /// A hash of the text in each selected row the surface shows, by content
+    /// row. Text only: a recolor, the cursor passing, or a pane wide enough to
+    /// pad a row with more blanks leaves the choice valid.
+    fn row_hashes(
+        &self,
+        surface: &PaneSurfaceFrame,
+        cell_width: f32,
+        cell_height: f32,
+    ) -> Vec<(u32, u64)> {
+        let (Some(region), Some(frame)) = (
+            region(surface, &self.target, cell_width, cell_height),
+            frame(surface, &self.target),
+        ) else {
+            return Vec::new();
+        };
+        let (top, first, edge) = (region.top, region.rows.start, region.columns.end);
+        self.spans(region)
+            .filter_map(|(row, columns)| {
+                let offset = usize::from(row) * usize::from(frame.width);
+                let cells = frame
+                    .cells
+                    .get(offset + usize::from(columns.start)..offset + usize::from(columns.end))?;
+                // A row selected to the edge gains blanks when the pane widens.
+                // They are padding there, and only there, as `text` trims them.
+                let text = if columns.end >= edge {
+                    cells
+                        .iter()
+                        .rposition(|cell| !shown(cell).trim_end().is_empty())
+                        .map_or(&cells[..0], |last| &cells[..=last])
+                } else {
+                    cells
+                };
+                let mut hasher = DefaultHasher::new();
+                text.iter().for_each(|cell| shown(cell).hash(&mut hasher));
+                Some((top.saturating_add(u32::from(row - first)), hasher.finish()))
+            })
+            .collect()
     }
 
     /// The pane or popup the selection is in.

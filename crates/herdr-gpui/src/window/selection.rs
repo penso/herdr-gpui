@@ -22,8 +22,8 @@ const AUTOSCROLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// What a drag needs beyond the selection itself: where the pointer last was,
 /// so the selection can follow the pane as it scrolls under a still pointer,
-/// the last scroll it asked for, and the copy the daemon is reading for a
-/// released selection.
+/// the last scroll it asked for, the last frame a kept highlight was checked
+/// against, and the copy the daemon is reading for a released selection.
 #[derive(Default)]
 pub(crate) struct Follow {
     pointer: Option<Point<Pixels>>,
@@ -32,6 +32,9 @@ pub(crate) struct Follow {
     /// answer can arrive before the frame that shows it, so the next step
     /// continues from here instead of repeating this one.
     sent: Option<(String, u64)>,
+    /// The projection and surface revisions a kept highlight was last checked
+    /// against, so an unchanged frame is not hashed again every tick.
+    checked: Option<(u64, u64)>,
     read: Option<(Arc<Mutex<Inbox>>, String)>,
 }
 
@@ -113,6 +116,12 @@ impl HerdrWindow {
             return false;
         }
         self.selection_follow.pointer = None;
+        let cell_height = self.config.terminal.line_height();
+        if let (Some(selection), Some(surface)) =
+            (&mut self.selection, self.live.surface.as_deref())
+        {
+            selection.remember_text(surface, self.cell_width, cell_height);
+        }
         let selected = !self.selection_is_empty();
         if selected && !self.copy_on_select() {
             cx.notify();
@@ -129,6 +138,26 @@ impl HerdrWindow {
             .as_ref()
             .is_some_and(|selection| !selection.dragging())
             && !self.selection_is_empty()
+    }
+
+    /// Drops a kept highlight once the terminal writes other text into the
+    /// rows it marks, as terminal emulators do, rather than leaving it over
+    /// cells the user never chose, where a later copy would take them.
+    fn retire_overwritten_selection(&mut self, cx: &mut Context<Self>) {
+        let cell_height = self.config.terminal.line_height();
+        let (Some(selection), Some(surface)) = (&self.selection, self.live.surface.as_deref())
+        else {
+            return;
+        };
+        let revision = (surface.projection_revision, surface.surface_revision);
+        if selection.dragging() || self.selection_follow.checked.replace(revision) == Some(revision)
+        {
+            return;
+        }
+        if !selection.text_unchanged(surface, self.cell_width, cell_height) {
+            self.selection = None;
+            cx.notify();
+        }
     }
 
     /// Copies a selection kept on release, as Herdr's Ctrl-C or Cmd-C does,
@@ -234,6 +263,7 @@ impl HerdrWindow {
     /// as the pane moves, and copies a read that has come back.
     pub(crate) fn follow_selection(&mut self, cx: &mut Context<Self>) {
         self.finish_selection_read(cx);
+        self.retire_overwritten_selection(cx);
         let Some(pointer) = self.selection_follow.pointer else {
             return;
         };

@@ -252,6 +252,12 @@ impl HerdrWindow {
             let waits = hit.is_none() && self.gesture_waits(gesture);
             let kind = button(gesture.button).map(ClientMouseKind::Drag);
             if let (Some(hit), Some(kind)) = (hit, kind) {
+                // Like a terminal's button-event tracking, motion is reported
+                // only when it reaches another cell, or another pixel for an
+                // application that asked for pixels.
+                if hit == gesture.hit {
+                    return true;
+                }
                 if self.send_mouse(&hit, kind, event.modifiers, cx)
                     && let Some(gesture) = &mut self.terminal_mouse
                 {
