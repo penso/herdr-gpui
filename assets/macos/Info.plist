@@ -13,6 +13,7 @@
     <key>CFBundleVersion</key><string>1</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSMicrophoneUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to the microphone.</string>
+    <key>NSPhotoLibraryUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to your photo library.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Herdr looks for computers on your local network that offer SSH, to suggest them when you add a device.</string>
     <key>NSBonjourServices</key>
     <array>
