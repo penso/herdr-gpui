@@ -162,13 +162,25 @@ class RealChangelogTests(unittest.TestCase):
                            capture_output=True, text=True, timeout=180, check=True)
             changelog = (Path(temp) / "CHANGELOG.md").read_text()
         self.assertIn("# Changelog", changelog)
-        self.assertIn("## [v20260920.3]", changelog)
+        # No "## [v20260920.3]" check: that section is rightly absent when nothing
+        # user-facing is unreleased, such as on a release commit. The beta test
+        # below covers the heading against a scratch history.
         # Merge commits and skipped types never reach a user-facing changelog.
         self.assertNotIn("Merge pull request", changelog)
         self.assertNotIn("### Chore", changelog)
-        published = subprocess.run(["git", "-C", str(ROOT), "tag", "--list", "v20*"],
-                                   capture_output=True, text=True, check=True).stdout.split()
-        for tag in published:
+        # git-cliff gives a commit one section, under its newest tag. A release
+        # that failed after tagging can leave an older tag on the same commit
+        # (v20260930.1 beside v20260930.2), and that one has no section.
+        listing = subprocess.run(
+            ["git", "-C", str(ROOT), "tag", "--list", "v20*",
+             "--format=%(refname:short) %(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)"],
+            capture_output=True, text=True, check=True).stdout
+        newest = {}
+        for tag, commit in (line.split()[:2] for line in listing.splitlines()):
+            key = tuple(int(part) for part in tag[1:].split("."))
+            if commit not in newest or key > newest[commit][0]:
+                newest[commit] = (key, tag)
+        for _, tag in newest.values():
             self.assertIn(f"## [{tag}]", changelog)
 
     def test_stable_notes_list_every_unpromoted_beta_change(self):
@@ -187,11 +199,17 @@ class RealChangelogTests(unittest.TestCase):
         self.assertNotIn("## [v20260906.2]", notes)
 
     def render(self, *messages):
+        # A scratch history whose head is never tagged, so the probes are always
+        # unreleased; in the checkout, a release commit at HEAD renders nothing.
         probes = [argument for message in messages for argument in ("--with-commit", message)]
-        return subprocess.run(["git-cliff", "--config", "cliff.toml", "--unreleased",
-                               "--tag", "v20260920.3", "--strip", "header", *probes],
-                              cwd=ROOT, capture_output=True, text=True, timeout=180,
-                              check=True).stdout.split("## [v20260920.3]")[0]
+        with tempfile.TemporaryDirectory(prefix="herdr-changelog-render-") as temp:
+            env = {"PATH": os.environ["PATH"], "HOME": temp}
+            repo = history(Path(temp), env, ("feat: base", "v20260901.1"),
+                           ("test: head", None)).parents[2]
+            return subprocess.run(["git-cliff", "--config", "cliff.toml", "--unreleased",
+                                   "--tag", "v20260920.3", "--strip", "header", *probes],
+                                  cwd=repo, env=env, capture_output=True, text=True,
+                                  timeout=180, check=True).stdout.split("## [v20260920.3]")[0]
 
     def test_the_type_chooses_the_group_and_the_subject_is_the_entry(self):
         rendered = self.render("feat(sidebar): add a pinned section",

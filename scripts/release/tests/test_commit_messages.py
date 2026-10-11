@@ -1,6 +1,7 @@
 """Run: python3 -m unittest discover -s scripts/release/tests -v"""
 import importlib.util
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -73,12 +74,21 @@ class RuleTests(unittest.TestCase):
                             "diff --git a/x b/x\n+Added a line.\n")
         self.assertRejected("# everything was a comment\n", "empty")
 
+    # Published commits that break a rule. History is not rewritten, so these
+    # are listed once here; any other violation still fails.
+    KNOWN_VIOLATIONS = {
+        # A 94-character subject, merged after the rule and shipped in v20261005.1.
+        "2f0347d1b3f078d3e190f4f124ef0c530713753c",
+    }
+
     def test_this_repository_already_obeys_every_rule(self):
         first = subprocess.run(["git", "-C", str(ROOT), "rev-list", "--max-parents=0", "HEAD"],
                                capture_output=True, text=True, check=True).stdout.split()[0]
         result = subprocess.run(["python3", str(CHECKER), "range", f"{first}..HEAD"],
                                 cwd=ROOT, capture_output=True, text=True, timeout=120)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        flagged = set(re.findall(r"^[0-9a-f]{40}$", result.stderr, re.MULTILINE))
+        self.assertLessEqual(flagged, self.KNOWN_VIOLATIONS, result.stderr)
+        self.assertEqual(result.returncode != 0, bool(flagged), result.stderr)
 
 
 class HookTests(unittest.TestCase):
