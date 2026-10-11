@@ -169,7 +169,13 @@ fn resolve(path: &Path) -> Result<PathBuf, Error> {
             match fs::canonicalize(existing) {
                 Ok(target) => {
                     let missing = path.strip_prefix(existing).map_err(|_| Error::UnsafePath)?;
-                    real = Some(target.join(missing));
+                    // Joining an empty tail would add a trailing slash, which then
+                    // reaches the `chmod go-w` repair command and makes it fail.
+                    real = Some(if missing.as_os_str().is_empty() {
+                        target
+                    } else {
+                        target.join(missing)
+                    });
                 }
                 // A dangling link stays as given, and `read_at` refuses it.
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
