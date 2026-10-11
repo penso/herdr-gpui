@@ -50,7 +50,11 @@ pub(super) struct Asset {
 pub(super) struct Offer {
     pub(super) manifest: Manifest,
     pub(super) asset: Asset,
+    // Only the POSIX installer reads the signed material back (see
+    // `same_signed_manifest`); it is kept and tested everywhere regardless.
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub(super) manifest_bytes: Vec<u8>,
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub(super) signature: Vec<u8>,
     /// GitHub's own release notes, shown before updating. Display-only and
     /// **untrusted**: unlike `manifest`, this is not covered by the signature,
@@ -65,6 +69,7 @@ impl Offer {
     /// the offer rebuilt from a signed request (`install::authenticate`) has
     /// none — comparing whole offers would reject a valid download whenever a
     /// release publishes notes.
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub(super) fn same_signed_manifest(&self, other: &Self) -> bool {
         self.manifest_bytes == other.manifest_bytes && self.signature == other.signature
     }
