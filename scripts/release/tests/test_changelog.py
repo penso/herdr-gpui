@@ -166,9 +166,19 @@ class RealChangelogTests(unittest.TestCase):
         # Merge commits and skipped types never reach a user-facing changelog.
         self.assertNotIn("Merge pull request", changelog)
         self.assertNotIn("### Chore", changelog)
-        published = subprocess.run(["git", "-C", str(ROOT), "tag", "--list", "v20*"],
-                                   capture_output=True, text=True, check=True).stdout.split()
-        for tag in published:
+        # git-cliff gives a commit one section, under its newest tag. A release
+        # that failed after tagging can leave an older tag on the same commit
+        # (v20260930.1 beside v20260930.2), and that one has no section.
+        listing = subprocess.run(
+            ["git", "-C", str(ROOT), "tag", "--list", "v20*",
+             "--format=%(refname:short) %(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)"],
+            capture_output=True, text=True, check=True).stdout
+        newest = {}
+        for tag, commit in (line.split()[:2] for line in listing.splitlines()):
+            key = tuple(int(part) for part in tag[1:].split("."))
+            if commit not in newest or key > newest[commit][0]:
+                newest[commit] = (key, tag)
+        for _, tag in newest.values():
             self.assertIn(f"## [{tag}]", changelog)
 
     def test_stable_notes_list_every_unpromoted_beta_change(self):
