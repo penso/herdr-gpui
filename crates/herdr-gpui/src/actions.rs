@@ -32,8 +32,13 @@ actions!(edit, [Cut, Copy, Paste, SelectAll]);
 
 /// No element sets this context, so these bindings never match a keystroke.
 /// They exist only so the Edit menu shows its standard shortcuts. The focused
-/// element's key handler keeps owning Cmd-X/C/V/A, as it did before the menu.
+/// element's key handler keeps owning the Edit keys, as it did before the menu.
 const EDIT_MENU_LABELS: &str = "EditMenuLabels";
+
+/// Linux and Windows edit with Ctrl-Shift (and fields with plain Ctrl), so a
+/// pane keeps plain Ctrl; Windows also keeps Win+X/C/V/A for itself. macOS
+/// edits with Cmd.
+pub(crate) const CTRL_EDIT_KEYS: bool = cfg!(any(target_os = "linux", target_os = "windows"));
 
 /// The keystroke an Edit menu item stands for. A menu click replays it
 /// through the focused element's own key handler, so choosing the item and
@@ -42,9 +47,9 @@ pub(crate) fn edit_key(key: &str) -> KeyDownEvent {
     KeyDownEvent {
         keystroke: Keystroke {
             modifiers: Modifiers {
-                platform: !cfg!(target_os = "linux"),
-                control: cfg!(target_os = "linux"),
-                shift: cfg!(target_os = "linux"),
+                platform: !CTRL_EDIT_KEYS,
+                control: CTRL_EDIT_KEYS,
+                shift: CTRL_EDIT_KEYS,
                 ..Modifiers::default()
             },
             key: key.into(),
@@ -135,8 +140,13 @@ pub(crate) fn bind_keys(cx: &mut App) {
     }
 }
 
-/// The Edit menu's keystrokes: cut, copy, paste, and select all.
-pub(crate) const EDIT_KEYS: [&str; 4] = if cfg!(target_os = "linux") {
+/// The Edit menu's keystrokes: cut, copy, paste, and select all. Windows
+/// labels paste with plain Ctrl-V, which a pane takes as the app's paste
+/// while the clipboard holds text, because Ctrl-Shift-V is often taken
+/// system-wide there.
+pub(crate) const EDIT_KEYS: [&str; 4] = if cfg!(target_os = "windows") {
+    ["ctrl-shift-x", "ctrl-shift-c", "ctrl-v", "ctrl-shift-a"]
+} else if CTRL_EDIT_KEYS {
     [
         "ctrl-shift-x",
         "ctrl-shift-c",
@@ -147,14 +157,15 @@ pub(crate) const EDIT_KEYS: [&str; 4] = if cfg!(target_os = "linux") {
     ["cmd-x", "cmd-c", "cmd-v", "cmd-a"]
 };
 
-/// Fields also accept plain Ctrl on Linux, where there is no terminal
-/// program to receive it. Keep the terminal's Ctrl-Shift aliases working in
-/// fields so Edit menu clicks and keyboard shortcuts share the same path.
+/// Fields also accept plain Ctrl on Linux and Windows, where there is no
+/// terminal program to receive it. Keep the terminal's Ctrl-Shift aliases
+/// working in fields so Edit menu clicks and keyboard shortcuts share the
+/// same path.
 pub(crate) fn edit_modifiers(modifiers: Modifiers) -> bool {
     !modifiers.alt
         && !modifiers.function
         && ((modifiers.platform && !modifiers.control && !modifiers.shift)
-            || (cfg!(target_os = "linux") && modifiers.control && !modifiers.platform))
+            || (CTRL_EDIT_KEYS && modifiers.control && !modifiers.platform))
 }
 
 /// macOS's Hide, Hide Others, and Minimize, bound there alone.
