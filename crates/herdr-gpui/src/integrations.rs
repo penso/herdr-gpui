@@ -1,5 +1,5 @@
 //! Daemon-host integration management. No native credentials or local file writes.
-use crate::{HerdrWindow, connection::IntegrationInbox};
+use crate::{HerdrWindow, connection::IntegrationInbox, usage};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 use serde_json::Value;
@@ -32,6 +32,7 @@ struct Integration {
     label: String,
     command: String,
     available: bool,
+    usage_provider: Option<usize>,
     state: State,
 }
 
@@ -66,6 +67,15 @@ fn result<'a>(response: &'a Value, kind: &str) -> Result<&'a Value, ResponseErro
     Ok(result)
 }
 
+fn usage_provider(command: &str) -> Option<usize> {
+    // Factory's registered usage service is named Droid in its CLI.
+    let id = match command {
+        "droid" => "factory",
+        command => command,
+    };
+    usage::providers().position(|provider| provider.id() == id)
+}
+
 fn parse_list(response: &Value) -> Result<Vec<Integration>, ResponseError> {
     let rows = result(response, "integration_list")?["integrations"]
         .as_array()
@@ -76,6 +86,7 @@ fn parse_list(response: &Value) -> Result<Vec<Integration>, ResponseError> {
     let mut integrations = Vec::<Integration>::with_capacity(rows.len());
     for row in rows {
         let target = text(&row["target"], 64)?;
+        let command = text(&row["command"], MAX_TEXT)?;
         if !target.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
             || integrations.iter().any(|item| item.target == target)
         {
@@ -84,8 +95,9 @@ fn parse_list(response: &Value) -> Result<Vec<Integration>, ResponseError> {
         integrations.push(Integration {
             target: target.into(),
             label: text(&row["label"], 256)?.into(),
-            command: text(&row["command"], MAX_TEXT)?.into(),
+            command: command.into(),
             available: row["available"].as_bool().ok_or(ResponseError::Invalid)?,
+            usage_provider: usage_provider(command),
             state: match row["state"].as_str() {
                 Some("not_installed") => State::NotInstalled,
                 Some("current") => State::Current,
@@ -116,7 +128,7 @@ fn parse_install(response: &Value, target: &str) -> Result<Vec<String>, Response
 }
 
 #[derive(Clone)]
-struct Scope {
+pub(crate) struct Scope {
     endpoint: String,
     host: String,
     epoch: u64,
@@ -174,6 +186,64 @@ impl Integrations {
 }
 
 impl HerdrWindow {
+    pub(crate) fn integration_scope(&self) -> crate::Result<Scope> {
+        let endpoint = self
+            .endpoints
+            .get(self.selected_endpoint)
+            .ok_or(crate::Error::NotConnected)?;
+        if !endpoint.live.status.is_connected() {
+            return Err(crate::Error::NotConnected);
+        }
+        let snapshot = endpoint
+            .live
+            .snapshot
+            .as_ref()
+            .ok_or(crate::Error::NoSnapshot)?;
+        Ok(Scope {
+            endpoint: endpoint.id.clone(),
+            host: endpoint.label.clone(),
+            epoch: self.selection_epoch,
+            generation: endpoint.generation,
+            boot: snapshot.boot_id.clone(),
+            inbox: endpoint.connection.integrations.clone(),
+        })
+    }
+
+    /// Compare borrowed connection metadata without cloning a scope on every
+    /// terminal notification. A disconnected source is one settled empty scope.
+    pub(crate) fn integration_scope_changed(&self, previous: Option<&Scope>) -> bool {
+        let ready = self
+            .endpoints
+            .get(self.selected_endpoint)
+            .is_some_and(|endpoint| {
+                endpoint.live.status.is_connected() && endpoint.live.snapshot.is_some()
+            });
+        if !ready {
+            return previous.is_some();
+        }
+        previous.is_none_or(|scope| !self.integration_scope_current(scope))
+    }
+
+    /// CLI availability is daemon metadata, independent of usage credentials
+    /// and of whether the daemon's integration hooks have been installed.
+    pub(crate) fn installed_usage_providers(&self) -> [bool; usage::PROVIDER_COUNT] {
+        let mut selected = [false; usage::PROVIDER_COUNT];
+        if self
+            .integrations
+            .scope
+            .as_ref()
+            .is_none_or(|scope| !self.integration_scope_current(scope))
+        {
+            return selected;
+        }
+        for row in self.integrations.rows.iter().filter(|row| row.available) {
+            if let Some(index) = row.usage_provider {
+                selected[index] = true;
+            }
+        }
+        selected
+    }
+
     fn integration_scope_current(&self, scope: &Scope) -> bool {
         self.endpoints
             .get(self.selected_endpoint)
@@ -207,26 +277,8 @@ impl HerdrWindow {
         self.integrations.error = None;
         self.integrations.scope = None;
         let request = (|| {
-            let endpoint = self
-                .endpoints
-                .get(self.selected_endpoint)
-                .ok_or(crate::Error::NotConnected)?;
-            if !endpoint.live.status.is_connected() {
-                return Err(crate::Error::NotConnected);
-            }
-            let snapshot = endpoint
-                .live
-                .snapshot
-                .as_ref()
-                .ok_or(crate::Error::NoSnapshot)?;
-            let scope = Scope {
-                endpoint: endpoint.id.clone(),
-                host: endpoint.label.clone(),
-                epoch: self.selection_epoch,
-                generation: endpoint.generation,
-                boot: snapshot.boot_id.clone(),
-                inbox: endpoint.connection.integrations.clone(),
-            };
+            let scope = self.integration_scope()?;
+            let endpoint = &self.endpoints[self.selected_endpoint];
             let id = endpoint.connection.request_integration(
                 &scope.boot,
                 Method::IntegrationList,
@@ -457,6 +509,8 @@ mod tests {
     use super::*;
     use core::prelude::v1::test;
     use serde_json::json;
+
+    mod installed_providers;
 
     fn list() -> Value {
         json!({"result":{"type":"integration_list","integrations":[{

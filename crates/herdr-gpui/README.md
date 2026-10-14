@@ -843,6 +843,21 @@ These switches affect GPUI only; they do not change
 the daemon or its plugins. Header text uses GPUI's standard truncation: character boundaries, with trailing
 space or punctuation trimmed before the ellipsis.
 
+**Settings > Status bar > Usage services** lists detected services on the
+selected host and turns each one off or on. Available agent commands,
+provider-specific sign-in files, cached usage, and sign-in permission requests
+can make a service appear, even when Usage or that service is disabled.
+Known saved provider settings or explicit off preferences also keep services
+selectable after restart, including API-key-only services without cached usage.
+**Turn all off** followed by one click keeps a single listed service; bulk
+changes leave unlisted services' preferences alone. Controls dim and stop
+accepting clicks during preference saves or reloads.
+The choice is saved as `[usage] hide_providers` and applies while Settings
+stays open, including fresh quota reads while its Status bar page is in the
+foreground. A disabled service is never contacted and its credential contents
+are not read; offline discovery checks only installation metadata. Existing
+comments within `hide_providers` are preserved.
+
 The status bar shows the selected host's CPU and memory: a sparkline of recent
 CPU use and a memory meter, each with its current share, and cores, load
 averages, memory in gigabytes, free space on the volume holding the home

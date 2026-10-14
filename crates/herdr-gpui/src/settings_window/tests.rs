@@ -19,6 +19,7 @@ mod theme_drafts;
 #[cfg(unix)]
 mod theme_recovery;
 mod theme_sources;
+mod usage_source;
 mod window_commands;
 mod window_lifecycle;
 

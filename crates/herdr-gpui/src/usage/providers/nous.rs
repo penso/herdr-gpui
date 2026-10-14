@@ -15,7 +15,7 @@ use crate::{
     Error, Result,
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
         values::invalid,
     },
@@ -55,6 +55,12 @@ impl Service for Nous {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        // The shared file is Nous-specific; Hermes's general auth.json can
+        // belong to other providers and is not evidence for Nous by itself.
+        detector.file_exists(&credential_path("shared/nous_auth.json"))
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let (token, stored_portal) = match probe.setting("token") {
             Some(token) => (token, None),
@@ -81,13 +87,17 @@ impl Service for Nous {
     }
 }
 
+fn credential_path(rest: &str) -> HostPath {
+    HostPath::env_or("HERMES_HOME", ".hermes", rest)
+}
+
 /// Hermes's stored token and portal, from the first auth file with an
 /// unexpired one. Some(Err) when a login exists but every token expired.
 fn hermes(probe: &mut Probe) -> Option<Result<(Secret, Option<String>)>> {
     let now = SystemTime::now();
     let mut expired = false;
     for rest in ["auth.json", "shared/nous_auth.json"] {
-        let Some(file) = probe.file(&HostPath::env_or("HERMES_HOME", ".hermes", rest)) else {
+        let Some(file) = probe.file(&credential_path(rest)) else {
             continue;
         };
         let Some(state) = state(probe, &file) else {

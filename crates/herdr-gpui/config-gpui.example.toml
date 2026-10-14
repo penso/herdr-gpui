@@ -485,7 +485,8 @@ size = 12
 # inline = true
 # Show these even when no sign-in was found, with what to set up.
 # show_providers = ["cursor", "openrouter"]
-# Never show these, even when signed in.
+# Never read or show these, even when signed in; to see only Claude, list
+# every other id. Also under Settings > Status bar > Usage services.
 # hide_providers = []
 # Let providers listed in show_providers read their web session from Chrome
 # (and Brave, Edge, Arc, Chromium) or Safari when no cookie is set below.

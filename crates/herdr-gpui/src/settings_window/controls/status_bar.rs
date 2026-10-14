@@ -9,6 +9,16 @@ use crate::config::{
 
 impl SettingsWindow {
     pub(super) fn render_status_bar_controls(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(24.))
+            .min_w_0()
+            .child(self.render_status_bar_items(cx))
+            .child(self.render_usage_provider_controls(cx))
+    }
+
+    fn render_status_bar_items(&self, cx: &mut Context<Self>) -> Div {
         let items = self.config.status_bar;
         let usage = self.config.usage.show;
         let system_load = self.config.show_system_load;

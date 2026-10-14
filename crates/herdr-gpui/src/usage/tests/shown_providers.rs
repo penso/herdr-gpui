@@ -31,7 +31,7 @@ fn the_status_bar_shows_the_two_closest_to_a_limit() {
     });
     let ids = |limit, chosen: Option<&str>| {
         entry
-            .headline(limit, chosen.map(provider))
+            .headline(&UsageConfig::default(), limit, chosen.map(provider))
             .iter()
             .map(|reading| reading.provider.id())
             .collect::<Vec<_>>()

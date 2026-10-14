@@ -52,12 +52,15 @@ fn a_denied_prompt_is_reported_for_its_grant_to_be_dropped() {
     begin(&mut usage, &Host::Local, now);
     usage.apply(
         Message::Reading(Host::Local, zed, Err(Error::UsageKeychainAccess)),
+        &UsageConfig::default(),
         now,
     );
     let entry = usage.current().unwrap();
     assert_eq!(entry.readings[0].access, Some(Access::Needed));
     assert_eq!(
-        entry.headline(crate::usage::HEADLINE, None).len(),
+        entry
+            .headline(&UsageConfig::default(), crate::usage::HEADLINE, None)
+            .len(),
         1,
         "a sign-in waiting on Keychain access gets a status bar segment to open"
     );
@@ -65,6 +68,7 @@ fn a_denied_prompt_is_reported_for_its_grant_to_be_dropped() {
 
     usage.apply(
         Message::Reading(Host::Local, zed, Err(Error::UsageKeychainDenied)),
+        &UsageConfig::default(),
         now,
     );
     assert_eq!(
@@ -81,7 +85,11 @@ fn allowing_reads_at_once_and_forgets_refusals_once() {
     let zed = provider("zed");
     let mut usage = Usage::default();
     begin(&mut usage, &Host::Local, now);
-    usage.apply(Message::Done(Host::Local, Ok(())), now);
+    usage.apply(
+        Message::Done(Host::Local, Ok(())),
+        &UsageConfig::default(),
+        now,
+    );
     // Unlike Refresh, Allow is not spaced: macOS should ask right away.
     usage.allow(zed, now + Duration::from_secs(1));
     assert_eq!(

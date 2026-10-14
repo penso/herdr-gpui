@@ -18,7 +18,7 @@ use crate::{
     Error, Result,
     usage::{
         model::{Account, DAY, Kind, Provider, Report, Section, Window},
-        probe::{HostPath, Part, Probe, Request, Secret},
+        probe::{Detector, HostPath, Part, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
         values::invalid,
     },
@@ -86,8 +86,12 @@ impl Service for Gemini {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
-        let credentials = probe.file(&HostPath::home(".gemini/oauth_creds.json"))?;
+        let credentials = probe.file(&credential_path())?;
         let settings = HostPath::home(".gemini/settings.json");
         let auth = probe
             .file_text(&settings, &["security", "auth", "selectedType"])
@@ -101,6 +105,10 @@ impl Service for Gemini {
         let email = probe.file_text(&HostPath::home(".gemini/google_accounts.json"), &["active"]);
         Some(read(probe, &credentials, email))
     }
+}
+
+fn credential_path() -> HostPath {
+    HostPath::home(".gemini/oauth_creds.json")
 }
 
 fn read(probe: &mut Probe, credentials: &Secret, email: Option<String>) -> Result<Report> {

@@ -93,6 +93,8 @@ static SERVICES: &[&dyn Service] = &[
     &providers::xkiro::Xkiro,
 ];
 
+pub(crate) const COUNT: usize = SERVICES.len();
+
 pub(crate) fn all() -> impl Iterator<Item = Provider> {
     SERVICES.iter().map(|service| Provider(*service))
 }

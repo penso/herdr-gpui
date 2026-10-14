@@ -141,7 +141,8 @@ fn native_fixture(fixture: Fixture) {
     }
     isolated.gui = Some(command.arg("--sidebar-test").spawn().unwrap());
     let gui = isolated.gui.as_mut().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // The sidebar scenario includes native Settings saves and watcher reloads.
+    let deadline = Instant::now() + Duration::from_secs(40);
     while gui.try_wait().unwrap().is_none() {
         if Instant::now() >= deadline {
             let _ = gui.kill();

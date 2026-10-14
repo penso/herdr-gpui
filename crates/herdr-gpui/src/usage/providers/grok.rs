@@ -15,7 +15,7 @@ use crate::{
     Error, Result,
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, WEEK, Window},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
         values::invalid,
     },
@@ -49,8 +49,12 @@ impl Service for Grok {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
-        let path = HostPath::env_or("GROK_HOME", ".grok", "auth.json");
+        let path = credential_path();
         let mut expired = false;
         if let Some(auth) = probe.file(&path) {
             for &scope in SCOPES {
@@ -82,6 +86,10 @@ impl Service for Grok {
             None => expired.then_some(Err(Error::UsageRejected)),
         }
     }
+}
+
+fn credential_path() -> HostPath {
+    HostPath::env_or("GROK_HOME", ".grok", "auth.json")
 }
 
 fn fetch(probe: &mut Probe, token: &Secret, account: Account) -> Result<Report> {

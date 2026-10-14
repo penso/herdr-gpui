@@ -10,8 +10,9 @@ unit struct implementing `Service`, listed once in
 service's sign-in, endpoints, and response shapes.
 
 Detection, local and remote fetching, caching, refresh timing, the status
-bar, and the panel all work from the trait. A provider only says how to
-find its sign-in, how to ask its service, and how to read the answer.
+bar, and the panel all work from the trait. A provider says how to find its
+sign-in, optionally recognize its installation without reading credentials,
+ask its service, and read the answer.
 
 ## ChatGPT usage through OpenCode
 
@@ -33,17 +34,68 @@ when its usage request fails, so a failure does not switch the shown account.
 SSH hosts need `python3` or `jq` to read the JSON sign-in; detection is skipped
 when neither parser is available.
 
+## Choosing which services to read
+
+Every provider is on by default. **Settings > Status bar > Usage services**
+lists supported services detected on the selected host from its available
+agent commands, provider-specific sign-in file presence, cached usage, or a
+sign-in permission request. Known services with saved provider settings or an
+explicit `hide_providers` preference also remain selectable, even after a
+restart with no cached report. This includes API-key-only services such as
+OpenRouter. These saved choices apply across hosts and do not claim a valid
+sign-in or subscription. Detection still runs when Usage or individual
+services are off.
+Codex file discovery respects `CODEX_HOME`; Claude respects `CLAUDE_CONFIG_DIR`.
+
+**Turn all off** / **Turn all on** affect only the listed services and leave
+unlisted services' preferences unchanged. Provider and bulk controls are
+visibly disabled while preferences are saving or reloading; wait for them to
+become available before making another change. To see only Claude among the
+listed services, turn all off and then turn Claude on. Cached readings are
+filtered as settings apply. New reads can also start while the Status bar
+settings page is in the foreground; you do not need to close Settings or wait
+for the periodic refresh. If a read is already in progress, the latest settings
+are read as soon as that round finishes; the older round cannot defer them to
+the next periodic refresh.
+
+The choice is saved as `[usage] hide_providers` in
+`config-gpui.local.toml`, which can also be edited by hand:
+
+```toml
+[usage]
+hide_providers = ["cursor", "openrouter"]
+```
+
+Comments within the existing list, including comments on untouched or unknown
+ids, are preserved when services are added or removed.
+
+A provider listed there is skipped before fetching: its credential contents
+are not read on this machine or over SSH, no provider request is made, and it
+is left out of the status bar and panel. Offline discovery checks only file
+metadata and the selected host's agent catalog; it does not query Keychain,
+contact provider APIs, or turn services on. Ids from a newer build that this
+one does not know stay in the file. `show_providers` is independent and only
+adds providers that have no sign-in yet.
+
 ## The trait
 
 ```rust
 pub(crate) trait Service: Sync {
     fn meta(&self) -> &'static Meta;
+    fn installed(&self, _detector: &mut Detector<'_>) -> bool {
+        false
+    }
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>>;
     fn render(&self, report: &Report, ui: &Ui, cx: &App) -> AnyElement {
         ui.standard(report)
     }
 }
 ```
+
+Implement `installed` for provider-specific files using
+`Detector::file_exists`. Share the same `HostPath` helper with `fetch`, so
+discovery honors the same host and environment overrides. Do not treat a
+generic shared credential store as evidence for every provider it can hold.
 
 What a provider is lives in one `static`:
 

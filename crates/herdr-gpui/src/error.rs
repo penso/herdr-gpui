@@ -461,6 +461,8 @@ pub enum Error {
     UsageUnsupported,
     #[error("usage must be a TOML table")]
     InvalidUsageTable,
+    #[error("usage.hide_providers must be a list of provider ids")]
+    InvalidHideProviders,
     #[error("code must be a TOML table")]
     InvalidCodeTable,
     #[error("Could not read CPU and memory on this host.")]

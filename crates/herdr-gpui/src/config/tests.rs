@@ -40,6 +40,8 @@ mod theme_files;
 mod themes;
 mod update_channel;
 mod usage_inline;
+mod usage_provider_comments;
+mod usage_providers;
 
 struct TempDirectory(PathBuf);
 

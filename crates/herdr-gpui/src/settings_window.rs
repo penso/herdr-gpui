@@ -55,6 +55,21 @@ struct SettingsWindowHandle {
 }
 impl Global for SettingsWindowHandle {}
 
+pub(crate) fn usage_source_active(source: EntityId, cx: &App) -> bool {
+    let Some(settings) = cx.try_global::<SettingsWindowHandle>() else {
+        return false;
+    };
+    let Some(window) = settings.window else {
+        return false;
+    };
+    if cx.active_window() != Some(window.into()) {
+        return false;
+    }
+    window
+        .read(cx)
+        .is_ok_and(|view| view.section == Section::StatusBar && view.source.entity_id() == source)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Section {
     General,
@@ -228,6 +243,8 @@ struct SettingsWindow {
     controls: controls::Controls,
     plugins: controls::plugins::Plugins,
     code: controls::code::CodeSettings,
+    usage_providers: [bool; crate::usage::PROVIDER_COUNT],
+    usage_provider_scope: Option<crate::integrations::Scope>,
     error: Option<String>,
     status: Option<String>,
     focus: FocusHandle,
@@ -336,6 +353,8 @@ impl SettingsWindow {
             themes: themes::ThemeBrowser::new(cx),
             controls: controls::Controls::new(cx),
             plugins: controls::plugins::Plugins::new(cx),
+            usage_providers: [false; crate::usage::PROVIDER_COUNT],
+            usage_provider_scope: None,
             error: appearance.error,
             status: None,
             focus: cx.focus_handle(),
@@ -416,8 +435,11 @@ impl SettingsWindow {
     fn source_changed(&mut self, source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
         #[cfg(feature = "cloud")]
         self.cloud_source_changed(&source, cx);
-        #[cfg(not(feature = "cloud"))]
-        let _ = source;
+        if self.section == Section::StatusBar
+            && self.sync_usage_provider_controls(&source, false, cx)
+        {
+            cx.notify();
+        }
         if matches!(self.section, Section::Integrations | Section::Plugins) {
             cx.notify();
         }
@@ -447,6 +469,9 @@ impl SettingsWindow {
             .map(|endpoint| endpoint.connection.target.clone());
         if self.section == Section::Integrations {
             owner.update(cx, |source, cx| source.load_integrations(cx));
+        }
+        if self.section == Section::StatusBar {
+            self.sync_usage_provider_controls(&owner, true, cx);
         }
         if self.section == Section::General {
             self.sync_remote_history(false, cx);
@@ -601,6 +626,7 @@ impl SettingsWindow {
             self.finish_code_edit(false, cx);
         }
         self.dismiss_control_font_picker(window, cx);
+        let opening = self.section != section;
         self.section = section;
         if section == Section::Code {
             self.open_code_page(window, cx);
@@ -611,6 +637,12 @@ impl SettingsWindow {
             let _ = self
                 .source
                 .update(cx, |source, cx| source.load_integrations(cx));
+        }
+        if section == Section::StatusBar
+            && opening
+            && let Some(source) = self.source.upgrade()
+        {
+            self.sync_usage_provider_controls(&source, true, cx);
         }
         if section == Section::General {
             self.sync_remote_history(false, cx);

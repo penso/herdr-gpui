@@ -25,21 +25,32 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
     assert!(usage.busy());
     usage.apply(
         Message::Reading(local.clone(), claude, Ok(report(claude, 20.))),
+        &UsageConfig::default(),
         now,
     );
-    usage.apply(Message::Done(local.clone(), Ok(())), now);
+    usage.apply(
+        Message::Done(local.clone(), Ok(())),
+        &UsageConfig::default(),
+        now,
+    );
     assert!(!usage.busy());
 
     begin(&mut usage, &local, now);
     usage.apply(
         Message::Reading(local.clone(), claude, Err(Error::UsageRateLimited)),
+        &UsageConfig::default(),
         now,
     );
     usage.apply(
         Message::Reading(local.clone(), codex, Err(Error::UsageRejected)),
+        &UsageConfig::default(),
         now,
     );
-    usage.apply(Message::Done(local.clone(), Ok(())), now);
+    usage.apply(
+        Message::Done(local.clone(), Ok(())),
+        &UsageConfig::default(),
+        now,
+    );
     let entry = usage.current().unwrap();
     assert_eq!(
         entry.readings,
@@ -64,6 +75,7 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
     begin(&mut usage, &local, now);
     usage.apply(
         Message::Done(local.clone(), Err(Error::UsageUnreachable)),
+        &UsageConfig::default(),
         now,
     );
     let entry = usage.current().unwrap();
@@ -77,9 +89,14 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
     begin(&mut usage, &local, now);
     usage.apply(
         Message::Reading(local.clone(), codex, Ok(report(codex, 5.))),
+        &UsageConfig::default(),
         now,
     );
-    usage.apply(Message::Done(local.clone(), Ok(())), now);
+    usage.apply(
+        Message::Done(local.clone(), Ok(())),
+        &UsageConfig::default(),
+        now,
+    );
     let entry = usage.current().unwrap();
     assert_eq!(
         entry.readings.len(),
@@ -99,9 +116,10 @@ fn each_host_keeps_its_own_answer_within_a_bound() {
         begin(&mut usage, &host, now);
         usage.apply(
             Message::Reading(host.clone(), claude, Ok(report(claude, 1.))),
+            &UsageConfig::default(),
             now,
         );
-        usage.apply(Message::Done(host, Ok(())), now);
+        usage.apply(Message::Done(host, Ok(())), &UsageConfig::default(), now);
     }
     let config = UsageConfig::default();
     usage.poll(Some(Host::Local), &config, &HashSet::new(), 0, false, now);
@@ -142,7 +160,11 @@ fn manual_refresh_is_spaced() {
     let now = Instant::now();
     let mut usage = Usage::default();
     begin(&mut usage, &Host::Local, now);
-    usage.apply(Message::Done(Host::Local, Ok(())), now);
+    usage.apply(
+        Message::Done(Host::Local, Ok(())),
+        &UsageConfig::default(),
+        now,
+    );
     usage.refresh(now + Duration::from_secs(1));
     assert_eq!(
         usage.current().unwrap().due,

@@ -25,7 +25,7 @@ use crate::{
     Error, Result,
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, SESSION, Section, WEEK, Window, group},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
         values::invalid,
     },
@@ -86,6 +86,10 @@ impl Service for Kimi {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&cli_path("credentials/kimi-code.json"))
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let region = Region::from(probe.text_setting("region").as_deref());
         let web = probe
@@ -101,45 +105,49 @@ impl Service for Kimi {
             return Some(code(probe, request, web.as_ref(), region));
         }
 
-        if region == Region::China && base_url.is_none() {
-            let home = |rest: &str| HostPath::env_or("KIMI_CODE_HOME", ".kimi-code", rest);
-            if let Some(file) = probe.file(&home("credentials/kimi-code.json")) {
-                let fresh = probe
-                    .text(&file, &["expires_at"])
-                    .and_then(|expiry| expiry.parse::<f64>().ok())
-                    .and_then(|expiry| Timestamp::Number(expiry).time())
-                    .is_some_and(|expiry| expiry > SystemTime::now() + Duration::from_secs(60));
-                match probe.field(&file, &["access_token"]).filter(|_| fresh) {
-                    Some(token) => {
-                        let device = probe
-                            .read(&home("device_id"))
-                            .map(|id| ascii(id.trim()))
-                            .filter(|id| !id.is_empty());
-                        let system = if probe.is_macos() { "macOS" } else { "Linux" };
-                        let mut request = Request::get(usages_url(region.api()))
-                            .bearer(&token)
-                            .header(
-                                "User-Agent",
-                                concat!("herdr-gpui/", env!("CARGO_PKG_VERSION")),
-                            )
-                            .header("X-Msh-Platform", "kimi_code_cli")
-                            .header("X-Msh-Version", env!("CARGO_PKG_VERSION"))
-                            .header("X-Msh-Device-Model", system);
-                        if let Some(device) = device {
-                            request = request.header("X-Msh-Device-Id", device);
-                        }
-                        return Some(code(probe, request, web.as_ref(), region));
+        if region == Region::China
+            && base_url.is_none()
+            && let Some(file) = probe.file(&cli_path("credentials/kimi-code.json"))
+        {
+            let fresh = probe
+                .text(&file, &["expires_at"])
+                .and_then(|expiry| expiry.parse::<f64>().ok())
+                .and_then(|expiry| Timestamp::Number(expiry).time())
+                .is_some_and(|expiry| expiry > SystemTime::now() + Duration::from_secs(60));
+            match probe.field(&file, &["access_token"]).filter(|_| fresh) {
+                Some(token) => {
+                    let device = probe
+                        .read(&cli_path("device_id"))
+                        .map(|id| ascii(id.trim()))
+                        .filter(|id| !id.is_empty());
+                    let system = if probe.is_macos() { "macOS" } else { "Linux" };
+                    let mut request = Request::get(usages_url(region.api()))
+                        .bearer(&token)
+                        .header(
+                            "User-Agent",
+                            concat!("herdr-gpui/", env!("CARGO_PKG_VERSION")),
+                        )
+                        .header("X-Msh-Platform", "kimi_code_cli")
+                        .header("X-Msh-Version", env!("CARGO_PKG_VERSION"))
+                        .header("X-Msh-Device-Model", system);
+                    if let Some(device) = device {
+                        request = request.header("X-Msh-Device-Id", device);
                     }
-                    // CodexBar never refreshes the CLI's token: sign in again there.
-                    None if web.is_none() => return Some(Err(Error::UsageRejected)),
-                    None => {}
+                    return Some(code(probe, request, web.as_ref(), region));
                 }
+                // CodexBar never refreshes the CLI's token: sign in again there.
+                None if web.is_none() => return Some(Err(Error::UsageRejected)),
+                None => {}
             }
         }
 
         let token = web?;
         Some(web_usage(probe, &token, region))
     }
+}
+
+fn cli_path(rest: &str) -> HostPath {
+    HostPath::env_or("KIMI_CODE_HOME", ".kimi-code", rest)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

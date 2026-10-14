@@ -7,6 +7,7 @@
 
 mod access;
 mod cookies;
+mod discovery;
 mod icons;
 mod model;
 mod panel;
@@ -22,10 +23,18 @@ mod values;
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(feature = "integration-test", target_os = "macos"))]
+mod native;
+#[cfg(all(feature = "integration-test", target_os = "macos"))]
+pub(crate) use native::fixture as native_fixture;
+
 pub(crate) use access::KeychainGrants;
 pub(crate) use model::{Host, Provider};
 pub(crate) use panel::PANEL_WIDTH;
 pub(crate) use probe::Shell;
+/// Every provider, in the order the status bar lists them.
+pub(crate) use registry::all as providers;
+pub(crate) const PROVIDER_COUNT: usize = registry::COUNT;
 pub(crate) use render::Hint;
 pub use settings::UsageConfig;
 
@@ -93,21 +102,39 @@ pub(crate) struct Entry {
     /// silent (signed out) can be dropped when it ends.
     round: HashSet<Provider>,
     rate_limited: bool,
+    config_changed_during_read: bool,
 }
 
 /// How many providers the status bar has room for; the panel lists all.
 pub(crate) const HEADLINE: usize = 2;
 
 impl Entry {
+    /// Detected providers with numbers or a pending/denied access request,
+    /// in registry order, including cached readings hidden by the config.
+    pub fn detected(&self) -> impl Iterator<Item = Provider> + '_ {
+        self.readings
+            .iter()
+            .filter(|reading| has_numbers(reading) || reading.access.is_some())
+            .map(|reading| reading.provider)
+    }
+
     /// The providers the status bar shows: those with numbers to show, the
     /// one chosen in the panel first, then the ones closest to a limit, at
     /// most `limit` of them. A provider that has no report yet, or no windows
     /// or balances, waits in the panel.
-    pub fn headline(&self, limit: usize, chosen: Option<Provider>) -> Vec<&Reading> {
+    pub fn headline(
+        &self,
+        config: &UsageConfig,
+        limit: usize,
+        chosen: Option<Provider>,
+    ) -> Vec<&Reading> {
         let mut shown: Vec<&Reading> = self
             .readings
             .iter()
-            .filter(|reading| has_numbers(reading) || reading.access.is_some())
+            .filter(|reading| {
+                !config.hidden(reading.provider)
+                    && (has_numbers(reading) || reading.access.is_some())
+            })
             .collect();
         // Stable: equally used providers keep the registry's order.
         shown.sort_by(|a, b| urgency(b).total_cmp(&urgency(a)));
@@ -131,7 +158,12 @@ impl Entry {
     pub fn tabs(&self, config: &UsageConfig) -> Vec<&Reading> {
         self.readings
             .iter()
-            .filter(|reading| has_numbers(reading) || config.shown(reading.provider))
+            .filter(|reading| {
+                !config.hidden(reading.provider)
+                    && (has_numbers(reading)
+                        || reading.access.is_some()
+                        || config.shown(reading.provider))
+            })
             .collect()
     }
 }
@@ -173,6 +205,7 @@ struct Worker {
 pub(crate) struct Usage {
     host: Option<Host>,
     entries: HashMap<Host, Entry>,
+    discovery: discovery::Discovery,
     worker: Option<Worker>,
     busy: Option<Host>,
     minute: u64,
@@ -192,6 +225,50 @@ impl Usage {
     /// What the status bar shows for the tracked host.
     pub fn current(&self) -> Option<&Entry> {
         self.entries.get(self.host.as_ref()?)
+    }
+
+    pub(crate) fn for_target(&self, target: &herdr_client::ConnectTarget) -> Option<&Entry> {
+        use herdr_client::ConnectTarget;
+        match target {
+            ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
+                self.entries.get(&Host::Local)
+            }
+            ConnectTarget::Ssh { target, .. } => self.entries.iter().find_map(|(host, entry)| {
+                matches!(host, Host::Ssh(cached) if cached == target).then_some(entry)
+            }),
+            ConnectTarget::Wsl { distro, .. } => self.entries.iter().find_map(|(host, entry)| {
+                matches!(host, Host::Wsl(cached) if cached == distro).then_some(entry)
+            }),
+            #[cfg(feature = "cloud")]
+            ConnectTarget::Cloud { .. } => None,
+        }
+    }
+
+    pub(crate) fn request_discovery(&mut self, target: &herdr_client::ConnectTarget) {
+        self.discovery.request(target);
+    }
+
+    pub(crate) fn discovery_target_changed(&self, target: &herdr_client::ConnectTarget) -> bool {
+        self.discovery.target_changed(target)
+    }
+
+    pub(crate) fn installed_for_target(
+        &self,
+        target: &herdr_client::ConnectTarget,
+    ) -> [bool; PROVIDER_COUNT] {
+        self.discovery.installed(target)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_current_for_test(&mut self, host: Host, readings: Vec<Reading>) {
+        self.entries.insert(
+            host.clone(),
+            Entry {
+                readings,
+                ..Default::default()
+            },
+        );
+        self.host = Some(host);
     }
 
     /// The provider picked in the panel to lead the status bar.
@@ -252,21 +329,22 @@ impl Usage {
         active: bool,
         now: Instant,
     ) -> bool {
-        let mut changed = self.host != host;
+        let mut changed = self.discovery.poll() | (self.host != host);
         self.host = host;
         if self
             .revision
             .replace(revision)
             .is_some_and(|last| last != revision)
         {
-            for entry in self.entries.values_mut() {
+            for (host, entry) in &mut self.entries {
                 entry.due = Some(now);
+                entry.config_changed_during_read |= self.busy.as_ref() == Some(host);
             }
         }
         while let Some(worker) = &self.worker {
             match worker.results.try_recv() {
                 Ok(message) => {
-                    self.apply(message, now);
+                    self.apply(message, config, now);
                     changed = true;
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -348,12 +426,13 @@ impl Usage {
         entry.requested = Some(now);
         entry.round.clear();
         entry.rate_limited = false;
+        entry.config_changed_during_read = false;
         // Due again only once this read answers.
         entry.due = Some(now + REFRESH);
         self.busy = Some(host);
     }
 
-    fn apply(&mut self, message: Message, now: Instant) {
+    fn apply(&mut self, message: Message, config: &UsageConfig, now: Instant) {
         match message {
             Message::Reading(host, provider, report) => {
                 let Some(entry) = self.entries.get_mut(&host) else {
@@ -406,13 +485,17 @@ impl Usage {
                 let Some(entry) = self.entries.get_mut(&host) else {
                     return;
                 };
+                let config_changed = std::mem::take(&mut entry.config_changed_during_read);
                 match result {
                     Ok(()) => {
                         let heard = std::mem::take(&mut entry.round);
-                        // A provider that stopped answering has been signed out.
-                        entry
-                            .readings
-                            .retain(|reading| heard.contains(&reading.provider));
+                        // A round using old preferences cannot establish that
+                        // a newly enabled service signed out.
+                        if !config_changed {
+                            entry.readings.retain(|reading| {
+                                config.hidden(reading.provider) || heard.contains(&reading.provider)
+                            });
+                        }
                         entry.error = None;
                         entry.updated = Some(SystemTime::now());
                         entry.due = Some(
@@ -428,6 +511,10 @@ impl Usage {
                         entry.error = Some(error.to_string());
                         entry.due = Some(now + ERROR_BACKOFF);
                     }
+                }
+                if config_changed {
+                    // Coalesce edits into one read with the latest preferences.
+                    entry.due = Some(now);
                 }
             }
         }

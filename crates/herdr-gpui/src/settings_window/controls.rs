@@ -7,6 +7,7 @@ mod preferences;
 mod sidebar_layout;
 mod status_bar;
 mod updates;
+mod usage_providers;
 
 use super::{Section, SettingsWindow, remote_history::HostState};
 use crate::{

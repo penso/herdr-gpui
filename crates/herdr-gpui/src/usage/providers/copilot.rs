@@ -14,7 +14,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Kind, MONTH, Provider, Report, Section, Window, group, title_case},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
     },
 };
@@ -51,6 +51,12 @@ impl Service for Copilot {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        ["apps.json", "hosts.json"]
+            .into_iter()
+            .any(|file| detector.file_exists(&credential_path(file)))
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let token = probe.setting("token").or_else(|| plugin_token(probe))?;
         let api = api_host(probe.text_setting("enterprise_host").as_deref());
@@ -70,19 +76,20 @@ impl Service for Copilot {
     }
 }
 
+fn credential_path(file: &str) -> HostPath {
+    HostPath::env_or(
+        "XDG_CONFIG_HOME",
+        ".config",
+        format!("github-copilot/{file}"),
+    )
+}
+
 fn plugin_token(probe: &mut Probe) -> Option<Secret> {
-    let path = |file: &str| {
-        HostPath::env_or(
-            "XDG_CONFIG_HOME",
-            ".config",
-            format!("github-copilot/{file}"),
-        )
-    };
-    let apps = probe.file(&path("apps.json"));
+    let apps = probe.file(&credential_path("apps.json"));
     if let Some(token) = apps.and_then(|apps| probe.field(&apps, &[PLUGIN_APP, "oauth_token"])) {
         return Some(token);
     }
-    let hosts = probe.file(&path("hosts.json"))?;
+    let hosts = probe.file(&credential_path("hosts.json"))?;
     probe.field(&hosts, &["github.com", "oauth_token"])
 }
 

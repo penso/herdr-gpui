@@ -5,7 +5,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Timestamp, json},
     },
 };
@@ -27,6 +27,10 @@ impl Service for Codex {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let (token, account) = codex_auth(probe).or_else(|| opencode_auth(probe))?;
         let mut request = Request::get(URL)
@@ -41,8 +45,12 @@ impl Service for Codex {
     }
 }
 
+fn credential_path() -> HostPath {
+    HostPath::env_or("CODEX_HOME", ".codex", "auth.json")
+}
+
 fn codex_auth(probe: &mut Probe) -> Option<(Secret, Option<Secret>)> {
-    let auth = probe.file(&HostPath::env_or("CODEX_HOME", ".codex", "auth.json"))?;
+    let auth = probe.file(&credential_path())?;
     let token = probe.field(&auth, &["tokens", "access_token"])?;
     Some((token, probe.field(&auth, &["tokens", "account_id"])))
 }

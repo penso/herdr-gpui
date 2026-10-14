@@ -30,6 +30,8 @@ pub(crate) enum Preference {
     StatusBar(status_bar::Edit),
     /// `[usage] inline`: whether the sidebar draws the daemon's configured rows.
     UsageInline(bool),
+    /// `[usage] hide_providers`: which usage services are turned off.
+    UsageProviders(usage_providers::ProviderEdit),
     /// `[updates] channel`: whether the updater also offers beta releases.
     UpdateChannel(UpdateChannel),
 }
@@ -137,6 +139,11 @@ impl Config {
                     (Some("sound"), "volume", Some(i64::from(value).into()))
                 }
                 Preference::UsageInline(value) => (Some("usage"), "inline", Some(value.into())),
+                Preference::UsageProviders(edit) => (
+                    Some("usage"),
+                    "hide_providers",
+                    usage_providers::hide_providers(&document, edit)?,
+                ),
                 Preference::UpdateChannel(channel) => {
                     (Some("updates"), "channel", Some(channel.as_str().into()))
                 }

@@ -4,7 +4,11 @@
 //! remote fetching, caching, the status bar, and the panel, works from the
 //! trait: a provider reads through a [`Probe`] and draws through a [`Ui`].
 
-use super::{model::Report, probe::Probe, ui::Ui};
+use super::{
+    model::Report,
+    probe::{Detector, Probe},
+    ui::Ui,
+};
 use crate::{Error, Result};
 use gpui::{AnyElement, App};
 use serde::Deserialize;
@@ -86,6 +90,10 @@ impl Meta {
 
 pub(crate) trait Service: Sync {
     fn meta(&self) -> &'static Meta;
+    /// Offline installation evidence. Existence does not validate a sign-in.
+    fn installed(&self, _detector: &mut Detector<'_>) -> bool {
+        false
+    }
     /// Finds the sign-in through `probe` and asks the service. None means
     /// the probed host has no sign-in and the config names none, so the
     /// provider is left out unless the config asks for it.

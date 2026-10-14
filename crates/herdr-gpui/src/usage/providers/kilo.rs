@@ -13,7 +13,7 @@ use crate::{
     Error, Result,
     usage::{
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
-        probe::{HostPath, Probe, Request},
+        probe::{Detector, HostPath, Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json},
         values::{invalid, number, plain, usd},
     },
@@ -42,9 +42,13 @@ impl Service for Kilo {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let token = probe.setting("api_key").or_else(|| {
-            let auth = probe.file(&HostPath::home(".local/share/kilo/auth.json"))?;
+            let auth = probe.file(&credential_path())?;
             probe.field(&auth, &["kilo", "access"])
         })?;
         let request = Request::get(URL)
@@ -52,6 +56,10 @@ impl Service for Kilo {
             .header("Accept", "application/json");
         Some(probe.body(request).and_then(|body| parse(&body)))
     }
+}
+
+fn credential_path() -> HostPath {
+    HostPath::home(".local/share/kilo/auth.json")
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {

@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 mod fonts;
 mod themes;
+pub(super) mod usage_services;
 use fonts::verify_fonts;
 use themes::verify_themes;
 
@@ -233,6 +234,9 @@ pub(crate) async fn verify_native(
             })??;
             if section == Section::Fonts {
                 verify_fonts(settings, source, expected, cx).await?;
+            }
+            if section == Section::StatusBar {
+                usage_services::verify(settings, source, expected, cx).await?;
             }
             #[cfg(feature = "mockup")]
             if section == Section::Plugins {

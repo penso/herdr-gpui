@@ -15,7 +15,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
         values::invalid,
     },
@@ -60,10 +60,24 @@ impl Service for Huggingface {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        credential_paths()
+            .iter()
+            .any(|path| detector.file_exists(path))
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let token = find_token(probe)?;
         Some(read(probe, &token))
     }
+}
+
+fn credential_paths() -> [HostPath; 3] {
+    [
+        HostPath::env_or("HF_TOKEN_PATH", ".cache/huggingface/token", ""),
+        HostPath::env_or("HF_HOME", ".cache/huggingface", "token"),
+        HostPath::env_or("XDG_CACHE_HOME", ".cache", "huggingface/token"),
+    ]
 }
 
 fn find_token(probe: &mut Probe) -> Option<Secret> {
@@ -75,12 +89,7 @@ fn find_token(probe: &mut Probe) -> Option<Secret> {
     }
     // huggingface_hub derives its home from these in this order, and saves
     // the token without a trailing newline.
-    let files = [
-        HostPath::env_or("HF_TOKEN_PATH", ".cache/huggingface/token", ""),
-        HostPath::env_or("HF_HOME", ".cache/huggingface", "token"),
-        HostPath::env_or("XDG_CACHE_HOME", ".cache", "huggingface/token"),
-    ];
-    files
+    credential_paths()
         .iter()
         .find_map(|path| probe.file(path))
         .or_else(|| probe.setting("api_key"))

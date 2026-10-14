@@ -29,7 +29,7 @@ impl HerdrWindow {
     pub(crate) fn render_usage(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let entry = self.usage.current();
         let shown = entry
-            .map(|entry| entry.headline(super::HEADLINE, self.usage.chosen()))
+            .map(|entry| entry.headline(&self.config.usage, super::HEADLINE, self.usage.chosen()))
             .unwrap_or_default();
         // A host that could not be read at all says so, but only while
         // there is nothing older to show.

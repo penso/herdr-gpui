@@ -12,7 +12,7 @@ use crate::{
         model::{
             Account, Balance, Kind, Provider, Report, Section, Unit, WEEK, Window, title_case,
         },
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
         values,
     },
@@ -46,6 +46,10 @@ impl Service for Codebuff {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         // A token is never sent to a plain http override.
         let base = probe
@@ -56,7 +60,7 @@ impl Service for Codebuff {
         if let Some(key) = probe.setting("api_key") {
             return Some(read(probe, &base, &key, None));
         }
-        let credentials = HostPath::home(".config/manicode/credentials.json");
+        let credentials = credential_path();
         if let Some(file) = probe.file(&credentials) {
             let token = probe
                 .field(&file, &["default", "authToken"])
@@ -69,6 +73,10 @@ impl Service for Codebuff {
         let key = probe.env("CODEBUFF_API_KEY")?;
         Some(read(probe, &base, &key, None))
     }
+}
+
+fn credential_path() -> HostPath {
+    HostPath::home(".config/manicode/credentials.json")
 }
 
 /// `session` is the CLI sign-in's email when the token is a CLI session,

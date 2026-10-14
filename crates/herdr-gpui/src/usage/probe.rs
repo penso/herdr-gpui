@@ -258,6 +258,27 @@ pub(super) enum Exec {
     Remote(Shell),
 }
 
+/// Installation evidence only. Unlike `Probe`, this cannot open credential
+/// files, read Keychain items, or make provider requests.
+pub(crate) struct Detector<'a> {
+    exec: &'a mut Exec,
+}
+
+impl<'a> Detector<'a> {
+    pub(super) fn new(exec: &'a mut Exec) -> Self {
+        Self { exec }
+    }
+
+    pub fn file_exists(&mut self, path: &HostPath) -> bool {
+        match self.exec {
+            Exec::Local => path.local().is_some_and(|path| path.is_file()),
+            Exec::Remote(shell) => shell
+                .run(&format!("test -f {}", path.remote()), STEP_TIMEOUT)
+                .is_ok_and(|output| output.success),
+        }
+    }
+}
+
 pub(crate) struct Probe<'a> {
     exec: &'a mut Exec,
     provider: Provider,

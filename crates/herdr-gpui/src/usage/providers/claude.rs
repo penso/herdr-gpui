@@ -8,7 +8,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window, title_case},
-        probe::{HostPath, Probe, Request, Secret},
+        probe::{Detector, HostPath, Probe, Request, Secret},
         service::{Meta, Service, Timestamp, json},
         ui::Ui,
     },
@@ -41,6 +41,10 @@ static META: Meta = Meta::new("claude", "Claude")
 impl Service for Claude {
     fn meta(&self) -> &'static Meta {
         &META
+    }
+
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&directory(".credentials.json"))
     }
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
@@ -85,9 +89,12 @@ impl Service for Claude {
     }
 }
 
+fn directory(rest: &str) -> HostPath {
+    HostPath::env_or("CLAUDE_CONFIG_DIR", ".claude", rest)
+}
+
 /// The usage of the account Claude Code is signed in with.
 fn signed_in(probe: &mut Probe) -> Option<Result<Report>> {
-    let directory = |rest: &str| HostPath::env_or("CLAUDE_CONFIG_DIR", ".claude", rest);
     let credentials = keychain(probe).or_else(|| probe.file(&directory(".credentials.json")))?;
     let token = probe.field(&credentials, &["claudeAiOauth", "accessToken"])?;
     let email = [directory(".claude.json"), HostPath::home(".claude.json")]

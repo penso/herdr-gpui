@@ -17,7 +17,7 @@ use crate::{
     Result,
     usage::{
         model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window},
-        probe::{HostPath, Probe, Request},
+        probe::{Detector, HostPath, Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json},
         values::invalid,
     },
@@ -48,12 +48,12 @@ impl Service for Muse {
         &META
     }
 
+    fn installed(&self, detector: &mut Detector<'_>) -> bool {
+        detector.file_exists(&credential_path())
+    }
+
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
-        let file = probe.file(&HostPath::env_or(
-            "MUSE_AUTH_PATH",
-            ".config/muse/auth.json",
-            "",
-        ));
+        let file = probe.file(&credential_path());
         let inline = file
             .as_ref()
             .and_then(|file| probe.field(file, &["providers", "meta", "access_token"]));
@@ -74,6 +74,10 @@ impl Service for Muse {
             .json("{}");
         Some(probe.body(request).and_then(|body| parse(&body)))
     }
+}
+
+fn credential_path() -> HostPath {
+    HostPath::env_or("MUSE_AUTH_PATH", ".config/muse/auth.json", "")
 }
 
 pub(crate) fn parse(body: &str) -> Result<Report> {
