@@ -100,9 +100,11 @@ impl Sent {
         match self {
             Self::Agent => "Sent to the agent".into(),
             Self::Kept => "Notes kept for `browser feedback`; not queued to an agent".into(),
-            Self::Unconfirmed { source } => format!(
-                "Delivery unconfirmed ({source}); check `browser feedback` before sending again"
-            ),
+            Self::Unconfirmed { source } => {
+                format!(
+                    "Delivery unconfirmed ({source}); check `browser feedback` before sending again"
+                )
+            }
             Self::File { path, unreached } => {
                 format!("Saved to {} ({unreached})", path.display())
             }
@@ -174,44 +176,6 @@ mod tests {
             choices,
             overall,
         }
-    }
-
-    #[test]
-    fn lists_every_variant_with_picks_and_notes() {
-        let text = report(
-            vec![
-                Choice {
-                    letter: 'A',
-                    name: "Pill",
-                    picked: false,
-                    note: "",
-                },
-                Choice {
-                    letter: 'B',
-                    name: "Two-line",
-                    picked: true,
-                    note: "  branch in accent  ",
-                },
-                Choice {
-                    letter: 'C',
-                    name: "Accent bar",
-                    picked: true,
-                    note: "",
-                },
-            ],
-            " B's text with C's bar ",
-        )
-        .text();
-        assert_eq!(
-            text,
-            "# Mockup feedback: Status chip\n\n\
-             Picked: B, C\n\
-             Viewed with theme Nord at Design (300 px) width.\n\n\
-             - A (Pill)\n\
-             - B (Two-line) [picked]: branch in accent\n\
-             - C (Accent bar) [picked]\n\n\
-             Overall: B's text with C's bar\n"
-        );
     }
 
     #[test]

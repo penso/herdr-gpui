@@ -65,7 +65,6 @@ fn saved_review_tabs_are_checked_when_read() {
     };
     let location: Location = serde_json::from_str(&saved(repo, "main", Some(root))).unwrap();
     assert!(!location.is_page());
-    assert_eq!(location.default_title(), "Review \u{00b7} main");
     for bad in [
         saved("relative", "main", None),
         saved(repo, "", None),

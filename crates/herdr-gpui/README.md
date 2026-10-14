@@ -139,7 +139,8 @@ hosts remain visible. Host and repository collapse state is endpoint-scoped, and
 Agents aggregates all connected endpoints with host labels. The catalog is read
 through `herdr-client` every two seconds; changes to targets, sessions, enablement,
 and ordering are reflected without restarting. Catalog errors preserve the last
-valid list. Saved-host edits and remote provisioning are delegated to Herdr's CLI.
+valid list. Default SSH setup, rename, and removal use Herdr's CLI. Custom-command
+profiles are saved locally after a compatible remote Herdr is verified.
 An explicit `--socket` is isolated: it never loads or connects saved hosts, or
 reads/writes saved selection. Other launches read `client/endpoint-selection.json`
 once, under the same release/dev state root as the catalog. Local remains usable
@@ -225,9 +226,9 @@ its own form, so switching between them keeps what was typed. **Ctrl-Tab** and
 **Ctrl-Shift-Tab** move through the rail from any field. In a narrow window the
 rail shows only the logos.
 
-The SSH form accepts an SSH target, label, and optional remote session (default:
-`default`). Herdr's `machine add` saves a new profile every time and takes no
-lock, so the dialog keeps a host from being saved twice itself. A host counts as
+The SSH form accepts an SSH target, label, optional remote session (default:
+`default`), and optional **SSH command**. Herdr's `machine add` saves a new profile
+every time and takes no lock, so the dialog keeps a host from being saved twice itself. A host counts as
 already saved when a profile with the same session reaches the same user, host
 name, and port as `ssh -G` resolves them, so an SSH alias, `user@address`, and
 `ssh://` spellings of one machine all match. The host is claimed for this app
@@ -240,6 +241,27 @@ never locks the host out; if the setup workspace never runs, the claim is
 released after two minutes. Another client adding the host while a terminal
 setup runs can still create a duplicate. A host refused as already being added
 is still in another Add Device dialog or in a running "Set up" workspace.
+
+The command selects a local executable and fixed arguments, such as
+`tailscale ssh`, `/opt/homebrew/bin/ssh`, or
+`"/path with spaces/ssh" -F "/path to/ssh_config"`. Do not include the destination
+or remote command: the app appends them. Commands run directly, without shell,
+variable, or glob expansion; blank restores the normal `ssh`.
+
+For an existing machine, right-click its Spaces header and choose **SSH command…**,
+or run `herdr-gpui host ssh-command HOST` to open that same editor. The preference
+is local to this app, under `[devices.<catalog-id>] ssh_command` in
+`config-gpui.local.toml`; the shared Herdr catalog stays compatible. Changing it
+replaces that machine's connection without changing its selected remote session.
+Session management, scripts, Git queries, usage/load, file copies, and forwards
+use the same command.
+
+Custom-command setup requires an installed, compatible remote Herdr and
+noninteractive access through the selected command. If either is missing,
+prepare the machine with that command in your own terminal, then try again;
+the app never falls back to setup through another SSH client. Once saved, the
+normal bridge starts the remote session if absent. Custom binaries/wrappers must
+accept SSH options and remote commands and stay in the foreground.
 
 Under the SSH target, **Nearby devices** suggests hosts to add. Opening the
 dialog starts one search, shown by a sliding bar, which lasts about ten seconds;

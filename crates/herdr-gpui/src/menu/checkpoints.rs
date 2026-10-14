@@ -160,13 +160,14 @@ impl HerdrWindow {
                 }
                 Listing::Ready(list) if list.is_empty() => {
                     body = body.child(
-                        line(if self.config.agent_checkpoints {
-                            "No checkpoints yet. One is taken each time an agent here starts or finishes a turn.".into()
-                        } else {
-                            "No checkpoints. Checkpoint agent turns is off in Settings > General.".into()
-                        })
-                        .text_color(muted),
-                    );
+            line(if self.config.agent_checkpoints {
+              "No checkpoints yet. One is taken each time an agent here starts or finishes a turn."
+                .into()
+            } else {
+              "No checkpoints. Checkpoint agent turns is off in Settings > General.".into()
+            })
+            .text_color(muted),
+          );
                 }
                 Listing::Ready(list) => {
                     body = body.child(self.render_checkpoint_timeline(list, now, cx));

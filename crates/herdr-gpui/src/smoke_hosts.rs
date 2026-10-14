@@ -267,36 +267,40 @@ pub(super) async fn sidebar_hosts(
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             let settled = AnyWindowHandle::from(handle)
-            .update(cx, |_, window, cx| -> Result<bool> {
-                if window.viewport_size() != fixture_size(window_width, 780.) {
-                    return Ok(false);
-                }
-                cx.default_global::<PaintedProbes>().0.clear();
-                window.refresh();
-                window.draw(cx).clear(cx);
-                for (name, prefix, expected_width) in [
-                    (REMOTE, host_prefix, host_width),
-                    ("agent-1-with-a-deliberately-long-label", agent_prefix, agent_width),
-                ] {
-                    let p = cx
-                        .global::<PaintedProbes>()
-                        .0
-                        .get(name)
-                        .context("missing narrow label")?;
-                    if p.clipped
-                        || p.glyph_text != p.cached
-                        || (p.glyph_text != name && !p.glyph_text.ends_with('\u{2026}'))
-                        || !p.glyph_text.starts_with(prefix)
-                        || p.bounds.size.width != px(expected_width)
-                        || p.mask.size.width != px(expected_width)
-                        || p.width > p.bounds.size.width
-                    {
-                        bail!("resized native label window={window_width} preferred={preferred:?}: {p:?}");
-                    }
-                }
-                Ok(true)
-            })
-            .context("verifying resized sidebar labels")??;
+        .update(cx, |_, window, cx| -> Result<bool> {
+          if window.viewport_size() != fixture_size(window_width, 780.) {
+            return Ok(false);
+          }
+          cx.default_global::<PaintedProbes>().0.clear();
+          window.refresh();
+          window.draw(cx).clear(cx);
+          for (name, prefix, expected_width) in [
+            (REMOTE, host_prefix, host_width),
+            (
+              "agent-1-with-a-deliberately-long-label",
+              agent_prefix,
+              agent_width,
+            ),
+          ] {
+            let p = cx
+              .global::<PaintedProbes>()
+              .0
+              .get(name)
+              .context("missing narrow label")?;
+            if p.clipped
+              || p.glyph_text != p.cached
+              || (p.glyph_text != name && !p.glyph_text.ends_with('\u{2026}'))
+              || !p.glyph_text.starts_with(prefix)
+              || p.bounds.size.width != px(expected_width)
+              || p.mask.size.width != px(expected_width)
+              || p.width > p.bounds.size.width
+            {
+              bail!("resized native label window={window_width} preferred={preferred:?}: {p:?}");
+            }
+          }
+          Ok(true)
+        })
+        .context("verifying resized sidebar labels")??;
             if settled {
                 break;
             }

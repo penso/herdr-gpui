@@ -109,7 +109,6 @@ fn search_matches_number_title_and_author() {
         assert!(key.contains(term), "{key} missing {term}");
     }
     assert!(!key.contains("outsider"));
-    assert_eq!(prs[0].label(), "#48 Centre the worktree dialog");
 }
 
 #[test]

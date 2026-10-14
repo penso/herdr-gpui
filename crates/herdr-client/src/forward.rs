@@ -5,7 +5,7 @@
 //! port some other local process took first. Nothing reconnects; a forward
 //! that ends stays ended until someone starts it again. Callers name the
 //! remote port, so this knows nothing of how that port was found.
-use crate::{Error, Result, catalog::validate_target};
+use crate::{Error, Result, SshTarget, catalog::validate_target};
 use std::num::NonZeroU16;
 #[cfg(unix)]
 use std::{
@@ -84,9 +84,9 @@ pub enum PortForward {}
 impl PortForward {
     /// Forwards `remote_port` on `target`'s loopback to a local port. Returns
     /// at once: running SSH and choosing the port happen on a worker thread.
-    pub fn start(target: &str, remote_port: NonZeroU16) -> Result<Self> {
-        validate_target(target)?;
-        let (master_target, forward_target) = (target.to_owned(), target.to_owned());
+    pub fn start(target: &SshTarget, remote_port: NonZeroU16) -> Result<Self> {
+        validate_target(&target.target)?;
+        let (master_target, forward_target) = (target.clone(), target.clone());
         Self::start_with(
             remote_port,
             READY_TIMEOUT,
@@ -151,8 +151,8 @@ impl Drop for PortForward {
 
 #[cfg(windows)]
 impl PortForward {
-    pub fn start(target: &str, _remote_port: NonZeroU16) -> Result<Self> {
-        validate_target(target)?;
+    pub fn start(target: &SshTarget, _remote_port: NonZeroU16) -> Result<Self> {
+        validate_target(&target.target)?;
         Err(Error::SshUnsupported)
     }
 
@@ -370,10 +370,11 @@ fn control_path(socket: &Path) -> String {
 /// private socket. `ExitOnForwardFailure` stays off so a `LocalForward` or
 /// `RemoteForward` from the user's config that is busy elsewhere cannot end it.
 #[cfg(unix)]
-fn master_command(target: &str, socket: &Path) -> Command {
-    let mut command = crate::environment::command("ssh");
-    command
-        .args([
+fn master_command(target: &SshTarget, socket: &Path) -> Command {
+    let control = control_path(socket);
+    crate::ssh::with_options(
+        target,
+        [
             "-N",
             "-T",
             "-o",
@@ -401,24 +402,35 @@ fn master_command(target: &str, socket: &Path) -> Command {
             "-o",
             "ControlPersist=no",
             "-o",
-        ])
-        .arg(control_path(socket))
-        .args(["--", target]);
-    command
+            control.as_str(),
+        ],
+    )
 }
 
 /// Asks the master on `socket` to listen on loopback only. It exits 0 only
 /// once that master holds the port.
 #[cfg(unix)]
-fn forward_command(target: &str, socket: &Path, local_port: u16, remote_port: u16) -> Command {
-    let mut command = crate::environment::command("ssh");
-    command
-        .args(["-o", "BatchMode=yes", "-o"])
-        .arg(control_path(socket))
-        .args(["-O", "forward", "-L"])
-        .arg(format!("127.0.0.1:{local_port}:localhost:{remote_port}"))
-        .args(["--", target]);
-    command
+fn forward_command(
+    target: &SshTarget,
+    socket: &Path,
+    local_port: u16,
+    remote_port: u16,
+) -> Command {
+    let control = control_path(socket);
+    let forward = format!("127.0.0.1:{local_port}:localhost:{remote_port}");
+    crate::ssh::with_options(
+        target,
+        [
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            control.as_str(),
+            "-O",
+            "forward",
+            "-L",
+            forward.as_str(),
+        ],
+    )
 }
 
 #[cfg(all(test, unix))]

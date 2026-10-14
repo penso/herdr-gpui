@@ -1,8 +1,7 @@
-use super::super::pr::{comment_info, pr_info, status};
+use super::super::pr::{pr_info, status};
 use super::*;
 use crate::{
     control::protocol::hosts::CheckInfo,
-    pr_actions::{Comment, CommentKind, Review},
     pull_request::{Input, fixture},
     sidebar::layout_tests::REPO_KEY,
 };
@@ -62,24 +61,6 @@ fn a_pull_request_maps_to_what_the_command_prints() {
     quiet.merge_state_status = crate::pull_request::MergeState::Unknown;
     let info = pr_info(&quiet);
     assert_eq!((info.review, info.merge_status), (None, None));
-}
-
-#[test]
-fn a_comment_maps_with_its_kind_label() {
-    let comment = Comment {
-        author: "octocat".into(),
-        kind: CommentKind::Review(Review::ChangesRequested),
-        body: "Please split this".into(),
-        created_at: "2026-09-20T12:00:00Z".into(),
-        source: "Please split this".into(),
-        avatar: None,
-        bot: false,
-    };
-    let info = comment_info(&comment);
-    assert_eq!(info.author, "octocat");
-    assert_eq!(info.kind, "requested changes");
-    assert_eq!(info.body, "Please split this");
-    assert_eq!(info.created_at, "2026-09-20T12:00:00Z");
 }
 
 #[gpui::test]

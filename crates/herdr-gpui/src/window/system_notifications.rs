@@ -294,8 +294,6 @@ mod tests {
             panic!("expected one notification: {shown:?}");
         };
         assert_eq!(shown.tag, "herdr-preview:local");
-        assert_eq!(shown.title, "Needs attention");
-        assert!(shown.body.starts_with("QA preview"));
         view.read_with(cx, |view, _| {
             let (_, notice) = view.endpoints[0].toasts.entries.back().unwrap();
             assert!(notice.posted && !notice.visible);

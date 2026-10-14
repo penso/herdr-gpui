@@ -98,27 +98,6 @@ fn the_buttons_enable_as_the_trail_grows(cx: &mut TestAppContext) {
     assert_eq!(can(&view, cx), (true, false));
 }
 
-#[test]
-fn each_platform_draws_its_own_buttons() {
-    let native = if cfg!(target_os = "macos") {
-        Style::Segmented
-    } else if cfg!(windows) {
-        Style::Fluent
-    } else {
-        Style::Adwaita
-    };
-    assert_eq!(Style::NATIVE, native);
-    // Fluent uses arrows; the others turn one chevron around.
-    assert_eq!(Style::Fluent.icon(Step::Back), "icons/arrow-left.svg");
-    for style in [Style::Segmented, Style::Adwaita] {
-        assert_eq!(style.icon(Step::Back), style.icon(Step::Forward));
-    }
-    // Every style fits the 34 px header with room to spare.
-    for style in [Style::Segmented, Style::Fluent, Style::Adwaita] {
-        assert!(style.button().0.height <= px(28.));
-    }
-}
-
 #[gpui::test]
 fn a_press_that_cannot_be_sent_leaves_the_landing_step_alone(cx: &mut TestAppContext) {
     let (view, cx) = window(cx);

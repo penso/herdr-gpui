@@ -18,6 +18,10 @@ pub(crate) enum HostOp {
     Select {
         id: String,
     },
+    /// Open the saved SSH device's command editor; the user saves there.
+    SshCommand {
+        host: String,
+    },
     /// The pull request of the caller's workspace's branch.
     Pr,
     /// Its review comments, loaded on request.

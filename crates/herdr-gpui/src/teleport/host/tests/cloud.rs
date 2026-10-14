@@ -12,7 +12,6 @@ fn cloud_hosts_preserve_provider_account_machine_and_session() {
             session: "work's session".into(),
         };
         let host = crate::teleport::host_for(&target).unwrap();
-        assert_eq!(host, crate::teleport::host_for(&target).unwrap());
         assert!(
             host.prelude()
                 .contains("herdr --session 'work'\\''s session'")

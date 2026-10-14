@@ -21,8 +21,8 @@ fn forwarding_a_port_asks_for_one_and_refuses_bad_or_repeated_ports(cx: &mut Tes
         assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
         return;
     }
-    assert_eq!(ACTIONS[2].0, Action::ForwardPort);
-    cx.simulate_keystrokes("down down down enter");
+    assert_eq!(ACTIONS[3].0, Action::ForwardPort);
+    cx.simulate_keystrokes("down down down down enter");
     let input = view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ForwardPort));
         host(view).input.clone().unwrap()
@@ -49,7 +49,7 @@ fn forwarding_a_port_asks_for_one_and_refuses_bad_or_repeated_ports(cx: &mut Tes
             host(view).error.as_deref(),
             Some("Port 3000 is already forwarded from this host.")
         );
-        assert_eq!(view.port_forwards.for_host("penso@box").count(), 1);
+        assert_eq!(view.port_forwards.for_host(&"penso@box".into()).count(), 1);
     });
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
     assert!(cx.debug_bounds("forward-port-error").is_some());
@@ -94,7 +94,7 @@ fn the_menu_lists_the_host_forwards_and_stops_one(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("host-forward-stop-80").is_some());
     // The forwards sit below the actions, and widen the menu to fit.
     assert!(
-        cx.debug_bounds("host-menu-3").unwrap().bottom()
+        cx.debug_bounds("host-menu-4").unwrap().bottom()
             <= cx.debug_bounds("host-forward-3000").unwrap().top()
     );
     assert_eq!(cx.debug_bounds("menu-panel").unwrap().size.width, px(260.));
@@ -103,7 +103,7 @@ fn the_menu_lists_the_host_forwards_and_stops_one(cx: &mut TestAppContext) {
     view.read_with(cx, |view, _| {
         let ports: Vec<u16> = view
             .port_forwards
-            .for_host("penso@box")
+            .for_host(&"penso@box".into())
             .map(|forward| forward.remote_port().get())
             .collect();
         assert_eq!(ports, [80]);
@@ -126,16 +126,16 @@ fn forwards_end_with_their_host(cx: &mut TestAppContext) {
     });
     view.update(cx, |view, cx| {
         view.update_port_forwards(cx);
-        assert_eq!(view.port_forwards.for_host("penso@box").count(), 1);
+        assert_eq!(view.port_forwards.for_host(&"penso@box".into()).count(), 1);
         view.endpoints[1].enabled = false;
         view.update_port_forwards(cx);
-        assert_eq!(view.port_forwards.for_host("penso@box").count(), 0);
+        assert_eq!(view.port_forwards.for_host(&"penso@box".into()).count(), 0);
 
         view.endpoints[1].enabled = true;
         view.port_forwards
             .fixture("penso@box", 3000, crate::port_forward::State::Starting);
         view.endpoints.truncate(1);
         view.update_port_forwards(cx);
-        assert_eq!(view.port_forwards.for_host("penso@box").count(), 0);
+        assert_eq!(view.port_forwards.for_host(&"penso@box".into()).count(), 0);
     });
 }

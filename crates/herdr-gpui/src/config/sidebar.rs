@@ -539,9 +539,11 @@ mod tests {
         }
         assert!(layout("[ui.sidebar.spaces]\nrows = [[\"agent\"]]").is_err());
         assert!(
-            layout("[ui.sidebar.spaces]\nrows = [[{ token = \"git_status\", rules = [{ equals = \"x\" }] }]]")
-                .is_err()
-        );
+      layout(
+        "[ui.sidebar.spaces]\nrows = [[{ token = \"git_status\", rules = [{ equals = \"x\" }] }]]"
+      )
+      .is_err()
+    );
     }
 
     #[test]

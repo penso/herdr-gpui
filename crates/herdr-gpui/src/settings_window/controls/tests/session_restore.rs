@@ -8,8 +8,8 @@ fn connected_ssh_hosts_get_their_own_pane_history_rows(cx: &mut TestAppContext) 
     view.update(cx, |view, cx| {
         let jobs = view.remote_history.sync(
             [
-                (long.to_owned(), "ready".to_owned()),
-                ("loading".to_owned(), "loading".to_owned()),
+                (long.to_owned(), "ready".into()),
+                ("loading".to_owned(), "loading".into()),
             ],
             false,
         );

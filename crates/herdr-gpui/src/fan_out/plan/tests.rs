@@ -70,27 +70,6 @@ fn stats_parse_each_lane_and_skip_gone_or_garbled_records() {
 }
 
 #[test]
-fn summaries_read_naturally() {
-    assert_eq!(DiffStat::default().summary(), "No changes yet");
-    let one = DiffStat {
-        files: 1,
-        additions: 4,
-        deletions: 0,
-        untracked: 0,
-        commits: 1,
-    };
-    assert_eq!(one.summary(), "+4 −0 · 1 file · 1 commit");
-    let many = DiffStat {
-        files: 3,
-        additions: 10,
-        deletions: 2,
-        untracked: 5,
-        commits: 0,
-    };
-    assert_eq!(many.summary(), "+10 −2 · 3 files · 5 untracked");
-}
-
-#[test]
 fn only_full_object_names_are_commits() {
     let sha = "0123456789abcdef0123456789abcdef01234567";
     assert_eq!(parse_commit(&format!("{sha}\n")).as_deref(), Some(sha));

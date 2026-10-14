@@ -283,48 +283,44 @@ pub(crate) async fn verify_native(
                 }
                 let deadline = Instant::now() + Duration::from_secs(3);
                 loop {
-                    let ready = AnyWindowHandle::from(settings).update(
-                        cx,
-                        |root, window, cx| -> Result<_> {
-                            window.draw(cx).clear(cx);
-                            let view = root
-                                .downcast::<SettingsWindow>()
-                                .map_err(|_| anyhow::anyhow!("unexpected Settings root"))?;
-                            let view = view.read(cx);
-                            let cards = view.native_theme_cards(cx);
-                            // The unfiltered catalog scrolls to the saved theme.
-                            let first = cards
-                                .iter()
-                                .map(|card| card.0)
-                                .filter(|index| index % columns == 0)
-                                .min()
-                                .unwrap_or(0);
-                            let bounds: Option<Vec<_>> = (first..=first + columns)
-                                .map(|index| {
-                                    cards.iter().find(|card| card.0 == index).map(|card| card.1)
-                                })
-                                .collect();
-                            let Some(bounds) = bounds.filter(|_| !view.busy()) else {
-                                return Ok(false);
-                            };
-                            // The outer body may clip the grid at the narrow size.
-                            // Check row geometry, not containment in that viewport.
-                            for pair in bounds[..columns].windows(2) {
-                                ensure!(
-                                    (pair[0].top() - pair[1].top()).abs() < px(1.)
-                                        && pair[0].right() < pair[1].left()
-                                        && pair[0].size.width > px(0.),
-                                    "Settings grid is not {columns} columns at {expected:?}: {bounds:?}"
-                                );
-                            }
-                            ensure!(
-                                (bounds[columns].left() - bounds[0].left()).abs() < px(1.)
-                                    && bounds[columns].top() >= bounds[0].bottom(),
-                                "Settings grid card {columns} did not wrap at {expected:?}: {bounds:?}"
-                            );
-                            Ok(true)
-                        },
-                    )??;
+                    let ready =
+            AnyWindowHandle::from(settings).update(cx, |root, window, cx| -> Result<_> {
+              window.draw(cx).clear(cx);
+              let view = root
+                .downcast::<SettingsWindow>()
+                .map_err(|_| anyhow::anyhow!("unexpected Settings root"))?;
+              let view = view.read(cx);
+              let cards = view.native_theme_cards(cx);
+              // The unfiltered catalog scrolls to the saved theme.
+              let first = cards
+                .iter()
+                .map(|card| card.0)
+                .filter(|index| index % columns == 0)
+                .min()
+                .unwrap_or(0);
+              let bounds: Option<Vec<_>> = (first..=first + columns)
+                .map(|index| cards.iter().find(|card| card.0 == index).map(|card| card.1))
+                .collect();
+              let Some(bounds) = bounds.filter(|_| !view.busy()) else {
+                return Ok(false);
+              };
+              // The outer body may clip the grid at the narrow size.
+              // Check row geometry, not containment in that viewport.
+              for pair in bounds[..columns].windows(2) {
+                ensure!(
+                  (pair[0].top() - pair[1].top()).abs() < px(1.)
+                    && pair[0].right() < pair[1].left()
+                    && pair[0].size.width > px(0.),
+                  "Settings grid is not {columns} columns at {expected:?}: {bounds:?}"
+                );
+              }
+              ensure!(
+                (bounds[columns].left() - bounds[0].left()).abs() < px(1.)
+                  && bounds[columns].top() >= bounds[0].bottom(),
+                "Settings grid card {columns} did not wrap at {expected:?}: {bounds:?}"
+              );
+              Ok(true)
+            })??;
                     if ready {
                         break;
                     }

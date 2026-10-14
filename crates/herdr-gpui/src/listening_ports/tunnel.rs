@@ -26,7 +26,7 @@ const TUNNEL_LIMIT: usize = 32;
 /// A remote port, by the SSH target its host is dialled with.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Key {
-    pub target: String,
+    pub target: herdr_client::SshTarget,
     pub port: u16,
 }
 

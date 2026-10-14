@@ -98,11 +98,11 @@ fn multi_file_binary_roundtrip_preserves_quoted_names_and_private_permissions() 
 fn public_limits_names_and_descriptor_validation_precede_spawn() {
     let stop = AtomicBool::new(false);
     assert!(matches!(
-        upload_files("-bad", &[], &stop, |_, _| {}),
+        upload_files(&"-bad".into(), &[], &stop, |_, _| {}),
         Err(Error::InvalidSshTarget)
     ));
     assert!(matches!(
-        upload_files("host", &vec![PathBuf::new(); 257], &stop, |_, _| {}),
+        upload_files(&"host".into(), &vec![PathBuf::new(); 257], &stop, |_, _| {}),
         Err(Error::UploadPathLimit)
     ));
     let temp = Temp::new();
@@ -364,7 +364,7 @@ fn fake_ssh_requires_exit_success_and_redacts_stderr() {
                 return temp.remote(script);
             }
             // Exercise the real policy arguments with an injected executable, not PATH.
-            let policy = crate::ssh::command("host", script);
+            let policy = crate::ssh::command(&"host".into(), script);
             let mut cmd = Command::new(&fake);
             cmd.args(policy.get_args()).env("TMPDIR", &temp.0);
             cmd
@@ -741,7 +741,7 @@ fn successful_upload_paths_can_be_cleaned_after_late_cancellation_and_retried() 
         cleanup(&cleanup_paths(&paths).unwrap(), &mut |s| temp.remote(s)).unwrap();
         assert!(temp.staged().is_empty());
     }
-    assert!(remove_uploaded_files("host", &[]).is_ok());
+    assert!(remove_uploaded_files(&"host".into(), &[]).is_ok());
     cleanup(&[], &mut |_| panic!("empty cleanup must not spawn")).unwrap();
 }
 

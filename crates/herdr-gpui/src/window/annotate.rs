@@ -232,11 +232,11 @@ impl HerdrWindow {
             Some(note) => {
                 if self.terminal_notes.queued.len() >= MAX_NOTES {
                     self.show_flash(
-                        Flash::warning(format!(
-                            "{MAX_NOTES} notes are queued; clear the field and press Enter to send them"
-                        )),
-                        cx,
-                    );
+            Flash::warning(format!(
+              "{MAX_NOTES} notes are queued; clear the field and press Enter to send them"
+            )),
+            cx,
+          );
                     return;
                 }
                 let origin = composer.origin.clone();

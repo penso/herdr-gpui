@@ -4,6 +4,7 @@ use herdr_client::{ClientEvent, SavedHost};
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod local_peer_warning;
+mod ssh_command;
 
 #[test]
 fn saved_profile_ids_are_the_catalog_ids_behind_ssh_endpoints() {

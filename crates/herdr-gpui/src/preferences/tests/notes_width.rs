@@ -15,12 +15,12 @@ fn the_notes_width_round_trips_and_a_damaged_one_is_forgotten() {
     // A bad width loses only itself, never the sidebar's.
     for damaged in [r#""wide""#, "-5", "0", "null"] {
         fs::write(
-            &path,
-            format!(
-                r#"{{"sidebar_width_px": 250, "notes_width_px": {damaged}, "code_width_px": {damaged}}}"#
-            ),
-        )
-        .unwrap();
+      &path,
+      format!(
+        r#"{{"sidebar_width_px": 250, "notes_width_px": {damaged}, "code_width_px": {damaged}}}"#
+      ),
+    )
+    .unwrap();
         let read = read_chrome(&path).unwrap();
         assert_eq!(read.notes_width, None, "{damaged}");
         assert_eq!(read.sidebar_width, Some(250.), "{damaged}");

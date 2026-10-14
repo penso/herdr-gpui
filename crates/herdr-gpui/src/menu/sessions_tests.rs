@@ -363,7 +363,7 @@ fn a_disabled_device_is_never_asked_for_its_sessions(cx: &mut TestAppContext) {
         targets,
         [(
             "ssh:build".to_owned(),
-            herdr_client::RemoteHost::Ssh("build.invalid".to_owned())
+            herdr_client::RemoteHost::Ssh("build.invalid".into())
         )],
         "a device the user disabled is never dialled"
     );

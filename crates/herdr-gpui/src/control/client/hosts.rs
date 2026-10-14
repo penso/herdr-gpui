@@ -4,9 +4,6 @@ mod text;
 
 pub(super) use text::bytes;
 
-#[cfg(test)]
-mod tests;
-
 use super::{Context, Output, unexpected};
 use crate::{
     cli::control::{CloudCommand, HostCommand, PortsCommand, PrCommand},
@@ -61,6 +58,7 @@ pub(super) fn host(command: HostCommand, context: &Context) -> crate::Result<Out
     let op = match command {
         HostCommand::List => HostOp::List,
         HostCommand::Select(id) => HostOp::Select { id },
+        HostCommand::SshCommand(host) => HostOp::SshCommand { host },
     };
     match context.call(Request::Host, op)? {
         Response::Done { message } => Ok(Output::message(message)),

@@ -69,7 +69,7 @@ impl Drop for Shell {
 
 impl Shell {
     #[cfg(unix)]
-    pub fn connect(target: &str) -> Result<Self> {
+    pub fn connect(target: &herdr_client::SshTarget) -> Result<Self> {
         let mut command = herdr_client::script_command(target, "exec /bin/sh -s")?;
         command
             .stdin(Stdio::piped())
@@ -79,7 +79,7 @@ impl Shell {
     }
 
     #[cfg(windows)]
-    pub fn connect(_target: &str) -> Result<Self> {
+    pub fn connect(_target: &herdr_client::SshTarget) -> Result<Self> {
         Err(Error::UsageUnsupported)
     }
 

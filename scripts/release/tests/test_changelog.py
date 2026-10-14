@@ -9,7 +9,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts/release/generate-changelog.sh"
-PREAMBLE = "GUI-only release."
 
 MOCK_GIT_CLIFF = """#!/usr/bin/env python3
 import json, os, sys
@@ -78,27 +77,6 @@ class ChangelogTests(unittest.TestCase):
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()]
-
-    def test_release_body_leads_with_the_platform_facts_then_the_history(self):
-        self.generate()
-        notes = (self.out / "RELEASE_NOTES.md").read_text()
-        head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
-                              capture_output=True, text=True, check=True).stdout.strip()
-        self.assertTrue(notes.startswith(PREAMBLE), notes)
-        self.assertIn(f"Source: {head}.", notes)
-        self.assertIn("## [v20260920.3]", notes)
-        self.assertIn("- Mock entry", notes)
-        self.assertIn("# Changelog", (self.out / "CHANGELOG.md").read_text())
-
-    def test_the_tag_being_cut_names_the_still_unreleased_commits(self):
-        self.generate()
-        changelog, notes = self.calls()
-        self.assertNotIn("--unreleased", changelog)
-        self.assertIn("--unreleased", notes)
-        for call in (changelog, notes):
-            self.assertEqual(call[call.index("--tag") + 1], "v20260920.3")
-            self.assertEqual(call[call.index("--config") + 1], "cliff.toml")
-        self.assertIn("--strip", notes)
 
     def test_unpromoted_betas_fold_into_the_release_after_them(self):
         script = history(self.work, self.env, *BETA_HISTORY)

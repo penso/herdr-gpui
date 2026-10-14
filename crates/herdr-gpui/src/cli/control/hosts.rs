@@ -13,6 +13,8 @@ pub enum PrCommand {
 pub enum HostCommand {
     List,
     Select(String),
+    /// Open the saved SSH device's command editor; the user saves there.
+    SshCommand(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +54,7 @@ pub(super) fn host(args: &mut Args) -> Result<HostCommand, CliError> {
     Ok(match verb.to_str() {
         Some("list") => HostCommand::List,
         Some("select") => HostCommand::Select(args.required_text("HOST")?),
+        Some("ssh-command") => HostCommand::SshCommand(args.required_text("HOST")?),
         _ => return Err(unknown("host", verb)),
     })
 }

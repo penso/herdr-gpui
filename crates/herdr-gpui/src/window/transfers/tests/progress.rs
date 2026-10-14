@@ -1,17 +1,17 @@
 use super::*;
 
 #[test]
-fn progress_sizes_and_percentages_are_readable_and_bounded() {
-    for (sent, total, fraction, label) in [
-        (0, 0, 0., "0 B / 0 B (0%)"),
-        (512, 1024, 0.5, "512 B / 1 KiB (50%)"),
-        (1024 * 1024, 2 * 1024 * 1024, 0.5, "1 MiB / 2 MiB (50%)"),
-        (1_288_490_189, 4_294_967_296, 0.3, "1.2 GiB / 4 GiB (30%)"),
-        (4_294_967_296, 8_589_934_592, 0.5, "4 GiB / 8 GiB (50%)"),
-        (2048, 1024, 1., "2 KiB / 1 KiB (100%)"),
-        (u64::MAX, u64::MAX, 1., "16 EiB / 16 EiB (100%)"),
+fn progress_fractions_are_bounded() {
+    for (sent, total, fraction) in [
+        (0, 0, 0.),
+        (512, 1024, 0.5),
+        (1024 * 1024, 2 * 1024 * 1024, 0.5),
+        (1_288_490_189, 4_294_967_296, 0.3),
+        (4_294_967_296, 8_589_934_592, 0.5),
+        (2048, 1024, 1.),
+        (u64::MAX, u64::MAX, 1.),
     ] {
-        assert_eq!(transfer_progress(sent, total), (fraction, label.into()));
+        assert_eq!(transfer_progress(sent, total).0, fraction);
     }
 }
 

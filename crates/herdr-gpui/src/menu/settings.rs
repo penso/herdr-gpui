@@ -166,90 +166,103 @@ impl HerdrWindow {
         self.config_load = Some(cx.spawn(async move |this, cx| {
             let loaded = load.await;
             let _ = this.update(cx, |this, cx| {
-                this.config_load = None;
-                this.config_load_revision = this.config_load_revision.wrapping_add(1);
-                // Apply a coherent pair only after both have loaded successfully.
-                match loaded {
-                    Ok((mut config, mut theme)) => {
-                        crate::settings_window::apply_loaded_layout(&mut config, layout_revision, cx);
-                        crate::settings_window::apply_loaded_theme(&mut config, &mut theme, theme_revision, cx);
-                        if let Some(shared) = &this.settings.shared {
-                            config.apply_shared_notifications(shared);
-                        }
-                        // A reload discards session zoom.
-                        this.configured_terminal_size = config.terminal.size;
-                        cx.set_global(crate::app::InitialAppearance {
-                            config: config.clone(),
-                            theme: theme.clone(),
-                            error: None,
-                        });
-                        if config.keybindings != this.config.keybindings {
-                            crate::actions::rebind_keys(cx);
-                        } else if config.layout.mode != this.config.layout.mode {
-                            // The View menu checks the layout in use.
-                            crate::menus::install(cx);
-                        }
-                        if this.config.notifications.delivery() == crate::config::NotificationDelivery::Off
-                            && config.notifications.delivery() != crate::config::NotificationDelivery::Off
-                        {
-                            let cutoff = std::time::Instant::now();
-                            for endpoint in &mut this.endpoints {
-                                endpoint.toasts.enabled_since = Some(cutoff);
-                            }
-                        }
-                        if config.status_bar.show != this.config.status_bar.show {
-                            this.status_bar_visible = config.status_bar.show;
-                        }
-                        this.config = config.clone();
-                        if this.config.theme != "Follow Herdr" {
-                            this.theme = theme;
-                        }
-                        this.apply_shared_theme(cx);
-                        this.theme_light = light;
-                        if light != crate::app::light_appearance(cx) {
-                            this.apply_system_theme(cx);
-                        }
-                        crate::settings_window::apply_loaded_theme(&mut this.config, &mut this.theme, theme_revision, cx);
-                        cx.set_global(crate::app::InitialAppearance {
-                            config: this.config.clone(),
-                            theme: this.theme.clone(),
-                            error: None,
-                        });
-                        this.config = config;
-                        this.gui_config_diagnostic.sync(this.config.diagnostic().as_deref());
-                        crate::settings_window::apply_loaded_theme(&mut this.config, &mut this.theme, theme_revision, cx);
-                        this.tick_toasts(
-                            this.menu.page.is_some() || this.toasts_hidden,
-                            std::time::Instant::now(),
-                        );
-                        crate::log_window::set_appearance(&this.config, &this.theme, cx);
-                        this.wheel = Default::default();
-                        this.last_queued_options = None;
-                        this.local_error = None;
-                    }
-                    Err(error) => {
-                        tracing::warn!(%error, "Could not load GUI config; keeping current settings");
-                        let message = format!("Load GUI config: {error}");
-                        this.local_error = Some(message);
-                    }
-                }
-                // A config another build wrote, such as a setting this version
-                // does not know, must not sign GitHub out: restore the saved
-                // credential under the settings already in effect.
-                let mut reloaded = false;
-                if this.avatars.is_some() {
-                    reloaded = this.menu.github.initialize(&this.config);
-                    for auth in this.menu.github_hosts.values_mut() {
-                        reloaded |= auth.initialize(&this.config);
-                    }
-                }
-                if reloaded {
-                    this.menu.pr_cache.clear();
-                    this.menu.pr.clear();
-                    this.menu.pr_connection = None;
-                }
-                cx.notify();
+        this.config_load = None;
+        this.config_load_revision = this.config_load_revision.wrapping_add(1);
+        // Apply a coherent pair only after both have loaded successfully.
+        match loaded {
+          Ok((mut config, mut theme)) => {
+            crate::settings_window::apply_loaded_layout(&mut config, layout_revision, cx);
+            crate::settings_window::apply_loaded_theme(&mut config, &mut theme, theme_revision, cx);
+            if let Some(shared) = &this.settings.shared {
+              config.apply_shared_notifications(shared);
+            }
+            // A reload discards session zoom.
+            this.configured_terminal_size = config.terminal.size;
+            cx.set_global(crate::app::InitialAppearance {
+              config: config.clone(),
+              theme: theme.clone(),
+              error: None,
             });
+            if config.keybindings != this.config.keybindings {
+              crate::actions::rebind_keys(cx);
+            } else if config.layout.mode != this.config.layout.mode {
+              // The View menu checks the layout in use.
+              crate::menus::install(cx);
+            }
+            if this.config.notifications.delivery() == crate::config::NotificationDelivery::Off
+              && config.notifications.delivery() != crate::config::NotificationDelivery::Off
+            {
+              let cutoff = std::time::Instant::now();
+              for endpoint in &mut this.endpoints {
+                endpoint.toasts.enabled_since = Some(cutoff);
+              }
+            }
+            if config.status_bar.show != this.config.status_bar.show {
+              this.status_bar_visible = config.status_bar.show;
+            }
+            this.config = config.clone();
+            if this.config.theme != "Follow Herdr" {
+              this.theme = theme;
+            }
+            this.apply_shared_theme(cx);
+            this.theme_light = light;
+            if light != crate::app::light_appearance(cx) {
+              this.apply_system_theme(cx);
+            }
+            crate::settings_window::apply_loaded_theme(
+              &mut this.config,
+              &mut this.theme,
+              theme_revision,
+              cx,
+            );
+            cx.set_global(crate::app::InitialAppearance {
+              config: this.config.clone(),
+              theme: this.theme.clone(),
+              error: None,
+            });
+            this.config = config;
+            this.reload_ssh_commands(cx);
+            this
+              .gui_config_diagnostic
+              .sync(this.config.diagnostic().as_deref());
+            crate::settings_window::apply_loaded_theme(
+              &mut this.config,
+              &mut this.theme,
+              theme_revision,
+              cx,
+            );
+            this.tick_toasts(
+              this.menu.page.is_some() || this.toasts_hidden,
+              std::time::Instant::now(),
+            );
+            crate::log_window::set_appearance(&this.config, &this.theme, cx);
+            this.wheel = Default::default();
+            this.last_queued_options = None;
+            this.local_error = None;
+          }
+          Err(error) => {
+            tracing::warn!(%error, "Could not load GUI config; keeping current settings");
+            let message = format!("Load GUI config: {error}");
+            this.local_error = Some(message);
+          }
+        }
+        // A config another build wrote, such as a setting this version
+        // does not know, must not sign GitHub out: restore the saved
+        // credential under the settings already in effect.
+        let mut reloaded = false;
+        if this.avatars.is_some() {
+          reloaded = this.menu.github.initialize(&this.config);
+          for auth in this.menu.github_hosts.values_mut() {
+            reloaded |= auth.initialize(&this.config);
+          }
+        }
+        if reloaded {
+          this.menu.pr_cache.clear();
+          this.menu.pr.clear();
+          this.menu.pr_connection = None;
+        }
+        cx.notify();
+      });
         }));
     }
 }

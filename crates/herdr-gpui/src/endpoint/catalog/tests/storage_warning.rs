@@ -16,6 +16,7 @@ fn loaded() -> Result<CatalogUpdate> {
         hosts: Vec::new(),
         wsl: Vec::new(),
         selection: None,
+        new_host_settings: None,
         #[cfg(feature = "cloud")]
         cloud: None,
     })

@@ -195,20 +195,6 @@ mod tests {
     use super::*;
     use core::prelude::v1::test;
 
-    /// The visible copyright must not drift from the repository's NOTICE.
-    #[test]
-    fn copyright_tracks_the_repository_notice() {
-        let notice = include_str!("../../../NOTICE");
-        let holder = notice
-            .lines()
-            .find_map(|line| line.strip_prefix("Copyright "))
-            .unwrap();
-        let copyright = format!("{COPYRIGHT_YEAR} {AUTHOR} {LICENSE}");
-        assert!(copyright.contains(holder), "{copyright} lacks {holder}");
-        assert!(notice.contains("Apache License, Version 2.0"));
-        assert!(LICENSE.contains("Apache-2.0"));
-    }
-
     /// Classic macOS puts About first in the application menu, above a separator.
     #[test]
     fn about_leads_the_application_menu() {

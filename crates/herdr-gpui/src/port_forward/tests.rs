@@ -57,20 +57,20 @@ fn a_running_port_is_not_forwarded_twice_but_an_ended_one_restarts() {
     forwards.fixture("box", 4000, State::Ended("gone".into()));
     let never = || -> Result<PortForward> { unreachable!("must not start") };
     assert!(matches!(
-        forwards.insert("box", port(3000), never),
+        forwards.insert(&"box".into(), port(3000), never),
         Err(Error::ForwardDuplicate(3000))
     ));
     // The ended entry is replaced by whatever the restart produced: here,
     // a failure to start, which leaves no entry behind.
     assert!(matches!(
-        forwards.insert("box", port(4000), || Err(Error::ForwardPort)),
+        forwards.insert(&"box".into(), port(4000), || Err(Error::ForwardPort)),
         Err(Error::ForwardPort)
     ));
-    assert_eq!(forwards.for_host("box").count(), 1);
+    assert_eq!(forwards.for_host(&"box".into()).count(), 1);
     // The same port on another host is another forward.
     assert!(
         forwards
-            .insert("other", port(3000), || Err(Error::ForwardPort))
+            .insert(&"other".into(), port(3000), || Err(Error::ForwardPort))
             .is_err()
     );
 }
@@ -82,7 +82,7 @@ fn the_number_of_forwards_is_bounded() {
         forwards.fixture("box", remote, State::Starting);
     }
     assert!(matches!(
-        forwards.insert("box", port(9999), || unreachable!()),
+        forwards.insert(&"box".into(), port(9999), || unreachable!()),
         Err(Error::ForwardLimit(LIMIT))
     ));
 }
@@ -93,17 +93,17 @@ fn stopping_removes_only_the_named_forward_and_hosts_that_leave_lose_theirs() {
     forwards.fixture("box", 3000, State::Starting);
     forwards.fixture("box", 4000, State::Listening { local_port: 4000 });
     forwards.fixture("other", 3000, State::Starting);
-    assert!(forwards.stop("box", port(3000)));
-    assert!(!forwards.stop("box", port(3000)));
-    let ports = |forwards: &PortForwards, host| {
+    assert!(forwards.stop(&"box".into(), port(3000)));
+    assert!(!forwards.stop(&"box".into(), port(3000)));
+    let ports = |forwards: &PortForwards, host: &str| {
         forwards
-            .for_host(host)
+            .for_host(&host.into())
             .map(|forward| forward.remote_port().get())
             .collect::<Vec<_>>()
     };
     assert_eq!(ports(&forwards, "box"), [4000]);
     assert!(!forwards.retain_hosts(|_| true));
-    assert!(forwards.retain_hosts(|host| host == "other"));
+    assert!(forwards.retain_hosts(|host| host.target == "other"));
     assert!(ports(&forwards, "box").is_empty());
     assert_eq!(ports(&forwards, "other"), [3000]);
     forwards.stop_all();

@@ -9,6 +9,7 @@ use herdr_client::HostProbe;
 
 #[cfg(feature = "cloud")]
 mod cloud_providers;
+mod custom_command;
 mod host_key;
 mod key_login;
 mod local_network;
@@ -30,10 +31,6 @@ fn only_a_present_herdr_is_saved_without_a_terminal() {
     assert_eq!(
         Offer::for_probe(HostProbe::SshFailed(herdr_client::SshFailure::Auth)),
         Some(Offer::InstallKey)
-    );
-    assert_eq!(
-        Offer::Install.question("dev@box"),
-        "Herdr was not detected on dev@box. Should we install it?"
     );
 }
 
@@ -95,12 +92,12 @@ fn a_device_on_another_session_is_still_matched_by_its_saved_entry(cx: &mut gpui
                 target: "penso@box".into(),
                 session: "work".into(),
             };
-            let saved = setup::Request::new("penso@box", "Again", "").unwrap();
+            let saved = setup::Request::new("penso@box", "Again", "", "").unwrap();
             assert!(matches!(
                 view.ensure_new_device(&saved),
                 Err(crate::Error::DeviceExists(label)) if label == "m5max-ms"
             ));
-            let work = setup::Request::new("penso@box", "Work", "work").unwrap();
+            let work = setup::Request::new("penso@box", "Work", "work", "").unwrap();
             assert!(view.ensure_new_device(&work).is_ok());
         });
     });
@@ -121,12 +118,12 @@ fn a_host_already_saved_or_being_added_returns_to_the_form(cx: &mut gpui::TestAp
                 true,
             ));
             // The window's own list refuses the exact spelling at once.
-            let again = setup::Request::new("penso@box", "Again", "").unwrap();
+            let again = setup::Request::new("penso@box", "Again", "", "").unwrap();
             assert!(matches!(
                 view.ensure_new_device(&again),
                 Err(crate::Error::DeviceExists(label)) if label == "m5max-ms"
             ));
-            let other = setup::Request::new("penso@box", "Work", "work").unwrap();
+            let other = setup::Request::new("penso@box", "Work", "work", "").unwrap();
             assert!(view.ensure_new_device(&other).is_ok());
 
             // Background checks catch other spellings and concurrent adds.

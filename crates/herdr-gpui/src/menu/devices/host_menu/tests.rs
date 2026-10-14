@@ -4,6 +4,7 @@ use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext, point, px,
 
 mod forwards;
 mod menu_width;
+mod ssh_command;
 
 // Endpoint IDs carry the `ssh:` prefix; the profile ID is the rest.
 const HOST: &str = "ssh:0123456789abcdef0123456789abcdef";
@@ -54,7 +55,7 @@ fn right_clicking_a_saved_host_offers_removal_but_local_has_no_menu(cx: &mut Tes
     }
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::Host));
-        assert_eq!(host(view).target, "penso@box");
+        assert_eq!(host(view).target, "penso@box".into());
         // `herdr machine remove` takes the bare catalog ID.
         assert_eq!(host(view).profile, "0123456789abcdef0123456789abcdef");
     });
@@ -92,17 +93,18 @@ fn the_menu_shows_the_server_keybindings_choice(cx: &mut TestAppContext) {
     let row = |cx: &mut VisualTestContext| {
         cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
         (
-            cx.debug_bounds("host-menu-1").is_some(),
+            cx.debug_bounds("host-menu-2").is_some(),
             cx.debug_bounds("host-menu-keybindings-error").is_some(),
         )
     };
     assert_eq!(row(cx), (true, false));
-    assert_eq!(ACTIONS[1].0, Action::ServerKeybindings);
+    assert_eq!(ACTIONS[2].0, Action::ServerKeybindings);
     view.update(cx, |view, cx| {
         view.config.devices.insert(
             "0123456789abcdef0123456789abcdef".into(),
             crate::config::DeviceSettings {
                 keybindings: KeybindingSource::Server,
+                ssh_command: Default::default(),
             },
         );
         view.selected_endpoint = 1;
@@ -144,7 +146,7 @@ fn the_menu_names_the_saved_session_after_a_session_pick(cx: &mut TestAppContext
             assert!(view.menu.host.is_none());
             return;
         }
-        assert_eq!(host(view).target, "penso@box");
+        assert_eq!(host(view).target, "penso@box".into());
         assert_eq!(host(view).session, "default");
     });
 }

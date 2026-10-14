@@ -41,15 +41,15 @@ pub(super) fn check_status_bar(
         }
         cx.simulate_click(report.center(), Default::default());
         assert_eq!(
-            cx.opened_url().as_deref(),
-            Some(
-                format!(
-                    "https://github.com/penso/herdr-gpui/issues/new?template=bug_report.yml&version={}",
-                    crate::APP_VERSION.replace('+', "%2B"),
-                )
-                .as_str()
-            )
-        );
+      cx.opened_url().as_deref(),
+      Some(
+        format!(
+          "https://github.com/penso/herdr-gpui/issues/new?template=bug_report.yml&version={}",
+          crate::APP_VERSION.replace('+', "%2B"),
+        )
+        .as_str()
+      )
+    );
     }
     Ok(())
 }

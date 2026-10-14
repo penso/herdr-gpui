@@ -72,9 +72,9 @@ fn sidebar_background_colors_only_the_sidebar() -> anyhow::Result<()> {
     for light in [false, true] {
         let base = parsed("[theme]\nname = 'catppuccin'\nauto_switch = true")?.theme(light)?;
         let common = parsed(
-            "[theme]\nname = 'catppuccin'\nauto_switch = true\n[theme.custom]\nsidebar_bg = '#0d0e0f'",
-        )?
-        .theme(light)?;
+      "[theme]\nname = 'catppuccin'\nauto_switch = true\n[theme.custom]\nsidebar_bg = '#0d0e0f'",
+    )?
+    .theme(light)?;
         assert_eq!(common.sidebar, Some(0x0d0e0f), "light {light}");
         assert_eq!(
             crate::config::Theme {

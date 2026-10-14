@@ -1,5 +1,6 @@
 use super::*;
 
+mod managed_command;
 #[test]
 fn fingerprints_are_read_from_ssh_keygen_lines() {
     assert_eq!(
@@ -226,7 +227,7 @@ fn a_failed_append_names_the_operation() {
 #[test]
 fn invalid_targets_are_refused_before_ssh_runs() {
     assert!(matches!(
-        scan_host_key("-oProxyCommand=x"),
+        scan_host_key(&"-oProxyCommand=x".into()),
         Err(Error::InvalidSshTarget)
     ));
 }

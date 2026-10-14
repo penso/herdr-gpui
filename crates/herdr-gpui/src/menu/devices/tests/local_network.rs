@@ -17,7 +17,7 @@ fn a_local_network_refusal_waits_for_the_user(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("penso@10.0.0.19", "", "").unwrap();
+            let request = setup::Request::new("penso@10.0.0.19", "", "", "").unwrap();
             open_form(view, Step::Checking(request), cx);
             view.device_probed(denied("local-network-wait"), cx);
             assert!(matches!(step(view), Step::AwaitingLocalNetwork(_)));
@@ -42,7 +42,7 @@ fn a_refusal_after_the_wait_returns_to_the_form(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("penso@10.0.0.20", "", "").unwrap();
+            let request = setup::Request::new("penso@10.0.0.20", "", "", "").unwrap();
             open_form(view, Step::AwaitingLocalNetwork(request), cx);
             view.device_probed(denied("local-network-denied"), cx);
             // A terminal cannot grant this app the permission, so none is offered.
@@ -67,7 +67,7 @@ fn an_allowed_wait_continues_the_setup(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("penso@10.0.0.21", "", "").unwrap();
+            let request = setup::Request::new("penso@10.0.0.21", "", "", "").unwrap();
             open_form(view, Step::AwaitingLocalNetwork(request), cx);
             view.device_probed(
                 Ok((

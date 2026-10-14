@@ -233,7 +233,7 @@ fn device(name: &str) -> (String, RemoteHost) {
 }
 
 fn ssh(target: &str) -> RemoteHost {
-    RemoteHost::Ssh(target.to_owned())
+    RemoteHost::Ssh(target.into())
 }
 
 /// Wait for the pass the popup started, counting nothing it never began.

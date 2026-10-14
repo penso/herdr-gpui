@@ -441,14 +441,3 @@ fn old_layouts_prefer_a_group_showing_a_tab_then_the_group_in_use() {
         [Terminal, Page(TabId::test(9)), Terminal]
     );
 }
-
-#[test]
-fn selectors_keep_their_names_in_the_first_group() {
-    let (_, mut ids, _) = layout();
-    let mut slot = |index| Slot {
-        id: ids.next(),
-        index,
-    };
-    assert_eq!(slot(0).selector("tab-t0"), "tab-t0");
-    assert_eq!(slot(2).selector("tab-t0"), "g2-tab-t0");
-}

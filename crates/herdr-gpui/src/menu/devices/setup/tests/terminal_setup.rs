@@ -12,7 +12,12 @@ fn after_session(command: &Command) -> Vec<&OsStr> {
 /// argument stays its own word: no shell sees the target or the label.
 #[test]
 fn the_setup_runs_machine_add_as_the_apps_child() -> Result<()> {
-    let request = Request::new("user@host", "Alice's $(printf INJECTED); device", "work")?;
+    let request = Request::new(
+        "user@host",
+        "Alice's $(printf INJECTED); device",
+        "work",
+        "",
+    )?;
     let command = setup_command(
         OsStr::new("/Applications/Herdr.app/Contents/MacOS/Herdr"),
         OsStr::new("/a path/herdr"),
@@ -52,7 +57,7 @@ fn key_setup_installs_the_key_with_the_users_ssh_then_saves() -> Result<()> {
         "herdr",
         &format!("#!/bin/sh\nprintf 'herdr\\n' >> \"$LOG\"\n{record}\n"),
     )?;
-    let request = Request::new("penso@m5mini.local", "Mini 'n $HOME", "")?;
+    let request = Request::new("penso@m5mini.local", "Mini 'n $HOME", "", "")?;
     let herdr = root.path().join("herdr");
     let command = setup_command(OsStr::new("herdr-gpui"), herdr.as_os_str(), &request, true);
     let words = after_session(&command);

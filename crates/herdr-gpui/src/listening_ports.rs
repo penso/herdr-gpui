@@ -141,14 +141,14 @@ fn local_shell() -> Result<Shell> {
 /// only, but runs `ssh -G`, so it happens on the worker, once per worker.
 fn origin(host: &Host) -> Origin {
     let resolved = match host {
-        Host::Local | Host::Wsl(_) => None,
-        Host::Ssh(target) => herdr_client::resolve_destination(target)
-            .inspect_err(|error| {
-                tracing::debug!(category = "listening-ports", %error, "could not resolve an SSH host name");
-            })
-            .ok()
-            .map(|destination| destination.host),
-    };
+    Host::Local | Host::Wsl(_) => None,
+    Host::Ssh(target) => herdr_client::resolve_destination(target)
+      .inspect_err(|error| {
+        tracing::debug!(category = "listening-ports", %error, "could not resolve an SSH host name");
+      })
+      .ok()
+      .map(|destination| destination.host),
+  };
     Origin::new(host, resolved.as_deref())
 }
 

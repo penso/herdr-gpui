@@ -36,10 +36,10 @@ impl Daemon {
         fs::create_dir_all(&dir).unwrap();
         let dir = dir.canonicalize().unwrap();
         fs::write(
-            dir.join("config.toml"),
-            "onboarding = false\n[terminal]\ndefault_shell = \"/bin/sh\"\nshell_mode = \"non_login\"\n",
-        )
-        .unwrap();
+      dir.join("config.toml"),
+      "onboarding = false\n[terminal]\ndefault_shell = \"/bin/sh\"\nshell_mode = \"non_login\"\n",
+    )
+    .unwrap();
         let env: Vec<(String, String)> = [
             ("HOME", dir.clone()),
             ("XDG_CONFIG_HOME", dir.join("config")),

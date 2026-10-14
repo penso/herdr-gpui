@@ -29,7 +29,7 @@ impl HerdrWindow {
         form.error = None;
         let background = cx
             .background_executor()
-            .spawn(async move { herdr_client::scan_host_key(request.target()) });
+            .spawn(async move { herdr_client::scan_host_key(request.ssh_target()) });
         form.task = Some(cx.spawn(async move |this, cx| {
             let result = background.await;
             let _ = this.update(cx, |this, cx| this.host_key_fetched(result, cx));

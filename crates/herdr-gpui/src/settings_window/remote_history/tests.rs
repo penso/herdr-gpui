@@ -1,9 +1,9 @@
 use super::*;
 
-fn connected(targets: &[&str]) -> Vec<(String, String)> {
+fn connected(targets: &[&str]) -> Vec<(String, SshTarget)> {
     targets
         .iter()
-        .map(|target| (format!("label-{target}"), (*target).to_owned()))
+        .map(|target| (format!("label-{target}"), (*target).into()))
         .collect()
 }
 
@@ -29,7 +29,7 @@ fn sync_loads_new_hosts_once_and_drops_disconnected_ones() {
     let jobs = remote.sync(connected(&["a", "b", "a"]), false);
     assert_eq!(
         jobs.iter()
-            .map(|job| job.target.as_str())
+            .map(|job| job.target.target.as_str())
             .collect::<Vec<_>>(),
         ["a", "b"]
     );
@@ -51,9 +51,9 @@ fn late_results_cannot_overwrite_a_newer_read() -> anyhow::Result<()> {
     let first = remote.sync(connected(&["a"]), false).remove(0);
     let second = remote.sync(connected(&["a"]), true).remove(0);
     assert!(first.cancel.load(Ordering::Acquire));
-    assert!(!remote.finish("a", first.generation, Ok(history(true)?)));
+    assert!(!remote.finish(&"a".into(), first.generation, Ok(history(true)?)));
     assert!(matches!(remote.hosts()[0].state, HostState::Loading));
-    assert!(remote.finish("a", second.generation, Ok(history(false)?)));
+    assert!(remote.finish(&"a".into(), second.generation, Ok(history(false)?)));
     assert!(matches!(
         &remote.hosts()[0].state,
         HostState::Ready(history) if !history.enabled
@@ -65,20 +65,23 @@ fn late_results_cannot_overwrite_a_newer_read() -> anyhow::Result<()> {
 fn saves_start_only_from_a_settled_read_and_survive_reload() -> anyhow::Result<()> {
     let mut remote = RemoteHistory::default();
     let load = remote.sync(connected(&["a"]), false).remove(0);
-    assert!(remote.begin_save("a").is_none(), "still loading");
-    assert!(remote.finish("a", load.generation, Ok(history(false)?)));
+    assert!(remote.begin_save(&"a".into()).is_none(), "still loading");
+    assert!(remote.finish(&"a".into(), load.generation, Ok(history(false)?)));
 
-    let Some((from, save)) = remote.begin_save("a") else {
+    let Some((from, save)) = remote.begin_save(&"a".into()) else {
         anyhow::bail!("a ready host saves");
     };
     assert!(!from.enabled);
-    assert!(remote.begin_save("a").is_none(), "one write at a time");
+    assert!(
+        remote.begin_save(&"a".into()).is_none(),
+        "one write at a time"
+    );
     // A reload while the write runs leaves it alone.
     assert!(remote.sync(connected(&["a"]), true).is_empty());
     assert!(!save.cancel.load(Ordering::Acquire));
-    assert!(!remote.finish("a", load.generation, Ok(history(false)?)));
+    assert!(!remote.finish(&"a".into(), load.generation, Ok(history(false)?)));
     assert!(remote.finish(
-        "a",
+        &"a".into(),
         save.generation,
         Err(crate::herdr_settings::Error::RemoteConflict.into())
     ));
@@ -87,7 +90,7 @@ fn saves_start_only_from_a_settled_read_and_survive_reload() -> anyhow::Result<(
         HostState::Failed(text) if text == "the host's Herdr config changed; reload before saving"
     ));
     assert!(
-        remote.begin_save("a").is_none(),
+        remote.begin_save(&"a".into()).is_none(),
         "a failed host reloads first"
     );
     assert_eq!(remote.sync(connected(&["a"]), true).len(), 1);

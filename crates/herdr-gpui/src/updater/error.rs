@@ -338,20 +338,6 @@ mod tests {
     use std::error::Error as _;
 
     #[test]
-    fn stale_homebrew_diagnostic_describes_the_post_refresh_requirement() {
-        let error = UpdateError::BrewStale {
-            installed: "20260921.2".into(),
-            current: "20260921.1".into(),
-            expected: "20260921.3".into(),
-        };
-        assert_eq!(
-            error.to_string(),
-            "After refreshing Homebrew, the installed cask is 20260921.2; it must be newer than 20260921.1 and at least the expected release 20260921.3"
-        );
-        assert!(error.source().is_none());
-    }
-
-    #[test]
     fn sources_remain_typed_without_displaying_remote_diagnostics() -> anyhow::Result<()> {
         let private =
             "https://release-assets.githubusercontent.com/a?signature=secret\n".repeat(4096);

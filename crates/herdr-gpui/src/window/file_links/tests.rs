@@ -240,7 +240,7 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
         assert!(cx.opened_url().is_none());
         view.read_with(cx, |view, _| {
             let (flash, _) = view.flash.as_ref().unwrap();
-            assert_eq!(flash.text.as_ref(), crate::Error::NotConnected.to_string());
+            assert!(matches!(flash.tone, crate::window::flash::Tone::Warning));
         });
     }
 

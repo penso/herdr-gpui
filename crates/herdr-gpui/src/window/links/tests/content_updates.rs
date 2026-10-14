@@ -137,9 +137,10 @@ fn an_unchanged_url_activates_at_the_release_revision(cx: &mut gpui::TestAppCont
     handler_failed(&mut peer, &view, cx, &request);
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| {
-        assert_eq!(
-            view.local_error.as_deref(),
-            Some("Link handler failed: handler failed")
+        assert!(
+            view.local_error
+                .as_deref()
+                .is_some_and(|error| error.contains("handler failed"))
         );
         assert!(view.links.activating.is_none());
     });

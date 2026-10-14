@@ -11,6 +11,7 @@ fn update(wsl: &[&str], selection: Option<Option<&str>>) -> CatalogUpdate {
             })
             .collect(),
         selection: selection.map(|id| id.map(str::to_owned)),
+        new_host_settings: None,
         #[cfg(feature = "cloud")]
         cloud: None,
     }

@@ -18,6 +18,8 @@ pub(crate) enum Page {
     RenameDevice,
     /// Names a saved SSH device's port to forward to this computer.
     ForwardPort,
+    /// Edits the saved SSH device's command, reset blank to plain `ssh`.
+    SshCommand,
     RemoveDevice,
     /// Sign in to Coder and add one of its workspaces as a device.
     #[cfg(feature = "coder")]

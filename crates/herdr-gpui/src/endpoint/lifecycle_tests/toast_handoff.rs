@@ -56,14 +56,20 @@ fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui::T
     next.panes[0].focused = false;
     next.panes.push(pane);
     next.focused_pane_id = Some("new-pane".into());
-    write_message(&mut server.stream, &ServerMessage::ClientShellEndpointResponseChunk {
-        boot_id: next.boot_id.clone(),
-        request_id: barrier["id"].as_str().unwrap().into(),
-        final_chunk: true,
-        data: serde_json::to_vec(&serde_json::json!({"id": barrier["id"], "result": {
-            "type": "client_shell_surface_set", "active": true, "projection_revision": next.revision
-        }})).unwrap(),
-    }, MAX_GRAPHICS_FRAME_SIZE).unwrap();
+    write_message(
+    &mut server.stream,
+    &ServerMessage::ClientShellEndpointResponseChunk {
+      boot_id: next.boot_id.clone(),
+      request_id: barrier["id"].as_str().unwrap().into(),
+      final_chunk: true,
+      data: serde_json::to_vec(&serde_json::json!({"id": barrier["id"], "result": {
+          "type": "client_shell_surface_set", "active": true, "projection_revision": next.revision
+      }}))
+      .unwrap(),
+    },
+    MAX_GRAPHICS_FRAME_SIZE,
+  )
+  .unwrap();
     wait_until(|| {
         inbox
             .lock()

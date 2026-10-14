@@ -343,6 +343,78 @@ impl Config {
         result.map_err(|error| error.at_path(path))
     }
 
+    /// Persist one device's SSH command, keeping the rest of the local file.
+    /// The default `ssh` removes the entry, so a reset leaves no override.
+    pub(crate) fn save_device_ssh_command(
+        profile: &str,
+        command: &herdr_client::SshCommand,
+    ) -> Result<()> {
+        let (_lock, local) = Self::prepare_files(&Self::path()?)?;
+        Self::save_device_ssh_command_path(profile, command, &local)
+    }
+
+    pub(super) fn save_device_ssh_command_path(
+        profile: &str,
+        command: &herdr_client::SshCommand,
+        path: &Path,
+    ) -> Result<()> {
+        if !herdr_client::valid_profile_id(profile) {
+            return Err(Error::InvalidDeviceId(profile.to_owned()));
+        }
+        let result = (|| -> Result<()> {
+            let text = match fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
+                Err(error) => return Err(error.into()),
+            };
+            let mut document = text.parse::<toml_edit::DocumentMut>()?;
+            if command.is_default() {
+                // Reset to plain `ssh`: remove only this device's command, and
+                // the device table itself when nothing else names it.
+                let Some(devices) = document
+                    .get_mut("devices")
+                    .and_then(toml_edit::Item::as_table_like_mut)
+                else {
+                    return Ok(());
+                };
+                if let Some(device) = devices
+                    .get_mut(profile)
+                    .and_then(toml_edit::Item::as_table_like_mut)
+                {
+                    device.remove("ssh_command");
+                    if device.is_empty() {
+                        devices.remove(profile);
+                    }
+                }
+                if devices.is_empty() {
+                    document.remove("devices");
+                }
+            } else {
+                let mut devices = toml_edit::Table::new();
+                devices.set_implicit(true);
+                let device = document
+                    .entry("devices")
+                    .or_insert(toml_edit::Item::Table(devices))
+                    .as_table_like_mut()
+                    .ok_or(Error::InvalidDevicesTable)?
+                    .entry(profile)
+                    .or_insert(toml_edit::Item::Table(toml_edit::Table::new()))
+                    .as_table_like_mut()
+                    .ok_or(Error::InvalidDevicesTable)?;
+                let mut value = toml_edit::Value::from(command.as_str());
+                if let Some(previous) = device
+                    .get("ssh_command")
+                    .and_then(toml_edit::Item::as_value)
+                {
+                    *value.decor_mut() = previous.decor().clone();
+                }
+                device.insert("ssh_command", toml_edit::Item::Value(value));
+            }
+            write_config(path, &document.to_string())
+        })();
+        result.map_err(|error| error.at_path(path))
+    }
+
     /// Persist only the Agents section visibility, keeping the rest of the local file.
     pub(crate) fn save_show_agents(show: bool) -> Result<()> {
         let (_lock, local) = Self::prepare_files(&Self::path()?)?;

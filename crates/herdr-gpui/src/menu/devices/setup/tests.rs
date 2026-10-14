@@ -4,17 +4,17 @@ use super::*;
 fn validates_setup_fields_before_launch() -> Result<()> {
     for target in ["", "-oProxyCommand=bad", "two hosts", "host\ncommand"] {
         assert!(matches!(
-            Request::new(target, "Label", ""),
+            Request::new(target, "Label", "", ""),
             Err(Error::DeviceSetupInput(_))
         ));
     }
     // An empty label is not an error: the target names the device.
-    assert_eq!(Request::new("host", "", "")?.label(), "host");
-    assert!(Request::new("host", "Label", "../session").is_err());
-    assert!(Request::new("host", "Label", ".").is_err());
-    assert!(Request::new("host", "Label", "dev.session").is_ok());
-    assert!(Request::new("ssh://user:password@host", "Label", "").is_err());
-    let request = Request::new(" user@host ", " My Device ", "")?;
+    assert_eq!(Request::new("host", "", "", "")?.label(), "host");
+    assert!(Request::new("host", "Label", "../session", "").is_err());
+    assert!(Request::new("host", "Label", ".", "").is_err());
+    assert!(Request::new("host", "Label", "dev.session", "").is_ok());
+    assert!(Request::new("ssh://user:password@host", "Label", "", "").is_err());
+    let request = Request::new(" user@host ", " My Device ", "", "")?;
     assert_eq!(
         request.arguments(),
         [
@@ -64,7 +64,7 @@ fn a_claim_blocks_a_second_add_until_released() -> Result<()> {
 
 #[test]
 fn saved_hosts_match_by_resolved_destination_not_spelling() -> Result<()> {
-    let request = Request::new("penso@10.0.0.9", "Box", "")?;
+    let request = Request::new("penso@10.0.0.9", "Box", "", "")?;
     let claim = Claim::acquire(destination("match.test"), "default")?;
     let resolve = |target: &str| {
         (target == "box-alias" || target == "penso@10.0.0.9").then(|| destination("match.test"))
@@ -126,7 +126,7 @@ fn fake_cli(name: &str) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
 #[test]
 fn save_reports_the_cli_failure_without_waiting_for_input() -> Result<()> {
     let (binary, log) = fake_cli("failure")?;
-    let request = Request::new("host", "Label", "")?;
+    let request = Request::new("host", "Label", "", "")?;
     let claim = Claim::acquire(destination("failure.test"), "default")?;
     let error = save_with(&binary, &request, &claim, || Ok(Vec::new()), |_| None).err();
     std::fs::remove_dir_all(binary.parent().unwrap_or(&binary))?;
@@ -145,7 +145,7 @@ fn save_reports_the_cli_failure_without_waiting_for_input() -> Result<()> {
 #[test]
 fn a_host_saved_by_another_client_meanwhile_keeps_only_the_first_profile() -> Result<()> {
     let (binary, log) = fake_cli("race")?;
-    let request = Request::new("penso@box", "Mine", "")?;
+    let request = Request::new("penso@box", "Mine", "", "")?;
     let claim = Claim::acquire(destination("race.test"), "default")?;
     let resolve = |_: &str| Some(destination("race.test"));
     let ours = saved('a', "Mine", "penso@box");
@@ -201,7 +201,7 @@ fn a_host_saved_by_another_client_meanwhile_keeps_only_the_first_profile() -> Re
 #[test]
 fn an_empty_label_names_the_device_after_its_target() -> Result<()> {
     assert_eq!(
-        Request::new("penso@10.0.0.9", "  ", "")?.label(),
+        Request::new("penso@10.0.0.9", "  ", "", "")?.label(),
         "penso@10.0.0.9"
     );
     assert_eq!(device_label("", "ssh://penso@box:22")?, "penso@box:22");
@@ -247,7 +247,7 @@ fn rename_passes_the_label_as_one_value_even_when_it_looks_like_a_flag() -> Resu
 #[test]
 fn same_host_means_same_ssh_target_and_session() -> Result<()> {
     // An empty session is the default one, as `machine add` saves it.
-    let request = Request::new(" penso@box ", "Box", "")?;
+    let request = Request::new(" penso@box ", "Box", "", "")?;
     assert!(request.same_host("penso@box", "default"));
     assert!(!request.same_host("penso@box", "work"));
     assert!(!request.same_host("other@box", "default"));

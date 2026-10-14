@@ -7,7 +7,7 @@
 //! user starts it again. Ports are named by the caller, never discovered here.
 
 use crate::{Error, Result};
-use herdr_client::{ForwardEvent, PortForward};
+use herdr_client::{ForwardEvent, PortForward, SshTarget};
 use std::num::NonZeroU16;
 
 /// Each forward is a process; a window never runs more than this many.
@@ -25,7 +25,7 @@ pub(crate) enum State {
 }
 
 pub(crate) struct Forward {
-    target: String,
+    target: SshTarget,
     remote_port: NonZeroU16,
     state: State,
     /// None once ended, and in tests that drive the state by hand.
@@ -124,15 +124,15 @@ pub(crate) struct PortForwards {
 }
 
 impl PortForwards {
-    pub fn for_host<'a>(&'a self, target: &'a str) -> impl Iterator<Item = &'a Forward> + 'a {
+    pub fn for_host<'a>(&'a self, target: &'a SshTarget) -> impl Iterator<Item = &'a Forward> + 'a {
         self.forwards
             .iter()
-            .filter(move |forward| forward.target == target)
+            .filter(move |forward| &forward.target == target)
     }
 
     /// Starts forwarding `remote_port` on `target`. An ended forward of the
     /// same port is replaced; a running one is left alone.
-    pub fn start(&mut self, target: &str, remote_port: NonZeroU16) -> Result<()> {
+    pub fn start(&mut self, target: &SshTarget, remote_port: NonZeroU16) -> Result<()> {
         self.insert(target, remote_port, || {
             PortForward::start(target, remote_port).map_err(Error::from)
         })
@@ -140,12 +140,12 @@ impl PortForwards {
 
     fn insert(
         &mut self,
-        target: &str,
+        target: &SshTarget,
         remote_port: NonZeroU16,
         start: impl FnOnce() -> Result<PortForward>,
     ) -> Result<()> {
         let same =
-            |forward: &Forward| forward.target == target && forward.remote_port == remote_port;
+            |forward: &Forward| &forward.target == target && forward.remote_port == remote_port;
         if self
             .forwards
             .iter()
@@ -159,7 +159,7 @@ impl PortForwards {
         }
         let handle = start()?;
         self.forwards.push(Forward {
-            target: target.to_owned(),
+            target: target.clone(),
             remote_port,
             state: State::Starting,
             handle: Some(handle),
@@ -168,15 +168,15 @@ impl PortForwards {
     }
 
     /// Stops the forward, or dismisses an ended one. Dropping it kills SSH.
-    pub fn stop(&mut self, target: &str, remote_port: NonZeroU16) -> bool {
+    pub fn stop(&mut self, target: &SshTarget, remote_port: NonZeroU16) -> bool {
         let before = self.forwards.len();
         self.forwards
-            .retain(|forward| forward.target != target || forward.remote_port != remote_port);
+            .retain(|forward| &forward.target != target || forward.remote_port != remote_port);
         self.forwards.len() != before
     }
 
     /// Stops forwards of hosts `keep` rejects. Returns whether any stopped.
-    pub fn retain_hosts(&mut self, keep: impl Fn(&str) -> bool) -> bool {
+    pub fn retain_hosts(&mut self, keep: impl Fn(&SshTarget) -> bool) -> bool {
         let before = self.forwards.len();
         self.forwards.retain(|forward| keep(&forward.target));
         self.forwards.len() != before

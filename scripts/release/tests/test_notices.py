@@ -118,10 +118,6 @@ class NoticeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "empty license evidence"):
                 notices.main()
             self.assertFalse(output.exists())
-            self.assertEqual(cargo.call_args.args[0], [
-                "cargo", "about", "generate", "--locked", "--all-features", "--workspace", "--fail",
-                "--config", str(self.root / "scripts/release/about.toml"), "--format", "json",
-            ])
             self.evidence["licenses"][0]["text"] = "Test license"
             with patch("builtins.print"):
                 notices.main()

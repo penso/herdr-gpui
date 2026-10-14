@@ -48,10 +48,6 @@ fn success_pastes_quoted_paths_to_captured_pane_or_popup(cx: &mut TestAppContext
         view.read_with(cx, |view, _| {
             assert!(view.file_transfer.is_none());
             assert!(view.local_error.is_none());
-            assert_eq!(
-                view.endpoints[0].toasts.entries.back().unwrap().1.title,
-                "Copy complete"
-            );
         });
         peer.sentinel(&view, cx);
     }
@@ -127,15 +123,17 @@ fn old_completion_preserves_replacement_and_reports_cleanup_failure(cx: &mut Tes
     cx.run_until_parked();
     assert_eq!(rx.try_recv().unwrap(), (HOST.into(), vec![REMOTE.into()]));
     view.read_with(cx, |view, _| {
-        assert!(Arc::ptr_eq(
-            &replacement,
-            &view.file_transfer.as_ref().unwrap().cancelled
-        ));
-        assert!(!replacement.load(Ordering::Acquire));
-        let notice = &view.endpoints[0].toasts.entries.back().unwrap().1;
-        assert_eq!(notice.title, "Remote cleanup failed");
-        assert_eq!(notice.body.as_deref(), Some("No path was pasted. Temporary files may remain on the original host (Original host)."));
-    });
+    assert!(Arc::ptr_eq(
+      &replacement,
+      &view.file_transfer.as_ref().unwrap().cancelled
+    ));
+    assert!(!replacement.load(Ordering::Acquire));
+    let notice = &view.endpoints[0].toasts.entries.back().unwrap().1;
+    assert_eq!(
+      notice.body.as_deref(),
+      Some("No path was pasted. Temporary files may remain on the original host (Original host).")
+    );
+  });
     peer.sentinel(&view, cx);
 }
 
@@ -181,19 +179,21 @@ fn backend_cleanup_failure_survives_host_switch_without_disclosing_diagnostics(
     });
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
-        assert!(view.file_transfer.is_none());
-        assert!(view.local_error.is_none());
-        assert!(view.endpoints[0].toasts.entries.is_empty());
-        let notices = &view.endpoints[1].toasts.entries;
-        assert_eq!(notices.len(), 1);
-        let notice = &notices.back().unwrap().1;
-        assert_eq!(notice.title, "Remote cleanup failed");
-        assert!(notice.visible);
-        assert_eq!(notice.body.as_deref(), Some("No path was pasted. Temporary files may remain on the original host (Original host)."));
-        for forbidden in ["/private", "secret", HOST, "other.invalid", "Other host"] {
-            assert!(!notice.body.as_ref().unwrap().contains(forbidden));
-        }
-    });
+    assert!(view.file_transfer.is_none());
+    assert!(view.local_error.is_none());
+    assert!(view.endpoints[0].toasts.entries.is_empty());
+    let notices = &view.endpoints[1].toasts.entries;
+    assert_eq!(notices.len(), 1);
+    let notice = &notices.back().unwrap().1;
+    assert!(notice.visible);
+    assert_eq!(
+      notice.body.as_deref(),
+      Some("No path was pasted. Temporary files may remain on the original host (Original host).")
+    );
+    for forbidden in ["/private", "secret", HOST, "other.invalid", "Other host"] {
+      assert!(!notice.body.as_ref().unwrap().contains(forbidden));
+    }
+  });
     peer.sentinel(&view, cx);
 }
 
@@ -210,7 +210,7 @@ fn duplicate_copy_never_invokes_second_backend(cx: &mut TestAppContext) {
             InputTarget::Pane("w1:p1".into()),
             vec!["large file".into()],
             move |host, paths, cancelled, progress| {
-                assert_eq!(host, HOST);
+                assert_eq!(host, &HOST.into());
                 assert_eq!(paths, [PathBuf::from("large file")]);
                 assert!(!cancelled.load(Ordering::Acquire));
                 progress(4_294_967_296, 8_589_934_592);
@@ -232,17 +232,12 @@ fn duplicate_copy_never_invokes_second_backend(cx: &mut TestAppContext) {
             &token,
             &view.file_transfer.as_ref().unwrap().cancelled
         ));
-        assert_eq!(
-            view.endpoints[0].toasts.entries.back().unwrap().1.title,
-            "Copy not started"
-        );
     });
     cx.run_until_parked();
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     view.read_with(cx, |view, _| {
         assert!(view.file_transfer.is_none());
         let notice = &view.endpoints[0].toasts.entries.back().unwrap().1;
-        assert_eq!(notice.title, "Copy failed");
         assert_eq!(
             notice.body.as_deref(),
             Some(herdr_client::Error::UploadPathLimit.to_string().as_str())

@@ -788,31 +788,36 @@ impl Render for SettingsWindow {
             .text_color(rgb(theme.foreground))
             .children(header)
             .child(
-                div().flex_1().min_h_0().flex().child(navigation).child(self.scroll_area(scrollbar::Pane::Body,
-                    div()
-                        .id("settings-body")
-                        .debug_selector(|| "settings-body".into())
-                        .flex_1()
-                        .min_w_0()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .track_scroll(&self.body_scroll)
-                        .p(px(28.))
-                        .child(
-                            div()
-                                .text_size(px(28.))
-                                .line_height(px(36.))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(self.section.label()),
-                        )
-                        .child(
-                            div()
-                                .mt(px(5.))
-                                .mb(px(24.))
-                                .text_color(rgb(theme.subtext()))
-                                .child(self.section.description()),
-                        )
-                        .child(content), cx)),
+                div().flex_1().min_h_0().flex().child(navigation).child(
+                    self.scroll_area(
+                        scrollbar::Pane::Body,
+                        div()
+                            .id("settings-body")
+                            .debug_selector(|| "settings-body".into())
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .track_scroll(&self.body_scroll)
+                            .p(px(28.))
+                            .child(
+                                div()
+                                    .text_size(px(28.))
+                                    .line_height(px(36.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(self.section.label()),
+                            )
+                            .child(
+                                div()
+                                    .mt(px(5.))
+                                    .mb(px(24.))
+                                    .text_color(rgb(theme.subtext()))
+                                    .child(self.section.description()),
+                            )
+                            .child(content),
+                        cx,
+                    ),
+                ),
             )
             .child(
                 div()
@@ -827,30 +832,34 @@ impl Render for SettingsWindow {
                     .border_color(rgb(theme.active))
                     .text_size(px(11.))
                     .child(
-                        div().debug_selector(|| "settings-footer-status".into()).flex_1().min_w_0().child(
-                            self.error
-                                .clone()
-                                .or_else(|| {
-                                    if self.loading {
-                                        Some("Loading preferences...".into())
-                                    } else {
-                                        self.status.clone()
-                                    }
-                                })
-                                .unwrap_or_else(|| {
-                                    match self.section {
-                                        Section::Appearance => {
-                                            "Themes and layouts change live; saved on Settings close or app quit."
+                        div()
+                            .debug_selector(|| "settings-footer-status".into())
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                self.error
+                                    .clone()
+                                    .or_else(|| {
+                                        if self.loading {
+                                            Some("Loading preferences...".into())
+                                        } else {
+                                            self.status.clone()
                                         }
-                                        #[cfg(feature = "cloud")]
-                                        Section::CloudDevices => {
-                                            "Account fields save with Save; sign-in and removal apply at once."
-                                        }
-                                        _ => "Changes are saved automatically.",
-                                    }
-                                    .into()
-                                }),
-                        ),
+                                    })
+                                    .unwrap_or_else(|| {
+                                        match self.section {
+                      Section::Appearance => {
+                        "Themes and layouts change live; saved on Settings close or app quit."
+                      }
+                      #[cfg(feature = "cloud")]
+                      Section::CloudDevices => {
+                        "Account fields save with Save; sign-in and removal apply at once."
+                      }
+                      _ => "Changes are saved automatically.",
+                    }
+                    .into()
+                                    }),
+                            ),
                     )
                     .child(
                         self.control_choice("settings-footer-reload", "Reload", false, true)

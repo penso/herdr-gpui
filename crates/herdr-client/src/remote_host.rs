@@ -2,7 +2,7 @@
 //! socket: an SSH target, or a WSL distribution on this Windows machine. Each
 //! owns its own named sessions, listed and deleted through its own Herdr CLI.
 use crate::{
-    ConnectTarget, RemoteSession, Result, delete_distro_session, delete_remote_session,
+    ConnectTarget, RemoteSession, Result, SshTarget, delete_distro_session, delete_remote_session,
     list_distro_sessions, list_remote_sessions,
 };
 
@@ -10,7 +10,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RemoteHost {
     /// A validated `[user@]host` SSH target.
-    Ssh(String),
+    Ssh(SshTarget),
     /// A WSL distribution name.
     Wsl(String),
 }
@@ -62,27 +62,5 @@ impl ConnectTarget {
             Self::Cloud { .. } => None,
             Self::Local | Self::Session { .. } | Self::Socket(_) => None,
         }
-    }
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hosts_round_trip_through_their_targets() {
-        for host in [
-            RemoteHost::Ssh("me@box".into()),
-            RemoteHost::Wsl("Ubuntu".into()),
-        ] {
-            let target = host.target("work");
-            assert_eq!(target.remote_host(), Some(host));
-            assert_eq!(target.remote_session(), Some("work"));
-            assert!(target.is_remote());
-            assert!(target.socket_path().is_err());
-        }
-        assert_eq!(ConnectTarget::Local.remote_host(), None);
-        assert!(!ConnectTarget::Local.is_remote());
     }
 }

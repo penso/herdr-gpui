@@ -1,12 +1,19 @@
 use super::*;
 use gpui::Entity;
 
-const ROWS: [&str; 4] = ["host-menu-0", "host-menu-1", "host-menu-2", "host-menu-3"];
-const LABELS: [&str; 4] = [
+const ROWS: [&str; 5] = [
+    "host-menu-0",
+    "host-menu-1",
+    "host-menu-2",
+    "host-menu-3",
+    "host-menu-4",
+];
+const LABELS: [&str; 5] = [
     "host-menu-label-0",
     "host-menu-label-1",
     "host-menu-label-2",
     "host-menu-label-3",
+    "host-menu-label-4",
 ];
 
 /// Opens the saved host's menu in a window `width` wide, with the device

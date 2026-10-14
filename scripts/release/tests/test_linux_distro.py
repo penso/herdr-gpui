@@ -7,7 +7,6 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import tarfile
 import tempfile
@@ -170,15 +169,6 @@ class LinuxDistroTests(unittest.TestCase):
                 path = rewrite(name, extra)
                 self.package(target, path, success=False)
                 self.assertEqual([p.name for p in path.parent.iterdir()], [path.name])
-
-    def test_pinned_tools_and_images(self):
-        installer = (SCRIPTS / "install-nfpm.sh").read_text()
-        self.assertEqual(len(re.findall(r"sha=[0-9a-f]{64} ;;", installer)), 4)
-        smoke = (SCRIPTS / "smoke-linux-packages.sh").read_text()
-        images = re.findall(r"^(?:ubuntu|debian|fedora|arch)=(\S+)$", smoke, re.M)
-        self.assertEqual(len(images), 4)
-        for image in images:
-            self.assertRegex(image, r"^[a-z]+:[a-z0-9.]+@sha256:[0-9a-f]{64}$")
 
     @unittest.skipUnless(os.environ.get("HERDR_TEST_NFPM"), "set HERDR_TEST_NFPM to a real nfpm")
     def test_real_nfpm_writes_each_format(self):

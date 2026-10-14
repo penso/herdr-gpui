@@ -31,10 +31,10 @@ fn the_exit_status_is_reported_and_the_output_is_bounded_and_stripped_of_control
     assert_eq!(finished.output, "red\nplain");
     // Far more than a terminal buffer holds: unread output would block it.
     let finished = create_vm(
-        sh("i=0; while [ $i -lt 4000 ]; do echo \"line $i padding padding padding\"; i=$((i+1)); done"),
-        &|| false,
-    )
-    .unwrap();
+    sh("i=0; while [ $i -lt 4000 ]; do echo \"line $i padding padding padding\"; i=$((i+1)); done"),
+    &|| false,
+  )
+  .unwrap();
     assert!(finished.output.contains("line 3999") && finished.output.len() < 8 * 1024);
 }
 

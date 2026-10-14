@@ -100,7 +100,8 @@ running another terminal emulator or wrapping the TUI.
   </tr>
 </table>
 
-Also included: saved SSH hosts with [file copies](crates/herdr-gpui/README.md#ssh-file-copies),
+Also included: saved SSH hosts with per-machine commands such as `tailscale ssh`
+or a custom SSH binary, [file copies](crates/herdr-gpui/README.md#ssh-file-copies),
 [inline images](crates/herdr-gpui/README.md#images),
 [clickable links](crates/herdr-gpui/README.md#terminal-links),
 [code navigation](crates/herdr-gpui/README.md#code-navigation) that jumps to a

@@ -3,13 +3,15 @@
 //! installation prompts runs in this app on a terminal that a local workspace
 //! shows (see `setup_relay`), so no remote installer policy is duplicated here.
 use crate::{Error, Result};
-use herdr_client::{Destination, HostProbe, SavedHost};
+use herdr_client::{Destination, HostProbe, SavedHost, SshCommand, SshTarget};
 use std::{
     io::Read,
     process::{Command, ExitStatus, Stdio},
     sync::Mutex,
     time::{Duration, Instant},
 };
+
+mod custom_command;
 
 /// `machine add` connects, starts the remote server, and verifies it.
 const SAVE_TIMEOUT: Duration = Duration::from_secs(120);
@@ -101,15 +103,17 @@ impl Drop for Claim {
 /// the claim even before the catalog changes. Blocks on `ssh -G` and the
 /// catalog file: call it from the background executor.
 pub(super) fn claim(request: &Request) -> Result<Claim> {
-    let destination = herdr_client::resolve_destination(&request.target)?;
+    let destination = herdr_client::resolve_destination(request.ssh_target())?;
     let claim = Claim::acquire(destination, &request.session)?;
-    ensure_unsaved(request, &claim, &load_catalog()?, resolve)?;
+    ensure_unsaved(request, &claim, &load_catalog()?, |target| {
+        request.resolve(target)
+    })?;
     Ok(claim)
 }
 
 /// Claim a saved host while it is removed, so an add of the same host from
 /// this process cannot run at the same time. Blocks on `ssh -G`.
-pub(super) fn claim_saved(target: &str, session: &str) -> Result<Claim> {
+pub(super) fn claim_saved(target: &SshTarget, session: &str) -> Result<Claim> {
     let destination = herdr_client::resolve_destination(target)?;
     Claim::acquire(destination, session)
 }
@@ -163,7 +167,9 @@ fn rename_with(executable: &std::ffi::OsStr, id: &str, label: &str) -> Result<()
 
 /// Check the catalog on disk again, right before a step that saves.
 pub(super) fn verify_unsaved(request: &Request, claim: &Claim) -> Result<()> {
-    ensure_unsaved(request, claim, &load_catalog()?, resolve)
+    ensure_unsaved(request, claim, &load_catalog()?, |target| {
+        request.resolve(target)
+    })
 }
 
 /// Device setup is refused for development catalogs, so this is the catalog
@@ -181,10 +187,6 @@ fn load_catalog() -> Result<Vec<SavedHost>> {
     Ok(hosts)
 }
 
-fn resolve(target: &str) -> Option<Destination> {
-    herdr_client::resolve_destination(target).ok()
-}
-
 /// The first saved profile, in catalog order, that reaches the claimed host
 /// and session. `machine add` appends, so the first one is the oldest.
 fn first_saved<'a>(
@@ -195,7 +197,7 @@ fn first_saved<'a>(
 ) -> Option<&'a SavedHost> {
     hosts.iter().find(|host| {
         host.session == request.session
-            && (host.target == request.target
+            && (host.target == request.target.target
                 || resolve(&host.target).as_ref() == Some(&claim.destination))
     })
 }
@@ -248,13 +250,13 @@ pub(super) fn device_label(label: &str, target: &str) -> Result<String> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Request {
-    target: String,
+    target: SshTarget,
     label: String,
     session: String,
 }
 
 impl Request {
-    pub(super) fn new(target: &str, label: &str, session: &str) -> Result<Self> {
+    pub(super) fn new(target: &str, label: &str, session: &str, command: &str) -> Result<Self> {
         let target = target.trim();
         let label = label.trim();
         let session = session.trim();
@@ -289,14 +291,33 @@ impl Request {
             ));
         }
         Ok(Self {
-            target: target.into(),
+            target: SshTarget {
+                target: target.into(),
+                command: SshCommand::try_from(command)?,
+            },
             label,
             session: session.into(),
         })
     }
 
     pub(super) fn target(&self) -> &str {
+        &self.target.target
+    }
+
+    pub(super) fn ssh_target(&self) -> &SshTarget {
         &self.target
+    }
+
+    pub(super) fn has_custom_command(&self) -> bool {
+        !self.target.command.is_default()
+    }
+
+    fn resolve(&self, target: &str) -> Option<Destination> {
+        herdr_client::resolve_destination(&SshTarget {
+            target: target.to_owned(),
+            command: self.target.command.clone(),
+        })
+        .ok()
     }
 
     pub(super) fn label(&self) -> &str {
@@ -306,7 +327,7 @@ impl Request {
     /// Whether a saved device connects the same way: Herdr's `machine add` saves
     /// a new profile every time, so the same host would otherwise appear twice.
     pub(super) fn same_host(&self, target: &str, session: &str) -> bool {
-        target == self.target && session == self.session
+        target == self.target.target && session == self.session
     }
 
     /// Blocks on SSH: call it from the background executor.
@@ -318,7 +339,7 @@ impl Request {
         [
             "machine",
             "add",
-            &self.target,
+            self.target(),
             "--label",
             &self.label,
             "--remote-session",
@@ -408,12 +429,15 @@ pub(super) struct TerminalSetup {
 /// call it from the background executor. Stdin is closed, so any approval the
 /// CLI would need fails instead of waiting for input nobody can see.
 pub(super) fn save(request: &Request, claim: &Claim) -> Result<()> {
+    if request.has_custom_command() {
+        return custom_command::save(request, claim);
+    }
     save_with(
         crate::daemon::executable(),
         request,
         claim,
         load_catalog,
-        resolve,
+        |target| request.resolve(target),
     )
 }
 
@@ -606,6 +630,11 @@ impl TerminalSetup {
 /// the file system: call it off the UI thread.
 #[cfg(unix)]
 pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<TerminalSetup> {
+    if request.has_custom_command() {
+        return Err(Error::DeviceSetupInput(
+            "Custom SSH commands need noninteractive access and an installed, compatible Herdr. Set up the host with your command, then try again.",
+        ));
+    }
     let app = std::env::current_exe()?;
     let dir = crate::preferences::state_dir()
         .ok_or(Error::DeviceSetupInput("Herdr UI has no state directory."))?;

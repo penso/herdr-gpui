@@ -10,10 +10,11 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    sync::Mutex,
     sync::atomic::{AtomicU64, Ordering},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SavedHost {
     pub id: String,
@@ -23,7 +24,7 @@ pub struct SavedHost {
     pub enabled: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Catalog {
     version: u32,
@@ -147,6 +148,74 @@ fn store_selection(catalog: &Path, selected: Option<&str>) -> Result<()> {
         )
     })?;
     write_private(&path, &content)
+}
+
+/// Serializes this process's catalog read-modify-write, so two windows adding
+/// different hosts cannot lose one another's append. Cross-process edits are
+/// not locked (the Herdr CLI takes none); callers re-check for duplicates
+/// afterward, exactly as upstream's own `machine add` flow does.
+static CATALOG_EDIT: Mutex<()> = Mutex::new(());
+
+/// Append one validated [`SavedHost`] to the upstream catalog, preserving its
+/// version, order, and selection. The caller generates the ID and, for a
+/// custom command, persists that preference before this entry can be reached.
+///
+/// The whole catalog is loaded, the entry appended, and the file atomically
+/// replaced under the existing private-write policy. A duplicate ID or a
+/// duplicate target/session pair is refused rather than silently replacing or
+/// shadowing a profile. Performs filesystem I/O: call it from a background
+/// worker.
+pub fn store_saved_host(development: bool, host: SavedHost) -> Result<()> {
+    store_host(&catalog_path(development, |name| env::var_os(name)), host)
+}
+
+fn store_host(catalog: &Path, host: SavedHost) -> Result<()> {
+    validate_saved_host(&host)?;
+    let _guard = CATALOG_EDIT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut current = load_catalog(catalog)?;
+    if current.ssh.iter().any(|existing| existing.id == host.id) {
+        return Err(Error::ProfileId);
+    }
+    if current
+        .ssh
+        .iter()
+        .any(|existing| existing.target == host.target && existing.session == host.session)
+    {
+        return Err(Error::DuplicateHost);
+    }
+    current.ssh.push(host);
+    if current.ssh.len() > 64 {
+        return Err(Error::CatalogVersionOrCount);
+    }
+    let content = serde_json::to_vec_pretty(&current).map_err(|error| {
+        Error::storage(
+            StorageOperation::Encode,
+            catalog,
+            Error::CatalogSchema(error),
+        )
+    })?;
+    if content.len() > 65536 {
+        return Err(Error::CatalogLimit);
+    }
+    write_private(catalog, &content)
+}
+
+/// The per-profile rules a catalog entry must satisfy, shared by loading and
+/// appending so a stored entry is rejected for exactly the reasons a loaded
+/// one would be.
+fn validate_saved_host(host: &SavedHost) -> Result<()> {
+    if !valid_profile_id(&host.id) {
+        return Err(Error::ProfileId);
+    }
+    let label = host.label.trim();
+    if label.is_empty() || label.len() > 128 || label.chars().any(char::is_control) {
+        return Err(Error::ProfileLabel);
+    }
+    validate_target(&host.target)?;
+    session_socket(Path::new(""), &host.session)?;
+    Ok(())
 }
 
 /// Atomically replace `path` with `content` in a private file, syncing its
@@ -289,15 +358,10 @@ fn parse_catalog(bytes: &[u8]) -> Result<Catalog> {
     }
     let mut ids = HashSet::new();
     for host in &catalog.ssh {
-        if !valid_profile_id(&host.id) || !ids.insert(&host.id) {
+        if !ids.insert(&host.id) {
             return Err(Error::ProfileId);
         }
-        let label = host.label.trim();
-        if label.is_empty() || label.len() > 128 || label.chars().any(char::is_control) {
-            return Err(Error::ProfileLabel);
-        }
-        validate_target(&host.target)?;
-        session_socket(Path::new(""), &host.session)?;
+        validate_saved_host(host)?;
     }
     if catalog
         .selected_profile

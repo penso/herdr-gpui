@@ -12,7 +12,7 @@ fn a_server_that_needs_a_restart_is_named_as_such() -> Result<()> {
          'error: remote server is not ready for saved machines; machine was not saved' >&2\nexit 1\n",
         0o700,
     )?;
-    let request = Request::new("framework.local", "", "")?;
+    let request = Request::new("framework.local", "", "", "")?;
     let claim = Claim::acquire(destination("restart.test"), "default")?;
     let error = save_with(&binary, &request, &claim, || Ok(Vec::new()), |_| None).err();
     assert!(

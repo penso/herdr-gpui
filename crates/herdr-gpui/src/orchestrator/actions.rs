@@ -199,7 +199,7 @@ fn host_of(site: &Site, session: &HerdrSession) -> Result<Host> {
 pub(super) fn target_of(session: &HerdrSession) -> ConnectTarget {
     match (&session.host, &session.session) {
         (Some(destination), session) => ConnectTarget::Ssh {
-            target: destination.clone(),
+            target: destination.clone().into(),
             session: session.clone().unwrap_or_else(|| "default".into()),
         },
         (None, Some(name)) => ConnectTarget::Session {
@@ -223,7 +223,9 @@ fn herdr(
 /// The SSH destination and Herdr session a target names, as sessions record.
 pub(super) fn place(target: &ConnectTarget) -> (Option<String>, Option<String>) {
     match target {
-        ConnectTarget::Ssh { target, session } => (Some(target.clone()), Some(session.clone())),
+        ConnectTarget::Ssh { target, session } => {
+            (Some(target.target.clone()), Some(session.clone()))
+        }
         ConnectTarget::Session { name, .. } => (None, Some(name.clone())),
         _ => (None, None),
     }

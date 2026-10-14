@@ -3,7 +3,7 @@
 //! This exists for work the endpoint connection cannot express, such as Git
 //! plumbing in a remote checkout or `herdr` CLI queries whose methods are not
 //! advertised to GUI clients. It never touches a daemon connection.
-use crate::{Error, Result, catalog::validate_target};
+use crate::{Error, Result, SshTarget, catalog::validate_target};
 use std::{
     io::{Read, Write},
     process::Command,
@@ -16,7 +16,7 @@ use std::{
 pub enum ScriptHost<'a> {
     Local,
     /// A validated `[user@]host` target, using the endpoint SSH trust policy.
-    Ssh(&'a str),
+    Ssh(&'a SshTarget),
 }
 
 /// Bounds for one script run.
@@ -49,7 +49,7 @@ pub fn run_script(
     cancelled: &AtomicBool,
 ) -> Result<u64> {
     if let ScriptHost::Ssh(target) = host {
-        validate_target(target)?;
+        validate_target(&target.target)?;
     }
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {

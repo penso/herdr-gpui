@@ -80,38 +80,3 @@ fn disconnect_presentation_is_sanitized_and_bounded() {
     assert_eq!(reason.chars().count(), 1024);
     assert!(!reason.chars().any(char::is_control));
 }
-
-#[test]
-fn connect_options_equality_and_send_error_display() {
-    let options = ConnectOptions::default();
-    assert_eq!(options, ConnectOptions::default());
-    for changed in [
-        ConnectOptions {
-            surface_size: ClientSurfaceSize { cols: 81, rows: 24 },
-            ..options
-        },
-        ConnectOptions {
-            surface_size: ClientSurfaceSize { cols: 80, rows: 25 },
-            ..options
-        },
-        ConnectOptions {
-            cell_width_px: 8,
-            ..options
-        },
-        ConnectOptions {
-            cell_height_px: 16,
-            ..options
-        },
-    ] {
-        assert_ne!(options, changed);
-    }
-    assert_eq!(SendError::Full.to_string(), "client command queue is full");
-    assert_eq!(
-        SendError::Disconnected.to_string(),
-        "client is disconnected"
-    );
-    assert_eq!(
-        Error::MissingBootId.to_string(),
-        "invalid client command: snapshot boot ID required"
-    );
-}

@@ -232,11 +232,9 @@ impl HerdrWindow {
         };
         let existing = cx.try_global::<Store>().and_then(|store| {
             store
-                .in_workspace(&scope, &workspace)
-                .find(|tab| {
-                    matches!(&tab.location, Some(Location::Code { file }) if file.path == path)
-                })
-                .map(|tab| tab.id)
+        .in_workspace(&scope, &workspace)
+        .find(|tab| matches!(&tab.location, Some(Location::Code { file }) if file.path == path))
+        .map(|tab| tab.id)
         });
         let file = CodeFile {
             path,

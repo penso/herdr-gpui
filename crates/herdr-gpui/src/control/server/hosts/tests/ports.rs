@@ -40,7 +40,8 @@ fn a_port_says_where_this_machine_reaches_it() {
     assert_eq!(hidden.local_url, None);
     let mut forwards = PortForwards::default();
     forwards.fixture("me@devbox", 5173, State::Listening { local_port: 40_001 });
-    let listed: Vec<_> = forwards.for_host("me@devbox").collect();
+    let target = "me@devbox".into();
+    let listed: Vec<_> = forwards.for_host(&target).collect();
     let forwarded = port_info(&port(5173, Bind::Loopback), &remote(), &listed);
     assert_eq!(
         forwarded.local_url.as_deref(),
@@ -55,7 +56,7 @@ fn a_forward_reports_its_state_and_why_it_ended() {
     forwards.fixture("me@devbox", 80, State::Listening { local_port: 40_080 });
     forwards.fixture("me@devbox", 443, State::Ended("ssh exited".into()));
     let infos: Vec<_> = forwards
-        .for_host("me@devbox")
+        .for_host(&"me@devbox".into())
         .map(|forward| forward_info("me@devbox", forward))
         .collect();
     let summary: Vec<_> = infos
@@ -159,7 +160,7 @@ fn local_ports_need_no_forward_and_a_remote_forward_stops(cx: &mut TestAppContex
             assert_eq!(forwards[0].host, "me@devbox");
             let stopped = unforward(view, &caller(None), 5173, cx);
             assert!(matches!(stopped, Response::Done { .. }), "{stopped:?}");
-            assert_eq!(view.port_forwards.for_host("me@devbox").count(), 0);
+            assert_eq!(view.port_forwards.for_host(&"me@devbox".into()).count(), 0);
             let again = unforward(view, &caller(None), 5173, cx);
             assert_eq!(error_code(&again), Some(ErrorCode::NotFound));
         })

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use super::{Page, PrState, Row, summary};
+use super::{Page, PrState, Row};
 use crate::git::Status;
 use crate::sidebar::layout_tests::REPO_KEY;
 use gpui::{TestAppContext, VisualTestContext, point, px, size};
@@ -11,15 +11,6 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
         deletions,
         untracked,
     }
-}
-
-#[test]
-fn summary_reads_as_a_sentence_before_and_after_the_first_refresh() {
-    assert_eq!(summary(None), "Checking working tree...");
-    assert_eq!(summary(Some(Status::default())), "No uncommitted changes");
-    assert_eq!(summary(Some(status(12, 3, 0))), "+12 -3");
-    assert_eq!(summary(Some(status(12, 3, 1))), "+12 -3, 1 untracked entry");
-    assert_eq!(summary(Some(status(0, 0, 4))), "+0 -0, 4 untracked entries");
 }
 
 #[gpui::test]

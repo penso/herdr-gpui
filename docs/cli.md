@@ -102,6 +102,7 @@ Every command accepts:
 | Command | What it does |
 | --- | --- |
 | `host [list]`, `host select ID` | The window's hosts; show another one |
+| `host ssh-command HOST` | Open the saved SSH device's command editor; save or reset there. Accepts an ID or label, including disabled devices |
 | `pr [status]\|checks\|comments\|open` | Your branch's pull request, on the window's selected host. `comments` needs your workspace focused |
 | `ports [list]` | Ports your workspace listens on, and forwards |
 | `ports forward\|unforward PORT` | Forward a port of the SSH host to this machine |
@@ -150,7 +151,7 @@ herdr-gpui wait window            # also waits for the app to start
 
 Commands never bypass a confirmation. Restoring a checkpoint, teleporting a
 worktree, fanning out a prompt, running a worktree script the app has not
-seen, and adding a cloud machine open the app's own dialog (archiving a
+seen, changing a machine's SSH command, and adding a cloud machine open the app's own dialog (archiving a
 worktree has no command at all), already pointed
 at your checkout, and the user confirms there. Nothing here installs,
 starts, stops, or upgrades Herdr, and `update` never installs the app.

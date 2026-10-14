@@ -2,6 +2,8 @@
 use super::*;
 use serde_json::json;
 
+mod append;
+
 // Symlink and permission fixtures require POSIX semantics.
 #[cfg(unix)]
 #[test]

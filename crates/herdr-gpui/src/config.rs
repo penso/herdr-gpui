@@ -187,10 +187,13 @@ pub(crate) enum KeybindingSource {
 }
 
 /// One `[devices.<profile-id>]` table.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub(crate) struct DeviceSettings {
     pub(crate) keybindings: KeybindingSource,
+    /// The executable this device's SSH sessions run, such as `tailscale ssh`
+    /// or a fixed-argument custom binary. Unset or empty is the plain `ssh`.
+    pub(crate) ssh_command: herdr_client::SshCommand,
 }
 
 impl Config {
@@ -200,6 +203,16 @@ impl Config {
         crate::endpoint::saved_profile_id(endpoint_id)
             .and_then(|profile| self.devices.get(profile))
             .map(|device| device.keybindings)
+            .unwrap_or_default()
+    }
+
+    /// The SSH command a saved device's sessions run, resolved by its catalog
+    /// profile ID. Local, explicit sockets, and other endpoint kinds have no
+    /// saved profile, so they keep the default `ssh`.
+    pub(crate) fn ssh_command(&self, endpoint_id: &str) -> herdr_client::SshCommand {
+        crate::endpoint::saved_profile_id(endpoint_id)
+            .and_then(|profile| self.devices.get(profile))
+            .map(|device| device.ssh_command.clone())
             .unwrap_or_default()
     }
 }

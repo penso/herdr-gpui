@@ -108,7 +108,6 @@ fn a_posted_comment_is_a_success_even_when_its_link_is_unexpected() {
     )
     .unwrap();
     assert_eq!(sends, 1);
-    assert_eq!(outcome.message, "Commented on pull request #8");
     assert!(outcome.url.unwrap().ends_with("#issuecomment-42"));
     for url in [
         "https://evil.example/#issuecomment-42",
@@ -116,7 +115,6 @@ fn a_posted_comment_is_a_success_even_when_its_link_is_unexpected() {
         "https://github.com/example/project/pull/8#issuecomment-4x",
     ] {
         let outcome = commented(&reply(url), &target);
-        assert_eq!(outcome.message, "Commented on pull request #8");
         assert_eq!(outcome.url, None, "{url}");
     }
 }

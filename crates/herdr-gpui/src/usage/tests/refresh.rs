@@ -117,7 +117,7 @@ fn each_host_keeps_its_own_answer_within_a_bound() {
         now,
     );
     for index in 0..super::super::HOST_LIMIT * 2 {
-        usage.begin(Host::Ssh(format!("host-{index}")), now);
+        usage.begin(Host::Ssh(format!("host-{index}").into()), now);
     }
     usage.busy = None;
     assert!(usage.entries.len() <= super::super::HOST_LIMIT);

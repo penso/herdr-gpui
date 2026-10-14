@@ -180,7 +180,7 @@ pub(crate) enum Origin {
     Local,
     Remote {
         /// The SSH target, which a tunnel to the host dials.
-        target: String,
+        target: herdr_client::SshTarget,
         /// The host's name as a URL spells it, if one could be found.
         name: Option<String>,
     },
@@ -198,7 +198,7 @@ impl Origin {
                 target: target.clone(),
                 name: resolved
                     .and_then(url_host)
-                    .or_else(|| url_host(target.rsplit('@').next()?)),
+                    .or_else(|| url_host(target.target.rsplit('@').next()?)),
             },
         }
     }

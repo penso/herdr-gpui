@@ -344,7 +344,7 @@ impl HerdrWindow {
                     Target::Device {
                         host: RemoteHost::Ssh(target),
                         ..
-                    } => target.clone(),
+                    } => target.target.clone(),
                     Target::Device {
                         host: RemoteHost::Wsl(distro),
                         ..

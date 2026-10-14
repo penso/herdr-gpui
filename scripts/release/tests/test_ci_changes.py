@@ -15,6 +15,8 @@ class CiChanges(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.env = {"PATH": os.environ["PATH"], "HOME": str(self.root),
+                    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
         self.git("init", "-q")
         # Auto maintenance detaches a gc that can still be writing to .git
         # when the directory is removed, failing cleanup.
@@ -25,7 +27,7 @@ class CiChanges(unittest.TestCase):
         self.base = self.git("rev-parse", "HEAD").strip()
 
     def git(self, *args):
-        return subprocess.check_output(["git", *args], cwd=self.root, text=True)
+        return subprocess.check_output(["git", *args], cwd=self.root, env=self.env, text=True)
 
     def commit_path(self, path):
         target = self.root / path
@@ -38,7 +40,7 @@ class CiChanges(unittest.TestCase):
     def detect(self, event="pull_request", base=None):
         return subprocess.check_output(
             ["bash", str(SCRIPT)], cwd=self.root, text=True,
-            env={**os.environ, "EVENT": event, "BASE": base or self.base,
+            env={**self.env, "EVENT": event, "BASE": base or self.base,
                  "HEAD_SHA": self.git("rev-parse", "HEAD").strip()},
         ).strip()
 

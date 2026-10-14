@@ -15,7 +15,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Host {
     Local,
-    Ssh(String),
+    Ssh(herdr_client::SshTarget),
     /// A WSL distribution. Nothing is read from one yet: its files are not this
     /// machine's, and no shell is opened into it for these probes.
     Wsl(String),

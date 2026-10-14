@@ -88,11 +88,11 @@ impl Tools {
 
     fn alert(&self, message: &str) -> String {
         self.tool(
-            "osascript",
-            &format!(
-                "-e on run argv -e display alert (item 1 of argv) giving up after 300 -e end run {message}"
-            ),
-        )
+      "osascript",
+      &format!(
+        "-e on run argv -e display alert (item 1 of argv) giving up after 300 -e end run {message}"
+      ),
+    )
     }
 
     /// Complete lines recorded so far. A line still being written is not one.
@@ -156,8 +156,8 @@ fn relaunch_alerts_instead_of_opening_when_the_app_never_exits() -> anyhow::Resu
     let tools = Tools::new()?;
     tools.schedule(std::process::id(), Duration::ZERO)?;
     tools.wait_for(&tools.alert(
-        "Herdr did not quit in time to restart. Quit Herdr, then open it again to finish the update.",
-    ))?;
+    "Herdr did not quit in time to restart. Quit Herdr, then open it again to finish the update.",
+  ))?;
     thread::sleep(Duration::from_millis(100));
     let events = tools.events();
     anyhow::ensure!(

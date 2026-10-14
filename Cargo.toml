@@ -90,6 +90,7 @@ serde_json           = "1"
 serde_ignored        = "0.1.14"
 sha1                 = "0.11.0"
 sha2                 = "0.11.0"
+shlex                = "2"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
 skrifa               = { default-features = false, features = ["std"], version = "0.48" }
 # Diff syntax colouring: bundled grammars, parsed with the pure-Rust regex

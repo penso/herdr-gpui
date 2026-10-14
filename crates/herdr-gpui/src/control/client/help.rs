@@ -89,7 +89,7 @@ fn family(name: &str) -> &'static str {
             "herdr-gpui pr [status]|checks\n    The pull request of the caller's workspace's branch, as Herdr UI last\n    looked it up (selected host only; sign in to GitHub first). Exits 4\n    when there is none.\nherdr-gpui pr comments\n    Its review comments (the workspace must be the focused one).\nherdr-gpui pr open\n    Open it in a browser tab."
         }
         "host" => {
-            "herdr-gpui host [list]\n    The window's hosts and their status. Herdr's `machine` command\n    manages saved hosts.\nherdr-gpui host select ID\n    Show that host in the window, as choosing it in the sidebar does."
+            "herdr-gpui host [list]\n    The window's hosts and their status. Herdr's `machine` command\n    manages saved hosts.\nherdr-gpui host select ID\n    Show that host in the window, as choosing it in the sidebar does.\nherdr-gpui host ssh-command HOST\n    Open the saved device's SSH command editor. The user saves there;\n    nothing is executed from the command line."
         }
         "cloud" => {
             "herdr-gpui cloud [list]\n    Saved cloud machines (Herdr UI need not run).\nherdr-gpui cloud add\n    Open the settings that add a machine. A machine is never created or\n    destroyed from the command line."

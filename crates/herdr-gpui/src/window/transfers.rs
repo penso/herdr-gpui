@@ -15,7 +15,7 @@ use std::{
 
 pub(crate) struct FileTransfer {
     endpoint: String,
-    host: String,
+    host: herdr_client::SshTarget,
     epoch: u64,
     generation: u64,
     boot: String,
@@ -139,14 +139,16 @@ impl HerdrWindow {
         target: InputTarget,
         paths: Vec<PathBuf>,
         upload: impl FnOnce(
-            &str,
+            &herdr_client::SshTarget,
             &[PathBuf],
             &AtomicBool,
             &mut dyn FnMut(u64, u64),
         ) -> herdr_client::Result<Vec<String>>
         + Send
         + 'static,
-        cleanup: impl FnOnce(&str, &[String]) -> herdr_client::Result<()> + Send + 'static,
+        cleanup: impl FnOnce(&herdr_client::SshTarget, &[String]) -> herdr_client::Result<()>
+        + Send
+        + 'static,
         cx: &mut Context<Self>,
     ) {
         if !self.accepts_remote_images() || paths.is_empty() {

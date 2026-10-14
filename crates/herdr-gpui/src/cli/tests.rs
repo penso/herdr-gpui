@@ -2,6 +2,7 @@ use super::*;
 use control::BrowserCommand;
 
 mod control_commands;
+mod ssh_command;
 
 #[test]
 fn build_info_is_an_informational_mode() {

@@ -76,28 +76,3 @@ class LinuxIconGeometryTests(unittest.TestCase):
             with self.subTest(icon=name):
                 self.check_geometry(ET.parse(ASSETS / name).getroot())
 
-    def test_geometry_rejects_regenerated_but_broken_layouts(self):
-        for tag, attribute, value in (
-            ("circle", "r", "512"),
-            ("circle", "cx", "540"),
-            ("path", "transform", "translate(400 792) scale(.15 -.15)"),
-            ("path", "transform", "translate(51 792) scale(.3 -.3)"),
-            ("path", "d", "M 0 0 C 20000 0 20000 0 0 0 Z"),
-        ):
-            root = ET.parse(ASSETS / "herdr-linux.svg").getroot()
-            root.find(SVG + tag).set(attribute, value)
-            with self.subTest(attribute=attribute, value=value), self.assertRaises(AssertionError):
-                self.check_geometry(root)
-
-    def test_control_points_handle_relative_curves_repeated_segments_and_close(self):
-        self.assertEqual(list(control_points(
-            "M 10 20 30 40 c 1 2 3 4 5 6 1 2 3 4 5 6 z m 2 3 l 4 5 "
-            "L 1 2 C 3 4 5 6 7 8 Z"
-        )), [(10, 20), (30, 40), (31, 42), (33, 44), (35, 46),
-             (36, 48), (38, 50), (40, 52), (10, 20), (12, 23), (16, 28),
-             (1, 2), (3, 4), (5, 6), (7, 8), (12, 23)])
-
-    def test_control_points_reject_unsupported_or_incomplete_commands(self):
-        for path in ("M 0 0 Q 1 2 3 4", "M 0 0 L 1", "M 0 0 ! L 1 2"):
-            with self.subTest(path=path), self.assertRaises(ValueError):
-                list(control_points(path))

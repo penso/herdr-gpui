@@ -108,7 +108,7 @@ fn privileged_ports_move_up_and_others_keep_their_number() {
 #[test]
 fn the_master_is_private_to_the_forward_and_the_request_binds_loopback_only() {
     let socket = Path::new("/tmp/herdr-fwd-1-1/c%h");
-    let master = master_command("penso@box", socket);
+    let master = master_command(&"penso@box".into(), socket);
     assert_eq!(master.get_program(), "ssh");
     let args: Vec<&OsStr> = master.get_args().collect();
     assert_eq!(args[0], "-N");
@@ -129,7 +129,7 @@ fn the_master_is_private_to_the_forward_and_the_request_binds_loopback_only() {
     assert!(!args.contains(&OsStr::new("ClearAllForwardings=yes")));
     assert_eq!(&args[args.len() - 2..], ["--", "penso@box"]);
 
-    let request = forward_command("penso@box", socket, 13000, 3000);
+    let request = forward_command(&"penso@box".into(), socket, 13000, 3000);
     let args: Vec<&OsStr> = request.get_args().collect();
     assert!(args.contains(&OsStr::new("ControlPath=/tmp/herdr-fwd-1-1/c%%h")));
     let at = args.iter().position(|arg| *arg == "-O").unwrap();
@@ -152,7 +152,7 @@ fn a_long_temporary_directory_falls_back_to_tmp_for_the_socket() {
 #[test]
 fn option_like_targets_are_refused_before_anything_runs() {
     assert!(matches!(
-        PortForward::start("-oProxyCommand=x", port(3000)),
+        PortForward::start(&"-oProxyCommand=x".into(), port(3000)),
         Err(Error::InvalidSshTarget)
     ));
 }

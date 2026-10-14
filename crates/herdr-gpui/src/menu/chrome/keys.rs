@@ -119,7 +119,13 @@ impl HerdrWindow {
         }
         if matches!(
             self.menu.page,
-            Some(Page::Host | Page::RenameDevice | Page::ForwardPort | Page::RemoveDevice)
+            Some(
+                Page::Host
+                    | Page::RenameDevice
+                    | Page::ForwardPort
+                    | Page::SshCommand
+                    | Page::RemoveDevice
+            )
         ) {
             self.host_menu_key(event, window, cx);
             return;

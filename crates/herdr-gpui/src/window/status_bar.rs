@@ -99,10 +99,15 @@ impl HerdrWindow {
             .children(self.caffeine_button(items.keep_awake, cx))
             .when(items.theme.shown(), |bar| {
                 bar.child(
-                    self.status_button("status-theme", glyph("icons/theme.svg", self.theme.foreground), "Theme", items.theme)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_theme_picker(window, cx);
-                        })),
+                    self.status_button(
+                        "status-theme",
+                        glyph("icons/theme.svg", self.theme.foreground),
+                        "Theme",
+                        items.theme,
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_theme_picker(window, cx);
+                    })),
                 )
             })
             .when(items.shortcuts.shown(), |bar| {
@@ -120,13 +125,18 @@ impl HerdrWindow {
             })
             .when(items.report_issue.shown(), |bar| {
                 bar.child(
-                    self.status_button("report-issue", self.issue_ring(), "Report issue", items.report_issue)
-                        .on_click(|_, _, cx| {
-                            cx.open_url(&format!(
-                                "https://github.com/penso/herdr-gpui/issues/new?template=bug_report.yml&version={}",
-                                APP_VERSION.replace('+', "%2B"),
-                            ));
-                        }),
+                    self.status_button(
+                        "report-issue",
+                        self.issue_ring(),
+                        "Report issue",
+                        items.report_issue,
+                    )
+                    .on_click(|_, _, cx| {
+                        cx.open_url(&format!(
+                "https://github.com/penso/herdr-gpui/issues/new?template=bug_report.yml&version={}",
+                APP_VERSION.replace('+', "%2B"),
+              ));
+                    }),
                 )
             })
             .child(

@@ -54,12 +54,12 @@ impl HerdrWindow {
         force: bool,
     ) -> crate::Result<()> {
         let pending = self.endpoints[self.selected_endpoint]
-            .connection
-            .request_dialog(
-                boot_id,
-                Method::WorktreeRemove,
-                serde_json::json!({"workspace_id": workspace, "force": force, "trust_repository": false}),
-            )?;
+      .connection
+      .request_dialog(
+        boot_id,
+        Method::WorktreeRemove,
+        serde_json::json!({"workspace_id": workspace, "force": force, "trust_repository": false}),
+      )?;
         self.removal = Some(Removal {
             endpoint: (
                 self.selection_epoch,

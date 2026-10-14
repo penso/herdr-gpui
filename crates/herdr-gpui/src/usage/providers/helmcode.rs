@@ -333,14 +333,14 @@ mod tests {
     fn schema_changes_fail_visibly() {
         assert!(parse(r#"{"models": []}"#, false, None, "x").is_err());
         assert!(
-            parse(
-                r#"{"periodStart": "2026-06-01", "models": [{"model": "m", "cap": -1, "tokensUsed": 0}]}"#,
-                false,
-                None,
-                "x"
-            )
-            .is_err()
-        );
+      parse(
+        r#"{"periodStart": "2026-06-01", "models": [{"model": "m", "cap": -1, "tokensUsed": 0}]}"#,
+        false,
+        None,
+        "x"
+      )
+      .is_err()
+    );
         assert!(
             parse(
                 r#"{"periodStart": "2026-06-01", "models": [{"model": "m", "cap": 1, "tokensUsed": 0, "windowHours": 0}]}"#,

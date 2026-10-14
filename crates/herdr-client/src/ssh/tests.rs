@@ -1,6 +1,7 @@
 use super::*;
 
 mod command;
+mod custom_command;
 mod forward;
 mod incompatible;
 mod probe_failure;
@@ -158,13 +159,13 @@ fn origin_command_reads_only_the_named_repository() {
 fn origin_lookup_rejects_relative_or_control_git_dirs_before_ssh() {
     for dir in ["relative/.git", "/repo\n/.git", ""] {
         assert!(matches!(
-            remote_origin_url("host", dir, Duration::from_secs(1), || false),
+            remote_origin_url(&"host".into(), dir, Duration::from_secs(1), || false),
             Err(Error::InvalidGitDir)
         ));
     }
     assert!(matches!(
         remote_origin_url(
-            "-oProxyCommand=x",
+            &"-oProxyCommand=x".into(),
             "/repo/.git",
             Duration::from_secs(1),
             || false
@@ -190,11 +191,11 @@ fn destinations_come_from_the_resolved_config_not_the_spelling() {
     assert_eq!(parse_destination(b"user a\nhostnamex b\nport 22\n"), None);
     assert_eq!(parse_destination(b"user a\nhostname b\nport x\n"), None);
     // Spellings of one host agree through the real `ssh -G`.
-    let a = resolve_destination("penso@example.invalid").unwrap();
-    let b = resolve_destination("ssh://penso@EXAMPLE.invalid:22").unwrap();
+    let a = resolve_destination(&"penso@example.invalid".into()).unwrap();
+    let b = resolve_destination(&"ssh://penso@EXAMPLE.invalid:22".into()).unwrap();
     assert_eq!(a, b);
     assert!(matches!(
-        resolve_destination("-oProxyCommand=x"),
+        resolve_destination(&"-oProxyCommand=x".into()),
         Err(Error::InvalidSshTarget)
     ));
 }
@@ -202,18 +203,18 @@ fn destinations_come_from_the_resolved_config_not_the_spelling() {
 #[test]
 fn probe_rejects_bad_targets_before_spawning_ssh() {
     assert!(matches!(
-        probe_host("-oProxyCommand=x", "default"),
+        probe_host(&"-oProxyCommand=x".into(), "default"),
         Err(Error::InvalidSshTarget)
     ));
     assert!(matches!(
-        probe_host("host", "../escape"),
+        probe_host(&"host".into(), "../escape"),
         Err(Error::InvalidSession)
     ));
 }
 
 #[test]
 fn command_is_noninteractive_and_target_is_one_argument() {
-    let command = command("user@host;not-a-command", "agents");
+    let command = command(&"user@host;not-a-command".into(), "agents");
     let args: Vec<_> = command.get_args().map(|a| a.to_str().unwrap()).collect();
     for option in [
         "BatchMode=yes",
@@ -242,13 +243,13 @@ fn command_is_noninteractive_and_target_is_one_argument() {
 }
 #[test]
 fn script_runs_under_remote_sh_and_rejects_option_targets() {
-    let command = script_command("user@host", "echo 'hi'").unwrap();
+    let command = script_command(&"user@host".into(), "echo 'hi'").unwrap();
     let args: Vec<_> = command.get_args().map(|a| a.to_str().unwrap()).collect();
     assert_eq!(args[args.len() - 3], "--");
     assert_eq!(args[args.len() - 2], "user@host");
     assert_eq!(args[args.len() - 1], "/bin/sh -c 'echo '\\''hi'\\'''");
     assert!(matches!(
-        script_command("-oProxyCommand=bad", "true"),
+        script_command(&"-oProxyCommand=bad".into(), "true"),
         Err(Error::InvalidSshTarget)
     ));
 }

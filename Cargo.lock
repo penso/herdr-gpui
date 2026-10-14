@@ -3530,6 +3530,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "shlex 2.0.1",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",

@@ -153,7 +153,7 @@ impl HerdrWindow {
                 !self.endpoints.iter().any(|endpoint| {
                     endpoint
                         .saved_ssh()
-                        .is_some_and(|(target, _)| suggestion.saved_as(target))
+                        .is_some_and(|(target, _)| suggestion.saved_as(&target.target))
                 })
             })
             .collect();

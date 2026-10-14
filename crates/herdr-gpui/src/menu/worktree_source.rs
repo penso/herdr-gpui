@@ -805,7 +805,10 @@ impl HerdrWindow {
             .filter(|path| std::path::Path::new(path).is_absolute())
             .map(std::path::PathBuf::from)
         else {
-            self.local_error = Some("The daemon did not report the new checkout path, so no agent context note was written.".into());
+            self.local_error = Some(
+        "The daemon did not report the new checkout path, so no agent context note was written."
+          .into(),
+      );
             return;
         };
         let write = cx

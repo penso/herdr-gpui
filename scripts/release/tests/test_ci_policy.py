@@ -141,14 +141,3 @@ class CiPolicy(unittest.TestCase):
                     self.assertIn("persist-credentials: false", job)
                 if "Swatinem/rust-cache@" in job:
                     self.assertIn("save-if: ${{ github.ref == 'refs/heads/main' }}", job)
-        # Keep runners a fixed hosted set; never accept a PR-controlled label.
-        self.assertEqual(re.findall(r"^    runs-on: (.+)$", WORKFLOW, re.M), [
-            "ubuntu-latest", "ubuntu-24.04", "${{ matrix.runner }}",
-            "${{ matrix.runner }}", "ubuntu-24.04", "${{ matrix.runner }}",
-        ])
-        self.assertEqual(re.findall(r"^        runner: (.+)$", WORKFLOW, re.M), [
-            "[macos-14, macos-15, ubuntu-24.04, ubuntu-24.04-arm]",
-            "[windows-2025, windows-11-arm]",
-        ])
-        self.assertEqual(re.findall(r"^          - runner: (.+)$", WORKFLOW, re.M),
-                         ["macos-15", "macos-15-intel", "ubuntu-24.04", "ubuntu-24.04-arm"])

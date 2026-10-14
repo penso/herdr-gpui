@@ -188,99 +188,99 @@ impl HerdrWindow {
         };
         let theme = &self.theme;
         div()
-            .flex()
-            .flex_col()
-            .size_full()
-            .min_h_0()
-            .child(self.palette_header(palette, cx))
-            .when(palette.loading_projects, |panel| {
-                panel.child(
-                    div()
-                        .flex_none()
-                        .px(px(16.))
-                        .py(px(8.))
-                        .text_color(rgb(theme.muted))
-                        .child("Loading local projects..."),
-                )
-            })
-            .when(!palette.projects.errors.is_empty(), |panel| {
-                panel.child(
-                    div()
-                        .id("palette-project-errors")
-                        .max_h(px(72.))
-                        .overflow_y_scroll()
-                        .flex_none()
-                        .px(px(16.))
-                        .py(px(8.))
-                        .text_color(rgb(theme.muted))
-                        .child(
-                            palette
-                                .projects
-                                .errors
-                                .iter()
-                                .map(ToString::to_string)
-                                .collect::<Vec<_>>()
-                                .join("\n"),
-                        ),
-                )
-            })
-            .when_some(palette.error.clone(), |panel, error| {
-                panel.child(
-                    div()
-                        .id("palette-error")
-                        .max_h(px(90.))
-                        .overflow_y_scroll()
-                        .flex_none()
-                        .p(px(12.))
-                        .text_color(rgb(theme.foreground))
-                        .bg(rgb(theme.active))
-                        .child(error),
-                )
-            })
-            .when(palette.filtered.is_empty(), |panel| {
-                panel.child(
-                    div()
-                        .flex_1()
-                        .p(px(16.))
-                        .text_color(rgb(theme.muted))
-                        .child("No matching results. Try a shorter search."),
-                )
-            })
-            .when(!palette.filtered.is_empty(), |panel| {
-                panel.child(
-                    uniform_list(
-                        "palette-results",
-                        palette.filtered.len(),
-                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
-                            let Some(palette) = &this.menu.palette else {
-                                return Vec::new();
-                            };
-                            range
-                                .map(|index| this.palette_row(palette, index, cx))
-                                .collect()
-                        }),
-                    )
-                    .track_scroll(&palette.scroll)
-                    .flex_1()
-                    .min_h_0(),
-                )
-            })
+      .flex()
+      .flex_col()
+      .size_full()
+      .min_h_0()
+      .child(self.palette_header(palette, cx))
+      .when(palette.loading_projects, |panel| {
+        panel.child(
+          div()
+            .flex_none()
+            .px(px(16.))
+            .py(px(8.))
+            .text_color(rgb(theme.muted))
+            .child("Loading local projects..."),
+        )
+      })
+      .when(!palette.projects.errors.is_empty(), |panel| {
+        panel.child(
+          div()
+            .id("palette-project-errors")
+            .max_h(px(72.))
+            .overflow_y_scroll()
+            .flex_none()
+            .px(px(16.))
+            .py(px(8.))
+            .text_color(rgb(theme.muted))
             .child(
-                div()
-                    .debug_selector(|| "palette-status".into())
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .text_color(rgb(theme.muted))
-                    .child(if palette.busy() {
-                        "Opening local project... Esc to dismiss."
-                    } else if palette.filter == Filter::Navigation {
-                        "↑ / ↓ navigate · Tab filter · alt-b/w/i/d/a status · Enter select · Esc cancel"
-                    } else {
-                        "↑ / ↓ navigate · Tab filter · Enter select · Esc cancel"
-                    }),
-            )
+              palette
+                .projects
+                .errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+            ),
+        )
+      })
+      .when_some(palette.error.clone(), |panel, error| {
+        panel.child(
+          div()
+            .id("palette-error")
+            .max_h(px(90.))
+            .overflow_y_scroll()
+            .flex_none()
+            .p(px(12.))
+            .text_color(rgb(theme.foreground))
+            .bg(rgb(theme.active))
+            .child(error),
+        )
+      })
+      .when(palette.filtered.is_empty(), |panel| {
+        panel.child(
+          div()
+            .flex_1()
+            .p(px(16.))
+            .text_color(rgb(theme.muted))
+            .child("No matching results. Try a shorter search."),
+        )
+      })
+      .when(!palette.filtered.is_empty(), |panel| {
+        panel.child(
+          uniform_list(
+            "palette-results",
+            palette.filtered.len(),
+            cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+              let Some(palette) = &this.menu.palette else {
+                return Vec::new();
+              };
+              range
+                .map(|index| this.palette_row(palette, index, cx))
+                .collect()
+            }),
+          )
+          .track_scroll(&palette.scroll)
+          .flex_1()
+          .min_h_0(),
+        )
+      })
+      .child(
+        div()
+          .debug_selector(|| "palette-status".into())
+          .flex_none()
+          .px(px(16.))
+          .py(px(10.))
+          .border_t_1()
+          .border_color(rgb(theme.active))
+          .text_color(rgb(theme.muted))
+          .child(if palette.busy() {
+            "Opening local project... Esc to dismiss."
+          } else if palette.filter == Filter::Navigation {
+            "↑ / ↓ navigate · Tab filter · alt-b/w/i/d/a status · Enter select · Esc cancel"
+          } else {
+            "↑ / ↓ navigate · Tab filter · Enter select · Esc cancel"
+          }),
+      )
     }
 }

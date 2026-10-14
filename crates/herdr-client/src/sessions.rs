@@ -3,7 +3,7 @@
 //! session's state can only come from a connect attempt, never the file itself.
 use crate::ssh::CANDIDATES;
 use crate::{
-    Error, Result, Stream,
+    Error, Result, SshTarget, Stream,
     catalog::validate_target,
     discovery::{config_dir, valid_session_name},
     session_socket,
@@ -46,8 +46,8 @@ pub fn delete_local_session(executable: &Path, name: &str) -> Result<()> {
 }
 
 /// Stop and delete a named session on a saved POSIX device after confirmation.
-pub fn delete_remote_session(target: &str, name: &str) -> Result<()> {
-    validate_target(target)?;
+pub fn delete_remote_session(target: &SshTarget, name: &str) -> Result<()> {
+    validate_target(&target.target)?;
     validate_delete(name)?;
     #[cfg(unix)]
     {
@@ -263,8 +263,8 @@ struct SessionList {
 /// from a worker, never a rendering thread. A host with no discoverable Herdr, or
 /// one reporting more sessions than a listing may hold, is an error rather than a
 /// shorter list.
-pub fn list_remote_sessions(target: &str) -> Result<Vec<RemoteSession>> {
-    validate_target(target)?;
+pub fn list_remote_sessions(target: &SshTarget) -> Result<Vec<RemoteSession>> {
+    validate_target(&target.target)?;
     #[cfg(unix)]
     {
         parse_session_list(&remote_stdout(target, &session_list_script())?)
@@ -300,7 +300,7 @@ exit 127"#
 /// carry secrets and terminal controls, and a command that reads a terminal it was
 /// not given would hang.
 #[cfg(unix)]
-fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
+fn remote_stdout(target: &SshTarget, script: &str) -> Result<Vec<u8>> {
     let (mut stream, child_stream) = Stream::pair()?;
     stream.set_read_timeout(Some(POLL))?;
     let mut command = script_command(target, script)?;

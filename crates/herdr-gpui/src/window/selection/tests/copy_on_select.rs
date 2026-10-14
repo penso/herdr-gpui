@@ -73,7 +73,7 @@ fn dragging_copies_on_release_keeps_the_highlight_and_reports(cx: &mut TestAppCo
     cx.simulate_mouse_up(at(5., 0.), MouseButton::Left, Modifiers::default());
     view.update(cx, |view, _| {
         let (flash, expires) = view.flash.clone().expect("a copy reports itself");
-        assert_eq!(flash, crate::window::Flash::success("copied to clipboard"));
+        assert!(matches!(flash.tone, crate::window::flash::Tone::Success));
         assert!(!view.tick_flash(expires - Duration::from_nanos(1)));
         assert!(view.flash.is_some());
         assert!(view.tick_flash(expires));

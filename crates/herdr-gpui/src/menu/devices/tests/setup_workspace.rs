@@ -9,7 +9,7 @@ fn install_needs_a_connected_local_daemon(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("dev@box", "Box", "").unwrap();
+            let request = setup::Request::new("dev@box", "Box", "", "").unwrap();
             view.endpoints[0].live.status = ConnectionStatus::Disconnected;
             open_form(view, Step::Verifying(request, Offer::Install), cx);
             view.setup_space_verified(
@@ -64,7 +64,7 @@ fn created_space_runs_setup_in_its_root_pane(cx: &mut gpui::TestAppContext) {
             local.connection.handle = Some(peer.client.handle.clone());
             local.live.snapshot = Some(Arc::new(snapshot));
             local.live.status = ConnectionStatus::Connected;
-            let request = setup::Request::new("dev@box", "Box", "").unwrap();
+            let request = setup::Request::new("dev@box", "Box", "", "").unwrap();
 
             // A refusal returns to the question with the daemon's reason.
             open_form(view, Step::Opening(request.clone(), space("create")()), cx);

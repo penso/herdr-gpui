@@ -52,6 +52,7 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![host("a", enabled)],
         wsl: Vec::new(),
         selection,
+        new_host_settings: None,
         #[cfg(feature = "cloud")]
         cloud: None,
     };
@@ -82,6 +83,7 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![],
         wsl: Vec::new(),
         selection: None,
+        new_host_settings: None,
         #[cfg(feature = "cloud")]
         cloud: None,
     });

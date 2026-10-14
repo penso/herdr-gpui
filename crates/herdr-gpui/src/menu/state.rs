@@ -270,7 +270,9 @@ impl MenuState {
                 .map(str::to_owned);
             deletion.root = crate::worktree_scripts::main_checkout(result);
             if deletion.path.is_none() {
-                self.error = Some("Daemon did not identify a unique linked checkout. Dismiss and reopen the menu.".into());
+                self.error = Some(
+          "Daemon did not identify a unique linked checkout. Dismiss and reopen the menu.".into(),
+        );
             }
         } else {
             self.error = Some(

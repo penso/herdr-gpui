@@ -111,7 +111,7 @@ pub(super) fn sync(window: WindowId, endpoints: &[Endpoint], cx: &mut App) {
             .filter(|endpoint| endpoint.enabled && endpoint.live.status.is_connected())
             .filter_map(|endpoint| {
                 let host = match &endpoint.connection.target {
-                    ConnectTarget::Ssh { target, .. } => Some(target.as_str()),
+                    ConnectTarget::Ssh { target, .. } => Some(target.target.as_str()),
                     ConnectTarget::Wsl { distro, .. } => Some(distro.as_str()),
                     _ => None,
                 };

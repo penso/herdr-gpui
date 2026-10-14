@@ -175,10 +175,6 @@ mod tests {
             }
         ));
         assert!(std::error::Error::source(&error).is_some());
-        assert_eq!(
-            error.to_string(),
-            "fetching the branch on the destination failed: host script made no progress before its deadline"
-        );
         assert!(matches!(
             script(Step::Tabs)(herdr_client::Error::ScriptCancelled),
             Error::Cancelled

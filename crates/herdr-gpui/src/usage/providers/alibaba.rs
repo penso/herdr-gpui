@@ -46,44 +46,46 @@ const QUOTA_KEYS: &[&str] = &[
 pub(crate) struct Alibaba;
 
 static META: Meta = Meta::new("alibaba", "Alibaba")
-    .dashboard("https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=coding-plan#/efm/coding_plan")
-    .status_page("https://status.aliyun.com")
-    .settings(&[
-        Setting::new(
-            "cookie",
-            &["ALIBABA_CODING_PLAN_COOKIE"],
-            "Your Model Studio console session. Sign in to the Coding Plan page at \
+  .dashboard(
+    "https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=coding-plan#/efm/coding_plan",
+  )
+  .status_page("https://status.aliyun.com")
+  .settings(&[
+    Setting::new(
+      "cookie",
+      &["ALIBABA_CODING_PLAN_COOKIE"],
+      "Your Model Studio console session. Sign in to the Coding Plan page at \
              https://modelstudio.console.alibabacloud.com (or https://bailian.console.aliyun.com \
              in China), open Developer Tools > Application > Cookies for that site, and copy \
              at least login_aliyunid_ticket, login_aliyunid_pk, login_aliyunid_csrf and cna. \
              Paste them as \"name=value; name2=value2\", or copy the whole Cookie header of the \
              data/api.json request from the Network tab.",
-        ),
-        Setting::new(
-            "api_key",
-            &[
-                "ALIBABA_CODING_PLAN_API_KEY",
-                "ALIBABA_QWEN_API_KEY",
-                "DASHSCOPE_API_KEY",
-            ],
-            "A Coding Plan API key (sk-sp-...) from the Coding Plan page of the Model Studio \
+    ),
+    Setting::new(
+      "api_key",
+      &[
+        "ALIBABA_CODING_PLAN_API_KEY",
+        "ALIBABA_QWEN_API_KEY",
+        "DASHSCOPE_API_KEY",
+      ],
+      "A Coding Plan API key (sk-sp-...) from the Coding Plan page of the Model Studio \
              console. Used when no console cookie works; some mainland accounts only answer \
              the cookie.",
-        ),
-        Setting::new(
-            "region",
-            &[],
-            "Optional. \"intl\" (modelstudio.console.alibabacloud.com) or \"cn\" \
+    ),
+    Setting::new(
+      "region",
+      &[],
+      "Optional. \"intl\" (modelstudio.console.alibabacloud.com) or \"cn\" \
              (bailian.console.aliyun.com). Unset tries International, then China mainland.",
-        ),
-        Setting::new(
-            "sec_token",
-            &[],
-            "Optional. The console's sec_token, when it cannot be read from \
+    ),
+    Setting::new(
+      "sec_token",
+      &[],
+      "Optional. The console's sec_token, when it cannot be read from \
              /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
              the data/api.json request on the Coding Plan page.",
-        ),
-    ]);
+    ),
+  ]);
 
 impl Service for Alibaba {
     fn meta(&self) -> &'static Meta {

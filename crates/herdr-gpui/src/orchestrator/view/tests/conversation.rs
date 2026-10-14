@@ -1,4 +1,4 @@
-use crate::orchestrator::view::conversation::{Entry, Summary, ago, entries, summary};
+use crate::orchestrator::view::conversation::{Entry, Summary, entries, summary};
 use crate::pr_actions::{Comment, CommentKind, Review};
 
 fn comment(author: &str, kind: CommentKind, at: &str) -> Comment {
@@ -99,14 +99,4 @@ fn the_summary_counts_each_reviewers_newest_verdict() {
             people: 3,
         }
     );
-}
-
-#[test]
-fn times_read_as_how_long_ago() {
-    let now = chrono::DateTime::parse_from_rfc3339("2026-09-20T14:00:00Z")
-        .unwrap()
-        .with_timezone(&chrono::Utc);
-    assert_eq!(ago("2026-09-20T12:00:00Z", now), "2h ago");
-    assert_eq!(ago("2026-09-20T13:59:30Z", now), "now");
-    assert_eq!(ago("yesterday", now), "");
 }

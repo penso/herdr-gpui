@@ -451,6 +451,7 @@ impl HerdrWindow {
                         | Page::Usage(_)
                         | Page::RenameDevice
                         | Page::ForwardPort
+                        | Page::SshCommand
                 ) && !self.cloud_dialog_open(),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
@@ -512,6 +513,7 @@ impl HerdrWindow {
                         | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
+                        | Page::SshCommand
                 ) || self.cloud_dialog_open(),
                 |panel| panel.flex().flex_col().overflow_hidden().shadow_lg(),
             )
@@ -614,7 +616,11 @@ impl HerdrWindow {
             panel = panel.child(self.render_pr_merge(cx));
         } else if matches!(
             page,
-            Page::Host | Page::RenameDevice | Page::ForwardPort | Page::RemoveDevice
+            Page::Host
+                | Page::RenameDevice
+                | Page::ForwardPort
+                | Page::SshCommand
+                | Page::RemoveDevice
         ) {
             panel = panel.child(self.render_host_menu(cx));
         } else if matches!(page, Page::Tab | Page::RenameTab) {

@@ -10,7 +10,7 @@ fn local(home: &std::path::Path) -> Command {
         .arg("sh")
         .env_clear()
         .env("HOME", home)
-        .env("PATH", "/usr/bin:/bin");
+        .env("PATH", home);
     command
 }
 

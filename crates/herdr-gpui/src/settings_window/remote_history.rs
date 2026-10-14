@@ -5,7 +5,7 @@
 use super::SettingsWindow;
 use crate::herdr_settings::RemotePaneHistory;
 use gpui::{AsyncApp, Context, WeakEntity};
-use herdr_client::{ConnectTarget, ScriptHost};
+use herdr_client::{ConnectTarget, ScriptHost, SshTarget};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -21,7 +21,7 @@ pub(super) enum HostState {
 }
 
 pub(super) struct Host {
-    pub target: String,
+    pub target: SshTarget,
     pub label: String,
     pub state: HostState,
     generation: u64,
@@ -40,7 +40,7 @@ impl Drop for Host {
 /// cannot overwrite a newer read of the same host.
 #[derive(Debug)]
 pub(super) struct Job {
-    pub target: String,
+    pub target: SshTarget,
     pub generation: u64,
     pub cancel: Arc<AtomicBool>,
 }
@@ -56,7 +56,7 @@ impl RemoteHistory {
         &self.hosts
     }
 
-    fn host(&mut self, target: String, label: String) -> (Host, Job) {
+    fn host(&mut self, target: SshTarget, label: String) -> (Host, Job) {
         self.generation = self.generation.wrapping_add(1);
         let cancel = Arc::new(AtomicBool::new(false));
         let job = Job {
@@ -79,7 +79,7 @@ impl RemoteHistory {
     /// except one mid-save, whose own completion re-reads it.
     pub fn sync(
         &mut self,
-        connected: impl IntoIterator<Item = (String, String)>,
+        connected: impl IntoIterator<Item = (String, SshTarget)>,
         reload: bool,
     ) -> Vec<Job> {
         let mut previous = std::mem::take(&mut self.hosts);
@@ -113,14 +113,14 @@ impl RemoteHistory {
     /// or been read again.
     pub fn finish(
         &mut self,
-        target: &str,
+        target: &SshTarget,
         generation: u64,
         result: crate::Result<RemotePaneHistory>,
     ) -> bool {
         let Some(host) = self
             .hosts
             .iter_mut()
-            .find(|host| host.target == target && host.generation == generation)
+            .find(|host| &host.target == target && host.generation == generation)
         else {
             return false;
         };
@@ -133,14 +133,14 @@ impl RemoteHistory {
 
     /// Starts a write from a settled read. A host still loading, saving, or
     /// failed has nothing current to compare against.
-    pub fn begin_save(&mut self, target: &str) -> Option<(RemotePaneHistory, Job)> {
-        let index = self.hosts.iter().position(|host| host.target == target)?;
+    pub fn begin_save(&mut self, target: &SshTarget) -> Option<(RemotePaneHistory, Job)> {
+        let index = self.hosts.iter().position(|host| &host.target == target)?;
         let HostState::Ready(history) = &self.hosts[index].state else {
             return None;
         };
         let history = history.clone();
         let label = self.hosts[index].label.clone();
-        let (mut host, job) = self.host(target.to_owned(), label);
+        let (mut host, job) = self.host(target.clone(), label);
         host.state = HostState::Saving(history.clone());
         self.hosts[index] = host;
         Some((history, job))
@@ -150,11 +150,11 @@ impl RemoteHistory {
 impl SettingsWindow {
     /// Connected SSH endpoints as (label, target), one per host: sessions on
     /// one host share its config.
-    fn connected_ssh_hosts(&self, cx: &Context<Self>) -> Vec<(String, String)> {
+    fn connected_ssh_hosts(&self, cx: &Context<Self>) -> Vec<(String, SshTarget)> {
         let Some(source) = self.source.upgrade() else {
             return Vec::new();
         };
-        let mut hosts: Vec<(String, String)> = Vec::new();
+        let mut hosts: Vec<(String, SshTarget)> = Vec::new();
         for endpoint in &source.read(cx).endpoints {
             if let ConnectTarget::Ssh { target, .. } = &endpoint.connection.target
                 && endpoint.live.status.is_connected()
@@ -202,7 +202,7 @@ impl SettingsWindow {
 
     pub(super) fn save_remote_history(
         &mut self,
-        target: &str,
+        target: &SshTarget,
         enabled: bool,
         cx: &mut Context<Self>,
     ) {
@@ -257,7 +257,7 @@ fn describe(error: &(dyn std::error::Error + 'static)) -> String {
 /// the first failure to queue that request.
 fn queue_reload(
     source: &WeakEntity<crate::HerdrWindow>,
-    target: &str,
+    target: &SshTarget,
     cx: &mut AsyncApp,
 ) -> Option<String> {
     source

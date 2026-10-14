@@ -1,4 +1,4 @@
-use crate::{Error, Result, catalog::validate_target};
+use crate::{Error, Result, SshTarget, catalog::validate_target};
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 const LINE_LIMIT: usize = 4096;
@@ -20,12 +20,12 @@ const LINE_LIMIT: usize = 4096;
 /// If a successful result is no longer wanted, call [`remove_uploaded_files`]
 /// on a background worker using the original target and unchanged result paths.
 pub fn upload_files(
-    target: &str,
+    target: &SshTarget,
     paths: &[PathBuf],
     cancelled: &AtomicBool,
     progress: impl FnMut(u64, u64),
 ) -> Result<Vec<String>> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     if paths.len() > 256 {
         return Err(Error::UploadPathLimit);
     }
@@ -57,8 +57,8 @@ pub fn upload_files(
 /// can partially succeed before an I/O/remote error and may be retried with the
 /// same paths. It uses the shared SSH trust policy and a 30-second no-progress
 /// timeout, without a cancellation flag. Empty batches do not spawn SSH.
-pub fn remove_uploaded_files(target: &str, paths: &[String]) -> Result<()> {
-    validate_target(target)?;
+pub fn remove_uploaded_files(target: &SshTarget, paths: &[String]) -> Result<()> {
+    validate_target(&target.target)?;
     let owned = cleanup_paths(paths)?;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
@@ -169,7 +169,7 @@ mod validation_tests {
                 "/tmp/herdr-upload.123456ABCDEF/valid.iso".into(),
                 path.into(),
             ];
-            let result = remove_uploaded_files("host", &paths);
+            let result = remove_uploaded_files(&"host".into(), &paths);
             assert!(
                 matches!(result, Err(Error::UploadCleanupPath)),
                 "{path:?}: {result:?}"
@@ -177,7 +177,7 @@ mod validation_tests {
         }
         assert!(matches!(
             remove_uploaded_files(
-                "host",
+                &"host".into(),
                 &[format!(
                     "/tmp/herdr-upload.abcdefghijkl/{}",
                     "x".repeat(LINE_LIMIT)
@@ -186,11 +186,11 @@ mod validation_tests {
             Err(Error::UploadCleanupPath)
         ));
         assert!(matches!(
-            remove_uploaded_files("host", &vec![String::new(); 257]),
+            remove_uploaded_files(&"host".into(), &vec![String::new(); 257]),
             Err(Error::UploadPathLimit)
         ));
         assert!(matches!(
-            remove_uploaded_files("-bad", &[]),
+            remove_uploaded_files(&"-bad".into(), &[]),
             Err(Error::InvalidSshTarget)
         ));
     }

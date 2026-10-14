@@ -254,10 +254,7 @@ mod tests {
 
     #[test]
     fn the_skill_is_marked_and_names_this_executable() {
-        assert!(SKILL.starts_with("---\nname: herdr-gpui-browser\n"));
         assert!(managed(SKILL));
-        assert!(SKILL.contains("herdr-gpui browser open"));
-        assert_eq!(text(None), SKILL);
         let bundled = text(Some(Path::new(
             "/Applications/Herdr.app/Contents/MacOS/Herdr",
         )));

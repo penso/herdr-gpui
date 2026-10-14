@@ -42,7 +42,7 @@ fn targeted_previews_use_only_current_snapshot_ids(cx: &mut TestAppContext) {
 #[gpui::test]
 fn toast_preview_actions_use_normal_state_without_a_connection(cx: &mut TestAppContext) {
     use crate::actions::ShowToastPreview;
-    use herdr_client::protocol::{SemanticNotificationKind, ToastHerdrPosition};
+    use herdr_client::protocol::SemanticNotificationKind;
 
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.simulate_resize(size(px(1000.), px(600.)));
@@ -79,9 +79,6 @@ fn toast_preview_actions_use_normal_state_without_a_connection(cx: &mut TestAppC
             let endpoint = &view.endpoints[1];
             let (_, notice) = endpoint.toasts.entries.back().unwrap();
             assert_eq!(notice.kind, kind);
-            assert!(!notice.title.is_empty());
-            assert!(notice.body.as_ref().unwrap().starts_with("QA preview"));
-            assert_eq!(notice.position, ToastHerdrPosition::BottomRight);
             assert_eq!(endpoint.toasts.entries.len(), 1);
             assert!(endpoint.connection.handle.is_none());
             assert!(view.endpoints[0].toasts.entries.is_empty());

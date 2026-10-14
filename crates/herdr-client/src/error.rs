@@ -85,6 +85,8 @@ pub enum Error {
     NoLocalSocket,
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
     InvalidSshTarget,
+    #[error("invalid SSH command: {reason}")]
+    InvalidSshCommand { reason: &'static str },
     #[error("client stopped")]
     Cancelled,
     #[error("event receiver dropped")]
@@ -303,6 +305,8 @@ pub enum Error {
     ProfileId,
     #[error("invalid endpoint label")]
     ProfileLabel,
+    #[error("an endpoint for this host and session is already saved")]
+    DuplicateHost,
     #[error("too many sessions to list")]
     SessionLimit,
     /// An endpoint answered a request with an error. The message is the
@@ -357,7 +361,9 @@ impl Error {
             | Self::DefaultSession
             | Self::NoLocalSocket
             | Self::InvalidSshTarget
+            | Self::InvalidSshCommand { .. }
             | Self::InvalidWslDistro => io::ErrorKind::InvalidInput,
+            Self::DuplicateHost => io::ErrorKind::AlreadyExists,
             Self::SshUnsupported | Self::WslUnsupported | Self::ClipboardImageUnsupported => {
                 io::ErrorKind::Unsupported
             }

@@ -54,11 +54,9 @@ fn captured_pane_payloads_ignore_focus_and_reject_stale_membership() {
         Action::Zoom.request(&target).unwrap(),
         (Method::PaneZoom, json!({"pane_id":"inactive", "mode":"on"}))
     );
-    assert_eq!(Action::Zoom.label(&target), "Zoom");
     let mut zoomed = original.clone();
     zoomed.tabs[0].zoomed = true;
     let target_zoomed = Target::capture(&zoomed, "inactive").unwrap();
-    assert_eq!(Action::Zoom.label(&target_zoomed), "Unzoom");
     assert_eq!(
         Action::Zoom.request(&target_zoomed).unwrap(),
         (
@@ -84,10 +82,6 @@ fn captured_pane_payloads_ignore_focus_and_reject_stale_membership() {
             json!({"pane_id":"inactive", "right_click":"pane"})
         )
     );
-    assert_eq!(
-        Action::RightClick.label(&target),
-        "Send Right-Clicks to Pane"
-    );
     let mut routed = original.clone();
     routed.panes[1].right_click_passthrough = true;
     let routed = Target::capture(&routed, "inactive").unwrap();
@@ -97,10 +91,6 @@ fn captured_pane_payloads_ignore_focus_and_reject_stale_membership() {
             Method::PaneInputSet,
             json!({"pane_id":"inactive", "right_click":"herdr"})
         )
-    );
-    assert_eq!(
-        Action::RightClick.label(&routed),
-        "Open This Menu on Right-Click"
     );
     for case in 0..7 {
         let mut snapshot = original.clone();

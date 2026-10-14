@@ -248,9 +248,8 @@ impl CloseCheck {
             warnings.push("Git status could not be verified for every checkout.");
         }
         if !report.needs_consent() {
-            warnings.push(
-                "No uncommitted files or unpushed commits found (using local remote-tracking refs).",
-            );
+            warnings
+        .push("No uncommitted files or unpushed commits found (using local remote-tracking refs).");
         } else if !self.skippable(confirm) {
             warnings.push("Type close to consent to closing anyway, or Cancel to keep working.");
         }

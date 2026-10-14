@@ -128,6 +128,7 @@ for what only Herdr UI shows or keeps.
 | List or focus the app's windows and its own tabs | `herdr-gpui window`, `herdr-gpui tab`, `herdr-gpui tab focus ID` |
 | Block until something happens in the app | `herdr-gpui wait tab-closed ID --timeout 600`, `herdr-gpui events --follow` |
 | Read or change a Herdr UI setting | `herdr-gpui config get KEY`, `herdr-gpui config set KEY VALUE` |
+| Choose a machine's SSH binary or wrapper | `herdr-gpui host ssh-command HOST` (opens the user's editor; never executes a command from the request) |
 | Keep the machine awake during a long job | `herdr-gpui caffeine on --for 2h` |
 | Check whether the app runs, and which windows and hosts it has | `herdr-gpui status` |
 
@@ -138,7 +139,8 @@ exits 5 rather than act in another session's window.
 
 Some commands only open the app's dialog and the user confirms there:
 restoring a checkpoint, teleporting a worktree, fanning out a prompt, running
-a worktree script the app has not seen, and adding a cloud machine. Say so
+a worktree script the app has not seen, changing a machine's SSH command, and
+adding a cloud machine. Say so
 when you run one, instead of waiting for it to finish. Run
 `herdr-gpui --help` to list every command, and `herdr-gpui COMMAND --help`
 for one.

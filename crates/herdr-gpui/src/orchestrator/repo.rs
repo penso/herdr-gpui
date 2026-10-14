@@ -90,7 +90,7 @@ pub(super) fn parse(target: &ConnectTarget, output: &str) -> Result<RepoInfo> {
     };
     let repository = match target {
         ConnectTarget::Ssh { target, .. } => Repository::Ssh {
-            destination: target.clone(),
+            destination: target.target.clone(),
             git_dir: common,
         },
         _ => Repository::Local(common.into()),

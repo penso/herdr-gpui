@@ -4,11 +4,16 @@
 //! come from upstream's endpoint catalog; WSL distributions from this client's
 //! own list beside it, which upstream never reads.
 use super::{Endpoint, LOCAL, SAVED_PREFIX, WSL_PREFIX};
-use crate::{Error, HerdrWindow, Result, storage_warning::StorageFailure};
+use crate::{
+    Error, HerdrWindow, Result,
+    config::{Config, DeviceSettings},
+    storage_warning::StorageFailure,
+};
 use gpui::Context;
 use herdr_client::{ConnectTarget, SavedHost, WslHost};
 use std::{
-    sync::mpsc,
+    collections::{BTreeMap, HashSet},
+    sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
 
@@ -25,11 +30,16 @@ pub(crate) struct Catalog {
     /// The storage failure last warned about. Loads retry every two seconds,
     /// so each distinct failure warns once until a load succeeds.
     last_failure: Option<StorageFailure>,
+    /// IDs whose command preferences were loaded before their first connection.
+    known_hosts: Arc<HashSet<String>>,
 }
 
 pub(super) struct CatalogUpdate {
     pub(super) hosts: Vec<SavedHost>,
     pub(super) wsl: Vec<WslHost>,
+    /// Fresh preferences only when a new profile appears. The catalog and its
+    /// executable must arrive together, not race the config watcher's reload.
+    new_host_settings: Option<BTreeMap<String, DeviceSettings>>,
     /// The endpoint ID the stored selection names, read only at startup.
     selection: Option<Option<String>>,
     /// The GUI's saved cloud devices, or `None` when that list could not be read.
@@ -68,31 +78,33 @@ fn cloud_devices() -> Option<Vec<crate::cloud::SavedDevice>> {
         .ok()
 }
 
-fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
+fn load(development: bool, startup: bool, known_hosts: &HashSet<String>) -> Result<CatalogUpdate> {
     // Only Windows has distributions; elsewhere the file is never read.
     let wsl = if cfg!(windows) {
         herdr_client::load_wsl_hosts(development)?
     } else {
         Default::default()
     };
-    if !startup {
-        return Ok(CatalogUpdate {
-            hosts: herdr_client::load_saved_hosts(development)?,
-            wsl: wsl.hosts,
-            selection: None,
-            #[cfg(feature = "cloud")]
-            cloud: cloud_devices(),
-        });
-    }
-    let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
-    let selection = match wsl.selected_host() {
-        Some(host) => Some(format!("{WSL_PREFIX}{}", host.distro)),
-        None => selected.map(|id| format!("{SAVED_PREFIX}{id}")),
+    let (hosts, selection) = if startup {
+        let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
+        let selection = match wsl.selected_host() {
+            Some(host) => Some(format!("{WSL_PREFIX}{}", host.distro)),
+            None => selected.map(|id| format!("{SAVED_PREFIX}{id}")),
+        };
+        (hosts, Some(selection))
+    } else {
+        (herdr_client::load_saved_hosts(development)?, None)
     };
+    let new_host_settings = hosts
+        .iter()
+        .any(|host| !known_hosts.contains(&host.id))
+        .then(|| Config::load().map(|config| config.devices))
+        .transpose()?;
     Ok(CatalogUpdate {
         hosts,
         wsl: wsl.hosts,
-        selection: Some(selection),
+        selection,
+        new_host_settings,
         #[cfg(feature = "cloud")]
         cloud: cloud_devices(),
     })
@@ -124,6 +136,7 @@ impl Catalog {
             queued_write: None,
             writing: None,
             last_failure: None,
+            known_hosts: Default::default(),
         }
     }
 
@@ -141,10 +154,11 @@ impl Catalog {
             let (tx, rx) = mpsc::sync_channel(1);
             self.pending = Some(rx);
             let startup = !self.initialized;
+            let known_hosts = self.known_hosts.clone();
             if let Err(error) = std::thread::Builder::new()
                 .name("herdr-gui-catalog".into())
                 .spawn(move || {
-                    let _ = tx.send(load(development, startup));
+                    let _ = tx.send(load(development, startup, &known_hosts));
                 })
             {
                 self.pending = None;
@@ -169,6 +183,14 @@ impl Catalog {
     }
 
     pub(super) fn accept(&mut self, update: &CatalogUpdate) {
+        if self.known_hosts.len() != update.hosts.len()
+            || update
+                .hosts
+                .iter()
+                .any(|host| !self.known_hosts.contains(&host.id))
+        {
+            self.known_hosts = Arc::new(update.hosts.iter().map(|host| host.id.clone()).collect());
+        }
         if !self.initialized {
             self.desired = update.selection.clone().flatten();
             self.restore_pending = self.desired.is_some();
@@ -216,6 +238,29 @@ impl Catalog {
 }
 
 impl HerdrWindow {
+    pub(super) fn apply_catalog_update(
+        &mut self,
+        mut update: CatalogUpdate,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(mut settings) = update.new_host_settings.take() {
+            for host in &update.hosts {
+                let id = format!("{SAVED_PREFIX}{}", host.id);
+                if !self.endpoints.iter().any(|endpoint| endpoint.id == id) {
+                    self.config.devices.insert(
+                        host.id.clone(),
+                        settings.remove(&host.id).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+        self.catalog.accept(&update);
+        #[cfg(feature = "cloud")]
+        self.reconcile_devices(update.hosts, update.wsl, update.cloud, cx);
+        #[cfg(not(feature = "cloud"))]
+        self.reconcile_devices(update.hosts, update.wsl, cx);
+    }
+
     pub(super) fn restore_selection(&mut self, cx: &mut Context<Self>) {
         if !self.catalog.restore_pending {
             return;
@@ -262,8 +307,12 @@ impl HerdrWindow {
         #[cfg(feature = "cloud")] cloud: Option<Vec<crate::cloud::SavedDevice>>,
         cx: &mut Context<Self>,
     ) {
-        #[cfg_attr(not(feature = "cloud"), allow(unused_mut))]
         let mut devices = devices(hosts, wsl);
+        for device in &mut devices {
+            if let ConnectTarget::Ssh { target, .. } = &mut device.target {
+                target.command = self.config.ssh_command(&device.id);
+            }
+        }
         #[cfg(feature = "cloud")]
         match cloud {
             Some(cloud) => devices.extend(cloud.into_iter().map(|saved| Device {
@@ -380,7 +429,7 @@ fn devices(hosts: Vec<SavedHost>, wsl: Vec<WslHost>) -> Vec<Device> {
         id: format!("{SAVED_PREFIX}{}", host.id),
         label: host.label,
         target: ConnectTarget::Ssh {
-            target: host.target,
+            target: host.target.into(),
             session: host.session,
         },
         enabled: host.enabled,

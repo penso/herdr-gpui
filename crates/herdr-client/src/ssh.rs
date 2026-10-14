@@ -9,7 +9,9 @@
 //! PowerShell; see `powershell`.
 #[cfg(unix)]
 use crate::limits::POLL;
-use crate::{Error, Result, catalog::validate_target, session_socket, transport::Stream};
+use crate::{
+    Error, Result, SshTarget, catalog::validate_target, session_socket, transport::Stream,
+};
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
 use std::{
@@ -171,8 +173,8 @@ fn lines(output: &[u8]) -> impl Iterator<Item = &[u8]> {
 
 /// Blocks for at most `PROBE_TIMEOUT`: call it from a background thread.
 #[cfg(unix)]
-pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
-    validate_target(target)?;
+pub fn probe_host(target: &SshTarget, session: &str) -> Result<HostProbe> {
+    validate_target(&target.target)?;
     session_socket(Path::new(""), session)?;
     let mut command = command(target, &probe_command(session));
     // Stderr is read only to classify an `ssh` failure; its text is dropped.
@@ -212,7 +214,7 @@ pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
 
 /// [`probe_host`] for a host whose shell is `cmd.exe` or PowerShell.
 #[cfg(unix)]
-fn probe_powershell_host(target: &str, session: &str) -> Result<HostProbe> {
+fn probe_powershell_host(target: &SshTarget, session: &str) -> Result<HostProbe> {
     let mut command = command(target, &powershell::probe_command(session));
     command.stderr(Stdio::piped());
     let (status, output, stderr) = run_with_stderr(&mut command, PROBE_TIMEOUT, || false)?;
@@ -233,7 +235,7 @@ fn probe_powershell_host(target: &str, session: &str) -> Result<HostProbe> {
 /// most `timeout`: call it from a background thread.
 #[cfg(unix)]
 pub fn remote_origin_url(
-    target: &str,
+    target: &SshTarget,
     git_dir: &str,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
@@ -245,13 +247,13 @@ pub fn remote_origin_url(
 /// noninteractive SSH. Call only from a background thread.
 #[cfg(unix)]
 pub fn remote_config_value(
-    target: &str,
+    target: &SshTarget,
     git_dir: &str,
     key: &str,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     if !git_dir.starts_with('/') || git_dir.chars().any(char::is_control) {
         return Err(Error::InvalidGitDir);
     }
@@ -296,10 +298,9 @@ pub struct Destination {
 /// Resolve `target` with `ssh -G`, which reads configuration only and never
 /// connects. Blocks briefly: call it from a background thread.
 #[cfg(unix)]
-pub fn resolve_destination(target: &str) -> Result<Destination> {
-    validate_target(target)?;
-    let mut command = crate::environment::command("ssh");
-    command.args(["-G", "--", target]);
+pub fn resolve_destination(target: &SshTarget) -> Result<Destination> {
+    validate_target(&target.target)?;
+    let mut command = resolve_command(target);
     let (status, output) = run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
         tracing::warn!(category = "resolve", %status, "ssh -G failed");
@@ -314,9 +315,15 @@ pub fn resolve_destination(target: &str) -> Result<Destination> {
     destination.ok_or(Error::RemoteOutput)
 }
 
+/// Resolve through the same executable and transport as the connection.
+#[cfg(unix)]
+fn resolve_command(target: &SshTarget) -> Command {
+    with_options(target, ["-G"])
+}
+
 #[cfg(windows)]
-pub fn resolve_destination(target: &str) -> Result<Destination> {
-    validate_target(target)?;
+pub fn resolve_destination(target: &SshTarget) -> Result<Destination> {
+    validate_target(&target.target)?;
     Err(Error::SshUnsupported)
 }
 
@@ -341,7 +348,7 @@ fn parse_destination(output: &[u8]) -> Option<Destination> {
 /// bytes of stdout and never stderr, which can carry banners or secrets.
 #[cfg(unix)]
 fn run_remote(
-    target: &str,
+    target: &SshTarget,
     remote_command: &str,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
@@ -414,32 +421,32 @@ fn run_with_stderr(
 }
 
 #[cfg(windows)]
-pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
-    validate_target(target)?;
+pub fn probe_host(target: &SshTarget, session: &str) -> Result<HostProbe> {
+    validate_target(&target.target)?;
     session_socket(Path::new(""), session)?;
     Err(Error::SshUnsupported)
 }
 
 #[cfg(windows)]
 pub fn remote_origin_url(
-    target: &str,
+    target: &SshTarget,
     _git_dir: &str,
     _timeout: Duration,
     _cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     Err(Error::SshUnsupported)
 }
 
 #[cfg(windows)]
 pub fn remote_config_value(
-    target: &str,
+    target: &SshTarget,
     _git_dir: &str,
     _key: &str,
     _timeout: Duration,
     _cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     Err(Error::SshUnsupported)
 }
 
@@ -451,19 +458,45 @@ pub fn remote_config_value(
 /// noninteractive connections. `ControlMaster=no` still forbids this child from
 /// becoming a master: killing it must never end the user's other sessions, and
 /// it must not leave a persistent background process behind.
+///
+/// The configured command's executable and fixed arguments are honored. Plain
+/// OpenSSH commands keep OpenSSH ordering: the mandatory policy first (so a
+/// conflicting `-o` in the user's arguments cannot weaken it), then the user's
+/// arguments, then the destination and remote command. `tailscale ssh` takes
+/// its destination as the first subcommand argument instead, so it goes there
+/// with the policy and remote command after it; tailscale verifies host keys
+/// and stays noninteractive through the coordination server, and its wrapper
+/// injects its own options before any it is handed.
 #[cfg(unix)]
-pub(super) fn command(target: &str, remote_command: &str) -> Command {
-    let mut command = noninteractive();
-    command.args(["-o", "ClearAllForwardings=yes", "--", target]);
+pub(super) fn command(target: &SshTarget, remote_command: &str) -> Command {
+    let mut command = with_options(
+        target,
+        POLICY.into_iter().chain(["-o", "ClearAllForwardings=yes"]),
+    );
     command.arg(remote_command);
     command
 }
 
-/// `ssh` with the bridge's connection policy and nothing to connect yet.
+/// Keep policy/operation options ahead of fixed SSH arguments. Tailscale's
+/// subcommand requires the destination first; its global flags stay in front.
 #[cfg(unix)]
-fn noninteractive() -> Command {
-    let mut command = crate::environment::command("ssh");
-    command.args(POLICY);
+pub(super) fn with_options<'a>(
+    target: &SshTarget,
+    options: impl IntoIterator<Item = &'a str>,
+) -> Command {
+    let mut command = target.command.empty_command();
+    if let Some((prefix, fixed)) = target.command.tailscale_arguments() {
+        command
+            .args(prefix)
+            .arg(&target.target)
+            .args(options)
+            .args(fixed);
+    } else {
+        command
+            .args(options)
+            .args(target.command.arguments())
+            .args(["--", target.target.as_str()]);
+    }
     command
 }
 
@@ -512,31 +545,33 @@ pub const FORWARD_READY: &str = "herdr-forward-ready";
 /// an interactively authenticated master cannot be tunnelled. The caller owns
 /// the child: its streams, readiness, and reaping.
 #[cfg(unix)]
-pub fn forward_command(target: &str, local: u16, remote: u16) -> Result<Command> {
-    validate_target(target)?;
-    let mut command = noninteractive();
-    command.args([
-        "-N",
-        "-o",
-        "ControlPath=none",
-        "-o",
-        "PermitLocalCommand=yes",
-        "-o",
-        &format!("LocalCommand=echo {FORWARD_READY}"),
-        "-o",
-        "ExitOnForwardFailure=yes",
-        "-L",
-        &format!("127.0.0.1:{local}:localhost:{remote}"),
-        "--",
+pub fn forward_command(target: &SshTarget, local: u16, remote: u16) -> Result<Command> {
+    validate_target(&target.target)?;
+    let local_command = format!("LocalCommand=echo {FORWARD_READY}");
+    let forward = format!("127.0.0.1:{local}:localhost:{remote}");
+    let command = with_options(
         target,
-    ]);
+        POLICY.into_iter().chain([
+            "-N",
+            "-L",
+            forward.as_str(),
+            "-o",
+            "ControlPath=none",
+            "-o",
+            "PermitLocalCommand=yes",
+            "-o",
+            local_command.as_str(),
+            "-o",
+            "ExitOnForwardFailure=yes",
+        ]),
+    );
     Ok(command)
 }
 
 /// Windows rejects SSH endpoints, so it has no host to forward from.
 #[cfg(windows)]
-pub fn forward_command(target: &str, _local: u16, _remote: u16) -> Result<Command> {
-    validate_target(target)?;
+pub fn forward_command(target: &SshTarget, _local: u16, _remote: u16) -> Result<Command> {
+    validate_target(&target.target)?;
     Err(Error::SshUnsupported)
 }
 
@@ -544,18 +579,18 @@ pub fn forward_command(target: &str, _local: u16, _remote: u16) -> Result<Comman
 /// `/bin/sh`, whatever the login shell, with the bridge's connection policy.
 /// The caller owns the child: its streams, deadline, and reaping.
 #[cfg(unix)]
-pub fn script_command(target: &str, script: &str) -> Result<Command> {
-    validate_target(target)?;
+pub fn script_command(target: &SshTarget, script: &str) -> Result<Command> {
+    validate_target(&target.target)?;
     Ok(command(target, &format!("/bin/sh -c {}", quote(script))))
 }
 
 #[cfg(unix)]
 pub(crate) fn connect(
-    target: &str,
+    target: &SshTarget,
     session: &str,
     stop: &AtomicBool,
 ) -> Result<(Stream, ChildGuard)> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     session_socket(Path::new(""), session)?;
     match start_bridge(command(target, &bridge_command(session)), stop, handshake)? {
         Ok(bridge) => Ok(bridge),
@@ -573,7 +608,7 @@ pub(crate) fn connect(
 /// have no PowerShell either.
 #[cfg(unix)]
 fn connect_powershell(
-    target: &str,
+    target: &SshTarget,
     session: &str,
     stop: &AtomicBool,
     posix: SshFailure,
@@ -733,11 +768,11 @@ fn incompatible(status: &serde_json::Value) -> Error {
 /// everywhere.
 #[cfg(windows)]
 pub(crate) fn connect(
-    target: &str,
+    target: &SshTarget,
     session: &str,
     _stop: &AtomicBool,
 ) -> Result<(Stream, ChildGuard)> {
-    validate_target(target)?;
+    validate_target(&target.target)?;
     session_socket(Path::new(""), session)?;
     Err(Error::SshUnsupported)
 }
@@ -837,23 +872,5 @@ mod tests;
 // Windows never spawns the bridge, but a rejected SSH endpoint must still be
 // rejected for the same reasons and in the same order as on POSIX.
 #[cfg(all(test, windows))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn invalid_targets_and_sessions_are_rejected_before_the_platform_refusal() {
-        let stop = AtomicBool::new(false);
-        assert!(matches!(
-            connect("-oProxyCommand=x", "default", &stop),
-            Err(Error::InvalidSshTarget)
-        ));
-        assert!(matches!(
-            connect("host", "../escape", &stop),
-            Err(Error::InvalidSession)
-        ));
-        assert!(matches!(
-            connect("host", "default", &stop),
-            Err(Error::SshUnsupported)
-        ));
-    }
-}
+#[path = "ssh/tests/windows.rs"]
+mod tests;

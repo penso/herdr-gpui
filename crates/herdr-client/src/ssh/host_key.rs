@@ -8,7 +8,7 @@
 //! entry. Nothing reaches the user's files until [`trust_host_key`] appends
 //! those exact entries, so the approved fingerprint is the one saved.
 use super::SshFailure;
-use crate::{Error, Result};
+use crate::{Error, Result, SshTarget};
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use {
@@ -72,8 +72,44 @@ impl NewHostKey {
 /// Every authentication method is off, so no credential is offered and no
 /// remote command runs. Blocks on SSH: call it from a background thread.
 #[cfg(unix)]
-pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
-    validate_target(target)?;
+pub fn scan_host_key(target: &SshTarget) -> Result<HostKeyScan> {
+    validate_target(&target.target)?;
+    // Coordination-managed keys cannot be approved in our known_hosts file,
+    // but still verify through the chosen executable before reporting trust.
+    if target.command.is_tailscale_ssh() {
+        let mut command = super::with_options(
+            target,
+            super::POLICY.into_iter().chain([
+                "-o",
+                "PubkeyAuthentication=no",
+                "-o",
+                "PasswordAuthentication=no",
+                "-o",
+                "KbdInteractiveAuthentication=no",
+                "-o",
+                "GSSAPIAuthentication=no",
+                "-o",
+                "HostbasedAuthentication=no",
+                "-o",
+                "ForwardAgent=no",
+                "-o",
+                "ControlPath=none",
+                "-o",
+                "ClearAllForwardings=yes",
+            ]),
+        );
+        command.arg("true").stderr(Stdio::piped());
+        let (status, _, stderr) =
+            super::run_with_stderr(&mut command, Duration::from_secs(20), || false)?;
+        let failure = SshFailure::classify(status.code(), &stderr);
+        return Ok(
+            if status.success() || (status.code() == Some(255) && failure == SshFailure::Auth) {
+                HostKeyScan::Trusted
+            } else {
+                HostKeyScan::Refused(failure)
+            },
+        );
+    }
     let known = known_hosts(target)?;
     let files = &known.user;
     let scratch = tempfile::Builder::new()
@@ -81,11 +117,18 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
         .tempdir()?;
     let recorded = scratch.path().join("known_hosts");
     std::fs::File::create(&recorded)?;
-    let mut command = crate::environment::command("ssh");
+    let mut command = target.command.empty_command();
     command
         .args(scan_options(&recorded, files))
         .args(super::POLICY)
-        .args(["-o", "ClearAllForwardings=yes", "--", target, "true"])
+        .args(target.command.arguments())
+        .args([
+            "-o",
+            "ClearAllForwardings=yes",
+            "--",
+            target.target.as_str(),
+            "true",
+        ])
         .stderr(Stdio::piped());
     // Stderr is read only to classify a failure, as for the probe.
     let (status, _, stderr) =
@@ -134,8 +177,8 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
 }
 
 #[cfg(windows)]
-pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
-    crate::catalog::validate_target(target)?;
+pub fn scan_host_key(target: &SshTarget) -> Result<HostKeyScan> {
+    crate::catalog::validate_target(&target.target)?;
     Err(Error::SshUnsupported)
 }
 
@@ -221,9 +264,8 @@ fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> R
 }
 
 #[cfg(unix)]
-fn known_hosts(target: &str) -> Result<KnownHosts> {
-    let mut command = crate::environment::command("ssh");
-    command.args(["-G", "--", target]);
+fn known_hosts(target: &SshTarget) -> Result<KnownHosts> {
+    let mut command = super::resolve_command(target);
     let (status, output) = super::run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
         return Err(Error::RemoteCommand(status));

@@ -16,8 +16,9 @@ use crate::{
         Call, Caller, ErrorCode, Response,
         hosts::{HostOp, LoadInfo, Reply, UsageInfo, UsageWindow},
     },
+    menu::Page,
 };
-use gpui::App;
+use gpui::{App, Context, Point, Window};
 use herdr_client::protocol::{ClientShellSnapshot, ClientShellWorkspace};
 use std::time::SystemTime;
 
@@ -36,6 +37,9 @@ pub(super) fn serve(
         }),
         HostOp::Select { id } => in_free_window(caller, cx, |view, _, cx| {
             select(view, &id, |view, id| view.select_endpoint(id, cx))
+        }),
+        HostOp::SshCommand { host } => in_free_window(caller, cx, |view, window, cx| {
+            ssh_command(view, &host, window, cx)
         }),
         HostOp::Pr => in_window(caller, cx, |view, _, _| pr::status(view, caller)),
         HostOp::PrComments => return pr::comments(call.caller, incoming, watches, cx),
@@ -168,6 +172,57 @@ fn selected_label(view: &HerdrWindow) -> String {
         .get(view.selected_endpoint)
         .map(|endpoint| endpoint.label.clone())
         .unwrap_or_default()
+}
+
+/// Opens the saved SSH device's command editor. The command is a trusted
+/// local preference, never executed here: the user saves it in the dialog,
+/// which then reconnects only that saved endpoint with the new command.
+fn ssh_command(
+    view: &mut HerdrWindow,
+    name: &str,
+    window: &mut Window,
+    cx: &mut Context<HerdrWindow>,
+) -> Response {
+    let found = view
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.id == name)
+        .or_else(|| {
+            view.endpoints
+                .iter()
+                .find(|endpoint| endpoint.label.eq_ignore_ascii_case(name))
+        });
+    let Some(endpoint) = found else {
+        return Response::error(
+            ErrorCode::NotFound,
+            format!("No host is named {name}; `herdr-gpui host list` lists them"),
+        );
+    };
+    let (id, label) = (endpoint.id.clone(), endpoint.label.clone());
+    if endpoint.saved_ssh().is_none() {
+        return Response::error(
+            ErrorCode::Unsupported,
+            format!("{label} is not a saved SSH device, so it has no SSH command"),
+        );
+    }
+    view.open_host_menu(&id, Point::default(), window, cx);
+    if view.menu.page != Some(Page::Host) {
+        return Response::error(
+            ErrorCode::Failed,
+            format!("Could not open {label}'s SSH command editor"),
+        );
+    }
+    view.open_ssh_command_editor(window, cx);
+    // Bring the window forward, where the user saves; activating a window
+    // cannot happen inside this update.
+    let handle = window.window_handle();
+    cx.activate(true);
+    cx.defer(move |cx| {
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
+    });
+    Response::done(format!(
+        "Editing {label}'s SSH command; save it in Herdr UI to apply"
+    ))
 }
 
 /// Plan usage on the selected host, as the status bar shows it.

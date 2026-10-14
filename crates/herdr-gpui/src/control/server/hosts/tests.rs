@@ -6,6 +6,8 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 mod info;
 mod ports;
 mod pr;
+#[cfg(unix)]
+mod ssh_command;
 mod strict;
 
 fn caller(workspace: Option<&str>) -> Caller {

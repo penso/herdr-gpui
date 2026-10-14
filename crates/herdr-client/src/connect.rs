@@ -77,7 +77,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
     validate_options(options)?;
     match &target {
         ConnectTarget::Ssh { target, session } => {
-            catalog::validate_target(target)?;
+            catalog::validate_target(&target.target)?;
             session_socket(std::path::Path::new(""), session)?;
         }
         ConnectTarget::Wsl { distro, session } => wsl::validate(distro, session)?,
@@ -94,76 +94,76 @@ pub fn connect_with_connector<T: Into<Transport>>(
     let liveness = Arc::new(AtomicBool::new(false));
     let worker_liveness = liveness.clone();
     thread::Builder::new()
-        .name("herdr-client-io".into())
-        .spawn(move || {
-            let transport = match target {
-                ConnectTarget::Ssh { .. } => "ssh",
-                ConnectTarget::Wsl { .. } => "wsl",
-                #[cfg(feature = "cloud")]
-                ConnectTarget::Cloud { provider, .. } => provider.key(),
-                _ => "local",
-            };
-            let span = tracing::info_span!("connection", transport);
-            let _entered = span.enter();
-            tracing::info!(transport, "connection starting");
-            let result = (|| {
-                let (stream, child) = match &target {
-                    ConnectTarget::Ssh { target, session } => {
-                        let (stream, child) = ssh::connect(target, session, &worker_stop)?;
-                        (stream, Some(child))
-                    }
-                    ConnectTarget::Wsl { distro, session } => {
-                        let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
-                        (stream, Some(child))
-                    }
-                    _ => match connector(&target, &worker_stop)?.into() {
-                        Transport::Local(stream) => (stream, None),
-                        Transport::Bridge(Bridge { stream, child }) => (stream, Some(child)),
-                    },
-                };
-                run_connection(
-                    stream,
-                    options,
-                    surface_active,
-                    child.is_some(),
-                    rx,
-                    &tx,
-                    Signals {
-                        stop: &worker_stop,
-                        liveness: &worker_liveness,
-                    },
-                )
-                // The child guard is dropped before delivering a disconnect event.
-            })();
-            if worker_stop.load(Ordering::Acquire) {
-                tracing::debug!("connection cancelled");
-            } else if let Err(error) = &result {
-                tracing::warn!(kind = ?error.kind(), "connection ended with transport or protocol failure");
-            } else {
-                tracing::info!("connection ended");
-            }
-            if !worker_stop.load(Ordering::Acquire) {
-                if let Some(mismatch) = result.as_ref().err().and_then(Error::version_mismatch) {
-                    let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
-                }
-                let ssh = match &result {
-                    Err(Error::SshRefused(failure)) => Some(*failure),
-                    _ => None,
-                };
-                let reason = result
-                    .err()
-                    .map(|e| {
-                        e.to_string()
-                            .chars()
-                            .filter(|c| !c.is_control())
-                            .take(1024)
-                            .collect()
-                    })
-                    .unwrap_or_else(|| "server disconnected".into());
-                let _ = deliver(&tx, ClientEvent::Disconnected { reason, ssh }, &worker_stop);
-            }
-            worker_stop.store(true, Ordering::Release);
-        })?;
+    .name("herdr-client-io".into())
+    .spawn(move || {
+      let transport = match target {
+        ConnectTarget::Ssh { .. } => "ssh",
+        ConnectTarget::Wsl { .. } => "wsl",
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { provider, .. } => provider.key(),
+        _ => "local",
+      };
+      let span = tracing::info_span!("connection", transport);
+      let _entered = span.enter();
+      tracing::info!(transport, "connection starting");
+      let result = (|| {
+        let (stream, child) = match &target {
+          ConnectTarget::Ssh { target, session } => {
+            let (stream, child) = ssh::connect(target, session, &worker_stop)?;
+            (stream, Some(child))
+          }
+          ConnectTarget::Wsl { distro, session } => {
+            let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
+            (stream, Some(child))
+          }
+          _ => match connector(&target, &worker_stop)?.into() {
+            Transport::Local(stream) => (stream, None),
+            Transport::Bridge(Bridge { stream, child }) => (stream, Some(child)),
+          },
+        };
+        run_connection(
+          stream,
+          options,
+          surface_active,
+          child.is_some(),
+          rx,
+          &tx,
+          Signals {
+            stop: &worker_stop,
+            liveness: &worker_liveness,
+          },
+        )
+        // The child guard is dropped before delivering a disconnect event.
+      })();
+      if worker_stop.load(Ordering::Acquire) {
+        tracing::debug!("connection cancelled");
+      } else if let Err(error) = &result {
+        tracing::warn!(kind = ?error.kind(), "connection ended with transport or protocol failure");
+      } else {
+        tracing::info!("connection ended");
+      }
+      if !worker_stop.load(Ordering::Acquire) {
+        if let Some(mismatch) = result.as_ref().err().and_then(Error::version_mismatch) {
+          let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
+        }
+        let ssh = match &result {
+          Err(Error::SshRefused(failure)) => Some(*failure),
+          _ => None,
+        };
+        let reason = result
+          .err()
+          .map(|e| {
+            e.to_string()
+              .chars()
+              .filter(|c| !c.is_control())
+              .take(1024)
+              .collect()
+          })
+          .unwrap_or_else(|| "server disconnected".into());
+        let _ = deliver(&tx, ClientEvent::Disconnected { reason, ssh }, &worker_stop);
+      }
+      worker_stop.store(true, Ordering::Release);
+    })?;
     Ok(Client {
         handle: ClientHandle {
             inner: Arc::new(HandleInner {

@@ -63,12 +63,12 @@ const ORIGIN_LIMIT: usize = 64;
 /// GitHub repositories resolved on saved hosts, keyed by SSH target and Git
 /// directory. Bounded, and owned by the single PR worker thread.
 #[derive(Default)]
-pub(super) struct Origins(Vec<(String, String, Instant, (String, String))>);
+pub(super) struct Origins(Vec<(herdr_client::SshTarget, String, Instant, (String, String))>);
 
 impl Origins {
     fn resolve(
         &mut self,
-        target: &str,
+        target: &herdr_client::SshTarget,
         input: &Input,
         now: Instant,
         deadline: Instant,
@@ -97,7 +97,7 @@ impl Origins {
             self.0.remove(0);
         }
         self.0
-            .push((target.to_owned(), key.to_owned(), now, repository.clone()));
+            .push((target.clone(), key.to_owned(), now, repository.clone()));
         Ok(repository)
     }
 }
@@ -669,17 +669,21 @@ mod origin_tests {
         let now = Instant::now();
         let deadline = now + TIMEOUT;
         // An invalid target fails before SSH, so reaching it proves a miss.
-        let target = "-not-dialled";
+        let target: herdr_client::SshTarget = "-not-dialled".into();
         let mut origins = Origins(vec![(
-            target.into(),
+            target.clone(),
             "/repo/.git".into(),
             now,
             ("owner".into(), "repo".into()),
         )]);
         let mut resolve = |key: &str, at: Instant| {
-            origins.resolve(target, &input(key), at, deadline.max(at + TIMEOUT), &|| {
-                false
-            })
+            origins.resolve(
+                &target,
+                &input(key),
+                at,
+                deadline.max(at + TIMEOUT),
+                &|| false,
+            )
         };
         assert_eq!(
             resolve("/repo/.git", now).unwrap(),

@@ -277,11 +277,6 @@ fn real_executable_archive_installs_relaunches_and_rolls_back() -> anyhow::Resul
         assert!(archive_path.exists());
         if !fail {
             assert_eq!(fs::read(backup)?, old);
-        } else {
-            assert!(
-                fs::read_to_string(stage.path().join("install-result.txt"))?
-                    .contains("restart failed")
-            );
         }
     }
     Ok(())

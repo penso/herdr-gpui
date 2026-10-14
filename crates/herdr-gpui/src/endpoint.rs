@@ -242,7 +242,7 @@ impl Endpoint {
     /// so whatever speaks for the saved device (duplicate checks, the device's
     /// own menu) reads this instead. One never reconciled against the catalog
     /// has only its live target to go on.
-    pub(crate) fn saved_ssh(&self) -> Option<(&str, &str)> {
+    pub(crate) fn saved_ssh(&self) -> Option<(&herdr_client::SshTarget, &str)> {
         match self.saved_target() {
             ConnectTarget::Ssh { target, session } => Some((target, session)),
             _ => None,
@@ -445,6 +445,34 @@ impl HerdrWindow {
             }
         }
         selected_changed
+    }
+
+    /// A command edit retires the old transport without changing the session
+    /// selected from the host's session list.
+    pub(crate) fn reload_ssh_commands(&mut self, cx: &mut Context<Self>) {
+        let mut selected_changed = false;
+        for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
+            let ConnectTarget::Ssh { target, .. } = &endpoint.connection.target else {
+                continue;
+            };
+            let command = self.config.ssh_command(&endpoint.id);
+            if target.command == command {
+                continue;
+            }
+            let mut replacement = endpoint.connection.target.clone();
+            if let ConnectTarget::Ssh { target, .. } = &mut replacement {
+                target.command = command.clone();
+            }
+            if let Some(ConnectTarget::Ssh { target, .. }) = &mut endpoint.saved {
+                target.command = command;
+            }
+            endpoint.retarget(replacement);
+            endpoint.retry_now(Instant::now());
+            selected_changed |= index == self.selected_endpoint;
+        }
+        if selected_changed {
+            self.reset_selected(cx);
+        }
     }
 
     pub(super) fn reconnect(&mut self, cx: &mut Context<Self>) {

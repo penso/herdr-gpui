@@ -16,7 +16,7 @@ pub(crate) enum Origin {
     #[default]
     Local,
     /// A saved SSH device, named by its SSH target. Its Git runs there.
-    Ssh(String),
+    Ssh(herdr_client::SshTarget),
 }
 
 /// The repository and branch a lookup reads. `repo_key` is the daemon's Git

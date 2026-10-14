@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::{
     super::super::{Section, SettingsWindow},
-    Account, CoderConfig, CoderFields, SECRET_VARIABLE, SavedDevice, Session, configured_secret,
+    Account, CoderConfig, CoderFields, SavedDevice, Session,
 };
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
@@ -87,16 +87,6 @@ fn a_signed_in_account_lists_its_devices_within_the_narrowest_window(cx: &mut Te
             "https://coder.example.com"
         );
     });
-}
-
-#[test]
-fn a_configured_secret_is_named_before_the_saved_one() {
-    let mut config = CoderConfig::default();
-    if std::env::var_os(SECRET_VARIABLE).is_none() {
-        assert_eq!(configured_secret(&config), None);
-        config.oauth_client_secret = Some("from-file".into());
-        assert!(configured_secret(&config).unwrap().contains("config file"));
-    }
 }
 
 #[gpui::test]

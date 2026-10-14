@@ -37,19 +37,22 @@ connect_with_surface_active(ConnectTarget, ConnectOptions, bool) -> Result<Clien
 load_saved_hosts(development: bool) -> Result<Vec<SavedHost>>
 load_saved_host_selection(development: bool) -> Result<(Vec<SavedHost>, Option<String>)>
 store_saved_host_selection(development: bool, selected: Option<&str>) -> Result<()>
+store_saved_host(development: bool, host: SavedHost) -> Result<()>
 SavedHost { pub id: String, pub label: String, pub target: String, pub session: String, pub enabled: bool }
+SshCommand::default()  // "ssh"; TryFrom<&str>/<String>, as_str(), is_default()
+SshTarget { pub target: String, pub command: SshCommand }  // From<String>/<&str>, Display shows target only
 Client { pub handle: ClientHandle, pub events: Receiver<ClientEvent> }
 ConnectTarget::Local
 ConnectTarget::Session { name: String, development: bool }
 ConnectTarget::Socket(PathBuf)
-ConnectTarget::Ssh { target: String, session: String }
+ConnectTarget::Ssh { target: SshTarget, session: String }
 ConnectTarget::socket_path(&self) -> Result<PathBuf>
 Stream  // std::os::unix::net::UnixStream, or a named-pipe wrapper on Windows
 session_socket(config_dir: &Path, name: &str) -> Result<PathBuf>
 list_local_sessions(development: bool) -> Result<Vec<LocalSession>>
-list_remote_sessions(target: &str) -> Result<Vec<RemoteSession>>
+list_remote_sessions(target: &SshTarget) -> Result<Vec<RemoteSession>>
 delete_local_session(executable: &Path, name: &str) -> Result<()>
-delete_remote_session(target: &str, name: &str) -> Result<()>
+delete_remote_session(target: &SshTarget, name: &str) -> Result<()>
 ConnectOptions { surface_size: ClientSurfaceSize, cell_width_px: u32, cell_height_px: u32 }
 HostTheme { pub foreground: ClientHostColor, pub background: ClientHostColor, pub palette: [ClientHostColor; 256], pub appearance: ClientHostAppearance }
 ```
@@ -390,6 +393,39 @@ are returned without modifying profiles. A directory-sync error can occur after
 the new selection has become visible. Call all these APIs on background workers
 and serialize a client's writes. Explicit-socket clients should call none of them.
 
+`store_saved_host(development, host)` appends one standard `SavedHost` to the
+catalog under the same private atomic-write policy, preserving the catalog's
+version, profile order, and selection. The caller generates the ID (32 lowercase
+hex digits) and, for a custom command, persists that preference before this
+entry can be reached. A duplicate ID or a duplicate target/session pair is
+refused (`ProfileId`/`DuplicateHost`), and the entry is validated with exactly
+the rules a loaded catalog enforces (ID, label, target, session, 64-profile and
+64-KiB bounds). The append is serialized within this process so two windows
+adding different hosts cannot lose one another's write; cross-process edits are
+not locked (the upstream CLI takes none), so callers re-check for duplicates
+afterward as upstream's own flow does. `SavedHost` itself gains no command
+field: the per-machine command lives beside the catalog, not in it.
+
+A saved host may carry a `SshCommand` selecting how it is reached: plain `ssh`
+by default, or a trusted executable with fixed arguments such as `tailscale ssh`
+or `/path/to/ssh -F /path/to/config`. Commands are parsed with shell-style word
+quoting, bounded to 4096 bytes and 64 words, and refuse control characters,
+incomplete quoting, an empty executable, or an option-like executable
+(`Error::InvalidSshCommand`). They run directly with `Command`, never through a
+shell, so no variable, command, or glob expansion occurs; `as_str` returns the
+canonical quoted form and serialization validates the string. `SshTarget`
+carries the catalog target plus its command and displays only the target, so a
+target can never silently drop its command through string coercion. Every SSH
+entry point — probe, destination resolution, host key, scripts, Git/config,
+upload/cleanup, forwarding, and remote session list/delete — takes `&SshTarget`
+and honors the command throughout. `tailscale ssh` is detected by the
+executable basename plus an `ssh` subcommand (global flags allowed) and gets its
+destination first, before the policy options and remote command, matching its
+own argument order; plain OpenSSH commands keep the policy ahead of the user's
+fixed arguments so a conflicting `-o` cannot weaken it. Destination resolution
+and forwarding also use the configured executable; Tailscale's trailing SSH
+options are passed through to its underlying OpenSSH client.
+
 `connect` remains active by default; `connect_with_surface_active(..., false)`
 starts with an inactive hello. Inactive local connections and all SSH connections
 require `surface_interest`, `presentation_effects_fence`, and the advertised
@@ -398,10 +434,13 @@ require `surface_interest`, `presentation_effects_fence`, and the advertised
 request ID. Await the matching response and check its API error before treating
 activation as complete. Unsupported or stale requests produce `CommandRejected`.
 
-SSH runs entirely on the connection worker using the system `ssh`, existing
-OpenSSH configuration/agent credentials, strict known-host verification, and no
-password prompts, agent/X11 forwarding, port forwards, or persistent control
-master. It discovers a POSIX remote binary on PATH (excluding mise shims), then
+SSH runs entirely on the connection worker using the configured per-machine
+command (`ssh` by default, or a trusted executable with fixed arguments such as
+`tailscale ssh`), existing OpenSSH configuration/agent credentials, strict
+known-host verification, and no password prompts, X11 forwarding, incidental
+port forwards, or persistent control master. Agent forwarding and reuse of a
+user-authenticated control socket follow the user's SSH configuration. It
+discovers a POSIX remote binary on PATH (excluding mise shims), then
 the upstream local-bin, Homebrew, and Nix roots. Each candidate is checked with
 `status client --json` for generation and required capabilities before executing
 `--session <session> remote-client-bridge`; advertised bridge idle timeouts are
@@ -429,7 +468,9 @@ probe, independently of the initial-snapshot deadline. As with local connections
 events: event backpressure pauses transport processing, including health checks.
 
 `PortForward::start(target, remote_port)` forwards a saved host's loopback port
-to `127.0.0.1` and returns at once. A worker thread starts one `ssh -N` master
+to `127.0.0.1` and returns at once. `target` is a `&SshTarget`, so both the master
+and its forwarding requests use that machine's configured command. A worker
+thread starts one `ssh -N` master
 on a control socket in a fresh owner-only directory, waits for it to
 authenticate, and asks it to listen with `ssh -O forward -L`: the preferred port
 (`preferred_local_port`), then once more on a port the system picks. That
@@ -454,7 +495,9 @@ as upstream does; disconnect only detaches and never stops the remote daemon.
 ## Background Host Scripts
 
 `run_script(ScriptHost, script, input, output, ScriptLimits, cancelled)` runs a
-POSIX script locally or over a saved SSH target. `run_script_command(Command,
+POSIX script locally or over a saved SSH target. `ScriptHost::Ssh(&SshTarget)`
+uses the target's configured command; `ScriptHost::Local` runs the local
+`/bin/sh`. `run_script_command(Command,
 input, output, ScriptLimits, cancelled)` accepts an already-prepared command for
 provider-specific transports. The caller supplies authentication, quotes the
 remote command, and keeps temporary credential files alive through the call.
@@ -497,9 +540,9 @@ per entry, with the same 64-entry and 64-KiB limits.
 ## SSH File Transfers
 
 ```text
-upload_files(target: &str, paths: &[PathBuf], cancelled: &AtomicBool,
+upload_files(target: &SshTarget, paths: &[PathBuf], cancelled: &AtomicBool,
              progress: impl FnMut(u64, u64)) -> Result<Vec<String>>
-remove_uploaded_files(target: &str, paths: &[String]) -> Result<()>
+remove_uploaded_files(target: &SshTarget, paths: &[String]) -> Result<()>
 ```
 
 This separate **blocking background-worker API** stages arbitrary regular files,

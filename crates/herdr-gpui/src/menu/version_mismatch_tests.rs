@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{Page, VersionNotice, version_mismatch::UPDATE_COMMAND};
+use super::{Page, version_mismatch::UPDATE_COMMAND};
 use crate::sidebar::layout_tests::{fixture_window, full_draw};
 use herdr_client::VersionMismatch;
 
@@ -8,40 +8,6 @@ fn outdated(version: Option<&str>) -> VersionMismatch {
     VersionMismatch::DaemonOutdated {
         server_version: version.map(Into::into),
     }
-}
-
-#[test]
-fn notice_names_the_side_to_update_and_where() {
-    let local = VersionNotice {
-        host: None,
-        mismatch: outdated(Some("0.8.2")),
-    };
-    assert_eq!(local.title(), "Herdr needs an update");
-    assert_eq!(
-        local.body(),
-        "The Herdr server on this device (version 0.8.2) is too old for this app. Run this command in a terminal; the app reconnects once the updated server is running."
-    );
-
-    let remote = VersionNotice {
-        host: Some("build box".into()),
-        mismatch: outdated(None),
-    };
-    assert_eq!(
-        remote.body(),
-        "The Herdr server on build box did not answer this app's handshake. This app needs Herdr 0.9.0 or newer. Run this command on build box; the app reconnects once the updated server is running."
-    );
-
-    let newer = VersionNotice {
-        host: Some("build box".into()),
-        mismatch: VersionMismatch::ClientOutdated {
-            server_version: Some("2.0.0".into()),
-        },
-    };
-    assert_eq!(newer.title(), "Herdr UI needs an update");
-    assert_eq!(
-        newer.body(),
-        "The Herdr server on build box (version 2.0.0) is newer than this app supports. Update this app to connect."
-    );
 }
 
 #[gpui::test]

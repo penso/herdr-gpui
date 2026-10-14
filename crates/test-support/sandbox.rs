@@ -54,10 +54,10 @@ impl Sandbox {
             "temporary path too long for Unix socket; set HERDR_TEST_TMPDIR to a shorter parent"
         );
         fs::write(
-            sandbox.dir.join("config.toml"),
-            "onboarding = false\n[terminal]\ndefault_shell = \"/bin/sh\"\nshell_mode = \"non_login\"\n",
-        )
-        .unwrap();
+      sandbox.dir.join("config.toml"),
+      "onboarding = false\n[terminal]\ndefault_shell = \"/bin/sh\"\nshell_mode = \"non_login\"\n",
+    )
+    .unwrap();
         sandbox
     }
 

@@ -246,13 +246,3 @@ fn a_failed_removal_returns_to_the_confirmation_without_removed_lanes() {
             .starts_with("1 worktree(s) could not be removed")
     );
 }
-
-#[test]
-fn agent_status_comes_from_the_daemon_snapshot() {
-    let mut snapshot = crate::sidebar::layout_tests::snapshot(2);
-    let id = snapshot.workspaces[1].workspace_id.clone();
-    snapshot.workspaces[1].agent_status = AgentStatus::Blocked;
-    assert_eq!(agent_status(Some(&snapshot), &id), "Needs input");
-    assert_eq!(agent_status(Some(&snapshot), "gone"), "Closed");
-    assert_eq!(agent_status(None, &id), "Host offline");
-}

@@ -66,7 +66,7 @@ fn a_device_picker_that_overflows_scrolls_its_list(cx: &mut gpui::TestAppContext
                     format!("ssh:fixture{index}"),
                     format!("host{index}"),
                     ConnectTarget::Ssh {
-                        target: format!("host{index}"),
+                        target: format!("host{index}").into(),
                         session: "default".into(),
                     },
                     true,

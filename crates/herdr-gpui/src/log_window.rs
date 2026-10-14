@@ -520,11 +520,7 @@ impl Render for LogWindow {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(
-                        div()
-                            .text_size(px(config.ui.size + 4.))
-                            .child("Logs"),
-                    )
+                    .child(div().text_size(px(config.ui.size + 4.)).child("Logs"))
                     .child(self.search.clone())
                     .child(
                         div()
@@ -533,45 +529,92 @@ impl Render for LogWindow {
                             .items_center()
                             .gap_2()
                             .child(
-                                button("minimum-level", format!("Minimum: {} v", self.minimum), theme)
-                                    .track_focus(&self.level_focus)
-                                    .border_1()
-                                    .border_color(if self.level_focus.is_focused(window) { palette_color(theme, 4) } else { rgb(theme.active) })
-                                    .on_click(cx.listener(|this, _, window, cx| this.open_levels(window, cx)))
-                                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                                        if matches!(event.keystroke.key.as_str(), "enter" | "space" | "down" | "up") {
+                                button(
+                                    "minimum-level",
+                                    format!("Minimum: {} v", self.minimum),
+                                    theme,
+                                )
+                                .track_focus(&self.level_focus)
+                                .border_1()
+                                .border_color(if self.level_focus.is_focused(window) {
+                                    palette_color(theme, 4)
+                                } else {
+                                    rgb(theme.active)
+                                })
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.open_levels(window, cx)),
+                                )
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, window, cx| {
+                                        if matches!(
+                                            event.keystroke.key.as_str(),
+                                            "enter" | "space" | "down" | "up"
+                                        ) {
                                             cx.stop_propagation();
                                             window.prevent_default();
                                             this.open_levels(window, cx);
                                         }
-                                    }))
-                                    .when_some(self.level_menu, |el, selected| el.child(
-                                        deferred(
-                                            anchored().child(
-                                                div().id("level-menu").debug_selector(|| "level-menu".into())
-                                                    .absolute().top_full().left_0().w(px(180.))
-                                                    .p_1().bg(rgb(theme.surface)).border_1().border_color(rgb(theme.active))
-                                                    .occlude().track_focus(&self.menu_focus)
-                                                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                                    .on_click(|_, _, cx| cx.stop_propagation())
-                                                    .on_mouse_down_out(cx.listener(|this, _, window, cx| this.close_levels(window, cx)))
-                                                    .on_key_down(cx.listener(Self::level_key))
-                                                    .children(LEVELS.iter().enumerate().map(|(index, level)| {
-                                                        let level = *level;
-                                                        div().id(("level-option", index)).debug_selector(move || format!("level-option-{index}"))
-                                                            .px_2().py_1().cursor_pointer()
-                                                            .when(index == selected, |el| el.bg(rgb(theme.active)))
-                                                            .child(format!("{} {}", if self.minimum == level { "*" } else { " " }, level))
-                                                            .on_click(cx.listener(move |this, _, window, cx| {
-                                                                cx.stop_propagation();
-                                                                this.minimum = level;
-                                                                this.generation = None;
-                                                                this.close_levels(window, cx);
-                                                            }))
-                                                    }))
+                                    },
+                                ))
+                                .when_some(
+                                    self.level_menu,
+                                    |el, selected| {
+                                        el.child(
+                                            deferred(
+                                                anchored().child(
+                                                    div()
+                                                        .id("level-menu")
+                                                        .debug_selector(|| "level-menu".into())
+                                                        .absolute()
+                                                        .top_full()
+                                                        .left_0()
+                                                        .w(px(180.))
+                                                        .p_1()
+                                                        .bg(rgb(theme.surface))
+                                                        .border_1()
+                                                        .border_color(rgb(theme.active))
+                                                        .occlude()
+                                                        .track_focus(&self.menu_focus)
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            |_, _, cx| cx.stop_propagation(),
+                                                        )
+                                                        .on_click(|_, _, cx| cx.stop_propagation())
+                                                        .on_mouse_down_out(cx.listener(
+                                                            |this, _, window, cx| {
+                                                                this.close_levels(window, cx)
+                                                            },
+                                                        ))
+                                                        .on_key_down(cx.listener(Self::level_key))
+                                                        .children(LEVELS.iter().enumerate().map(
+                                                            |(index, level)| {
+                                                                let level = *level;
+                                                                div()
+                              .id(("level-option", index))
+                              .debug_selector(move || format!("level-option-{index}"))
+                              .px_2()
+                              .py_1()
+                              .cursor_pointer()
+                              .when(index == selected, |el| el.bg(rgb(theme.active)))
+                              .child(format!(
+                                "{} {}",
+                                if self.minimum == level { "*" } else { " " },
+                                level
+                              ))
+                              .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.minimum = level;
+                                this.generation = None;
+                                this.close_levels(window, cx);
+                              }))
+                                                            },
+                                                        )),
+                                                ),
                                             )
-                                        ).with_priority(1)
-                                    )),
+                                            .with_priority(1),
+                                        )
+                                    },
+                                ),
                             )
                             .child(div().flex_1())
                             .child(
@@ -653,10 +696,7 @@ impl Render for LogWindow {
                                             div()
                                                 .flex_none()
                                                 .whitespace_nowrap()
-                                                .text_color(severity_color(
-                                                    theme,
-                                                    record.level,
-                                                ))
+                                                .text_color(severity_color(theme, record.level))
                                                 .child(format!("{:<5} ", record.level.as_str())),
                                         )
                                         .child(

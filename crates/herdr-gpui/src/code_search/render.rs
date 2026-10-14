@@ -225,53 +225,53 @@ impl HerdrWindow {
             _ => None,
         };
         div()
-            .flex()
-            .flex_col()
-            .size_full()
-            .min_h_0()
-            .child(self.code_search_header(code, cx))
-            .when_some(empty, |panel, text| {
-                panel.child(
-                    div()
-                        .debug_selector(|| "code-search-empty".into())
-                        .flex_1()
-                        .p(px(16.))
-                        .text_color(rgb(theme.muted))
-                        .child(text),
-                )
-            })
-            .when(!code.hits.is_empty(), |panel| {
-                panel.child(
-                    uniform_list(
-                        "code-search-results",
-                        code.hits.len(),
-                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
-                            let Some(code) = &this.menu.code_search else {
-                                return Vec::new();
-                            };
-                            range
-                                .filter_map(|row| this.code_search_row(code, row, cx))
-                                .collect()
-                        }),
-                    )
-                    .track_scroll(&code.scroll)
-                    .flex_1()
-                    .min_h_0(),
-                )
-            })
-            .child(
-                div()
-                    .flex_none()
-                    .px(px(16.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(rgb(theme.active))
-                    .text_color(rgb(theme.muted))
-                    .child(if cfg!(target_os = "macos") {
-                        "↑ / ↓ navigate · Tab symbols/files · Enter editor · ⌘Enter viewer · Esc cancel"
-                    } else {
-                        "↑ / ↓ navigate · Tab symbols/files · Enter editor · Ctrl-Enter viewer · Esc cancel"
-                    }),
-            )
+      .flex()
+      .flex_col()
+      .size_full()
+      .min_h_0()
+      .child(self.code_search_header(code, cx))
+      .when_some(empty, |panel, text| {
+        panel.child(
+          div()
+            .debug_selector(|| "code-search-empty".into())
+            .flex_1()
+            .p(px(16.))
+            .text_color(rgb(theme.muted))
+            .child(text),
+        )
+      })
+      .when(!code.hits.is_empty(), |panel| {
+        panel.child(
+          uniform_list(
+            "code-search-results",
+            code.hits.len(),
+            cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+              let Some(code) = &this.menu.code_search else {
+                return Vec::new();
+              };
+              range
+                .filter_map(|row| this.code_search_row(code, row, cx))
+                .collect()
+            }),
+          )
+          .track_scroll(&code.scroll)
+          .flex_1()
+          .min_h_0(),
+        )
+      })
+      .child(
+        div()
+          .flex_none()
+          .px(px(16.))
+          .py(px(10.))
+          .border_t_1()
+          .border_color(rgb(theme.active))
+          .text_color(rgb(theme.muted))
+          .child(if cfg!(target_os = "macos") {
+            "↑ / ↓ navigate · Tab symbols/files · Enter editor · ⌘Enter viewer · Esc cancel"
+          } else {
+            "↑ / ↓ navigate · Tab symbols/files · Enter editor · Ctrl-Enter viewer · Esc cancel"
+          }),
+      )
     }
 }

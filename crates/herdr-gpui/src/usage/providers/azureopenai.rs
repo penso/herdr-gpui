@@ -245,10 +245,10 @@ mod tests {
     fn reports_the_answering_model() {
         let target = Target::new("resource.openai.azure.com", "chat-prod", "2024-10-21").unwrap();
         let report = parse(
-            r#"{"id":"chatcmpl-1","object":"chat.completion","model":"gpt-4o-2024-08-06","choices":[]}"#,
-            &target,
-        )
-        .unwrap();
+      r#"{"id":"chatcmpl-1","object":"chat.completion","model":"gpt-4o-2024-08-06","choices":[]}"#,
+      &target,
+    )
+    .unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
             report.account.plan.as_deref(),

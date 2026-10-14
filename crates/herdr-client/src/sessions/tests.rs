@@ -35,7 +35,7 @@ fn deletion_rejects_default_and_invalid_names_before_spawning() {
     assert!(matches!(error, Error::Io(_)));
     assert!(std::error::Error::source(&error).is_some());
     assert!(matches!(
-        delete_remote_session("-oProxyCommand=bad", "work"),
+        delete_remote_session(&"-oProxyCommand=bad".into(), "work"),
         Err(Error::InvalidSshTarget)
     ));
 }
@@ -109,7 +109,7 @@ fn remote_delete_is_noninteractive_and_never_retries_a_mutation() {
     let script = delete_script("--json");
     assert!(script.contains("exec \"$path\" session delete --json -- '--json'"));
     assert!(script.contains("session list --json >/dev/null 2>&1 || continue"));
-    let command = script_command("host", &script).unwrap();
+    let command = script_command(&"host".into(), &script).unwrap();
     assert!(command.get_args().any(|arg| arg == "BatchMode=yes"));
     assert!(script.contains("session stop --json -- '--json' >/dev/null 2>&1"));
     assert!(script.find("session stop").unwrap() < script.find("session delete").unwrap());
@@ -470,7 +470,7 @@ fn the_remote_listing_walks_the_shared_candidate_roots() {
     // The candidate that answers ends the probe, with a zero status.
     assert!(script.contains("exit 0"), "{script}");
     assert!(script.starts_with(CANDIDATES), "{script}");
-    let command = script_command("host", &script).unwrap();
+    let command = script_command(&"host".into(), &script).unwrap();
     let args: Vec<_> = command
         .get_args()
         .map(|arg| arg.to_str().unwrap())
@@ -480,7 +480,7 @@ fn the_remote_listing_walks_the_shared_candidate_roots() {
     assert!(args.contains(&"BatchMode=yes"));
     // A malformed target is rejected before anything is built or spawned.
     assert!(matches!(
-        list_remote_sessions("-oProxyCommand=bad"),
+        list_remote_sessions(&"-oProxyCommand=bad".into()),
         Err(Error::InvalidSshTarget)
     ));
 }

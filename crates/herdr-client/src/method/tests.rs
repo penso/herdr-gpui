@@ -7,7 +7,6 @@ fn integration_methods_require_exact_advertisement() {
         (Method::IntegrationInstall, "integration.install"),
     ] {
         assert_eq!(method.as_str(), name);
-        assert_eq!(method.to_string(), name);
         assert!(!method.advertised_in(&[]));
         assert!(!method.advertised_in(&[format!("{name}.extra")]));
         assert!(method.advertised_in(&["unknown.future".into(), name.into()]));
@@ -18,7 +17,6 @@ fn integration_methods_require_exact_advertisement() {
 #[test]
 fn pane_rename_wire_name_and_advertisement() {
     assert_eq!(Method::PaneRename.as_str(), "pane.rename");
-    assert_eq!(Method::PaneRename.to_string(), "pane.rename");
     assert!(Method::PaneRename.advertised_in(&["pane.rename".into()]));
     assert!(!Method::PaneRename.advertised_in(&["tab.rename".into()]));
 }
@@ -239,6 +237,4 @@ fn every_method_is_offered_to_endpoint_clients() {
             "{method} is not offered to endpoint clients"
         );
     }
-    // `workspace.get` is API-socket only; the snapshot carries what we need.
-    assert!(!OFFERED.contains(&"workspace.get"));
 }

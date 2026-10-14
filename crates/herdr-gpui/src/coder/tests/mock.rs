@@ -78,25 +78,31 @@ fn rejected_grant_reads_as_signed_out_and_other_failures_keep_coder_text() {
 fn listing_and_creating_use_the_bearer_token_and_documented_paths() {
     let (mut settings, log) = serve(|request| {
         match (request.method.as_str(), request.target.as_str()) {
-        ("GET", "/api/v2/users/me") => (200, r#"{"id":"u1","username":"fabien","email":"x"}"#.into()),
-        ("GET", "/api/v2/organizations/acme/templates") => (
-            200,
-            r#"[{"id":"t2","name":"zeta","display_name":"","active_version_id":"v2"},
+      ("GET", "/api/v2/users/me") => (200, r#"{"id":"u1","username":"fabien","email":"x"}"#.into()),
+      ("GET", "/api/v2/organizations/acme/templates") => (
+        200,
+        r#"[{"id":"t2","name":"zeta","display_name":"","active_version_id":"v2"},
                 {"id":"t1","name":"docker","display_name":"Docker","active_version_id":"v1"},
                 {"id":"t3","name":"old","active_version_id":"v3","deprecated":true}]"#
-                .into(),
+          .into(),
+      ),
+      ("GET", "/api/v2/templateversions/v1/presets") => (
+        200,
+        r#"[{"ID":"p1","Name":"Small","Default":false},{"ID":"p2","Name":"Large","Default":true}]"#
+          .into(),
+      ),
+      ("GET", "/api/v2/templateversions/v2/presets") => (200, "null".into()),
+      ("POST", "/api/v2/organizations/acme/members/me/workspaces") => {
+        (200, workspace("pending", "start", "created"))
+      }
+      ("GET", target) if target.starts_with("/api/v2/workspaces?") => (
+        200,
+        format!(
+          r#"{{"workspaces":[{}],"count":1}}"#,
+          workspace("running", "start", "ready")
         ),
-        ("GET", "/api/v2/templateversions/v1/presets") => (
-            200,
-            r#"[{"ID":"p1","Name":"Small","Default":false},{"ID":"p2","Name":"Large","Default":true}]"#.into(),
-        ),
-        ("GET", "/api/v2/templateversions/v2/presets") => (200, "null".into()),
-        ("POST", "/api/v2/organizations/acme/members/me/workspaces") => (200, workspace("pending", "start", "created")),
-        ("GET", target) if target.starts_with("/api/v2/workspaces?") => (
-            200,
-            format!(r#"{{"workspaces":[{}],"count":1}}"#, workspace("running", "start", "ready")),
-        ),
-        other => panic!("unexpected {other:?}"),
+      ),
+      other => panic!("unexpected {other:?}"),
     }
     });
     settings.organization = Some("acme".into());

@@ -174,7 +174,8 @@ impl HerdrWindow {
         if !matches!(setup.step, super::super::add_device::Step::Form) {
             return;
         }
-        let [target_field, label_field, _] = setup.fields.clone();
+        let target_field = setup.fields[0].clone();
+        let label_field = setup.fields[1].clone();
         target_field.update(cx, |field, cx| field.set_text_selected(target, cx));
         let label = label_field.read(cx).text().trim();
         if label.is_empty() || setup.suggested_label.as_deref() == Some(label) {

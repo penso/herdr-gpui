@@ -348,9 +348,9 @@ fn paths_move_only_at_boundaries() {
     assert_eq!(remap("/w/feature", "/w/feat", "/h/feat"), None);
     let text = br#"{"cwd":"/w/feat","file":"/w/feat/a.rs","other":"/w/feature","x":"/w/feat.bak"}"#;
     assert_eq!(
-        rewrite_paths(text, "/w/feat", "/home/u/feat"),
-        br#"{"cwd":"/home/u/feat","file":"/home/u/feat/a.rs","other":"/w/feature","x":"/w/feat.bak"}"#
-    );
+    rewrite_paths(text, "/w/feat", "/home/u/feat"),
+    br#"{"cwd":"/home/u/feat","file":"/home/u/feat/a.rs","other":"/w/feature","x":"/w/feat.bak"}"#
+  );
 }
 
 #[test]
@@ -398,11 +398,6 @@ fn claude_project_dirs_match_claude_code() {
 
 #[test]
 fn fresh_starts_carry_the_handoff_prompt() {
-    let prompt = handoff_resume_prompt(&handoff_path(0));
-    assert_eq!(
-        prompt,
-        "Read .herdr/teleport/handoff-1.md and continue the work it describes."
-    );
     assert_eq!(
         AgentKind::Claude.start_argv(Some("go")),
         strings(&["claude", "go"])

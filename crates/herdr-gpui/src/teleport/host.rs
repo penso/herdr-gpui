@@ -17,7 +17,7 @@ const QUERY_IDLE: Duration = Duration::from_secs(60);
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Route {
     Local,
-    Ssh(String),
+    Ssh(herdr_client::SshTarget),
     #[cfg(feature = "cloud")]
     Cloud {
         provider: herdr_client::CloudProvider,

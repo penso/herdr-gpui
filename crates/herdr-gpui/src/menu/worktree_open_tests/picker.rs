@@ -199,11 +199,11 @@ fn open_worktree_search_keeps_a_bounded_scrollable_centered_viewport(cx: &mut Te
                     })
                     .collect();
                 view.menu.apply_worktree_list_response(
-                    "list",
-                    Ok(json!({"result":{
-                        "type":"worktree_list", "source":listing()["result"]["source"], "worktrees":entries
-                    }})),
-                );
+          "list",
+          Ok(json!({"result":{
+              "type":"worktree_list", "source":listing()["result"]["source"], "worktrees":entries
+          }})),
+        );
                 cx.notify();
             });
             window.draw(cx).clear(cx);

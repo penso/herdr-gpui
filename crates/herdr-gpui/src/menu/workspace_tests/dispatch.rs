@@ -16,7 +16,7 @@ fn add_host(view: &mut HerdrWindow, name: &str, label: &str) {
         format!("ssh:{name}"),
         label.into(),
         herdr_client::ConnectTarget::Ssh {
-            target: format!("nobody@{name}.invalid"),
+            target: format!("nobody@{name}.invalid").into(),
             session: "default".into(),
         },
         true,

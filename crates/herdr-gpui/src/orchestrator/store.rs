@@ -279,28 +279,28 @@ impl Store {
             .map(|workspace| encode("workspace_json", workspace))
             .transpose()?;
         transaction.execute(
-            &format!(
-                "INSERT INTO runs ({RUN_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+      &format!(
+        "INSERT INTO runs ({RUN_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
                  ON CONFLICT(id) DO UPDATE SET issue_key = excluded.issue_key, \
                  workspace_json = excluded.workspace_json, agent = excluded.agent, \
                  model = excluded.model, state_json = excluded.state_json, \
                  message = excluded.message, session_id = excluded.session_id, \
                  started_at = excluded.started_at, updated_at = excluded.updated_at"
-            ),
-            params![
-                run.id,
-                run.item_key,
-                workspace,
-                run.agent,
-                run.model,
-                encode("state_json", &run.state)?,
-                run.message,
-                run.session_id,
-                time(run.started_at),
-                time(run.updated_at),
-                run.owner.as_str(),
-            ],
-        )?;
+      ),
+      params![
+        run.id,
+        run.item_key,
+        workspace,
+        run.agent,
+        run.model,
+        encode("state_json", &run.state)?,
+        run.message,
+        run.session_id,
+        time(run.started_at),
+        time(run.updated_at),
+        run.owner.as_str(),
+      ],
+    )?;
         match session {
             Some(session) => {
                 transaction.execute(

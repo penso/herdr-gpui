@@ -210,9 +210,9 @@ pub(crate) fn remove(provider: CloudProvider, id: &str) -> Result<()> {
 
 fn remove_in(path: &Path, provider: CloudProvider, id: &str) -> Result<()> {
     let mut devices = read_entries(path)?;
-    devices.retain(|entry| {
-        !matches!(entry, Entry::Known(saved) if saved.provider == provider && saved.id == id)
-    });
+    devices.retain(
+    |entry| !matches!(entry, Entry::Known(saved) if saved.provider == provider && saved.id == id),
+  );
     write(path, devices)
 }
 

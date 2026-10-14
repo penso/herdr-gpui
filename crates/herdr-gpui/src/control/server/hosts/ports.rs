@@ -13,6 +13,7 @@ use crate::{
     usage::Host,
 };
 use gpui::{App, Context, Window};
+use herdr_client::SshTarget;
 use std::{num::NonZeroU16, time::Duration};
 
 pub(super) fn port_info(port: &Port, origin: &Origin, forwards: &[&Forward]) -> PortInfo {
@@ -48,7 +49,7 @@ pub(super) fn forward_info(host: &str, forward: &Forward) -> ForwardInfo {
 }
 
 /// The saved SSH target of the place's host, which forwards are keyed by.
-fn ssh_target<'a>(view: &'a HerdrWindow, place: &Place) -> Option<&'a str> {
+fn ssh_target<'a>(view: &'a HerdrWindow, place: &Place) -> Option<&'a SshTarget> {
     view.endpoints
         .get(place.index)?
         .saved_ssh()
@@ -98,7 +99,10 @@ pub(super) fn list(view: &HerdrWindow, caller: &Caller) -> Response {
     } else {
         None
     };
-    let host = ssh_target(view, &place).unwrap_or(&place.label).to_owned();
+    let host = ssh_target(view, &place)
+        .map(|target| target.target.as_str())
+        .unwrap_or(&place.label)
+        .to_owned();
     Response::Host {
         reply: Reply::Ports(Box::new(Ports {
             listening,
@@ -114,7 +118,7 @@ pub(super) fn list(view: &HerdrWindow, caller: &Caller) -> Response {
 }
 
 /// The SSH target to forward `place`'s ports from, or why there is none.
-fn forwarding_target<'a>(view: &'a HerdrWindow, place: &Place) -> Result<&'a str, Response> {
+fn forwarding_target<'a>(view: &'a HerdrWindow, place: &Place) -> Result<&'a SshTarget, Response> {
     if let Some(target) = ssh_target(view, place) {
         return Ok(target);
     }
@@ -198,7 +202,7 @@ enum Opening {
     Answered(Response),
     Forwarding {
         place: Place,
-        target: String,
+        target: SshTarget,
         port: NonZeroU16,
     },
 }
@@ -263,7 +267,7 @@ fn start_open(
 fn open_forwarded(
     view: &mut HerdrWindow,
     place: &Place,
-    target: &str,
+    target: &SshTarget,
     port: NonZeroU16,
     window: &mut Window,
     cx: &mut Context<HerdrWindow>,

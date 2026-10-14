@@ -88,14 +88,14 @@ pub(in crate::teleport) fn process_infos(
     cancelled: &AtomicBool,
 ) -> Result<HashMap<String, ProcessInfo>> {
     let body = panes
-        .iter()
-        .map(|pane| {
-            format!(
-                "printf '\\036%s\\n' {pane}\nherdr_cli pane process-info --pane {pane} 2>/dev/null || :\n",
-                pane = shell_quote(pane)
-            )
-        })
-        .collect::<String>();
+    .iter()
+    .map(|pane| {
+      format!(
+        "printf '\\036%s\\n' {pane}\nherdr_cli pane process-info --pane {pane} 2>/dev/null || :\n",
+        pane = shell_quote(pane)
+      )
+    })
+    .collect::<String>();
     let output = host.query(Step::Review, &body, &[], cancelled)?;
     let output = String::from_utf8_lossy(&output);
     Ok(output

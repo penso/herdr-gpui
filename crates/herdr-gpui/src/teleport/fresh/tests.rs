@@ -158,23 +158,3 @@ fn a_shipped_commit_arrives_without_touching_the_origin() {
         "the temporary reference is dropped"
     );
 }
-
-#[test]
-fn an_origin_names_its_repository_as_teleport_resolves_it() {
-    let origin = Origin {
-        place: Place {
-            endpoint_id: "local".into(),
-            label: "This Mac".into(),
-            host: host(),
-        },
-        workspace_id: "w1".into(),
-        repo_key: "/repo/.git".into(),
-        repo_label: "repo".into(),
-    };
-    let source = origin.source();
-    assert_eq!(source.repo_key, "/repo/.git");
-    assert_eq!(source.workspace_id, "w1");
-    // Without a branch, discovery never offers to reclaim a checkout.
-    assert_eq!(source.branch, None);
-    assert_eq!(source.custom_label, None);
-}

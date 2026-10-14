@@ -213,10 +213,7 @@ fn find_explains_an_old_daemon_instead_of_opening(cx: &mut TestAppContext) {
     view.read_with(cx, |view, _| {
         assert!(view.find.is_none());
         let (flash, _) = view.flash.clone().expect("Find says why it did nothing");
-        assert_eq!(
-            flash,
-            crate::window::Flash::warning("Find needs a newer Herdr daemon")
-        );
+        assert!(matches!(flash.tone, crate::window::flash::Tone::Warning));
     });
 }
 

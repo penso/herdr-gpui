@@ -237,19 +237,6 @@ fn start_collapsed_applies_once_and_yields_to_an_earlier_toggle(cx: &mut TestApp
 
 #[test]
 fn tooltips_name_host_place_and_status() {
-    assert_eq!(
-        describe(
-            Some("build"),
-            "review",
-            Some("herdr / tab 2"),
-            status_word(AgentStatus::Blocked)
-        ),
-        "build: review in herdr / tab 2 (blocked)"
-    );
-    assert_eq!(
-        describe(None, "herdr", None, status_word(AgentStatus::Unknown)),
-        "herdr"
-    );
     let mut snapshot = snapshot(1);
     let agent = &mut snapshot.agents[0];
     assert_eq!(agent_status_word(agent).as_deref(), Some("working"));

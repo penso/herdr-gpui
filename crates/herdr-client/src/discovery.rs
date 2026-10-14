@@ -1,7 +1,7 @@
 //! Local socket rules adapted from herdr src/server/socket_paths.rs and
 //! src/session.rs (Apache-2.0; see ../../herdr-protocol/NOTICE.md).
 //! Modified: explicit release/dev selection, no server spawning or global state.
-use crate::{Error, Result};
+use crate::{Error, Result, SshTarget};
 use std::{
     env,
     ffi::OsString,
@@ -79,7 +79,7 @@ pub enum ConnectTarget {
     /// Exact client protocol socket, not the JSON API socket.
     Socket(PathBuf),
     /// Noninteractive SSH attachment to an installed remote Herdr (POSIX hosts).
-    Ssh { target: String, session: String },
+    Ssh { target: SshTarget, session: String },
     /// A machine a cloud provider created, reached through the application's
     /// connector, which holds the provider's credential and builds the command
     /// that runs the bridge there. `account` names the provider account or

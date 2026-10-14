@@ -2,7 +2,7 @@ use super::*;
 use herdr_client::{HostKeyScan, SshFailure};
 
 fn fetching(view: &mut HerdrWindow, cx: &mut Context<HerdrWindow>) -> setup::Request {
-    let request = setup::Request::new("dev@box", "", "").unwrap();
+    let request = setup::Request::new("dev@box", "", "", "").unwrap();
     open_form(view, Step::FetchingKey(request.clone()), cx);
     request
 }
@@ -12,7 +12,7 @@ fn an_unknown_host_key_is_fetched_for_approval(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("dev@box", "", "").unwrap();
+            let request = setup::Request::new("dev@box", "", "", "").unwrap();
             open_form(view, Step::Checking(request), cx);
             view.device_probed(
                 Ok((
@@ -97,7 +97,7 @@ fn cancel_gives_up_the_host_so_it_can_be_tried_again(cx: &mut gpui::TestAppConte
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("dev@box", "", "").unwrap();
+            let request = setup::Request::new("dev@box", "", "", "").unwrap();
             open_form(view, Step::Confirm(request, Offer::Terminal), cx);
             view.menu.device_setup.as_mut().unwrap().claim =
                 Some(setup::Claim::fixture("cancel-retry"));

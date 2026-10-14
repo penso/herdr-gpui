@@ -465,7 +465,7 @@ impl OrchestratorView {
             .iter()
             .find(|item| item.key.canonical() == dialog.item);
         let host = match &self.request.target {
-            herdr_client::ConnectTarget::Ssh { target, .. } => target.clone(),
+            herdr_client::ConnectTarget::Ssh { target, .. } => target.target.clone(),
             _ => "this machine".into(),
         };
         let section = |title: &'static str, body: AnyElement| {

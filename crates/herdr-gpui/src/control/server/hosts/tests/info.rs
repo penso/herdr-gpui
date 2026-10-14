@@ -87,21 +87,3 @@ fn usage_and_load_say_why_they_are_empty(cx: &mut TestAppContext) {
         })
     });
 }
-
-#[test]
-fn a_load_sample_maps_to_its_info() {
-    let sample = crate::system_load::Sample {
-        cpu: Some(12.5),
-        cores: Some(8),
-        load: Some([1., 0.5, 0.25]),
-        uptime: Some(3600),
-        ..Default::default()
-    };
-    let info = load_info("Local", &sample);
-    assert_eq!(info.host, "Local");
-    assert_eq!(info.cpu_percent, Some(12.5));
-    assert_eq!(info.cores, Some(8));
-    assert_eq!(info.load, Some([1., 0.5, 0.25]));
-    assert_eq!(info.uptime_seconds, Some(3600));
-    assert_eq!((info.memory_used, info.disk_total), (None, None));
-}

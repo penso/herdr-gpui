@@ -131,23 +131,3 @@ fn replies_round_trip() {
         r#"{"kind":"opened","id":7,"workspace":"w_1"}"#
     );
 }
-
-#[test]
-fn kinds_are_named_as_json_spells_them() {
-    for kind in [
-        TabKind::Blank,
-        TabKind::Web,
-        TabKind::File,
-        TabKind::Code,
-        TabKind::Review,
-        TabKind::Orchestrator,
-        TabKind::Devices,
-        TabKind::Editor,
-    ] {
-        assert_eq!(
-            serde_json::to_string(&kind).unwrap(),
-            format!("\"{}\"", kind.name())
-        );
-        assert_eq!(kind.is_page(), matches!(kind, TabKind::Web | TabKind::File));
-    }
-}

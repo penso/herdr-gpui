@@ -60,7 +60,8 @@ fn saved_notes_load_back_and_damaged_files_are_rejected() {
         Some("remember me")
     );
 
-    let unclean = br#"{"notes":[{"endpoint":"local","repo_key":"/r/.git","branch":"b","text":"two\nlines"}]}"#;
+    let unclean =
+    br#"{"notes":[{"endpoint":"local","repo_key":"/r/.git","branch":"b","text":"two\nlines"}]}"#;
     assert!(matches!(
         parse(unclean),
         Err(crate::Error::InvalidWorktreeNotes)

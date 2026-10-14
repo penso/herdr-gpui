@@ -125,7 +125,7 @@ fn read_local(path: &Path) -> crate::Result<Option<Vec<u8>>> {
 }
 
 fn read_remote(
-    target: &str,
+    target: &herdr_client::SshTarget,
     checkout: &str,
     cancelled: &AtomicBool,
 ) -> crate::Result<Option<Vec<u8>>> {

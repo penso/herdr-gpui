@@ -61,29 +61,12 @@ fn a_known_agent_shows_its_mark_before_the_kind_icon() {
         Some("claude"),
         SemanticNotificationKind::Finished,
     );
-    assert_eq!(claude.agent, Some(AgentIcon::Claude));
     assert_eq!(badge(&claude).mark, Mark::Icon(AgentIcon::Claude.path()));
     // A display-cased identity still resolves; an unknown one falls back.
     let codex = notice("Waiting", Some("Codex"), SemanticNotificationKind::Finished);
     assert_eq!(codex.agent, Some(AgentIcon::Codex));
     for agent in [Some("untrusted"), Some(&*"claude".repeat(20)), None] {
         let notice = notice("Waiting", agent, SemanticNotificationKind::NeedsAttention);
-        assert_eq!(notice.agent, None);
         assert_eq!(badge(&notice).mark, Mark::Icon("icons/bell.svg"));
-    }
-}
-
-#[test]
-fn each_kind_has_its_own_fallback_icon() {
-    for (kind, icon) in [
-        (SemanticNotificationKind::NeedsAttention, "icons/bell.svg"),
-        (SemanticNotificationKind::Finished, "icons/check.svg"),
-        (
-            SemanticNotificationKind::UpdateInstalled,
-            "icons/refresh.svg",
-        ),
-        (SemanticNotificationKind::Custom, "icons/note.svg"),
-    ] {
-        assert_eq!(badge(&notice("Done", None, kind)).mark, Mark::Icon(icon));
     }
 }

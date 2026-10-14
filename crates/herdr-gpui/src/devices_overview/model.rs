@@ -235,7 +235,7 @@ pub(crate) fn address(target: &ConnectTarget) -> String {
         ConnectTarget::Local => "this machine".to_owned(),
         ConnectTarget::Session { name, .. } => format!("session {name}"),
         ConnectTarget::Socket(path) => path.display().to_string(),
-        ConnectTarget::Ssh { target, .. } => format!("ssh {target}"),
+        ConnectTarget::Ssh { target, .. } => format!("{} {target}", target.command.as_str()),
         #[cfg(feature = "cloud")]
         ConnectTarget::Cloud {
             provider, machine, ..

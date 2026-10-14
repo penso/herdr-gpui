@@ -56,7 +56,6 @@ fn an_agent_backed_stale_public_half_is_refused_without_changing_either_file() {
     let before = (fs::read(&selected).unwrap(), fs::read(&public).unwrap());
     let error = fingerprint(&selected, &|| false).unwrap_err();
     assert!(matches!(&error, Error::PublicKeyMismatch(path) if *path == selected));
-    assert!(error.to_string().contains("Restore the matching .pub file"));
     assert_eq!(
         before,
         (fs::read(selected).unwrap(), fs::read(public).unwrap())

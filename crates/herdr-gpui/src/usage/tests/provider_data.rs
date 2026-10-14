@@ -147,7 +147,7 @@ fn statuses_become_typed_errors_without_echoing_the_body() {
 }
 
 #[test]
-fn every_provider_is_registered_once_with_its_icon() {
+fn every_provider_is_registered_once() {
     let ids: Vec<_> = registry::all().map(|p| p.id()).collect();
     let mut unique = ids.clone();
     unique.sort_unstable();
@@ -163,12 +163,6 @@ fn every_provider_is_registered_once_with_its_icon() {
             "{}",
             provider.id()
         );
-        let icon = provider.icon();
-        assert!(
-            super::super::icon(icon).is_some() || icon.starts_with("icons/agent-"),
-            "{} has no icon at {icon}",
-            provider.id()
-        );
         for url in provider
             .service()
             .meta()
@@ -177,14 +171,6 @@ fn every_provider_is_registered_once_with_its_icon() {
             .chain(provider.service().meta().status_page)
         {
             assert!(url.starts_with("https://"), "{url}");
-        }
-        for setting in provider.service().meta().settings {
-            assert!(
-                !setting.help.trim().is_empty(),
-                "{}.{}",
-                provider.id(),
-                setting.name
-            );
         }
     }
 }

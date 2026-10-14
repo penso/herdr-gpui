@@ -303,14 +303,14 @@ pub(crate) fn run(
             credentials::install(to, &landing.checkout, &token, cancelled)
         });
         match installed {
-            Ok(credentials::Installed::Complete) => {}
-            Ok(credentials::Installed::WithoutEnvrc) => warnings.push(
-                "The repository tracks .envrc, so GH_TOKEN was not added; git pull and push still work"
-                    .to_owned(),
-            ),
-            Err(Error::Cancelled) => return Err(Error::Cancelled),
-            Err(error) => warnings.push(format!("GitHub access was not set up: {error}")),
-        }
+      Ok(credentials::Installed::Complete) => {}
+      Ok(credentials::Installed::WithoutEnvrc) => warnings.push(
+        "The repository tracks .envrc, so GH_TOKEN was not added; git pull and push still work"
+          .to_owned(),
+      ),
+      Err(Error::Cancelled) => return Err(Error::Cancelled),
+      Err(error) => warnings.push(format!("GitHub access was not set up: {error}")),
+    }
     }
 
     report(Step::Launch);

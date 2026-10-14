@@ -486,9 +486,9 @@ mod tests {
             parse("<span>Monthly usage</span><span>$1,250 of $5,000 used</span>").unwrap();
         assert!((grouped.windows[0].used - 25.).abs() < 1e-4);
         let zero = parse(
-            r#"<span>Monthly usage</span><span>$0 of $0 used</span><div style="width: 25%; "></div>"#,
-        )
-        .unwrap();
+      r#"<span>Monthly usage</span><span>$0 of $0 used</span><div style="width: 25%; "></div>"#,
+    )
+    .unwrap();
         assert!((zero.windows[0].used - 25.).abs() < 1e-4);
         assert_eq!(amount("1,25 of"), Some((1., ",25 of")));
         assert_eq!(amount("7.50 of"), Some((7.5, " of")));

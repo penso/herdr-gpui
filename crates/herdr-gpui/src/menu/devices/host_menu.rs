@@ -10,10 +10,13 @@ use crate::{
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
+use herdr_client::{SshCommand, SshTarget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     Rename,
+    /// Edits the device's SSH command; blank resets to plain `ssh`.
+    SshCommand,
     /// Toggles `[devices.<id>] keybindings` between local and server.
     ServerKeybindings,
     /// Forwards one of the host's listening ports to this computer.
@@ -21,8 +24,9 @@ enum Action {
     Remove,
 }
 
-const ACTIONS: [(Action, &str); 4] = [
+const ACTIONS: [(Action, &str); 5] = [
     (Action::Rename, "Rename…"),
+    (Action::SshCommand, "SSH command…"),
     (Action::ServerKeybindings, "Use server keybindings"),
     (Action::ForwardPort, "Forward port…"),
     (Action::Remove, "Remove device…"),
@@ -34,15 +38,16 @@ pub(crate) struct HostMenu {
     /// The catalog profile the `herdr machine` commands name.
     profile: String,
     label: String,
-    target: String,
+    target: SshTarget,
     session: String,
     selected: Option<usize>,
     /// Also delete the device's own GitHub sign-in. Offered only when it has
     /// one, since its account panel disappears with the device.
     forget_github: bool,
-    /// The new name while renaming, or the port to forward.
+    /// The new name while renaming, the port to forward, or the SSH command.
     input: Option<Entity<SearchInput>>,
     renaming: bool,
+    saving_command: bool,
     error: Option<String>,
 }
 
@@ -110,12 +115,13 @@ impl HerdrWindow {
             id: endpoint.id.clone(),
             profile: profile.to_owned(),
             label: endpoint.label.clone(),
-            target: target.to_owned(),
+            target: target.clone(),
             session: session.to_owned(),
             selected: None,
             forget_github: true,
             input: None,
             renaming: false,
+            saving_command: false,
             error: None,
         };
         if !self.open_menu(window, cx) {
@@ -151,7 +157,7 @@ impl HerdrWindow {
                 let Some(host) = &self.menu.host else {
                     return;
                 };
-                let (label, target) = (host.label.clone(), host.target.clone());
+                let (label, target) = (host.label.clone(), host.target.target.clone());
                 let input = cx.new(SearchInput::new);
                 input.update(cx, |input, cx| {
                     input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
@@ -166,6 +172,7 @@ impl HerdrWindow {
                 }
                 self.menu.page = Some(Page::RenameDevice);
             }
+            Action::SshCommand => self.open_ssh_command_editor(window, cx),
             Action::ServerKeybindings => self.toggle_server_keybindings(cx),
             Action::ForwardPort => {
                 let input = cx.new(SearchInput::new);
@@ -202,6 +209,90 @@ impl HerdrWindow {
         );
     }
 
+    /// Prefills the SSH command field from the saved preference and focuses
+    /// it. Blank means plain `ssh`, which saving a blank field restores.
+    pub(crate) fn open_ssh_command_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(host) = &self.menu.host else {
+            return;
+        };
+        let current = self.config.ssh_command(&host.id);
+        let text = if current.is_default() {
+            String::new()
+        } else {
+            current.as_str().to_owned()
+        };
+        let input = cx.new(SearchInput::new);
+        input.update(cx, |input, cx| {
+            input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
+            input.set_placeholder("ssh", cx);
+            input.set_text_selected(&text, cx);
+            window.focus(&input.focus, cx);
+        });
+        if let Some(host) = &mut self.menu.host {
+            host.input = Some(input);
+            host.saving_command = false;
+            host.error = None;
+        }
+        self.menu.page = Some(Page::SshCommand);
+        cx.notify();
+    }
+
+    /// Saves the command in the background and closes once the file has it;
+    /// the config watcher reconnects only the changed saved endpoints. A
+    /// refused command keeps the dialog open and says why.
+    fn submit_ssh_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(host) = &mut self.menu.host else {
+            return;
+        };
+        let Some(input) = &host.input else {
+            return;
+        };
+        if host.saving_command || input.read(cx).is_composing() {
+            return;
+        }
+        let command = match SshCommand::try_from(input.read(cx).text()) {
+            Ok(command) => command,
+            Err(error) => {
+                host.error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        let (id, profile) = (host.id.clone(), host.profile.clone());
+        host.saving_command = true;
+        host.error = None;
+        let background = cx
+            .background_executor()
+            .spawn(async move { Config::save_device_ssh_command(&profile, &command) });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = background.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                // The menu may have closed or moved to another device meanwhile.
+                let Some(host) = this
+                    .menu
+                    .host
+                    .as_mut()
+                    .filter(|host| host.id == id && host.saving_command)
+                else {
+                    return;
+                };
+                host.saving_command = false;
+                match result {
+                    Ok(()) => this.dismiss_menu(window, cx),
+                    Err(error) => {
+                        host.error = Some(error.to_string());
+                        if let Some(input) = &host.input {
+                            window.focus(&input.read(cx).focus.clone(), cx);
+                        }
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     /// Rename in the background and close once the catalog has the new name;
     /// the sidebar and picker pick it up from there.
     fn submit_rename_device(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -214,7 +305,7 @@ impl HerdrWindow {
         if host.renaming || input.read(cx).is_composing() {
             return;
         }
-        let label = match setup::device_label(input.read(cx).text(), &host.target) {
+        let label = match setup::device_label(input.read(cx).text(), &host.target.target) {
             Ok(label) => label,
             Err(error) => {
                 host.error = Some(error.to_string());
@@ -370,10 +461,13 @@ impl HerdrWindow {
             return;
         };
         let key = event.keystroke.key.as_str();
-        // The name and port fields own typing and composition; only their
-        // submit and cancel keys belong to the menu.
-        if matches!(self.menu.page, Some(Page::RenameDevice | Page::ForwardPort))
-            && !host.renaming
+        // The name, port, and command fields own typing and composition;
+        // only their submit and cancel keys belong to the menu.
+        if matches!(
+            self.menu.page,
+            Some(Page::RenameDevice | Page::ForwardPort | Page::SshCommand)
+        ) && !host.renaming
+            && !host.saving_command
             && (host
                 .input
                 .as_ref()
@@ -394,6 +488,9 @@ impl HerdrWindow {
             }
             "enter" if self.menu.page == Some(Page::ForwardPort) => {
                 self.submit_forward_port(window, cx)
+            }
+            "enter" if self.menu.page == Some(Page::SshCommand) => {
+                self.submit_ssh_command(window, cx)
             }
             "enter" if self.menu.page == Some(Page::RemoveDevice) => {
                 self.confirm_remove_device(window, cx)
@@ -528,6 +625,9 @@ impl HerdrWindow {
         }
         if self.menu.page == Some(Page::ForwardPort) {
             return self.render_forward_port(host, cx);
+        }
+        if self.menu.page == Some(Page::SshCommand) {
+            return self.render_ssh_command(host, cx);
         }
         let github = self.host_has_github(&host.id);
         body = body
@@ -683,6 +783,110 @@ impl HerdrWindow {
                     .child(if ready { "Rename" } else { "Renaming…" })
                     .on_click(
                         cx.listener(|this, _, window, cx| this.submit_rename_device(window, cx)),
+                    ),
+            );
+        div()
+            .flex()
+            .flex_col()
+            .min_h_0()
+            .child(header)
+            .child(body)
+            .child(footer)
+    }
+
+    /// A centered modal like Rename: the command field in the body, examples
+    /// below it, and Save in the footer. Blank restores plain `ssh`.
+    fn render_ssh_command(&self, host: &HostMenu, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let header = div()
+            .debug_selector(|| "ssh-command-header".into())
+            .flex_none()
+            .p(px(16.))
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .flex()
+            .items_center()
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(px(self.config.ui.size * 1.35))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("SSH command"),
+            )
+            .child(
+                div()
+                    .id("ssh-command-close")
+                    .debug_selector(|| "ssh-command-close".into())
+                    .px_2()
+                    .py_1()
+                    .cursor_pointer()
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .hover(|s| s.bg(rgb(theme.active)))
+                    .child("Close")
+                    .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
+            );
+        let body = div()
+            .debug_selector(|| "ssh-command".into())
+            .min_h_0()
+            .p(px(16.))
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .text_color(rgb(theme.muted))
+                    .child(format!("{} · {}", host.target, host.session)),
+            )
+            .child(div().flex().flex_col().gap(px(6.)).child("Command").when_some(
+                host.input.clone(),
+                |field, input| {
+                    if host.saving_command {
+                        field.child(div().child(input.read(cx).text().to_owned()))
+                    } else {
+                        field.child(input)
+                    }
+                },
+            ))
+            .child(
+                div()
+                    .debug_selector(|| "ssh-command-examples".into())
+                    .text_color(rgb(theme.muted))
+                    .text_size(px(self.config.ui.size * 0.85))
+                    .child(
+                        "Examples: tailscale ssh or /path/to/ssh -F /path/to/config. \
+                         Quote paths with spaces; runs directly without shell expansion. Blank restores ssh.",
+                    ),
+            )
+            .when_some(host.error.clone(), |body, error| {
+                body.child(div().text_color(crate::menu::danger(theme)).child(error))
+            });
+        let ready = !host.saving_command;
+        let footer = div()
+            .debug_selector(|| "ssh-command-footer".into())
+            .flex_none()
+            .p(px(16.))
+            .border_t_1()
+            .border_color(rgb(theme.active))
+            .flex()
+            .justify_end()
+            .child(
+                div()
+                    .id("ssh-command-submit")
+                    .debug_selector(|| "ssh-command-submit".into())
+                    .p(px(8.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .bg(rgb(theme.active))
+                    .when(ready, |button| {
+                        button.cursor_pointer().hover(|s| {
+                            s.bg(rgb(theme.active).blend(rgba((theme.foreground << 8) | 0x20)))
+                        })
+                    })
+                    .when(!ready, |button| button.text_color(rgb(theme.muted)))
+                    .child(if ready { "Save" } else { "Saving…" })
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.submit_ssh_command(window, cx)),
                     ),
             );
         div()

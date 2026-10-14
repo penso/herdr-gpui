@@ -254,6 +254,11 @@ project_roots = []
 # by catalog ID; a device's right-click menu toggles it.
 # [devices.0123456789abcdef0123456789abcdef]
 # keybindings = "server"
+# SSH command overrides are local to this app, including for hosts added with
+# `herdr machine`. Blank restores ssh. Enter an executable and fixed arguments,
+# not the destination; quote paths with spaces. No shell expansion occurs.
+# ssh_command = "tailscale ssh"
+# Other examples: "/opt/homebrew/bin/ssh" or '"/path with spaces/ssh" -F /path/to/config'
 
 # Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.

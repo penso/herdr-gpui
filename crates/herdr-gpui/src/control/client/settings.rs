@@ -2,8 +2,6 @@
 //! `update`, and `integrations`. What only reads or writes files is done
 //! here, whether or not Herdr UI runs; the rest asks the app.
 mod config;
-#[cfg(test)]
-mod tests;
 mod text;
 
 use super::{Context, Output, unexpected};

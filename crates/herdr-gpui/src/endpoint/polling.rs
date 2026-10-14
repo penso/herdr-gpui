@@ -40,13 +40,7 @@ impl HerdrWindow {
         }
         if let Some(result) = self.catalog.poll() {
             match result {
-                Ok(update) => {
-                    self.catalog.accept(&update);
-                    #[cfg(feature = "cloud")]
-                    self.reconcile_devices(update.hosts, update.wsl, update.cloud, cx);
-                    #[cfg(not(feature = "cloud"))]
-                    self.reconcile_devices(update.hosts, update.wsl, cx);
-                }
+                Ok(update) => self.apply_catalog_update(update, cx),
                 Err(error) => {
                     self.local_error = Some(format!("Host catalog: {error}"));
                     cx.notify();

@@ -201,12 +201,14 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
                 })
         });
     let range = nodes
-        .iter()
-        .position(|node| matches!(node, Node::Tag(tag) if tag.contains("aria-label=\"Usage date range\"")))
-        .and_then(|index| match nodes.get(index + 1) {
-            Some(Node::Text(text)) => Some(text.clone()),
-            _ => None,
-        });
+    .iter()
+    .position(
+      |node| matches!(node, Node::Tag(tag) if tag.contains("aria-label=\"Usage date range\"")),
+    )
+    .and_then(|index| match nodes.get(index + 1) {
+      Some(Node::Text(text)) => Some(text.clone()),
+      _ => None,
+    });
     let mut sections = Vec::new();
     if let Some(spent) = usage {
         balances.push(Balance::new("Pay-as-you-go usage", spent, usd()));

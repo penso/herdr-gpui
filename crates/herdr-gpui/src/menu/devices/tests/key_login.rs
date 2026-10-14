@@ -8,7 +8,7 @@ fn a_host_that_refuses_every_key_offers_to_install_one(cx: &mut gpui::TestAppCon
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("m5mini.local", "", "").unwrap();
+            let request = setup::Request::new("m5mini.local", "", "", "").unwrap();
             open_form(view, Step::Checking(request), cx);
             view.device_probed(
                 Ok((
@@ -35,7 +35,7 @@ fn a_failed_setup_workspace_still_offers_to_install_the_key(cx: &mut gpui::TestA
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            let request = setup::Request::new("m5mini.local", "", "").unwrap();
+            let request = setup::Request::new("m5mini.local", "", "", "").unwrap();
             let space = LocalSpace {
                 request: "create".into(),
                 boot: "gone".into(),

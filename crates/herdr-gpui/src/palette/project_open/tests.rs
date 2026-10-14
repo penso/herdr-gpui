@@ -109,16 +109,31 @@ fn creating_a_project_while_viewing_ssh_targets_local_and_waits_for_its_response
         };
         id.clone()
     });
-    cx.update(|window, cx| view.update(cx, |view, cx| {
-        view.endpoints[0].live.dialog_response = Some(("unrelated".into(), Some(Ok(json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": "w2"}}})))));
-        view.update_palette_project(window, cx);
-        assert!(view.menu.palette.is_some());
-        view.endpoints[0].live.dialog_response = Some((pending, Some(Ok(json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": "w2"}}})))));
-        view.update_palette_project(window, cx);
-        assert!(view.menu.palette.is_none());
-        assert_eq!(view.selected_endpoint, 0);
-        assert_eq!(view.pending_navigation, Some(NavigationTarget::Workspace("w2".into())));
-    }));
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+      view.endpoints[0].live.dialog_response = Some((
+        "unrelated".into(),
+        Some(Ok(
+          json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": "w2"}}}),
+        )),
+      ));
+      view.update_palette_project(window, cx);
+      assert!(view.menu.palette.is_some());
+      view.endpoints[0].live.dialog_response = Some((
+        pending,
+        Some(Ok(
+          json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": "w2"}}}),
+        )),
+      ));
+      view.update_palette_project(window, cx);
+      assert!(view.menu.palette.is_none());
+      assert_eq!(view.selected_endpoint, 0);
+      assert_eq!(
+        view.pending_navigation,
+        Some(NavigationTarget::Workspace("w2".into()))
+      );
+    })
+    });
 }
 
 #[gpui::test]

@@ -149,11 +149,15 @@ impl HerdrWindow {
         let step = if located {
             Step::Reading
         } else {
-            Step::Locating(self.endpoints[self.selected_endpoint].connection.request_script(
-                &launch.boot,
-                Method::WorktreeList,
-                serde_json::json!({"workspace_id": launch.workspace, "trust_repository": false}),
-            )?)
+            Step::Locating(
+        self.endpoints[self.selected_endpoint]
+          .connection
+          .request_script(
+            &launch.boot,
+            Method::WorktreeList,
+            serde_json::json!({"workspace_id": launch.workspace, "trust_repository": false}),
+          )?,
+      )
         };
         self.worktree_script = Some(Job {
             launch,

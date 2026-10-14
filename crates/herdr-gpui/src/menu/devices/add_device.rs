@@ -13,7 +13,7 @@ use herdr_client::{
 };
 
 pub(in crate::menu) struct Setup {
-    pub(super) fields: [Entity<SearchInput>; 3],
+    pub(super) fields: [Entity<SearchInput>; 4],
     pub(super) step: Step,
     /// This process's claim on the host being added, from the first check
     /// until the device is saved or the dialog closes.
@@ -100,9 +100,11 @@ impl Offer {
             Self::Terminal => format!(
                 "Setting up {target} needs your input, such as an SSH password or host key. Continue in a local terminal?"
             ),
-            Self::Restart => format!(
-                "Restart the Herdr server on {target}? A local terminal asks you to confirm."
-            ),
+            Self::Restart => {
+                format!(
+                    "Restart the Herdr server on {target}? A local terminal asks you to confirm."
+                )
+            }
             Self::InstallKey => format!(
                 "{target} accepted none of your SSH keys. Install your key there? A local terminal runs ssh-copy-id, which asks for the password once, then saves the device."
             ),
@@ -144,7 +146,12 @@ impl HerdrWindow {
             input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
                 input.set_placeholder(
-                    ["user@hostname or SSH alias", "The SSH target", "default"][index],
+                    [
+                        "user@hostname or SSH alias",
+                        "The SSH target",
+                        "default",
+                        "ssh (default), tailscale ssh, or /path/to/ssh",
+                    ][index],
                     cx,
                 );
             });
@@ -210,7 +217,13 @@ impl HerdrWindow {
                     .iter()
                     .position(|field| field.read(cx).focus.is_focused(window))
                     .unwrap_or(0);
-                let next = (index + if modifiers.shift { 2 } else { 1 }) % 3;
+                let next = (index
+                    + if modifiers.shift {
+                        form.fields.len() - 1
+                    } else {
+                        1
+                    })
+                    % form.fields.len();
                 window.focus(&form.fields[next].read(cx).focus.clone(), cx);
             }
             "enter" => self.submit_device_setup(cx),
@@ -249,11 +262,12 @@ impl HerdrWindow {
             .flex_1()
             .min_h_0().overflow_y_scroll().p(px(16.)).flex().flex_col().gap(px(12.))
             .child(div().flex_none().text_color(rgb(theme.subtext()))
-                .child("Herdr checks the host over SSH and saves the device. If Herdr is missing or SSH needs your input, setup continues in a local workspace."));
+                .child("Check the host and save the device. Default SSH can continue setup in a local workspace; a custom command needs an installed, compatible Herdr and noninteractive access."));
         for (index, (label, field)) in [
             "SSH target",
             "Label (optional)",
             "Remote session (optional)",
+            "SSH command (optional)",
         ]
         .into_iter()
         .zip(&setup.fields)
@@ -276,6 +290,14 @@ impl HerdrWindow {
             {
                 body = body.child(self.render_device_suggestions(setup, discovery, cx));
             }
+            if index == 3 {
+                body = body.child(
+                    div()
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child("Examples: tailscale ssh or /path/to/ssh -F /path/to/config. Quote paths with spaces. Runs directly, without shell expansion."),
+                );
+            }
         }
         if let Some(error) = &setup.error {
             body = body.child(
@@ -291,12 +313,14 @@ impl HerdrWindow {
             Step::AwaitingLocalNetwork(request) => {
                 Some(super::local_network::waiting_status(request.target()))
             }
-            Step::Saving(request, HostProbe::Stopped) => Some(format!(
-                "Herdr is installed on {} but not running. Starting it…",
-                request.target()
-            )),
+            Step::Saving(request, HostProbe::Stopped) if !request.has_custom_command() => {
+                Some(format!(
+                    "Herdr is installed on {} but not running. Starting it…",
+                    request.target()
+                ))
+            }
             Step::Saving(request, _) => Some(format!(
-                "Herdr is running on {}. Saving the device…",
+                "Herdr is installed on {}. Saving the device…",
                 request.target()
             )),
             Step::Saved => None,
@@ -393,7 +417,7 @@ impl HerdrWindow {
         match self.endpoints.iter().find(|endpoint| {
             endpoint
                 .saved_ssh()
-                .is_some_and(|(target, session)| request.same_host(target, session))
+                .is_some_and(|(target, session)| request.same_host(&target.target, session))
         }) {
             Some(endpoint) => Err(crate::Error::DeviceExists(endpoint.label.clone())),
             None => Ok(()),
@@ -413,6 +437,7 @@ impl HerdrWindow {
             form.fields[0].read(cx).text(),
             form.fields[1].read(cx).text(),
             form.fields[2].read(cx).text(),
+            form.fields[3].read(cx).text(),
         );
         let request = match request.and_then(|request| {
             self.ensure_new_device(&request)?;
@@ -486,7 +511,11 @@ impl HerdrWindow {
                 if !self.refuse_duplicate(&error, cx) {
                     self.set_device_error(Some(format!("Check {}: {error}", request.target())));
                     if let Some(form) = &mut self.menu.device_setup {
-                        form.step = Step::Confirm(request, Offer::Terminal);
+                        form.step = if request.has_custom_command() {
+                            Step::Form
+                        } else {
+                            Step::Confirm(request, Offer::Terminal)
+                        };
                     }
                     cx.notify();
                 }
@@ -500,6 +529,27 @@ impl HerdrWindow {
                 "Device probed"
             ),
             Err(_) => tracing::warn!(category = "device_setup", "Device probe failed"),
+        }
+        if request.has_custom_command()
+            && !matches!(probe, Ok(HostProbe::Running | HostProbe::Stopped))
+        {
+            let reason = match probe {
+                Ok(HostProbe::Missing) => "Install Herdr on this host, then try again.".into(),
+                Ok(HostProbe::Outdated) => "Update Herdr on this host, then try again.".into(),
+                Ok(HostProbe::SshFailed(failure)) => format!(
+                    "SSH to {}: {failure}. Establish noninteractive access with your custom command, then try again.",
+                    request.target()
+                ),
+                Err(error) => format!("Check {}: {error}", request.target()),
+                Ok(HostProbe::Running | HostProbe::Stopped) => return,
+            };
+            self.set_device_error(Some(reason));
+            if let Some(form) = &mut self.menu.device_setup {
+                form.step = Step::Form;
+                form.claim = None;
+            }
+            cx.notify();
+            return;
         }
         // An unknown key can be approved here; a changed one is refused while
         // fetching it, and the terminal is offered instead.
@@ -594,6 +644,14 @@ impl HerdrWindow {
                     Err(error) => error,
                 };
                 if this.refuse_duplicate(&error, cx) {
+                    return;
+                }
+                if request.has_custom_command() {
+                    this.set_device_error(Some(error.to_string()));
+                    if let Some(form) = &mut this.menu.device_setup {
+                        form.step = Step::Form;
+                    }
+                    cx.notify();
                     return;
                 }
                 this.set_device_error(Some(error.to_string()));

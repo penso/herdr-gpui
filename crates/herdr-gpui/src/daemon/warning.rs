@@ -56,9 +56,11 @@ impl LocalPeerWarning {
                     Some(path) => format!(
                         "Check ownership and remove {access} access, then reconnect the GUI.\nchmod -- {mode} {path}"
                     ),
-                    None => format!(
-                        "Make it owned by your user, remove {access} access, then reconnect the GUI."
-                    ),
+                    None => {
+                        format!(
+                            "Make it owned by your user, remove {access} access, then reconnect the GUI."
+                        )
+                    }
                 }
             }
             PeerUser => "Run the local daemon as your user, then reconnect the GUI.".into(),

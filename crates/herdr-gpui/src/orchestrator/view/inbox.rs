@@ -76,7 +76,7 @@ impl OrchestratorView {
             })
             .unwrap_or_else(|| "Reading the repository\u{2026}".into());
         let host = match &self.request.target {
-            herdr_client::ConnectTarget::Ssh { target, .. } => target.clone(),
+            herdr_client::ConnectTarget::Ssh { target, .. } => target.target.clone(),
             _ => "local".into(),
         };
         let sources = self

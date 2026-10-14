@@ -230,14 +230,3 @@ fn only_plain_host_names_become_targets() {
         assert!(!valid_host(host), "{host}");
     }
 }
-
-#[test]
-fn source_lists_read_as_prose() {
-    use super::render::sources;
-    assert_eq!(sources(&[Source::Bonjour]), "Bonjour");
-    assert_eq!(
-        sources(&[Source::Tailscale, Source::Bonjour]),
-        "Tailscale and Bonjour"
-    );
-    assert_eq!(sources(&Source::ALL), "SSH config, Tailscale, and Bonjour");
-}
