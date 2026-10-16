@@ -157,3 +157,45 @@ fn custom_command_and_resize_mode_keys_send_endpoint_requests(cx: &mut gpui::Tes
         }
     }
 }
+
+/// A daemon custom command bound to a catalog default's keystroke, as
+/// `ctrl+shift+t` is New Tab's on Linux, runs from the window's keymap
+/// instead of yielding to the default.
+#[gpui::test]
+fn a_custom_command_runs_from_a_catalog_default_keystroke(cx: &mut gpui::TestAppContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let new_tab = crate::controls::platform_default("cmd-t");
+    let (endpoint, mut server) = connected_endpoint("ssh:fixture");
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.endpoints.truncate(1);
+            view.endpoints.push(endpoint);
+            view.selected_endpoint = 1;
+            view.options = ConnectOptions::default();
+            view.reset_selected(cx);
+            view.activation_deadline = None;
+            assert_eq!(view.keymap().primary(Command::Tab), new_tab);
+            let relabel = |snapshot: &mut Arc<ClientShellSnapshot>| {
+                Arc::make_mut(snapshot).commands[0].binding_labels =
+                    vec![new_tab.replace('-', "+")];
+            };
+            relabel(view.live.snapshot.as_mut().unwrap());
+            let mut inbox = view.endpoints[1].connection.inbox.lock().unwrap();
+            relabel(inbox.snapshot.as_mut().unwrap());
+            drop(inbox);
+            assert!(view.input_ready());
+        })
+    });
+    cx.update(|window, cx| {
+        window.dispatch_keystroke(gpui::Keystroke::parse(new_tab).unwrap(), cx);
+    });
+    let ClientMessage::ClientShellEndpointRequest { request, .. } = server.receive() else {
+        panic!("missing command");
+    };
+    let request: serde_json::Value = serde_json::from_str(&request).unwrap();
+    assert_eq!(request["method"], Method::CommandInvoke.as_str());
+    assert_eq!(request["params"]["command_id"], "command-v1");
+}

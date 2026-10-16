@@ -2,6 +2,7 @@ use super::*;
 use crate::controls::platform_default as default;
 use herdr_client::protocol::ClientShellCommand;
 
+mod custom_defaults;
 mod custom_reference;
 mod literal_plus;
 mod pane_keys;
@@ -325,10 +326,7 @@ fn custom_commands_bind_after_the_keymap() {
     let commands = [
         custom("git", &["prefix+y", "ctrl+alt+g"]),
         // Herdr's own chord for New Tab, which the keymap keeps.
-        custom(
-            "shadowed",
-            &["prefix+c", &default("cmd-t").replace('-', "+")],
-        ),
+        custom("shadowed", &["prefix+c"]),
         // A bare key would swallow typing, and the prefix is the prefix.
         custom("typing", &["u", "ctrl+b"]),
         custom("legacy", &[]),
@@ -345,7 +343,6 @@ fn custom_commands_bind_after_the_keymap() {
     assert_eq!(find("g", true), None);
     assert_eq!(find("ctrl-alt-g", true), None);
     assert_eq!(find("c", true), None);
-    assert_eq!(find(default("cmd-t"), false), None);
     assert_eq!(find("u", false), None);
     assert_eq!(find("ctrl-b", false), None);
     assert_eq!(running(&keymap, &commands, 0), ["ctrl-b y", "ctrl-alt-g"]);

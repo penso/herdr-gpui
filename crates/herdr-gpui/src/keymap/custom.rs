@@ -1,10 +1,12 @@
 //! The daemon's `[[keys.command]]` shortcuts, matched against the resolved
 //! keymap. Herdr resolves its own actions before custom commands, so a
-//! keystroke the keymap, a pane key, the app's reserved bindings, or the
-//! prefix already holds never reaches one, and of two custom commands sharing
-//! a trigger only the first runs. Dispatch and the shortcut reference both
-//! answer through `Keymap::reach`, so neither can claim a shortcut the other
-//! disagrees with.
+//! keystroke a daemon `[keys]` entry, the GUI's `[keybindings]`, a pane key,
+//! the app's reserved bindings, or the prefix already holds never reaches
+//! one, and of two custom commands sharing a trigger only the first runs. A
+//! catalog default is no Herdr action and nobody configured it, so it yields
+//! to a custom command bound to its keystroke, as it does to a daemon
+//! `[keys]` entry. Dispatch and the shortcut reference both answer through
+//! `Keymap::reach`, so neither can claim a shortcut the other disagrees with.
 
 use super::{Keymap, MAX_KEYSTROKES, Trigger, daemon, has_modifier, identity, typed_matches};
 use gpui::{Keystroke, Modifiers};
@@ -19,8 +21,8 @@ const MAX_LISTED: usize = 16;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Reach {
     Runs,
-    /// The keymap, a pane key, a reserved app shortcut, or the prefix itself
-    /// holds the keystroke first.
+    /// A configured or daemon keymap binding, a pane key, a reserved app
+    /// shortcut, or the prefix itself holds the keystroke first.
     Shadowed,
     /// An earlier custom command holds the same trigger.
     Taken,
@@ -159,9 +161,17 @@ impl Keymap {
         }
     }
 
-    /// Keystrokes GPUI binds directly: the keymap's, then the app's own.
+    /// Keystrokes GPUI binds directly that a custom command cannot take: the
+    /// keymap's, less the catalog defaults no config file assigned, then the
+    /// app's own. The interceptor matches custom commands before GPUI's
+    /// bindings, so a default left out here simply never fires.
     fn bound_directly(&self) -> HashSet<Identity> {
-        let keymap = self.bindings().map(|(_, label)| label);
+        let keymap = self
+            .shortcuts
+            .iter()
+            .flatten()
+            .filter(|shortcut| shortcut.chord.is_none() && !shortcut.catalog_default)
+            .map(|shortcut| shortcut.label.as_str());
         let reserved = crate::actions::reserved_keystrokes().map(|label| -> &str { label });
         keymap
             .chain(reserved)

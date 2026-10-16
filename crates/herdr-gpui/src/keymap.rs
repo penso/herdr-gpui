@@ -4,7 +4,8 @@
 //! on top. The palette, keybindings page, menu bar, GPUI keymap, and prefix
 //! mode all read this one resolved answer. The daemon's `[[keys.command]]`
 //! shortcuts arrive with each snapshot instead, so they are matched against
-//! this answer when typed rather than resolved into it.
+//! this answer when typed rather than resolved into it; one bound to a
+//! catalog default's keystroke takes it over, as a daemon `[keys]` entry does.
 
 mod custom;
 mod daemon;
@@ -106,6 +107,9 @@ struct Shortcut {
     /// The key that completes a prefix chord. `None` binds `label` directly
     /// through GPUI's keymap.
     chord: Option<Keystroke>,
+    /// A catalog default that neither config file assigned. A daemon custom
+    /// command bound to the same keystroke takes it over.
+    catalog_default: bool,
 }
 
 impl Shortcut {
@@ -113,6 +117,7 @@ impl Shortcut {
         Self {
             label: label.into(),
             chord: None,
+            catalog_default: false,
         }
     }
 }
@@ -253,6 +258,7 @@ impl Keymap {
                     Shortcut {
                         label: format!("{} {}", prefix.unparse(), keystroke.unparse()),
                         chord: Some(keystroke.clone()),
+                        catalog_default: false,
                     }
                 }
             };
@@ -271,7 +277,10 @@ impl Keymap {
                         Keystroke::parse(shortcut)
                             .is_ok_and(|parsed| !taken.contains(&identity(&parsed)))
                     })
-                    .map(|&shortcut| Shortcut::direct(shortcut))
+                    .map(|&shortcut| Shortcut {
+                        catalog_default: true,
+                        ..Shortcut::direct(shortcut)
+                    })
                     .chain(from_daemon)
                     .collect(),
             })

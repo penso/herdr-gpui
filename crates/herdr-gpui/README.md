@@ -3401,7 +3401,10 @@ Ctrl+Shift+U is left unbound for
   `[[keys.command]]` shortcuts, prefix chords or direct keys, run their
   command through `command.invoke` on the focused pane, and the palette lists
   them with these keys; like Herdr, a keystroke one of its actions already
-  holds keeps that action. Daemon keys add to the catalog
+  holds keeps that action, as does one listed in `[keybindings]`. A GUI
+  catalog default is no Herdr action, so it yields: a custom command on
+  `ctrl+shift+t` runs instead of New Tab's Linux default, without unbinding
+  `new_tab`. Daemon keys add to the catalog
   defaults and take a keystroke from its default command. A command named in
   `[keybindings]` keeps exactly the keystrokes listed there, daemon chords
   included, and a keystroke listed there outranks the daemon's, even the
