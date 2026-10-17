@@ -10,7 +10,7 @@ environment once on the connection worker so daemon plugins can find tools such 
 per-user and Homebrew bin directories; the probe has a five-second timeout.
 It does not link or install Herdr, stop
 daemons, spawn a local PTY, or emulate a terminal. Herdr's remote bridge may start
-the named remote session. SSH requires an installed POSIX Herdr, noninteractive authentication,
+the named remote session. SSH requires Herdr installed on the host (macOS, Linux, or Windows), noninteractive authentication,
 and an already trusted host key. For hosts that need MFA or a password, configure
 `ControlMaster auto` with a `ControlPath` in `~/.ssh/config` and authenticate once
 with `ssh HOST` in a terminal: the app reuses that master connection while it lives,
