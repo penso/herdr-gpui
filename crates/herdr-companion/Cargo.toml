@@ -1,0 +1,25 @@
+[package]
+description            = "Companion bridge and web app for following and answering Herdr agents from a phone"
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-companion"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace           = true
+herdr-client.workspace     = true
+percent-encoding.workspace = true
+qrcode.workspace           = true
+secrecy.workspace          = true
+serde.workspace            = true
+serde_json.workspace       = true
+thiserror.workspace        = true
+ureq.workspace             = true
+
+[dev-dependencies]
+tempfile.workspace = true
