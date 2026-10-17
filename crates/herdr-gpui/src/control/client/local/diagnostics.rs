@@ -1,8 +1,9 @@
 //! `diagnostics bundle`, answered by this process: one text file for a bug
 //! report. It holds the build, the platform, where the settings are, what
-//! loading them reports, the user's overrides, and recent log records, all
-//! passed through [`redact`]. Herdr's own config, stored credentials, and the
-//! keychain are never read.
+//! loading them reports, the user's overrides, recent log records, and the
+//! newest crash reports, all passed through [`redact`]. Herdr's own config,
+//! stored credentials, the keychain, and crash dumps (which hold the app's
+//! memory) are never read.
 mod redact;
 #[cfg(test)]
 mod tests;
@@ -21,6 +22,10 @@ use std::{
 const LOG_RECORDS: usize = 500;
 /// The overrides file is small; anything past this is not ours to send.
 const MAX_OVERRIDES: usize = 64 * 1024;
+/// Crash reports the bundle quotes, newest first.
+const CRASH_REPORTS: usize = 3;
+/// A report is a page of backtrace; anything past this is not one of ours.
+const MAX_CRASH_REPORT: u64 = 64 * 1024;
 
 pub(crate) fn diagnostics(output: &Path) -> crate::Result<Output> {
     if output.symlink_metadata().is_ok() {
@@ -90,6 +95,59 @@ fn gather() -> String {
     }
     let _ = writeln!(text, "\n== Last {LOG_RECORDS} log records ==");
     text.push_str(&log_records());
+    let _ = writeln!(text, "\n== Newest {CRASH_REPORTS} crash reports ==");
+    match crate::crash::dir() {
+        Some(dir) => text.push_str(&crash_reports(&dir)),
+        None => text.push_str("(no state directory)\n"),
+    }
+    text
+}
+
+/// The newest crash reports in full, then the names of any minidumps, which
+/// stay out: they hold memory the redactor cannot read.
+fn crash_reports(dir: &Path) -> String {
+    let reports = crate::crash::files(dir, crate::crash::REPORT_EXTENSION);
+    let mut text = String::new();
+    if reports.is_empty() {
+        text.push_str("(none)\n");
+    }
+    for path in reports.iter().take(CRASH_REPORTS) {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        let _ = writeln!(text, "-- {name} --");
+        let report = match std::fs::metadata(path) {
+            Ok(metadata) if metadata.len() > MAX_CRASH_REPORT => {
+                format!("(omitted: larger than {MAX_CRASH_REPORT} bytes)\n")
+            }
+            Ok(_) => std::fs::read_to_string(path).unwrap_or_else(|_| "(unreadable)\n".into()),
+            Err(_) => "(unreadable)\n".into(),
+        };
+        text.push_str(&report);
+        if !report.ends_with('\n') {
+            text.push('\n');
+        }
+    }
+    if reports.len() > CRASH_REPORTS {
+        let _ = writeln!(
+            text,
+            "({} older not included)",
+            reports.len() - CRASH_REPORTS
+        );
+    }
+    #[cfg(windows)]
+    {
+        let dumps = crate::crash::files(dir, crate::crash::DUMP_EXTENSION);
+        if !dumps.is_empty() {
+            text.push_str(
+                "\nMinidumps, not included because they hold the app's memory; share one \
+                 only when asked:\n",
+            );
+        }
+        for path in dumps {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            let size = std::fs::metadata(&path).map_or(0, |metadata| metadata.len());
+            let _ = writeln!(text, "{name} ({} KiB)", size.div_ceil(1024));
+        }
+    }
     text
 }
 

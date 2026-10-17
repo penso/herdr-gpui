@@ -52,6 +52,7 @@ mod contrast;
 mod control;
 mod controls;
 mod copy_mode;
+mod crash;
 mod daemon;
 #[cfg(feature = "daytona")]
 mod daytona;

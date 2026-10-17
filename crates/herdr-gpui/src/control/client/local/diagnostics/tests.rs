@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod crashes;
+
 fn redactor() -> Redactor {
     Redactor::new(Some(Path::new("/Users/someone")))
 }

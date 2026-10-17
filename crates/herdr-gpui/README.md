@@ -3026,6 +3026,27 @@ waits on the disk; lines that cannot be queued or written are counted as dropped
 in the window's status bar. If none of these state-directory variables is
 available, nothing is saved and the window says so.
 
+### Crash reports
+
+If the app panics, it writes `crash-YYYYMMDD-HHMMSS.mmm-PID.txt` beside the log
+before it exits. The report has the version, platform, thread, panic message,
+source location, and a backtrace. The app also writes a `Herdr UI panicked`
+error record to the log, naming the report, and waits up to two seconds for the
+log writer to save it. Release builds ship without debug symbols, so their
+backtraces are mostly addresses; the message and location are exact. On Windows
+it also writes a minidump, `crash-….dmp`, for a panic and for a crash Rust never
+sees, such as an access violation or a stack overflow (an unhandled-exception
+filter; `src/crash/windows.rs`). Such a crash gets a short `.txt` report with the
+exception code and address, and a `Herdr UI crashed` record. A dump holds every
+thread's stack and registers but not the heap. A thread started at launch writes
+it, because the crashing thread may have no stack left. Windows Error Reporting
+still runs afterwards. Only the five newest reports and three newest dumps are
+kept. On macOS and Linux a signal such as `SIGSEGV` leaves no report here. Crash
+files never leave the machine. `herdr-gpui diagnostics bundle PATH` includes the
+three newest reports, redacted like the log records, and lists dumps by name and
+size without including them: they hold the app's memory, so attach one only
+when asked.
+
 Local Windows connections are supported through the daemon's named pipe; pass
 the binary client socket path to `--socket`, not the JSON API socket. No debug
 build or `RUST_LOG` setting is needed: client debug records are captured in
@@ -4120,7 +4141,8 @@ silently; Setup restarts the app (see
 [App Updates](../../docs/updating.md#windows-installers)). Only the copy in
 `%LOCALAPPDATA%\Programs\Herdr UI` updates itself. The app registers with Restart
 Manager, never after a crash or hang; the `herdr-gpui.exe --restart-manager`
-Windows starts hands off to the launcher (`src/restart_manager.rs`).
+Windows starts hands off to the launcher (`src/restart_manager.rs`). A crash
+leaves a minidump and a report beside the log; see [crash reports](#crash-reports).
 
 Starting a local `herdr server` looks for `herdr.exe` and uses
 `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` in place of `process_group(0)`, so

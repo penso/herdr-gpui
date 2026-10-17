@@ -1,5 +1,7 @@
 use super::*;
 
+mod flush;
+
 #[test]
 fn timestamp_and_left_aligned_levels_have_exact_columns() {
     let time = chrono::DateTime::parse_from_rfc3339("2025-09-26T15:03:45-07:00").unwrap();

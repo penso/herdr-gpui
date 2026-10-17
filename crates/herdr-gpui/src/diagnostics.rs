@@ -21,6 +21,7 @@ use std::{
         mpsc::{self, Receiver, SyncSender},
     },
     thread,
+    time::{Duration, Instant},
 };
 use tracing::{
     Event, Level, Subscriber,
@@ -177,16 +178,40 @@ pub(crate) fn dropped() -> u64 {
         .map_or(0, |sink| sink.counters.dropped.load(Ordering::Relaxed))
 }
 
+/// Waits, at most `timeout`, until every line queued so far was written or
+/// dropped. For a crashing process, which would otherwise end before the
+/// writer reaches its last records; nothing else needs to wait.
+pub(crate) fn flush(timeout: Duration) -> bool {
+    SINK.get().is_none_or(|sink| sink.counters.settle(timeout))
+}
+
 #[derive(Default)]
 struct Counters {
     generation: AtomicU64,
     dropped: AtomicU64,
+    /// Lines handed to the writer, and lines it has written or dropped.
+    queued: AtomicU64,
+    settled: AtomicU64,
 }
 
 impl Counters {
     fn lose(&self, lines: u64) {
         self.dropped.fetch_add(lines, Ordering::Relaxed);
         self.generation.fetch_add(1, Ordering::Release);
+    }
+
+    fn settle(&self, timeout: Duration) -> bool {
+        let target = self.queued.load(Ordering::Acquire);
+        let deadline = Instant::now() + timeout;
+        loop {
+            if self.settled.load(Ordering::Acquire) >= target {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
     }
 }
 
@@ -211,6 +236,7 @@ fn write_lines(path: PathBuf, queued: Receiver<Vec<u8>>, counters: &Counters) {
         } else {
             counters.generation.fetch_add(1, Ordering::Release);
         }
+        counters.settled.fetch_add(lines, Ordering::Release);
         batch.clear();
     }
 }
@@ -440,6 +466,8 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Capture {
         line.push(b'\n');
         if self.lines.try_send(line).is_err() {
             self.counters.lose(1);
+        } else {
+            self.counters.queued.fetch_add(1, Ordering::Release);
         }
     }
 }

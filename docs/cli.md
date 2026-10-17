@@ -140,7 +140,7 @@ Every command accepts:
 | `integrations [list]` | What Herdr offers the selected host |
 | `integrations install-skill` | Install the agent skill (no app needed) |
 | `logs [--lines N] [--path]` | The app's log (no app needed) |
-| `diagnostics bundle PATH` | A redacted report for a bug (no app needed) |
+| `diagnostics bundle PATH` | A redacted report for a bug, with the newest crash reports (no app needed) |
 
 Boat's sandbox lifetime uses the existing config commands:
 
