@@ -75,6 +75,55 @@
   $link.TargetPath = $launcher
   $link.WorkingDirectory = $dest
   $link.Save()
+  # Each Herdr window carries this AppUserModelID (constants::APP_ID, see
+  # taskbar.rs). Without the same one on the shortcut, the app opened or
+  # pinned from it groups apart from its windows. WScript.Shell cannot set
+  # it, so write the shortcut's property store. Without it the app still
+  # works, so a failure only warns.
+  try {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class HerdrShortcut {
+  [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IPropertyStore {
+    void GetCount(out uint count);
+    void GetAt(uint index, out PropertyKey key);
+    void GetValue(ref PropertyKey key, out PropVariant value);
+    void SetValue(ref PropertyKey key, ref PropVariant value);
+    void Commit();
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  struct PropertyKey { public Guid Format; public uint Id; }
+  // PROPVARIANT: a type tag, three reserved words, and a pointer-sized union.
+  [StructLayout(LayoutKind.Sequential)]
+  struct PropVariant { public ushort Type; ushort R1, R2, R3; public IntPtr Value; IntPtr Padding; }
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+  static extern void SHGetPropertyStoreFromParsingName(string path, IntPtr bindContext, int flags, ref Guid iid, out IPropertyStore store);
+  public static void SetAppUserModelId(string path, string id) {
+    Guid iid = typeof(IPropertyStore).GUID;
+    IPropertyStore store;
+    SHGetPropertyStoreFromParsingName(path, IntPtr.Zero, 2 /* GPS_READWRITE */, ref iid, out store);
+    try {
+      // PKEY_AppUserModel_ID, a VT_LPWSTR.
+      PropertyKey key = new PropertyKey { Format = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), Id = 5 };
+      PropVariant value = new PropVariant { Type = 31, Value = Marshal.StringToCoTaskMemUni(id) };
+      try {
+        store.SetValue(ref key, ref value);
+        store.Commit();
+      } finally {
+        Marshal.FreeCoTaskMem(value.Value);
+      }
+    } finally {
+      Marshal.ReleaseComObject(store);
+    }
+  }
+}
+'@
+    [HerdrShortcut]::SetAppUserModelId($shortcut, 'so.pen.herdr-gpui')
+  } catch {
+    Write-Warning "Could not give the Start menu shortcut Herdr UI's taskbar identity: $_"
+  }
 
   Write-Host "Installed Herdr UI $version to $dest. Start it from the Start menu (Herdr UI) or by running herdr-gpui-launcher.exe; use herdr-gpui for the command line."
   if (-not (Get-Command herdr -ErrorAction SilentlyContinue)) {

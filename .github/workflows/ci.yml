@@ -285,6 +285,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The other jobs that run scripts/release/tests are macOS and Linux,
+      # where the shortcut test skips; run it here, before the slow build.
+      - name: Test the install script's Start menu shortcut
+        run: python scripts/release/tests/test_install_ps1.py -v
       - name: Install pinned Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
