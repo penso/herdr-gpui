@@ -6,7 +6,7 @@ use super::{Page, WorkspaceTarget};
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
-    fan_out::{FanOut, Origin},
+    fan_out::{FanOut, Journal, Origin},
     teleport::host_for,
 };
 use gpui::{Context, Window};
@@ -95,7 +95,7 @@ impl HerdrWindow {
         self.menu.page = Some(Page::FanOut);
         self.menu.error = None;
         self.menu.input = Some(DialogInput::default());
-        self.fan_out = Some(FanOut::start(origin));
+        self.fan_out = Some(FanOut::start(origin, Journal::get(cx)));
         window.focus(&self.menu.focus, cx);
         cx.notify();
     }

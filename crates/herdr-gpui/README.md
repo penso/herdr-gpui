@@ -1919,6 +1919,19 @@ reason. Lanes on another host show it next to their status, and Open, Keep and
 the comparison work across hosts; a host that cannot be read marks only its
 own lanes, keeping the changes read before.
 
+Each fan-out's lanes and the last step each one reached are kept in
+`fan-outs.json` in the state directory, written before and after every step,
+until a lane is kept or the comparison is forgotten. If the app quits or
+crashes partway, the next launch shows the fan-out again as a comparison with a
+warning, and each lane says where it stopped: while creating its worktree (the
+branch may exist), before its agent started, while the agent was starting, or
+while the prompt was being sent. Nothing runs by itself. Start agent or Send
+prompt finishes a lane only when clicked, and Send prompt never starts a second
+agent. Keep removes the other worktrees after its usual confirmation, and
+Forget lets the fan-out go and leaves every worktree as it is. The four most
+recent fan-outs are kept, and a prompt over 32 KiB is not saved, so its lanes
+cannot be finished from the comparison.
+
 Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.

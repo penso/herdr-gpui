@@ -3,6 +3,7 @@
 
 use super::{
     error::{Error, Result, Step, script},
+    journal::Resume,
     plan::{DiffStat, Lane, parse_stats, stats_script},
 };
 use crate::teleport::{
@@ -211,7 +212,8 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
     std::thread::scope(|scope| {
         for (index, lane, checkout) in &created {
             let run = move || {
-                let progress = match start(request, *index, lane, checkout, report, cancelled) {
+                let started = start(*index, lane, checkout, &request.prompt, report, cancelled);
+                let progress = match started {
                     Ok(()) => Progress::Running,
                     Err(error) => Progress::Failed(error),
                 };
@@ -268,10 +270,10 @@ fn create(site: &Site, lane: &Lane, commit: &str, cancelled: &AtomicBool) -> Res
 /// Start the lane's agent in its first pane and, once it is ready, send it
 /// the prompt.
 fn start(
-    request: &Request,
     index: usize,
     lane: &Lane,
     checkout: &Checkout,
+    prompt: &str,
     report: &impl Fn(Report),
     cancelled: &AtomicBool,
 ) -> Result<()> {
@@ -291,14 +293,46 @@ fn start(
         .host
         .capture(&start, cancelled)
         .map_err(script(Step::StartAgent))?;
+    send_prompt(index, checkout, prompt, report, cancelled)
+}
+
+fn send_prompt(
+    index: usize,
+    checkout: &Checkout,
+    prompt: &str,
+    report: &impl Fn(Report),
+    cancelled: &AtomicBool,
+) -> Result<()> {
     report(Report::Lane(index, Progress::Prompting));
     // The pane is the target: an agent name could match one started elsewhere.
-    let prompt = Host::herdr_line(&["agent", "prompt", &checkout.pane_id, &request.prompt]);
+    let prompt = Host::herdr_line(&["agent", "prompt", &checkout.pane_id, prompt]);
     checkout
         .host
         .capture(&prompt, cancelled)
         .map_err(script(Step::Prompt))?;
     Ok(())
+}
+
+/// Finish lane `index` of an interrupted fan-out, which the user asked for:
+/// start its agent first when `from` says so, then send the prompt.
+pub(crate) fn resume(
+    from: Resume,
+    index: usize,
+    lane: &Lane,
+    checkout: &Checkout,
+    prompt: &str,
+    report: &impl Fn(Report),
+    cancelled: &AtomicBool,
+) {
+    let result = match from {
+        Resume::Start => start(index, lane, checkout, prompt, report, cancelled),
+        Resume::Prompt => send_prompt(index, checkout, prompt, report, cancelled),
+    };
+    let progress = match result {
+        Ok(()) => Progress::Running,
+        Err(error) => Progress::Failed(error),
+    };
+    report(Report::Lane(index, progress));
 }
 
 /// The agent kinds installed on `host`, in [`AgentKind::ALL`] order.

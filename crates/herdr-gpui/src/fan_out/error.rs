@@ -48,6 +48,12 @@ pub(crate) enum Error {
     AgentMissing { agent: &'static str, host: String },
     #[error("Fan-out cancelled")]
     Cancelled,
+    #[error("The saved fan-outs could not be read")]
+    JournalRead(#[source] Box<crate::Error>),
+    #[error("The saved fan-outs are not valid JSON")]
+    JournalJson(#[source] serde_json::Error),
+    #[error("The saved fan-outs exceed their limits or contradict themselves")]
+    InvalidJournal,
 }
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
