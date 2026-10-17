@@ -36,6 +36,7 @@ impl HerdrWindow {
         let unsent = list.iter().filter(|(_, note)| !note.sent).count();
         let send_label = crate::agent_notes::send_label(list.len(), unsent);
         let any_sent = unsent < list.len();
+        let queued = self.queued_notes(id, cx);
         let now = Instant::now();
         self.browser.annotations.observe_notes(id, list.len(), now);
         let origin = tab.origin.is_some();
@@ -260,11 +261,25 @@ impl HerdrWindow {
                 panel.child(
                     div()
                         .flex()
+                        .flex_wrap()
                         .gap_1()
                         .p_2()
                         .border_t_1()
                         .border_color(rgb(theme.active))
-                        .when(origin, |row| {
+                        .when_some(queued, |row, queued| {
+                            row.child(
+                                div()
+                                    .id("annotation-queued")
+                                    .debug_selector(|| "annotation-queued".into())
+                                    .w_full()
+                                    .text_color(rgb(theme.muted))
+                                    .child(queued.label()),
+                            )
+                            .child(button("annotation-withdraw", "Withdraw".into(), true).on_click(
+                                cx.listener(move |this, _, _, cx| this.withdraw_notes(id, cx)),
+                            ))
+                        })
+                        .when(origin && queued.is_none(), |row| {
                             row.child(button("annotation-send", send_label.into(), true).on_click(
                                 cx.listener(move |this, _, _, cx| this.send_notes(&tab_for_send, cx)),
                             ))

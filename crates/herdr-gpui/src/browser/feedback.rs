@@ -6,7 +6,10 @@
 //! methods for it exist only where that socket does.
 use super::Scope;
 use gpui::Global;
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Weak},
+};
 
 /// Batches kept at once; the oldest goes first.
 const MAX_KEPT: usize = 16;
@@ -103,6 +106,21 @@ impl Feedback {
             self.kept.pop_back();
         }
         self.kept.push_front((batch, None, 0));
+    }
+
+    /// Whether the batch `pending` follows is still kept.
+    pub(crate) fn holds(&self, pending: &Weak<()>) -> bool {
+        self.kept
+            .iter()
+            .any(|(_, kept, _)| crate::agent_notes::carries(kept.as_ref(), pending))
+    }
+
+    /// Drops the batch `pending` follows, before its agent fetched it.
+    pub(crate) fn withdraw(&mut self, pending: &Weak<()>) -> bool {
+        let kept = self.kept.len();
+        self.kept
+            .retain(|(_, held, _)| !crate::agent_notes::carries(held.as_ref(), pending));
+        self.kept.len() < kept
     }
 
     /// What is kept for this daemon and pane, oldest first, joined into one

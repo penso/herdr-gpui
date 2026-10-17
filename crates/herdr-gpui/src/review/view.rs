@@ -171,7 +171,7 @@ pub(crate) struct Review {
     selection: Option<selection::Selection>,
     selecting: bool,
     notes: Vec<Note>,
-    sending: crate::agent_notes::PendingSend,
+    sending: crate::agent_notes::PendingSend<Note>,
     /// Each noted row and its note's number, recomputed when either changes.
     marks: HashMap<RowId, usize>,
     input: Entity<SearchInput>,
@@ -627,11 +627,13 @@ impl HerdrWindow {
         let Some((text, indexes, pane)) = self.review_prompt(id) else {
             return;
         };
-        let Some(pending) = self
-            .reviews
-            .get_mut(&id)
-            .and_then(|review| review.sending.start())
-        else {
+        let Some(pending) = self.reviews.get_mut(&id).and_then(|review| {
+            let round = indexes
+                .iter()
+                .filter_map(|&index| review.notes.get(index).cloned())
+                .collect();
+            review.sending.start(round)
+        }) else {
             self.show_flash(
                 Flash::warning("The previous notes are still pending delivery"),
                 cx,
@@ -655,6 +657,32 @@ impl HerdrWindow {
         {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
+        cx.notify();
+    }
+
+    /// Takes back the batch still waiting for the agent, marking its notes
+    /// unsent so the next Send carries them again.
+    fn withdraw_review(&mut self, id: TabId, cx: &mut Context<Self>) {
+        let Some(review) = self.reviews.get_mut(&id) else {
+            return;
+        };
+        let feedback = cx.default_global::<crate::browser::Feedback>();
+        let Some(round) = review
+            .sending
+            .withdraw(&mut self.deliveries, Some(feedback))
+        else {
+            self.show_flash(Flash::warning("The agent already has those notes"), cx);
+            return;
+        };
+        for note in &mut review.notes {
+            if round
+                .iter()
+                .any(|sent| sent.anchor == note.anchor && sent.comment == note.comment)
+            {
+                note.sent = false;
+            }
+        }
+        self.show_flash(Flash::success("Notes withdrawn"), cx);
         cx.notify();
     }
 

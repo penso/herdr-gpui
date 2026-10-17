@@ -2,7 +2,7 @@
 //! shared delivery in `agent_notes`, or copying them.
 
 use super::{
-    super::{Tab, annotate},
+    super::{Tab, TabId, annotate},
     screenshots::save_screenshots,
 };
 use crate::{HerdrWindow, window::Flash};
@@ -80,14 +80,14 @@ impl HerdrWindow {
         save: impl FnOnce(&[Option<Arc<Image>>]) -> crate::Result<Vec<Option<PathBuf>>> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
-        let Some(pending) = self.tab_notes(tab.id).sending.start() else {
+        let (indexes, notes) = self.notes_round(tab);
+        let Some(pending) = self.tab_notes(tab.id).sending.start(notes.clone()) else {
             self.show_flash(
                 Flash::warning("The previous notes are still pending delivery"),
                 cx,
             );
             return;
         };
-        let (indexes, notes) = self.notes_round(tab);
         let pane_id = tab.origin.clone();
         // The page's daemon must still be the one shown, in the session
         // shown now, once the screenshots are saved.
@@ -103,6 +103,41 @@ impl HerdrWindow {
             }
         });
         self.mark_notes_sent(tab.id, &indexes, cx);
+    }
+
+    /// Takes back the batch still waiting for the agent, marking its notes
+    /// unsent so the next Send carries them again.
+    pub(in crate::browser) fn withdraw_notes(&mut self, id: TabId, cx: &mut Context<Self>) {
+        let Some(notes) = self.browser.annotations.tabs.get_mut(&id) else {
+            return;
+        };
+        let feedback = cx.default_global::<crate::browser::Feedback>();
+        let Some(round) = notes.sending.withdraw(&mut self.deliveries, Some(feedback)) else {
+            self.show_flash(Flash::warning("The agent already has those notes"), cx);
+            return;
+        };
+        for note in &mut notes.notes {
+            if round
+                .iter()
+                .any(|sent| sent.anchor == note.anchor && sent.comment == note.comment)
+            {
+                note.sent = false;
+            }
+        }
+        self.show_flash(Flash::success("Notes withdrawn"), cx);
+        cx.notify();
+    }
+
+    /// Where the tab's last batch waits, while it can still be withdrawn.
+    pub(in crate::browser) fn queued_notes(
+        &self,
+        id: TabId,
+        cx: &App,
+    ) -> Option<crate::agent_notes::Queued> {
+        self.browser.annotations.tabs.get(&id)?.sending.queued(
+            &self.deliveries,
+            cx.try_global::<crate::browser::Feedback>(),
+        )
     }
 }
 

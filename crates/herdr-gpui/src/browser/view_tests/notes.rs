@@ -3,6 +3,7 @@ use super::*;
 mod page_editing;
 mod pending_send;
 mod resend;
+mod withdraw;
 
 const PICK: &str = r##"{"kind":"pick","target":{"kind":"element","selector":"#save","tag":"button","text":"Save","html":"<button id=\"save\">Save</button>"}}"##;
 

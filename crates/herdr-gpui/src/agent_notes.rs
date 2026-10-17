@@ -3,6 +3,9 @@
 //! goes one way only: to the agent when it waits in `browser feedback
 //! --wait`, otherwise pasted into its pane once it is idle, and kept for
 //! `browser feedback` when its pane is gone or must not be typed into.
+//! Until a pane or `browser feedback` takes a tab's batch, the tab can
+//! withdraw it. Nothing joins a running turn: the daemon offers this client
+//! no method to prompt an agent mid-run, only the pane input it types into.
 use crate::{
     HerdrWindow,
     browser::{Feedback, FeedbackKey},
@@ -50,18 +53,93 @@ fn collect_copy(collected: &mut Vec<Copies>, group: Option<Copies>, text: Option
 }
 
 /// A tab cannot resend while its previous batch is saving, waiting for an
-/// agent, or still held for feedback. The delivery owns the strong reference.
-#[derive(Default)]
-pub(crate) struct PendingSend(Weak<()>);
+/// agent, or still held for feedback. The delivery owns the strong reference;
+/// the tab keeps the notes the batch carries, so withdrawing it can mark
+/// them unsent again.
+pub(crate) struct PendingSend<N> {
+    live: Weak<()>,
+    round: Vec<N>,
+}
 
-impl PendingSend {
-    pub(crate) fn start(&mut self) -> Option<Arc<()>> {
-        if self.0.strong_count() > 0 {
+impl<N> Default for PendingSend<N> {
+    fn default() -> Self {
+        Self {
+            live: Weak::new(),
+            round: Vec::new(),
+        }
+    }
+}
+
+/// Where a tab's batch waits while it can still be withdrawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Queued {
+    /// In this window, for its agent to stop working.
+    UntilIdle,
+    /// For the agent to fetch with `browser feedback`.
+    ForFeedback,
+}
+
+impl Queued {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::UntilIdle => "Queued until the agent is idle",
+            Self::ForFeedback => "Kept for `browser feedback`",
+        }
+    }
+}
+
+/// Whether `pending` is the batch `live` follows. The weak reference keeps
+/// the allocation, so another batch cannot reuse its address.
+pub(crate) fn carries(pending: Option<&Arc<()>>, live: &Weak<()>) -> bool {
+    pending.is_some_and(|pending| std::ptr::eq(Arc::as_ptr(pending), live.as_ptr()))
+}
+
+impl<N> PendingSend<N> {
+    /// Starts sending `round`, unless the previous batch is still pending.
+    pub(crate) fn start(&mut self, round: Vec<N>) -> Option<Arc<()>> {
+        if self.live.strong_count() > 0 {
             return None;
         }
         let pending = Arc::new(());
-        self.0 = Arc::downgrade(&pending);
+        self.live = Arc::downgrade(&pending);
+        self.round = round;
         Some(pending)
+    }
+
+    /// Where the batch waits, while no agent has it yet.
+    pub(crate) fn queued(
+        &self,
+        deliveries: &Deliveries,
+        feedback: Option<&Feedback>,
+    ) -> Option<Queued> {
+        if deliveries
+            .queue
+            .iter()
+            .any(|delivery| carries(delivery.pending.as_ref(), &self.live))
+        {
+            Some(Queued::UntilIdle)
+        } else if feedback.is_some_and(|feedback| feedback.holds(&self.live)) {
+            Some(Queued::ForFeedback)
+        } else {
+            None
+        }
+    }
+
+    /// Takes the batch back before any agent has it, leaving every other
+    /// batch queued in its order, and returns the notes it carried. `None`
+    /// once it was pasted, fetched, or dropped.
+    pub(crate) fn withdraw(
+        &mut self,
+        deliveries: &mut Deliveries,
+        feedback: Option<&mut Feedback>,
+    ) -> Option<Vec<N>> {
+        let queued = deliveries.queue.len();
+        deliveries
+            .queue
+            .retain(|delivery| !carries(delivery.pending.as_ref(), &self.live));
+        let withdrawn = deliveries.queue.len() < queued
+            || feedback.is_some_and(|feedback| feedback.withdraw(&self.live));
+        withdrawn.then(|| std::mem::take(&mut self.round))
     }
 }
 
@@ -384,6 +462,7 @@ impl HerdrWindow {
         }
         let now = Instant::now();
         let deliveries = std::mem::take(&mut self.deliveries.queue);
+        let queued = deliveries.len();
         let mut copied = Vec::new();
         let mut stale = false;
         for delivery in deliveries {
@@ -458,6 +537,10 @@ impl HerdrWindow {
                 Flash::warning("The original daemon is not selected; pending notes copied"),
                 cx,
             );
+        }
+        // A tab shows its batch as queued until it leaves.
+        if self.deliveries.queue.len() < queued {
+            cx.notify();
         }
     }
 

@@ -248,4 +248,5 @@ mod search;
 mod selection;
 mod split_resize;
 mod tab;
+mod withdraw;
 mod wrap;

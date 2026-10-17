@@ -2528,6 +2528,12 @@ them to the agent that opened it, so it can change the page.
   copies the same ones. **Clear sent** removes the sent notes, ending the
   round. Another Send waits while screenshots are saving, delivery is pending,
   or the previous batch is still waiting to be collected through `browser feedback`.
+  While a batch waits for a busy agent or for `browser feedback`, the panel
+  says so and offers **Withdraw** in place of Send: it takes the batch back
+  before the agent has it and marks its notes unsent, so you can edit them and
+  send again. A batch already typed into the pane cannot be withdrawn, and
+  nothing joins an agent's running turn: Herdr offers this client no way to
+  prompt an agent mid-run, so busy agents get notes once they are idle.
 - The prompt goes to the agent one way only. An agent waiting in
   `browser feedback --wait` receives it there. Otherwise it is typed into the
   agent's pane and submitted once Herdr reports the agent idle (or still
@@ -2670,7 +2676,8 @@ comments on a pull request.
   As with page notes, sent notes stay listed until **Clear sent**: click one
   to edit it, and Send delivers only new or edited notes, or all of them
   again once every one was sent. Another Send waits until the previous batch
-  has been delivered or collected through `browser feedback`. The notes icon
+  has been delivered or collected through `browser feedback`, or until you
+  **Withdraw** it. The notes icon
   counts the unsent ones.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is

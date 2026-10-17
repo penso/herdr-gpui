@@ -160,6 +160,10 @@ impl HerdrWindow {
         let unsent = review.notes.iter().filter(|note| !note.sent).count();
         let send_label = crate::agent_notes::send_label(review.notes.len(), unsent);
         let any_sent = unsent < review.notes.len();
+        let queued = review.sending.queued(
+            &self.deliveries,
+            cx.try_global::<crate::browser::Feedback>(),
+        );
         let panel =
             div()
                 .id("review-notes")
@@ -190,11 +194,29 @@ impl HerdrWindow {
                     panel.child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .gap_1()
                             .p_2()
                             .border_t_1()
                             .border_color(rgb(theme.active))
-                            .when(has_agent, |row| {
+                            .when_some(queued, |row, queued| {
+                                row.child(
+                                    div()
+                                        .id("review-queued")
+                                        .debug_selector(|| "review-queued".into())
+                                        .w_full()
+                                        .text_color(rgb(theme.muted))
+                                        .child(queued.label()),
+                                )
+                                .child(
+                                    button("review-withdraw", "Withdraw".into(), true).on_click(
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.withdraw_review(id, cx)
+                                        }),
+                                    ),
+                                )
+                            })
+                            .when(has_agent && queued.is_none(), |row| {
                                 row.child(button("review-send", send_label.into(), true).on_click(
                                     cx.listener(move |this, _, _, cx| this.send_review(id, cx)),
                                 ))

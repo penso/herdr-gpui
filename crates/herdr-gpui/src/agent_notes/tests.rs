@@ -2,6 +2,14 @@ use super::*;
 
 mod copies;
 mod pending_send;
+mod withdraw;
+
+fn key(pane: &str) -> FeedbackKey {
+    FeedbackKey {
+        scope: crate::browser::Scope::local(std::path::Path::new("/herdr.sock")),
+        pane_id: pane.into(),
+    }
+}
 
 #[test]
 fn typed_notes_keep_line_breaks_and_lose_controls() {
