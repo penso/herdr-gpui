@@ -187,13 +187,8 @@ impl HerdrWindow {
         image_only: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.menu.page.is_some() {
-            return false;
-        }
-        // A paste is use even before the frame is ready, so the window takes
-        // back a frame another client sized; its contents wait for that frame.
-        self.note_input();
-        if !self.input_ready() || self.mouse_focus_pending() {
+        // `paste_or_hold` holds a paste until the frame is ready.
+        if self.menu.page.is_some() || self.mouse_focus_pending() {
             return false;
         }
         // Files copied in a file manager carry their names as text too; paste

@@ -1,7 +1,7 @@
 //! External paths paste locally; one supported image on SSH uses the daemon's
 //! image bridge. A drop never submits the terminal command.
 
-use super::HerdrWindow;
+use super::{HerdrWindow, pending_input::DropAt};
 use crate::{
     Error, Result,
     connection::ConnectionBridge,
@@ -25,17 +25,64 @@ impl HerdrWindow {
         // before invoking on_drop; the payload itself carries no coordinates.
         let position = window.mouse_position();
         // A drop over the panes is use even before the frame is ready, so the
-        // window takes back a frame another client sized; its files are not
-        // pasted until then.
+        // window takes back a frame another client sized.
         if self.menu.page.is_none() && self.bounds.contains(&position) {
             self.note_input();
         }
-        let Some(target) = self.file_drop_target(position) else {
+        if self.input_ready() {
+            let Some(target) = self.file_drop_target(position) else {
+                return;
+            };
+            cx.stop_propagation();
+            if self.paste_files(target, paths.paths(), cx) {
+                window.focus(&self.focus, cx);
+            }
+            return;
+        }
+        // The files wait for a ready frame. Delivery has no window to focus,
+        // so the window takes focus as the drop is held.
+        if paths.paths().is_empty() {
+            return;
+        }
+        let Some(at) = self.held_drop_at(position) else {
             return;
         };
         cx.stop_propagation();
-        if self.paste_files(target, paths.paths(), cx) {
+        if self.hold_drop(at, paths.paths().to_vec(), cx) {
             window.focus(&self.focus, cx);
+        }
+    }
+
+    /// Where a drop made before the frame is ready goes: the pane under the
+    /// pointer in the frame the user sees, or, in a gap with no frame, the
+    /// drop point for the frame that closes it.
+    fn held_drop_at(&self, position: Point<Pixels>) -> Option<DropAt> {
+        if self.live.surface.is_some() {
+            return self.pane_under_drop(position).map(DropAt::Pane);
+        }
+        (self.menu.page.is_none()
+            && self.live.status.is_connected()
+            && self.bounds.contains(&position))
+        .then_some(DropAt::Point(position))
+    }
+
+    /// Paste held files once the frame is ready; a drop point that lands on
+    /// nothing in that frame is reported.
+    pub(super) fn deliver_held_drop(
+        &mut self,
+        at: DropAt,
+        paths: &[PathBuf],
+        cx: &mut Context<Self>,
+    ) {
+        let target = match at {
+            DropAt::Pane(target) => Some(target),
+            DropAt::Point(position) => self.pane_under_drop(position),
+        };
+        if let Some(target) = target {
+            self.paste_files(target, paths, cx);
+        } else {
+            self.local_error = Some("Files not pasted: nothing under the drop point".into());
+            cx.notify();
         }
     }
 
@@ -112,9 +159,17 @@ impl HerdrWindow {
     }
 
     fn file_drop_target(&self, position: Point<Pixels>) -> Option<InputTarget> {
+        if !self.input_ready() {
+            return None;
+        }
+        self.pane_under_drop(position)
+    }
+
+    /// The pane or popup under `position` in the current frame, ready for
+    /// input or not.
+    fn pane_under_drop(&self, position: Point<Pixels>) -> Option<InputTarget> {
         if self.menu.page.is_some()
             || !self.live.status.is_connected()
-            || !self.input_ready()
             || !self.bounds.contains(&position)
         {
             return None;

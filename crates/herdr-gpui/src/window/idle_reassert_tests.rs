@@ -187,11 +187,14 @@ fn a_stationary_click_on_a_frame_another_client_sized_is_use(cx: &mut gpui::Test
 fn a_paste_on_a_frame_another_client_sized_is_use(cx: &mut gpui::TestAppContext) {
     let (view, cx) = overridden_window(cx);
     view.update(cx, |view, cx| {
+        view.live.status = crate::state::ConnectionStatus::Connected;
         assert!(!view.input_ready(), "the fixture holds input");
-        let item = gpui::ClipboardItem::new_string("x".into());
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string("x".into()));
+        view.paste(cx);
         assert!(
-            !view.paste_terminal_clipboard(item, false, cx),
-            "a paste waits for a ready frame"
+            view.local_error.is_none(),
+            "a paste waits for a ready frame instead of being sent: {:?}",
+            view.local_error
         );
         assert!(view.last_input.is_some(), "a paste is use");
         assert!(reclaims(view), "the paste re-claims the frame");
