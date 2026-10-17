@@ -27,7 +27,7 @@ fn colors_follow_primary_and_contrast_in_every_theme() {
             theme.palette[5] = 0x8839ef;
             let (fill, ink) = colors(&theme, true);
             assert_eq!(fill, 0x8839ef);
-            assert!(luminance(ink) > luminance(fill));
+            assert!(luminance(ink) > luminance(fill), "{name} {contrast:?}");
             assert!(ratio(ink, fill) >= contrast.mark_ratio());
         }
     }

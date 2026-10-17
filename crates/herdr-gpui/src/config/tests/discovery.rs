@@ -1,4 +1,6 @@
 use super::*;
+use crate::config::theme::theme_key;
+use std::collections::HashSet;
 
 #[cfg(windows)]
 #[test]
@@ -43,20 +45,12 @@ fn discovers_sorted_names_and_loads_in_precedence_order() -> anyhow::Result<()> 
         theme: "alpha".into(),
         ..Config::default()
     };
-    assert_eq!(
-        config.available_themes_in(&directories)?,
-        vec![
-            "Alpha",
-            "alpha",
-            "Catppuccin Latte",
-            "Catppuccin Mocha",
-            "Default",
-            "Dracula",
-            "Follow Herdr",
-            "Nord",
-            "zebra",
-        ]
-    );
+    // The second directory's `Alpha` spells the first one's `alpha`, which
+    // loads, so it is not listed twice.
+    let mut expected: Vec<&str> = Theme::BUILTIN_NAMES.to_vec();
+    expected.extend(["Follow Herdr", "alpha", "zebra"]);
+    expected.sort_by_cached_key(|name| (name.to_lowercase(), *name));
+    assert_eq!(config.available_themes_in(&directories)?, expected);
     assert_eq!(
         config
             .theme_with_directories(false, || Ok(directories.clone()))?
@@ -72,6 +66,105 @@ fn discovers_sorted_names_and_loads_in_precedence_order() -> anyhow::Result<()> 
         Theme::builtin("Nord").context("missing builtin")?
     );
     Ok(())
+}
+
+#[test]
+fn installed_ghostty_copies_of_builtins_are_listed_once() -> anyhow::Result<()> {
+    let temp = TempDirectory::new()?;
+    // Current Ghostty names, the older lowercase spellings, and themes that
+    // only look alike.
+    for name in [
+        "TokyoNight",
+        "tokyonight-storm",
+        "catppuccin-mocha",
+        "rose-pine",
+        "Dracula+",
+        "My Theme",
+    ] {
+        fs::write(temp.0.join(name), "background=112233")?;
+    }
+    let config = Config {
+        theme: "light:Nord,dark:rose-pine".into(),
+        ..Config::default()
+    };
+    let listed = config.available_themes_in(std::slice::from_ref(&temp.0))?;
+    for hidden in ["tokyonight-storm", "catppuccin-mocha"] {
+        assert!(!listed.iter().any(|name| name == hidden), "{hidden} listed");
+    }
+    for shown in [
+        "TokyoNight",
+        "TokyoNight Storm",
+        "Catppuccin Mocha",
+        "Dracula",
+        "Dracula+",
+        "My Theme",
+        "Rose Pine",
+        // Selected under its old name, so the picker can still show it.
+        "rose-pine",
+    ] {
+        assert!(listed.iter().any(|name| name == shown), "{shown} missing");
+    }
+    let keys: HashSet<_> = listed.iter().map(|name| theme_key(name)).collect();
+    assert_eq!(keys.len(), listed.len() - 1, "only the selection repeats");
+    // The built-in, not the installed file, is what a built-in name loads.
+    let builtin = Config {
+        theme: "TokyoNight".into(),
+        ..Config::default()
+    };
+    assert_eq!(
+        builtin.theme_with_directories(false, || Ok(vec![temp.0.clone()]))?,
+        Theme::builtin("TokyoNight").context("missing builtin")?
+    );
+    Ok(())
+}
+
+#[test]
+fn an_impossible_theme_directory_does_not_hide_the_others() -> anyhow::Result<()> {
+    let temp = TempDirectory::new()?;
+    fs::write(temp.0.join("Mine"), "background=112233")?;
+    // A Unix `XDG_DATA_DIRS` list read as one Windows path, which Windows
+    // rejects as a name rather than reporting it missing.
+    let directories = [
+        PathBuf::from("/usr/local/share:/usr/share").join("ghostty/themes"),
+        temp.0.join("bad|name"),
+        temp.0.clone(),
+    ];
+    let config = Config {
+        theme: "Mine".into(),
+        ..Config::default()
+    };
+    assert!(
+        config
+            .available_themes_in(&directories)?
+            .contains(&"Mine".to_owned())
+    );
+    assert_eq!(
+        config
+            .theme_with_directories(false, || Ok(directories.to_vec()))?
+            .background,
+        0x112233
+    );
+    Ok(())
+}
+
+#[test]
+fn bundled_themes_are_distinct_and_carry_their_own_colors() {
+    let keys: HashSet<_> = Theme::BUILTIN_NAMES
+        .iter()
+        .map(|name| theme_key(name))
+        .collect();
+    assert_eq!(keys.len(), Theme::BUILTIN_NAMES.len());
+    let default = Theme::default();
+    for name in &Theme::BUILTIN_NAMES[1..] {
+        let theme = Theme::builtin(name).unwrap_or_else(|| panic!("{name} does not load"));
+        assert_ne!(theme.background, default.background, "{name}");
+        assert_ne!(theme.palette[..16], default.palette[..16], "{name}");
+    }
+    let tokyo = Theme::builtin("TokyoNight").unwrap_or_default();
+    assert_eq!(
+        (tokyo.background, tokyo.foreground, tokyo.palette[4]),
+        (0x1a1b26, 0xc0caf5, 0x7aa2f7)
+    );
 }
 
 #[test]

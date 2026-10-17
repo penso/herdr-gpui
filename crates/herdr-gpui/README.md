@@ -681,7 +681,12 @@ preserves these drafts. Theme, font, and layout writes from Settings are seriali
 **Ghostty** and **Herdr** are independent library filters, both enabled initially.
 Turn either off to show only the other; search text is preserved, and changing a
 filter does not change the live theme or pending draft. Ghostty includes native
-built-ins and theme files. Every card identifies its source, including themes
+built-ins and theme files. The built-ins bundle popular Ghostty themes from
+iTerm2-Color-Schemes under their Ghostty names, so a platform without Ghostty
+still lists them; when Ghostty is installed, its copy of a built-in, including
+an older spelling such as `tokyonight` or `catppuccin-mocha`, is listed once,
+as the built-in. A theme saved under such a spelling stays listed and loads
+from its file. Every card identifies its source, including themes
 with the same name in both libraries. Herdr selections edit the shared theme,
 which changes the GUI only when it follows Herdr rather than a native override.
 Follow Herdr and high contrast remain available independently.

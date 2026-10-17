@@ -139,7 +139,7 @@ fn switch_colors_follow_primary_and_contrast_in_every_theme() {
             theme.palette[5] = 0x8839ef;
             let (track, thumb) = switch_colors(&theme, true);
             assert_eq!(track, 0x8839ef);
-            assert!(luminance(thumb) > luminance(track));
+            assert!(luminance(thumb) > luminance(track), "{name} {contrast:?}");
             assert!(ratio(thumb, track) >= contrast.mark_ratio());
         }
     }

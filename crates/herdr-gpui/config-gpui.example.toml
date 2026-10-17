@@ -18,7 +18,9 @@
 # brings up a dismissible card naming a Nerd Font to install.
 # Saved changes to the local file reload automatically in every GUI window.
 
-# Built-ins: Default, Nord, Dracula, Catppuccin Mocha, Catppuccin Latte.
+# Built-ins: Default, Nord, Dracula, Catppuccin Mocha, Catppuccin Latte, plus
+# popular Ghostty themes compiled in, such as TokyoNight, Gruvbox Dark,
+# Rose Pine, Atom One Dark, and GitHub Light Default (Settings lists them all).
 # Also accepts a Ghostty theme name, an absolute path, or a ~/ path.
 # Set "Follow Herdr" in config-gpui.local.toml to follow the local Herdr theme.
 # On an Omarchy desktop, "Omarchy" follows its current theme as it switches,

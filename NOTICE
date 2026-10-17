@@ -46,6 +46,12 @@ assets/social-preview-light-ui.svg, and assets/social-preview-dark.svg, and
 their PNG exports, embed the same adapted ram path alongside original layout,
 typography, and interface artwork.
 
+The built-in theme files in assets/themes/ are unmodified copies from
+iTerm2-Color-Schemes (https://github.com/mbadolato/iTerm2-Color-Schemes),
+Copyright (c) 2011 to Present Mark Badolato, MIT License; each theme's
+copyright belongs to its author. crates/herdr-gpui/THEMES-NOTICE.md has the
+revision and the full license text.
+
 The icons assets/icons/vscode.svg, error.svg, and pass.svg are Codicons,
 Copyright (c) Microsoft Corporation, from
 https://github.com/microsoft/vscode-codicons at revision
