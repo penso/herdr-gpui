@@ -1,5 +1,5 @@
 //! `browser ...`: page tabs, and the notes the user sends from them.
-use super::{Args, CliError};
+use super::{Args, CliError, ZoomChange};
 use std::ffi::OsString;
 
 /// `herdr-gpui browser ...`, answered by the running app.
@@ -43,6 +43,10 @@ pub enum BrowserCommand {
         id: u64,
         path: std::path::PathBuf,
     },
+    Zoom {
+        id: u64,
+        change: ZoomChange,
+    },
 }
 
 /// Where `browser open` puts a new page.
@@ -67,6 +71,26 @@ fn tab_id(value: Option<OsString>) -> Result<u64, CliError> {
         .as_ref()
         .and_then(|value| value.to_str()?.parse().ok())
         .ok_or(CliError::InvalidValue("TAB (an ID from `browser list`)"))
+}
+
+/// `+`, `-`, `reset`, or a percent such as `125` or `125%`.
+fn zoom_change(value: Option<OsString>) -> Result<ZoomChange, CliError> {
+    let value = value.ok_or(CliError::MissingArgument {
+        command: "browser zoom",
+        what: "+|-|reset|PERCENT",
+    })?;
+    Ok(match value.to_str() {
+        Some("+" | "in") => ZoomChange::In,
+        Some("-" | "out") => ZoomChange::Out,
+        Some("reset") => ZoomChange::Reset,
+        percent => ZoomChange::Percent {
+            percent: percent
+                .map(|text| text.strip_suffix('%').unwrap_or(text))
+                .and_then(|text| text.parse().ok())
+                .filter(|percent| crate::browser::Zoom::try_from(*percent).is_ok())
+                .ok_or(CliError::InvalidValue("PERCENT (50-300)"))?,
+        },
+    })
 }
 
 /// The rest of a command that takes no more arguments.
@@ -104,6 +128,11 @@ pub(super) fn parse(args: &mut Args) -> Result<BrowserCommand, CliError> {
             let id = tab_id(args.next())?;
             let url = utf8(args.next().ok_or(CliError::MissingUrl)?)?;
             return none_left(BrowserCommand::Navigate { id, url }, args);
+        }
+        Some("zoom") => {
+            let id = tab_id(args.next())?;
+            let change = zoom_change(args.next())?;
+            return none_left(BrowserCommand::Zoom { id, change }, args);
         }
         Some("screenshot") => {
             let id = tab_id(args.next())?;

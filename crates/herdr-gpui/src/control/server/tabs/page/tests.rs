@@ -3,6 +3,8 @@ use super::*;
 use crate::browser::Scope;
 use std::path::Path;
 
+mod zoom;
+
 #[test]
 fn page_text_is_cut_until_its_json_fits() {
     assert_eq!(bounded_text("short", 100), "short");

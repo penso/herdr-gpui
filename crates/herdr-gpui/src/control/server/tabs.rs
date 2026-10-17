@@ -38,6 +38,7 @@ pub(super) fn serve(
         TabOp::Forward { id } => incoming.respond(page::history(&caller, id, true, cx)),
         TabOp::Text { id } => page::text(caller, id, incoming, watches, cx),
         TabOp::Screenshot { id, path } => page::screenshot(caller, id, path, incoming, watches, cx),
+        TabOp::Zoom { id, change } => incoming.respond(page::zoom(&caller, id, change, cx)),
         TabOp::Code { path, line } => arrive::code(&caller, &path, line, incoming, watches, cx),
         TabOp::Edit { path, line } => arrive::edit(&caller, &path, line, incoming, watches, cx),
         TabOp::Devices => arrive::devices(&caller, incoming, watches, cx),

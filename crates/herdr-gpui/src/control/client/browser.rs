@@ -2,7 +2,7 @@
 use super::{Context, Output, caller, notes_daemon, rejected, send, tabs, unexpected};
 use crate::{
     browser::{LocalFile, WebUrl},
-    cli::control::{BrowserCommand, Placement},
+    cli::control::{BrowserCommand, Placement, ZoomChange},
     control::protocol::{
         BrowserOpen, Caller, ErrorCode, FeedbackRequest, MAX_WAIT_SECONDS, OpenedIn, Page, Request,
         Response,
@@ -144,6 +144,24 @@ fn text(id: u64, context: &Context) -> crate::Result<Output> {
     }
 }
 
+/// Zooms a page tab.
+fn zoom(id: u64, change: ZoomChange, context: &Context) -> crate::Result<Output> {
+    zoomed(context.call(Request::Tab, TabOp::Zoom { id, change })?)
+}
+
+/// What a zoomed tab says: the zoom it landed on.
+fn zoomed(response: Response) -> crate::Result<Output> {
+    match response {
+        Response::Tab {
+            reply: Reply::Zoom { id, percent },
+        } => Output::data(
+            format!("Tab {id} is zoomed to {percent}%"),
+            &serde_json::json!({ "id": id, "zoom": percent }),
+        ),
+        response => Err(unexpected(response)),
+    }
+}
+
 /// The screenshot is written by the app, so the path is made absolute here,
 /// where the caller's working directory is known.
 fn screenshot(id: u64, path: &Path, context: &Context) -> crate::Result<Output> {
@@ -185,6 +203,7 @@ pub(super) fn run(command: BrowserCommand, context: &Context) -> crate::Result<O
         BrowserCommand::Forward { id } => context.act(Request::Tab, TabOp::Forward { id }),
         BrowserCommand::Text { id } => text(id, context),
         BrowserCommand::Screenshot { id, path } => screenshot(id, &path, context),
+        BrowserCommand::Zoom { id, change } => zoom(id, change, context),
     }
 }
 

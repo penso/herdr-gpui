@@ -855,7 +855,9 @@ install command is never run.
 The terminal face can also be resized for the current session from the View menu,
 the in-app menu, the command palette, or `cmd-=` / `cmd--` / `cmd-0`. Adjustments
 are clamped to the same 8..48 range, apply to the terminal only, and are never
-written to disk, so a reload or a restart returns to the configured size.
+written to disk, so a reload or a restart returns to the configured size. While
+a browser tab is focused, the same commands zoom its page instead (see
+[Browser Tabs](#browser-tabs)).
 
 A tab asks before closing only while one of its agents is working or blocked
 on a prompt; tabs whose agents are idle or done, or that have none, close at
@@ -2396,6 +2398,15 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
 - The toolbar has back, forward, reload, the address field, and a button that
   opens the page in the system browser. The address field accepts bare hosts:
   `localhost:3000` becomes `http://localhost:3000/`.
+- While a browser tab is focused, Increase and Decrease Font Size
+  (`cmd-=` / `cmd--`) zoom its page a step, from 50% to 300%, and Reset Font
+  Size (`cmd-0`) returns it to 100%. The tab is the one whose page has the
+  keyboard, or else the one the group in use shows. On macOS the keys bound
+  to those commands zoom a page that has the keyboard too, as Safari's do,
+  so the page cannot take them for itself. Each tab keeps its own zoom, saved with it, and every window's
+  page for the tab follows it. A zoomed page's toolbar shows its zoom;
+  clicking it returns to 100%. An agent zooms a tab with
+  `herdr-gpui browser zoom`.
 - Close Tab and Close Pane close the browser tab being shown, without asking.
   Clicking a Herdr tab, or switching Herdr tabs in the workspace, shows its
   terminal again. Next Tab, Previous Tab, and the tab numbers count browser
@@ -2859,8 +2870,9 @@ the page's storage, which belongs to one address.
   and the keys macOS keeps for the app (quit, hide, minimize, and cycling
   windows) still reach the app. So do the keys bound to Next Tab, Previous
   Tab, the tab numbers, and moving to another workspace or agent, as a web
-  browser keeps its tab keys from its pages. Click a terminal to take the
-  keyboard back.
+  browser keeps its tab keys from its pages, and the keys bound to the font
+  size commands, which zoom the page. Click a terminal to take the keyboard
+  back.
 
 ## System Notifications
 

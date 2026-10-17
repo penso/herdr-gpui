@@ -328,6 +328,7 @@ impl HerdrWindow {
                             .child(flash.text.clone())
                     }),
             )
+            .children(self.zoom_chip(slot, tab, cx))
             .children(annotate_button)
             .child(self.toolbar_button(
                 slot,

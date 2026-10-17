@@ -32,6 +32,9 @@ herdr-gpui browser close|back|forward|text TAB
     Close a page tab, go back or forward in it, or print its visible text.
 herdr-gpui browser navigate TAB URL
     Load another web address in a page tab.
+herdr-gpui browser zoom TAB +|-|reset|PERCENT
+    Zoom a page tab in or out a step, back to 100%, or to PERCENT (50-300),
+    as the font size keys do while it is focused. The tab keeps its zoom.
 herdr-gpui browser screenshot TAB PATH
     Save a PNG of the page (macOS).
 herdr-gpui browser skill

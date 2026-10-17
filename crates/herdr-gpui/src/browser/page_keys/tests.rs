@@ -11,6 +11,9 @@ const COMMAND: Held = Held {
 /// Tab and workspace keys leave a page to the app.
 mod leaving;
 
+/// The font size keys leave a page to the app, which zooms the page.
+mod zoom;
+
 #[test]
 fn a_focused_page_takes_its_keys_but_not_the_app_s() {
     // Typing, arrows, and the page's own shortcuts are the page's.

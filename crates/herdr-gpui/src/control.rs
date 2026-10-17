@@ -26,6 +26,7 @@ pub use protocol::{
     app::{FontSize, Size, Switch},
     events::{Cursor, EventKind},
     settings::Sound,
+    tabs::ZoomChange,
     work::Script,
 };
 use std::path::{Path, PathBuf};

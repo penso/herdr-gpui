@@ -28,6 +28,14 @@ fn tab_operations_round_trip() {
             id: 3,
             path: "/tmp/a.png".into(),
         },
+        TabOp::Zoom {
+            id: 3,
+            change: ZoomChange::Percent { percent: 150 },
+        },
+        TabOp::Zoom {
+            id: 3,
+            change: ZoomChange::Reset,
+        },
         TabOp::Code {
             path: "/src/main.rs".into(),
             line: Some(42),
@@ -66,7 +74,17 @@ fn tab_requests_have_a_stable_wire_form() {
         serde_json::from_str::<TabOp>(r#"{"op":"list"}"#).unwrap(),
         TabOp::List { pages: false }
     );
+    assert_eq!(
+        serde_json::from_str::<TabOp>(r#"{"op":"zoom","id":1,"change":{"change":"in"}}"#).unwrap(),
+        TabOp::Zoom {
+            id: 1,
+            change: ZoomChange::In
+        }
+    );
     for invalid in [
+        r#"{"op":"zoom","id":1}"#,
+        r#"{"op":"zoom","id":1,"change":{"change":"percent"}}"#,
+        r#"{"op":"zoom","id":1,"change":{"change":"twice"}}"#,
         r#"{"op":"eval","id":1}"#,
         r#"{"op":"text","id":1,"script":"alert(1)"}"#,
         r#"{"op":"focus"}"#,

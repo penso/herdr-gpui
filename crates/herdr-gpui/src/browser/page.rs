@@ -6,7 +6,7 @@
 //! On Windows it is a child window above the window's drawing, and the window
 //! hides a page that one of its overlays reaches (`view::present`).
 use {
-    crate::browser::TabId,
+    crate::browser::{TabId, Zoom},
     gpui::{
         App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId, Hitbox, HitboxBehavior,
         InspectorElementId, IntoElement, LayoutId, MouseDownEvent, Pixels, Size, Style, Window,
@@ -29,6 +29,8 @@ pub(crate) struct Page {
     /// Read as the page lays out, after the window shows or hides it for
     /// the frame: a hidden page stays where it was moved out of the way.
     shown: Cell<bool>,
+    /// The zoom the view last took, which starts at the page's own size.
+    zoom: Cell<Zoom>,
     /// Hands mouse events between the page and the window's view above it.
     #[cfg(target_os = "macos")]
     router: objc2::rc::Retained<crate::browser::stacking::Router>,
@@ -50,6 +52,7 @@ impl Page {
         Ok(Self {
             view,
             shown: Cell::new(false),
+            zoom: Cell::new(Zoom::default()),
             #[cfg(target_os = "macos")]
             router,
         })
@@ -80,12 +83,40 @@ impl Page {
         let _ = self.view.set_visible(false);
     }
 
+    /// Draws the page at `zoom`. The view keeps it as it navigates, so only a
+    /// change reaches the platform. A zoom the platform refused (WebView2 can)
+    /// is not taken, so the next presented frame asks again.
+    pub(crate) fn zoom(&self, zoom: Zoom) {
+        if self.zoom.get() == zoom {
+            return;
+        }
+        match self.view.zoom(zoom.factor()) {
+            Ok(()) => self.zoom.set(zoom),
+            Err(error) => tracing::debug!(%error, "Browser zoom failed"),
+        }
+    }
+
+    /// The zoom the page is drawn at, which turns the CSS pixels its scripts
+    /// measure into the view's points.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn drawn_zoom(&self) -> Zoom {
+        self.zoom.get()
+    }
+
     /// Moves keyboard input into the page.
     pub(crate) fn focus(&self) {
         #[cfg(target_os = "macos")]
         self.router.focus();
         #[cfg(not(target_os = "macos"))]
         let _ = self.view.focus();
+    }
+
+    /// Whether the page holds the window's keyboard. Only macOS tells.
+    pub(crate) fn holds_keyboard(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        return self.router.holds_keyboard();
+        #[cfg(not(target_os = "macos"))]
+        false
     }
 
     /// Hands the keyboard back from the page to the window.

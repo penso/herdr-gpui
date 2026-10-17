@@ -1,6 +1,7 @@
 use super::*;
 use control::BrowserCommand;
 
+mod browser_zoom;
 mod cloud_setup;
 mod control_commands;
 mod links;

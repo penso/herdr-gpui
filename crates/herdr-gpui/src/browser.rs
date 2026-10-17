@@ -54,6 +54,7 @@ mod underlay;
 mod view;
 #[cfg(test)]
 mod view_tests;
+mod zoom;
 
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use annotate_view::Annotations;
@@ -83,6 +84,7 @@ pub(crate) use underlay::{
     AroundPages, ground as ground_around_pages, picture as picture_around_pages,
 };
 pub(crate) use view::{Browser, PageOpened, scope};
+pub(crate) use zoom::Zoom;
 
 /// Whether this build can show a page inside the window. Elsewhere a browser
 /// tab request opens the system browser instead.

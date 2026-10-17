@@ -48,6 +48,13 @@ impl HerdrWindow {
         {
             self.browser.pages.set_theme(&self.theme);
             let live = self.live_pages(cx);
+            // A tab's zoom may change in any window, or from the command
+            // line, so each window's pages follow the store as they show.
+            if let Some(store) = super::store(cx) {
+                self.browser
+                    .pages
+                    .follow_zoom(&live, |id| store.get(id).map(|tab| tab.zoom));
+            }
             // On macOS every live page shows, beneath whatever the window
             // draws over it. A menu or dialog covers the whole window and
             // takes every click, so pages refuse drops while one is open.

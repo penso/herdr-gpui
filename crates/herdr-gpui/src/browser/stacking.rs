@@ -262,14 +262,17 @@ impl Router {
         }
     }
 
+    /// Whether the page is its window's first responder, which takes keys.
+    pub(crate) fn holds_keyboard(&self) -> bool {
+        let page = &self.ivars().page;
+        page.window()
+            .and_then(|window| window.firstResponder())
+            .is_some_and(|responder| std::ptr::addr_eq(&*responder, &**page))
+    }
+
     /// Hands the keyboard to GPUI's view if the page holds it.
     pub(crate) fn release_keyboard(&self) {
-        let page = &self.ivars().page;
-        let holds = page
-            .window()
-            .and_then(|window| window.firstResponder())
-            .is_some_and(|responder| std::ptr::addr_eq(&*responder, &**page));
-        if holds {
+        if self.holds_keyboard() {
             self.blur();
         }
     }

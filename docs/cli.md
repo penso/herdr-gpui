@@ -81,6 +81,7 @@ Every command accepts:
 | `browser list` | Page tabs only |
 | `browser navigate ID URL` | Load another address in a page tab |
 | `browser back\|forward ID` | |
+| `browser zoom ID +\|-\|reset\|PERCENT` | Zoom a page tab a step, back to 100%, or to 50-300%; the tab keeps it |
 | `browser text ID` | The page's visible text |
 | `browser screenshot ID PATH` | A PNG of the visible page, at most 2000 px a side (macOS) |
 | `code open FILE[:LINE]` | A read-only code tab at a line |

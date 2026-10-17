@@ -23,8 +23,9 @@ use wry::WebViewExtMacOS as _;
 /// Longest side of a saved screenshot, in pixels.
 const MAX_SIDE: u32 = 2000;
 
-/// Asks WebKit for `rect`, in CSS pixels of the page's viewport, and calls
-/// `done` with the image's TIFF bytes, or `None` when WebKit has none. WebKit
+/// Asks WebKit for `rect`, in the web view's points (the viewport's CSS pixels
+/// scaled by the page's zoom), and calls `done` with the image's TIFF bytes,
+/// or `None` when WebKit has none. WebKit
 /// answers on the main thread after the page's next screen update, so the
 /// annotation overlay hidden before this call is not in the picture.
 pub(crate) fn capture(

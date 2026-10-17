@@ -48,6 +48,10 @@ herdr-gpui browser open http://localhost:3000
   After editing a file, run `herdr-gpui browser reload` instead.
 - Add `--no-focus` to add the tab without switching to it, for example when
   the user is typing in your pane.
+- When the user finds a page too small or too large, zoom its tab:
+  `herdr-gpui browser zoom TAB 150` (or `+`, `-`, `reset`), with `TAB` from
+  `herdr-gpui browser list`. The tab keeps its zoom; the user zooms with
+  the font size keys (Cmd-=, Cmd--, and Cmd-0 on macOS).
 - Bare hosts work: `localhost:3000` becomes `http://localhost:3000/`, and
   `example.com/docs` becomes `https://example.com/docs`. Only `http`,
   `https`, and local files open.

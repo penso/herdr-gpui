@@ -1,12 +1,15 @@
 //! What `browser` does to a page tab beyond opening it: load another
-//! address, go back or forward, read its text, and picture it. Only builds
-//! that show pages have any; the rest answer that they cannot.
+//! address, go back or forward, zoom it, read its text, and picture it. Only
+//! builds that show pages have any; the rest answer that they cannot.
 use super::{find, kind};
 #[cfg(not(target_os = "macos"))]
 use crate::control::server::{Watches, socket};
 use crate::{
     browser::{Location, Store, Tab, WebUrl},
-    control::protocol::{Caller, ErrorCode, Response},
+    control::protocol::{
+        Caller, ErrorCode, Response,
+        tabs::{Reply, ZoomChange},
+    },
 };
 use gpui::App;
 
@@ -86,6 +89,37 @@ pub(super) fn navigate(caller: &Caller, id: u64, url: &str, cx: &mut App) -> Res
     });
     load_everywhere(&tab, &location, cx);
     Response::done(format!("Loading {url} in tab {id}"))
+}
+
+/// Zooms a page tab. The zoom is the tab's, so every window's page for it
+/// follows, and a window that makes the page later makes it at that zoom.
+pub(super) fn zoom(caller: &Caller, id: u64, change: ZoomChange, cx: &mut App) -> Response {
+    if !crate::browser::EMBEDDED {
+        return no_pages();
+    }
+    let tab = match page_tab(id, cx) {
+        Ok(tab) => tab,
+        Err(response) => return response,
+    };
+    if let Some(window) = caller.window
+        && super::showing(caller, &tab, cx).is_none()
+    {
+        return super::not_found(format!("Window {window} does not show tab {id}"));
+    }
+    let zoom = match tab.zoom.changed(change) {
+        Ok(zoom) => zoom,
+        Err(error) => return Response::error(ErrorCode::InvalidRequest, error.to_string()),
+    };
+    Store::update(cx, |store| store.set_zoom(tab.id, zoom));
+    for handle in crate::control::main_windows(cx) {
+        let _ = handle.update(cx, |view, _, _| view.apply_page_zoom(tab.id, zoom));
+    }
+    Response::Tab {
+        reply: Reply::Zoom {
+            id,
+            percent: zoom.percent(),
+        },
+    }
 }
 
 #[cfg(any(target_os = "macos", windows))]

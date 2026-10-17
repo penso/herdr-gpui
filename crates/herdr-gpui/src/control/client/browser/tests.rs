@@ -1,5 +1,7 @@
 use super::*;
 
+mod zoom;
+
 fn caller(pane_id: Option<&str>) -> Caller {
     Caller {
         pane_id: pane_id.map(str::to_owned),

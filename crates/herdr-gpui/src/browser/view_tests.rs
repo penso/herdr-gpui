@@ -104,6 +104,11 @@ mod overlays;
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;
 
+/// The font size keys zoom a browser tab's page. Only builds that show
+/// pages open a browser tab.
+#[cfg(any(target_os = "macos", windows))]
+mod zoom;
+
 /// Terminal padding beside a page; only builds that show pages open one.
 #[cfg(any(target_os = "macos", windows))]
 mod terminal_padding;
