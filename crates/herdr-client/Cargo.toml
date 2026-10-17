@@ -23,8 +23,15 @@ crossbeam-channel.workspace = true
 herdr-protocol.workspace    = true
 serde.workspace             = true
 serde_json.workspace        = true
+sha2.workspace              = true
 thiserror.workspace         = true
 tracing.workspace           = true
+
+# The PowerShell file-transfer tests encode scripts and use temporary folders
+# on every platform, Windows included.
+[dev-dependencies]
+base64.workspace   = true
+tempfile.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 base64.workspace   = true
