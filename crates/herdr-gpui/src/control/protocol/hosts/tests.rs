@@ -2,6 +2,8 @@
 use super::*;
 use crate::control::protocol::{Call, Caller, MAX_WAIT_SECONDS, Request, Response};
 
+mod remote_files;
+
 #[test]
 fn host_requests_have_a_stable_wire_form() {
     let request = Request::Host(Call {

@@ -2095,8 +2095,9 @@ its dashes turn solid once its target is verified:
 
 A plain URL is read from its row. One that reaches the pane's right edge may
 wrap onto the next row; a daemon that offers `pane.link.resolve` reads it
-whole, and otherwise it needs explicit terminal hyperlink metadata. Paths are
-not links in panes on SSH hosts, whose files live on that host.
+whole, and otherwise it needs explicit terminal hyperlink metadata. Paths in
+panes on SSH hosts name that host's files; see
+[Files on SSH Hosts](#files-on-ssh-hosts).
 
 A file opens in your terminal editor at the printed line, in a new pane split
 to the right of the pane that printed it (see [Code Navigation](#code-navigation)).
@@ -2115,6 +2116,51 @@ instead. Holding Alt (Option on macOS) as well opens a link in the other target.
 With a daemon that offers it, a link click, a file path or `file://` hyperlink
 included, first goes to the daemon so a plugin's `[[link_handlers]]` entry can
 claim it; see [Herdr Plugins](#herdr-plugins).
+
+### Files on SSH Hosts
+
+On macOS and Linux, a path printed in a pane on an SSH device is a link too,
+such as `C:\dev\notes.md:42` from a Windows host, `src\main.rs` under a
+Windows working directory, or `~/notes.md` and `src/main.rs` on a POSIX host.
+The host is not asked whether the file exists, so the path is underlined by its
+shape. Relative paths join the pane's working directory on the host, and `~`
+is the login user's home there.
+
+The modifier click copies the file over the device's own SSH login into a
+private cache folder and opens the copy, under the same rule as a local file: a
+document opens in its default application, and anything else opens the folder
+holding the copy. Windows OpenSSH hosts are reached through Windows PowerShell
+5.1 or later, and other hosts through `/bin/sh`. Files up to 64 MB are fetched;
+a folder, a larger file, or a missing one shows why nothing opened.
+
+The copy is watched for saves. The first save asks whether to upload it:
+**Upload**, **Upload future saves without asking**, or **Not now**. Each
+upload checks that the host's file is still the one fetched; when it changed
+on the host meanwhile, nothing is written and a dialog offers **Keep both**
+(uploads your copy beside it as `notes.conflict.md`), **Overwrite anyway**, or
+**Re-fetch**, which replaces the copy and drops your edits. If the Re-fetch
+fails, the dialog comes back. Saving the copy back to the bytes it was
+fetched or last uploaded with drops the question and closes its dialog. An
+upload replaces the host's file only once all of it arrived, and the file
+does not become readable by anyone who could not read it before. An existing
+file keeps its permissions and ACL. A **Keep both** copy gets the original
+file's access; on a POSIX host it is private to you when that access cannot
+be copied, and on a Windows host the upload is refused instead. When an
+existing file's access cannot be kept, it is not changed and the upload says
+so. On a macOS host, a folder ACL that others inherit can let them read the
+upload while it transfers. Clicking the path again reopens a copy with
+unuploaded edits, and fetches a synced one anew; a click while the file is
+still being fetched does nothing more.
+
+Each window keeps its own copies, so the same host file opened in two windows
+is two copies, and a fetch in one window never replaces the other's edits.
+Copies last until the app quits, when the cache is removed; a cache an earlier
+run left behind is removed on the next fetch. `herdr-gpui remote-files` lists
+the calling window's copies and their state. Windows clients do not fetch
+remote files, since they run no SSH children, and WSL and cloud panes are
+unchanged. A `file://`
+hyperlink naming the host itself, as `ls --hyperlink` prints, still counts as
+another host's file.
 
 ## Herdr Plugins
 
