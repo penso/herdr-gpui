@@ -22,6 +22,12 @@ pub(crate) fn with_command<T>(
         ));
     }
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => {
+            let command =
+                crate::azure::command(account, id, cancelled).map_err(io::Error::other)?;
+            Ok(run(command))
+        }
         #[cfg(feature = "boat")]
         CloudProvider::Boat => {
             let gateway = crate::boat::command(account, id, cancelled).map_err(io::Error::other)?;

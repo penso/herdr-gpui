@@ -490,6 +490,8 @@ fn read(
         Host::Ssh(target) => Exec::Remote(Shell::connect(target)?),
         // A distribution is read as a Linux host, its sign-ins its own.
         Host::Wsl(distro) => Exec::Remote(Shell::connect_wsl(distro)?),
+        #[cfg(feature = "azure")]
+        Host::Azure { .. } => return Err(crate::Error::CloudHostUnsupported),
     };
     for provider in registry::all() {
         if config.hidden(provider) {

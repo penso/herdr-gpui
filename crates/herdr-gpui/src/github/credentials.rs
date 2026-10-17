@@ -37,7 +37,12 @@ pub(super) fn read(_path: &Path, _name: &CStr) -> Result<Option<SecretString>> {
 
 #[cfg(all(
     not(unix),
-    any(feature = "boat", feature = "coder", feature = "daytona")
+    any(
+        feature = "azure",
+        feature = "boat",
+        feature = "coder",
+        feature = "daytona"
+    )
 ))]
 pub(crate) fn read_checked(
     _path: &Path,
@@ -49,7 +54,12 @@ pub(crate) fn read_checked(
 
 #[cfg(all(
     not(unix),
-    any(feature = "boat", feature = "coder", feature = "daytona")
+    any(
+        feature = "azure",
+        feature = "boat",
+        feature = "coder",
+        feature = "daytona"
+    )
 ))]
 pub(super) fn store_checked(
     path: &Path,
@@ -164,7 +174,13 @@ pub(super) fn store(
 /// `store` for a record another feature owns; `validate` must bound its size.
 #[cfg(all(
     unix,
-    any(test, feature = "boat", feature = "coder", feature = "daytona")
+    any(
+        test,
+        feature = "azure",
+        feature = "boat",
+        feature = "coder",
+        feature = "daytona"
+    )
 ))]
 pub(super) fn store_checked(
     path: &Path,

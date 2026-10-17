@@ -231,7 +231,7 @@ fn system(view: &HerdrWindow) -> Response {
     let host = view
         .endpoints
         .get(view.selected_endpoint)
-        .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target));
+        .and_then(|endpoint| crate::usage::Host::load_of(&endpoint.connection.target));
     let Some(host) = host else {
         return Response::Host {
             reply: Reply::System {

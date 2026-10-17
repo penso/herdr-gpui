@@ -20,6 +20,13 @@ pub(crate) enum Host {
     /// A WSL distribution, asked through a `wsl.exe` shell as a remote host
     /// is over SSH: its files and sign-ins are its own, not this machine's.
     Wsl(String),
+    /// An Azure machine, by its saved account and ID. Only its CPU and memory
+    /// are sampled, through the command its connection uses; see `load_of`.
+    #[cfg(feature = "azure")]
+    Azure {
+        account: String,
+        id: String,
+    },
 }
 
 impl Host {
@@ -36,6 +43,25 @@ impl Host {
                 Some(Self::Local)
             }
         }
+    }
+
+    /// The host whose CPU and memory a device shows: `of`'s, and also an
+    /// Azure machine's, sampled through its own connection command.
+    pub(crate) fn load_of(target: &ConnectTarget) -> Option<Self> {
+        #[cfg(feature = "azure")]
+        if let ConnectTarget::Cloud {
+            provider: herdr_client::CloudProvider::Azure,
+            account,
+            id,
+            ..
+        } = target
+        {
+            return Some(Self::Azure {
+                account: account.clone(),
+                id: id.clone(),
+            });
+        }
+        Self::of(target)
     }
 }
 

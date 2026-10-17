@@ -81,6 +81,9 @@ objc2-web-kit        = { default-features = false, features = ["WKSnapshotConfig
 # Asks for Dock badge permission; the version GPUI's macOS platform already links.
 objc2-user-notifications ={ default-features = false, features = ["UNUserNotificationCenter", "block2", "std"], version = "0.3.2" }
 raw-window-handle    = "0.6"
+# TLS for the Azure sandbox exec stream, with the ring provider and roots
+# ureq already links.
+rustls               = { default-features = false, features = ["ring", "std", "tls12"], version = "0.23" }
 rusqlite             = { features = ["bundled"], version = "0.40" }
 rodio                = { default-features = false, features = ["playback", "symphonia-mp3", "tracing"], version = "0.22.2" }
 rustix               = { features = ["event", "fs", "process", "pty", "termios"], version = "=1.1.5" }
@@ -105,11 +108,14 @@ thiserror            = "2"
 toml                 = "1.1"
 toml_edit            = "0.25"
 tracing              = "0.1"
+# The Azure sandbox exec stream; TLS comes from `rustls` above.
+tungstenite          = { default-features = false, features = ["handshake"], version = "0.28" }
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
 unicode-properties   = { version = "0.1.4", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
+webpki-roots         = "1"
 uuid                 = { features = ["serde", "v4", "v5"], version = "1" }
 # Window shell properties behind the taskbar relaunch identity; the version
 # GPUI's Windows platform already links.

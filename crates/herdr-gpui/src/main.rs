@@ -12,6 +12,8 @@ mod app;
 mod app_badge;
 mod app_icon;
 mod avatars;
+#[cfg(feature = "azure")]
+mod azure;
 mod backdrop;
 mod bell;
 #[cfg(feature = "boat")]
@@ -26,6 +28,7 @@ mod close_modal;
 #[cfg(all(
     feature = "cloud",
     not(any(
+        feature = "azure",
         feature = "boat",
         feature = "coder",
         feature = "daytona",
@@ -33,7 +36,7 @@ mod close_modal;
     ))
 ))]
 compile_error!(
-    "the `cloud` feature is enabled through a provider feature, such as `boat`, `coder`, `daytona`, or `railway`"
+    "the `cloud` feature is enabled through a provider feature, such as `azure`, `boat`, `coder`, `daytona`, or `railway`"
 );
 #[cfg(feature = "cloud")]
 mod cloud;

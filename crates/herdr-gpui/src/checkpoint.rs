@@ -175,6 +175,8 @@ fn run_bytes(checkout: &Checkout, body: &str, limits: ScriptLimits) -> Result<Ve
         Host::Local => ScriptHost::Local,
         Host::Ssh(target) => ScriptHost::Ssh(target),
         Host::Wsl(distro) => ScriptHost::Wsl(distro),
+        #[cfg(feature = "azure")]
+        Host::Azure { .. } => return Err(Error::CloudHostUnsupported),
     };
     let mut output = Vec::new();
     run_script(

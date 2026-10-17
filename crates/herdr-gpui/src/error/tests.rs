@@ -1,5 +1,5 @@
 use super::*;
-use std::error::Error as _;
+use std::{error::Error as _, path::Path};
 
 #[test]
 fn github_network_message_names_the_transport_failure() {

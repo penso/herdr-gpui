@@ -63,7 +63,12 @@ pub(crate) fn unavailable() -> Option<&'static str> {
 /// What a job reports while it adds a machine, in words every provider shares.
 // Railway reports only the steps it has; the rest belong to the others.
 #[cfg_attr(
-    not(any(feature = "boat", feature = "coder", feature = "daytona")),
+    not(any(
+        feature = "azure",
+        feature = "boat",
+        feature = "coder",
+        feature = "daytona"
+    )),
     allow(dead_code)
 )]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,6 +86,18 @@ pub(crate) enum Step {
 }
 
 impl Step {
+    /// About how far along a job at this step is, for a progress bar: a
+    /// build's own steps take the most time.
+    pub(crate) fn progress(&self) -> f32 {
+        match self {
+            Self::Creating => 0.15,
+            Self::Connecting => 0.25,
+            Self::Starting | Self::Building(_) => 0.4,
+            Self::CheckingHerdr => 0.7,
+            Self::InstallingHerdr => 0.85,
+        }
+    }
+
     pub(crate) fn text(&self) -> String {
         match self {
             Self::Creating => "Creating…".into(),
@@ -96,6 +113,8 @@ impl Step {
 /// The provider's name, as the UI shows it.
 pub(crate) fn name(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => "Azure",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "Boat",
         #[cfg(feature = "coder")]
@@ -110,6 +129,8 @@ pub(crate) fn name(provider: CloudProvider) -> &'static str {
 /// The provider's logo, an embedded asset path.
 pub(crate) fn icon(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => "icons/cloud/azure.svg",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "icons/terminal.svg",
         #[cfg(feature = "coder")]
@@ -124,6 +145,8 @@ pub(crate) fn icon(provider: CloudProvider) -> &'static str {
 /// What adding a device from the provider does, as Add Device says it.
 pub(crate) fn offer(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => "Create an Azure VM or sandbox in Settings",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "Create a Boat sandbox in Settings",
         #[cfg(feature = "coder")]
@@ -140,6 +163,8 @@ pub(crate) fn offer(provider: CloudProvider) -> &'static str {
 /// What the provider calls one machine.
 pub(crate) fn noun(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => "machine",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "sandbox",
         #[cfg(feature = "coder")]
@@ -165,6 +190,8 @@ pub(crate) fn connect(target: &ConnectTarget, stop: &AtomicBool) -> io::Result<T
         return Err(io::Error::other(Error::Invalid("cloud target")));
     };
     match provider {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => crate::azure::connect(account, id, session, stop),
         #[cfg(feature = "boat")]
         CloudProvider::Boat => crate::boat::connect(account, id, session, stop),
         #[cfg(feature = "coder")]

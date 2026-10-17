@@ -630,6 +630,8 @@ impl HerdrWindow {
         if self.update_listening_ports() {
             cx.notify();
         }
+        #[cfg(feature = "azure")]
+        self.update_cloud_activity();
         if self.live.missing_installation && !self.install_warning_shown {
             self.install_warning_shown = true;
             self.show_install_modal(window, cx);

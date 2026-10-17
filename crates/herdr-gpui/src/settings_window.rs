@@ -216,6 +216,16 @@ struct SettingsWindow {
     /// The main window's finished cloud jobs when the cards last read them.
     #[cfg(feature = "cloud")]
     cloud_jobs_seen: u64,
+    /// The cloud jobs' revision last drawn, so a job's progress redraws
+    /// Cloud devices without every change to the main window doing so.
+    #[cfg(feature = "cloud")]
+    cloud_jobs_drawn: u64,
+    /// The main window's cloud devices when the cards last read them, so a
+    /// device removed from the sidebar leaves Settings too.
+    #[cfg(feature = "cloud")]
+    cloud_devices_seen: u64,
+    #[cfg(feature = "azure")]
+    azure_card: Option<cloud_devices::AzureCard>,
     #[cfg(feature = "boat")]
     boat_card: Option<cloud_devices::BoatCard>,
     #[cfg(feature = "coder")]
@@ -337,6 +347,12 @@ impl SettingsWindow {
             cloud_tab: cloud_devices::first_tab(),
             #[cfg(feature = "cloud")]
             cloud_jobs_seen: 0,
+            #[cfg(feature = "cloud")]
+            cloud_jobs_drawn: 0,
+            #[cfg(feature = "cloud")]
+            cloud_devices_seen: 0,
+            #[cfg(feature = "azure")]
+            azure_card: None,
             #[cfg(feature = "boat")]
             boat_card: None,
             #[cfg(feature = "coder")]

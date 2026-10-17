@@ -18,6 +18,7 @@ pub struct CloudConfig {
     // keep-sorted start
     /// Agent keys installed first, such as `claude` or `opencode`.
     pub agents: Option<Vec<String>>,
+    pub azure: CloudSetup,
     pub boat: CloudSetup,
     pub coder: CloudSetup,
     pub daytona: CloudSetup,
@@ -55,8 +56,9 @@ impl CloudConfig {
         Ok(cloud_setup::compose(known(agents), setup)?)
     }
 
-    fn tables(&self) -> [(&'static str, &CloudSetup); 4] {
+    fn tables(&self) -> [(&'static str, &CloudSetup); 5] {
         [
+            ("azure", &self.azure),
             ("boat", &self.boat),
             ("coder", &self.coder),
             ("daytona", &self.daytona),
@@ -80,6 +82,7 @@ impl CloudConfig {
             }
         };
         retain("cloud.", &mut self.agents);
+        retain("cloud.azure.", &mut self.azure.agents);
         retain("cloud.boat.", &mut self.boat.agents);
         retain("cloud.coder.", &mut self.coder.agents);
         retain("cloud.daytona.", &mut self.daytona.agents);

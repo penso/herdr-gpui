@@ -2,6 +2,8 @@ use super::{Action, HostMenu, SSH_ACTIONS, Saved};
 use crate::{config::KeybindingSource, menu::Page, sidebar::layout_tests::fixture_window};
 use gpui::{Modifiers, MouseButton, TestAppContext, VisualTestContext, point, px, size};
 
+#[cfg(feature = "azure")]
+mod azure_destroy;
 #[cfg(feature = "cloud")]
 mod cloud;
 mod device_theme;

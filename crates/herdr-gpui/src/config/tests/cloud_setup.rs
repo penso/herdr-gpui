@@ -13,12 +13,24 @@ fn no_cloud_table_runs_nothing() -> anyhow::Result<()> {
 fn every_provider_table_parses_in_every_build() -> anyhow::Result<()> {
     let config = Config::parse(
         "[cloud]\nagents = [\"claude\"]\nsetup = \"echo hi\"\n\
-         [cloud.boat]\nsetup = \"\"\n[cloud.coder]\nagents = []\n\
+         [cloud.azure]\nagents = [\"codex\"]\n[cloud.boat]\nsetup = \"\"\n[cloud.coder]\nagents = []\n\
          [cloud.daytona]\nagents = [\"opencode\"]\n[cloud.railway]\nsetup = \"echo rail\"\n",
     )?;
     assert_eq!(config.cloud.shared_agents(), [Agent::Claude]);
     assert_eq!(config.cloud.shared_setup(), Some("echo hi"));
     assert!(config.unknown_keys.is_empty(), "{:?}", config.unknown_keys);
+    Ok(())
+}
+
+#[cfg(feature = "azure")]
+#[test]
+fn azure_uses_its_own_table() -> anyhow::Result<()> {
+    use herdr_client::CloudProvider;
+    let config =
+        Config::parse("[cloud]\nagents = [\"claude\"]\n[cloud.azure]\nagents = [\"codex\"]\n")?;
+    assert_eq!(config.cloud.agents(CloudProvider::Azure), [Agent::Codex]);
+    let config = Config::parse("[cloud]\nagents = [\"claude\"]\n[cloud.azure]\nagents = []\n")?;
+    assert_eq!(config.cloud.script(CloudProvider::Azure)?, None);
     Ok(())
 }
 

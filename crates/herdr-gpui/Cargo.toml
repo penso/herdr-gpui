@@ -36,6 +36,7 @@ percent-encoding.workspace     = true
 pulldown-cmark.workspace       = true
 rodio.workspace                = true
 rusqlite.workspace             = true
+rustls                         = { optional = true, workspace = true }
 secrecy.workspace              = true
 serde.workspace                = true
 serde_ignored.workspace        = true
@@ -52,11 +53,13 @@ toml.workspace                 = true
 toml_edit.workspace            = true
 tracing.workspace              = true
 tracing-subscriber.workspace   = true
+tungstenite                    = { optional = true, workspace = true }
 unicode-properties.workspace = true
 unicode-segmentation.workspace = true
 unicode-width.workspace        = true
 ureq.workspace                 = true
 uuid.workspace                 = true
+webpki-roots                   = { optional = true, workspace = true }
 zeroize.workspace              = true
 
 [build-dependencies]
@@ -67,10 +70,13 @@ gpui = { features = ["test-support"], workspace = true }
 test-case.workspace = true
 
 [features]
-default = ["boat", "coder", "daytona", "railway"]
+default = ["azure", "boat", "coder", "daytona", "railway"]
 # Machines from cloud providers as devices: the shared device list, background
 # jobs, and connector. Turned on by each provider below; not useful alone.
 cloud = ["herdr-client/cloud"]
+# Azure VMs and Container Apps sandboxes as devices, with generic credentials
+# or local Azure CLI. Sandboxes are reached over the data plane's exec stream.
+azure = ["cloud", "herdr-client/azure", "dep:base64", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
 # Boat sandboxes as devices, with an API key and per-machine SSH key setup.
 boat = ["cloud", "herdr-client/boat"]
 # Coder workspaces as devices, with OAuth2 sign-in.

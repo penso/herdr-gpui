@@ -45,14 +45,8 @@ fn all_cloud_providers_are_sources_and_destinations_without_probing(cx: &mut gpu
         });
     });
     cx.run_until_parked();
-    let rows = [
-        "teleport-host-0",
-        "teleport-host-1",
-        "teleport-host-2",
-        "teleport-host-3",
-    ];
-    assert!(CloudProvider::ALL.len() <= rows.len());
-    for row in rows.into_iter().take(CloudProvider::ALL.len()) {
+    for i in 0..CloudProvider::ALL.len() {
+        let row: &'static str = Box::leak(format!("teleport-host-{i}").into_boxed_str());
         assert!(cx.debug_bounds(row).is_some());
     }
     cx.update(|window, cx| {

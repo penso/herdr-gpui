@@ -186,6 +186,9 @@ impl Origin {
         match host {
             // WSL forwards a distribution's localhost ports to this machine.
             Host::Local | Host::Wsl(_) => Self::Local,
+            // Never scanned: `open` refuses it.
+            #[cfg(feature = "azure")]
+            Host::Azure { .. } => Self::Local,
             Host::Ssh(target) => Self::Remote {
                 target: target.clone(),
             },

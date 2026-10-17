@@ -209,6 +209,7 @@ embedded_icons! {
     "chevron-right.svg",
     "chevron-up.svg",
     "close.svg",
+    "cloud/azure.svg",
     "cloud/coder.svg",
     "cloud/daytona.svg",
     "cloud/railway.svg",

@@ -181,7 +181,7 @@ impl Device {
             dots,
             agents: lines,
             names,
-            host: Host::of(&endpoint.connection.target),
+            host: Host::load_of(&endpoint.connection.target),
         }
     }
 

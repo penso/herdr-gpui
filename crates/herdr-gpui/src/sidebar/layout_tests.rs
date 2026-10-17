@@ -32,6 +32,8 @@ mod configured_rows;
 mod device_footer;
 #[cfg(test)]
 mod device_footer_setting;
+#[cfg(all(test, feature = "azure"))]
+mod device_removing;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]

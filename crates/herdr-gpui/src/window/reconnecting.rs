@@ -24,7 +24,13 @@ impl HerdrWindow {
             return None;
         }
         let endpoint = &self.endpoints[self.selected_endpoint];
-        let reason = endpoint.outage();
+        // A device going away drops on purpose: say so, and offer no retry.
+        let removing = self.device_removing(endpoint);
+        let reason = if removing {
+            Some("It is being removed.")
+        } else {
+            endpoint.outage()
+        };
         let theme = &self.theme;
         let card = div()
             .id("reconnecting")
@@ -49,7 +55,12 @@ impl HerdrWindow {
                     .font_weight(FontWeight::SEMIBOLD)
                     .truncate()
                     .child(format!(
-                        "Reconnecting to {}",
+                        "{} {}",
+                        if removing {
+                            "Removing"
+                        } else {
+                            "Reconnecting to"
+                        },
                         safe_text(&endpoint.label, 80)
                     )),
             )
@@ -59,26 +70,28 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(safe_text(reason, MAX_REASON))
             }))
-            .child(
-                div().flex().child(
-                    div()
-                        .id("reconnect-now")
-                        .debug_selector(|| "reconnect-now".into())
-                        .px(px(10.))
-                        .py(px(4.))
-                        .rounded(px(crate::config::corners::CONTROL))
-                        .border_1()
-                        .border_color(rgb(theme.active))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(rgb(theme.active)))
-                        .child("Reconnect now")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.reconnect(cx);
-                            cx.notify();
-                        })),
-                ),
-            );
+            .when(!removing, |card| {
+                card.child(
+                    div().flex().child(
+                        div()
+                            .id("reconnect-now")
+                            .debug_selector(|| "reconnect-now".into())
+                            .px(px(10.))
+                            .py(px(4.))
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .border_1()
+                            .border_color(rgb(theme.active))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(theme.active)))
+                            .child("Reconnect now")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.reconnect(cx);
+                                cx.notify();
+                            })),
+                    ),
+                )
+            });
         Some(
             div()
                 .absolute()

@@ -2,10 +2,7 @@
 pub use crate::updater::UpdateError;
 use daemon::daemon_error_message;
 pub use github::{GitHubAccountsError, GitHubJsonError};
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 pub use theme::ThemeParseError;
 
 #[cfg(any(target_os = "macos", windows))]
@@ -22,6 +19,9 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[cfg(feature = "azure")]
+    #[error(transparent)]
+    Azure(#[from] crate::azure::Error),
     #[error(transparent)]
     Backdrop(#[from] crate::backdrop::Error),
     #[cfg(feature = "boat")]
@@ -89,6 +89,10 @@ pub enum Error {
     #[cfg(feature = "cloud")]
     #[error(transparent)]
     Cloud(#[from] crate::cloud::Error),
+    /// Only CPU and memory are sampled on an Azure machine so far.
+    #[cfg(feature = "azure")]
+    #[error("This is not available for cloud machines yet.")]
+    CloudHostUnsupported,
     #[error(transparent)]
     CloudSetup(#[from] crate::cloud_setup::Error),
     #[error(transparent)]
@@ -979,18 +983,10 @@ pub enum Error {
     // keep-sorted end
 }
 
-impl Error {
-    pub(crate) fn at_path(self, path: &Path) -> Self {
-        Self::Path {
-            path: path.to_owned(),
-            source: Box::new(self),
-        }
-    }
-}
-
 mod config;
 mod daemon;
 mod github;
+mod path;
 mod theme;
 
 #[cfg(test)]

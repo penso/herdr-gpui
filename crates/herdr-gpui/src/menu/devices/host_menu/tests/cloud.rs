@@ -39,6 +39,8 @@ fn right_clicking_a_cloud_device_offers_rename_settings_setup_and_removal(cx: &m
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
     let header = match provider() {
+        #[cfg(feature = "azure")]
+        CloudProvider::Azure => "host-azure:w1",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "host-boat:w1",
         #[cfg(feature = "coder")]

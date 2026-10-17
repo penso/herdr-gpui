@@ -86,6 +86,36 @@ fn coder_config_ssh_hosts_and_saved_workspaces_are_coder() {
     assert_eq!(saved.describe(), "Coder workspace");
 }
 
+#[cfg(feature = "azure")]
+#[test]
+fn azure_cloud_device_origin_and_icon() {
+    use crate::cloud::CloudProvider;
+    use gpui::AssetSource;
+    let saved = Origin::of(&ConnectTarget::Cloud {
+        provider: CloudProvider::Azure,
+        account: "00000000-0000-0000-0000-000000000000".into(),
+        id: "herdr-test-vm".into(),
+        machine: "herdr-test-vm".into(),
+        session: "default".into(),
+    });
+    assert_eq!(
+        saved,
+        Origin::Cloud {
+            provider: CloudProvider::Azure,
+            ssh: false,
+        }
+    );
+    assert_eq!(saved.describe(), "Azure machine");
+    assert_eq!(saved.icon(), "icons/cloud/azure.svg");
+    assert!(
+        crate::icons::Icons
+            .load(saved.icon())
+            .ok()
+            .flatten()
+            .is_some()
+    );
+}
+
 #[test]
 fn every_mark_is_an_embedded_icon() {
     use gpui::AssetSource;

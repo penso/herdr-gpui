@@ -73,8 +73,8 @@ impl HerdrWindow {
             })
             .map(|(index, endpoint)| {
                 let snapshot = self.endpoint_snapshot(index);
-                // A cloud machine has no probed load to rank it by.
-                let load = crate::usage::Host::of(&endpoint.connection.target)
+                // Of cloud machines, only Azure's load is probed to rank by.
+                let load = crate::usage::Host::load_of(&endpoint.connection.target)
                     .and_then(|host| self.system_load.get(&host))
                     .and_then(|reading| reading.latest())
                     .map(|sample| Load {

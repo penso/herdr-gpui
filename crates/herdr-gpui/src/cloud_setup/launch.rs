@@ -102,6 +102,11 @@ impl HerdrWindow {
             });
         match typed {
             Ok(tab) => {
+                tracing::info!(
+                    category = "cloud_setup",
+                    endpoint = %running.endpoint_id,
+                    "A new cloud device's setup script started"
+                );
                 self.navigate_endpoint(&running.endpoint_id, NavigationTarget::Tab(&tab), cx);
             }
             Err(error) => self.fail_cloud_setup(&running.label, error, cx),
@@ -114,6 +119,12 @@ impl HerdrWindow {
         error: crate::Error,
         cx: &mut Context<Self>,
     ) {
+        tracing::warn!(
+            category = "cloud_setup",
+            label,
+            %error,
+            "A new cloud device's setup script did not start"
+        );
         // Kept on screen rather than flashed, as a worktree script's is.
         self.local_error = Some(format!(
             "The setup script for {label} did not start: {error}"

@@ -56,6 +56,8 @@ fn every_provider_sits_beside_ssh_and_says_whether_it_is_set_up(cx: &mut gpui::T
     assert!(cx.debug_bounds("add-device-source-host").is_some());
     for provider in CloudProvider::ALL {
         let id = match provider {
+            #[cfg(feature = "azure")]
+            CloudProvider::Azure => "add-device-source-azure",
             #[cfg(feature = "boat")]
             CloudProvider::Boat => "add-device-source-boat",
             #[cfg(feature = "coder")]
@@ -120,6 +122,8 @@ fn settings_only() -> Vec<(CloudProvider, &'static str)> {
     CloudProvider::ALL
         .iter()
         .filter_map(|&provider| match provider {
+            #[cfg(feature = "azure")]
+            CloudProvider::Azure => Some((provider, "add-device-source-azure")),
             #[cfg(feature = "boat")]
             CloudProvider::Boat => Some((provider, "add-device-source-boat")),
             #[cfg(feature = "coder")]
@@ -298,6 +302,8 @@ fn switching_sources_never_resizes_the_dialog(cx: &mut gpui::TestAppContext) {
     let ssh = cx.debug_bounds("menu-panel").unwrap();
     for provider in CloudProvider::ALL {
         let id = match provider {
+            #[cfg(feature = "azure")]
+            CloudProvider::Azure => "add-device-source-azure",
             #[cfg(feature = "boat")]
             CloudProvider::Boat => "add-device-source-boat",
             #[cfg(feature = "coder")]

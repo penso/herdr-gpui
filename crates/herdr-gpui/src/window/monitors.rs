@@ -44,7 +44,7 @@ impl HerdrWindow {
         {
             return self.system_load.poll(Vec::new());
         }
-        let hosts = self.watched_hosts();
+        let hosts = self.connected_hosts(crate::usage::Host::load_of);
         self.system_load.poll(hosts)
     }
 
@@ -68,6 +68,16 @@ impl HerdrWindow {
     /// host while it is connected, so a dropped host is not dialled every
     /// few seconds.
     pub(super) fn watched_hosts(&self) -> Vec<crate::usage::Host> {
+        self.connected_hosts(crate::usage::Host::of)
+    }
+
+    /// The hosts `host` finds for the enabled endpoints `watched_hosts` would
+    /// watch. A cloud machine is only reached while it is connected, so a
+    /// stopped one is never woken by a monitor.
+    fn connected_hosts(
+        &self,
+        host: fn(&herdr_client::ConnectTarget) -> Option<crate::usage::Host>,
+    ) -> Vec<crate::usage::Host> {
         self.endpoints
             .iter()
             .enumerate()
@@ -80,7 +90,7 @@ impl HerdrWindow {
                 endpoint.enabled
                     && (live.status.is_connected() || !endpoint.connection.target.is_remote())
             })
-            .filter_map(|(_, endpoint)| crate::usage::Host::of(&endpoint.connection.target))
+            .filter_map(|(_, endpoint)| host(&endpoint.connection.target))
             .collect()
     }
 
@@ -155,10 +165,26 @@ impl HerdrWindow {
         }
     }
 
-    /// The machine the selected endpoint runs on.
+    /// The machine the selected endpoint runs on, for its load.
     pub(crate) fn selected_host(&self) -> Option<crate::usage::Host> {
         self.endpoints
             .get(self.selected_endpoint)
-            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target))
+            .and_then(|endpoint| crate::usage::Host::load_of(&endpoint.connection.target))
+    }
+
+    /// Update cloud activity timestamps for active cloud device connections.
+    #[cfg(feature = "azure")]
+    pub(super) fn update_cloud_activity(&mut self) {
+        for endpoint in &self.endpoints {
+            if let herdr_client::ConnectTarget::Cloud {
+                provider: herdr_client::CloudProvider::Azure,
+                id,
+                ..
+            } = &endpoint.connection.target
+                && endpoint.live.status.is_connected()
+            {
+                crate::azure::record_activity(id);
+            }
+        }
     }
 }

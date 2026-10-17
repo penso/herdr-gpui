@@ -117,6 +117,8 @@ fn open(host: &Host) -> Result<Shell> {
         Host::Ssh(target) => Shell::connect(target),
         // A distribution is scanned as a Linux host, with its own `ss`.
         Host::Wsl(distro) => Shell::connect_wsl(distro),
+        #[cfg(feature = "azure")]
+        Host::Azure { .. } => Err(Error::CloudHostUnsupported),
     }
     .map_err(failed)
 }

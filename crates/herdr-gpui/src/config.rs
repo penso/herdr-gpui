@@ -9,6 +9,7 @@ use crate::{
 };
 mod accent;
 mod agents_placement;
+mod azure;
 pub(crate) mod backdrop;
 mod bitmap_fonts;
 mod boat;
@@ -32,7 +33,12 @@ pub(crate) mod sidebar;
 mod sidebar_style;
 pub(crate) mod status_bar;
 mod status_icons;
-#[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona"
+))]
 mod table;
 pub(crate) use sidebar_style::parse_hex;
 mod theme;
@@ -42,6 +48,9 @@ mod zen;
 
 pub use accent::Accent;
 pub use agents_placement::AgentsPlacement;
+pub use azure::AzureConfig;
+#[cfg(feature = "azure")]
+pub(crate) use azure::AzureFields;
 pub use backdrop::{Backdrop, Material};
 pub use boat::BoatConfig;
 #[cfg(feature = "boat")]
@@ -122,6 +131,7 @@ pub struct Config {
     /// Where the sidebar lists agents while `show_agents` is on.
     pub agents_placement: AgentsPlacement,
     /// What shows behind the main window's terminals and chrome.
+    pub azure: AzureConfig,
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
@@ -417,6 +427,7 @@ impl Default for Config {
             accent: Accent::default(),
             agent_checkpoints: true,
             agents_placement: AgentsPlacement::default(),
+            azure: AzureConfig::default(),
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
@@ -489,6 +500,7 @@ struct Settings {
     accent: Accent,
     agent_checkpoints: Option<bool>,
     agents_placement: AgentsPlacement,
+    azure: AzureConfig,
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
@@ -861,6 +873,9 @@ impl Config {
         settings.github.client_id_with_override(None)?;
         settings.github.check_accounts()?;
         config.github = settings.github;
+        #[cfg(feature = "azure")]
+        settings.azure.check()?;
+        config.azure = settings.azure;
         #[cfg(feature = "boat")]
         settings.boat.settings_with(|_| None)?;
         config.boat = settings.boat;

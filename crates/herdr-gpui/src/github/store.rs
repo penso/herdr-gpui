@@ -239,7 +239,12 @@ fn keyring_save(_: Option<&SecretString>, _: &Account) -> Result<()> {
 /// the keyring service, account and label, the private file beside the GUI
 /// config, and the record check every read and write must pass (which must
 /// also bound its size).
-#[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona"
+))]
 pub(crate) struct Entry {
     // Only the keyrings address entries by these.
     #[cfg_attr(
@@ -260,7 +265,12 @@ pub(crate) struct Entry {
     pub(crate) validate: fn(&SecretString) -> Result<()>,
 }
 
-#[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona"
+))]
 impl Store {
     /// The store for another feature's credential, from its own plaintext opt-in.
     pub(crate) const fn for_policy(allow_plaintext: bool) -> Self {
@@ -292,7 +302,12 @@ fn keychain_save(service: &str, account: &str, token: Option<&SecretString>) -> 
 }
 
 /// Read `entry` from `store`. Callers run on a background worker.
-#[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona"
+))]
 pub(crate) fn read_entry(store: Store, entry: &Entry) -> Result<Option<SecretString>> {
     match store {
         Store::Environment => Ok(None),
@@ -311,7 +326,12 @@ pub(crate) fn read_entry(store: Store, entry: &Entry) -> Result<Option<SecretStr
 }
 
 /// Write or remove `entry` in `store`. Callers run on a background worker.
-#[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona"
+))]
 pub(crate) fn save_entry(store: Store, entry: &Entry, token: Option<&SecretString>) -> Result<()> {
     if let Some(token) = token {
         (entry.validate)(token)?;

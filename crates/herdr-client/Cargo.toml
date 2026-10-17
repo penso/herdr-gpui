@@ -13,6 +13,7 @@ workspace = true
 # `ConnectTarget::Cloud`: machines a cloud provider created, reached through an
 # application-built command. Each provider adds its `CloudProvider` variant.
 cloud = []
+azure = ["cloud"]
 boat = ["cloud"]
 coder = ["cloud"]
 daytona = ["cloud"]

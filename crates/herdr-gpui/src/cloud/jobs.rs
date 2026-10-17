@@ -20,6 +20,8 @@ pub(crate) struct Job {
     pub(crate) provider: CloudProvider,
     pub(crate) name: String,
     pub(crate) status: String,
+    /// How far along the job is, from its latest step; `None` before one.
+    pub(crate) progress: Option<f32>,
     /// The setup script the device runs once shown, fixed when it was asked
     /// for so an edit to the config meanwhile cannot change it.
     setup: Option<String>,
@@ -33,6 +35,9 @@ pub(crate) struct Jobs {
     /// How many jobs have finished, so a view showing saved devices (such as
     /// Settings) can tell when to read them again.
     finished: u64,
+    /// Bumped whenever a job starts, steps, or finishes, so a view showing
+    /// their progress redraws for that and not for the window's other changes.
+    revision: u64,
 }
 
 impl Jobs {
@@ -46,6 +51,10 @@ impl Jobs {
 
     pub(crate) fn finished(&self) -> u64 {
         self.finished
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// Count a job as finished without running one.
@@ -110,9 +119,11 @@ impl HerdrWindow {
             provider,
             name,
             status: format!("Contacting {}…", super::name(provider)),
+            progress: None,
             setup,
             _worker: worker,
         });
+        self.cloud_jobs.revision += 1;
         cx.notify();
         Ok(())
     }
@@ -121,8 +132,13 @@ impl HerdrWindow {
         let Some(index) = self.cloud_jobs.jobs.iter().position(|job| job.id == id) else {
             return;
         };
+        self.cloud_jobs.revision += 1;
         match update {
-            Update::Step(step) => self.cloud_jobs.jobs[index].status = step.text(),
+            Update::Step(step) => {
+                let job = &mut self.cloud_jobs.jobs[index];
+                job.status = step.text();
+                job.progress = Some(step.progress());
+            }
             Update::Finished(result) => {
                 let job = self.cloud_jobs.jobs.remove(index);
                 self.cloud_jobs.finished += 1;
