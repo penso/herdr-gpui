@@ -11,8 +11,21 @@ import time
 import unittest
 
 
+BASH = shutil.which("bash")
+
+
+def sh_quote(value):
+    """Double-quote a value for a POSIX sh script."""
+    escaped = value.replace("\\", "\\\\")
+    for character in ('"', "$", "`"):
+        escaped = escaped.replace(character, "\\" + character)
+    return f'"{escaped}"'
+
+
 class WaitTests(unittest.TestCase):
     def setUp(self):
+        if BASH is None:
+            self.fail("bash is not on PATH; wait.sh needs it")
         self.directory = tempfile.TemporaryDirectory(prefix="mockup-wait-")
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
@@ -21,9 +34,9 @@ class WaitTests(unittest.TestCase):
         shutil.copyfile(Path(__file__).with_name("wait.sh"), self.script)
         app = self.root / "target/debug/herdr-gpui"
         app.parent.mkdir(parents=True)
-        app.write_text(
-            f"#!{sys.executable}\n"
-            "import json, os, pathlib, signal, sys\n"
+        fake = app.with_name("fake_app.py")
+        fake.write_text(
+            "import json, os, pathlib, sys, time\n"
             "root = pathlib.Path(os.environ['TEST_ROOT'])\n"
             "(root / 'called').write_text(json.dumps(sys.argv[1:]))\n"
             "mode = os.environ['TEST_MODE']\n"
@@ -32,11 +45,17 @@ class WaitTests(unittest.TestCase):
             "    sys.exit(0)\n"
             "if mode == 'waiting':\n"
             "    (root / 'pid').write_text(str(os.getpid()))\n"
-            "    signal.pause()\n"
+            "    while True:\n"
+            "        time.sleep(1)\n"
             "if mode == 'refused':\n"
             "    sys.stderr.write('Request refused\\n')\n"
             "    sys.exit(1)\n"
             "sys.exit(3 if mode == 'absent' else 4)\n"
+        )
+        app.write_text(
+            "#!/bin/sh\n"
+            f"exec {sh_quote(Path(sys.executable).as_posix())} "
+            f'{sh_quote(fake.as_posix())} "$@"\n'
         )
         app.chmod(0o700)
         self.feedback = self.root / "feedback.md"
@@ -44,7 +63,7 @@ class WaitTests(unittest.TestCase):
 
     def run_wait(self, seconds=0, mode="empty"):
         return subprocess.run(
-            ["bash", str(self.script), str(self.feedback), str(seconds)],
+            [BASH, self.script.as_posix(), self.feedback.as_posix(), str(seconds)],
             env=dict(self.env, TEST_MODE=mode),
             capture_output=True,
             text=True,
@@ -93,7 +112,7 @@ class WaitTests(unittest.TestCase):
         # Older apps accept browser.feedback but reject notes.send, so the
         # mockup writes its fallback while the feedback request is still open.
         process = subprocess.Popen(
-            ["bash", str(self.script), str(self.feedback), "60"],
+            [BASH, self.script.as_posix(), self.feedback.as_posix(), "60"],
             env=dict(self.env, TEST_MODE="waiting"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -117,8 +136,14 @@ class WaitTests(unittest.TestCase):
             self.assertEqual(json.loads((self.root / "called").read_text()),
                              ["browser", "feedback", "--wait", "60"])
             self.assertEqual(Path(f"{self.feedback}.1").read_text(), stdout)
-            with self.assertRaises(ProcessLookupError):
+            with self.assertRaises(OSError) as gone:
                 os.kill(int(pid_file.read_text()), 0)
+            # Windows reports a gone pid as WinError 87 (invalid parameter),
+            # not ProcessLookupError; any other error leaves the child unproven.
+            if os.name == "nt":
+                self.assertEqual(gone.exception.winerror, 87)
+            else:
+                self.assertIsInstance(gone.exception, ProcessLookupError)
         finally:
             if process.poll() is None:
                 process.terminate()
