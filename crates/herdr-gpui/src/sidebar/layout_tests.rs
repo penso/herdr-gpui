@@ -530,6 +530,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         checkpoints: Default::default(),
         port_forwards: Default::default(),
         remote_browser: Vec::new(),
+        remote_files: Default::default(),
         #[cfg(feature = "cloud")]
         cloud_jobs: Default::default(),
         #[cfg(feature = "cloud")]

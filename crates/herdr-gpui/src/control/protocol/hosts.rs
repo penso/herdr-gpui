@@ -1,5 +1,6 @@
 //! Hosts and what the app gathers about them: pull requests, listening and
-//! forwarded ports, plan usage, and load.
+//! forwarded ports, plan usage, load, and the copies of their files that
+//! link clicks fetched.
 use serde::{Deserialize, Serialize};
 
 /// How long a pull request's comments may take to load.
@@ -45,6 +46,9 @@ pub(crate) enum HostOp {
     CloudSetup {
         id: String,
     },
+    /// The copies of SSH hosts' files that link clicks fetched into the
+    /// window, and where each stands against its host.
+    RemoteFiles,
 }
 
 impl HostOp {
@@ -137,6 +141,40 @@ pub(crate) struct LoadInfo {
     pub disk_total: Option<u64>,
 }
 
+/// Where a fetched copy stands against its host's file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum CopyState {
+    /// The copy holds the bytes the host had when last fetched or pushed.
+    Synced,
+    /// A save waits for the next one: its upload failed.
+    Edited,
+    /// The app asks, or is about to ask, whether to upload a save.
+    Asking,
+    Uploading,
+    /// The host's file changed since it was synced, so the save was not
+    /// uploaded.
+    Conflict,
+    /// The user chose not to upload this save.
+    Declined,
+    /// The host's file is being fetched over the copy.
+    Refetching,
+}
+
+/// A copy of an SSH host's file that a link click fetched.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RemoteCopy {
+    /// The SSH target.
+    pub host: String,
+    /// The file's path as the host names it.
+    pub path: String,
+    /// The copy's path on this machine.
+    pub local: String,
+    pub state: CopyState,
+    /// Whether saves upload without asking.
+    pub auto_upload: bool,
+}
+
 /// A workspace's listening ports, and its host's forwards. Boxed in
 /// [`Reply`], which every response carries.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +215,12 @@ pub(crate) enum Reply {
         load: Option<Box<LoadInfo>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
+    },
+    /// The copies that fit one answer; `omitted` more did not.
+    RemoteFiles {
+        copies: Vec<RemoteCopy>,
+        #[serde(default)]
+        omitted: usize,
     },
 }
 

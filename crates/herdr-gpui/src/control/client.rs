@@ -364,6 +364,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Host(command) => hosts::host(command, &context),
         ControlCommand::Cloud(command) => hosts::cloud(command, &context),
         ControlCommand::Ports(command) => hosts::ports(command, &context),
+        ControlCommand::RemoteFiles => hosts::remote_files(&context),
         ControlCommand::Processes { pane } => local::processes(pane.as_deref()),
         ControlCommand::Usage => hosts::usage(&context),
         ControlCommand::System => hosts::system(&context),

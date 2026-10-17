@@ -12,7 +12,7 @@
 //! this client opens the address or file itself. A handler that fails spends
 //! the click. Daemons without these methods keep the row-local detector.
 
-use super::{HerdrWindow, file_links::FileLink};
+use super::{HerdrWindow, RemotePath, file_links::FileLink};
 use crate::terminal::PaneLink;
 use crate::{
     browser::WebUrl,
@@ -216,6 +216,11 @@ impl HerdrWindow {
     /// first question about a path starts a check on the background
     /// executor, whose answer is applied to wherever the pointer is then.
     fn file_found(&mut self, link: FileLink, cx: &mut Context<Self>) -> bool {
+        // A host's file counts by its shape: asking the host on every hover
+        // would cost an SSH round trip each time.
+        if link.remote.is_some() {
+            return RemotePath::from_link(&link).is_some();
+        }
         if let Some((checked, found)) = &self.links.checked
             && *checked == link
         {
@@ -248,16 +253,21 @@ impl HerdrWindow {
     /// disk again, and opens nothing for a printed path that is not there.
     fn clickable_file(&self, link: PaneLink) -> Option<FileLink> {
         let file = self.file_link(link)?;
+        if file.remote.is_some() {
+            return RemotePath::from_link(&file).map(|_| file);
+        }
         let missing =
             matches!(&self.links.checked, Some((checked, Some(false))) if *checked == file);
         (file.explicit || !missing).then_some(file)
     }
 
     /// Whether a press is on a link known to be one: anything but a printed
-    /// path whose check has not found it yet, which may name nothing.
+    /// path whose check has not found it yet, which may name nothing. A
+    /// host's file is one by its shape, as for a hover.
     pub(crate) fn verified_press(&self, press: &PressedLink) -> bool {
         press.file.as_ref().is_none_or(|file| {
             file.explicit
+                || file.remote.is_some()
                 || matches!(&self.links.checked, Some((checked, Some(true))) if checked == file)
         })
     }
@@ -563,6 +573,13 @@ impl HerdrWindow {
     ) {
         match link {
             Some(Fallback::Web(url)) => self.open_web_link(url, in_tab, window, cx),
+            // The terminal editor never opens a pane on another host, so a
+            // host's file always opens in the system's application.
+            Some(Fallback::File { link, .. }) if link.remote.is_some() => {
+                if let Some(remote) = RemotePath::from_link(&link) {
+                    self.open_remote_file(remote, cx);
+                }
+            }
             Some(Fallback::File { link, in_editor }) => self.open_file_link(link, in_editor, cx),
             Some(Fallback::External(url)) if url.trusted() => cx.open_url(url.as_str()),
             Some(Fallback::External(url)) => self.ask_to_open_link(url, window, cx),

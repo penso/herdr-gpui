@@ -66,6 +66,8 @@ pub(crate) struct MenuState {
     pub(super) session_edit: Option<super::sessions::Edit>,
     /// The address the open-link question is about.
     pub(super) open_link: Option<crate::terminal::ExternalUrl>,
+    /// The copy the remote file questions are about.
+    pub(super) remote_file: Option<crate::remote_files::Key>,
     #[cfg(feature = "coder")]
     pub(super) coder: Option<super::devices::coder::Wizard>,
     pub(super) devices_scroll: ScrollHandle,
@@ -312,6 +314,7 @@ impl MenuState {
             wsl_remove: None,
             session_edit: None,
             open_link: None,
+            remote_file: None,
             #[cfg(feature = "coder")]
             coder: None,
             devices_scroll: ScrollHandle::new(),
@@ -382,6 +385,7 @@ impl MenuState {
         self.wsl_remove = None;
         self.session_edit = None;
         self.open_link = None;
+        self.remote_file = None;
         #[cfg(feature = "coder")]
         {
             self.coder = None;

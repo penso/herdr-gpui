@@ -2,9 +2,48 @@
 //! without an app; `finish` makes the app's text safe to print.
 use crate::control::protocol::{
     app::HostInfo,
-    hosts::{CheckInfo, CommentInfo, LoadInfo, Ports, PrInfo, Reply},
+    hosts::{CheckInfo, CommentInfo, CopyState, LoadInfo, Ports, PrInfo, RemoteCopy, Reply},
 };
 use std::fmt::Write as _;
+
+fn copy_state(state: CopyState) -> &'static str {
+    match state {
+        CopyState::Synced => "synced",
+        CopyState::Edited => "edited",
+        CopyState::Asking => "asking",
+        CopyState::Uploading => "uploading",
+        CopyState::Conflict => "conflict",
+        CopyState::Declined => "declined",
+        CopyState::Refetching => "refetching",
+    }
+}
+
+/// One line per copy: its state, the host's file, and the copy here.
+pub(super) fn remote_files(copies: &[RemoteCopy], omitted: usize) -> String {
+    if copies.is_empty() && omitted == 0 {
+        return "No remote file copies.".to_owned();
+    }
+    let mut text = String::new();
+    for copy in copies {
+        let auto = if copy.auto_upload {
+            " (auto-upload)"
+        } else {
+            ""
+        };
+        let _ = writeln!(
+            text,
+            "{}{auto}  {}:{}  -> {}",
+            copy_state(copy.state),
+            copy.host,
+            copy.path,
+            copy.local
+        );
+    }
+    if omitted > 0 {
+        let _ = writeln!(text, "… and {omitted} more copies that did not fit");
+    }
+    text.trim_end().to_owned()
+}
 
 pub(super) fn pr(pr: &PrInfo) -> String {
     let mut text = format!("#{} {}\n", pr.number, pr.title);

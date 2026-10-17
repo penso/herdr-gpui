@@ -220,6 +220,7 @@ impl HerdrWindow {
             pressed_terminal_link: None,
             regions: Vec::new(),
             remote_browser: Vec::new(),
+            remote_files: Default::default(),
             removal: None,
             resize_mode: false,
             review_files_width: crate::panel_resize::REVIEW_FILES,
@@ -284,11 +285,12 @@ impl HerdrWindow {
         };
         // Quitting need not drop this window, so its SSH children (port
         // forwards and listening-port tunnels) are killed here rather than
-        // left forwarding after the app is gone.
-        cx.on_app_quit(|this, _| {
+        // left forwarding after the app is gone. The copies of remote files
+        // clicks fetched go with it.
+        cx.on_app_quit(|this, cx| {
             this.port_forwards.stop_all();
             this.tunnels.close_all();
-            async {}
+            this.remote_files.remove_copies(cx)
         })
         .detach();
         Self::close_orchestrator_windows_on_release(cx);

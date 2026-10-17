@@ -335,6 +335,12 @@ impl HerdrWindow {
             "enter" if self.menu.page == Some(Page::OpenLink) => {
                 self.confirm_open_link(window, cx);
             }
+            "enter" if self.menu.page == Some(Page::RemoteUpload) => {
+                self.confirm_remote_upload(crate::remote_files::Answer::Upload, window, cx);
+            }
+            "enter" if self.menu.page == Some(Page::RemoteConflict) => {
+                self.confirm_remote_conflict(crate::remote_files::Resolution::KeepBoth, window, cx);
+            }
             "enter" if self.menu.page == Some(Page::VersionMismatch) => {
                 self.act_on_version_mismatch(window, cx);
             }
