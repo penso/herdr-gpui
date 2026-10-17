@@ -1,20 +1,28 @@
 //! The `/bin/sh` scripts. They use only POSIX shell, `wc`, `cat`, `mktemp`,
-//! `mv`, and `rm`, plus a SHA-256 tool when a push expects a hash.
+//! `mv`, and `rm`, plus a SHA-256 tool when a push expects a hash, and `stat`,
+//! `ls`, `getfacl` where there is one, `chgrp`, and `chmod` to keep a file's
+//! access.
 
 use super::{
-    CONFLICT_EXIT, Expect, MISSING_EXIT, NO_HASHER_EXIT, NOT_A_FILE_EXIT, SYMLINK_EXIT,
-    TOO_LARGE_EXIT, hex,
+    ACCESS_EXIT, Access, CONFLICT_EXIT, Expect, MISSING_EXIT, NO_HASHER_EXIT, NOT_A_FILE_EXIT,
+    SHORT_EXIT, SYMLINK_EXIT, TOO_LARGE_EXIT, hex,
 };
 use crate::script::shell_quote;
 
 /// Sets `path` to the host's path, expanding a leading `~/` to `$HOME`.
 fn path_assignment(path: &str) -> String {
+    assignment("path", path)
+}
+
+/// Sets the shell variable `name` to the host's `path`, expanding a leading
+/// `~/` to `$HOME`.
+fn assignment(name: &str, path: &str) -> String {
     if path == "~" {
-        return r#"path="$HOME""#.to_owned();
+        return format!(r#"{name}="$HOME""#);
     }
     match path.strip_prefix("~/") {
-        Some(rest) => format!(r#"path="$HOME"/{}"#, shell_quote(rest)),
-        None => format!("path={}", shell_quote(path)),
+        Some(rest) => format!(r#"{name}="$HOME"/{}"#, shell_quote(rest)),
+        None => format!("{name}={}", shell_quote(path)),
     }
 }
 
@@ -73,37 +81,87 @@ if [ "${{sum%% *}}" != '{hex}' ]; then exit {CONFLICT_EXIT}; fi"#,
     }
 }
 
-/// Gives the copy the target's permission bits, read with GNU `stat -c` or
-/// BSD `stat -f`, or a new file the mode the caller's umask gives one. When no
-/// `stat` reads the target's mode, the copy is written over the target in
-/// place instead: that keeps the mode, owner, and hard links, but it is not
-/// atomic, so a reader can see a partly written file and a failure partway
-/// leaves one.
-const KEEP_MODE: &str = r#"if [ -e "$path" ]; then
-mode=$(stat -c %a -- "$path" 2>/dev/null) || mode=$(stat -f %Lp -- "$path" 2>/dev/null) || mode=
+/// Gives the copy the group and permission bits of `$like`, the target when
+/// it exists and otherwise `$source` (empty for [`Access::Keep`]), read with
+/// GNU `stat -c` or BSD `stat -f`. `chgrp` runs only when the groups differ,
+/// and before `chmod`, which restores any bit `chgrp` clears. When `chgrp`
+/// fails, the copy keeps its own group, which is enough only when the group
+/// and other bits are identical: otherwise members of the old group who are
+/// not in the copy's would fall into "other" and gain or lose access.
+///
+/// The access is not kept when it cannot be read or copied: `$like` is a
+/// symbolic link or not a regular file (GNU `stat` reads a link as 777, and a
+/// folder has a mode of its own), no `stat` reads the mode or group, `ls -ld`
+/// fails, `ls -ld` marks `$like` or the copy with `+` or macOS's `@` (an ACL,
+/// or extended attributes that may hide one), or `getfacl -s` lists an ACL
+/// on either (BusyBox `ls` never marks one). A folder's default ACL reaches
+/// the copy, and `chmod` would raise its mask.
+///
+/// Then an existing target is written over in place, which keeps its mode,
+/// owner, group, ACL, and hard links but is not atomic, so a reader can see a
+/// partly written file and a failure partway leaves one; a target the SSH
+/// user cannot write is refused with [`ACCESS_EXIT`] before the host's file
+/// changes. A new file whose source's access is not kept is never refused:
+/// it stays readable by the SSH user alone. One with no source gets the mode
+/// the umask gives it.
+fn keep_access() -> String {
+    format!(
+        r#"if [ -e "$path" ]; then like=$path; else like=$source; fi
+keep=
+if [ -n "$like" ]; then
+mode=$(stat -c %a -- "$like" 2>/dev/null) || mode=$(stat -f %Lp -- "$like" 2>/dev/null) || mode=
 case $mode in ''|*[!0-7]*) mode= ;; esac
-if [ -z "$mode" ]; then
+group=$(stat -c %g -- "$like" 2>/dev/null) || group=$(stat -f %g -- "$like" 2>/dev/null) || group=
+case $group in ''|*[!0-9]*) group= ;; esac
+tmp_group=$(stat -c %g -- "$tmp" 2>/dev/null) || tmp_group=$(stat -f %g -- "$tmp" 2>/dev/null) || tmp_group=
+if [ -n "$mode" ] && [ -n "$group" ]; then keep=1; fi
+if [ -L "$like" ] || [ ! -f "$like" ]; then keep=; fi
+for listed in "$like" "$tmp"; do
+listing=$(ls -ld -- "$listed" 2>/dev/null) || listing=
+case $listing in ''|??????????[+@]*) keep= ;; esac
+if command -v getfacl >/dev/null 2>&1 && [ -n "$(getfacl -s -- "$listed" 2>/dev/null)" ]; then keep=; fi
+done
+if [ -n "$keep" ] && [ "$group" != "$tmp_group" ] && ! chgrp -- "$group" "$tmp" 2>/dev/null; then
+g=$(( (0$mode >> 3) & 7 ))
+o=$(( 0$mode & 7 ))
+if [ "$g" -ne "$o" ]; then keep=; fi
+fi
+fi
+if [ -n "$keep" ]; then
+chmod -- "$mode" "$tmp" || exit 1
+elif [ -e "$path" ]; then
+if [ ! -w "$path" ]; then exit {ACCESS_EXIT}; fi
 cat < "$tmp" > "$path" || exit 1
 exit 0
-fi
-chmod -- "$mode" "$tmp" || exit 1
-else
+elif [ -z "$like" ]; then
 chmod -- "$(printf '%o' $(( 0666 & ~0$old_umask )))" "$tmp" || exit 1
-fi"#;
+fi"#
+    )
+}
 
-/// Copies stdin to a private temporary file beside the target, checks
-/// `expect`, gives the copy the target's permission bits (see [`KEEP_MODE`]),
-/// and renames it over the target, so the file becomes the SSH user's. The
-/// trap removes the copy on every exit that did not rename it.
-pub(super) fn push_script(path: &str, expect: Expect) -> String {
+/// Copies stdin to a private temporary file beside the target, refuses it
+/// unless it holds exactly `len` bytes, checks `expect`, gives the copy the
+/// access of the target or of `access`'s source, and renames it over the
+/// target, so the file becomes the SSH user's. When that access cannot be
+/// kept, it writes over an existing target in place instead (see
+/// [`keep_access`]). The trap removes the copy on every exit that did not
+/// rename it.
+pub(super) fn push_script(path: &str, expect: Expect, access: Access<'_>, len: u64) -> String {
+    // The shell's arithmetic is signed; no real length comes near it.
+    let len = len.min(i64::MAX as u64);
     let hasher = match expect {
         Expect::Sha256(_) => choose_hasher(),
         Expect::Absent | Expect::Any => String::new(),
+    };
+    let source = match access {
+        Access::Keep => "source=".to_owned(),
+        Access::Like(source) => assignment("source", source),
     };
     format!(
         r#"old_umask=$(umask)
 umask 077
 {assign}
+{source}
 {refuse}
 {hasher}
 case $path in
@@ -115,13 +173,17 @@ name=${{path##*/}}
 tmp=$(mktemp "$dir/.$name.XXXXXX") || exit 1
 trap 'rm -f -- "$tmp"' EXIT
 cat > "$tmp" || exit 1
+size=$(wc -c < "$tmp") || exit 1
+case $size in ''|*[!0-9\ ]*) exit 1 ;; esac
+if [ $size -ne {len} ]; then exit {SHORT_EXIT}; fi
 {refuse}
 {check}
-{KEEP_MODE}
+{keep}
 mv -f -- "$tmp" "$path" || exit 1
 trap - EXIT"#,
         assign = path_assignment(path),
         refuse = refuse_unsafe(),
         check = expect_check(expect),
+        keep = keep_access(),
     )
 }

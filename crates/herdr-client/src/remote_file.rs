@@ -12,15 +12,38 @@
 //! variants. Any other failure, including an SSH failure, is
 //! [`Error::Script`].
 //!
-//! A push writes a private temporary file beside the target and renames it
-//! over the target only after checking [`Expect`] against the host's file.
+//! A push writes a temporary file beside the target and renames it over the
+//! target only after checking [`Expect`] against the host's file. The
+//! temporary file never lets anyone read the upload who cannot read the file
+//! its access comes from: the target when it exists, else the file
+//! [`Access::Like`] names. A POSIX host creates it readable by the SSH user
+//! alone (but see the macOS limitation below); Windows PowerShell and
+//! PowerShell 7 create it with that file's DACL.
 //! Another writer can still slip in between that check and the rename; the
 //! host offers no lock that every editor honours.
 //!
-//! An existing file keeps its permission bits, and a new file gets the mode
-//! the host's umask gives one; either way the file becomes the SSH user's. A
-//! POSIX host whose `stat` cannot report a mode gets the file overwritten in
-//! place instead, which keeps its owner but is not atomic.
+//! An existing file keeps its permission bits and, on a POSIX host, its
+//! group, and becomes the SSH user's. On a POSIX host it is overwritten in
+//! place instead, keeping its owner, group, and ACL but not atomically, when
+//! the host cannot report its mode or group, when an ACL shows on the file or
+//! on the temporary file, or when the copy cannot be given the file's group
+//! and the group and other bits differ. When it would write in place over a
+//! file the SSH user cannot write, it refuses with [`Error::Access`] before
+//! the host's file changes.
+//!
+//! A new file takes the access of the file [`Access::Like`] names, as a
+//! kept-both copy does, or with [`Access::Keep`] what the host gives a new
+//! file. On a POSIX host a new file whose source's access cannot be copied
+//! (the source is missing, a link, not a regular file, or carries an ACL, or
+//! its group cannot be given and its group and other bits differ) is never
+//! refused: it stays readable by the SSH user alone. PowerShell refuses with
+//! [`Error::Access`] instead when it cannot read the source's DACL or the
+//! source is not a file.
+//!
+//! Limitation: on a macOS host, an inheritable ACL entry on the folder can
+//! let others read the temporary file while the upload is written, since
+//! macOS does not mask ACL entries by the file's 0600 mode. The final file is
+//! still right, because the ACL check then writes the upload in place.
 
 use crate::{Result, script::ScriptLimits, script::run_script_command};
 use sha2::{Digest, Sha256};
@@ -55,6 +78,13 @@ const NOT_A_FILE_EXIT: i32 = 67;
 const TOO_LARGE_EXIT: i32 = 68;
 /// The host has no SHA-256 tool to check an expected hash with.
 const NO_HASHER_EXIT: i32 = 69;
+/// The pushed input was not the length the caller said it would be: the
+/// transfer was cut off, or the file changed while it was read.
+const SHORT_EXIT: i32 = 70;
+/// The push cannot keep the file's access: it would write in place over a
+/// target the SSH user cannot write, or PowerShell cannot read the ACL to
+/// copy or its source is not a file. The host's file was not changed.
+const ACCESS_EXIT: i32 = 71;
 /// The host's file no longer matches what the push expected.
 const CONFLICT_EXIT: i32 = 75;
 
@@ -82,6 +112,17 @@ pub enum Expect {
     Any,
 }
 
+/// Where a pushed file's access comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Access<'a> {
+    /// An existing target keeps its own access; a new file gets what the
+    /// host gives one: the umask's mode, or the folder's inherited ACL.
+    Keep,
+    /// A new file takes the access of the host file at this path, written as
+    /// a push's path is. An existing target still keeps its own access.
+    Like(&'a str),
+}
+
 /// A completed fetch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fetched {
@@ -95,8 +136,12 @@ pub struct Fetched {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start
+    #[error("could not keep the file's access; nothing was changed")]
+    Access,
     #[error("the host's file changed since it was fetched")]
     Conflict,
+    #[error("the upload was cut off; the host's file is unchanged")]
+    Incomplete,
     #[error("the file is not on the host")]
     Missing,
     #[error("the host has no SHA-256 tool (sha256sum, shasum, or openssl)")]
@@ -113,17 +158,26 @@ pub enum Error {
     // keep-sorted end
 }
 
-/// Stream `path` on `target` to `out`, refusing a missing path, a folder or
-/// device, and a file larger than `max_bytes`. Symbolic links are followed.
+/// A file on an SSH host: where it is and the shell its scripts run in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteFile<'a> {
+    /// A `[user@]host` SSH target.
+    pub target: &'a str,
+    /// The shell the host runs scripts in.
+    pub shell: RemoteShell,
+    /// The host's absolute path, or one starting `~/` (also `~\` for
+    /// PowerShell) for the login user's home folder.
+    pub path: &'a str,
+}
+
+/// Stream `file` to `out`, refusing a missing path, a folder or device, and a
+/// file larger than `max_bytes`. Symbolic links are followed.
 ///
 /// Blocking: call only on a background worker. Linux and macOS clients only;
 /// elsewhere this returns [`crate::Error::ScriptUnsupported`].
 ///
 /// Args:
-///     target: A `[user@]host` SSH target.
-///     shell: The shell the host runs scripts in.
-///     path: The host's absolute path, or one starting `~/` (also `~\` for
-///         PowerShell) for the login user's home folder.
+///     file: The host, its shell, and the path to read.
 ///     out: Receives the file's bytes. On failure it may hold a prefix.
 ///     max_bytes: The largest file accepted.
 ///     cancelled: Kills the transfer when set.
@@ -135,53 +189,57 @@ pub enum Error {
 ///     [`crate::Error::RemoteFile`] for a refusal or a failed script, or a
 ///     target or platform error from [`crate::Error`].
 pub fn fetch_remote_file(
-    target: &str,
-    shell: RemoteShell,
-    path: &str,
+    file: RemoteFile<'_>,
     out: impl Write + Send,
     max_bytes: u64,
     cancelled: &AtomicBool,
 ) -> Result<Fetched> {
-    let script = match shell {
-        RemoteShell::Posix => posix::fetch_script(path, max_bytes),
-        RemoteShell::PowerShell => powershell::fetch_script(path, max_bytes),
+    let script = match file.shell {
+        RemoteShell::Posix => posix::fetch_script(file.path, max_bytes),
+        RemoteShell::PowerShell => powershell::fetch_script(file.path, max_bytes),
     };
-    let command = remote_command(target, shell, &script)?;
+    let command = remote_command(file.target, file.shell, &script)?;
     Ok(fetch_with(command, out, max_bytes, cancelled)?)
 }
 
-/// Replace `path` on `target` with `input`, only while the host's file still
-/// meets `expect`. A symbolic link or non-regular file at the path is never
+/// Replace `file` with `input`, only while the host's file still meets
+/// `expect`. A symbolic link or non-regular file at the path is never
 /// replaced, and the temporary file is removed on every failure.
 ///
 /// Blocking: call only on a background worker. Linux and macOS clients only;
 /// elsewhere this returns [`crate::Error::ScriptUnsupported`].
 ///
 /// Args:
-///     target: A `[user@]host` SSH target.
-///     shell: The shell the host runs scripts in.
-///     path: As for [`fetch_remote_file`]. Its folder must exist.
+///     file: The host, its shell, and the path to replace. The path's folder
+///         must exist.
 ///     expect: What the host's file must be just before the rename.
-///     input: The new contents. The caller bounds its length.
+///     access: Where a new file's access comes from.
+///     len: The exact number of bytes `input` holds. The host replaces
+///         nothing unless it received exactly that many, so a transfer cut
+///         off early, which the host sees only as the end of its input, is
+///         refused rather than committed.
+///     input: The new contents.
 ///     cancelled: Kills the transfer when set; the host's file is unchanged
 ///         unless the rename already happened.
 ///
 /// Errors:
-///     [`crate::Error::RemoteFile`] for a refusal, a conflict, or a failed
-///     script, or a target or platform error from [`crate::Error`].
+///     [`crate::Error::RemoteFile`] for a refusal, a conflict, a transfer
+///     that was not `len` bytes ([`Error::Incomplete`]), access it cannot
+///     keep ([`Error::Access`]), or a failed script, or a target or platform
+///     error from [`crate::Error`].
 pub fn push_remote_file(
-    target: &str,
-    shell: RemoteShell,
-    path: &str,
+    file: RemoteFile<'_>,
     expect: Expect,
+    access: Access<'_>,
+    len: u64,
     input: impl Read + Send,
     cancelled: &AtomicBool,
 ) -> Result<()> {
-    let script = match shell {
-        RemoteShell::Posix => posix::push_script(path, expect),
-        RemoteShell::PowerShell => powershell::push_script(path, expect),
+    let script = match file.shell {
+        RemoteShell::Posix => posix::push_script(file.path, expect, access, len),
+        RemoteShell::PowerShell => powershell::push_script(file.path, expect, access, len),
     };
-    let command = remote_command(target, shell, &script)?;
+    let command = remote_command(file.target, file.shell, &script)?;
     Ok(push_with(command, input, cancelled)?)
 }
 
@@ -259,6 +317,8 @@ fn classify(error: crate::Error, limit: Option<u64>) -> Error {
         (Some(TOO_LARGE_EXIT), Some(limit)) => Error::TooLarge { limit },
         (Some(NO_HASHER_EXIT), _) => Error::NoHasher,
         (Some(CONFLICT_EXIT), _) => Error::Conflict,
+        (Some(ACCESS_EXIT), _) => Error::Access,
+        (Some(SHORT_EXIT), _) => Error::Incomplete,
         _ => Error::Script(Box::new(error)),
     }
 }

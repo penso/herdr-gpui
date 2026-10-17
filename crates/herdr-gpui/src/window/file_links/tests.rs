@@ -12,6 +12,8 @@ use std::sync::Arc;
 
 #[cfg(unix)]
 mod remote;
+#[cfg(unix)]
+mod remote_saves;
 
 #[test]
 fn paths_resolve_under_home_or_the_pane_directory() {

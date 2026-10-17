@@ -515,6 +515,7 @@ impl HerdrWindow {
         self.ring_bell(window);
         self.poll_integrations(cx);
         self.poll_links(window, cx);
+        self.poll_remote_files(window, cx);
         if self.settings.task.is_none() {
             let mut reload = false;
             for endpoint in &self.endpoints {

@@ -33,6 +33,15 @@ impl RemotePath {
             line: link.line,
         })
     }
+
+    /// The host's file, as the transfer functions name it.
+    pub(crate) fn remote_file(&self) -> herdr_client::RemoteFile<'_> {
+        herdr_client::RemoteFile {
+            target: &self.target,
+            shell: self.shell,
+            path: &self.path,
+        }
+    }
 }
 
 /// The shell and the absolute or `~` path for `path` as printed under `cwd`.

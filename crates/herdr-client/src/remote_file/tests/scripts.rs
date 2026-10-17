@@ -19,7 +19,7 @@ fn posix_scripts_assign_the_path_as_one_quoted_word() {
             "{path}"
         );
         for expect in [Expect::Any, Expect::Absent, Expect::Sha256([0; 32])] {
-            let script = posix::push_script(path, expect);
+            let script = posix::push_script(path, expect, Access::Keep, 0);
             assert!(script.contains(&format!("\n{assignment}")), "{path}");
         }
     }
@@ -42,7 +42,7 @@ fn posix_scripts_never_pass_the_path_where_it_could_be_an_option() {
     let fetch = posix::fetch_script("-x", 10);
     assert!(fetch.contains("wc -c < \"$path\""));
     assert!(fetch.contains("exec cat < \"$path\""));
-    let push = posix::push_script("-x", Expect::Sha256([0; 32]));
+    let push = posix::push_script("-x", Expect::Sha256([0; 32]), Access::Keep, 0);
     assert!(push.contains("$hasher < \"$path\""));
     assert!(push.contains("mv -f -- \"$tmp\" \"$path\""));
 }
@@ -50,12 +50,76 @@ fn posix_scripts_never_pass_the_path_where_it_could_be_an_option() {
 #[test]
 fn posix_push_consults_a_hasher_only_for_an_expected_hash() {
     let digest = [0xAB; 32];
-    let script = posix::push_script("/f", Expect::Sha256(digest));
+    let script = posix::push_script("/f", Expect::Sha256(digest), Access::Keep, 0);
     assert!(script.contains("sha256sum"));
     assert!(script.contains(&format!("!= '{}'", "ab".repeat(32))));
     for expect in [Expect::Absent, Expect::Any] {
-        assert!(!posix::push_script("/f", expect).contains("sha256sum"));
+        assert!(!posix::push_script("/f", expect, Access::Keep, 0).contains("sha256sum"));
     }
+}
+
+#[test]
+fn pushes_check_the_received_length_before_the_expectation() {
+    let posix = posix::push_script("/f", Expect::Sha256([0; 32]), Access::Keep, 42);
+    let counted = posix.find("-ne 42 ]; then exit 70").unwrap();
+    assert!(counted < posix.find("$hasher < \"$path\"").unwrap());
+    assert!(counted < posix.find("mv -f").unwrap());
+    assert!(
+        posix::push_script("/f", Expect::Any, Access::Keep, u64::MAX)
+            .contains(&format!("-ne {} ]", i64::MAX))
+    );
+    let powershell = powershell::push_script("C:\\f", Expect::Sha256([0; 32]), Access::Keep, 42);
+    let counted = powershell.find("($received -ne 42) { exit 70 }").unwrap();
+    assert!(counted < powershell.find("ComputeHash").unwrap());
+    assert!(counted < powershell.find("::Replace(").unwrap());
+}
+
+#[test]
+fn posix_push_names_where_a_new_files_access_comes_from() {
+    let keep = posix::push_script("/f", Expect::Absent, Access::Keep, 0);
+    assert!(keep.contains("\nsource=\n"));
+    let like = posix::push_script("/f.conflict", Expect::Absent, Access::Like("~/a b"), 0);
+    assert!(like.contains("\nsource=\"$HOME\"/'a b'\n"));
+    let hostile = posix::push_script("/f", Expect::Absent, Access::Like("/srv/it's"), 0);
+    assert!(hostile.contains("\nsource='/srv/it'\\''s'\n"));
+}
+
+#[test]
+fn posix_push_checks_it_can_write_in_place_before_writing() {
+    let script = posix::push_script("/f", Expect::Any, Access::Keep, 0);
+    let checked = script
+        .find("if [ ! -w \"$path\" ]; then exit 71; fi")
+        .unwrap();
+    assert!(checked < script.find("cat < \"$tmp\" > \"$path\"").unwrap());
+    assert!(
+        script.contains("??????????[+@]*"),
+        "macOS marks an ACL with @ too"
+    );
+    assert!(
+        script.contains("getfacl -s -- \"$listed\""),
+        "BusyBox ls marks none"
+    );
+}
+
+#[test]
+fn powershell_push_reads_the_acl_before_creating_the_copy() {
+    let like =
+        powershell::push_script("C:\\f.conflict", Expect::Absent, Access::Like("C:\\a b"), 0);
+    assert!(like.contains("\n$source = [System.IO.Path]::GetFullPath('C:\\a b')\n"));
+    // A source that is not a file is refused, then one whose ACL cannot be
+    // read, both before the copy exists.
+    let not_a_file = like.find("Get-HerdrAttributes $like").unwrap();
+    let read = like.find("GetAccessControl(").unwrap();
+    let refused = like.rfind("exit 71").unwrap();
+    let created = like.find("FileMode]::CreateNew").unwrap();
+    assert!(not_a_file < read && read < refused && refused < created);
+    // A source the user cannot stat fails inside the `try`, so it is refused
+    // too rather than ending the script with a generic failure.
+    let guarded = like.find("try {\n        $likeAttributes = Get-HerdrAttributes $like");
+    assert!(guarded.is_some(), "{like}");
+    assert!(like.contains("FileSystemAclExtensions]::Create("));
+    let keep = powershell::push_script("C:\\f", Expect::Absent, Access::Keep, 0);
+    assert!(keep.contains("\n$source = $null\n"));
 }
 
 #[test]
@@ -69,7 +133,7 @@ fn powershell_scripts_quote_the_path_as_a_literal() {
     let path = "C:\\a b\\it's \u{2018}x\u{2019} $env:X `y \u{e9}";
     let quoted = "'C:\\a b\\it''s \u{2018}\u{2018}x\u{2019}\u{2019} $env:X `y \u{e9}'";
     assert!(powershell::fetch_script(path, 10).contains(&format!("\n$path = {quoted}\n")));
-    let push = powershell::push_script(path, Expect::Any);
+    let push = powershell::push_script(path, Expect::Any, Access::Keep, 0);
     assert!(push.contains(&format!("GetFullPath({quoted})")));
     assert!(powershell::fetch_script("-x", 10).contains("\n$path = '-x'\n"));
     for path in HOSTILE_PATHS {
@@ -93,13 +157,13 @@ fn powershell_scripts_expand_only_a_leading_home() {
 
 #[test]
 fn powershell_push_checks_each_expectation() {
-    let script = powershell::push_script("C:\\f", Expect::Sha256([0x0F; 32]));
+    let script = powershell::push_script("C:\\f", Expect::Sha256([0x0F; 32]), Access::Keep, 0);
     assert!(script.contains("SHA256]::Create().ComputeHash($current)"));
     assert!(script.contains(&format!("-ne '{}'", "0f".repeat(32))));
-    let absent = powershell::push_script("C:\\f", Expect::Absent);
+    let absent = powershell::push_script("C:\\f", Expect::Absent, Access::Keep, 0);
     assert!(absent.contains("Get-HerdrAttributes $path)) { exit 75 }"));
     assert!(!absent.contains("ComputeHash"));
-    let any = powershell::push_script("C:\\f", Expect::Any);
+    let any = powershell::push_script("C:\\f", Expect::Any, Access::Keep, 0);
     assert!(!any.contains("ComputeHash") && !any.contains("exit 75"));
     for script in [script, absent, any] {
         assert!(!script.contains("$input"));
@@ -112,7 +176,7 @@ fn powershell_push_checks_each_expectation() {
 
 #[test]
 fn encoded_scripts_decode_back_to_the_script() {
-    let script = powershell::push_script("C:\\\u{e9}\u{1F600}'", Expect::Absent);
+    let script = powershell::push_script("C:\\\u{e9}\u{1F600}'", Expect::Absent, Access::Keep, 0);
     assert_eq!(decode(&encode(&script)), script);
 }
 
@@ -178,6 +242,8 @@ fn exit_codes_map_to_refusals() {
         }
     ));
     assert!(matches!(classify(exit(69), None), Error::NoHasher));
+    assert!(matches!(classify(exit(70), None), Error::Incomplete));
+    assert!(matches!(classify(exit(71), None), Error::Access));
     assert!(matches!(classify(exit(75), None), Error::Conflict));
     assert!(matches!(
         classify(crate::Error::ScriptOutputLimit, Some(7)),
@@ -228,28 +294,32 @@ fn messages_are_short_and_plain() {
         "the host's file changed since it was fetched"
     );
     assert_eq!(Error::Missing.to_string(), "the file is not on the host");
+    assert_eq!(
+        Error::Incomplete.to_string(),
+        "the upload was cut off; the host's file is unchanged"
+    );
+    assert_eq!(
+        Error::Access.to_string(),
+        "could not keep the file's access; nothing was changed"
+    );
+}
+
+fn file<'a>(target: &'a str, shell: RemoteShell, path: &'a str) -> RemoteFile<'a> {
+    RemoteFile {
+        target,
+        shell,
+        path,
+    }
 }
 
 #[test]
 fn public_functions_refuse_an_invalid_target() {
     let cancelled = AtomicBool::new(false);
-    let fetched = fetch_remote_file(
-        "-oProxyCommand=x",
-        RemoteShell::Posix,
-        "/f",
-        Vec::new(),
-        1,
-        &cancelled,
-    );
+    let posix = file("-oProxyCommand=x", RemoteShell::Posix, "/f");
+    let fetched = fetch_remote_file(posix, Vec::new(), 1, &cancelled);
     assert!(matches!(fetched, Err(crate::Error::InvalidSshTarget)));
-    let pushed = push_remote_file(
-        "-oProxyCommand=x",
-        RemoteShell::PowerShell,
-        "C:\\f",
-        Expect::Any,
-        &[][..],
-        &cancelled,
-    );
+    let windows = file("-oProxyCommand=x", RemoteShell::PowerShell, "C:\\f");
+    let pushed = push_remote_file(windows, Expect::Any, Access::Keep, 0, &[][..], &cancelled);
     assert!(matches!(pushed, Err(crate::Error::InvalidSshTarget)));
 }
 
@@ -257,22 +327,10 @@ fn public_functions_refuse_an_invalid_target() {
 #[test]
 fn public_functions_are_unsupported_without_a_unix_client() {
     let cancelled = AtomicBool::new(false);
-    let fetched = fetch_remote_file(
-        "user@host",
-        RemoteShell::Posix,
-        "/f",
-        Vec::new(),
-        1,
-        &cancelled,
-    );
+    let posix = file("user@host", RemoteShell::Posix, "/f");
+    let fetched = fetch_remote_file(posix, Vec::new(), 1, &cancelled);
     assert!(matches!(fetched, Err(crate::Error::ScriptUnsupported)));
-    let pushed = push_remote_file(
-        "user@host",
-        RemoteShell::PowerShell,
-        "C:\\f",
-        Expect::Any,
-        &[][..],
-        &cancelled,
-    );
+    let windows = file("user@host", RemoteShell::PowerShell, "C:\\f");
+    let pushed = push_remote_file(windows, Expect::Any, Access::Keep, 0, &[][..], &cancelled);
     assert!(matches!(pushed, Err(crate::Error::ScriptUnsupported)));
 }

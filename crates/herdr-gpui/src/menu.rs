@@ -14,6 +14,7 @@ mod open_link;
 mod page;
 mod pr;
 mod pr_actions;
+mod remote_file_dialogs;
 mod sessions;
 mod settings;
 mod shortcut_editor;

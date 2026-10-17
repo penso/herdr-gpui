@@ -60,8 +60,45 @@ impl Fixture {
     }
 
     fn push(&self, path: &str, expect: Expect, input: &[u8]) -> std::result::Result<(), Error> {
-        let command = self.command(&posix::push_script(path, expect));
+        self.push_claiming(path, expect, input.len() as u64, input)
+    }
+
+    /// A push that says it sends `len` bytes and sends `input`.
+    fn push_claiming(
+        &self,
+        path: &str,
+        expect: Expect,
+        len: u64,
+        input: &[u8],
+    ) -> std::result::Result<(), Error> {
+        let command = self.command(&posix::push_script(path, expect, Access::Keep, len));
         push_with(command, input, &AtomicBool::new(false))
+    }
+
+    /// A push of a new file at `path` that takes the access of `source`, as
+    /// a kept-both copy does.
+    fn push_like(&self, path: &str, source: &str, input: &[u8]) -> std::result::Result<(), Error> {
+        let script = posix::push_script(
+            path,
+            Expect::Absent,
+            Access::Like(source),
+            input.len() as u64,
+        );
+        push_with(self.command(&script), input, &AtomicBool::new(false))
+    }
+
+    /// Runs the scripts with a `chgrp` that always fails first on `PATH`, as
+    /// for a user outside the file's group. Keep the returned folder alive.
+    fn fail_chgrp(&mut self) -> tempfile::TempDir {
+        let bin = tempfile::tempdir().unwrap();
+        let chgrp = bin.path().join("chgrp");
+        std::fs::write(&chgrp, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&chgrp, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let mut folders = vec![bin.path().to_owned()];
+        folders.extend(std::env::split_paths(&path));
+        self.path_env = Some(std::env::join_paths(folders).unwrap().into());
+        bin
     }
 }
 
@@ -189,6 +226,296 @@ fn push_keeps_an_existing_files_mode() {
     assert_eq!(entries(fixture.home.path()), ["file"]);
 }
 
+/// Runs `program` with `args` and returns its trimmed stdout.
+fn output_of(program: &str, args: &[&str]) -> String {
+    let output = Command::new(program).args(args).output().unwrap();
+    assert!(output.status.success(), "{program} {args:?} failed");
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+/// Gives the file at `path` a group other than its own that this user may
+/// give it: a supplementary group, or for root any other group. Each
+/// candidate is tried in turn, since `chown` can refuse one `id -G` lists
+/// (macOS's `everyone`, for one).
+fn give_another_group(path: &Path) -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    let gid = std::fs::metadata(path).unwrap().gid();
+    let mut groups = output_of("id", &["-G"])
+        .split_whitespace()
+        .map(|group| group.parse::<u32>().unwrap())
+        .collect::<Vec<_>>();
+    if output_of("id", &["-u"]) == "0" {
+        groups.extend([1, 2]);
+    }
+    groups.retain(|&group| group != gid);
+    groups
+        .iter()
+        .copied()
+        .find(|&group| std::os::unix::fs::chown(path, None, Some(group)).is_ok())
+        .unwrap_or_else(|| {
+            panic!(
+                "chown refused every other group of this user ({groups:?}); run as root or with a \
+                 supplementary group"
+            )
+        })
+}
+
+#[test]
+fn push_keeps_an_existing_files_group() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    fixture.set_mode("file", 0o640);
+    let group = give_another_group(&fixture.path("file"));
+    let before = std::fs::metadata(fixture.path("file")).unwrap();
+    fixture
+        .push(&fixture.text("file"), Expect::Any, b"new")
+        .unwrap();
+    let after = std::fs::metadata(fixture.path("file")).unwrap();
+    assert_eq!(std::fs::read(fixture.path("file")).unwrap(), b"new");
+    assert_eq!(after.gid(), group);
+    assert_eq!(fixture.mode("file"), 0o640);
+    assert_ne!(
+        after.ino(),
+        before.ino(),
+        "the copy was renamed over the file"
+    );
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
+#[test]
+fn push_renames_without_the_group_only_when_group_and_other_bits_match() {
+    use std::os::unix::fs::MetadataExt;
+    let mut fixture = Fixture::new();
+    let _bin = fixture.fail_chgrp();
+    // Renamed, the file's old group falls into "other", so only identical
+    // group and other bits keep who can read it.
+    let cases = [
+        (0o644, true),
+        (0o640, false),
+        (0o604, false),
+        (0o664, false),
+    ];
+    for (mode, renamed) in cases {
+        std::fs::write(fixture.path("file"), b"old").unwrap();
+        fixture.set_mode("file", mode);
+        let group = give_another_group(&fixture.path("file"));
+        let before = std::fs::metadata(fixture.path("file")).unwrap();
+        fixture
+            .push(&fixture.text("file"), Expect::Any, b"new")
+            .unwrap();
+        let after = std::fs::metadata(fixture.path("file")).unwrap();
+        assert_eq!(std::fs::read(fixture.path("file")).unwrap(), b"new");
+        assert_eq!(fixture.mode("file"), mode);
+        assert_eq!(after.ino() != before.ino(), renamed, "{mode:o} renamed");
+        // Written in place, the file keeps its group; renamed, it takes the
+        // user's, whose bits grant no more than everyone's.
+        assert_eq!(after.gid() == group, !renamed, "{mode:o} group");
+        assert_eq!(entries(fixture.home.path()), ["file"]);
+        std::fs::remove_file(fixture.path("file")).unwrap();
+    }
+}
+
+/// Makes the file at `path` unwritable to this user until dropped: by its
+/// mode, or for root, whom no mode stops, with the immutable attribute.
+struct Unwritable(std::path::PathBuf);
+
+impl Unwritable {
+    fn new(path: std::path::PathBuf) -> Self {
+        if output_of("id", &["-u"]) == "0" {
+            output_of("chattr", &["+i", path.to_str().unwrap()]);
+        } else {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o440)).unwrap();
+        }
+        Self(path)
+    }
+}
+
+impl Drop for Unwritable {
+    fn drop(&mut self) {
+        if output_of("id", &["-u"]) == "0" {
+            output_of("chattr", &["-i", self.0.to_str().unwrap()]);
+        }
+    }
+}
+
+#[test]
+fn push_refuses_an_in_place_write_to_a_file_it_cannot_write() {
+    let mut fixture = Fixture::new();
+    let _bin = fixture.fail_chgrp();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    fixture.set_mode("file", 0o640);
+    give_another_group(&fixture.path("file"));
+    let unwritable = Unwritable::new(fixture.path("file"));
+    let pushed = fixture.push(&fixture.text("file"), Expect::Any, b"new");
+    assert!(matches!(pushed, Err(Error::Access)), "{pushed:?}");
+    assert_eq!(std::fs::read(fixture.path("file")).unwrap(), b"old");
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+    drop(unwritable);
+}
+
+#[test]
+fn push_like_gives_a_new_file_its_sources_access() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path(".env"), b"secret").unwrap();
+    fixture.set_mode(".env", 0o600);
+    fixture
+        .push_like(
+            &fixture.text(".env.conflict"),
+            &fixture.text(".env"),
+            b"mine",
+        )
+        .unwrap();
+    assert_eq!(
+        std::fs::read(fixture.path(".env.conflict")).unwrap(),
+        b"mine"
+    );
+    assert_eq!(fixture.mode(".env.conflict"), 0o600);
+
+    std::fs::write(fixture.path("shared"), b"team").unwrap();
+    fixture.set_mode("shared", 0o640);
+    let group = give_another_group(&fixture.path("shared"));
+    fixture
+        .push_like("~/shared.conflict", "~/shared", b"mine")
+        .unwrap();
+    let copy = std::fs::metadata(fixture.path("shared.conflict")).unwrap();
+    assert_eq!(fixture.mode("shared.conflict"), 0o640);
+    assert_eq!(copy.gid(), group);
+
+    // A source that is gone gives no access to copy: the file stays private.
+    fixture
+        .push_like(
+            &fixture.text("gone.conflict"),
+            &fixture.text("gone"),
+            b"mine",
+        )
+        .unwrap();
+    assert_eq!(fixture.mode("gone.conflict"), 0o600);
+    let mut names = vec![
+        ".env",
+        ".env.conflict",
+        "gone.conflict",
+        "shared",
+        "shared.conflict",
+    ];
+    names.sort_unstable();
+    assert_eq!(entries(fixture.home.path()), names);
+}
+
+#[test]
+fn push_like_a_link_or_folder_leaves_the_new_file_private() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path("shared"), b"team").unwrap();
+    fixture.set_mode("shared", 0o640);
+    symlink(fixture.path("shared"), fixture.path("link")).unwrap();
+    std::fs::create_dir(fixture.path("folder")).unwrap();
+    fixture.set_mode("folder", 0o755);
+    for source in ["link", "folder"] {
+        let copy = format!("{source}.conflict");
+        fixture
+            .push_like(&fixture.text(&copy), &fixture.text(source), b"mine")
+            .unwrap();
+        assert_eq!(std::fs::read(fixture.path(&copy)).unwrap(), b"mine");
+        assert_eq!(fixture.mode(&copy), 0o600, "{source}");
+    }
+}
+
+#[test]
+#[ignore = "needs setfacl and an ACL-capable filesystem"]
+fn push_under_a_folders_default_acl_overwrites_in_place() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    fixture.set_mode("file", 0o640);
+    let home = fixture.home.path().to_str().unwrap();
+    output_of("setfacl", &["-d", "-m", "u:nobody:r", home]);
+    let file = fixture.text("file");
+    let before = std::fs::metadata(&file).unwrap();
+    fixture.push(&file, Expect::Any, b"new").unwrap();
+    let after = std::fs::metadata(&file).unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), b"new");
+    assert_eq!(after.ino(), before.ino(), "the file was written in place");
+    let acl = output_of("getfacl", &["--omit-header", &file]);
+    assert!(!acl.contains("nobody"), "{acl}");
+    assert_eq!(fixture.mode("file"), 0o640);
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
+#[test]
+fn push_renames_over_a_file_whose_group_already_matches() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    let before = std::fs::metadata(fixture.path("file")).unwrap();
+    fixture
+        .push(&fixture.text("file"), Expect::Any, b"new")
+        .unwrap();
+    let after = std::fs::metadata(fixture.path("file")).unwrap();
+    assert_eq!(std::fs::read(fixture.path("file")).unwrap(), b"new");
+    assert_eq!(after.gid(), before.gid());
+    assert_ne!(
+        after.ino(),
+        before.ino(),
+        "the copy was renamed over the file"
+    );
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
+#[test]
+#[ignore = "needs setfacl and an ACL-capable filesystem"]
+fn push_overwrites_a_file_with_an_acl_in_place() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    fixture.set_mode("file", 0o640);
+    let file = fixture.text("file");
+    output_of("setfacl", &["-m", "u:nobody:r", &file]);
+    let acl = output_of("getfacl", &["--omit-header", &file]);
+    assert!(acl.contains("user:nobody:r--"), "{acl}");
+    let before = std::fs::metadata(&file).unwrap();
+    let content = payload(70_000);
+    fixture.push(&file, Expect::Any, &content).unwrap();
+    let after = std::fs::metadata(&file).unwrap();
+    assert!(std::fs::read(&file).unwrap() == content);
+    assert_eq!(after.ino(), before.ino(), "the file was written in place");
+    assert_eq!(output_of("getfacl", &["--omit-header", &file]), acl);
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
+#[test]
+fn push_cut_off_short_of_its_length_replaces_nothing() {
+    let fixture = Fixture::new();
+    let first = payload(4096);
+    std::fs::write(fixture.path("file"), &first).unwrap();
+    let whole = payload(70_000);
+    // The host sees a transfer that ended early only as the end of its input.
+    let expects = [Expect::Sha256(sha256(&first)), Expect::Any];
+    for expect in expects {
+        let short = fixture.push_claiming(&fixture.text("file"), expect, 70_000, &whole[..1000]);
+        assert!(matches!(short, Err(Error::Incomplete)), "{short:?}");
+        assert!(std::fs::read(fixture.path("file")).unwrap() == first);
+        assert_eq!(entries(fixture.home.path()), ["file"], "no temporary file");
+    }
+    let long = fixture.push_claiming(&fixture.text("file"), Expect::Any, 10, &whole[..11]);
+    assert!(matches!(long, Err(Error::Incomplete)), "{long:?}");
+    let fresh = fixture.push_claiming(&fixture.text("new"), Expect::Absent, 5, b"new");
+    assert!(matches!(fresh, Err(Error::Incomplete)), "{fresh:?}");
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
+#[test]
+fn push_without_stat_still_refuses_a_cut_off_transfer() {
+    let mut fixture = Fixture::new();
+    std::fs::write(fixture.path("file"), b"old").unwrap();
+    let bin = tool_folder(&["cat", "chmod", "mktemp", "mv", "rm", "wc"]);
+    fixture.path_env = Some(bin.path().to_owned());
+    let short = fixture.push_claiming(&fixture.text("file"), Expect::Any, 9, b"new");
+    assert!(matches!(short, Err(Error::Incomplete)), "{short:?}");
+    assert_eq!(std::fs::read(fixture.path("file")).unwrap(), b"old");
+    assert_eq!(entries(fixture.home.path()), ["file"]);
+}
+
 /// A folder holding links to just `tools`, from this machine's own folders.
 fn tool_folder(tools: &[&str]) -> tempfile::TempDir {
     let bin = tempfile::tempdir().unwrap();
@@ -208,7 +535,7 @@ fn push_without_stat_overwrites_in_place_and_keeps_the_mode() {
     let mut fixture = Fixture::new();
     std::fs::write(fixture.path("file"), b"old").unwrap();
     fixture.set_mode("file", 0o755);
-    let bin = tool_folder(&["cat", "chmod", "mktemp", "mv", "rm"]);
+    let bin = tool_folder(&["cat", "chmod", "mktemp", "mv", "rm", "wc"]);
     fixture.path_env = Some(bin.path().to_owned());
     let content = payload(70_000);
     fixture

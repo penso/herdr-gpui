@@ -3,7 +3,8 @@
 //! streams: PowerShell's own pipeline would re-encode them as text.
 
 use super::{
-    CONFLICT_EXIT, Expect, MISSING_EXIT, NOT_A_FILE_EXIT, SYMLINK_EXIT, TOO_LARGE_EXIT, hex,
+    ACCESS_EXIT, Access, CONFLICT_EXIT, Expect, MISSING_EXIT, NOT_A_FILE_EXIT, SHORT_EXIT,
+    SYMLINK_EXIT, TOO_LARGE_EXIT, hex,
 };
 
 /// `FileAttributes.ReparsePoint`: symbolic links, junctions, and other
@@ -96,14 +97,35 @@ fn expect_check(expect: Expect) -> String {
     }
 }
 
-/// Copies stdin to a hidden-named temporary file beside the target, checks
-/// `expect`, and replaces the target with it. `finally` removes the copy on
-/// every exit that did not rename it. `[NullString]::Value` asks `Replace` for
-/// no backup file; PowerShell would pass `$null` as an empty string.
-pub(super) fn push_script(path: &str, expect: Expect) -> String {
+/// Copies stdin to a dot-named temporary file beside the target, refuses it
+/// unless it holds exactly `len` bytes, checks `expect`, and replaces the
+/// target with it. `finally` removes the copy on every exit that did not
+/// rename it.
+///
+/// The copy is created with the DACL of the target when it exists, else of
+/// `access`'s source, so nobody who cannot read that file can read the upload
+/// while it is in the copy; `Replace` then keeps the target's DACL. A new
+/// file with [`Access::Keep`] takes the folder's inherited ACL. Windows
+/// PowerShell (and PowerShell 3 to 5.0, which have no `PSEdition`) creates
+/// the copy through the `FileStream` constructor taking a `FileSecurity`,
+/// and PowerShell 7 through `FileSystemAclExtensions.Create`. When the source
+/// is a reparse point or a folder, whose ACL is no file's to copy, or its
+/// DACL cannot be read, the push exits with [`ACCESS_EXIT`] before it creates
+/// the copy. `[NullString]::Value` asks `Replace` for no backup file; PowerShell
+/// would pass `$null` as an empty string.
+pub(super) fn push_script(path: &str, expect: Expect, access: Access<'_>, len: u64) -> String {
+    let source = match access {
+        Access::Keep => "$null".to_owned(),
+        Access::Like(source) => {
+            format!("[System.IO.Path]::GetFullPath({})", path_expression(source))
+        }
+    };
     format!(
         r#"{PREAMBLE}
 $path = [System.IO.Path]::GetFullPath({path})
+$source = {source}
+$core = $PSVersionTable.PSEdition -eq 'Core'
+$sections = [System.Security.AccessControl.AccessControlSections]::Access
 function Get-HerdrAttributes([string]$Target) {{
     try {{
         return [System.IO.File]::GetAttributes($Target)
@@ -122,15 +144,36 @@ Assert-HerdrReplaceable
 $folder = [System.IO.Path]::GetDirectoryName($path)
 $name = '.' + [System.IO.Path]::GetFileName($path) + '.' + [System.IO.Path]::GetRandomFileName()
 $temporary = [System.IO.Path]::Combine($folder, $name)
-$copy = [System.IO.File]::Open($temporary, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+$like = if ([System.IO.File]::Exists($path)) {{ $path }} else {{ $source }}
+$security = $null
+if ($null -ne $like) {{
+    try {{
+        $likeAttributes = Get-HerdrAttributes $like
+        if ($null -ne $likeAttributes -and ([int]$likeAttributes -band ({REPARSE_POINT} -bor {NOT_A_FILE})) -ne 0) {{ exit {ACCESS_EXIT} }}
+        $security = if ($core) {{ [System.IO.FileSystemAclExtensions]::GetAccessControl([System.IO.FileInfo]$like, $sections) }} else {{ [System.IO.File]::GetAccessControl($like, $sections) }}
+    }} catch {{
+        exit {ACCESS_EXIT}
+    }}
+}}
+$write = [System.Security.AccessControl.FileSystemRights]::Write
+$copy = if ($null -eq $security) {{
+    [System.IO.File]::Open($temporary, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+}} elseif ($core) {{
+    [System.IO.FileSystemAclExtensions]::Create([System.IO.FileInfo]$temporary, [System.IO.FileMode]::CreateNew, $write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::None, $security)
+}} else {{
+    New-Object System.IO.FileStream($temporary, [System.IO.FileMode]::CreateNew, $write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::None, $security)
+}}
 $renamed = $false
+$received = -1
 try {{
     try {{
         $stdin = [Console]::OpenStandardInput()
         $stdin.CopyTo($copy)
+        $received = $copy.Length
     }} finally {{
         $copy.Dispose()
     }}
+    if ($received -ne {len}) {{ exit {SHORT_EXIT} }}
     Assert-HerdrReplaceable
     {check}
     if ([System.IO.File]::Exists($path)) {{

@@ -4,7 +4,7 @@
 //! first use in a later run removes the folders of runs that crashed or quit
 //! without removing their own, and leaves a running instance's alone.
 
-use super::{Error, Result};
+use super::{Error, Owner, Result};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{DirBuilder, File, OpenOptions},
@@ -76,11 +76,13 @@ impl Cache {
         })
     }
 
-    /// Where the copy of `path` on `target` is kept: a folder per host and
-    /// per path, so copies never collide, holding the file under the host's
-    /// own name for it, so an application shows its real name and type.
-    pub(crate) fn copy_path(&self, target: &str, path: &str) -> PathBuf {
+    /// Where `owner`'s copy of `path` on `target` is kept: a folder per
+    /// window, per host, and per path, so copies never collide, holding the
+    /// file under the host's own name for it, so an application shows its
+    /// real name and type.
+    pub(crate) fn copy_path(&self, owner: Owner, target: &str, path: &str) -> PathBuf {
         self.launch
+            .join(format!("w{}", owner.0))
             .join(short_hash(target))
             .join(short_hash(path))
             .join(basename(path))
@@ -136,6 +138,17 @@ pub(crate) fn basename(path: &str) -> &str {
     }
 }
 
+/// Where a fetch writes the copy at `local` before renaming it over it:
+/// beside it, under a name no other fetch of this process has, so two
+/// fetches of one copy never write or remove each other's bytes.
+pub(super) fn part_path(local: &Path) -> PathBuf {
+    static SERIAL: AtomicU64 = AtomicU64::new(0);
+    let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
+    let mut name = local.file_name().unwrap_or_default().to_owned();
+    name.push(format!(".{serial}.part"));
+    local.with_file_name(name)
+}
+
 /// Creates `path` and any missing parents, private to the user.
 pub(super) fn create_private_dirs(path: &Path) -> Result<()> {
     let mut builder = DirBuilder::new();
@@ -151,12 +164,11 @@ pub(super) fn create_private_dirs(path: &Path) -> Result<()> {
     })
 }
 
-/// Creates or truncates the file at `path`, readable and writable only by
-/// the user and never executable.
+/// Creates the file at `path`, readable and writable only by the user and
+/// never executable. Fails when a file is already there.
 pub(super) fn create_private_file(path: &Path) -> Result<File> {
     private_options()
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .open(path)
         .map_err(|source| Error::Cache {
             path: path.to_owned(),

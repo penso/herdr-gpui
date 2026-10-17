@@ -7,10 +7,10 @@ use crate::{
 };
 use herdr_client::RemoteShell;
 
-const TARGET: &str = "me@devbox";
+pub(super) const TARGET: &str = "me@devbox";
 
 /// A window whose SSH pane prints `text` in `cwd`, fetching from `host`.
-fn on_host<'a>(
+pub(super) fn on_host<'a>(
     host: &FakeHost,
     reply: fn() -> herdr_client::Result<&'static [u8]>,
     text: &str,
