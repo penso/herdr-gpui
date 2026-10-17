@@ -55,6 +55,8 @@ impl HerdrWindow {
             &initial_theme,
         );
         let sidebar_view = cx.new(|_| sidebar::SidebarView::new(weak, indicators));
+        let hosts = vec![cx.entity_id(), sidebar_view.entity_id()];
+        let mark_layer = cx.new(|cx| crate::mark_layer::MarkLayer::new(window, hosts, cx));
         let timer = cx.background_executor().clone();
         let poll = cx.spawn_in(window, async move |this, cx| {
             loop {
@@ -201,6 +203,7 @@ impl HerdrWindow {
             listening_ports: Default::default(),
             live: LiveState::default(),
             local_error: error,
+            mark_layer,
             marked: String::new(),
             marked_selection: None,
             menu,

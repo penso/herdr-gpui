@@ -5,7 +5,9 @@
 //! the terminal. GPUI reuses a cached view's layout and paint until that view
 //! is notified, so the window notifies this one whenever it is notified itself
 //! (`HerdrWindow::new` observes itself), and a surface-only update redraws the
-//! window without notifying it (`HerdrWindow::redraw_terminal`).
+//! window without notifying it (`HerdrWindow::redraw_terminal`). Moving
+//! status marks draw in the window's mark layer (`mark_layer`), so their
+//! frames do not invalidate it either.
 //!
 //! The rows still come from `HerdrWindow::render_sidebar`, so their listeners
 //! and state stay where they were.
@@ -52,6 +54,10 @@ impl Render for SidebarView {
         {
             cx.default_global::<crate::performance::Counts>()
                 .sidebar_renders += 1;
+        }
+        // Every moving mark is reserved again below.
+        if let Some(marks) = crate::mark_layer::Marks::of(window, cx) {
+            marks.forget(cx.entity_id());
         }
         // A closed window leaves nothing to draw.
         self.window

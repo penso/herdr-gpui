@@ -102,8 +102,17 @@ fn status_column(child: impl IntoElement, cx: &RowContext<'_>) -> Div {
         .child(child)
 }
 
+/// A card being removed fades to this while its worktree goes.
+const REMOVING_OPACITY: f32 = 0.5;
+
 impl RowLayout for Orca {
     fn workspace(&self, row: WorkspaceRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {
+        // Its marks fade with it, though the moving ones draw outside it.
+        let faded = row.removing.then(|| RowContext {
+            indicators: cx.indicators.faded(REMOVING_OPACITY),
+            ..*cx
+        });
+        let cx = faded.as_ref().unwrap_or(cx);
         let (branch, status, upstream) = (row.branch(), row.status(), row.upstream());
         let WorkspaceRow {
             label,
@@ -186,7 +195,7 @@ impl RowLayout for Orca {
             return card(label, state, indent, 8., (theme, cx.mark))
                 .items_start()
                 .py(px(5.))
-                .when(removing, |card| card.opacity(0.5))
+                .when(removing, |card| card.opacity(REMOVING_OPACITY))
                 .children(mark)
                 .child(text.into_div().items_start());
         }
@@ -239,7 +248,7 @@ impl RowLayout for Orca {
         card(label, state, indent, 8., (theme, cx.mark))
             .items_start()
             .py(px(if meta { 5. } else { 7. }))
-            .when(removing, |card| card.opacity(0.5))
+            .when(removing, |card| card.opacity(REMOVING_OPACITY))
             .child({
                 let column = status_column(parts::status(status, removing, cx), cx);
                 if cx.indicators.centered() {

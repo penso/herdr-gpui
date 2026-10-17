@@ -199,6 +199,9 @@ pub(crate) struct Indicators {
     /// Whether busy and finished rows carry a bar on their leading edge.
     pub(super) edge_rail: bool,
     colors: [u32; 5],
+    /// The opacity of the row a mark sits in, as `f32` bits: moving marks
+    /// draw in the window's mark layer, outside the row's own opacity.
+    fade: u32,
 }
 
 impl Indicators {
@@ -227,7 +230,20 @@ impl Indicators {
                     |settings| theme.ink(settings.status_color(status, light)),
                 )
             }),
+            fade: 1f32.to_bits(),
         }
+    }
+
+    /// The same marks in a row drawn at `opacity`.
+    pub(super) fn faded(self, opacity: f32) -> Self {
+        Self {
+            fade: opacity.to_bits(),
+            ..self
+        }
+    }
+
+    pub(super) fn fade(self) -> f32 {
+        f32::from_bits(self.fade)
     }
 
     /// The same colors drawn with another set, as a preview of it.
@@ -320,7 +336,7 @@ pub(super) fn status_mark(
     bold: bool,
 ) -> Div {
     if indicators.icons != StatusIcons::Dots {
-        return status_icon(status, font, indicators.icons, color);
+        return status_icon(status, font, indicators, color);
     }
     // Upstream dots: blocked/done filled, idle hollow, unknown a small dot.
     // Working spins instead, so busy agents read apart from settled ones.
@@ -338,7 +354,13 @@ pub(super) fn status_mark(
         .items_center()
         .justify_center()
         .when(status == AgentStatus::Working, |slot| {
-            slot.child(working_orbit(STATUS_WIDTH, color))
+            slot.child(icon_mark(
+                StatusIcons::Dots,
+                status,
+                STATUS_WIDTH,
+                color,
+                indicators.fade(),
+            ))
         })
         .when(status != AgentStatus::Working, |slot| {
             slot.child(
@@ -384,32 +406,47 @@ fn spin(mark: Svg, id: &'static str, period_ms: u64) -> impl IntoElement {
 
 /// A drawn status icon, centered in its slot. Configured weights do not
 /// apply: the icon's strokes are fixed by its asset.
-fn status_icon(status: AgentStatus, font: &FontConfig, icons: StatusIcons, color: u32) -> Div {
+fn status_icon(status: AgentStatus, font: &FontConfig, indicators: Indicators, color: u32) -> Div {
+    let (icons, fade) = (indicators.icons, indicators.fade());
     let size = icon_size(font);
     let slot = div().flex_none().flex().items_center().justify_center();
     if icons != StatusIcons::Tiles {
         return slot
             .size(px(size))
-            .child(icon_mark(icons, status, size, color));
+            .child(icon_mark(icons, status, size, color, fade));
     }
     slot.size(px(tile_size(font)))
         .rounded(px(crate::config::corners::SMALL))
         .bg(rgba((color << 8) | 0x30))
         .border_1()
         .border_color(rgba((color << 8) | 0x70))
-        .child(icon_mark(icons, status, size - 4., color))
+        .child(icon_mark(icons, status, size - 4., color, fade))
 }
 
 /// One set's mark for `status` at `size`: its asset, turning while working,
 /// or the mark drawn for the sets without assets. The working assets are
 /// rings around a turnable center, so spinning the whole icon keeps its
-/// outline still.
+/// outline still. A mark that moves draws in the window's mark layer, so its
+/// frames never rebuild the sidebar; `fade` is the opacity of its row.
 pub(super) fn icon_mark(
     icons: StatusIcons,
     status: AgentStatus,
     size: f32,
     color: u32,
+    fade: f32,
 ) -> AnyElement {
+    // Working always moves; of the settled statuses only a drawn blocked
+    // mark can.
+    let moves = status == AgentStatus::Working
+        || (status == AgentStatus::Blocked && crate::icons::status_icon(icons, status).is_none());
+    if !moves {
+        return drawn_mark(icons, status, size, color);
+    }
+    crate::mark_layer::layered(size, fade, move || drawn_mark(icons, status, size, color))
+        .into_any_element()
+}
+
+fn drawn_mark(icons: StatusIcons, status: AgentStatus, size: f32, color: u32) -> AnyElement {
     if icons == StatusIcons::Dots && status == AgentStatus::Working {
         return working_orbit(size, color).into_any_element();
     }
@@ -542,6 +579,7 @@ mod tests {
             icons: StatusIcons::Dots,
             edge_rail: false,
             colors: [0x112233, 0x223344, 0x334455, 0x445566, 0x556677],
+            fade: 1f32.to_bits(),
         };
         for (status, expected) in [
             (AgentStatus::Unknown, 0x112233),

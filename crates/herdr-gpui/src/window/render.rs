@@ -85,6 +85,14 @@ impl Render for HerdrWindow {
                     width,
                 )
             });
+        // The tab strip reserves its moving marks afresh; a hidden sidebar
+        // leaves none behind.
+        if let Some(marks) = crate::mark_layer::Marks::of(window, cx) {
+            marks.begin_frame(cx.entity_id());
+            if sidebar.is_none() {
+                marks.forget(self.sidebar_view.entity_id());
+            }
+        }
         // Paints the frame on screen, which during a focus change is the one
         // presented before it: the terminal area never blanks between two
         // projections. What the client knows to be current stays in `live`.
@@ -863,6 +871,9 @@ impl Render for HerdrWindow {
                             .children(self.zen_status_bar(cx)),
                     ),
             )
+            // After the body, whose rows reserve the marks it draws, and under
+            // everything that covers the body.
+            .child(AnyView::from(self.mark_layer.clone()))
             // At the window's foot in every layout: under the traffic lights
             // it would hide them, and one place is easier to find.
             .when(!zen, |root| root.children(self.render_worktree_banner()))

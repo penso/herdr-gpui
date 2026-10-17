@@ -119,7 +119,13 @@ fn slot(
                 .justify_center()
                 .rounded_full()
                 .bg(rgb(theme.sidebar_background()))
-                .child(icon_mark(icons, status, diameter, color));
+                .child(icon_mark(
+                    icons,
+                    status,
+                    diameter,
+                    color,
+                    cx.status_indicators().fade(),
+                ));
         }
         let (diameter, filled, _) = status_style(status, theme);
         // A working dot turns in the dot's own place, so the badge stays clear
@@ -133,7 +139,13 @@ fn slot(
                 .size(px(diameter))
                 .rounded_full()
                 .bg(rgb(theme.sidebar_background()))
-                .child(icon_mark(StatusIcons::Dots, status, diameter, color));
+                .child(icon_mark(
+                    StatusIcons::Dots,
+                    status,
+                    diameter,
+                    color,
+                    cx.status_indicators().fade(),
+                ));
         }
         div()
             .debug_selector(|| format!("dot-{key}"))

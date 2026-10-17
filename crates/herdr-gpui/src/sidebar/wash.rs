@@ -31,6 +31,11 @@ pub(super) struct HostMark {
 }
 
 impl HostMark {
+    /// The opacity of the host's rows.
+    pub(super) fn opacity(self) -> f32 {
+        if self.dim { DIM_OPACITY } else { 1. }
+    }
+
     /// The mark for the host named `label`, given whether it holds the
     /// selected workspace. In `row` mode only configured colours show. The
     /// group modes raise the selected host's wash, with the theme's active

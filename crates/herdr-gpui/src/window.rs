@@ -212,6 +212,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     pub(crate) live: LiveState,
     pub(crate) local_error: Option<String>,
+    /// Draws the moving status marks the sidebar and the tab strip reserve
+    /// room for; see `mark_layer`.
+    pub(crate) mark_layer: Entity<crate::mark_layer::MarkLayer>,
     pub(crate) marked: String,
     /// Where the IME's caret or converted clause is within `marked`, in
     /// UTF-16; `None` puts the caret after it.

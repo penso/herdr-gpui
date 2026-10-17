@@ -500,6 +500,23 @@ pub(crate) fn full_draw(window: &mut Window, cx: &mut App) -> ArenaClearNeeded {
 
 #[cfg(test)]
 pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
+    let sidebar_view = {
+        let weak = cx.weak_entity();
+        cx.new(|_| {
+            crate::sidebar::SidebarView::new(
+                weak,
+                super::agents::Indicators::new(
+                    None,
+                    crate::config::StatusIcons::default(),
+                    false,
+                    false,
+                    &crate::config::Theme::default(),
+                ),
+            )
+        })
+    };
+    let hosts = vec![cx.entity_id(), sidebar_view.entity_id()];
+    let mark_layer = cx.new(|cx| crate::mark_layer::MarkLayer::new(window, hosts, cx));
     HerdrWindow {
         sound: Default::default(),
         bell: Default::default(),
@@ -645,6 +662,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         backdrop: Default::default(),
         device_themes: Default::default(),
         regions: Vec::new(),
+        mark_layer,
         marked: String::new(),
         marked_selection: None,
         hover: None,
@@ -685,21 +703,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
             this.apply_shared_theme(cx);
             cx.notify();
         }),
-        sidebar_view: {
-            let weak = cx.weak_entity();
-            cx.new(|_| {
-                crate::sidebar::SidebarView::new(
-                    weak,
-                    super::agents::Indicators::new(
-                        None,
-                        crate::config::StatusIcons::default(),
-                        false,
-                        false,
-                        &crate::config::Theme::default(),
-                    ),
-                )
-            })
-        },
+        sidebar_view,
         surface_signal: cx.new(|_| crate::window::SurfaceSignal),
         _sidebar_invalidation: HerdrWindow::invalidate_sidebar(cx),
         _host_theme: HerdrWindow::observe_host_theme(cx),

@@ -726,7 +726,9 @@ impl HerdrWindow {
                             .overflow_hidden()
                             .map(|list| match search {
                                 Some(results) => list.child(results),
-                                None => list.child(spaces).children(pinned_host),
+                                None => list
+                                    .child(spaces)
+                                    .children(pinned_host.map(crate::mark_layer::covering)),
                             }),
                     )
                     .child(
