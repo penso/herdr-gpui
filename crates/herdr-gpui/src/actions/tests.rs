@@ -1,6 +1,8 @@
 use super::*;
 use crate::keymap::{Binding, DaemonKeys, Keymap};
 
+mod edit_keys;
+
 /// A keymap with `command` bound to `keystroke` in the GUI's `[keybindings]`.
 fn configured(command: &str, keystroke: &str) -> Keymap {
     let overrides = [(command.to_owned(), Binding::One(keystroke.into()))].into();
