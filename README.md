@@ -235,6 +235,21 @@ from **Check for Updates**: it downloads the new installer, checks it against
 the release's signed manifest and its Authenticode publisher, runs it silently,
 and reopens. See [Windows](#windows) for what works on the platform.
 
+Both add **Open in Herdr UI** to folders in File Explorer, and to the empty
+space inside one, for your user only. It runs `herdr-gpui open` on the folder
+through the launcher, so no console window appears: the running app focuses
+the folder's workspace or starts one there, and the app is started first when
+it is not running. On Windows 11 the entry is under **Show more options**,
+because the compact menu only lists commands of packaged apps. To remove
+everything `install.ps1` added, run it with `-Uninstall`:
+
+```powershell
+& ([scriptblock]::Create((irm https://herdrui.dev/install.ps1))) -Uninstall
+```
+
+Uninstalling the regular installer from **Settings > Apps** removes the entry
+too.
+
 ### From source
 
 Install Rust/rustup and, on macOS, the Xcode command-line tools. The repository

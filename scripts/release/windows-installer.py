@@ -173,6 +173,23 @@ def link_handler():
         return None
 
 
+FOLDER_VERBS = (r"Software\Classes\Directory\shell\HerdrUI",
+                r"Software\Classes\Directory\Background\shell\HerdrUI")
+
+
+def folder_verbs():
+    """The commands of the "Open in Herdr UI" folder verbs that exist for
+    this user."""
+    import winreg
+    commands = []
+    for name in FOLDER_VERBS:
+        try:
+            commands.append(winreg.QueryValue(winreg.HKEY_CURRENT_USER, name + r"\command"))
+        except FileNotFoundError:
+            pass
+    return commands
+
+
 def check_signed(paths):
     spec = importlib.util.spec_from_file_location("windows_signing", ROOT / "scripts/release/windows-signing.py")
     signing = importlib.util.module_from_spec(spec)
@@ -250,6 +267,9 @@ def check_installation(app, signed_installer):
     handler = link_handler()
     if handler != f'"{launcher}" "%1"':
         raise ValueError(f"Installer registered herdr-gpui:// links wrongly: {handler}")
+    verbs = folder_verbs()
+    if verbs != [f'"{launcher}" open "%V"'] * len(FOLDER_VERBS):
+        raise ValueError(f"Installer registered Open in Herdr UI wrongly: {verbs}")
 
 
 def processes_at(path):
@@ -293,10 +313,11 @@ def uninstall(app):
     shortcut = Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Herdr UI.lnk"
     deadline = time.monotonic() + 120
     while (app.exists() or shortcut.exists() or entry in user_path_entries()
-           or uninstall_entry() is not None or link_handler() is not None):
+           or uninstall_entry() is not None or link_handler() is not None
+           or folder_verbs()):
         if time.monotonic() > deadline:
             raise ValueError("Uninstaller left the app directory, its shortcut, its PATH entry, "
-                             "its Uninstall entry, or its link handler behind")
+                             "its Uninstall entry, its link handler, or Open in Herdr UI behind")
         time.sleep(1)
 
 

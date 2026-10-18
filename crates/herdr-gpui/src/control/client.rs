@@ -7,6 +7,7 @@ mod events;
 mod help;
 mod hosts;
 mod local;
+mod open;
 mod settings;
 mod tabs;
 mod work;
@@ -374,6 +375,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Browser(command) => browser::run(command, &context),
         ControlCommand::Status => app::status(&context),
         ControlCommand::App(command) => app::app(command, &context),
+        ControlCommand::Open { path } => open::open(&path, &context),
         ControlCommand::Window(command) => app::window(command, &context),
         ControlCommand::Ui(command) => app::ui(command, &context),
         ControlCommand::Run { name } => app::run_command(&name, &context),

@@ -149,7 +149,10 @@ fn a_new_folder_opens_at_its_resolved_path() -> anyhow::Result<()> {
         source: Source::Folder,
     };
     let opened = materialise(&project, &|| false)?;
-    assert_eq!(opened.path, fs::canonicalize(root.path())?.join("fresh"));
+    assert_eq!(
+        opened.path,
+        crate::palette::canonical::canonicalize(root.path())?.join("fresh")
+    );
     assert_eq!(opened.label, "fresh");
     assert!(opened.path.is_dir());
     Ok(())

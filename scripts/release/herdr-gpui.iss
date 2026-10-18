@@ -102,6 +102,19 @@ Root: HKCU; Subkey: "Software\Classes\herdr-gpui\DefaultIcon"; ValueType: string
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\{#AppUserModelID}"; Flags: uninsdeletekey dontcreatekey
 
+; "Open in Herdr UI" on a folder, and on the background inside one, for this
+; user only. The launcher runs `herdr-gpui open`, which opens the folder as
+; Open Project does and starts the app first when it is not running; running
+; herdr-gpui.exe directly would flash a console window on every click.
+; Windows 11 lists these under "Show more options": its compact menu only shows
+; commands of packaged apps. Removed on uninstall.
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "Open in {#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" open ""%V"""
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "Open in {#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" open ""%V"""
+
 ; Shortcuts open the launcher, so the app starts without a console window.
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#Launcher}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExe}"; AppUserModelID: "{#AppUserModelID}"

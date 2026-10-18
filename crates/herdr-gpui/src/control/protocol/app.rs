@@ -30,6 +30,12 @@ pub(crate) enum AppOp {
     Hide,
     /// Quit the app; Herdr and its terminals keep running.
     Quit,
+    /// Bring the window forward and open or focus the workspace of a
+    /// folder, as the palette's Open Project does. `path` is absolute and
+    /// canonical, resolved by the caller, and checked again by the app.
+    Open {
+        path: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,3 +147,6 @@ pub(crate) enum Reply {
     Size { width: f32, height: f32 },
     FontSize { points: f32 },
 }
+
+#[cfg(test)]
+mod tests;

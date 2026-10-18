@@ -67,7 +67,7 @@ fn creating_a_project_while_viewing_ssh_targets_local_and_waits_for_its_response
 ) {
     let root = tempfile::tempdir().unwrap();
     let project = projects::Project {
-        path: std::fs::canonicalize(root.path()).unwrap(),
+        path: crate::palette::canonical::canonicalize(root.path()).unwrap(),
         label: "project".into(),
     };
     let mut peer = MockPeer::advertising(&["workspace.create"]);
@@ -124,7 +124,7 @@ fn creating_a_project_while_viewing_ssh_targets_local_and_waits_for_its_response
 #[gpui::test]
 fn an_existing_local_project_is_focused_instead_of_created(cx: &mut TestAppContext) {
     let root = tempfile::tempdir().unwrap();
-    let path = std::fs::canonicalize(root.path()).unwrap();
+    let path = crate::palette::canonical::canonicalize(root.path()).unwrap();
     let peer = MockPeer::advertising(&["workspace.create"]);
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|window, cx| {
@@ -159,7 +159,7 @@ fn an_existing_local_project_is_focused_instead_of_created(cx: &mut TestAppConte
 fn unavailable_or_replaced_local_connections_cannot_open_projects(cx: &mut TestAppContext) {
     let root = tempfile::tempdir().unwrap();
     let project = projects::Project {
-        path: std::fs::canonicalize(root.path()).unwrap(),
+        path: crate::palette::canonical::canonicalize(root.path()).unwrap(),
         label: "project".into(),
     };
     let peer = MockPeer::new();
@@ -205,7 +205,7 @@ fn dismissal_during_validation_does_not_queue_a_creation(cx: &mut TestAppContext
             view.open_palette(Filter::All, window, cx);
             view.activate_palette(
                 Action::Project(projects::Project {
-                    path: std::fs::canonicalize(root.path()).unwrap(),
+                    path: crate::palette::canonical::canonicalize(root.path()).unwrap(),
                     label: "project".into(),
                 }),
                 window,
@@ -269,7 +269,7 @@ fn dismissing_a_queued_local_creation_cannot_resume_input_against_an_old_surface
             view.open_palette(Filter::Projects, window, cx);
             view.activate_palette(
                 Action::Project(projects::Project {
-                    path: std::fs::canonicalize(root.path()).unwrap(),
+                    path: crate::palette::canonical::canonicalize(root.path()).unwrap(),
                     label: "project".into(),
                 }),
                 window,
@@ -298,7 +298,9 @@ fn dismissing_a_queued_local_creation_cannot_resume_input_against_an_old_surface
 #[gpui::test]
 fn a_created_project_under_a_symlinked_root_reuses_its_workspace(cx: &mut TestAppContext) {
     let root = tempfile::tempdir().unwrap();
-    let real = std::fs::canonicalize(root.path()).unwrap().join("real");
+    let real = crate::palette::canonical::canonicalize(root.path())
+        .unwrap()
+        .join("real");
     std::fs::create_dir(&real).unwrap();
     let link = root.path().join("link");
     std::os::unix::fs::symlink(&real, &link).unwrap();

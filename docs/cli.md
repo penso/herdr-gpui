@@ -71,6 +71,23 @@ Every command accepts:
 | `ui panel workspaces\|overview\|pull-requests\|issues\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, or every host's plan usage |
 | `run COMMAND` | Any app command by its `[keybindings]` name, as the palette runs it |
 | `commands` | The names `run` accepts (no app needed) |
+| `open DIR` | Open a folder as **Open Project** in the palette does, starting the app if needed (below) |
+
+`open DIR` checks the folder where you run it and resolves it to an absolute,
+canonical path. A path that does not exist exits 5; a file, or a folder in a
+device namespace (`\\.\…`, `\\?\GLOBALROOT\…`, and on Unix `/dev`, `/proc`,
+`/sys`), exits 1. The app then opens the command palette on
+its projects and opens the folder there, which focuses the workspace already
+rooted in it or starts one, on the window's local Herdr, and brings the window
+forward. A dialog open in the window refuses it (exit 6); the palette shows
+anything that goes wrong after that, such as the folder disappearing.
+
+When no Herdr UI is running and no `--window` is given, `open` starts the app,
+as a plain `herdr-gpui` would, then asks again every quarter second until the
+window has connected to the local Herdr and accepts the folder. It waits at
+most 20 seconds after starting the app, then exits 7. Explorer's **Open in
+Herdr UI** entry, which both Windows installers add, runs this command through
+`herdr-gpui-launcher.exe`, so no console window appears.
 
 ### The app's own tabs
 

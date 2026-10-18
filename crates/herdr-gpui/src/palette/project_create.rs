@@ -117,7 +117,7 @@ pub(super) fn materialise(
         Source::Folder => fs::create_dir(&project.path).map_err(claim_error)?,
         Source::Clone { url } => clone(url, root, &project.path, &project.label, cancelled)?,
     }
-    let path = fs::canonicalize(&project.path)
+    let path = super::canonical::canonicalize(&project.path)
         .map_err(|error| Error::from(error).at_path(&project.path))?;
     Ok(projects::Project {
         path,

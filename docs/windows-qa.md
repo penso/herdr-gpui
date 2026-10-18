@@ -40,7 +40,10 @@ Steps (PowerShell, from the repo root):
 Then, using computer use if you have it (otherwise give me exact steps and I'll do them):
 6. Run the setup exe normally. A signed release names its publisher in any
    SmartScreen prompt; a local build is unsigned and needs More info → Run
-   anyway. Keep "Add herdr-gpui to PATH".
+   anyway. Keep "Add herdr-gpui to PATH". Afterwards, right-click a folder, and the empty space
+   inside one: Open in Herdr UI is under Show more options on Windows 11. Choose it with the app
+   closed, then again with it open: the folder opens as a workspace, no console window appears,
+   and the second time the existing workspace is focused rather than a new one made.
 7. Open "Herdr UI" from the Start menu. Take screenshots right away: does any console window appear,
    even briefly? Use the app a bit (open a repo/worktree so git runs) and watch for console flashes.
 8. In a NEW PowerShell window: `herdr-gpui --help` (output prints, prompt returns after it) and
@@ -50,7 +53,8 @@ Then, using computer use if you have it (otherwise give me exact steps and I'll 
    pin, and trigger a system notification (Settings: system notifications on, then an agent that
    needs attention): the window, the pin, and the notification must all use one taskbar button.
 9. Uninstall from Settings → Apps → Herdr UI; confirm %LOCALAPPDATA%\Programs\Herdr UI is gone and
-   `herdr-gpui` is no longer found in a new terminal.
+   `herdr-gpui` is no longer found in a new terminal, and Open in Herdr UI is gone from
+   folders' menus.
 
 Report: Windows version and architecture, the output of each command (full error text for any
 failure, including ISCC line numbers), and for steps 6–9 what you saw, with screenshots.

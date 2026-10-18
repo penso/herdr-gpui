@@ -43,6 +43,10 @@ pub enum ControlCommand {
     Skill,
     Browser(BrowserCommand),
     App(AppCommand),
+    /// Open a folder as the palette's Open Project does.
+    Open {
+        path: std::path::PathBuf,
+    },
     Window(WindowCommand),
     Ui(UiCommand),
     Tab(TabCommand),
@@ -125,6 +129,10 @@ pub const FAMILIES: &[(&str, &str)] = &[
         "Browser tabs: open, reload, list, navigate, page notes",
     ),
     ("app", "Bring the app forward, hide it, or quit it"),
+    (
+        "open",
+        "Open a folder in Herdr UI, starting the app if needed",
+    ),
     (
         "window",
         "List, open, focus, resize, detach, or reconnect windows",
@@ -270,6 +278,9 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "status" => ControlCommand::Status,
         "skill" => ControlCommand::Skill,
         "app" => ControlCommand::App(app::app(args)?),
+        "open" => ControlCommand::Open {
+            path: args.required("DIR")?.into(),
+        },
         "window" => ControlCommand::Window(app::window(args)?),
         "ui" => ControlCommand::Ui(app::ui(args)?),
         "tab" => ControlCommand::Tab(tabs::tab(args)?),
