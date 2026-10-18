@@ -149,8 +149,17 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     let style = [Style::Flat, Style::Rounded][frame / 36];
                     // Rounded rows are taller; grow both sections so the probed
                     // rows stay inside their lists at the smallest size too.
+                    // The activity bar's Workspaces title sits over the
+                    // sidebar, so its height is added back too.
+                    let title = root
+                        .clone()
+                        .downcast::<HerdrWindow>()
+                        .map_err(|_| anyhow!("unexpected root"))?
+                        .read(cx)
+                        .activity_title_height();
                     let h = h
                         + sidebar::DEVICE_FOOTER_HEIGHT
+                        + title
                         + if style == Style::Rounded { 160. } else { 0. };
                     let mode = LayoutMode::new(density, style);
                     let compact = density == Density::Compact;
