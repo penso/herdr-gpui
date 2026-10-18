@@ -101,6 +101,11 @@ Root: HKCU; Subkey: "Software\Classes\herdr-gpui"; ValueType: string; ValueName:
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\{#AppUserModelID}"; Flags: uninsdeletekey dontcreatekey
+; Settings > General > Launch at login writes a Run value naming the launcher,
+; and Task Manager's Startup apps may mark it off. Setup creates neither; both
+; go on uninstall, so Windows is not left starting a missing program.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "{#AppName}"; Flags: uninsdeletevalue dontcreatekey
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"; ValueName: "{#AppName}"; Flags: uninsdeletevalue dontcreatekey
 
 ; Shortcuts open the launcher, so the app starts without a console window.
 [Icons]

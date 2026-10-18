@@ -4122,6 +4122,22 @@ silently; Setup restarts the app (see
 Manager, never after a crash or hang; the `herdr-gpui.exe --restart-manager`
 Windows starts hands off to the launcher (`src/restart_manager.rs`).
 
+#### Launch at login
+
+**Settings > General > Launch at login**, off by default, writes
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Herdr UI`, naming the
+`herdr-gpui-launcher.exe` beside the running app, so it opens without a console
+window when you sign in; turning it off removes the value. The registry is the
+setting, so nothing goes in the config file, and the switch shows what Windows
+will do: it is read when Settings opens and each time it comes to the front. A copy with no launcher beside it
+cannot turn it on and says so. Task Manager's **Startup apps** and **Settings >
+Apps > Startup** can switch the entry off without removing it (a mark under
+`Explorer\StartupApproved\Run`). The app never overrides that: the row then
+says where to turn it back on. The installer's uninstaller removes both values;
+an `install.ps1` copy has no uninstaller, so turn the setting off before
+deleting its folder. macOS and Linux have no launch-at-login setting yet
+(`src/launch_at_login.rs`).
+
 Starting a local `herdr server` looks for `herdr.exe` and uses
 `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` in place of `process_group(0)`, so
 the daemon survives the GUI and no console window appears.

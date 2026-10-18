@@ -48,6 +48,7 @@ impl SettingsWindow {
             catalog::Availability::FollowingSystemTheme => {
                 ThemeName::follows_system(self.drafted_theme())
             }
+            catalog::Availability::Windows => cfg!(windows),
         }
     }
 

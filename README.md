@@ -356,7 +356,8 @@ Ed25519-signed `windows-manifest.json` and carry a valid signature from Herdr
 UI's publisher, or it never runs (see
 [App Updates](docs/updating.md#windows-installers)). The app registers with
 Restart Manager, so an update, or a restart with **Restart apps** turned on,
-reopens it. A copy run from anywhere else does not update itself; download each
+reopens it. **Settings > General > Launch at login** (off by default) opens it
+when you sign in; see [launch at login](crates/herdr-gpui/README.md#launch-at-login). A copy run from anywhere else does not update itself; download each
 new release manually. `herdr-gpui.exe` is a console program, because it is also the
 command line agents and scripts run. Open the app with
 `herdr-gpui-launcher.exe` (the Start menu shortcut's target), which starts

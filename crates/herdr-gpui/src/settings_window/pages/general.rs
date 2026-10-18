@@ -1,5 +1,6 @@
 //! General: interface toggles, the optional `[features]` flags, clipboard
-//! feedback, merged worktrees, the browser skill and the update channel.
+//! feedback, merged worktrees, the browser skill, launch at login (Windows)
+//! and the update channel.
 use super::{CLIPBOARD_POSITIONS, SettingsWindow, on_off, ui};
 use crate::settings_window::inputs::DropdownField;
 use crate::{
@@ -156,6 +157,7 @@ impl SettingsWindow {
                         .on_click(cx.listener(move |this, _, _, cx| this.save_skill(choice, cx))),
                 ),
             )
+            .children(self.startup_rows(cx))
             .child(ui::section(theme, "Updates", None))
             .child(
                 ui::row(theme, "general-update-beta", "Install beta releases")
@@ -174,6 +176,17 @@ impl SettingsWindow {
                         cx,
                     )),
             )
+    }
+
+    /// Windows' **Launch at login**; other platforms have no such setting yet.
+    fn startup_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        #[cfg(windows)]
+        return self.launch_at_login_rows(cx);
+        #[cfg(not(windows))]
+        {
+            let _ = cx;
+            Vec::new()
+        }
     }
 
     /// One row per `[features]` flag, generated from [`Feature::ALL`] so a

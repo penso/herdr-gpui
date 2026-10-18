@@ -19,6 +19,8 @@ pub(super) enum Availability {
     Always,
     /// Only while the drafted theme follows the system as a light/dark pair.
     FollowingSystemTheme,
+    /// Only on Windows, which has the only platform code for it.
+    Windows,
 }
 
 impl Entry {
@@ -302,6 +304,13 @@ pub(super) const CATALOG: &[Entry] = &[
         "Teach local agents to use browser tabs",
         "Installed in ~/.claude and ~/.agents, kept up to date.",
     ),
+    entry(
+        Section::General,
+        "general-launch-at-login",
+        "Launch at login",
+        "Open Herdr UI when you sign in to Windows.",
+    )
+    .only(Availability::Windows),
     entry(
         Section::General,
         "general-update-beta",

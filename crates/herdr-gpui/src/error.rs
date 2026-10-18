@@ -502,6 +502,9 @@ pub enum Error {
         command: &'static str,
         keystroke: String,
     },
+    #[cfg(windows)]
+    #[error(transparent)]
+    LaunchAtLogin(#[from] crate::launch_at_login::Error),
     #[error("File not found: {}", path.display())]
     LinkedFileMissing { path: PathBuf },
     #[error("This link names a file on another computer, {host}. It is not opened from here.")]
