@@ -10,6 +10,8 @@ use crate::control::protocol::{
     },
 };
 
+mod remote_files;
+
 fn check(name: &str, outcome: &str) -> CheckInfo {
     CheckInfo {
         name: name.into(),

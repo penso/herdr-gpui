@@ -55,6 +55,8 @@ impl HerdrWindow {
         {
             crate::agent_skill::AgentSkill::choose(crate::agent_skill::Choice::Declined, cx);
         }
+        self.decline_remote_upload_on_dismiss(cx);
+        self.decline_remote_folder_on_dismiss();
         let return_focus = self
             .menu
             .application
@@ -508,6 +510,8 @@ impl HerdrWindow {
                         | Page::VersionMismatch
                         | Page::OpenCheckout
                         | Page::OpenLink
+                        | Page::RemoteConflict
+                        | Page::RemoteUpload
                 ),
                 |panel| {
                     panel
@@ -674,6 +678,12 @@ impl HerdrWindow {
             panel = panel.child(self.render_open_link(cx));
         } else if page == Page::OpenCheckout {
             panel = panel.child(self.render_open_checkout(cx));
+        } else if page == Page::RemoteUpload {
+            panel = panel.child(self.render_remote_upload(cx));
+        } else if page == Page::RemoteConflict {
+            panel = panel.child(self.render_remote_conflict(cx));
+        } else if page == Page::RemoteFolder {
+            panel = panel.child(self.render_remote_folder(cx));
         } else if page == Page::Install {
             panel = panel
                 .child(div().p(px(8.)).child("Herdr must be installed"))

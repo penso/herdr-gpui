@@ -63,6 +63,7 @@ ureq.workspace                 = true
 uuid.workspace                 = true
 webpki-roots                   = { optional = true, workspace = true }
 zeroize.workspace              = true
+zip.workspace                  = true
 
 [build-dependencies]
 winresource.workspace = true

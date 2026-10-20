@@ -10,12 +10,12 @@ fn path(text: &str, column: u16) -> Option<(String, Range<u16>)> {
 }
 
 fn located(text: &str, column: u16) -> Option<(String, Option<u32>, Range<u16>)> {
-    read(text, column).and_then(|link| match link.target {
-        RowTarget::Path { path, line, .. } => Some((path, line, link.columns)),
-        RowTarget::Web(_)
-        | RowTarget::External(_)
-        | RowTarget::OtherHost(_)
-        | RowTarget::Malformed => None,
+    read(text, column).and_then(|link| match (columns(&link), link.target) {
+        (columns, RowTarget::Path { path, line, .. }) => Some((path, line, columns)),
+        (_, RowTarget::Web(_))
+        | (_, RowTarget::External(_))
+        | (_, RowTarget::OtherHost(_))
+        | (_, RowTarget::Malformed) => None,
     })
 }
 
@@ -23,6 +23,7 @@ fn bare(path: &str) -> RowTarget {
     RowTarget::Path {
         path: path.into(),
         line: None,
+        query: None,
         explicit: false,
     }
 }
@@ -109,19 +110,27 @@ fn paths_are_pane_links_only_and_never_web_links() {
         RowTarget::Path {
             path: "src/lib.rs".into(),
             line: Some(4),
+            query: None,
             explicit: false,
         }
     );
-    assert_eq!((link.link.row, link.link.columns), (0, 5..17));
+    assert_eq!(link.link.rows, vec![(0, 5..17)]);
 }
 
 #[test]
 fn paths_that_may_wrap_are_not_guessed() {
-    // Running to the right edge, the path may continue on the next row.
+    // Running to the right edge of the bottom row, the path may continue
+    // off-screen.
     assert!(frame_link(&frame("ab src/long/path", 16, 1), 5, 0, 0, 16).is_none());
-    // Starting a row under a full one, it may be the tail of that row.
+    // Starting a row under a full one, it is the tail of that row.
     let wrapped = frame("https://example.com/src/a.rs", 20, 2);
-    assert!(frame_link(&wrapped, 2, 1, 0, 20).is_none());
+    assert_eq!(
+        frame_link(&wrapped, 2, 1, 0, 20),
+        Some(RowLink {
+            target: RowTarget::Web("https://example.com/src/a.rs".into()),
+            rows: vec![(0, 0..20), (1, 0..8)],
+        })
+    );
     let mut separate = frame("first line ends here", 20, 2);
     separate.cells[19].symbol = " ".into();
     for (cell, symbol) in separate.cells[20..].iter_mut().zip("src/a.rs".chars()) {
@@ -145,7 +154,7 @@ fn wide_characters_before_a_path_keep_its_columns() {
     );
     wide.cells.pop();
     assert_eq!(
-        frame_link(&wide, 4, 0, 0, 20).map(|link| link.columns),
+        frame_link(&wide, 4, 0, 0, 20).map(|link| columns(&link)),
         Some(3..11)
     );
 }
@@ -157,6 +166,7 @@ fn a_hyperlink_names_a_path_by_a_file_address_or_without_a_scheme() {
     let named = |path: &str| RowTarget::Path {
         path: path.into(),
         line: None,
+        query: None,
         explicit: true,
     };
     let mut s = surface("report");

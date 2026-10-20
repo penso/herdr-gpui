@@ -141,6 +141,7 @@ Herdr UI** entry, which both Windows installers add, runs this command through
 | `cloud add` | Open the settings that add one |
 | `cloud setup ID` | Run the `[cloud]` setup script on a saved machine again, in a new tab once the window shows it. `ID` is the machine ID from `cloud list`, its host ID, or its label |
 | `processes [--pane ID]` | The processes under a pane, with CPU and memory (no app needed) |
+| `remote-files [list]` | Copies of SSH hosts' files that link clicks in this window fetched, and whether each is synced, edited, or in conflict. Uploads are confirmed in the app |
 | `search symbol\|file QUERY` | Go to Symbol or Go to File over the current checkout (no app needed) |
 
 ### Settings and services

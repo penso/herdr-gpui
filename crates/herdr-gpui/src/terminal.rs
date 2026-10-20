@@ -4,8 +4,8 @@ mod selection;
 pub(crate) mod splits;
 pub(crate) use accessibility::Transcript;
 pub(crate) use links::{
-    ExternalUrl, PaneLink, RowLink, RowTarget, escape_into, escaped_len, link_at,
-    pane_hyperlink_at, pane_link_at,
+    ExternalUrl, LinkReading, PaneLink, RowLink, RowTarget, escape_into, escaped_len,
+    pane_hyperlink_at,
 };
 pub(crate) use selection::{MAX_SELECTION_BYTES, Selection};
 

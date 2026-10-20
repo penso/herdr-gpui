@@ -94,7 +94,7 @@ pub(super) fn bridge_command(path: &str, session: &str, idle_timeout: bool) -> S
 
 /// `script` as a `powershell.exe` command line, encoded as UTF-16LE base64
 /// so neither `cmd.exe` nor PowerShell as the login shell reinterprets it.
-fn encoded_command(script: &str) -> String {
+pub(super) fn encoded_command(script: &str) -> String {
     let utf16 = script
         .encode_utf16()
         .flat_map(u16::to_le_bytes)

@@ -1,12 +1,14 @@
 use super::*;
 
 fn read(text: &str, column: u16) -> Option<(String, Option<u32>, Range<u16>)> {
-    frame_link(&frame(text, 60, 1), column, 0, 0, 60).and_then(|link| match link.target {
-        RowTarget::Path { path, line, .. } => Some((path, line, link.columns)),
-        RowTarget::Web(_)
-        | RowTarget::External(_)
-        | RowTarget::OtherHost(_)
-        | RowTarget::Malformed => None,
+    frame_link(&frame(text, 60, 1), column, 0, 0, 60).and_then(|link| {
+        match (columns(&link), link.target) {
+            (columns, RowTarget::Path { path, line, .. }) => Some((path, line, columns)),
+            (_, RowTarget::Web(_))
+            | (_, RowTarget::External(_))
+            | (_, RowTarget::OtherHost(_))
+            | (_, RowTarget::Malformed) => None,
+        }
     })
 }
 

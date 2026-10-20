@@ -1,4 +1,4 @@
-//! `pr`, `host`, `cloud`, `ports`, and `security`.
+//! `pr`, `host`, `cloud`, `ports`, `remote-files`, and `security`.
 use super::{Args, CliError, unknown};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,6 +101,15 @@ fn port(args: &mut Args) -> Result<u16, CliError> {
         .ok()
         .filter(|port| *port > 0)
         .ok_or(CliError::InvalidValue("PORT"))
+}
+
+/// `remote-files [list]`: listing is all it does.
+pub(super) fn remote_files(args: &mut Args) -> Result<(), CliError> {
+    match args.verb() {
+        None => Ok(()),
+        Some(verb) if verb == "list" => Ok(()),
+        Some(verb) => Err(unknown("remote-files", verb)),
+    }
 }
 
 pub(super) fn ports(args: &mut Args) -> Result<PortsCommand, CliError> {

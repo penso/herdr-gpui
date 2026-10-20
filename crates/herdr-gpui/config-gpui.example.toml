@@ -136,7 +136,8 @@ open_links_in = "system"
 # in a pane split beside the one that printed it) or "system" (the default
 # application). Folders, images, and PDFs always open in the system's
 # application, as does every file on Windows. Holding Alt (Option) as well opens a
-# file in the other one.
+# file in the other one. A path an SSH pane prints opens a fetched copy in the
+# system's application, and saves to it ask before uploading.
 open_files_in = "editor"
 # How that editor starts. Unset, the pane's $VISUAL or $EDITOR runs, then vi,
 # as `$EDITOR +LINE FILE`. `{file}` and `{line}` place the two yourself:
@@ -308,6 +309,14 @@ project_roots = []
 # [devices.0123456789abcdef0123456789abcdef]
 # keybindings = "server"
 # theme = "Dracula"
+
+[remote_files]
+# Warn before copying a folder printed in an SSH pane when its contents exceed
+# this many megabytes uncompressed. 1..=4096.
+folder_warning_mb = 64
+# Refuse a folder whose archive is larger than this many megabytes. 1..=8192,
+# and never below folder_warning_mb.
+folder_transfer_cap_mb = 512
 
 # Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.

@@ -632,6 +632,78 @@ arbitrary remote paths. The remote account and temporary-directory ancestors
 must remain trusted; shell-based cleanup cannot eliminate concurrent path
 replacement races by that account.
 
+### One File In Place
+
+```text
+fetch_remote_file(file: RemoteFile, out: impl Write, max_bytes: u64,
+                  cancelled: &AtomicBool) -> Result<Fetched>
+push_remote_file(file: RemoteFile, expect: Expect, access: RemoteFileAccess,
+                 len: u64, input: impl Read, cancelled: &AtomicBool) -> Result<()>
+```
+
+These copy one file at the host's own path off an SSH host and write it back,
+for the GUI's remote file links. `RemoteFile` names the target, the host's
+path as the host spells it (absolute, or `~/` for the login user's home), and
+the `RemoteShell`: `Posix` runs `/bin/sh` scripts, and `PowerShell` runs
+Windows PowerShell 5.1+ scripts through `-EncodedCommand` on Windows OpenSSH
+hosts. The path travels quoted in the script; the file's bytes travel only on
+stdout and stdin. Both are blocking background-worker APIs, on every client
+OS, with the bridge's SSH trust policy and a 30-second no-progress timeout.
+
+A fetch refuses a missing path, a folder or device, and a file over
+`max_bytes` (`MAX_REMOTE_FILE_BYTES`, 64 MB, for the GUI) before streaming, and
+returns the byte count and SHA-256 of what it wrote. A push writes a temporary
+file beside the target and renames it over the target only when it holds
+exactly `len` bytes and the host's file still meets `expect`: `Sha256` (the
+file as fetched), `Absent`, or `Any`. A symlink or non-regular file is never
+replaced. Another writer can still slip in between the check and the rename.
+
+A push never lets anyone read the bytes who could not read the file they came
+from, except as noted below. `access` says where a new file's access comes from: `Keep` (the login
+umask's default on POSIX, the folder's inherited ACL on Windows) or
+`Like(path)`, another host file's. An existing target always keeps its own.
+On POSIX the temporary file is 0600 and takes the target's (or the `Like`
+file's) group and mode before the rename. The target is written in place
+instead when its group cannot be given and its group and other bits differ,
+or when `ls` (`+`, or macOS's `@`) or `getfacl` shows an ACL on the target or
+the temporary file. That keeps owner, group, ACL and hard links, but is not
+atomic. A new `Like` file whose access cannot be copied (an ACL, a group that
+cannot be given, a source that is not a plain file) stays 0600. On Windows
+the temporary file is created with the target's (or the `Like` file's) DACL,
+and `Replace` keeps it; a `Like` source whose DACL cannot be read, or that is
+not a file, is refused.
+
+Limitation: on a macOS host, an inheritable folder ACL entry can read the
+temporary file while the upload is written, since macOS ACLs are not masked
+by its 0600 mode. The final file is still right.
+
+Refusals map to `RemoteFileError` variants (`Missing`, `NotAFile`,
+`TooLarge`, `Symlink`, `Conflict`, `Incomplete`, `NoHasher`, and `Access`
+when the file's access cannot be kept, before the host's file changes);
+anything else is `Script`.
+
+### A Folder as an Archive
+
+```text
+probe_remote_folder(folder: RemoteFile, cancelled: &AtomicBool) -> Result<ProbedFolder>
+fetch_remote_folder(folder: RemoteFile, out: impl Write, max_bytes: u64,
+                    cancelled: &AtomicBool) -> Result<Fetched>
+```
+
+These size a host folder without transferring it and stream the folder as one
+archive, for the GUI's folder links. `probe_remote_folder` returns the tree's
+uncompressed size, rounded up to KiB, and a SHA-256 over a sorted metadata
+listing of every entry when the host has a SHA-256 tool, or `None` when it has
+none. It runs the same shells and quoting as a file fetch; `NotAFolder` means
+the path is a file now.
+
+`fetch_remote_folder` writes a gzipped tar stream on a POSIX host and a zip on
+a Windows OpenSSH host. Every archive entry starts with the folder's own name,
+which the caller checks and strips. The archive is refused once it passes
+`max_bytes` (`TooLarge`), and a refused or failed archive may leave a prefix in
+`out`. Its idle timeout is 120 seconds rather than the file transfer's 30: a
+Windows host builds the zip before sending any of it.
+
 ## Local Discovery
 
 `Local` checks `HERDR_SOCKET_PATH` (derive `-client.sock` from its file stem),

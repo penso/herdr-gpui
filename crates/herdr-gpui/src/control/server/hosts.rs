@@ -1,9 +1,10 @@
-//! `pr`, `host`, `cloud add`, `ports`, `usage`, `system`, and `security`: what the
-//! window gathers about its hosts, read from the state it already keeps.
-//! Nothing here starts a lookup, a scan, or a sample of its own; a request
-//! answers from the latest one, and says why when there is none.
+//! `pr`, `host`, `cloud add`, `ports`, `usage`, `system`, `remote-files`, and
+//! `security`: what the window gathers about its hosts, read from the state it
+//! already keeps. Nothing here starts a lookup, a scan, or a sample of its own;
+//! a request answers from the latest one, and says why when there is none.
 mod ports;
 mod pr;
+mod remote_files;
 mod security;
 
 #[cfg(test)]
@@ -61,6 +62,9 @@ pub(super) fn serve(
         HostOp::CloudSetup { id } => {
             in_free_window(caller, cx, |view, _, cx| cloud_setup(view, &id, cx))
         }
+        HostOp::RemoteFiles => in_window(caller, cx, |view, _, _| {
+            remote_files::list(view.remote_files.list(), remote_files::LIST_BUDGET)
+        }),
     };
     incoming.respond(response);
 }

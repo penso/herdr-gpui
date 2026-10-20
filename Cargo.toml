@@ -73,7 +73,7 @@ objc                 = "0.2"
 # The Secret Service client GPUI's Linux platform links, with its async-io backend.
 oo7                  = { default-features = false, features = ["async-std", "native_crypto"], version = "0.6" }
 objc2                = "0.6.4"
-objc2-app-kit        = { default-features = false, features = ["NSApplication", "NSColor", "NSDockTile", "NSDragging", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "block2", "objc2-core-foundation", "std"], version = "0.3.2" }
+objc2-app-kit        = { default-features = false, features = ["NSApplication", "NSColor", "NSDockTile", "NSDragging", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "NSWorkspace", "block2", "objc2-core-foundation", "std"], version = "0.3.2" }
 objc2-foundation     = { default-features = false, features = ["NSArray", "NSBundle", "NSData", "NSError", "NSProcessInfo", "NSString", "NSURL", "std"], version = "0.3.2" }
 # The WebKit snapshot behind page annotation screenshots and the popups pages
 # open, at the versions wry uses.
@@ -131,6 +131,8 @@ windows-sys          = { features = ["Win32_Foundation", "Win32_System_Pipes"], 
 # Embeds the Windows executable's icon and version information; a build
 # dependency, so it runs on the host.
 winresource          = "0.1.34"
+# Reads the zip a PowerShell host sends a folder in; the tests write one.
+zip                  = { default-features = false, features = ["deflate"], version = "9.0.5" }
 zeroize              = "=1.9.1"
 
 # GPUI's build script embeds its own Windows manifest through embed-resource,

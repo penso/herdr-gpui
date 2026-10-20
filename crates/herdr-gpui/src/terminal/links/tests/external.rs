@@ -127,6 +127,7 @@ fn a_plain_file_address_is_a_path_to_look_for() {
         Some(RowTarget::Path {
             path: "/tmp/a b.rs".into(),
             line: None,
+            query: None,
             explicit: false,
         })
     );

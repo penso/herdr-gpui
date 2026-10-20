@@ -536,6 +536,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         updater: crate::updater::Updater::default(),
         update_preview: None,
         daemon_text: Default::default(),
+        default_browser: crate::window::start_browser(),
         app_update_notes: Default::default(),
         app_update_notes_scroll: gpui::ScrollHandle::new(),
         removal: None,
@@ -608,6 +609,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         checkpoints: Default::default(),
         port_forwards: Default::default(),
         remote_browser: Vec::new(),
+        remote_files: Default::default(),
         #[cfg(feature = "cloud")]
         cloud_jobs: Default::default(),
         #[cfg(feature = "cloud")]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::preferences::Preference;
 
 #[test]
 fn usage_visibility_preserves_settings_and_rejects_invalid_tables() -> anyhow::Result<()> {
@@ -224,5 +225,58 @@ fn palette_defaults_overrides_and_validation() -> anyhow::Result<()> {
         )),
         Err(Error::PaletteProjectRoots)
     ));
+    Ok(())
+}
+
+#[test]
+fn folder_sizes_save_under_remote_files_and_preserve_the_file() -> anyhow::Result<()> {
+    let temp = TempDirectory::new()?;
+    let path = temp.0.join("local.toml");
+    let original = "# personal\ntheme = 'Nord' # keep\n[notifications]\nfuture = 42\n";
+    fs::write(&path, original)?;
+    Config::save_preference_path(Preference::FolderWarningMb(128), &path)?;
+    Config::save_preference_path(Preference::FolderTransferCapMb(1024), &path)?;
+    let saved = fs::read_to_string(&path)?;
+    for kept in ["# personal", "theme = 'Nord' # keep", "future = 42"] {
+        assert!(saved.contains(kept), "{saved}");
+    }
+    let table: toml::Table = toml::from_str(&saved)?;
+    assert_eq!(
+        table["remote_files"]["folder_warning_mb"].as_integer(),
+        Some(128)
+    );
+    assert_eq!(
+        table["remote_files"]["folder_transfer_cap_mb"].as_integer(),
+        Some(1024)
+    );
+    let config = Config::parse(&saved)?;
+    assert_eq!(config.remote_files.folder_warning_mb, 128);
+    assert_eq!(config.remote_files.folder_transfer_cap_mb, 1024);
+    Ok(())
+}
+
+#[test]
+fn folder_sizes_refuse_out_of_range_and_above_cap_saves() -> anyhow::Result<()> {
+    let temp = TempDirectory::new()?;
+    let path = temp.0.join("local.toml");
+    let original = "[remote_files]\nfolder_transfer_cap_mb = 256\n";
+    fs::write(&path, original)?;
+    for edit in [
+        Preference::FolderWarningMb(0),
+        Preference::FolderWarningMb(4097),
+        Preference::FolderTransferCapMb(0),
+        Preference::FolderTransferCapMb(8193),
+    ] {
+        assert!(Config::save_preference_path(edit, &path).is_err());
+        assert_eq!(fs::read_to_string(&path)?, original);
+    }
+    // The warning may not land above the cap already in the file.
+    assert!(Config::save_preference_path(Preference::FolderWarningMb(4000), &path).is_err());
+    assert_eq!(fs::read_to_string(&path)?, original);
+    // Nor may the cap drop below a warning already there.
+    let warning_only = "[remote_files]\nfolder_warning_mb = 512\n";
+    fs::write(&path, warning_only)?;
+    assert!(Config::save_preference_path(Preference::FolderTransferCapMb(256), &path).is_err());
+    assert_eq!(fs::read_to_string(&path)?, warning_only);
     Ok(())
 }

@@ -204,6 +204,63 @@ fn the_delay_field_commits_valid_numbers_and_holds_invalid_ones(cx: &mut TestApp
 }
 
 #[gpui::test]
+fn folder_size_fields_commit_valid_numbers_and_hold_invalid_ones(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(skill_fixture);
+    let edits = view.update(cx, |view, _| recording(view));
+    cx.simulate_resize(size(px(960.), px(2000.)));
+    cx.update(|window, _| window.activate_window());
+    show(&view, Section::General, cx);
+    // Raise the cap so 4000 MB is a legal warning.
+    view.update(cx, |view, _| {
+        view.config.remote_files.folder_transfer_cap_mb = 4096
+    });
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.begin_number_edit(NumberField::FolderWarningMb, 64., window, cx)
+        })
+    });
+    cx.simulate_input("4000");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(
+        edits.lock().unwrap().last(),
+        Some(&Preference::FolderWarningMb(4000))
+    );
+
+    // The warning may not land above the cap the window shows.
+    view.update(cx, |view, _| {
+        view.config.remote_files.folder_transfer_cap_mb = 512
+    });
+    let before = edits.lock().unwrap().len();
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.begin_number_edit(NumberField::FolderWarningMb, 64., window, cx)
+        })
+    });
+    cx.simulate_input("4000");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(edits.lock().unwrap().len(), before);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.config.remote_files.folder_warning_mb, 64);
+    });
+
+    // Zero is outside the field's range, so the field stays open and invalid.
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.begin_number_edit(NumberField::FolderWarningMb, 64., window, cx)
+        })
+    });
+    cx.simulate_input("0");
+    cx.simulate_keystrokes("enter");
+    view.read_with(cx, |view, _| {
+        assert!(view.number_edit.as_ref().unwrap().invalid);
+    });
+    assert_eq!(edits.lock().unwrap().len(), before);
+    cx.simulate_keystrokes("escape");
+}
+
+#[gpui::test]
 fn shared_rows_say_why_they_are_disabled(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(skill_fixture);
     cx.simulate_resize(size(px(960.), px(3000.)));

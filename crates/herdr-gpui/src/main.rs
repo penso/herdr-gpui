@@ -60,6 +60,7 @@ mod crash;
 mod daemon;
 #[cfg(feature = "daytona")]
 mod daytona;
+mod default_browser;
 mod devices_overview;
 mod diagnostics;
 mod dialog_input;
@@ -121,6 +122,7 @@ mod pull_request;
 mod railway;
 mod release_notes;
 mod remote_browser;
+mod remote_files;
 mod reorder;
 mod repo_items;
 mod restart_manager;
