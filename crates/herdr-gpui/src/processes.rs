@@ -79,9 +79,7 @@ impl Daemon {
 
     /// The script asking this daemon about `pane`'s process.
     fn script(&self, executable: &Path, pane: &str) -> Result<String> {
-        let executable = executable
-            .to_str()
-            .ok_or(RootError::Processes(Error::Executable))?;
+        let executable = executable.to_str().ok_or(Error::Executable)?;
         let session = match self {
             Self::Default => String::new(),
             Self::Session(name) => format!(" --session {}", shell_quote(name)),
@@ -109,7 +107,7 @@ impl Daemon {
             QUERY_LIMITS,
             cancelled,
         )
-        .map_err(|source| RootError::Processes(Error::Query(source)))?;
+        .map_err(Error::Query)?;
         serde_json::from_slice::<crate::teleport::Envelope<crate::teleport::ProcessInfoResult>>(
             &output,
         )
@@ -161,7 +159,7 @@ impl Watch {
         thread::Builder::new()
             .name("herdr-pane-processes".into())
             .spawn(move || run(&daemon, &pane, &received, &sender, &shared))
-            .map_err(|source| RootError::Processes(Error::Worker(source)))?;
+            .map_err(Error::Worker)?;
         Ok(Self {
             commands,
             updates,
@@ -264,7 +262,7 @@ fn sample(
     cancelled: &AtomicBool,
 ) -> Result<Listing> {
     let info = daemon.process_info(pane, cancelled)?;
-    let root = info.shell_pid.ok_or(RootError::Processes(Error::NoRoot))?;
+    let root = info.shell_pid.ok_or(Error::NoRoot)?;
     refresh(system);
     let previous = std::mem::take(sightings);
     let entries = system

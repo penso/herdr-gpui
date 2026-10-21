@@ -158,7 +158,7 @@ pub(crate) fn command_line(
         .path
         .to_str()
         .filter(|path| quotable(path) && target.path.is_absolute())
-        .ok_or(crate::Error::Editor(Error::Path))?;
+        .ok_or(Error::Path)?;
     let line = target.line.unwrap_or(1).max(1);
     let script = command.map_or_else(|| DEFAULT_SCRIPT.to_owned(), EditorCommand::script);
     let Some(socket) = socket
@@ -350,7 +350,7 @@ impl HerdrWindow {
         let pane = beside
             .or(snapshot.focused_pane_id.as_deref())
             .and_then(|id| snapshot.panes.iter().find(|pane| pane.pane_id == id))
-            .ok_or(crate::Error::Editor(Error::NoPane))?;
+            .ok_or(Error::NoPane)?;
         let cwd = pane
             .foreground_cwd
             .clone()

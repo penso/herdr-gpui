@@ -74,9 +74,7 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
     let entries = (result["type"] == "worktree_list")
         .then(|| result["worktrees"].as_array())
         .flatten()
-        .ok_or(crate::Error::WorktreeScripts(
-            WorktreeScriptsError::Checkout,
-        ))?;
+        .ok_or(WorktreeScriptsError::Checkout)?;
     let mut own = entries
         .iter()
         .filter(|entry| entry["open_workspace_id"] == workspace);
@@ -84,9 +82,7 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
         (Some(entry), None) => entry["path"].as_str().filter(|path| !path.is_empty()),
         _ => None,
     }
-    .ok_or(crate::Error::WorktreeScripts(
-        WorktreeScriptsError::Checkout,
-    ))?;
+    .ok_or(WorktreeScriptsError::Checkout)?;
     Ok(Checkout {
         path: path.to_owned(),
         root: main_checkout(result),

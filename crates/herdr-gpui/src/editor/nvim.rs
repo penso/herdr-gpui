@@ -54,7 +54,7 @@ pub(crate) fn is_nvim(command: &str) -> bool {
 /// may yet run the request, so its pane is kept rather than replaced by a
 /// second editor on the same file.
 pub(crate) fn open(socket: &Path, target: &EditorTarget) -> crate::Result<()> {
-    let request = request(target).ok_or(crate::Error::Editor(EditorError::Path))?;
+    let request = request(target).ok_or(EditorError::Path)?;
     // Without a server `--server` edits locally and never exits, so make
     // sure one is listening first.
     if !listening(socket) {
@@ -113,9 +113,7 @@ fn nvim(socket: &Path) -> Command {
 
 /// Runs `command` to completion within [`DEADLINE`], killing it past that.
 fn run(command: &mut Command) -> crate::Result<()> {
-    let mut child = command
-        .spawn()
-        .map_err(|source| crate::Error::Editor(EditorError::RemoteLaunch(source)))?;
+    let mut child = command.spawn().map_err(EditorError::RemoteLaunch)?;
     let deadline = Instant::now() + DEADLINE;
     loop {
         match child.try_wait() {

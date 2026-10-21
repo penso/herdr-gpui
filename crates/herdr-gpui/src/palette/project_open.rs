@@ -26,7 +26,7 @@ impl HerdrWindow {
             .menu
             .palette
             .as_ref()
-            .ok_or(Error::Palette(PaletteError::HostUnavailable))?
+            .ok_or(PaletteError::HostUnavailable)?
             .local_target
             .clone();
         if let Err(error) = target
@@ -90,7 +90,7 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|endpoint| endpoint.id == crate::endpoint::LOCAL && endpoint.enabled)
-            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
+            .ok_or(PaletteError::HostUnavailable)?;
         let endpoint = &self.endpoints[index];
         // An explicitly supplied SSH launch target may occupy endpoint zero.
         if endpoint.connection.target.is_remote() {
@@ -107,7 +107,7 @@ impl HerdrWindow {
         let snapshot = live
             .snapshot
             .as_ref()
-            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
+            .ok_or(PaletteError::HostUnavailable)?;
         if snapshot.boot_id != target.boot {
             return Err(Error::Palette(PaletteError::LocalChanged));
         }

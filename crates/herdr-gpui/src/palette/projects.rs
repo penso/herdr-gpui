@@ -68,9 +68,7 @@ fn expand(
         expanded.push(&rest[..index]);
         rest = &rest[index + 1..];
         let (name, consumed) = if let Some(braced) = rest.strip_prefix('{') {
-            let end = braced
-                .find('}')
-                .ok_or(Error::Palette(PaletteError::ProjectPath))?;
+            let end = braced.find('}').ok_or(PaletteError::ProjectPath)?;
             (&braced[..end], end + 2)
         } else {
             let end = rest
@@ -88,7 +86,7 @@ fn expand(
         expanded.push(
             get(name)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| Error::Palette(PaletteError::ProjectVariable(name.into())))?,
+                .ok_or_else(|| PaletteError::ProjectVariable(name.into()))?,
         );
         rest = &rest[consumed..];
     }

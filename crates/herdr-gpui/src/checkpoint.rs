@@ -211,7 +211,7 @@ fn spawn() -> Result<Worker> {
                 }
             }
         })
-        .map_err(|source| RootError::Checkpoint(Error::Thread(source)))?;
+        .map_err(Error::Thread)?;
     Ok(Worker { requests, results })
 }
 

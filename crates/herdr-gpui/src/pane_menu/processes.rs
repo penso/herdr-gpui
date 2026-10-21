@@ -274,7 +274,7 @@ impl HerdrWindow {
             processes
                 .watch
                 .as_ref()
-                .ok_or(crate::Error::Processes(ProcessesError::Stopped))?
+                .ok_or(ProcessesError::Stopped)?
                 .kill(processes.chosen.iter().copied().collect())
         });
         match sent {

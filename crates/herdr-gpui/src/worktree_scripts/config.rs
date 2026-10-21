@@ -69,11 +69,8 @@ impl Config {
                 limit: MAX_BYTES,
             }));
         }
-        let text = std::str::from_utf8(bytes).map_err(|source| {
-            crate::Error::WorktreeScripts(WorktreeScriptsError::Encoding(source))
-        })?;
-        let file: File = toml::from_str(text)
-            .map_err(|source| crate::Error::WorktreeScripts(WorktreeScriptsError::Parse(source)))?;
+        let text = std::str::from_utf8(bytes).map_err(WorktreeScriptsError::Encoding)?;
+        let file: File = toml::from_str(text).map_err(WorktreeScriptsError::Parse)?;
         // Scripts travel to the pane as environment values, which cannot hold NUL.
         if [ScriptKind::Setup, ScriptKind::Run, ScriptKind::Archive]
             .into_iter()
@@ -138,7 +135,7 @@ fn read_local(path: &Path) -> crate::Result<Option<Vec<u8>>> {
     let mut bytes = Vec::new();
     file.take(MAX_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|source| crate::Error::WorktreeScripts(WorktreeScriptsError::Read(source)))?;
+        .map_err(WorktreeScriptsError::Read)?;
     Ok(Some(bytes))
 }
 
@@ -165,7 +162,7 @@ fn read_remote(
         },
         cancelled,
     )
-    .map_err(|source| crate::Error::WorktreeScripts(WorktreeScriptsError::Remote(source)))?;
+    .map_err(WorktreeScriptsError::Remote)?;
     Ok(remote_bytes(output))
 }
 

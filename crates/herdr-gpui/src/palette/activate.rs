@@ -189,7 +189,7 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|e| e.id == endpoint && e.enabled)
-            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
+            .ok_or(PaletteError::HostUnavailable)?;
         let selected = index == self.selected_endpoint;
         let live = if selected {
             &self.live
@@ -199,7 +199,7 @@ impl HerdrWindow {
         let snapshot = live
             .snapshot
             .as_ref()
-            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
+            .ok_or(PaletteError::HostUnavailable)?;
         destination_exists(snapshot, boot, target)?;
         if selected && !self.input_ready() {
             return Err(Error::Palette(PaletteError::ConnectionNotReady));
