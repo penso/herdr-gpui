@@ -1,4 +1,4 @@
-//! Palette failures retain their diagnostics and typed causes.
+//! Palette failures.
 
 use std::io;
 

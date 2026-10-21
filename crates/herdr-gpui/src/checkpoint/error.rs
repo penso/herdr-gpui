@@ -1,4 +1,4 @@
-//! Checkpoint failures retain their diagnostics and typed causes.
+//! Checkpoint failures.
 
 use std::io;
 

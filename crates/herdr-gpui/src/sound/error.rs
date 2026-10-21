@@ -1,4 +1,4 @@
-//! Sound configuration and playback failures retain their typed causes.
+//! Sound configuration and playback failures.
 
 use std::{io, path::PathBuf};
 

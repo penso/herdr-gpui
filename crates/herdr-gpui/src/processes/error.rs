@@ -1,4 +1,4 @@
-//! Process inspection failures retain their diagnostics and typed causes.
+//! Process inspection failures.
 
 use std::io;
 

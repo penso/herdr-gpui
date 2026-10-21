@@ -1,4 +1,4 @@
-//! Editor failures retain their diagnostics and typed causes.
+//! Editor failures.
 
 use std::io;
 

@@ -1,4 +1,4 @@
-//! Worktree script failures retain their diagnostics and typed causes.
+//! Worktree script failures.
 
 use std::io;
 
