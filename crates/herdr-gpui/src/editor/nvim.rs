@@ -49,7 +49,7 @@ pub(crate) fn is_nvim(command: &str) -> bool {
 /// Opens `target` in the Neovim listening on `socket`, at its line, and
 /// centers it. Blocking: it runs on the background executor.
 ///
-/// Only [`crate::Error::Editor(EditorError::Remote)`] means that Neovim has gone. One that
+/// Only [`EditorError::Remote`] means that Neovim has gone. One that
 /// still listens but is slow, such as one waiting on a swap-file prompt,
 /// may yet run the request, so its pane is kept rather than replaced by a
 /// second editor on the same file.
