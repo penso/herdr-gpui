@@ -1,5 +1,7 @@
 use super::*;
+use crate::Error;
 use crate::NavigationTarget;
+use crate::palette::Error as PaletteError;
 use core::prelude::v1::test;
 use gpui::TestAppContext;
 use herdr_client::protocol::ClientShellCommand;
@@ -181,7 +183,11 @@ fn go_to_rejects_a_disabled_or_missing_host_and_keeps_the_palette_open(cx: &mut 
                 let palette = view.menu.palette.as_ref().unwrap();
                 assert_eq!(
                     palette.error.as_deref(),
-                    Some(Error::PaletteHostUnavailable.to_string().as_str())
+                    Some(
+                        Error::Palette(PaletteError::HostUnavailable)
+                            .to_string()
+                            .as_str()
+                    )
                 );
                 assert!(view.pending_navigation.is_none());
             }
@@ -439,24 +445,24 @@ fn go_to_destinations_are_revalidated_against_the_current_snapshot() {
         assert!(destination_exists(&snapshot, "boot-v1", target.clone()).is_ok());
         assert!(matches!(
             destination_exists(&snapshot, "boot-v2", target.clone()),
-            Err(Error::PaletteSessionChanged)
+            Err(Error::Palette(PaletteError::SessionChanged))
         ));
         assert!(matches!(
             destination_exists(&snapshot, "", target),
-            Err(Error::PaletteSessionChanged)
+            Err(Error::Palette(PaletteError::SessionChanged))
         ));
     }
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Workspace("gone")),
-        Err(Error::PaletteWorkspaceRemoved)
+        Err(Error::Palette(PaletteError::WorkspaceRemoved))
     ));
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Tab("gone")),
-        Err(Error::PaletteTabRemoved)
+        Err(Error::Palette(PaletteError::TabRemoved))
     ));
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Pane("gone")),
-        Err(Error::PaletteDestinationRemoved)
+        Err(Error::Palette(PaletteError::DestinationRemoved))
     ));
 }
 

@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use crate::Error;
+use crate::checkpoint::Error as CheckpointError;
 use herdr_client::protocol::ClientShellWorktree;
 
 mod staged_metadata;
@@ -232,7 +234,7 @@ fn a_restore_is_reported_after_its_dialog_closed_and_failures_show() {
     answer(
         &mut checkpoints,
         Request::List,
-        Answer::Listed(Err(Error::CheckpointCheckout)),
+        Answer::Listed(Err(Error::Checkpoint(CheckpointError::Checkout))),
     );
     assert!(matches!(
         checkpoints.view.as_ref().unwrap().listing,
@@ -242,12 +244,12 @@ fn a_restore_is_reported_after_its_dialog_closed_and_failures_show() {
     let restored = answer(
         &mut checkpoints,
         Request::Restore { id: "1".into() },
-        Answer::Restored(Err(Error::CheckpointBusy)),
+        Answer::Restored(Err(Error::Checkpoint(CheckpointError::Busy))),
     );
     assert!(matches!(
         restored.as_slice(),
         [Restored {
-            result: Err(Error::CheckpointBusy),
+            result: Err(Error::Checkpoint(CheckpointError::Busy)),
             ..
         }]
     ));
@@ -298,7 +300,9 @@ fn ages_read_plainly() {
         "a host clock ahead is not negative"
     );
     assert_eq!(
-        describe(&Error::CheckpointScript(herdr_client::Error::ScriptTimeout)),
+        describe(&Error::Checkpoint(CheckpointError::Script(
+            herdr_client::Error::ScriptTimeout
+        ))),
         "Checkpoint Git commands failed: host script made no progress before its deadline"
     );
 }

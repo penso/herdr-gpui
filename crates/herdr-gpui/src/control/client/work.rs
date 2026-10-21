@@ -1,4 +1,5 @@
 //! `notes`, `checkpoint`, `scripts`, `teleport`, and `fan-out`.
+use crate::checkpoint::Error as CheckpointError;
 mod checkpoint;
 mod here;
 mod scripts;
@@ -23,11 +24,11 @@ use std::fmt::Write as _;
 /// the message with its causes, and the exit status the refusal deserves.
 fn rejected(error: crate::Error) -> crate::Error {
     let code = match &error {
-        crate::Error::CheckpointMissing => ErrorCode::NotFound,
+        crate::Error::Checkpoint(CheckpointError::Missing) => ErrorCode::NotFound,
         crate::Error::NotInCheckout
         | crate::Error::DetachedHead
-        | crate::Error::CheckpointCheckout
-        | crate::Error::CheckpointUnborn => ErrorCode::InvalidRequest,
+        | crate::Error::Checkpoint(CheckpointError::Checkout)
+        | crate::Error::Checkpoint(CheckpointError::Unborn) => ErrorCode::InvalidRequest,
         _ => ErrorCode::Failed,
     };
     crate::Error::ControlRejected {

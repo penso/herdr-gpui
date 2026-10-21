@@ -1,4 +1,5 @@
 use super::*;
+use crate::palette::Error as PaletteError;
 
 #[test]
 fn usage_visibility_preserves_settings_and_rejects_invalid_tables() -> anyhow::Result<()> {
@@ -222,7 +223,7 @@ fn palette_defaults_overrides_and_validation() -> anyhow::Result<()> {
             "[palette]\nproject_roots = [{}]",
             vec!["'x'"; 17].join(",")
         )),
-        Err(Error::PaletteProjectRoots)
+        Err(Error::Palette(PaletteError::ProjectRoots))
     ));
     Ok(())
 }

@@ -7,6 +7,7 @@
 //! is ever parsed by the user's interactive shell, whatever shell that is.
 
 use super::ScriptKind;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 use serde_json::{Value, json};
 
 /// The variable the typed line runs. Internal plumbing, not a stable API.
@@ -73,7 +74,9 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
     let entries = (result["type"] == "worktree_list")
         .then(|| result["worktrees"].as_array())
         .flatten()
-        .ok_or(crate::Error::WorktreeScriptsCheckout)?;
+        .ok_or(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Checkout,
+        ))?;
     let mut own = entries
         .iter()
         .filter(|entry| entry["open_workspace_id"] == workspace);
@@ -81,7 +84,9 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
         (Some(entry), None) => entry["path"].as_str().filter(|path| !path.is_empty()),
         _ => None,
     }
-    .ok_or(crate::Error::WorktreeScriptsCheckout)?;
+    .ok_or(crate::Error::WorktreeScripts(
+        WorktreeScriptsError::Checkout,
+    ))?;
     Ok(Checkout {
         path: path.to_owned(),
         root: main_checkout(result),
@@ -121,7 +126,9 @@ pub(crate) fn created_tab(response: &Value) -> crate::Result<(String, String)> {
             ))
         })
         .flatten()
-        .ok_or(crate::Error::WorktreeScriptsResponse)
+        .ok_or(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Response,
+        ))
 }
 
 fn response_result(response: &Value) -> crate::Result<&Value> {

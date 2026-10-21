@@ -1,5 +1,6 @@
 //! Local project discovery and path validation run only on background workers.
 
+use crate::palette::Error as PaletteError;
 use crate::{Error, Result};
 use herdr_client::protocol::ClientShellSnapshot;
 use std::{
@@ -47,7 +48,7 @@ fn valid_path(path: &Path) -> Result<&str> {
         .filter(|text| {
             path.is_absolute() && text.len() <= 8192 && !text.chars().any(char::is_control)
         })
-        .ok_or(Error::PaletteProjectPath)
+        .ok_or(Error::Palette(PaletteError::ProjectPath))
 }
 
 /// Expand variables as path data, never as shell syntax. An unset variable is
@@ -67,7 +68,9 @@ fn expand(
         expanded.push(&rest[..index]);
         rest = &rest[index + 1..];
         let (name, consumed) = if let Some(braced) = rest.strip_prefix('{') {
-            let end = braced.find('}').ok_or(Error::PaletteProjectPath)?;
+            let end = braced
+                .find('}')
+                .ok_or(Error::Palette(PaletteError::ProjectPath))?;
             (&braced[..end], end + 2)
         } else {
             let end = rest
@@ -80,12 +83,12 @@ fn expand(
                 .chars()
                 .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
         {
-            return Err(Error::PaletteProjectPath);
+            return Err(Error::Palette(PaletteError::ProjectPath));
         }
         expanded.push(
             get(name)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| Error::PaletteProjectVariable(name.into()))?,
+                .ok_or_else(|| Error::Palette(PaletteError::ProjectVariable(name.into())))?,
         );
         rest = &rest[consumed..];
     }
@@ -127,7 +130,7 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
                 }
                 visits += 1;
                 if visits > MAX_VISITS || collection.projects.len() >= MAX_PROJECTS {
-                    return Err(Error::PaletteProjectLimit);
+                    return Err(Error::Palette(PaletteError::ProjectLimit));
                 }
                 let entry = entry.map_err(|error| Error::from(error).at_path(&root))?;
                 let name = entry.file_name();
@@ -155,7 +158,7 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
             Ok(())
         })();
         if let Err(error) = result {
-            let limited = matches!(error, Error::PaletteProjectLimit);
+            let limited = matches!(error, Error::Palette(PaletteError::ProjectLimit));
             collection.errors.push(error);
             if limited {
                 break;
@@ -173,7 +176,7 @@ pub(super) fn validate(project: &Project) -> Result<()> {
     let path = super::canonical::canonicalize(&project.path)
         .map_err(|error| Error::from(error).at_path(&project.path))?;
     if path != project.path || !path.is_dir() {
-        return Err(Error::PaletteProjectRemoved);
+        return Err(Error::Palette(PaletteError::ProjectRemoved));
     }
     Ok(())
 }
@@ -252,11 +255,11 @@ mod tests {
         );
         assert!(matches!(
             expand("$MISSING/work", get, None),
-            Err(Error::PaletteProjectVariable(_))
+            Err(Error::Palette(PaletteError::ProjectVariable(_)))
         ));
         assert!(matches!(
             expand("relative", get, None),
-            Err(Error::PaletteProjectPath)
+            Err(Error::Palette(PaletteError::ProjectPath))
         ));
         assert!(expand("${ROOT", get, None).is_err());
         assert!(expand("$(touch x)", get, None).is_err());
@@ -327,7 +330,7 @@ mod tests {
         assert_eq!(result.projects.len(), MAX_PROJECTS);
         assert!(matches!(
             result.errors.as_slice(),
-            [Error::PaletteProjectLimit]
+            [Error::Palette(PaletteError::ProjectLimit)]
         ));
         Ok(())
     }
@@ -370,7 +373,7 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), &path)?;
         assert!(matches!(
             validate(&result.projects[0]),
-            Err(Error::PaletteProjectRemoved)
+            Err(Error::Palette(PaletteError::ProjectRemoved))
         ));
         Ok(())
     }

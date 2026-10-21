@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
+use crate::processes::Error as ProcessesError;
 use crate::processes::{Entry, Identity, Row};
 
 fn row(pid: u32, parent: Option<u32>, depth: usize, cpu: Option<f32>) -> Row {
@@ -68,11 +69,13 @@ fn sampling_waits_for_measured_cpu_or_returns_the_latest() {
 
     let (watch, sender, _commands) = Watch::fake();
     sender
-        .send(Update::Listing(Err(crate::Error::ProcessesNoRoot)))
+        .send(Update::Listing(Err(crate::Error::Processes(
+            ProcessesError::NoRoot,
+        ))))
         .unwrap();
     assert!(matches!(
         sample(&watch, Duration::from_secs(5)),
-        Err(crate::Error::ProcessesNoRoot)
+        Err(crate::Error::Processes(ProcessesError::NoRoot))
     ));
 
     let (watch, _sender, _commands) = Watch::fake();

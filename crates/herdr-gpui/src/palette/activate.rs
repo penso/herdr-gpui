@@ -2,6 +2,7 @@
 //! daemon custom commands a shortcut also reaches.
 
 use super::{Action, Frecency, Palette, Target, destination_exists, frecency};
+use crate::palette::Error as PaletteError;
 use crate::{Error, HerdrWindow, NavigationTarget, Result};
 use gpui::*;
 use herdr_client::{Method, protocol::ClientShellCommandAction};
@@ -102,7 +103,7 @@ impl HerdrWindow {
         }
         let result = (|| {
             if !self.input_ready() {
-                return Err(Error::PaletteConnectionNotReady);
+                return Err(Error::Palette(PaletteError::ConnectionNotReady));
             }
             let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
             let target = self
@@ -158,7 +159,7 @@ impl HerdrWindow {
         }
         let result = (|| {
             if !self.input_ready() {
-                return Err(Error::PaletteConnectionNotReady);
+                return Err(Error::Palette(PaletteError::ConnectionNotReady));
             }
             let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
             Target::capture(snapshot, self.plugin_selection()).invocation(snapshot, id, action)
@@ -188,7 +189,7 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|e| e.id == endpoint && e.enabled)
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
         let selected = index == self.selected_endpoint;
         let live = if selected {
             &self.live
@@ -198,10 +199,10 @@ impl HerdrWindow {
         let snapshot = live
             .snapshot
             .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
         destination_exists(snapshot, boot, target)?;
         if selected && !self.input_ready() {
-            return Err(Error::PaletteConnectionNotReady);
+            return Err(Error::Palette(PaletteError::ConnectionNotReady));
         }
         Ok(selected)
     }

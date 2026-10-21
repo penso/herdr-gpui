@@ -4,6 +4,8 @@ use super::{
     tree::{check, listing},
     *,
 };
+use crate::Error;
+use crate::processes::Error as ProcessesError;
 
 fn entry(pid: u32, parent: Option<u32>, started: u64) -> Entry {
     Entry {
@@ -237,15 +239,18 @@ fn a_watch_reports_a_stopped_worker_and_a_busy_one() {
     // One kill at a time: the first is still with the worker.
     assert!(matches!(
         watch.kill(vec![victim]),
-        Err(Error::ProcessesBusy)
+        Err(Error::Processes(ProcessesError::Busy))
     ));
     assert_eq!(commands.recv().unwrap(), Command::Kill(vec![victim]));
     drop(updates);
-    assert!(matches!(watch.try_update(), Err(Error::ProcessesStopped)));
+    assert!(matches!(
+        watch.try_update(),
+        Err(Error::Processes(ProcessesError::Stopped))
+    ));
     drop(commands);
     assert!(matches!(
         watch.kill(vec![victim]),
-        Err(Error::ProcessesStopped)
+        Err(Error::Processes(ProcessesError::Stopped))
     ));
 }
 

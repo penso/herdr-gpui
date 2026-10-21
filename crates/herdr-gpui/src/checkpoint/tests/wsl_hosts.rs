@@ -1,4 +1,6 @@
 use super::*;
+use crate::Error;
+use crate::checkpoint::Error as CheckpointError;
 
 #[test]
 fn a_distribution_is_snapshotted_only_from_windows() {
@@ -23,7 +25,9 @@ fn a_name_that_is_not_a_distribution_runs_nothing() {
     assert!(
         matches!(
             &error,
-            Error::CheckpointScript(herdr_client::Error::InvalidWslDistro)
+            Error::Checkpoint(CheckpointError::Script(
+                herdr_client::Error::InvalidWslDistro
+            ))
         ),
         "{error:?}"
     );

@@ -4,6 +4,7 @@
 //! the caller's checkout, and leaves the consequential step to the user:
 //! restoring, moving, launching, and trusting a script all wait for them.
 use super::{find, repository, selected_workspace};
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 use crate::{
     HerdrWindow,
     control::protocol::{
@@ -128,7 +129,7 @@ pub(super) fn script(
             "Starting the {} script of {repo} in a new tab; Herdr UI asks first about a script it has not seen",
             kind.name()
         )),
-        Err(crate::Error::WorktreeScriptsBusy) => {
+        Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Busy)) => {
             Response::error(ErrorCode::Busy, "Another worktree script is still starting")
         }
         Err(error) => Response::error(ErrorCode::Failed, crate::checkpoint::describe(&error)),
@@ -140,7 +141,9 @@ fn launch(view: &HerdrWindow, caller: &Caller, kind: ScriptKind) -> Result<Launc
     selected_workspace(view, caller)?;
     let found = find(view, caller)?;
     let Some(tree) = &found.workspace.worktree else {
-        return Err(invalid(crate::Error::WorktreeScriptsNotGit.to_string()));
+        return Err(invalid(
+            crate::Error::WorktreeScripts(WorktreeScriptsError::NotGit).to_string(),
+        ));
     };
     // The menu offers the setup script on linked worktrees alone.
     if kind == ScriptKind::Setup && !tree.is_linked_worktree {

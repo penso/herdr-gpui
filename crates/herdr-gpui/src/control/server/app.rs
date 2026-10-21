@@ -1,5 +1,6 @@
 //! `status`, `app`, `window`, `ui`, and `run`.
 use super::{in_free_window, in_window, main_windows, window_for};
+use crate::palette::Error as PaletteError;
 use crate::{
     HerdrWindow,
     constants::APP_VERSION,
@@ -148,12 +149,13 @@ fn open_in(
         Ok(()) => Response::done(format!("Opening {path} in Herdr UI")),
         // The window has not reached its local Herdr yet, as right after the
         // app starts; a caller may try again shortly.
-        Err(crate::Error::PaletteConnectionNotReady | crate::Error::PaletteHostUnavailable) => {
-            Response::error(
-                ErrorCode::Busy,
-                "The window is not connected to the local Herdr yet",
-            )
-        }
+        Err(
+            crate::Error::Palette(PaletteError::ConnectionNotReady)
+            | crate::Error::Palette(PaletteError::HostUnavailable),
+        ) => Response::error(
+            ErrorCode::Busy,
+            "The window is not connected to the local Herdr yet",
+        ),
         Err(error) => Response::error(ErrorCode::Failed, error.to_string()),
     }
 }

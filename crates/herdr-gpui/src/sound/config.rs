@@ -163,7 +163,7 @@ impl Settings {
             .read_to_string(&mut text)
             .map_err(|error| Error::from(error).at_path(path))?;
         if text.len() > 1_048_576 {
-            return Err(Error::SoundConfigSize.at_path(path));
+            return Err(Error::from(super::Error::ConfigSize).at_path(path));
         }
         Self::parse(&text, path).map_err(|error| error.at_path(path))
     }

@@ -142,7 +142,7 @@ fn bounded_reads_preserve_sources() {
     assert!(std::error::Error::source(&error).is_some());
     std::fs::write(&path, vec![b' '; 1_048_577]).unwrap();
     assert!(
-        matches!(Settings::load_path(&path), Err(Error::Path { source, .. }) if matches!(*source, Error::SoundConfigSize))
+        matches!(Settings::load_path(&path), Err(Error::Path { source, .. }) if matches!(*source, Error::Sound(crate::sound::Error::ConfigSize)))
     );
 }
 
@@ -221,7 +221,9 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
         sounds.recv_timeout(Duration::from_secs(3)).unwrap(),
         Some("/local/new.mp3".into())
     );
-    loads.send(Err(Error::SoundConfigSize)).unwrap();
+    loads
+        .send(Err(crate::sound::Error::ConfigSize.into()))
+        .unwrap();
     service.reload.store(true, Ordering::Release);
     wait_loaded(3);
     send("retained");

@@ -4,6 +4,7 @@
 //! directory of its own, so the shell starts where the device's does: home.
 
 use super::Pending;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 use crate::{HerdrWindow, NavigationTarget, worktree_scripts};
 use gpui::Context;
 use herdr_client::{CloudProvider, Method};
@@ -92,7 +93,7 @@ impl HerdrWindow {
             return;
         };
         let typed = result
-            .map_err(crate::Error::WorktreeScriptsRequest)
+            .map_err(|source| crate::Error::WorktreeScripts(WorktreeScriptsError::Request(source)))
             .and_then(|response| worktree_scripts::created_tab(&response))
             .and_then(|(tab, pane)| {
                 let line =

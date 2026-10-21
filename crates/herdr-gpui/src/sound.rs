@@ -1,9 +1,12 @@
 //! Local TUI sound settings and endpoint-scoped semantic notification policy.
 //! Policy adapted from Herdr; see SOUND-NOTICE.md.
 mod config;
+mod error;
 mod playback;
 #[cfg(test)]
 mod tests;
+
+pub use error::Error;
 
 use crate::state::LiveState;
 use config::Settings;

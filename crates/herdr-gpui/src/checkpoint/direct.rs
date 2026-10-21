@@ -7,6 +7,7 @@
 //! isolate Git from the user's configuration; [`here`] is the real one.
 
 use super::{Checkout, Checkpoint, KEEP, LIMITS, script};
+use crate::checkpoint::Error as CheckpointError;
 use crate::{Error, Result};
 use herdr_client::ScriptLimits;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -54,7 +55,7 @@ pub(crate) fn diff(
     run: impl FnOnce(&Checkout, &str, ScriptLimits) -> Result<Vec<u8>>,
 ) -> Result<Vec<u8>> {
     if !script::valid_id(from) || to.is_some_and(|to| !script::valid_id(to)) {
-        return Err(Error::CheckpointMissing);
+        return Err(Error::Checkpoint(CheckpointError::Missing));
     }
     run(checkout, &script::diff(checkout, from, to), DIFF_LIMITS)
 }

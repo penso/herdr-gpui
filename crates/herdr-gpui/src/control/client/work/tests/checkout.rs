@@ -1,4 +1,5 @@
 use super::*;
+use crate::checkpoint::Error as CheckpointError;
 use std::{fs, path::Path, process::Command};
 
 fn git(dir: &Path, args: &[&str]) {
@@ -69,7 +70,7 @@ fn the_current_checkout_is_named_as_the_daemon_names_it() {
         }
     ));
     assert!(matches!(
-        rejected(crate::Error::CheckpointMissing),
+        rejected(crate::Error::Checkpoint(CheckpointError::Missing)),
         crate::Error::ControlRejected {
             code: ErrorCode::NotFound,
             ..

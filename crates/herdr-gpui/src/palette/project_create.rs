@@ -7,6 +7,7 @@
 //! convention project discovery already uses.
 
 use super::{Action, Entry, Palette, projects};
+use crate::palette::Error as PaletteError;
 use crate::{Error, pull_request::run};
 use std::{
     fs,
@@ -106,10 +107,10 @@ pub(super) fn materialise(
     cancelled: &impl Fn() -> bool,
 ) -> Result<projects::Project, Error> {
     let Some(root) = project.path.parent() else {
-        return Err(Error::PaletteProjectRootMissing);
+        return Err(Error::Palette(PaletteError::ProjectRootMissing));
     };
     if !root.is_dir() {
-        return Err(Error::PaletteProjectRootMissing);
+        return Err(Error::Palette(PaletteError::ProjectRootMissing));
     }
     match &project.source {
         // Claim the destination atomically: whichever attempt creates it owns
@@ -141,7 +142,7 @@ fn clone(
     // Not a guarantee (`publish` is), only a way not to download a repository
     // that has nowhere to go.
     if destination.symlink_metadata().is_ok() {
-        return Err(Error::PaletteProjectExists);
+        return Err(Error::Palette(PaletteError::ProjectExists));
     }
     let staging = staging_dir(root, label)?;
     let deadline = Instant::now() + CLONE_TIMEOUT;
@@ -149,7 +150,11 @@ fn clone(
     let mut command = clone_command(url, staging.path());
     match run(&mut command, deadline, cancelled)? {
         (true, _) => {}
-        (false, output) => return Err(Error::PaletteProjectClone(output.trim().to_owned())),
+        (false, output) => {
+            return Err(Error::Palette(PaletteError::ProjectClone(
+                output.trim().to_owned(),
+            )));
+        }
     }
     publish(staging.path(), destination)?;
     // Moved into place: there is nothing left for the guard to remove.
@@ -168,7 +173,7 @@ pub(super) fn staging_dir(root: &Path, label: &str) -> Result<tempfile::TempDir,
     builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777));
     builder
         .tempdir_in(root)
-        .map_err(|source| Error::PaletteProjectCreate { source })
+        .map_err(|source| Error::Palette(PaletteError::ProjectCreate { source }))
 }
 
 /// Move a finished clone to `destination` without replacing anything there.
@@ -183,7 +188,7 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
     fs::rename(staging, destination).map_err(|source| {
         // Non-recursive, so this removes the claim only while it is still empty.
         let _ = fs::remove_dir(destination);
-        Error::PaletteProjectCreate { source }
+        Error::Palette(PaletteError::ProjectCreate { source })
     })
 }
 
@@ -191,7 +196,7 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
 #[cfg(windows)]
 pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
     if destination.symlink_metadata().is_ok() {
-        return Err(Error::PaletteProjectExists);
+        return Err(Error::Palette(PaletteError::ProjectExists));
     }
     fs::rename(staging, destination).map_err(claim_error)
 }
@@ -199,9 +204,9 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
 /// An existing name is the ordinary case; anything else is a real failure.
 fn claim_error(source: std::io::Error) -> Error {
     if source.kind() == std::io::ErrorKind::AlreadyExists {
-        Error::PaletteProjectExists
+        Error::Palette(PaletteError::ProjectExists)
     } else {
-        Error::PaletteProjectCreate { source }
+        Error::Palette(PaletteError::ProjectCreate { source })
     }
 }
 

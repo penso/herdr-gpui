@@ -4,6 +4,7 @@
 
 use super::super::{Removal, WorkspaceTarget, danger, state::Deletion};
 use crate::HerdrWindow;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 
@@ -32,7 +33,9 @@ impl HerdrWindow {
             }
         });
         let started = match launch {
-            Some(launch) if launch.repo_key.is_empty() => Err(crate::Error::WorktreeScriptsNotGit),
+            Some(launch) if launch.repo_key.is_empty() => {
+                Err(crate::Error::WorktreeScripts(WorktreeScriptsError::NotGit))
+            }
             Some(_) if !self.menu_target_current() || !self.live.status.is_connected() => {
                 Err(crate::Error::StaleConnection)
             }
@@ -91,7 +94,9 @@ impl HerdrWindow {
         Some(match &deletion.archive {
             // Every deletion there would say so; asking is where it is reported.
             ArchiveCheck::Unread
-            | ArchiveCheck::Failed(crate::Error::WorktreeScriptsUnsupportedHost) => {
+            | ArchiveCheck::Failed(crate::Error::WorktreeScripts(
+                WorktreeScriptsError::UnsupportedHost,
+            )) => {
                 return None;
             }
             ArchiveCheck::Reading => note("Checking for an archive script...".into()),

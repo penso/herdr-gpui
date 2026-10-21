@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 
 #[test]
 fn parses_scripts_and_skips_blank_ones() {
@@ -45,24 +46,32 @@ fn digest_follows_every_byte_of_the_file() {
 fn refuses_unknown_keys_bad_encoding_nul_and_oversized_files() {
     assert!(matches!(
         Config::parse(b"[scripts]\nsetpu = \"x\"\n"),
-        Err(crate::Error::WorktreeScriptsParse(_))
+        Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Parse(
+            _
+        )))
     ));
     assert!(matches!(
         Config::parse(b"[other]\n"),
-        Err(crate::Error::WorktreeScriptsParse(_))
+        Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Parse(
+            _
+        )))
     ));
     assert!(matches!(
         Config::parse(b"[scripts]\nrun = \"\xff\"\n"),
-        Err(crate::Error::WorktreeScriptsEncoding(_))
+        Err(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Encoding(_)
+        ))
     ));
     assert!(matches!(
         Config::parse(b"[scripts]\nrun = \"a\\u0000b\"\n"),
-        Err(crate::Error::WorktreeScriptsNul)
+        Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Nul))
     ));
     let large = vec![b'#'; MAX_BYTES as usize + 1];
     assert!(matches!(
         Config::parse(&large),
-        Err(crate::Error::WorktreeScriptsSize { limit: MAX_BYTES })
+        Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Size {
+            limit: MAX_BYTES
+        }))
     ));
 }
 
@@ -83,7 +92,9 @@ fn local_reads_tell_a_missing_file_from_a_present_one() {
     std::fs::write(dir.path().join(PATH), vec![b'#'; MAX_BYTES as usize + 1]).unwrap();
     assert!(matches!(
         read(&ConnectTarget::Local, checkout, &AtomicBool::new(false)),
-        Err(crate::Error::WorktreeScriptsSize { .. })
+        Err(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Size { .. }
+        ))
     ));
 }
 
@@ -105,6 +116,8 @@ fn a_wsl_distribution_is_refused_rather_than_read_from_this_machine() {
     };
     assert!(matches!(
         read(&target, "/home/me/app", &AtomicBool::new(false)),
-        Err(crate::Error::WorktreeScriptsUnsupportedHost)
+        Err(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::UnsupportedHost
+        ))
     ));
 }

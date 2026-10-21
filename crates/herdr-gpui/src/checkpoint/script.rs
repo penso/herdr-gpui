@@ -10,6 +10,7 @@
 //! another worktree does not keep their objects, so it could delete them.
 
 use super::{Checkout, Checkpoint, Diff};
+use crate::checkpoint::Error as CheckpointError;
 use crate::{Error, Result};
 use herdr_client::shell_quote;
 
@@ -200,7 +201,7 @@ pub(super) fn parse_capture(output: &str) -> Result<Option<String>> {
     line.strip_prefix("created ")
         .filter(|id| valid_id(id))
         .map(|id| Some(id.to_owned()))
-        .ok_or(Error::CheckpointOutput)
+        .ok_or(Error::Checkpoint(CheckpointError::Output))
 }
 
 /// Checkpoints newest first.
@@ -219,7 +220,7 @@ pub(super) fn parse_list(output: &str) -> Result<Vec<Checkpoint>> {
         let (Some(id), [files, additions, deletions], Some(created)) =
             (id, stats.as_slice(), created)
         else {
-            return Err(Error::CheckpointOutput);
+            return Err(Error::Checkpoint(CheckpointError::Output));
         };
         let label = lines.next().unwrap_or_default().to_owned();
         let branch = lines
@@ -251,15 +252,15 @@ pub(crate) fn valid_id(id: &str) -> bool {
 pub(super) fn classify(error: herdr_client::Error) -> Error {
     if let herdr_client::Error::ScriptExit { status, .. } = &error {
         match status.code() {
-            Some(EXIT_NO_CHECKOUT) => return Error::CheckpointCheckout,
-            Some(EXIT_UNBORN) => return Error::CheckpointUnborn,
-            Some(EXIT_MISSING) => return Error::CheckpointMissing,
-            Some(EXIT_BRANCH) => return Error::CheckpointBranch,
-            Some(EXIT_BUSY) => return Error::CheckpointBusy,
+            Some(EXIT_NO_CHECKOUT) => return Error::Checkpoint(CheckpointError::Checkout),
+            Some(EXIT_UNBORN) => return Error::Checkpoint(CheckpointError::Unborn),
+            Some(EXIT_MISSING) => return Error::Checkpoint(CheckpointError::Missing),
+            Some(EXIT_BRANCH) => return Error::Checkpoint(CheckpointError::Branch),
+            Some(EXIT_BUSY) => return Error::Checkpoint(CheckpointError::Busy),
             _ => {}
         }
     }
-    Error::CheckpointScript(error)
+    Error::Checkpoint(CheckpointError::Script(error))
 }
 
 #[cfg(test)]

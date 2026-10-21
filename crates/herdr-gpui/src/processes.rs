@@ -9,12 +9,15 @@
 //! pids mean nothing here. The worker samples every couple of seconds while a
 //! pane's process list is open, and stops when it closes.
 
+mod error;
+pub use error::Error;
+
 mod tree;
 
 #[cfg(test)]
 mod tests;
 
-use crate::{Error, Result};
+use crate::{Error as RootError, Result};
 use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, run_script, shell_quote};
 use std::{
     collections::HashMap,
@@ -76,7 +79,9 @@ impl Daemon {
 
     /// The script asking this daemon about `pane`'s process.
     fn script(&self, executable: &Path, pane: &str) -> Result<String> {
-        let executable = executable.to_str().ok_or(Error::ProcessesExecutable)?;
+        let executable = executable
+            .to_str()
+            .ok_or(RootError::Processes(Error::Executable))?;
         let session = match self {
             Self::Default => String::new(),
             Self::Session(name) => format!(" --session {}", shell_quote(name)),
@@ -104,12 +109,12 @@ impl Daemon {
             QUERY_LIMITS,
             cancelled,
         )
-        .map_err(Error::ProcessesQuery)?;
+        .map_err(|source| RootError::Processes(Error::Query(source)))?;
         serde_json::from_slice::<crate::teleport::Envelope<crate::teleport::ProcessInfoResult>>(
             &output,
         )
         .map(|envelope| envelope.result.process_info)
-        .map_err(Error::ProcessesAnswer)
+        .map_err(|source| RootError::Processes(Error::Answer(source)))
     }
 }
 
@@ -156,7 +161,7 @@ impl Watch {
         thread::Builder::new()
             .name("herdr-pane-processes".into())
             .spawn(move || run(&daemon, &pane, &received, &sender, &shared))
-            .map_err(Error::ProcessesWorker)?;
+            .map_err(|source| RootError::Processes(Error::Worker(source)))?;
         Ok(Self {
             commands,
             updates,
@@ -170,8 +175,8 @@ impl Watch {
         self.commands
             .try_send(Command::Kill(victims))
             .map_err(|error| match error {
-                mpsc::TrySendError::Full(_) => Error::ProcessesBusy,
-                mpsc::TrySendError::Disconnected(_) => Error::ProcessesStopped,
+                mpsc::TrySendError::Full(_) => RootError::Processes(Error::Busy),
+                mpsc::TrySendError::Disconnected(_) => RootError::Processes(Error::Stopped),
             })
     }
 
@@ -180,7 +185,7 @@ impl Watch {
         match self.updates.try_recv() {
             Ok(update) => Ok(Some(update)),
             Err(mpsc::TryRecvError::Empty) => Ok(None),
-            Err(mpsc::TryRecvError::Disconnected) => Err(Error::ProcessesStopped),
+            Err(mpsc::TryRecvError::Disconnected) => Err(RootError::Processes(Error::Stopped)),
         }
     }
 
@@ -259,7 +264,7 @@ fn sample(
     cancelled: &AtomicBool,
 ) -> Result<Listing> {
     let info = daemon.process_info(pane, cancelled)?;
-    let root = info.shell_pid.ok_or(Error::ProcessesNoRoot)?;
+    let root = info.shell_pid.ok_or(RootError::Processes(Error::NoRoot))?;
     refresh(system);
     let previous = std::mem::take(sightings);
     let entries = system
@@ -287,7 +292,7 @@ fn sample(
             memory: process.memory(),
         });
     tree::listing(entries, root, &info.foreground_pids(), ROW_LIMIT)
-        .ok_or(Error::ProcessesRootExited)
+        .ok_or(RootError::Processes(Error::RootExited))
 }
 
 /// Records that `identity` is listed now, given how often the last listing

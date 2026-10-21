@@ -6,6 +6,7 @@
 //! this client knows, never from the daemon's text.
 
 use super::closed;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 use crate::{HerdrWindow, NavigationTarget, teleport::AgentKind, window::Flash};
 use gpui::Context;
 use herdr_client::Method;
@@ -157,7 +158,9 @@ impl HerdrWindow {
             .map_err(|error| super::Error::ReopenRequest(error).into())
             .and_then(|response| {
                 crate::worktree_scripts::created_tab(&response).map_err(|error| match error {
-                    crate::Error::WorktreeScriptsResponse => super::Error::ReopenResponse.into(),
+                    crate::Error::WorktreeScripts(WorktreeScriptsError::Response) => {
+                        super::Error::ReopenResponse.into()
+                    }
                     error => error,
                 })
             });

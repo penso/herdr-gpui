@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use crate::Error;
+use crate::checkpoint::Error as CheckpointError;
 use crate::usage::Host;
 use herdr_client::{ScriptHost, run_script};
 use std::{fs, path::Path, process::Command, sync::atomic::AtomicBool};
@@ -104,16 +106,16 @@ fn the_command_line_takes_lists_and_diffs_checkpoints_as_the_app_does() {
     assert_eq!(patch_text(&checkout, &second, None).unwrap(), "");
     assert!(matches!(
         patch_text(&checkout, "0000000000000001", None),
-        Err(Error::CheckpointMissing)
+        Err(Error::Checkpoint(CheckpointError::Missing))
     ));
     assert!(matches!(
         patch_text(&checkout, "../heads/main", None),
-        Err(Error::CheckpointMissing)
+        Err(Error::Checkpoint(CheckpointError::Missing))
     ));
     let other = Checkout::new(Host::Local, key.trim(), Some("elsewhere")).unwrap();
     assert!(matches!(
         list(&other, isolated),
-        Err(Error::CheckpointCheckout)
+        Err(Error::Checkpoint(CheckpointError::Checkout))
     ));
 }
 

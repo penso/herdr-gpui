@@ -4,6 +4,7 @@
 //! keeps what it last reported and what the user chose.
 
 use super::PaneMenu;
+use crate::processes::Error as ProcessesError;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -273,7 +274,7 @@ impl HerdrWindow {
             processes
                 .watch
                 .as_ref()
-                .ok_or(crate::Error::ProcessesStopped)?
+                .ok_or(crate::Error::Processes(ProcessesError::Stopped))?
                 .kill(processes.chosen.iter().copied().collect())
         });
         match sent {

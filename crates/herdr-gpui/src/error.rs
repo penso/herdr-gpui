@@ -45,24 +45,8 @@ pub enum Error {
     CaffeineThread(#[source] io::Error),
     #[error("The keep-awake thread stopped; the display may sleep")]
     CaffeineWorkerStopped,
-    #[error("That checkpoint was taken on another branch. Check that branch out to restore it.")]
-    CheckpointBranch,
-    #[error("A merge, rebase, cherry-pick, or revert is in progress. Finish or abort it first.")]
-    CheckpointBusy,
-    #[error("No checkout of this branch was found on its host.")]
-    CheckpointCheckout,
-    #[error("That checkpoint no longer exists.")]
-    CheckpointMissing,
-    #[error("Checkpoint output was not understood.")]
-    CheckpointOutput,
-    #[error("Checkpoint Git commands failed")]
-    CheckpointScript(#[source] herdr_client::Error),
-    #[error("Could not start the checkpoint worker")]
-    CheckpointThread(#[source] io::Error),
-    #[error("This checkout has no commit yet, so it has no checkpoints.")]
-    CheckpointUnborn,
-    #[error("The checkpoint worker stopped.")]
-    CheckpointWorker,
+    #[error(transparent)]
+    Checkpoint(#[from] crate::checkpoint::Error),
     #[error("{source}; removing {}: {cleanup}", path.display())]
     Cleanup {
         #[source]
@@ -235,30 +219,8 @@ pub enum Error {
     },
     #[error("pane_keys: {0:?} is listed twice")]
     DuplicatePaneKey(String),
-    #[error("Another file is still opening in the editor")]
-    EditorBusy,
-    #[error(
-        "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
-    )]
-    EditorCommand,
-    #[error("No local pane to open the editor beside")]
-    EditorNoPane,
-    #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
-    EditorPath,
-    #[error("The Neovim in the editor pane did not answer")]
-    EditorRemote,
-    #[error("The Neovim in the editor pane is busy: answer it, then try again")]
-    EditorRemoteBusy,
-    #[error("The Neovim in the editor pane could not open the file")]
-    EditorRemoteFailed,
-    #[error("Could not run nvim to reach the editor pane")]
-    EditorRemoteLaunch(#[source] io::Error),
     #[error(transparent)]
-    EditorRequest(std::sync::Arc<Error>),
-    #[error("Unexpected daemon response while opening the editor pane")]
-    EditorResponse,
-    #[error("Opening a terminal editor needs a Unix shell in the pane")]
-    EditorUnsupported,
+    Editor(#[from] crate::editor::Error),
     #[error("{0}.fallback families must not be empty")]
     EmptyFontFallback(&'static str),
     #[error("{0}.family must not be empty")]
@@ -567,49 +529,8 @@ pub enum Error {
     #[cfg(target_os = "macos")]
     #[error("The window has no view to place a page beneath")]
     PageStack,
-    #[error("This command changed or was removed. Reopen the palette.")]
-    PaletteCommandChanged,
-    #[error("The selected connection is not ready.")]
-    PaletteConnectionNotReady,
-    #[error("This agent or terminal no longer exists. Reopen the palette.")]
-    PaletteDestinationRemoved,
-    #[error("This host is no longer connected. Reopen the palette.")]
-    PaletteHostUnavailable,
-    #[error("The local connection changed. Reopen the palette.")]
-    PaletteLocalChanged,
-    #[error("The original pane no longer exists in its tab. Reopen the palette.")]
-    PalettePaneRemoved,
-    #[error("git clone failed: {0}")]
-    PaletteProjectClone(String),
-    #[error("Could not create the project folder: {source}")]
-    PaletteProjectCreate {
-        #[source]
-        source: io::Error,
-    },
-    #[error("A folder of that name already exists in the project root")]
-    PaletteProjectExists,
-    #[error("Project discovery reached its directory limit; narrow palette.project_roots")]
-    PaletteProjectLimit,
-    #[error("Project paths must be absolute UTF-8 paths without control characters")]
-    PaletteProjectPath,
-    #[error("Project directory is no longer available")]
-    PaletteProjectRemoved,
-    #[error("Unexpected workspace creation response. Review workspace state before retrying.")]
-    PaletteProjectResponse,
-    #[error("The first configured project root is not available")]
-    PaletteProjectRootMissing,
-    #[error("palette.project_roots must contain at most 16 nonempty paths of at most 8192 bytes")]
-    PaletteProjectRoots,
-    #[error("Workspace directories changed. Select the project again.")]
-    PaletteProjectStateChanged,
-    #[error("Project path references an unset environment variable: {0}")]
-    PaletteProjectVariable(String),
-    #[error("The daemon session changed. Reopen the palette.")]
-    PaletteSessionChanged,
-    #[error("The original tab no longer exists in its workspace. Reopen the palette.")]
-    PaletteTabRemoved,
-    #[error("This workspace no longer exists. Reopen the palette.")]
-    PaletteWorkspaceRemoved,
+    #[error(transparent)]
+    Palette(#[from] crate::palette::Error),
     #[error(transparent)]
     PaneCarry(#[from] crate::pane_menu::carry::Refusal),
     #[error("Could not decode an image a pane placed.")]
@@ -683,22 +604,8 @@ pub enum Error {
     PrMetadata,
     #[error("No local worktree matches the daemon branch.")]
     PrMissingWorktree,
-    #[error("Herdr's answer about the pane's process was not understood.")]
-    ProcessesAnswer(#[source] serde_json::Error),
-    #[error("Still ending the last processes. Try again in a moment.")]
-    ProcessesBusy,
-    #[error("The herdr executable's path is not valid UTF-8.")]
-    ProcessesExecutable,
-    #[error("Herdr did not name a process for this pane.")]
-    ProcessesNoRoot,
-    #[error("Could not ask Herdr which process the pane runs.")]
-    ProcessesQuery(#[source] herdr_client::Error),
-    #[error("The pane's process has exited.")]
-    ProcessesRootExited,
-    #[error("The process list stopped updating. Reopen it to try again.")]
-    ProcessesStopped,
-    #[error("Could not start watching the pane's processes.")]
-    ProcessesWorker(#[source] io::Error),
+    #[error(transparent)]
+    Processes(#[from] crate::processes::Error),
     #[error("PR lookup supports GitHub.com origins only.")]
     PrOrigin,
     #[error("Could not {operation} for Git PR lookup.")]
@@ -802,26 +709,8 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
-    #[error("Audio playback cancelled")]
-    SoundCancelled,
-    #[error("Sound configuration exceeds 1 MiB")]
-    SoundConfigSize,
-    #[error("Could not decode MP3 sound: {0}")]
-    SoundDecode(#[from] rodio::decoder::DecoderError),
-    #[error("Could not open audio output: {0}")]
-    SoundDevice(#[from] rodio::DeviceSinkError),
-    #[error("Could not read sound file {}: {source}", path.display())]
-    SoundFile {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-    #[error("Sound must be a regular file of at most 16 MiB")]
-    SoundFileSize,
-    #[error("Audio output failed: {0}")]
-    SoundStream(#[from] rodio::cpal::StreamError),
-    #[error("Audio playback timed out")]
-    SoundTimeout,
+    #[error(transparent)]
+    Sound(#[from] crate::sound::Error),
     #[error("Could not read {}: {source}", path.display())]
     SshConfig {
         path: PathBuf,
@@ -954,30 +843,8 @@ pub enum Error {
     WorktreeList,
     #[error("Malformed worktree list. Dismiss and reopen the menu.")]
     WorktreeListDecode(#[source] serde_json::Error),
-    #[error("Another worktree script is still starting")]
-    WorktreeScriptsBusy,
-    #[error("The daemon did not identify this workspace's checkout")]
-    WorktreeScriptsCheckout,
-    #[error(".herdr/worktree.toml is not valid UTF-8")]
-    WorktreeScriptsEncoding(#[source] std::str::Utf8Error),
-    #[error("This workspace is not a Git checkout Herdr knows yet")]
-    WorktreeScriptsNotGit,
-    #[error(".herdr/worktree.toml scripts must not contain NUL bytes")]
-    WorktreeScriptsNul,
-    #[error(".herdr/worktree.toml: {0}")]
-    WorktreeScriptsParse(#[source] toml::de::Error),
-    #[error("Could not read .herdr/worktree.toml: {0}")]
-    WorktreeScriptsRead(#[source] io::Error),
-    #[error("Could not read .herdr/worktree.toml on the host: {0}")]
-    WorktreeScriptsRemote(#[source] herdr_client::Error),
-    #[error("{0}")]
-    WorktreeScriptsRequest(#[source] std::sync::Arc<Error>),
-    #[error("Unexpected daemon response while opening the script's tab")]
-    WorktreeScriptsResponse,
-    #[error(".herdr/worktree.toml exceeds {limit} bytes")]
-    WorktreeScriptsSize { limit: u64 },
-    #[error("Worktree scripts cannot be read from a WSL distribution yet")]
-    WorktreeScriptsUnsupportedHost,
+    #[error(transparent)]
+    WorktreeScripts(#[from] crate::worktree_scripts::Error),
     #[error("Select a checkout from the daemon's worktree list.")]
     WorktreeSelection,
     /// A shell into a WSL distribution starts through `wsl.exe`, which only a

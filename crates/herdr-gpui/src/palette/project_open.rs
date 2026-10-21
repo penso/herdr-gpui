@@ -2,6 +2,7 @@
 //! background validation and the correlated daemon response.
 
 use super::{LocalTarget, ProjectOperation, project_create, projects};
+use crate::palette::Error as PaletteError;
 use crate::{Error, HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
@@ -25,11 +26,11 @@ impl HerdrWindow {
             .menu
             .palette
             .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?
+            .ok_or(Error::Palette(PaletteError::HostUnavailable))?
             .local_target
             .clone();
         if let Err(error) = target
-            .ok_or(Error::PaletteConnectionNotReady)
+            .ok_or(Error::Palette(PaletteError::ConnectionNotReady))
             .and_then(|target| self.local_project_connection(&target))
         {
             self.dismiss_menu(window, cx);
@@ -89,11 +90,11 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|endpoint| endpoint.id == crate::endpoint::LOCAL && endpoint.enabled)
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
         let endpoint = &self.endpoints[index];
         // An explicitly supplied SSH launch target may occupy endpoint zero.
         if endpoint.connection.target.is_remote() {
-            return Err(Error::PaletteHostUnavailable);
+            return Err(Error::Palette(PaletteError::HostUnavailable));
         }
         let live = if index == self.selected_endpoint {
             &self.live
@@ -101,17 +102,17 @@ impl HerdrWindow {
             &endpoint.live
         };
         if endpoint.generation != target.generation {
-            return Err(Error::PaletteLocalChanged);
+            return Err(Error::Palette(PaletteError::LocalChanged));
         }
         let snapshot = live
             .snapshot
             .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::Palette(PaletteError::HostUnavailable))?;
         if snapshot.boot_id != target.boot {
-            return Err(Error::PaletteLocalChanged);
+            return Err(Error::Palette(PaletteError::LocalChanged));
         }
         if !live.status.is_connected() || endpoint.connection.handle.is_none() {
-            return Err(Error::PaletteConnectionNotReady);
+            return Err(Error::Palette(PaletteError::ConnectionNotReady));
         }
         Ok((index, snapshot.clone()))
     }
@@ -134,7 +135,7 @@ impl HerdrWindow {
             return;
         };
         let Some(target) = palette.local_target.clone() else {
-            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            self.palette_project_error(Error::Palette(PaletteError::HostUnavailable), cx);
             return;
         };
         let snapshot = match self.local_project_connection(&target) {
@@ -158,7 +159,7 @@ impl HerdrWindow {
                 if this.menu.palette.as_ref().is_none_or(|palette| palette.search != token)
                     || this.config.palette != config { return; }
                 if !this.menu_target_current() {
-                    this.palette_project_error(Error::PaletteSessionChanged, cx);
+                    this.palette_project_error(Error::Palette(PaletteError::SessionChanged), cx);
                     return;
                 }
                 let (index, current) = match this.local_project_connection(&target) {
@@ -172,7 +173,7 @@ impl HerdrWindow {
                 // Metadata can change while disk I/O is running. Compare only
                 // launch roots, not agent status or transient focus flags.
                 if roots != projects::workspace_roots(&current) {
-                    this.palette_project_error(Error::PaletteProjectStateChanged, cx);
+                    this.palette_project_error(Error::Palette(PaletteError::ProjectStateChanged), cx);
                     return;
                 }
                 if let Some(workspace) = existing {
@@ -217,7 +218,7 @@ impl HerdrWindow {
             return;
         };
         let Some(target) = palette.local_target.clone() else {
-            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            self.palette_project_error(Error::Palette(PaletteError::HostUnavailable), cx);
             return;
         };
         if let Err(error) = self.local_project_connection(&target) {
@@ -268,7 +269,8 @@ impl HerdrWindow {
         let (index, _) = match self.local_project_connection(target) {
             Ok(current) if self.menu_target_current() => current,
             Ok(_) => {
-                return self.palette_project_error(Error::PaletteSessionChanged, cx);
+                return self
+                    .palette_project_error(Error::Palette(PaletteError::SessionChanged), cx);
             }
             Err(error) => {
                 return self.palette_project_error(error, cx);
@@ -325,7 +327,7 @@ fn created_workspace(response: &Value) -> Result<String> {
         .flatten()
         .filter(|id| !id.is_empty() && id.len() <= 8192 && !id.chars().any(char::is_control))
         .map(str::to_owned)
-        .ok_or(Error::PaletteProjectResponse)
+        .ok_or(Error::Palette(PaletteError::ProjectResponse))
 }
 
 #[cfg(test)]

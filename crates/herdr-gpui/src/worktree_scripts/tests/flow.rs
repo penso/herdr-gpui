@@ -1,4 +1,5 @@
 use super::*;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 
 #[gpui::test]
 fn a_run_script_is_located_reviewed_trusted_and_typed_into_a_new_tab(
@@ -20,7 +21,7 @@ fn a_run_script_is_located_reviewed_trusted_and_typed_into_a_new_tab(
             // One script starts at a time.
             assert!(matches!(
                 view.start_worktree_script(launch(view, ScriptKind::Run, None), cx),
-                Err(crate::Error::WorktreeScriptsBusy)
+                Err(crate::Error::WorktreeScripts(WorktreeScriptsError::Busy))
             ));
         })
     });

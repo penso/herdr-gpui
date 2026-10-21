@@ -6,6 +6,7 @@
 //! travels as argv, so no path is ever parsed by a shell here.
 
 use super::EditorTarget;
+use crate::editor::Error as EditorError;
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -48,20 +49,20 @@ pub(crate) fn is_nvim(command: &str) -> bool {
 /// Opens `target` in the Neovim listening on `socket`, at its line, and
 /// centers it. Blocking: it runs on the background executor.
 ///
-/// Only [`crate::Error::EditorRemote`] means that Neovim has gone. One that
+/// Only [`crate::Error::Editor(EditorError::Remote)`] means that Neovim has gone. One that
 /// still listens but is slow, such as one waiting on a swap-file prompt,
 /// may yet run the request, so its pane is kept rather than replaced by a
 /// second editor on the same file.
 pub(crate) fn open(socket: &Path, target: &EditorTarget) -> crate::Result<()> {
-    let request = request(target).ok_or(crate::Error::EditorPath)?;
+    let request = request(target).ok_or(crate::Error::Editor(EditorError::Path))?;
     // Without a server `--server` edits locally and never exits, so make
     // sure one is listening first.
     if !listening(socket) {
-        return Err(crate::Error::EditorRemote);
+        return Err(crate::Error::Editor(EditorError::Remote));
     }
     match run(nvim(socket).arg("--remote-expr").arg(request)) {
         Ok(()) => Ok(()),
-        Err(_) if !listening(socket) => Err(crate::Error::EditorRemote),
+        Err(_) if !listening(socket) => Err(crate::Error::Editor(EditorError::Remote)),
         Err(error) => Err(error),
     }
 }
@@ -112,16 +113,18 @@ fn nvim(socket: &Path) -> Command {
 
 /// Runs `command` to completion within [`DEADLINE`], killing it past that.
 fn run(command: &mut Command) -> crate::Result<()> {
-    let mut child = command.spawn().map_err(crate::Error::EditorRemoteLaunch)?;
+    let mut child = command
+        .spawn()
+        .map_err(|source| crate::Error::Editor(EditorError::RemoteLaunch(source)))?;
     let deadline = Instant::now() + DEADLINE;
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => return Ok(()),
-            Ok(Some(_)) | Err(_) => return Err(crate::Error::EditorRemoteFailed),
+            Ok(Some(_)) | Err(_) => return Err(crate::Error::Editor(EditorError::RemoteFailed)),
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(crate::Error::EditorRemoteBusy);
+                return Err(crate::Error::Editor(EditorError::RemoteBusy));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
         }

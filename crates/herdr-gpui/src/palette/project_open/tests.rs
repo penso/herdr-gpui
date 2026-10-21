@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use crate::Error;
+use crate::palette::Error as PaletteError;
 use crate::{
     palette::{Action, Filter, fixture_window},
     state::ConnectionStatus,
@@ -47,13 +49,13 @@ fn creation_response_is_typed_and_requires_a_workspace_id() {
         created_workspace(
             &json!({"result": {"type": "tab_created", "workspace": {"workspace_id": "w2"}}})
         ),
-        Err(Error::PaletteProjectResponse)
+        Err(Error::Palette(PaletteError::ProjectResponse))
     ));
     assert!(matches!(
         created_workspace(
             &json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": ""}}})
         ),
-        Err(Error::PaletteProjectResponse)
+        Err(Error::Palette(PaletteError::ProjectResponse))
     ));
     assert!(matches!(
         created_workspace(&json!({"error": {"code": "refused", "message": "not trusted"}})),

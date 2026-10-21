@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::*;
+use crate::worktree_scripts::Error as WorktreeScriptsError;
 
 #[test]
 fn typed_lines_hold_no_repository_content_and_survive_any_shell() {
@@ -94,7 +95,9 @@ fn locates_a_workspace_checkout_and_its_main_checkout() {
     assert_eq!(locate(&response, "w1").unwrap().path, "/r");
     assert!(matches!(
         locate(&response, "w9"),
-        Err(crate::Error::WorktreeScriptsCheckout)
+        Err(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Checkout
+        ))
     ));
     assert!(matches!(
         locate(&json!({"error":{"code":"x","message":"no"}}), "w2"),
@@ -122,7 +125,9 @@ fn created_tabs_name_their_pane() {
     );
     assert!(matches!(
         created_tab(&json!({"result":{"type":"workspace_created"}})),
-        Err(crate::Error::WorktreeScriptsResponse)
+        Err(crate::Error::WorktreeScripts(
+            WorktreeScriptsError::Response
+        ))
     ));
     assert!(matches!(
         created_tab(&json!({"error":{"code":"denied","message":"no"}})),

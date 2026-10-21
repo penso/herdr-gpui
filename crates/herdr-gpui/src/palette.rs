@@ -1,5 +1,8 @@
+mod error;
+pub use error::Error;
+
 use crate::{
-    Error, HerdrWindow, OwnedNavigationTarget, Result,
+    Error as RootError, HerdrWindow, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
     keymap::Reach,
     menu::Page,
@@ -61,7 +64,7 @@ impl PaletteConfig {
                 root.trim().is_empty() || root.len() > 8192 || root.chars().any(char::is_control)
             })
         {
-            return Err(Error::PaletteProjectRoots);
+            return Err(RootError::Palette(Error::ProjectRoots));
         }
         Ok(())
     }
@@ -242,7 +245,7 @@ impl Target {
 
     fn validate_boot(&self, snapshot: &ClientShellSnapshot) -> Result<()> {
         if self.boot.is_empty() || self.boot != snapshot.boot_id {
-            return Err(Error::PaletteSessionChanged);
+            return Err(RootError::Palette(Error::SessionChanged));
         }
         Ok(())
     }
@@ -250,7 +253,7 @@ impl Target {
     fn workspace_exists(&self, snapshot: &ClientShellSnapshot, id: &str) -> Result<()> {
         self.validate_boot(snapshot)?;
         if !snapshot.workspaces.iter().any(|w| w.workspace_id == id) {
-            return Err(Error::PaletteWorkspaceRemoved);
+            return Err(RootError::Palette(Error::WorkspaceRemoved));
         }
         Ok(())
     }
@@ -263,14 +266,14 @@ impl Target {
     ) -> Result<Value> {
         self.validate_boot(snapshot)?;
         if action == ClientShellCommandAction::Unknown {
-            return Err(Error::UnsupportedCommand);
+            return Err(RootError::UnsupportedCommand);
         }
         if !snapshot
             .commands
             .iter()
             .any(|c| c.command_id == id && c.action == action)
         {
-            return Err(Error::PaletteCommandChanged);
+            return Err(RootError::Palette(Error::CommandChanged));
         }
         if let Some(id) = &self.workspace {
             self.workspace_exists(snapshot, id)?;
@@ -281,7 +284,7 @@ impl Target {
                 .iter()
                 .any(|t| t.tab_id == *id && self.workspace.as_ref() == Some(&t.workspace_id))
         {
-            return Err(Error::PaletteTabRemoved);
+            return Err(RootError::Palette(Error::TabRemoved));
         }
         if let Some(id) = &self.pane
             && !snapshot.panes.iter().any(|p| {
@@ -290,7 +293,7 @@ impl Target {
                     && self.tab.as_ref() == Some(&p.tab_id)
             })
         {
-            return Err(Error::PalettePaneRemoved);
+            return Err(RootError::Palette(Error::PaneRemoved));
         }
         let mut params = json!({"command_id": id});
         for (key, value) in [
