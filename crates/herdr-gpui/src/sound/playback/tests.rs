@@ -33,13 +33,16 @@ fn custom_failures_preserve_sources_and_fall_back() {
     let path = dir.path().join("custom.mp3");
     let error = decode_file(&path).err().unwrap();
     assert!(
-        matches!(&error, Error::Sound(SoundError::File { path: failed, source }) if failed == &path && source.kind() == std::io::ErrorKind::NotFound)
+        matches!(&error, Error::Sound(crate::sound::Error::File { path: failed, source }) if failed == &path && source.kind() == std::io::ErrorKind::NotFound)
     );
     assert!(std::error::Error::source(&error).is_some());
     for bytes in [b"".as_slice(), b"not an MP3"] {
         std::fs::write(&path, bytes).unwrap();
         let error = decode_file(&path).err().unwrap();
-        assert!(matches!(error, Error::Sound(SoundError::Decode(_))));
+        assert!(matches!(
+            error,
+            Error::Sound(crate::sound::Error::Decode(_))
+        ));
         assert!(std::error::Error::source(&error).is_some());
         assert_eq!(
             decode(Sound::Done, Some(&path))
@@ -54,19 +57,19 @@ fn custom_failures_preserve_sources_and_fall_back() {
         .unwrap();
     assert!(matches!(
         decode_file(&path),
-        Err(Error::Sound(SoundError::FileSize))
+        Err(Error::Sound(crate::sound::Error::FileSize))
     ));
     #[cfg(unix)]
     assert!(matches!(
         decode_file(dir.path()),
-        Err(Error::Sound(SoundError::FileSize))
+        Err(Error::Sound(crate::sound::Error::FileSize))
     ));
     #[cfg(windows)]
     {
         let error = decode_file(dir.path()).err().unwrap();
         assert!(matches!(
             &error,
-            Error::Sound(SoundError::File { path, source })
+            Error::Sound(crate::sound::Error::File { path, source })
                 if path == dir.path() && source.kind() == std::io::ErrorKind::PermissionDenied
         ));
         assert!(std::error::Error::source(&error).is_some());
@@ -84,7 +87,7 @@ fn custom_failures_preserve_sources_and_fall_back() {
         );
         assert!(matches!(
             decode_file(&path),
-            Err(Error::Sound(SoundError::FileSize))
+            Err(Error::Sound(crate::sound::Error::FileSize))
         ));
     }
     assert!(decode(Sound::Request, Some(&path)).is_ok());
@@ -120,11 +123,20 @@ fn playback_wait_stops_on_cancel_shutdown_timeout_and_device_loss() {
             },
         );
         match outcome {
-            0 | 1 | 4 => assert!(matches!(result, Err(Error::Sound(SoundError::Cancelled)))),
-            2 => assert!(matches!(result, Err(Error::Sound(SoundError::Timeout)))),
+            0 | 1 | 4 => assert!(matches!(
+                result,
+                Err(Error::Sound(crate::sound::Error::Cancelled))
+            )),
+            2 => assert!(matches!(
+                result,
+                Err(Error::Sound(crate::sound::Error::Timeout))
+            )),
             _ => {
                 let error = result.unwrap_err();
-                assert!(matches!(error, Error::Sound(SoundError::Stream(_))));
+                assert!(matches!(
+                    error,
+                    Error::Sound(crate::sound::Error::Stream(_))
+                ));
                 assert!(std::error::Error::source(&error).is_some());
             }
         }
@@ -166,7 +178,7 @@ fn normal_completion_and_source_duration_are_bounded() {
     assert!(player.empty());
     assert!(matches!(
         check(now, &[&AtomicBool::new(true)], &AtomicBool::new(false), now),
-        Err(Error::Sound(SoundError::Cancelled))
+        Err(Error::Sound(crate::sound::Error::Cancelled))
     ));
 }
 

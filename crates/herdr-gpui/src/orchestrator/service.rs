@@ -7,11 +7,12 @@ use super::{
     Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
     actions::{Action, Site},
     beads, database_path, github, gitlab,
-    location::database_path_in,
+    location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
     repo::{self, RepoInfo},
 };
+use crate::cache::{Cache, Kind};
 use crate::github::Tokens;
 use crate::teleport::{AgentKind, Host};
 use chrono::{DateTime, Utc};
@@ -88,7 +89,8 @@ pub(crate) struct Request {
     /// The accounts GitHub is read with; each source uses the one that
     /// reads its repository's owner.
     pub(crate) token: Option<Tokens>,
-    /// agent-launcher's data directory parent; `None` for the platform's.
+    /// The folder holding the databases, and agent-launcher's to carry
+    /// over, in place of the platform's; tests set it.
     pub(crate) data_root: Option<PathBuf>,
     pub(crate) timing: Timing,
 }
@@ -427,19 +429,115 @@ impl Worker {
         }
     }
 
-    /// Finds the repository, opens its database, and shows the cache.
+    /// Shows what the last run found at once, the repository it detected
+    /// and its database, then finds the repository again: git may answer
+    /// slowly, over SSH most of all. A checkout that holds another
+    /// repository now, or none, replaces or drops what was shown.
     fn open(&mut self) -> Result<()> {
         let host = Host::new(&self.request.target).map_err(|_| Error::UnsupportedHost)?;
-        let info = repo::detect(
+        let cache = self.cache(false);
+        let key = cache_key(&self.request.target, &self.request.checkout);
+        let cached = cache.as_ref().and_then(|cache| {
+            cache
+                .get::<RepoInfo>(Kind::Repository, &key)
+                .inspect_err(|error| tracing::debug!(%error, "Cannot read a cached repository"))
+                .ok()
+                .flatten()
+                .map(|entry| entry.value)
+        });
+        let shown = cached
+            .clone()
+            .is_some_and(|info| match self.show(info, &host) {
+                Ok(()) => true,
+                Err(error) => {
+                    tracing::debug!(%error, "Cannot show the cached repository");
+                    false
+                }
+            });
+        let info = match repo::detect(
             &self.request.target,
             &host,
             &self.request.checkout,
             &self.cancelled,
-        )?;
-        let path = match &self.request.data_root {
-            Some(root) => database_path_in(root, &info.repository),
-            None => database_path(&info.repository).ok_or(Error::NoDataDirectory)?,
+        ) {
+            Ok(info) => info,
+            Err(error) => {
+                if !matches!(error, Error::Cancelled) {
+                    self.forget_repository();
+                    if let Some(cache) = &cache
+                        && let Err(error) = cache.remove(Kind::Repository, &key)
+                    {
+                        tracing::debug!(%error, "Cannot drop a cached repository");
+                    }
+                }
+                return Err(error);
+            }
         };
+        if !shown || cached.as_ref() != Some(&info) {
+            self.show(info.clone(), &host)?;
+            if let Some(cache) = cache.or_else(|| self.cache(true))
+                && let Err(error) = cache.put(Kind::Repository, &key, &info)
+            {
+                tracing::debug!(%error, "Cannot cache the repository");
+            }
+        }
+        match installed(self.host.as_ref(), &self.cancelled) {
+            Ok(agents) => self.snapshot.installed = Some(Arc::new(agents)),
+            Err(error) => self.snapshot.installed_error = Some(Arc::new(error)),
+        }
+        self.publish();
+        Ok(())
+    }
+
+    /// The app's cache database, beside the databases in `data_root` when
+    /// a test sets one; only made when `create` is set, so a folder outside
+    /// Git leaves nothing behind. Without it nothing is cached and nothing
+    /// fails.
+    fn cache(&self, create: bool) -> Option<Cache> {
+        let path = match &self.request.data_root {
+            Some(root) => crate::cache::path_in(root),
+            None => crate::cache::path()
+                .inspect_err(|error| tracing::debug!(%error, "No cache"))
+                .ok()?,
+        };
+        if !create && !path.is_file() {
+            return None;
+        }
+        Cache::open_at(&path)
+            .inspect_err(|error| tracing::debug!(%error, "Cannot open the cache"))
+            .ok()
+    }
+
+    /// Drops a repository shown from the cache that git no longer finds.
+    fn forget_repository(&mut self) {
+        self.store = None;
+        self.site = None;
+        self.data_version = None;
+        self.snapshot = Snapshot::default();
+    }
+
+    /// Opens `info`'s database, carrying agent-launcher's over the first
+    /// time, and publishes what it holds.
+    fn show(&mut self, info: RepoInfo, host: &Host) -> Result<()> {
+        let (path, legacy) = match &self.request.data_root {
+            Some(root) => (
+                database_path_in(root, &info.repository),
+                Some(legacy_path_in(root, &info.repository)),
+            ),
+            None => (
+                database_path(&info.repository).ok_or(Error::NoDataDirectory)?,
+                legacy_path(&info.repository),
+            ),
+        };
+        if let Some(legacy) = legacy.filter(|legacy| !path.exists() && legacy.is_file())
+            && let Err(error) = Store::import(&legacy, &path)
+        {
+            tracing::warn!(
+                category = "orchestrator",
+                %error,
+                "Cannot carry over agent-launcher's database"
+            );
+        }
         let store = Store::open(&path)?;
         self.snapshot.access = Some(store.access());
         self.snapshot.sources = sources(&info)
@@ -463,14 +561,14 @@ impl Worker {
             self.snapshot.profiles = Arc::new(prompt::load_profiles(std::path::Path::new(&home)));
         }
         self.snapshot.repo = Some(info);
+        // The checks last read, until the first sync reads them again.
+        self.snapshot.pr_status = Arc::new(store.pr_statuses().unwrap_or_else(|error| {
+            tracing::debug!(%error, "Cannot read stored pull request checks");
+            HashMap::new()
+        }));
         self.store = Some(store);
-        self.host = Some(host);
+        self.host = Some(host.clone());
         self.reload()?;
-        self.publish();
-        match installed(self.host.as_ref(), &self.cancelled) {
-            Ok(agents) => self.snapshot.installed = Some(Arc::new(agents)),
-            Err(error) => self.snapshot.installed_error = Some(Arc::new(error)),
-        }
         self.publish();
         Ok(())
     }
@@ -638,6 +736,12 @@ impl Worker {
                 });
                 match statuses {
                     Ok(statuses) => {
+                        if writable
+                            && let Err(error) =
+                                store.replace_pr_statuses(&key.repository, &statuses)
+                        {
+                            tracing::warn!(%error, "Cannot keep pull request checks");
+                        }
                         let mut all = (*self.snapshot.pr_status).clone();
                         all.retain(|(repository, _), _| *repository != key.repository);
                         all.extend(
@@ -720,6 +824,11 @@ impl Worker {
             status.state = state;
         }
     }
+}
+
+/// The app cache's key for the repository `checkout` on `target` holds.
+pub(super) fn cache_key(target: &ConnectTarget, checkout: &str) -> String {
+    format!("{target:?}\n{checkout}")
 }
 
 /// Once accepted, an action completes even when its view stops observing it.

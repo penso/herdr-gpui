@@ -1,5 +1,7 @@
-//! One item's page, in the pane beside a section's list: its overview and
-//! description (Markdown, drawn as text), its runs, and its raw details.
+//! One item's page, in the pane beside a section's list: a header like a
+//! security alert's (crumbs, stepping, tags, title, tabs), the status box
+//! (`status`) over its conversation or description, its runs, and its raw
+//! details.
 
 use super::{
     Detail, DetailTab, Event, OrchestratorView,
@@ -31,21 +33,39 @@ impl OrchestratorView {
         let runs = Runs::new(&self.snapshot().runs, &self.snapshot().sessions, &self.live);
         let item_runs = runs.of_item(&detail.key);
         let body = match detail.tab {
-            // The pane is narrow: the overview, with its actions, leads,
-            // and the description follows under it.
+            // The status box leads the item's first page: the conversation
+            // for a pull request, the description for an issue.
             DetailTab::Description => div()
                 .id("orchestrator-description-page")
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
+                .p_4()
                 .flex()
                 .flex_col()
-                .child(self.render_overview(&item, &runs, &item_runs, cx))
+                .gap_4()
+                .when(item.pull_request.is_none(), |el| {
+                    el.child(self.render_status_box(&item, &runs, &item_runs, cx))
+                })
+                .child(self.render_meta(&item))
                 .child(self.render_description(&item))
+                .into_any_element(),
+            DetailTab::Conversation => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .flex_none()
+                        .px_4()
+                        .pt_4()
+                        .child(self.render_status_box(&item, &runs, &item_runs, cx)),
+                )
+                .child(self.render_conversation(cx))
                 .into_any_element(),
             DetailTab::Agent => self.render_runs(&runs, &item_runs, cx),
             DetailTab::Details => self.render_details(&item, cx),
-            DetailTab::Conversation => self.render_conversation(cx),
             DetailTab::Checks => self.render_checks(&item),
         };
         div()
@@ -78,126 +98,43 @@ impl OrchestratorView {
             .and_then(|info| info.remote.as_ref())
             .map(|remote| remote.source.repository.clone())
             .unwrap_or_else(|| item.key.source.repository.clone());
-        let key = item.key.canonical();
-        let url = item.url.clone();
-        let writable = self.snapshot().access == Some(Access::ReadWrite);
         let pull_request = item.pull_request.is_some();
-        let review_key = item.key.canonical();
         div()
             .flex_none()
             .flex()
             .flex_col()
             .gap_2()
             .px_4()
-            .pt_3()
+            .pt_2()
             .border_b_1()
             .border_color(rgb(theme.active))
-            .child(self.breadcrumbs(&repo, list, list_icon, list_tab, item, cx))
             .child(
                 div()
                     .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        look.mono(item.identifier.clone())
-                            .flex_none()
-                            .text_color(rgb(theme.muted)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(look.ui.size + 5.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(item.title.clone()),
-                    )
-                    .when(writable && !pull_request, |el| {
-                        el.child(
-                            look.button(
-                                "orchestrator-detail-dispatch",
-                                "Dispatch agent",
-                                runs == 0,
-                            )
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    this.open_dispatch(key.clone(), window, cx);
-                                },
-                            )),
-                        )
-                    })
-                    .when(writable && pull_request, |el| {
-                        el.child(
-                            look.button("orchestrator-detail-review", "Review with agent", true)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_review(review_key.clone(), window, cx);
-                                })),
-                        )
-                    })
-                    .when(self.mergeable(), |el| {
-                        el.child(
-                            look.button("orchestrator-detail-merge", "Merge \u{25be}", false)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.merge_open = !this.merge_open;
-                                    cx.notify();
-                                })),
-                        )
-                    })
-                    .when_some(url, |el, url| {
-                        el.child(
-                            look.icon_button(
-                                "orchestrator-detail-web",
-                                "icons/external.svg",
-                                "Open in browser",
-                            )
-                            .on_click(cx.listener(
-                                move |_, _, _, cx| {
-                                    cx.emit(Event::OpenUrl(url.clone()));
-                                },
-                            )),
-                        )
-                    })
-                    .child(
-                        look.icon_button(
-                            "orchestrator-detail-close",
-                            "icons/close.svg",
-                            "Close details",
-                        )
-                        .debug_selector(|| "orchestrator-detail-close".into())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.detail = None;
-                            this.merge_open = false;
-                            cx.notify();
-                        })),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
                     .items_center()
                     .gap_2()
-                    .child(source_mark(look, item.key.source.provider))
-                    .child(look.badge(item.state.replace('_', " "), look.state_hue(&item.state)))
-                    .when_some(item.priority, |el, priority| {
-                        el.child(look.badge(format!("P{priority}"), look.priority_hue(priority)))
-                    })
-                    .when_some(item.pull_request.as_ref(), |el, pr| {
-                        el.child(
-                            look.mono(pr.head_ref.clone())
-                                .text_color(rgb(theme.subtext())),
-                        )
-                        .child(look.icon("icons/arrow-right.svg", 11., theme.muted))
-                        .child(
-                            look.mono(pr.base_ref.clone())
-                                .text_color(rgb(theme.subtext())),
-                        )
-                    })
-                    .when_some(item.parent_id.clone(), |el, parent| {
-                        el.child(look.muted(format!("child of {parent}")))
-                    }),
+                    .child(
+                        self.breadcrumbs(&repo, list, list_icon, list_tab, item, cx)
+                            .flex_1(),
+                    )
+                    .child(self.stepper(item, cx)),
             )
-            .child(div().flex().gap_4().children(
+            .child(
+                div()
+                    .px_1()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(self.render_tags(item))
+                    .child(
+                        div()
+                            .debug_selector(|| "orchestrator-detail-title".into())
+                            .text_size(px(look.ui.size + 4.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(item.title.clone()),
+                    ),
+            )
+            .child(div().px_1().pt_1().flex().gap_4().children(
                 DetailTab::tabs(pull_request).iter().copied().map(|tab| {
                     let on = tab == active;
                     let label = match tab {
@@ -209,9 +146,14 @@ impl OrchestratorView {
                             "orchestrator-detail-{}",
                             tab.label()
                         )))
-                        .pb(px(6.))
+                        .pb_2()
+                        .border_b_2()
+                        .border_color(rgb(if on {
+                            theme.primary()
+                        } else {
+                            theme.background
+                        }))
                         .cursor_pointer()
-                        .when(on, |el| el.border_b_2().border_color(rgb(theme.primary())))
                         .text_color(rgb(if on { theme.foreground } else { theme.muted }))
                         .child(label)
                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -224,6 +166,121 @@ impl OrchestratorView {
                         }))
                 }),
             ))
+    }
+
+    /// Where the item sits in the list, stepping to its neighbors, the
+    /// item on the web, and close.
+    fn stepper(&self, item: &Item, cx: &mut Context<Self>) -> Div {
+        let look = &self.look;
+        let keys = self.keys();
+        let key = item.key.canonical();
+        let at = keys.iter().position(|listed| *listed == key);
+        let url = item.url.clone();
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap_1()
+            .text_size(look.small())
+            .text_color(rgb(look.theme.muted))
+            .children(at.map(|at| div().pr_1().child(format!("{} of {}", at + 1, keys.len()))))
+            .child(
+                look.icon_button(
+                    "orchestrator-detail-previous",
+                    "icons/chevron-up.svg",
+                    "Previous",
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.step_detail(-1, cx))),
+            )
+            .child(
+                look.icon_button("orchestrator-detail-next", "icons/chevron-down.svg", "Next")
+                    .debug_selector(|| "orchestrator-detail-next".into())
+                    .on_click(cx.listener(|this, _, _, cx| this.step_detail(1, cx))),
+            )
+            .when_some(url, |el, url| {
+                el.child(
+                    look.icon_button(
+                        "orchestrator-detail-web",
+                        "icons/external.svg",
+                        "Open in browser",
+                    )
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        cx.emit(Event::OpenUrl(url.clone()));
+                    })),
+                )
+            })
+            .child(
+                look.icon_button(
+                    "orchestrator-detail-close",
+                    "icons/close.svg",
+                    "Close details",
+                )
+                .debug_selector(|| "orchestrator-detail-close".into())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.detail = None;
+                    this.merge_open = false;
+                    cx.notify();
+                })),
+            )
+    }
+
+    /// Opens the item `by` rows away from the open one in the shown list.
+    pub(super) fn step_detail(&mut self, by: isize, cx: &mut Context<Self>) {
+        let keys = self.keys();
+        let Some(at) = self
+            .detail
+            .as_ref()
+            .and_then(|detail| keys.iter().position(|key| *key == detail.key))
+        else {
+            return;
+        };
+        let next = at.saturating_add_signed(by).min(keys.len() - 1);
+        if next == at {
+            return;
+        }
+        let key = keys[next].clone();
+        self.selected = Some(key.clone());
+        self.scroll
+            .scroll_to_item(self.line_of(&key), ScrollStrategy::Center);
+        self.open_detail(key, cx);
+    }
+
+    /// The item's state, priority, branches, and parent, as tags.
+    fn render_tags(&self, item: &Item) -> Div {
+        let look = &self.look;
+        let theme = &look.theme;
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(look.tag(
+                item.state.replace('_', " "),
+                look.hue(look.state_hue(&item.state)),
+            ))
+            .when_some(item.priority, |el, priority| {
+                el.child(look.tag(
+                    format!("P{priority}"),
+                    look.hue(look.priority_hue(priority)),
+                ))
+            })
+            .when_some(item.pull_request.as_ref(), |el, pr| {
+                el.child(look.icon("icons/git-branch.svg", 11., theme.muted))
+                    .child(
+                        look.mono(pr.head_ref.clone())
+                            .min_w_0()
+                            .truncate()
+                            .text_color(rgb(theme.subtext())),
+                    )
+                    .child(look.icon("icons/arrow-right.svg", 11., theme.muted))
+                    .child(
+                        look.mono(pr.base_ref.clone())
+                            .text_color(rgb(theme.subtext())),
+                    )
+            })
+            .when_some(item.parent_id.clone(), |el, parent| {
+                el.child(look.muted(format!("child of {parent}")))
+            })
     }
 
     /// Back, then where the page sits: the repository, the list it came
@@ -317,101 +374,11 @@ impl OrchestratorView {
         div()
             .id("orchestrator-description")
             .min_w_0()
-            .p_4()
-            .child(content)
-            .into_any_element()
-    }
-
-    fn render_overview(
-        &self,
-        item: &Item,
-        runs: &Runs<'_>,
-        item_runs: &[RunRow],
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let look = &self.look;
-        let theme = &look.theme;
-        let row = |key: &'static str, value: AnyElement| {
-            div()
-                .flex()
-                .gap_2()
-                .text_size(look.small())
-                .child(
-                    div()
-                        .flex_none()
-                        .w(px(84.))
-                        .text_color(rgb(theme.muted))
-                        .child(key),
-                )
-                .child(div().flex_1().min_w_0().flex().child(value))
-        };
-        let text = |value: String| div().min_w_0().truncate().child(value).into_any_element();
-        let now = chrono::Utc::now();
-        let source = match item.key.source.provider {
-            crate::orchestrator::Provider::Github => {
-                format!("GitHub \u{00b7} {}", item.key.source.repository)
-            }
-            crate::orchestrator::Provider::Beads => "Beads".to_owned(),
-            crate::orchestrator::Provider::Gitlab => {
-                format!("GitLab \u{00b7} {}", item.key.source.repository)
-            }
-        };
-        div()
-            .id("orchestrator-overview")
-            .flex_none()
-            .w_full()
-            .p_4()
             .flex()
             .flex_col()
             .gap_2()
-            .border_b_1()
-            .border_color(rgb(theme.active))
-            .child(look.label("OVERVIEW"))
-            .child(row("Source", text(source)))
-            .child(row(
-                "Status",
-                look.badge(item.state.replace('_', " "), look.state_hue(&item.state))
-                    .into_any_element(),
-            ))
-            .when_some(item.priority, |el, priority| {
-                el.child(row(
-                    "Priority",
-                    look.badge(format!("P{priority}"), look.priority_hue(priority))
-                        .into_any_element(),
-                ))
-            })
-            .when_some(item.parent_id.clone(), |el, parent| {
-                el.child(row("Parent", look.mono(parent).into_any_element()))
-            })
-            .when(!item.blocked_by.is_empty(), |el| {
-                el.child(row(
-                    "Blocked by",
-                    look.mono(item.blocked_by.join(", ")).into_any_element(),
-                ))
-            })
-            .when_some(item.author.clone(), |el, author| {
-                el.child(row("Author", text(author)))
-            })
-            .child(row(
-                "Updated",
-                text(format!("{} ago", age(item.updated_at, now))),
-            ))
-            .when(!item.labels.is_empty(), |el| {
-                el.child(row(
-                    "Labels",
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap_1()
-                        .children(item.labels.iter().map(|label| look.chip(label.clone())))
-                        .into_any_element(),
-                ))
-            })
-            .when_some(item_runs.first().copied(), |el, latest| {
-                el.child(div().h_2())
-                    .child(look.label("LATEST RUN"))
-                    .child(self.run_card_small(runs, latest, cx))
-            })
+            .child(div().font_weight(FontWeight::SEMIBOLD).child("Description"))
+            .child(content)
             .into_any_element()
     }
 
@@ -541,82 +508,6 @@ impl OrchestratorView {
                     })
                     .child(self.run_controls(run, index, current, live.is_some(), cx)),
             )
-    }
-
-    /// A run in a few lines: agent, host, branch, status, and the agent's
-    /// own title while Herdr shows it, with Open when it can be reached.
-    pub(super) fn run_card_small(
-        &self,
-        runs: &Runs<'_>,
-        row: RunRow,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let look = &self.look;
-        let theme = &look.theme;
-        let run = &runs.runs[row.run];
-        let live = runs.live(row.run);
-        let color = look.status_hue(row.status);
-        let host = run
-            .workspace
-            .as_ref()
-            .and_then(|workspace| workspace.host.clone())
-            .unwrap_or_else(|| "local".into());
-        let branch = run
-            .workspace
-            .as_ref()
-            .map(|workspace| workspace.branch.clone())
-            .unwrap_or_default();
-        let title = live.and_then(|agent| agent.title.clone());
-        let index = row.run;
-        div()
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .rounded(px(corners::CONTROL))
-            .bg(rgb(theme.surface))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(look.icon(agent_icon(&run.agent), 16., theme.foreground))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .child(format!("{} on {host}", run.agent)),
-                    )
-                    .child(look.dot(color, 7.))
-                    .child(
-                        div()
-                            .text_size(look.small())
-                            .text_color(rgb(color))
-                            .child(row.status.label()),
-                    ),
-            )
-            .when(!branch.is_empty(), |el| {
-                el.child(look.mono(branch).text_color(rgb(theme.muted)).truncate())
-            })
-            .when_some(title, |el, title| {
-                el.child(
-                    div()
-                        .text_size(look.small())
-                        .text_color(rgb(theme.subtext()))
-                        .truncate()
-                        .child(title),
-                )
-            })
-            .when(live.is_some(), |el| {
-                el.child(
-                    div().pt_1().child(
-                        look.button(("orchestrator-open-run", index), "Open agent", true)
-                            .on_click(cx.listener(move |this, _, _, cx| this.open_run(index, cx))),
-                    ),
-                )
-            })
-            .into_any_element()
     }
 
     fn render_details(&self, item: &Item, cx: &mut Context<Self>) -> AnyElement {

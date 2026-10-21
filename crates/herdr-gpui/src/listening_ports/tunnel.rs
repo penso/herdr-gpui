@@ -3,7 +3,7 @@
 //! port is clicked and kept while the port is still listed, so reopening the
 //! page reuses it.
 
-use crate::{Error, Result};
+use crate::Result;
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read},
@@ -14,6 +14,19 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+/// Why an SSH tunnel did not open.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("SSH ended before the tunnel opened ({0}).")]
+    Exited(ExitStatus),
+    #[error("No free local port for an SSH tunnel.")]
+    Port(#[source] std::io::Error),
+    #[error("Could not start ssh for a tunnel.")]
+    Start(#[source] std::io::Error),
+    #[error("The SSH tunnel did not open in time.")]
+    Timeout,
+}
 
 /// SSH connects, authenticates, and binds within its own `ConnectTimeout`.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -141,7 +154,9 @@ pub(crate) fn open(key: &Key, preferred: Option<u16>, attempt: &Attempt) -> Resu
     match start(key, preferred, attempt) {
         // Someone took the preferred port meanwhile; any free one will do,
         // unless the attempt was cancelled, which also looks like an exit.
-        Err(Error::TunnelExited(_)) if preferred.is_some() && !attempt.slot().cancelled => {
+        Err(crate::Error::Tunnel(Error::Exited(_)))
+            if preferred.is_some() && !attempt.slot().cancelled =>
+        {
             start(key, None, attempt)
         }
         result => result,
@@ -149,19 +164,19 @@ pub(crate) fn open(key: &Key, preferred: Option<u16>, attempt: &Attempt) -> Resu
 }
 
 fn start(key: &Key, preferred: Option<u16>, attempt: &Attempt) -> Result<Tunnel> {
-    let local = free_port(preferred).map_err(Error::TunnelPort)?;
+    let local = free_port(preferred).map_err(Error::Port)?;
     let mut command = herdr_client::forward_command(&key.target, local, key.address, key.port)?;
     // Only the readiness line is read; diagnostics may carry secrets.
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let mut child = command.spawn().map_err(Error::TunnelStart)?;
+    let mut child = command.spawn().map_err(Error::Start)?;
     let stdout = child.stdout.take();
     attempt.adopt(child);
     let result = match stdout {
         Some(stdout) => ready(|| attempt.try_wait(), stdout, Instant::now() + OPEN_TIMEOUT),
-        None => Err(Error::TunnelStart(std::io::Error::other("no stdout pipe"))),
+        None => Err(Error::Start(std::io::Error::other("no stdout pipe")).into()),
     };
     // From here on, dropping the tunnel kills the child, on failure too.
     let tunnel = Tunnel::new(attempt, local);
@@ -188,7 +203,7 @@ pub(super) fn ready(
                 .any(|line| line.trim_end() == herdr_client::FORWARD_READY);
             let _ = sender.send(ready);
         })
-        .map_err(Error::TunnelStart)?;
+        .map_err(Error::Start)?;
     let mut closed = false;
     loop {
         if closed {
@@ -201,11 +216,11 @@ pub(super) fn ready(
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
         }
-        if let Some(status) = exited().map_err(Error::TunnelStart)? {
-            return Err(Error::TunnelExited(status));
+        if let Some(status) = exited().map_err(Error::Start)? {
+            return Err(Error::Exited(status).into());
         }
         if Instant::now() >= deadline {
-            return Err(Error::TunnelTimeout);
+            return Err(Error::Timeout.into());
         }
     }
 }

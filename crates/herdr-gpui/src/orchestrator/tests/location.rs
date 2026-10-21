@@ -1,5 +1,5 @@
 use super::*;
-use crate::orchestrator::location::{data_local_dir_with, database_path_in};
+use crate::orchestrator::location::{data_local_dir_with, database_path_in, legacy_path_in};
 use std::{ffi::OsString, path::PathBuf};
 
 /// Values from Python's `uuid.uuid5(uuid.NAMESPACE_URL, identity)`, the
@@ -19,13 +19,16 @@ fn repository_ids_match_agent_launcher() {
 }
 
 #[test]
-fn database_path_is_agent_launchers_repository_directory() {
-    let path = database_path_in(
-        std::path::Path::new("/data"),
-        &Repository::Local("/Users/me/src/app/.git".into()),
+fn the_database_is_the_apps_and_agent_launchers_is_only_carried_over() {
+    let repository = Repository::Local("/Users/me/src/app/.git".into());
+    assert_eq!(
+        database_path_in(std::path::Path::new("/state/herdr/gpui"), &repository),
+        PathBuf::from(
+            "/state/herdr/gpui/repositories/872b7964-8ccf-5eaf-80cc-e036166c2f30/state.sqlite3"
+        )
     );
     assert_eq!(
-        path,
+        legacy_path_in(std::path::Path::new("/data"), &repository),
         PathBuf::from(
             "/data/agent-launcher/repositories/872b7964-8ccf-5eaf-80cc-e036166c2f30/state.sqlite3"
         )

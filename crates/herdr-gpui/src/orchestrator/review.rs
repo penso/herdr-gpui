@@ -1,11 +1,10 @@
 //! Where each open pull request stands on GitHub: its review decision, who
 //! is asked to review it, and its checks, read with one GraphQL query per
-//! page after each sync. Unlike the items, this is never stored: it changes
-//! with every CI run, and the database's rows are a contract shared with
-//! agent-launcher (see `orchestrator`), so it lives in the snapshot only.
+//! page after each sync. The last answer is kept in the database beside the
+//! items, so a restart shows it until the first sync reads it again.
 
 use super::{Error, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::HashMap, time::Duration};
 
@@ -44,7 +43,7 @@ const MAX_NAME: usize = 100;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
 /// GitHub's verdict on a pull request's reviews.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Review {
     Approved,
     ChangesRequested,
@@ -52,7 +51,7 @@ pub(crate) enum Review {
 }
 
 /// Where one check stands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub(crate) enum CheckState {
     Failed,
     Pending,
@@ -60,14 +59,14 @@ pub(crate) enum CheckState {
     Skipped,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Check {
     pub(crate) name: String,
     pub(crate) state: CheckState,
 }
 
 /// One open pull request's review and checks.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct PrStatus {
     pub(crate) review: Option<Review>,
     /// Logins of the users asked to review, and `team/slug` for teams.

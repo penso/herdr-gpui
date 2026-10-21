@@ -5,7 +5,7 @@
 //! beads cost only the rows on screen.
 
 use super::{
-    Event, OrchestratorView, PANE_MAX_SHARE, PANE_MIN, PaneDrag,
+    Event, OrchestratorView, PaneDrag, Resize,
     look::{BLUE, GREEN, Look, MAGENTA, RED, YELLOW, age},
     rows::{Sort, Tab},
 };
@@ -45,14 +45,9 @@ impl OrchestratorView {
                     .flex()
                     .on_drag_move(cx.listener(
                         |this, event: &DragMoveEvent<PaneDrag>, window, cx| {
-                            let right = event.bounds.right();
-                            let width = f32::from(right - event.event.position.x);
-                            let max = f32::from(window.viewport_size().width) * PANE_MAX_SHARE;
-                            // Dragged nearly shut, the details close.
-                            if width < PANE_MIN / 2. {
-                                this.detail = None;
-                            } else {
-                                this.pane_width = width.clamp(PANE_MIN, max.max(PANE_MIN));
+                            match Resize::of(event, window) {
+                                Resize::Close => this.detail = None,
+                                Resize::Width(width) => this.pane_width = width,
                             }
                             cx.notify();
                         },
@@ -73,26 +68,7 @@ impl OrchestratorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let theme = &self.look.theme;
-        let handle = div()
-            .id("orchestrator-pane-handle")
-            .flex_none()
-            .w(px(6.))
-            .h_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .border_l_1()
-            .border_color(rgb(theme.active))
-            .cursor(CursorStyle::ResizeLeftRight)
-            .on_drag(PaneDrag, |drag, _, _, cx| cx.new(|_| *drag))
-            .child(
-                div()
-                    .w(px(2.))
-                    .h(px(28.))
-                    .rounded_full()
-                    .bg(rgb(theme.active)),
-            );
+        let handle = super::pane::handle(&self.look.theme, "orchestrator-pane-handle");
         div()
             .debug_selector(|| "orchestrator-pane".into())
             .flex_none()
@@ -320,7 +296,8 @@ impl OrchestratorView {
     fn render_header(&self, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
         let theme = &look.theme;
-        let title = match self.repos.as_slice() {
+        let listed: Vec<_> = self.projects_named().collect();
+        let title = match listed.as_slice() {
             [] => "No repositories yet".to_owned(),
             [only] => only.name(),
             many => format!("{} projects", many.len()),
@@ -564,34 +541,8 @@ impl OrchestratorView {
     /// is text.
     fn render_search_field(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let look = &self.look;
-        let theme = &look.theme;
         let focused = self.search.read(cx).focus.is_focused(window);
-        div()
-            .id("orchestrator-search")
-            .flex_1()
-            .min_w_0()
-            .h(px(look.ui.line_height() + 12.))
-            .flex()
-            .items_center()
-            .gap_2()
-            .px_3()
-            .rounded(px(corners::CONTROL))
-            .border_1()
-            .border_color(rgb(if focused {
-                theme.primary()
-            } else {
-                theme.active
-            }))
-            .bg(rgb(theme.background))
-            .child(look.icon(
-                "icons/search.svg",
-                13.,
-                if focused {
-                    theme.foreground
-                } else {
-                    theme.muted
-                },
-            ))
+        look.search_frame("orchestrator-search", focused)
             .child(div().flex_1().min_w_0().child(self.search.clone()))
             .when(!self.query.is_empty(), |field| {
                 field.child(
@@ -655,8 +606,8 @@ impl OrchestratorView {
     fn render_banners(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let look = &self.look;
         let mut banners = Vec::new();
-        let named = self.repos.len() > 1;
-        for repo in &self.repos {
+        let named = self.projects_named().count() > 1;
+        for repo in self.projects_named() {
             // With several projects listed, each says whose trouble it is.
             let of = |text: String| {
                 if named {
@@ -704,6 +655,7 @@ impl OrchestratorView {
             .enumerate()
             .map(|(index, banner)| {
                 banner
+                    .debug_selector(|| "orchestrator-banner".into())
                     .id(("orchestrator-banner", index))
                     .cursor_pointer()
                     .on_click(cx.listener(|this, _, _, cx| {

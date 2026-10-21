@@ -20,6 +20,7 @@ mod repo;
 mod repo_output;
 #[cfg(unix)]
 mod repo_script;
+mod restart;
 mod retry;
 mod service;
 mod store;

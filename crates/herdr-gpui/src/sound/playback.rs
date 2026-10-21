@@ -1,4 +1,3 @@
-use super::Error as SoundError;
 use crate::{Error, Result};
 use herdr_client::protocol::SemanticNotificationSound as Sound;
 use rodio::{Decoder, DeviceSinkBuilder, Player, Source};
@@ -45,13 +44,11 @@ pub(super) fn play(
     // Worker-owned and scoped to this job: the next notification reselects the
     // default device, including after unplug/sleep. Failed jobs are never replayed.
     let (errors, receiver) = mpsc::sync_channel(1);
-    let mut output = DeviceSinkBuilder::from_default_device()
-        .map_err(SoundError::Device)?
+    let mut output = DeviceSinkBuilder::from_default_device()?
         .with_error_callback(move |error| {
             let _ = errors.try_send(error);
         })
-        .open_sink_or_fallback()
-        .map_err(SoundError::Device)?;
+        .open_sink_or_fallback()?;
     output.log_on_drop(false);
     check(deadline, cancel, stop, Instant::now())?;
     let player = Player::connect_new(output.mixer());
@@ -89,7 +86,7 @@ fn decode(sound: Sound, custom: Option<&Path>) -> Result<SoundDecoder> {
         Sound::Done => include_bytes!("../../../../assets/sounds/done.mp3"),
         Sound::Request => include_bytes!("../../../../assets/sounds/request.mp3"),
     };
-    Ok(Decoder::try_from(Cursor::new(Cow::Borrowed(bytes))).map_err(SoundError::Decode)?)
+    Ok(Decoder::try_from(Cursor::new(Cow::Borrowed(bytes)))?)
 }
 
 fn decode_file(path: &Path) -> Result<SoundDecoder> {
@@ -102,32 +99,31 @@ fn decode_file(path: &Path) -> Result<SoundDecoder> {
         let file = options.open(path)?;
         let metadata = file.metadata()?;
         if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
-            return Err(SoundError::FileSize.into());
+            return Err(Error::Sound(crate::sound::Error::FileSize));
         }
         let mut bytes = Vec::new();
         file.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > MAX_FILE_BYTES {
-            return Err(SoundError::FileSize.into());
+            return Err(Error::Sound(crate::sound::Error::FileSize));
         }
         Ok(bytes)
     };
     let bytes = read().map_err(|error| match error {
-        Error::Io(source) => SoundError::File {
+        Error::Io(source) => Error::Sound(crate::sound::Error::File {
             path: path.into(),
             source,
-        }
-        .into(),
+        }),
         error => error,
     })?;
-    Ok(Decoder::try_from(Cursor::new(Cow::Owned(bytes))).map_err(SoundError::Decode)?)
+    Ok(Decoder::try_from(Cursor::new(Cow::Owned(bytes)))?)
 }
 
 fn check(deadline: Instant, cancel: &[&AtomicBool], stop: &AtomicBool, now: Instant) -> Result<()> {
     if cancel.iter().any(|flag| flag.load(Ordering::Acquire)) || stop.load(Ordering::Acquire) {
-        return Err(SoundError::Cancelled.into());
+        return Err(Error::Sound(crate::sound::Error::Cancelled));
     }
     if now >= deadline {
-        return Err(SoundError::Timeout.into());
+        return Err(Error::Sound(crate::sound::Error::Timeout));
     }
     Ok(())
 }
@@ -146,7 +142,7 @@ fn wait(
             break Err(error);
         }
         if let Ok(error) = errors.try_recv() {
-            break Err(SoundError::Stream(error).into());
+            break Err(Error::Sound(crate::sound::Error::Stream(error)));
         }
         if player.empty() {
             break Ok(());

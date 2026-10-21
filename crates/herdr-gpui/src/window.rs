@@ -281,6 +281,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) scrollbar_drag: Option<mouse::ScrollbarDrag>,
     /// The activity bar's Security section: Dependabot alerts.
     pub(crate) security: crate::security::Security,
+    /// The Security section's search field and pills.
+    pub(crate) security_search: crate::security::SecuritySearch,
     pub(crate) selected_endpoint: usize,
     pub(crate) selected_generation: u64,
     /// The terminal cells the pointer is choosing. A release copies them and

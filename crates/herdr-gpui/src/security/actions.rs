@@ -13,6 +13,27 @@ use gpui::{prelude::*, *};
 use std::path::{Component, Path, PathBuf};
 
 impl HerdrWindow {
+    /// A row's Start agent, which [`Self::security_agent`] answers; the
+    /// press stays off the row, which would open the page instead.
+    pub(super) fn security_start(
+        &self,
+        look: &crate::orchestrator::Look,
+        id: impl Into<ElementId>,
+        item: Item,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let button = look
+            .compact_button(id, "Start agent")
+            .debug_selector(|| "security-start".into())
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.security_agent(&item, window, cx);
+            }));
+        // Centered on the row's height, whatever its lines.
+        div().flex_none().flex().items_center().child(button)
+    }
+
     /// Opens the fan-out dialog of a workspace holding `item`'s repository
     /// on the host shown, with a prompt to fix or investigate it.
     pub(crate) fn security_agent(

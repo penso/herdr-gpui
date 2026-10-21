@@ -222,7 +222,7 @@ fn worker_reloads_asynchronously_and_keeps_last_valid_config() {
         Some("/local/new.mp3".into())
     );
     loads
-        .send(Err(crate::sound::Error::ConfigSize.into()))
+        .send(Err(Error::Sound(crate::sound::Error::ConfigSize)))
         .unwrap();
     service.reload.store(true, Ordering::Release);
     wait_loaded(3);

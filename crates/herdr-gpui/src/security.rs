@@ -1,28 +1,30 @@
 //! The activity bar's Security section: the private vulnerability reports
 //! outsiders filed (`reports`) and the open Dependabot alerts of every
 //! github.com repository the window's workspaces hold, most severe first.
-//! Its icon joins the bar only once GitHub reports either on for one of
-//! them, and stays for the session so the bar does not shift when a later
-//! read fails.
+//! Its icon is always in the bar, so it never waits on the first read; a
+//! search field and pills (`filter`) narrow what the section lists.
 //!
 //! The repositories are the ones the Pull requests and Issues sections list
-//! (`HerdrWindow::repo_specs`), read with the same GitHub accounts, but the
-//! alerts live here only: the orchestrator's database is a contract shared
-//! with agent-launcher and has no place for them. A background read runs
-//! every [`INTERVAL`], or when Refresh asks; drawing reads what it left.
+//! (`HerdrWindow::repo_specs`), read with the same GitHub accounts. A
+//! background read runs every [`INTERVAL`], or when Refresh asks; drawing
+//! reads what it left. The app's cache keeps the last read (`saved`), shown
+//! at start until the first read of the run replaces it.
 
 mod actions;
 mod fetch;
+mod filter;
 mod list;
 mod model;
 mod page;
 mod pane;
 mod reports;
+mod saved;
 mod section;
 
 #[cfg(test)]
 mod tests;
 
+pub(crate) use filter::SecuritySearch;
 pub(crate) use model::{Alert, Alerts, Repo, Severity};
 pub(crate) use page::{Item, Tab};
 pub(crate) use reports::{Report, Reports};
@@ -31,6 +33,7 @@ use crate::{HerdrWindow, browser::WebUrl, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
 use std::{
     collections::HashMap,
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -53,6 +56,9 @@ pub enum Error {
     Output,
     #[error("Cannot read GitHub's alerts listing: {0}")]
     Json(#[from] serde_json::Error),
+    /// Restored from the cache, which held no read of it yet.
+    #[error("Not read yet")]
+    Unread,
 }
 
 impl Error {
@@ -70,9 +76,6 @@ pub(crate) struct Security {
     /// When the next read is due; `None` reads at the next tick.
     next: Option<Instant>,
     task: Option<Task<()>>,
-    /// Whether any repository had Dependabot alerts or private reporting
-    /// on, this session.
-    available: bool,
     /// The GitHub logins `repos` was read as. Private reports are only for
     /// the accounts that may see them, so what one sign-in read is dropped
     /// once the window reads GitHub as anyone else.
@@ -84,9 +87,15 @@ pub(crate) struct Security {
     opened: Option<page::Opened>,
     /// Whether the page takes the whole section, the list folded away.
     list_hidden: bool,
+    /// The page's width beside the list, as its handle was dragged.
+    pane_width: f32,
     /// Pages read this session, by item.
     pages: HashMap<Item, page::Loaded>,
     page_scroll: ScrollHandle,
+    /// The app's cache file; tests keep none unless they set one.
+    cache: Option<PathBuf>,
+    /// Reads the cached read for the accounts just signed in.
+    restoring: Option<Task<()>>,
 }
 
 impl Default for Security {
@@ -96,14 +105,22 @@ impl Default for Security {
             read_at: None,
             next: None,
             task: None,
-            available: false,
             accounts: Vec::new(),
             cancelled: Arc::default(),
             scroll: ScrollHandle::new(),
             opened: None,
             list_hidden: false,
+            pane_width: crate::orchestrator::pane::PANE_DEFAULT,
             pages: HashMap::new(),
             page_scroll: ScrollHandle::new(),
+            cache: if cfg!(test) {
+                None
+            } else {
+                crate::cache::path()
+                    .inspect_err(|error| tracing::debug!(%error, "No cache for Security"))
+                    .ok()
+            },
+            restoring: None,
         }
     }
 }
@@ -115,11 +132,6 @@ impl Drop for Security {
 }
 
 impl Security {
-    /// Whether the bar shows the section's icon.
-    pub(crate) fn available(&self) -> bool {
-        self.available
-    }
-
     /// The repositories as last read.
     pub(crate) fn repos(&self) -> &[Repo] {
         &self.repos
@@ -189,13 +201,23 @@ impl Security {
         self.read_at = None;
         self.next = None;
         self.task = None;
+        self.restoring = None;
         self.opened = None;
         self.pages.clear();
     }
 
+    /// What the cache kept, read at `at`, unless this run's own read is in.
+    fn restore(&mut self, repos: Vec<Repo>, at: SystemTime) {
+        if self.read_at.is_some() {
+            return;
+        }
+        self.repos = repos;
+        self.keep_opened();
+        self.read_at = Some(at);
+    }
+
     /// What a read found, replacing the last one.
     fn install(&mut self, repos: Vec<Repo>, now: Instant, at: SystemTime) {
-        self.available |= repos.iter().any(Repo::enabled);
         self.repos = repos;
         self.keep_opened();
         self.read_at = Some(at);
@@ -233,19 +255,55 @@ impl HerdrWindow {
             self.security.next = Some(now + WAIT);
             return;
         }
+        // What this window reads, as the cache keeps it: another window
+        // signed in as the same accounts may hold other repositories.
+        let key = saved::key(&self.security.accounts, &specs);
+        if self.security.read_at.is_none() {
+            self.restore_security(key.clone(), cx);
+        }
         let cancelled = self.security.cancelled.clone();
-        let work = cx
-            .background_executor()
-            .spawn(async move { fetch::read(&specs, &cancelled) });
+        let cache = self.security.cache.clone();
+        let work = cx.background_executor().spawn(async move {
+            let repos = fetch::read(&specs, &cancelled);
+            // A cancelled read stopped short: it is no read to keep.
+            if !cancelled.load(Ordering::Relaxed)
+                && let Some(cache) = cache.and_then(|path| open_cache(&path))
+            {
+                saved::save(&cache, &key, &repos);
+            }
+            repos
+        });
         self.security.task = Some(cx.spawn(async move |this, cx| {
             let repos = work.await;
             let _ = this.update(cx, |this, cx| {
                 this.security
                     .install(repos, Instant::now(), SystemTime::now());
+                this.read_waiting_page(cx);
                 cx.notify();
             });
         }));
         cx.notify();
+    }
+
+    /// Lists what the cache kept under `key` for this window, in the
+    /// background, until the first read of the run is in.
+    fn restore_security(&mut self, key: String, cx: &mut Context<Self>) {
+        let Some(path) = self.security.cache.clone() else {
+            return;
+        };
+        let work = cx
+            .background_executor()
+            .spawn(async move { saved::restore(&open_cache(&path)?, &key) });
+        self.security.restoring = Some(cx.spawn(async move |this, cx| {
+            let restored = work.await;
+            let _ = this.update(cx, |this, cx| {
+                this.security.restoring = None;
+                if let Some((repos, at)) = restored {
+                    this.security.restore(repos, at);
+                    cx.notify();
+                }
+            });
+        }));
     }
 
     /// Every login the window reads GitHub as, on this device and on its
@@ -265,13 +323,6 @@ impl HerdrWindow {
         logins.sort_unstable();
         logins.dedup();
         logins
-    }
-
-    /// Whether the bar lists the section: once alerts are on somewhere, or
-    /// while it is the one shown, so a stored or asked-for choice is never
-    /// left without its icon.
-    pub(crate) fn security_listed(&self) -> bool {
-        self.security.available() || self.activity.panel == ActivityPanel::Security
     }
 
     /// Shows `url`, an alert's or repository's page, in a browser tab of the
@@ -294,4 +345,10 @@ impl HerdrWindow {
         }
         cx.notify();
     }
+}
+
+fn open_cache(path: &std::path::Path) -> Option<crate::cache::Cache> {
+    crate::cache::Cache::open_at(path)
+        .inspect_err(|error| tracing::debug!(%error, "Cannot open the cache"))
+        .ok()
 }

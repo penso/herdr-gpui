@@ -8,7 +8,7 @@ use gpui::{Modifiers, TestAppContext};
 use std::sync::Arc;
 
 #[gpui::test]
-fn a_double_click_opens_the_item_beside_the_list(cx: &mut TestAppContext) {
+fn a_click_opens_the_item_beside_the_list(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let request = Request {
         target: herdr_client::ConnectTarget::Local,
@@ -40,24 +40,9 @@ fn a_double_click_opens_the_item_beside_the_list(cx: &mut TestAppContext) {
     let row: &'static str = Box::leak(format!("orchestrator-row-{key}").into_boxed_str());
     let list = cx.debug_bounds("orchestrator-list").unwrap();
     let at = cx.debug_bounds(row).unwrap().center();
-    // One click selects; the list keeps the width.
-    cx.simulate_click(at, Modifiers::none());
-    cx.run_until_parked();
     assert!(cx.debug_bounds("orchestrator-pane").is_none());
-    // A second click in time opens the item in a pane beside the list.
-    cx.simulate_event(gpui::MouseDownEvent {
-        position: at,
-        button: gpui::MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 2,
-        first_mouse: false,
-    });
-    cx.simulate_event(gpui::MouseUpEvent {
-        position: at,
-        button: gpui::MouseButton::Left,
-        modifiers: Modifiers::none(),
-        click_count: 2,
-    });
+    // One click opens the item in a pane beside the list.
+    cx.simulate_click(at, Modifiers::none());
     cx.run_until_parked();
     let pane = cx.debug_bounds("orchestrator-pane").unwrap();
     let narrowed = cx.debug_bounds("orchestrator-list").unwrap();
@@ -72,4 +57,14 @@ fn a_double_click_opens_the_item_beside_the_list(cx: &mut TestAppContext) {
         cx.debug_bounds("orchestrator-list").unwrap().size,
         list.size
     );
+    // Switching to pull requests leaves the issue behind.
+    cx.simulate_click(at, Modifiers::none());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("orchestrator-pane").is_some());
+    cx.update(|_, cx| view.update(cx, |view, cx| view.show_list(Tab::PullRequests, cx)));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("orchestrator-pane").is_none());
+    cx.update(|_, cx| view.update(cx, |view, cx| view.show_list(Tab::Issues, cx)));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("orchestrator-pane").is_none());
 }

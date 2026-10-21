@@ -559,6 +559,45 @@ pub(crate) fn merge<'a>(
     blocks.into_iter().flatten().collect()
 }
 
+/// One row per item: an issue or pull request several checkouts list (the
+/// same repository on two hosts) shows once, where its first copy came, and
+/// as the copy with a run when only another has one. Also returns, by item
+/// key, every repository listing it, in the order they came.
+pub(crate) fn dedupe(
+    rows: Vec<ItemRow>,
+    key: impl Fn(&ItemRow) -> String,
+) -> (Vec<ItemRow>, HashMap<String, Vec<usize>>) {
+    let mut kept: Vec<ItemRow> = Vec::with_capacity(rows.len());
+    let mut at: HashMap<String, usize> = HashMap::new();
+    let mut holders: HashMap<String, Vec<usize>> = HashMap::new();
+    for row in rows {
+        let key = key(&row);
+        let repos = holders.entry(key.clone()).or_default();
+        if !repos.contains(&row.repo) {
+            repos.push(row.repo);
+        }
+        match at.get(&key) {
+            Some(&index) => {
+                let first = &mut kept[index];
+                if first.run.is_none() && row.run.is_some() {
+                    // The tree shape stays the first copy's: its children
+                    // follow it.
+                    *first = ItemRow {
+                        depth: first.depth,
+                        children: first.children,
+                        ..row
+                    };
+                }
+            }
+            None => {
+                at.insert(key, kept.len());
+                kept.push(row);
+            }
+        }
+    }
+    (kept, holders)
+}
+
 /// Pull requests under what each waits on, in the order the rows came.
 pub(crate) fn pull_request_lines(rows: &[ItemRow], next: impl Fn(&ItemRow) -> Next) -> Vec<Line> {
     let mut lines = Vec::new();

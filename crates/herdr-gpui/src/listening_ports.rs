@@ -11,6 +11,8 @@ mod render;
 mod scan;
 mod tunnel;
 
+pub(crate) use tunnel::Error as TunnelError;
+
 #[cfg(test)]
 mod tests;
 

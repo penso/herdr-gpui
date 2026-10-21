@@ -1,7 +1,6 @@
 //! A section's list: its column heads and virtualized lines, headings
-//! between rows of issues or pull requests, each row a click to select and a
-//! double-click to open. While an item is open beside the list, rows keep
-//! only the columns that fit.
+//! between rows of issues or pull requests, each row a click to open. While
+//! an item is open beside the list, rows keep only the columns that fit.
 
 use super::{
     OrchestratorView,
@@ -46,7 +45,7 @@ impl OrchestratorView {
 
     /// Whether rows of several projects are listed, so each names its own.
     fn listing_projects(&self) -> bool {
-        self.repos.len() > 1 && self.projects.len() != 1
+        self.projects_named().count() > 1 && self.projects.len() != 1
     }
 
     /// A row's project, in its own column while several are listed.
@@ -59,8 +58,18 @@ impl OrchestratorView {
                 .truncate()
                 .text_size(look.small())
                 .text_color(rgb(look.theme.subtext()))
-                .child(self.project_label(&self.repos[row.repo]))
+                .child(self.row_project(row))
         })
+    }
+
+    /// The project a row names: its checkout's, or how many hosts list it
+    /// when several checkouts of the same repository do.
+    fn row_project(&self, row: &ItemRow) -> String {
+        let repo = &self.repos[row.repo];
+        match self.twins(&self.row_item(row).key.canonical()) {
+            0 => self.project_label(repo),
+            twins => format!("{} \u{00b7} {} hosts", repo.name(), twins + 1),
+        }
     }
 
     /// A row's source as a muted mark, while the list mixes backends.
@@ -98,12 +107,9 @@ impl OrchestratorView {
                 }
                 head.push(("TITLE", None));
                 if !compact {
-                    head.extend([
-                        ("AUTHOR", Some(110.)),
-                        ("\u{1f4ac}", Some(34.)),
-                        ("", Some(ACTION_WIDTH)),
-                    ]);
+                    head.extend([("AUTHOR", Some(110.)), ("\u{1f4ac}", Some(34.))]);
                 }
+                head.push(("", Some(ACTION_WIDTH)));
             }
             Tab::PullRequests => {
                 head.push(("PR", Some(48.)));
@@ -310,7 +316,7 @@ impl OrchestratorView {
             .into_any_element()
     }
 
-    /// A row's shell: selection, click to select, double-click to open.
+    /// A row's shell: selection, and a click to open it.
     /// `item` names the row for a screen reader by its identifier, title, and
     /// state.
     fn row_shell(
@@ -342,16 +348,15 @@ impl OrchestratorView {
             .border_color(rgb(theme.active))
             .cursor_pointer()
             .hover(move |style| style.bg(rgb(hover)))
-            .when(selected || open, |el| el.bg(rgb(theme.primary_wash())))
+            // The accent marks only the row whose page is open; a row the
+            // keys moved to, with no page, wears the hover's quiet tint.
+            .when(open, |el| el.bg(rgb(theme.primary_wash())))
+            .when(selected && !open, |el| el.bg(rgb(hover)))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
                     this.selected = Some(key.clone());
-                    this.activate(&key);
-                    if event.click_count == 2 {
-                        this.open_detail(key.clone(), cx);
-                    }
-                    cx.notify();
+                    this.open_detail(key.clone(), cx);
                 }),
             )
     }
@@ -386,9 +391,10 @@ impl OrchestratorView {
         });
         let writable = self.repos[row.repo].snapshot.access == Some(Access::ReadWrite);
         let blocked = !item.blocked_by.is_empty() || item.state == "blocked";
-        let start = (!compact && writable && row.run.is_none() && !blocked).then(|| {
+        let start = (writable && row.run.is_none() && !blocked).then(|| {
             let key = key.clone();
-            compact_button(look, ("orchestrator-start", index), "Start agent")
+            look.compact_button(("orchestrator-start", index), "Start agent")
+                .debug_selector(|| "orchestrator-start".into())
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_dispatch(key.clone(), window, cx);
@@ -458,16 +464,16 @@ impl OrchestratorView {
                                 .unwrap_or_default(),
                         ),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .w(px(ACTION_WIDTH))
-                        .flex()
-                        .justify_end()
-                        .children(start)
-                        .when(blocked, |el| el.child(look.badge("blocked", YELLOW))),
-                )
             })
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(ACTION_WIDTH))
+                    .flex()
+                    .justify_end()
+                    .children(start)
+                    .when(blocked, |el| el.child(look.badge("blocked", YELLOW))),
+            )
             .into_any_element()
     }
 
@@ -625,27 +631,6 @@ pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
 }
 
 /// A button small enough to sit in a row with room above and below.
-fn compact_button(look: &Look, id: impl Into<ElementId>, label: &'static str) -> Stateful<Div> {
-    let theme = &look.theme;
-    let hover = theme.active;
-    div()
-        .id(id)
-        .role(Role::Button)
-        .aria_label(label)
-        .flex_none()
-        .px_2()
-        .py(px(1.))
-        .rounded(px(crate::config::corners::SMALL))
-        .border_1()
-        .border_color(rgb(theme.active))
-        .bg(rgb(theme.surface))
-        .hover(move |style| style.bg(rgb(hover)))
-        .cursor_pointer()
-        .text_size(look.tiny())
-        .whitespace_nowrap()
-        .child(label)
-}
-
 fn column_head(look: &Look, cells: &[(&str, Option<f32>)]) -> Div {
     let theme = &look.theme;
     div()

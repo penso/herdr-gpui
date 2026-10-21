@@ -27,8 +27,15 @@ const MAX_SOCKET: usize = 1024;
 /// `N` when the host has neither `ss` nor `lsof`. Linux prefers `ss`, which
 /// is quicker; macOS has only `lsof`. Both list only this user's processes
 /// with their owners, so another user's servers never show. The step runs in
-/// a long-lived shell, so it must not `exit`.
-pub(crate) const COMMAND: &str = r#"PATH="$PATH:/usr/sbin:/sbin"
+/// a long-lived shell, so it must not `exit`, and it adds each `PATH` entry
+/// only when missing: appending on every scan grows `PATH` without bound and
+/// slows every command lookup (issue #754).
+pub(crate) const COMMAND: &str = r#"for herdr_dir in /usr/sbin /sbin; do
+    case ":$PATH:" in
+        *":$herdr_dir:"*) ;;
+        *) PATH="$PATH:$herdr_dir" ;;
+    esac
+done
 if command -v ss >/dev/null 2>&1; then
     herdr_ports=$(ss -ltnp 2>/dev/null | awk '{
         rest = $0

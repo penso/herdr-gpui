@@ -9,13 +9,17 @@ use std::{
 };
 
 mod accounts;
+mod filter;
 mod page;
 mod pane;
+mod pane_resize;
 mod parse;
 mod partial;
 mod reports;
+mod saved;
 mod section;
 mod state;
+mod unreadable;
 
 /// One alert node in the shape GitHub's GraphQL API answers with.
 fn node(number: u64, severity: &str, created: &str, package: &str) -> Value {

@@ -22,7 +22,9 @@ fn report_item() -> Item {
     }
 }
 
-fn shown(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
+pub(super) fn shown(
+    cx: &mut gpui::TestAppContext,
+) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = window(cx);
     let mut one = repo(
         "a/one",

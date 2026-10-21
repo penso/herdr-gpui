@@ -66,7 +66,7 @@ const FACTS_WIDTH: f32 = 220.;
 
 impl HerdrWindow {
     /// What the page draws with: the section's own fonts.
-    fn security_look(&self) -> Look {
+    pub(super) fn security_look(&self) -> Look {
         Look {
             theme: self.theme.clone(),
             ui: self.config.ui.clone(),
@@ -142,7 +142,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &look.theme;
-        let items = self.security.items();
+        let items = self.shown_items();
         let at = items.iter().position(|item| *item == opened.item);
         let (lead, list, last, url) = match found {
             Found::Alert(repo, alert) => (
@@ -343,17 +343,7 @@ impl HerdrWindow {
 
 /// A colored word, such as a severity or state.
 pub(super) fn tag(look: &Look, text: impl Into<SharedString>, color: u32) -> Div {
-    div()
-        .flex_none()
-        .whitespace_nowrap()
-        .px(px(6.))
-        .py(px(1.))
-        .rounded(px(corners::SMALL))
-        .bg(rgb(mix(look.theme.background, color, 18)))
-        .text_color(rgb(color))
-        .text_size(look.small())
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(text.into())
+    look.tag(text, color)
 }
 
 pub(super) fn heading(text: impl Into<SharedString>) -> Div {

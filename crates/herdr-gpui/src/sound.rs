@@ -6,7 +6,7 @@ mod playback;
 #[cfg(test)]
 mod tests;
 
-pub use error::Error;
+pub(crate) use error::Error;
 
 use crate::state::LiveState;
 use config::Settings;

@@ -20,6 +20,7 @@ mod bell;
 #[cfg(feature = "boat")]
 mod boat;
 mod browser;
+mod cache;
 mod caffeine;
 mod caption;
 mod checkpoint;
@@ -115,6 +116,7 @@ mod port_forward;
 mod pr_actions;
 mod preferences;
 mod presentation;
+mod private_file;
 mod processes;
 mod progress;
 mod pull_request;

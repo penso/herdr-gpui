@@ -269,6 +269,7 @@ pub(super) fn security(reply: &Reply) -> String {
         let _ = write!(text, "{} ({})", repo.name, repo.host);
         match repo.state.as_str() {
             "off" => text.push_str(": Dependabot alerts are off"),
+            "hidden" => text.push_str(": Dependabot alerts are not readable with this sign-in"),
             "error" => {
                 let _ = write!(text, ": {}", repo.error.as_deref().unwrap_or("not read"));
             }

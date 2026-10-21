@@ -4,7 +4,7 @@
 //! worker and database, and an item's page and actions go to its own.
 
 use super::rows::ItemRow;
-use crate::orchestrator::{Item, Request, Run, Service, Snapshot};
+use crate::orchestrator::{Error, Item, Request, Run, Service, Snapshot};
 use std::sync::Arc;
 
 /// A repository the window asks a view to list.
@@ -40,10 +40,7 @@ impl Repo {
     pub(super) fn start(spec: RepoSpec) -> Self {
         let (service, error) = match Service::start(spec.request.clone()) {
             Ok(service) => (Some(service), None),
-            Err(error) => (
-                None,
-                Some(Arc::new(crate::orchestrator::Error::Worker(error))),
-            ),
+            Err(error) => (None, Some(Arc::new(Error::Worker(error)))),
         };
         Self {
             key: spec.key,
@@ -97,6 +94,13 @@ impl Repo {
             (Some(tokens), Some(owner)) => Some(tokens.login_for(owner)),
             _ => self.login.as_deref(),
         }
+    }
+
+    /// Whether its folder turned out not to be in a Git repository: a
+    /// workspace opened on any folder is no project, so it is left out
+    /// rather than reported.
+    pub(super) fn outside_git(&self) -> bool {
+        matches!(self.snapshot.error.as_deref(), Some(Error::NotARepository))
     }
 
     /// The item `key` names here, listed or a stand-in.

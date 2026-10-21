@@ -202,7 +202,8 @@ pub(crate) struct SecurityRepoInfo {
     pub host: String,
     /// Its Dependabot alerts page.
     pub url: String,
-    /// "open", "off" (Dependabot alerts turned off), or "error".
+    /// "open", "off" (Dependabot alerts turned off), "hidden" (this sign-in
+    /// may not read alerts), or "error".
     pub state: String,
     /// Open alerts GitHub counts, which may be more than `alerts` holds.
     pub total: u64,

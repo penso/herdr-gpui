@@ -159,6 +159,7 @@ fn shell(repo: &Repo) -> SecurityRepoInfo {
     let (state, total, error) = match &repo.alerts {
         Ok(Alerts::Open { total, .. }) => ("open", *total, None),
         Ok(Alerts::Off) => ("off", 0, None),
+        Ok(Alerts::Hidden) => ("hidden", 0, None),
         Err(error) => ("error", 0, Some(error.to_string())),
     };
     let (reporting, reports_error) = match &repo.reports {

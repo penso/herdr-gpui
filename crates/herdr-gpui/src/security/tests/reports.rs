@@ -133,15 +133,12 @@ fn every_report_counts_on_the_bar_and_reporting_makes_it_available() {
         Instant::now(),
         SystemTime::now(),
     );
-    assert!(security.available());
     assert_eq!(security.urgent(), 2);
-    // Reporting on with an empty queue still lists the section.
     let mut quiet = Security::default();
     quiet.install(
         vec![reported("a/two", Vec::new())],
         Instant::now(),
         SystemTime::now(),
     );
-    assert!(quiet.available());
     assert_eq!(quiet.urgent(), 0);
 }

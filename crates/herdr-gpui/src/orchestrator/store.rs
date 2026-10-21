@@ -1,18 +1,26 @@
-//! The shared per-repository database. Opening it creates or migrates the
-//! schema to [`SCHEMA_VERSION`]; a newer schema opens read-only. Every call
-//! blocks on disk I/O, so it runs on the orchestrator's worker thread, never
-//! on the UI thread.
+//! The per-repository database, the app's own (`location`). Its schema began
+//! as agent-launcher's, whose file [`Store::import`] carries over once.
+//! Opening it creates or migrates the schema to [`SCHEMA_VERSION`]; a newer
+//! schema opens read-only. Every call blocks on disk I/O, so it runs on the
+//! orchestrator's worker thread, never on the UI thread.
 
 use super::{
     Checkpoint, Error, HerdrSession, Item, ItemKey, Owner, Result, Run, SourceKey,
     model::{Activity, PullRequest, Workspace},
+    review::PrStatus,
 };
 use chrono::{DateTime, SecondsFormat, Utc};
-use rusqlite::{Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params};
-use std::{path::Path, time::Duration};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior, params,
+};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// The newest schema this build reads and writes.
-pub(crate) const SCHEMA_VERSION: i64 = 1;
+pub(crate) const SCHEMA_VERSION: i64 = 2;
 
 /// How long a write waits for the other application's transaction.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -115,6 +123,14 @@ const HERDR_SESSIONS_V1: &str = "CREATE TABLE IF NOT EXISTS herdr_sessions (
     updated_at TEXT NOT NULL
 )";
 
+/// Version 2: each open pull request's last read review and checks.
+const PULL_REQUEST_STATUS_V2: &str = "CREATE TABLE IF NOT EXISTS pull_request_status (
+    repository TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    status_json TEXT NOT NULL,
+    PRIMARY KEY (repository, number)
+)";
+
 const ITEM_COLUMNS: &str = "provider, host, repository, native_id, identifier, title, \
      description, state, url, author, labels_json, parent_id, blocked_by_json, priority, \
      created_at, updated_at, pull_request_json, activity_json";
@@ -141,11 +157,37 @@ impl Store {
     /// Opens `path`, creating the private directory and file when missing,
     /// and migrates it to [`SCHEMA_VERSION`].
     pub(crate) fn open(path: &Path) -> Result<Self> {
-        private::prepare(path)?;
+        crate::private_file::prepare(path)?;
         let mut connection = Connection::open(path)?;
         connection.busy_timeout(BUSY_TIMEOUT)?;
         let access = migrate(&mut connection)?;
         Ok(Self { connection, access })
+    }
+
+    /// Copies agent-launcher's database at `legacy` to `path`, where none is
+    /// yet, so its items and runs come along. The copy is written to a
+    /// private file of its own beside `path` and only then moved there,
+    /// never over a file: when another window opens the same repository at
+    /// once, the first copy in place stays and the other is dropped. A
+    /// failed copy leaves no file behind.
+    pub(crate) fn import(legacy: &Path, path: &Path) -> Result<()> {
+        let staging = staging_path(path);
+        let copied = copy(legacy, &staging).and_then(|()| match publish(&staging, path) {
+            Ok(()) => Ok(()),
+            // Another window's copy is in place: it came from the same file.
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(source) => Err(Error::Private(crate::private_file::Error::Prepare {
+                path: path.to_owned(),
+                source,
+            })),
+        });
+        // Gone once published; what a failure or a lost race leaves.
+        match std::fs::remove_file(&staging) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => tracing::debug!(%error, "Cannot remove a staged import"),
+        }
+        copied
     }
 
     pub(crate) fn access(&self) -> Access {
@@ -218,6 +260,58 @@ impl Store {
     }
 
     /// Every non-confidential run, of either owner.
+    /// The last read review and checks of every open pull request, by
+    /// repository and number.
+    pub(crate) fn pr_statuses(&self) -> Result<HashMap<(String, u64), PrStatus>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT repository, number, status_json FROM pull_request_status")?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut statuses = HashMap::new();
+        for row in rows {
+            let (repository, number, json) = row?;
+            let Ok(number) = u64::try_from(number) else {
+                continue;
+            };
+            statuses.insert((repository, number), decode("status_json", &json)?);
+        }
+        Ok(statuses)
+    }
+
+    /// Replaces `repository`'s statuses with the ones just read.
+    pub(crate) fn replace_pr_statuses(
+        &mut self,
+        repository: &str,
+        statuses: &HashMap<u64, PrStatus>,
+    ) -> Result<()> {
+        self.writable()?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
+            "DELETE FROM pull_request_status WHERE repository = ?1",
+            [repository],
+        )?;
+        for (number, status) in statuses {
+            let Ok(number) = i64::try_from(*number) else {
+                continue;
+            };
+            transaction.execute(
+                "INSERT INTO pull_request_status (repository, number, status_json) \
+                 VALUES (?1, ?2, ?3)",
+                params![repository, number, encode("status_json", status)?],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub(crate) fn runs(&self) -> Result<Vec<Run>> {
         let mut statement = self.connection.prepare(&format!(
             "SELECT {RUN_COLUMNS} FROM runs ORDER BY started_at DESC, id"
@@ -402,6 +496,9 @@ fn migrate(connection: &mut Connection) -> Result<Access> {
             )?;
         }
         transaction.execute(HERDR_SESSIONS_V1, [])?;
+    }
+    if version < 2 {
+        transaction.execute(PULL_REQUEST_STATUS_V2, [])?;
         transaction.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
     }
     transaction.commit()?;
@@ -567,99 +664,40 @@ fn optional_time(row: &Row<'_>, column: &'static str) -> Result<Option<DateTime<
         .transpose()
 }
 
-/// Creating the database directory and file privately, as agent-launcher does.
-mod private {
-    use super::{Error, Result};
-    use std::{fs, io, path::Path};
+/// A name beside `path` no other import uses: this process's id and a
+/// count of its imports.
+fn staging_path(path: &Path) -> PathBuf {
+    static IMPORTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let count = IMPORTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut name = path.file_name().unwrap_or_default().to_owned();
+    name.push(format!(".import-{}-{count}", std::process::id()));
+    path.with_file_name(name)
+}
 
-    pub(super) fn prepare(path: &Path) -> Result<()> {
-        let prepare = |path: &Path| {
-            let path = path.to_owned();
-            move |source| Error::Prepare { path, source }
-        };
-        let directory = path.parent().ok_or_else(|| Error::NotPrivate {
-            path: path.to_owned(),
-        })?;
-        if let Some(parent) = directory.parent() {
-            fs::create_dir_all(parent).map_err(prepare(parent))?;
-        }
-        match create_directory(directory) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(prepare(directory)(error)),
-        }
-        check(directory, true)?;
-        match create_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(prepare(path)(error)),
-        }
-        check(path, false)
-    }
+/// `legacy`, whole and consistent, into a new private file at `staging`.
+fn copy(legacy: &Path, staging: &Path) -> Result<()> {
+    let Some(target) = staging.to_str() else {
+        return Err(Error::Database(rusqlite::Error::InvalidPath(
+            staging.to_owned(),
+        )));
+    };
+    crate::private_file::prepare(staging)?;
+    let source = Connection::open_with_flags(legacy, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    source.busy_timeout(BUSY_TIMEOUT)?;
+    source.execute("VACUUM INTO ?1", [target])?;
+    Ok(())
+}
 
-    #[cfg(unix)]
-    fn create_directory(path: &Path) -> io::Result<()> {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new().mode(0o700).create(path)
-    }
+/// Moves `staging` to `path` unless a file is there, in one step.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn publish(staging: &Path, path: &Path) -> std::io::Result<()> {
+    use rustix::fs::{CWD, RenameFlags, renameat_with};
+    renameat_with(CWD, staging, CWD, path, RenameFlags::NOREPLACE).map_err(std::io::Error::from)
+}
 
-    #[cfg(not(unix))]
-    fn create_directory(path: &Path) -> io::Result<()> {
-        fs::create_dir(path)
-    }
-
-    #[cfg(unix)]
-    fn create_file(path: &Path) -> io::Result<()> {
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(path)
-            .map(drop)
-    }
-
-    #[cfg(not(unix))]
-    fn create_file(path: &Path) -> io::Result<()> {
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map(drop)
-    }
-
-    /// The directory or file must be ours, not a link, and the file must have
-    /// one name. Neither may grant the group or others anything: issue
-    /// bodies, run messages, and paths go in. Permissions are not repaired;
-    /// agent-launcher makes both private, so a shared one passes.
-    fn check(path: &Path, directory: bool) -> Result<()> {
-        let metadata = fs::symlink_metadata(path).map_err(|source| Error::Prepare {
-            path: path.to_owned(),
-            source,
-        })?;
-        let kind = if directory {
-            metadata.is_dir()
-        } else {
-            metadata.is_file()
-        };
-        if !kind || metadata.file_type().is_symlink() || !owned(&metadata, directory) {
-            return Err(Error::NotPrivate {
-                path: path.to_owned(),
-            });
-        }
-        Ok(())
-    }
-
-    #[cfg(unix)]
-    fn owned(metadata: &fs::Metadata, directory: bool) -> bool {
-        use std::os::unix::fs::MetadataExt;
-        metadata.uid() == rustix::process::getuid().as_raw()
-            && metadata.mode() & 0o077 == 0
-            && (directory || metadata.nlink() == 1)
-    }
-
-    #[cfg(not(unix))]
-    fn owned(_: &fs::Metadata, _: bool) -> bool {
-        true
-    }
+/// Links `staging` at `path`, which fails when a file is there; the caller
+/// removes `staging`. Unlike a rename it never replaces one.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn publish(staging: &Path, path: &Path) -> std::io::Result<()> {
+    std::fs::hard_link(staging, path)
 }

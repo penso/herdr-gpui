@@ -766,14 +766,8 @@ pub enum Error {
     TooManyKeystrokes(&'static str),
     #[error("pane_keys must list at most {0} keystrokes")]
     TooManyPaneKeys(usize),
-    #[error("SSH ended before the tunnel opened ({0}).")]
-    TunnelExited(std::process::ExitStatus),
-    #[error("No free local port for an SSH tunnel.")]
-    TunnelPort(#[source] io::Error),
-    #[error("Could not start ssh for a tunnel.")]
-    TunnelStart(#[source] io::Error),
-    #[error("The SSH tunnel did not open in time.")]
-    TunnelTimeout,
+    #[error(transparent)]
+    Tunnel(#[from] crate::listening_ports::TunnelError),
     #[error("Herdr UI has no setting {}; config-gpui.toml lists every setting", .0.join(", "))]
     UnknownConfigKeys(Vec<String>),
     #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]

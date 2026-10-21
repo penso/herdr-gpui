@@ -1,5 +1,6 @@
 //! The list beside an open page: the same items as the section's cards, in
-//! the same order, one compact row each, the open one marked.
+//! the same order, one compact row each, the open one marked. It keeps the
+//! room the page's pane leaves, as an issue list does.
 
 use super::{
     Item,
@@ -9,9 +10,6 @@ use super::{
 use crate::HerdrWindow;
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
-
-/// The list's width beside a page.
-const WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     pub(super) fn render_security_list(
@@ -23,8 +21,8 @@ impl HerdrWindow {
         let mut list = div()
             .id("security-list")
             .debug_selector(|| "security-list".into())
-            .flex_none()
-            .w(px(WIDTH))
+            .flex_1()
+            .min_w_0()
             .h_full()
             .min_h_0()
             .overflow_y_scroll()
@@ -34,13 +32,14 @@ impl HerdrWindow {
             .pb_3()
             .border_r_1()
             .border_color(rgb(theme.active));
-        let reported = self.security.reported();
+        let look = self.security_look();
+        let reported = self.shown_reports();
         if !reported.is_empty() {
             list = list.child(
                 self.security_group("Reported to you", format!("{} in triage", reported.len())),
             );
             let now = SystemTime::now();
-            for (_, repo, report) in reported {
+            for (index, repo, report) in reported {
                 let color = report
                     .severity
                     .map_or(theme.muted, |severity| severity_color(theme, severity));
@@ -62,18 +61,17 @@ impl HerdrWindow {
                     repo: repo.name.clone(),
                     advisory: report.advisory.clone(),
                 };
-                list = list.child(self.security_row(
-                    item,
-                    opened,
-                    color,
-                    report.summary.clone(),
-                    detail,
-                    cx,
-                ));
+                let start =
+                    SharedString::from(format!("security-list-start-{index}-{}", report.advisory));
+                let start = self.security_start(&look, start, item.clone(), cx);
+                list = list.child(
+                    self.security_row(item, opened, color, report.summary.clone(), detail, cx)
+                        .child(start),
+                );
             }
         }
-        for repo in self.security.repos() {
-            let alerts = repo.open();
+        for (index, repo) in self.security.repos().iter().enumerate() {
+            let alerts = self.shown_alerts(repo);
             if alerts.is_empty() {
                 continue;
             }
@@ -84,17 +82,23 @@ impl HerdrWindow {
                     repo: repo.name.clone(),
                     number: alert.number,
                 };
-                list = list.child(self.security_row(
-                    item,
-                    opened,
-                    severity_color(theme, alert.severity),
-                    format!("{} — {}", alert.package, alert.summary),
-                    format!(
-                        "#{} · {} · {}",
-                        alert.number, alert.advisory, alert.manifest
-                    ),
-                    cx,
-                ));
+                let start =
+                    SharedString::from(format!("security-list-start-{index}-{}", alert.number));
+                let start = self.security_start(&look, start, item.clone(), cx);
+                list = list.child(
+                    self.security_row(
+                        item,
+                        opened,
+                        severity_color(theme, alert.severity),
+                        format!("{} — {}", alert.package, alert.summary),
+                        format!(
+                            "#{} · {} · {}",
+                            alert.number, alert.advisory, alert.manifest
+                        ),
+                        cx,
+                    )
+                    .child(start),
+                );
             }
         }
         list

@@ -2077,12 +2077,12 @@ on an item's branch shows as that item's run, working or stopped by whether an
 agent is in it, and so does an `agent/…` branch in the repository that no
 workspace shows. These runs open their workspace but have no controls.
 
-The tab shares its data with agent-launcher,
-so both can be open on one repository at once: each lists the other's runs,
-updates only its own, and uses agent-launcher's prompt profiles from
-`~/.config/agent-launcher/agents/<name>/prompt.md` (the built-in prompt when
-none is chosen). Issues and runs are kept in agent-launcher's per-repository
-database under the platform data directory. GitHub is read as the account used
+Issues, pull requests with their reviews and checks, and runs are kept in a
+per-repository database in Herdr UI's state directory, so a restart lists them
+at once and syncs after. The first time a repository opens, agent-launcher's
+database for it is copied in, with its runs. The tab uses agent-launcher's
+prompt profiles from `~/.config/agent-launcher/agents/<name>/prompt.md` (the
+built-in prompt when none is chosen). GitHub is read as the account used
 for pull requests on that host. A GitLab remote, on gitlab.com or a
 self-managed host, lists its open issues (not yet its merge requests), read
 with `GITLAB_TOKEN` or `GITLAB_ACCESS_TOKEN` when `GITLAB_HOST` names that host

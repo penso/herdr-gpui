@@ -8,7 +8,7 @@ use std::{
 
 /// A repository whose only remote is GitHub Enterprise, which this build
 /// does not read, so no source reaches the network.
-fn repository(dir: &std::path::Path) -> String {
+pub(super) fn repository(dir: &std::path::Path) -> String {
     let checkout = dir.join("app");
     std::fs::create_dir_all(&checkout).unwrap();
     let git = |args: &[&str]| {
@@ -30,7 +30,7 @@ fn repository(dir: &std::path::Path) -> String {
     checkout.to_string_lossy().into_owned()
 }
 
-fn start(dir: &std::path::Path, checkout: String) -> Service {
+pub(super) fn start(dir: &std::path::Path, checkout: String) -> Service {
     Service::start(Request {
         target: ConnectTarget::Local,
         checkout,
@@ -46,7 +46,7 @@ fn start(dir: &std::path::Path, checkout: String) -> Service {
 }
 
 /// Polls `service` until `ready` holds, for at most ten seconds.
-fn wait(service: &Service, ready: impl Fn(&Snapshot) -> bool) -> Snapshot {
+pub(super) fn wait(service: &Service, ready: impl Fn(&Snapshot) -> bool) -> Snapshot {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut last = None;
     while Instant::now() < deadline {

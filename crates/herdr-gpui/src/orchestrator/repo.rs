@@ -10,8 +10,9 @@ use std::{
     sync::atomic::AtomicBool,
 };
 
-/// What one checkout's repository offers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// What one checkout's repository offers. The app's cache keeps the last
+/// one found per checkout, to show before git answers again.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RepoInfo {
     /// The key of the shared database: the Git common directory, or `.beads`
     /// for a standalone Beads project.
@@ -24,7 +25,7 @@ pub(crate) struct RepoInfo {
     pub(crate) remote: Option<Remote>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Remote {
     pub(crate) name: String,
     pub(crate) url: String,

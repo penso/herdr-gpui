@@ -62,9 +62,14 @@ fn the_menu_shows_every_project_narrowed_to_the_workspaces(cx: &mut gpui::TestAp
             // The fixture's workspaces hold two repositories: agent-launcher's
             // worktrees, and the folder the others share.
             assert_eq!(keys.len(), 2, "{keys:?}");
-            assert_eq!(
-                listing.picked_projects(),
-                [view.workspace_repo_key("w3").unwrap()]
+            // The fixture's folders are not on disk: once detection says
+            // so, which a fast machine may have done already, the pick is
+            // dropped rather than hide the other project.
+            let key = view.workspace_repo_key("w3").unwrap();
+            let picked = listing.picked_projects();
+            assert!(
+                picked == [key.clone()] || (picked.is_empty() && listing.outside_git(&key)),
+                "{picked:?}"
             );
         })
     });

@@ -27,3 +27,23 @@ pub enum Error {
     Timeout,
     // keep-sorted end
 }
+
+// The audio library's failures convert straight into the crate's error, so
+// playback keeps using `?` on them.
+impl From<rodio::decoder::DecoderError> for crate::Error {
+    fn from(error: rodio::decoder::DecoderError) -> Self {
+        Self::Sound(error.into())
+    }
+}
+
+impl From<rodio::DeviceSinkError> for crate::Error {
+    fn from(error: rodio::DeviceSinkError) -> Self {
+        Self::Sound(error.into())
+    }
+}
+
+impl From<rodio::cpal::StreamError> for crate::Error {
+    fn from(error: rodio::cpal::StreamError) -> Self {
+        Self::Sound(error.into())
+    }
+}

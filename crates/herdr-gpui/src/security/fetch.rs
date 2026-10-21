@@ -180,7 +180,7 @@ pub(super) const FULLY_READ: u8 = 2;
 /// How much of a repository one account could read: its alerts listing,
 /// and its private reporting, whether on or off.
 pub(super) fn readable(repo: &Repo) -> u8 {
-    u8::from(repo.alerts.is_ok())
+    u8::from(matches!(repo.alerts, Ok(Alerts::Open { .. } | Alerts::Off)))
         + u8::from(matches!(
             repo.reports,
             Ok(super::Reports::Open { .. } | super::Reports::Off)
@@ -212,5 +212,25 @@ fn alerts(name: &str, tokens: &Tokens, cancelled: &AtomicBool) -> Result<Alerts,
         &mut cooldown,
     )
     .map_err(|error| Error::Github(Box::new(error)))?;
-    parse(&response)
+    let alerts = parse(&response)?;
+    if !matches!(alerts, Alerts::Open { total: 0, .. }) {
+        return Ok(alerts);
+    }
+    let check = crate::github::rest::<serde_json::Value>(
+        "security",
+        tokens.for_owner(owner),
+        &format!("/repos/{name}/dependabot/alerts?state=open&per_page=1"),
+        TIMEOUT,
+        || cancelled.load(Ordering::Relaxed),
+    );
+    Ok(checked(alerts, check.map(drop)))
+}
+
+/// An empty listing as REST's `check` of it says: whatever else goes wrong
+/// there, it stands, and only a refusal says it was not the whole story.
+pub(super) fn checked(empty: Alerts, check: crate::Result<()>) -> Alerts {
+    match check {
+        Err(error) if super::reports::hidden(&error) => Alerts::Hidden,
+        _ => empty,
+    }
 }

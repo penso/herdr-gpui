@@ -1,5 +1,6 @@
-//! Where a repository's shared database lives: agent-launcher's
-//! `repositories/<uuid v5>/state.sqlite3` under the platform data directory.
+//! Where a repository's database lives: `repositories/<uuid v5>/state.sqlite3`
+//! in the app's own state directory. agent-launcher kept the same file under
+//! the platform data directory, which is read once to carry it over.
 
 use std::{
     ffi::OsString,
@@ -9,7 +10,7 @@ use uuid::Uuid;
 
 /// A project the database is keyed by, through its Git common directory or
 /// its `.beads` directory when it has no Git repository.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub(crate) enum Repository {
     /// The canonicalized Git common directory or standalone `.beads` directory.
     Local(PathBuf),
@@ -38,14 +39,32 @@ impl Repository {
     }
 }
 
-/// The database file for `repository`, or `None` without a data directory.
+/// The database file for `repository`, or `None` without a state directory.
 pub(crate) fn database_path(repository: &Repository) -> Option<PathBuf> {
-    Some(database_path_in(&data_local_dir()?, repository))
+    Some(database_path_in(
+        &crate::preferences::state_dir()?,
+        repository,
+    ))
 }
 
-pub(super) fn database_path_in(data: &Path, repository: &Repository) -> PathBuf {
-    data.join("agent-launcher")
-        .join("repositories")
+pub(super) fn database_path_in(state: &Path, repository: &Repository) -> PathBuf {
+    repository_file(&state.join("repositories"), repository)
+}
+
+/// Where agent-launcher kept `repository`'s database, to carry over.
+pub(super) fn legacy_path(repository: &Repository) -> Option<PathBuf> {
+    Some(legacy_path_in(&data_local_dir()?, repository))
+}
+
+pub(super) fn legacy_path_in(data: &Path, repository: &Repository) -> PathBuf {
+    repository_file(
+        &data.join("agent-launcher").join("repositories"),
+        repository,
+    )
+}
+
+fn repository_file(folder: &Path, repository: &Repository) -> PathBuf {
+    folder
         .join(repository.id().hyphenated().to_string())
         .join("state.sqlite3")
 }
@@ -54,7 +73,7 @@ fn data_local_dir() -> Option<PathBuf> {
     data_local_dir_with(|name| std::env::var_os(name))
 }
 
-/// The `dirs::data_local_dir()` agent-launcher uses, from injected variables.
+/// The `dirs::data_local_dir()` agent-launcher used, from injected variables.
 pub(super) fn data_local_dir_with(var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     let var = |name| {
         var(name)

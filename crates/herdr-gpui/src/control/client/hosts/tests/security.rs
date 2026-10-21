@@ -92,3 +92,15 @@ fn a_queue_cut_short_says_github_holds_more() {
          \x20 more reports in triage on GitHub"
     );
 }
+
+#[test]
+fn alerts_a_sign_in_cannot_read_say_so_rather_than_none() {
+    let reply = Reply::Security {
+        repositories: vec![repo("a/hidden", "hidden", Vec::new())],
+        note: None,
+    };
+    assert_eq!(
+        text::security(&reply),
+        "a/hidden (Local): Dependabot alerts are not readable with this sign-in"
+    );
+}

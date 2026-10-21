@@ -223,7 +223,8 @@ impl HerdrWindow {
         let Some(opened) = &self.security.opened else {
             return;
         };
-        let items = self.security.items();
+        // Through what the search and pills show, as the list does.
+        let items = self.shown_items();
         let Some(at) = items.iter().position(|item| *item == opened.item) else {
             return;
         };
@@ -247,6 +248,15 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// Reads the open page once a read brought the account it waited for.
+    pub(super) fn read_waiting_page(&mut self, cx: &mut Context<Self>) {
+        if let Some(opened) = &self.security.opened
+            && !self.security.pages.contains_key(&opened.item)
+        {
+            self.read_security_page(opened.item.clone(), cx);
+        }
+    }
+
     /// Reads `item`'s page again, after a failure.
     pub(crate) fn retry_security_page(&mut self, cx: &mut Context<Self>) {
         if let Some(opened) = &self.security.opened {
@@ -265,8 +275,12 @@ impl HerdrWindow {
             return;
         };
         let Some(account) = repo.account.clone() else {
-            let error = Arc::new(Error::Output);
-            self.security.pages.insert(item, Loaded::Failed(error));
+            // Restored from the cache: the read in flight brings the
+            // account, and `read_waiting_page` then reads the page.
+            if !self.security.busy() {
+                let error = Arc::new(Error::Output);
+                self.security.pages.insert(item, Loaded::Failed(error));
+            }
             return;
         };
         if self.security.pages.len() >= MAX_PAGES {

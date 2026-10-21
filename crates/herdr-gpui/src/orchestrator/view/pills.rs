@@ -23,9 +23,15 @@ impl OrchestratorView {
             }
         }
         let mut backends: Vec<(Provider, usize)> = Vec::new();
+        // An item several checkouts list is one row, so it counts once.
+        let mut counted = std::collections::HashSet::new();
         for repo in &self.repos {
             for row in rows(repo, tab).iter().filter(|row| row.depth == 0) {
-                let provider = repo.snapshot.items[row.item].key.source.provider;
+                let key = &repo.snapshot.items[row.item].key;
+                if !counted.insert(key.canonical()) {
+                    continue;
+                }
+                let provider = key.source.provider;
                 match backends.iter_mut().find(|(found, _)| *found == provider) {
                     Some((_, count)) => *count += 1,
                     None => backends.push((provider, 1)),
@@ -34,8 +40,7 @@ impl OrchestratorView {
         }
         backends.sort_by_key(|(provider, _)| provider_name(*provider));
         let projects: Vec<(String, String, usize)> = self
-            .repos
-            .iter()
+            .projects_named()
             .map(|repo| {
                 let count = rows(repo, tab).iter().filter(|row| row.depth == 0).count();
                 (repo.key.clone(), self.project_label(repo), count)
@@ -44,25 +49,7 @@ impl OrchestratorView {
         if backends.len() < 2 && projects.len() < 2 {
             return None;
         }
-        let pill = |id: SharedString, on: bool| {
-            let hover = theme.active;
-            div()
-                .id(id.clone())
-                .debug_selector(move || id.to_string())
-                .flex_none()
-                .flex()
-                .items_center()
-                .gap_1()
-                .px_2()
-                .py(px(2.))
-                .rounded_full()
-                .border_1()
-                .border_color(rgb(if on { theme.primary() } else { theme.active }))
-                .when(on, |el| el.bg(rgb(theme.primary_wash())))
-                .when(!on, |el| el.hover(move |style| style.bg(rgb(hover))))
-                .cursor_pointer()
-                .text_size(look.small())
-        };
+        let pill = |id: SharedString, on: bool| look.pill(id, on);
         let count = |count: usize| {
             (count > 0).then(|| div().text_color(rgb(theme.muted)).child(count.to_string()))
         };
@@ -126,8 +113,7 @@ impl OrchestratorView {
     pub(super) fn project_label(&self, repo: &super::Repo) -> String {
         let name = repo.name();
         let shared = self
-            .repos
-            .iter()
+            .projects_named()
             .filter(|other| other.name() == name)
             .count()
             > 1;

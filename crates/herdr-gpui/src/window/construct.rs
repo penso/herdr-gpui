@@ -88,6 +88,7 @@ impl HerdrWindow {
         // Starts the thread that reads and saves the marks file.
         let teleport_marks = crate::teleport::Marks::start();
         let sidebar_search = sidebar::SidebarSearch::new(cx);
+        let security_search = crate::security::SecuritySearch::new(cx);
         let surface_signal = cx.new(|_| SurfaceSignal);
         let sidebar_invalidation = Self::invalidate_sidebar(cx);
         let host_theme = Self::observe_host_theme(cx);
@@ -243,6 +244,7 @@ impl HerdrWindow {
             reviews: Default::default(),
             scrollbar_drag: None,
             security: Default::default(),
+            security_search,
             selected_endpoint: 0,
             selected_generation: 0,
             selection: None,

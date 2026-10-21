@@ -11,7 +11,7 @@
 
 use super::{Error, Severity, model::ghsa};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
@@ -19,7 +19,7 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 pub(super) const PAGE: usize = 50;
 
 /// One report in triage.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Report {
     /// The draft advisory's GHSA identifier.
     pub(crate) advisory: String,
@@ -31,7 +31,7 @@ pub(crate) struct Report {
 }
 
 /// What a repository's private reporting said.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Reports {
     /// Private vulnerability reporting is turned off.
     Off,

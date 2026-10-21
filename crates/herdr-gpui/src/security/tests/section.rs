@@ -1,4 +1,4 @@
-//! The Security icon joins the bar only once alerts are on somewhere, and
+//! The Security icon is always in the bar, before any read finishes, and
 //! the section draws what the last read found.
 use super::*;
 use crate::sidebar::layout_tests::{SidebarFixture, fixture_window, full_draw};
@@ -38,18 +38,11 @@ pub(super) fn install(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, re
 }
 
 #[gpui::test]
-fn the_icon_waits_for_a_repository_with_alerts_on(cx: &mut gpui::TestAppContext) {
+fn the_icon_is_listed_before_any_read(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
     draw(cx);
-    assert!(cx.debug_bounds("activity-issues").is_some());
-    assert!(cx.debug_bounds("activity-security").is_none());
+    assert!(cx.debug_bounds("activity-security").is_some());
     install(&view, cx, vec![repo("a/off", Ok(Alerts::Off))]);
-    assert!(cx.debug_bounds("activity-security").is_none());
-    install(
-        &view,
-        cx,
-        vec![repo("a/on", Ok(open(vec![alert(1, Severity::Critical)])))],
-    );
     assert!(cx.debug_bounds("activity-security").is_some());
 }
 

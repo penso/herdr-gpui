@@ -100,7 +100,7 @@ fn version_zero_migrates_once_and_keeps_agent_launcher_rows() {
         assert_eq!(items[0].activity.unwrap().comments, Some(0));
         assert!(store.sessions().unwrap().is_empty());
     }
-    assert_eq!(pragma(&path, "user_version"), "1");
+    assert_eq!(pragma(&path, "user_version"), SCHEMA_VERSION.to_string());
 }
 
 #[test]
@@ -110,15 +110,23 @@ fn a_newer_schema_opens_read_only_and_refuses_writes() {
     drop(Store::open(&path).unwrap());
     Connection::open(&path)
         .unwrap()
-        .execute_batch("PRAGMA user_version = 2")
+        .execute_batch(&format!("PRAGMA user_version = {}", SCHEMA_VERSION + 1))
         .unwrap();
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.access(), Access::ReadOnly { found: 2 });
+    assert_eq!(
+        store.access(),
+        Access::ReadOnly {
+            found: SCHEMA_VERSION + 1
+        }
+    );
     assert!(store.runs().unwrap().is_empty());
     let error = store
         .save_run(&run("a", Owner::HerdrGpui), None)
         .unwrap_err();
-    assert!(matches!(error, Error::NewerSchema { found: 2, known: 1 }));
+    assert!(matches!(
+        error,
+        Error::NewerSchema { found, known } if found == SCHEMA_VERSION + 1 && known == SCHEMA_VERSION
+    ));
     let error = store
         .replace_items(&github(), &[], &Checkpoint::default())
         .unwrap_err();
@@ -233,7 +241,12 @@ fn a_linked_database_is_refused() {
     let elsewhere = dir.path().join("elsewhere.sqlite3");
     std::fs::write(&elsewhere, b"").unwrap();
     std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
-    assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+    assert!(matches!(
+        Store::open(&path),
+        Err(Error::Private(
+            crate::private_file::Error::NotPrivate { .. }
+        ))
+    ));
 }
 
 /// An existing database others could read is refused rather than written,
@@ -254,10 +267,20 @@ fn a_database_others_can_read_is_refused() {
 
     mode(&folder, 0o700);
     mode(&path, 0o644);
-    assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+    assert!(matches!(
+        Store::open(&path),
+        Err(Error::Private(
+            crate::private_file::Error::NotPrivate { .. }
+        ))
+    ));
     mode(&path, 0o600);
     mode(&folder, 0o755);
-    assert!(matches!(Store::open(&path), Err(Error::NotPrivate { .. })));
+    assert!(matches!(
+        Store::open(&path),
+        Err(Error::Private(
+            crate::private_file::Error::NotPrivate { .. }
+        ))
+    ));
     mode(&folder, 0o700);
     assert!(Store::open(&path).is_ok());
 }

@@ -1,28 +1,6 @@
 use super::*;
 
 #[test]
-fn the_section_becomes_available_once_alerts_are_on_and_stays() {
-    let mut security = Security::default();
-    let now = Instant::now();
-    assert!(!security.available());
-    security.install(vec![repo("a/off", Ok(Alerts::Off))], now, SystemTime::now());
-    assert!(!security.available());
-    security.install(
-        vec![repo("a/on", Ok(open(Vec::new())))],
-        now,
-        SystemTime::now(),
-    );
-    assert!(security.available());
-    // A later failure keeps the icon, so the bar does not shift.
-    security.install(
-        vec![repo("a/on", Err(Error::Output))],
-        now,
-        SystemTime::now(),
-    );
-    assert!(security.available());
-}
-
-#[test]
 fn counts_only_critical_and_high_alerts() {
     let mut security = Security::default();
     security.install(

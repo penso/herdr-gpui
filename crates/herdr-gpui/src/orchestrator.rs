@@ -1,13 +1,11 @@
 //! The orchestrator: a repository's issues and pull requests, and the agent
 //! runs dispatched for them.
 //!
-//! Its records live in the per-repository SQLite database agent-launcher also
-//! uses, so both applications can run at the same time against one
-//! repository, the way herdr and herdr-gpui share a daemon. agent-launcher's
-//! `docs/shared-state.md` is the contract this module implements: the file's
-//! location, its schema version, key formats, and which application may write
-//! which rows. herdr-gpui writes only the runs it owns, and never takes
-//! agent-launcher's `runtime.lock`.
+//! Its records live in its own per-repository SQLite database (`location`),
+//! whose schema began as agent-launcher's; agent-launcher's file is copied
+//! in the first time a repository opens. A restart shows what the database
+//! and the app's cache (`crate::cache`) hold before reading anything again;
+//! `docs/orchestrator.md` has the details.
 
 mod actions;
 mod beads;
@@ -47,7 +45,7 @@ pub(crate) use service::SourceStatus;
 pub(crate) use service::{Notice, Request, Service, Snapshot, SyncState, Timing};
 pub(crate) use store::{Access, SCHEMA_VERSION, Store};
 pub(crate) use view::{
-    Event, List, LiveAgent, Look, OrchestratorView, RepoSpec, key_label, without_html,
+    Event, List, LiveAgent, Look, OrchestratorView, RepoSpec, key_label, pane, without_html,
 };
 
 #[cfg(test)]

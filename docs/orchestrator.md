@@ -6,27 +6,33 @@ bar's Pull requests and Issues sections, and dispatches new ones through the
 Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
 section; this page is for working on it.
 
-## Shared state with agent-launcher
+## State and restart
 
-The orchestrator reads and writes agent-launcher's per-repository SQLite database, so
-both applications can run against one repository at once. agent-launcher's
-`docs/shared-state.md` is the contract: the file's location, the schema
-version (`PRAGMA user_version`, currently 1), key formats, JSON column shapes,
-and who may write what. In short:
+The orchestrator keeps its own per-repository SQLite database, in the app's
+state directory: `<state dir>/repositories/<uuid v5 of the canonical git
+common dir>/state.sqlite3`, private to the user. Repositories on SSH hosts
+are keyed by `ssh://<destination><git common dir>` and live on this machine.
+Its schema began as agent-launcher's (`PRAGMA user_version`, currently 2,
+which added each open pull request's last read review and checks):
 
-- The database is `<data_local_dir>/agent-launcher/repositories/<uuid v5 of
-  the canonical git common dir>/state.sqlite3`. Repositories on SSH hosts are
-  keyed by `ssh://<destination><git common dir>` and live on this machine.
-- A run's row, events, and `herdr_sessions` row are written only by its
-  `runs.owner` (`agent-launcher` or `herdr-gpui`). herdr-gpui never stops,
-  messages, removes, or recovers agent-launcher's runs, and never takes its
-  `runtime.lock`.
-- Either application may replace a source's issues, but only with a complete
-  listing. A capped listing, or one made while the schema is newer than this
-  build knows, is shown and not written.
-- A newer schema opens read-only, with a banner; nothing is downgraded.
+- The first time a repository opens, agent-launcher's database at
+  `<data_local_dir>/agent-launcher/repositories/<same uuid>/state.sqlite3`
+  is copied in, if there is one, so its items and runs come along. Nothing
+  is written back to it afterwards.
+- Runs keep their `runs.owner` (`agent-launcher` or `herdr-gpui`); only
+  herdr-gpui's own runs are stopped, messaged, or removed.
+- A source's issues are replaced only with a complete listing. A capped
+  listing, or one made while the schema is newer than this build knows, is
+  shown and not written. A newer schema opens read-only, with a banner.
 
-`store.rs` implements the contract; its tests open a version-0 database as
+A restart shows what the last run found before any network or git call:
+the repository each checkout held comes from the app's cache database
+(`<state dir>/cache/cache.sqlite3`, `crate::cache`), then the items, runs,
+and checks from the repository's database. Detection and the first sync
+follow at once and replace it, and syncing then runs on its timer. A
+checkout that no longer holds that repository drops what was shown.
+
+`store.rs` implements the schema; its tests open a version-0 database as
 agent-launcher wrote it and check that migration keeps its rows.
 
 ## Layout
@@ -36,7 +42,7 @@ agent-launcher wrote it and check that migration keeps its rows.
 | `model.rs`, `location.rs`, `store.rs` | Records in the database's shapes, its path, and SQLite access. |
 | `repo.rs` | Finding a checkout's repository, main checkout, Beads, and remote on its host. |
 | `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, with a full listing again every 30 minutes; GitLab lists its open issues in full on every sync. |
-| `review.rs` | Each open pull request's review decision, review requests, and checks, read after every GitHub sync and kept in the snapshot only: they change with every CI run, and the database's rows are agent-launcher's contract. |
+| `review.rs` | Each open pull request's review decision, review requests, and checks, read after every GitHub sync and kept in the database, so a restart shows the last ones until the first sync. |
 | `service.rs` | The worker thread per open view: sync, reload, and the action queue. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
 | `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts. |
