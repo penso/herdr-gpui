@@ -1,10 +1,9 @@
-//! Sound configuration and playback failures.
+//! Why a notification sound did not play or its settings did not load.
 
 use std::{io, path::PathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    // keep-sorted start
     #[error("Audio playback cancelled")]
     Cancelled,
     #[error("Sound configuration exceeds 1 MiB")]
@@ -25,7 +24,6 @@ pub enum Error {
     Stream(#[from] rodio::cpal::StreamError),
     #[error("Audio playback timed out")]
     Timeout,
-    // keep-sorted end
 }
 
 // The audio library's failures convert straight into the crate's error, so
