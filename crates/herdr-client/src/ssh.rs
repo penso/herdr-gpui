@@ -47,7 +47,9 @@ pub(super) use crate::script::shell_quote as quote;
 // Keep paths in shell variables: discovered executable names are never eval'd.
 pub(super) const CANDIDATES: &str = r#"candidate=$(command -v herdr 2>/dev/null || :)
 case "$candidate" in /*/mise/shims/herdr) candidate=;; /*) ;; *) candidate=;; esac
-for path in "$candidate" "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr /home/linuxbrew/.linuxbrew/bin/herdr "$HOME/.nix-profile/bin/herdr" "/etc/profiles/per-user/$USER/bin/herdr" /nix/var/nix/profiles/default/bin/herdr /run/current-system/sw/bin/herdr; do"#;
+linuxbrew=
+case "$(PATH=/usr/bin:/bin uname -s)" in Linux) linuxbrew=/home/linuxbrew/.linuxbrew/bin/herdr;; esac
+for path in "$candidate" "$HOME/.local/bin/herdr" /opt/homebrew/bin/herdr /usr/local/bin/herdr "$linuxbrew" "$HOME/.nix-profile/bin/herdr" "/etc/profiles/per-user/$USER/bin/herdr" /nix/var/nix/profiles/default/bin/herdr /run/current-system/sw/bin/herdr; do"#;
 
 const PROBE_CANDIDATE: &str = "herdr-probe:candidate";
 const PROBE_DONE: &str = "herdr-probe:done";

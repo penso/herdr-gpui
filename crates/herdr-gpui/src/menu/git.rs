@@ -101,7 +101,10 @@ impl HerdrWindow {
     }
 
     /// The checkout the chrome acts on: the focused workspace's, when it is one
-    /// this client may run Git in.
+    /// this client may run Git in. The daemon only attaches worktree metadata
+    /// to a worktree made through Herdr, so a space merely opened in a
+    /// repository is named by its directory, which the worker resolves and
+    /// verifies as the pull request lookup does; see `workspace_input`.
     pub(crate) fn git_input(&self) -> Option<crate::pull_request::Input> {
         if !self.local_git_endpoint() {
             return None;
@@ -119,11 +122,7 @@ impl HerdrWindow {
                     .iter()
                     .find(|workspace| workspace.focused)
             })?;
-        crate::pull_request::repository_input(
-            workspace.worktree.as_ref(),
-            workspace.branch.as_deref(),
-        )
-        .ok()
+        crate::pull_request::workspace_input(workspace, &crate::pull_request::Origin::Local).ok()
     }
 
     pub(crate) fn open_git_menu(
@@ -168,11 +167,7 @@ impl HerdrWindow {
         self.menu
             .github
             .connected()
-            .then(|| {
-                self.menu
-                    .pr_cache
-                    .peek(&view, input.repo_key.as_deref()?, &input.branch)
-            })
+            .then(|| self.menu.pr_cache.peek_input(&view, input))
             .flatten()
     }
 

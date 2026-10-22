@@ -70,14 +70,24 @@ fn zoomed_tab_shows_its_mark_within_its_width(cx: &mut TestAppContext) {
             &view.theme,
         );
         let label = view.live.snapshot.as_ref().unwrap().tabs[0].label.clone();
-        let lead = Lead::of(view.live.snapshot.as_ref().unwrap().tabs[0].agent_status);
+        let snapshot = view.live.snapshot.as_ref().unwrap();
+        let lead = herdr_mark(snapshot, &snapshot.tabs[0]).lead();
         (
-            view.tab_width(&label.clone().into(), lead, true, indicators, window),
-            view.tab_width(&label.into(), lead, false, indicators, window),
+            view.tab_width(&label.clone().into(), shape(lead, true), indicators, window),
+            view.tab_width(&label.into(), shape(lead, false), indicators, window),
         )
     });
     assert_eq!(zoomed - unzoomed, DOT_GAP + ZOOM_ICON);
     assert!((tab.size.width - px(zoomed)).abs() <= px(0.5), "{tab:?}");
+}
+
+/// A tab the strip does not show, for the classic layout's measure.
+fn shape(lead: Lead, zoomed: bool) -> TabShape {
+    TabShape {
+        lead,
+        zoomed,
+        selected: false,
+    }
 }
 
 fn status_layout(cx: &mut TestAppContext, settings: Option<&str>, font_size: f32) {
@@ -124,7 +134,12 @@ fn status_layout(cx: &mut TestAppContext, settings: Option<&str>, font_size: f32
         );
         (
             indicators.width(&view.config.tabs),
-            view.tab_width(&label.into(), Lead::Status, false, indicators, window),
+            view.tab_width(
+                &label.into(),
+                shape(Lead::Status, false),
+                indicators,
+                window,
+            ),
         )
     });
     assert_eq!(dot.size.width, px(width));
@@ -638,3 +653,6 @@ mod tear_off;
 
 /// The dividers between groups, and the grips that drag them.
 mod divider;
+
+/// Every tab layout draws its tabs as wide as the strip measures them.
+mod layouts;

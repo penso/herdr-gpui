@@ -19,6 +19,8 @@ pub(crate) enum Preference {
     ShowWindowControls(bool),
     /// `status_icons`: the set agent status is drawn with.
     StatusIcons(StatusIcons),
+    /// `tab_layout`: how tab strips draw their tabs.
+    TabLayout(TabLayoutMode),
     /// `edge_rail`: the bar on busy and finished rows.
     EdgeRail(bool),
     ShowDeviceIcons(bool),
@@ -142,6 +144,7 @@ impl Config {
                     (None, "status_icons", Some(value.as_str().into()))
                 }
                 Preference::EdgeRail(value) => (None, "edge_rail", Some(value.into())),
+                Preference::TabLayout(mode) => (None, "tab_layout", Some(mode.name().into())),
                 Preference::FocusFollowsMouse(value) => {
                     (None, "focus_follows_mouse", Some(value.into()))
                 }

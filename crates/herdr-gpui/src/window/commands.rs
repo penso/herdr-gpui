@@ -2,10 +2,12 @@
 //! ordered surface barrier so input cannot reach the previous pane while the
 //! navigation and its projection are still in flight.
 
-use super::{Flash, HerdrWindow};
+use super::{Flash, HerdrWindow, layout_save::LayoutSaves};
 use crate::{
     app::InitialAppearance,
-    config::{Config, FONT_SIZE_RANGE, FONT_SIZE_STEP, LayoutMode},
+    config::{
+        Config, FONT_SIZE_RANGE, FONT_SIZE_STEP, LayoutMode, TabLayoutMode, preferences::Preference,
+    },
     controls::{self, Command},
     endpoint::Step,
     log_window,
@@ -42,10 +44,54 @@ impl HerdrWindow {
         }
         crate::menus::install(cx);
         cx.notify();
-        let save = cx.background_executor().spawn(async move { save(mode) });
+        let saves = cx.default_global::<LayoutSaves>().sidebar.clone();
+        saves.want(mode);
+        let save = cx
+            .background_executor()
+            .spawn(async move { saves.write_latest(save) });
         cx.spawn(async move |_, _| {
             if let Err(error) = save.await {
                 tracing::warn!(%error, "Could not save the sidebar layout");
+            }
+        })
+        .detach();
+    }
+
+    /// Switches how tab strips draw their tabs, then keeps it as
+    /// [`Self::set_layout`] keeps the sidebar's.
+    pub(crate) fn set_tab_layout(&mut self, mode: TabLayoutMode, cx: &mut Context<Self>) {
+        self.set_tab_layout_with(
+            mode,
+            |mode| Config::save_preference(Preference::TabLayout(mode)),
+            cx,
+        );
+    }
+
+    /// `save` persists the choice; tests pass one that leaves the real
+    /// config alone.
+    pub(crate) fn set_tab_layout_with(
+        &mut self,
+        mode: TabLayoutMode,
+        save: impl FnOnce(TabLayoutMode) -> crate::Result<()> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        if self.config.tab_layout == mode {
+            return;
+        }
+        self.config.tab_layout = mode;
+        if cx.has_global::<InitialAppearance>() {
+            cx.global_mut::<InitialAppearance>().config.tab_layout = mode;
+        }
+        crate::menus::install(cx);
+        cx.notify();
+        let saves = cx.default_global::<LayoutSaves>().tabs.clone();
+        saves.want(mode);
+        let save = cx
+            .background_executor()
+            .spawn(async move { saves.write_latest(save) });
+        cx.spawn(async move |_, _| {
+            if let Err(error) = save.await {
+                tracing::warn!(%error, "Could not save the tab layout");
             }
         })
         .detach();

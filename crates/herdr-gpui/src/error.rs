@@ -1,5 +1,6 @@
 //! Internal failures retain their categories and sources until presentation.
 pub use crate::updater::UpdateError;
+pub use clipboard::ClipboardError;
 use daemon::daemon_error_message;
 pub use github::{GitHubAccountsError, GitHubJsonError};
 use std::{io, path::PathBuf};
@@ -58,18 +59,8 @@ pub enum Error {
     Client(#[from] herdr_client::Error),
     #[error("HERDR_GITHUB_OAUTH_CLIENT_ID must be UTF-8")]
     ClientIdEncoding,
-    #[error("The clipboard changed while reading. Try pasting again.")]
-    ClipboardChanged,
-    #[error("Clipboard text is not valid UTF-8.")]
-    ClipboardEncoding(#[source] std::str::Utf8Error),
-    #[error("Could not read the clipboard; on Linux, install wl-paste or xclip.")]
-    ClipboardProcess(#[source] io::Error),
-    #[error("Clipboard content exceeds the {limit}-byte limit.")]
-    ClipboardSize { limit: usize },
-    #[error("Clipboard acquisition timed out.")]
-    ClipboardTimeout,
-    #[error("Remote clipboard acquisition is not supported on this platform.")]
-    ClipboardUnsupported,
+    #[error(transparent)]
+    Clipboard(#[from] ClipboardError),
     #[cfg(feature = "cloud")]
     #[error(transparent)]
     Cloud(#[from] crate::cloud::Error),
@@ -736,6 +727,8 @@ pub enum Error {
     /// The host's `uname -s`, bounded, so the message names what it is.
     #[error("CPU and memory cannot be read on {0:?} hosts.")]
     SystemLoadUnsupported(String),
+    #[error(transparent)]
+    TabLayout(#[from] crate::config::tab_layout::Error),
     #[error("Tailscale returned an unreadable status: {0}")]
     TailscaleJson(#[source] serde_json::Error),
     #[error("Tailscale did not answer in time")]
@@ -841,8 +834,7 @@ pub enum Error {
     WorktreeScripts(#[from] crate::worktree_scripts::Error),
     #[error("Select a checkout from the daemon's worktree list.")]
     WorktreeSelection,
-    /// A shell into a WSL distribution starts through `wsl.exe`, which only a
-    /// Windows client has.
+    /// WSL shells start through `wsl.exe`, which only a Windows client has.
     #[error("WSL distributions can only be reached from Windows.")]
     WslHostUnsupported,
     #[error("Another drop's paths are still being mapped in WSL. Try again in a moment.")]
@@ -852,6 +844,7 @@ pub enum Error {
     // keep-sorted end
 }
 
+mod clipboard;
 mod config;
 mod daemon;
 mod github;

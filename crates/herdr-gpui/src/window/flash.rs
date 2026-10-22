@@ -1,7 +1,8 @@
-//! The brief message over the terminal: "copied to clipboard", or why a
-//! shortcut did nothing. It answers the user's own gesture, so it needs no
-//! dismissing and retires on its own. Any window code can raise one with
-//! [`HerdrWindow::show_flash`]; nothing here names individual messages.
+//! The brief message over the terminal: "copied to clipboard", why a
+//! shortcut did nothing, or how to do what a gesture did not. It answers the
+//! user's own gesture, so it needs no dismissing and retires on its own. Any
+//! window code can raise one with [`HerdrWindow::show_flash`]; nothing here
+//! names individual messages.
 
 use super::HerdrWindow;
 use crate::config::Theme;
@@ -11,9 +12,15 @@ use std::time::{Duration, Instant};
 /// How long a flash stays up, matching herdr's own clipboard feedback.
 const FLASH_DURATION: Duration = Duration::from_secs(2);
 
-/// Whether the flash reports something done or something declined.
+/// How long a hint stays up. It teaches rather than confirms, so it needs a
+/// read, not a glance.
+const HINT_DURATION: Duration = Duration::from_secs(4);
+
+/// Whether the flash reports something done or something declined, or
+/// suggests another way to do what was tried.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tone {
+    Hint,
     Success,
     Warning,
 }
@@ -39,19 +46,36 @@ impl Flash {
         }
     }
 
-    /// Green for something done, yellow for something declined.
+    pub(crate) fn hint(text: impl Into<SharedString>) -> Self {
+        Self {
+            tone: Tone::Hint,
+            text: text.into(),
+        }
+    }
+
+    /// Green for something done, yellow for something declined, blue for a
+    /// suggestion, as the window's other notices use it.
     pub(crate) fn accent(&self, theme: &Theme) -> u32 {
         theme.ink(match self.tone {
+            Tone::Hint => theme.palette[4],
             Tone::Success => theme.palette[2],
             Tone::Warning => theme.palette[3],
         })
+    }
+
+    fn duration(&self) -> Duration {
+        match self.tone {
+            Tone::Hint => HINT_DURATION,
+            Tone::Success | Tone::Warning => FLASH_DURATION,
+        }
     }
 }
 
 impl HerdrWindow {
     /// Replaces whatever flash is up, so the newest gesture is the one answered.
     pub(crate) fn show_flash(&mut self, flash: Flash, cx: &mut Context<Self>) {
-        self.flash = Some((flash, Instant::now() + FLASH_DURATION));
+        let expires = Instant::now() + flash.duration();
+        self.flash = Some((flash, expires));
         cx.notify();
     }
 

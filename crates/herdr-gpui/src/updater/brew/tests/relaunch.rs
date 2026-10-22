@@ -105,7 +105,10 @@ impl Tools {
     }
 
     fn wait_for(&self, line: &str) -> anyhow::Result<Vec<String>> {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        // Only a failing wait runs this long. The failing-open path alone
+        // sleeps over three seconds between a dozen process spawns, which a
+        // loaded test machine can stretch past ten.
+        let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
             let events = self.events();
             if events.iter().any(|event| event == line) {

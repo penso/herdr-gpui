@@ -144,6 +144,7 @@ mod state;
 mod state_file;
 mod storage_warning;
 mod system_load;
+mod tab_layout;
 mod tab_menu;
 mod taskbar;
 mod teleport;

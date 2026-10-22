@@ -8,6 +8,10 @@ mod announcement;
 mod backdrop;
 pub(crate) mod chrome_focus;
 mod clipboard;
+#[cfg(target_os = "macos")]
+pub(crate) use clipboard::macos::{
+    Error as ClipboardHelperError, run_helper as run_clipboard_helper,
+};
 mod commands;
 mod config_diagnostic;
 mod construct;
@@ -24,6 +28,7 @@ mod function_keys;
 mod image_source;
 mod images;
 mod input;
+mod layout_save;
 mod lifecycle;
 pub(crate) use lifecycle::reasserts;
 mod links;
@@ -37,6 +42,7 @@ mod reconnecting;
 mod regions;
 mod render;
 mod report_issue;
+mod select_hint;
 mod selection;
 mod server_keys;
 mod sound;
@@ -236,6 +242,8 @@ pub(crate) struct HerdrWindow {
     /// The last orchestrator view id handed out.
     pub(crate) next_orchestrator: u64,
     pub(crate) notes_width: crate::panel_resize::PanelWidth,
+    /// Which notice cards had lines too long for their row when last laid out.
+    pub(crate) notice_overflow: std::rc::Rc<config_diagnostic::Overflow>,
     pub(crate) options: ConnectOptions,
     /// Orchestrator views' requests, acted on at the next tick.
     pub(crate) orchestrator_events: Vec<(crate::orchestrator::ViewId, crate::orchestrator::Event)>,
@@ -511,7 +519,11 @@ impl HerdrWindow {
             }
             cx.notify();
         }
-        if self.avatars.as_mut().is_some_and(|avatars| avatars.poll()) {
+        if self
+            .avatars
+            .as_mut()
+            .is_some_and(|avatars| avatars.poll(std::time::Instant::now()))
+        {
             cx.notify();
         }
         if let Some(chrome) = self.sidebar_preferences.as_mut().and_then(|p| p.loaded()) {

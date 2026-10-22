@@ -229,15 +229,17 @@ fn resting_on_a_workspace_opens_its_menu_once(cx: &mut gpui::TestAppContext) {
     cx.simulate_resize(size(px(900.), px(700.)));
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     let row = cx.debug_bounds("row-herdr").unwrap().center();
+    let settle_at =
+        |view: &Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext, now: std::time::Instant| {
+            cx.update(|window, cx| {
+                view.update(cx, |view, cx| view.poll_hover_menu(now, window, cx));
+                full_draw(window, cx).clear(cx);
+            });
+        };
     let settle = |view: &Entity<HerdrWindow>,
                   cx: &mut gpui::VisualTestContext,
                   elapsed: std::time::Duration| {
-        cx.update(|window, cx| {
-            view.update(cx, |view, cx| {
-                view.poll_hover_menu(std::time::Instant::now() + elapsed, window, cx);
-            });
-            full_draw(window, cx).clear(cx);
-        });
+        settle_at(view, cx, std::time::Instant::now() + elapsed);
     };
 
     // Entering the row alone is not a rest: the pointer has not moved yet.
@@ -250,10 +252,13 @@ fn resting_on_a_workspace_opens_its_menu_once(cx: &mut gpui::TestAppContext) {
     assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
 
     // Drifting inside the row restarts the dwell rather than opening early.
+    // The early checks are timed from before the move, so a slow machine
+    // cannot carry them past the dwell.
+    let drifted = std::time::Instant::now();
     cx.simulate_mouse_move(row + point(px(8.), px(0.)), None, Modifiers::default());
-    settle(&view, cx, std::time::Duration::ZERO);
+    settle_at(&view, cx, drifted);
     assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
-    settle(&view, cx, super::super::HOVER_MENU_DELAY / 2);
+    settle_at(&view, cx, drifted + super::super::HOVER_MENU_DELAY / 2);
     assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
 
     settle(&view, cx, super::super::HOVER_MENU_DELAY);

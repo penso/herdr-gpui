@@ -62,11 +62,7 @@ fn package_commands_pass_a_literal_absolute_path_and_fixed_manager() {
             "/usr/bin/apt-get",
             vec!["install", "--yes", "--no-remove", "--"],
         ),
-        (
-            Format::Rpm,
-            "/usr/bin/dnf",
-            vec!["install", "--assumeyes", "--"],
-        ),
+        (Format::Rpm, "/usr/bin/dnf", vec!["install", "--assumeyes"]),
         (
             Format::Arch,
             "/usr/bin/pacman",

@@ -47,6 +47,7 @@ mod status_bar;
 mod status_bar_awake_scope;
 mod status_icons;
 mod system_themes;
+mod tab_layout;
 mod terminal_padding;
 mod theme_files;
 mod themes;

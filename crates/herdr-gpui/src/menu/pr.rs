@@ -66,10 +66,7 @@ impl HerdrWindow {
             if !self.workspace_pr_target_current() {
                 return Err(crate::Error::StaleWorkspace);
             }
-            let workspace = self
-                .menu_target_workspace()
-                .ok_or(crate::Error::StaleWorkspace)?;
-            workspace_input(workspace, &origin)
+            self.menu_target_input(&origin)
         })();
         match result {
             Ok(input) => {
@@ -139,9 +136,38 @@ impl HerdrWindow {
             .filter(|snapshot| snapshot.boot_id == target.boot_id)?;
         snapshot.workspaces.iter().find(|workspace| {
             workspace.workspace_id == target.id
-                && workspace.worktree == target.worktree
+                && super::workspace::known_worktree(workspace) == target.worktree
                 && workspace.branch == target.branch
+                && target.addresses(workspace)
         })
+    }
+
+    /// The repository lookup for the menu's workspace, read through what the
+    /// menu trusts of it. A main checkout whose shell left the repository
+    /// Herdr keeps for it is looked up by its current directory, which
+    /// `workspace_input` already prefers over that metadata. A linked
+    /// checkout routed through such a main checkout is looked up by its
+    /// repository's Git directory and its own branch, which belong together.
+    pub(super) fn menu_target_input(&self, origin: &Origin) -> crate::Result<Input> {
+        let target = self
+            .menu
+            .target
+            .as_ref()
+            .ok_or(crate::Error::StaleWorkspace)?;
+        let workspace = self
+            .menu_target_workspace()
+            .ok_or(crate::Error::StaleWorkspace)?;
+        match (&target.source, &target.base) {
+            (super::workspace::Source::Repository { key, .. }, Some(branch)) => {
+                crate::worktree::validate_branch(branch)?;
+                Ok(Input {
+                    checkout: None,
+                    repo_key: Some(key.clone()),
+                    branch: branch.clone(),
+                })
+            }
+            _ => workspace_input(workspace, origin),
+        }
     }
 
     pub(crate) fn update_workspace_pr(&mut self) -> bool {

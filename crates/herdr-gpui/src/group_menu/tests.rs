@@ -254,6 +254,7 @@ fn the_menu_opens_from_the_strip_and_steps_with_the_keyboard(cx: &mut TestAppCon
     assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
 }
 
+mod any_repository;
 mod close_others;
 mod closed_elsewhere;
 mod new_tabs;

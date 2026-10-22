@@ -469,6 +469,19 @@ impl Cache {
         .ok()
     }
 
+    /// Pure cache read of exactly `input`'s pull request, as `peek` is for a
+    /// row named by daemon metadata. A local space without that metadata is
+    /// looked up by its directory, which only its own input matches.
+    pub fn peek_input(&self, view: &View, input: &Input) -> Option<Ref<'_, PullRequest>> {
+        let store = self.store.try_borrow().ok()?;
+        Ref::filter_map(store, |store| {
+            store
+                .entry(view, input)
+                .and_then(|entry| entry.value.as_ref())
+        })
+        .ok()
+    }
+
     /// Pure cache read of one checkout's lookup, local checkouts included:
     /// `None` until it was looked up once, else its pull request (if any)
     /// and why its latest refresh failed (if it did).

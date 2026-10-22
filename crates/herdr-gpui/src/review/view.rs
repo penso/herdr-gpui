@@ -409,7 +409,7 @@ impl HerdrWindow {
     ) -> TabId {
         let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
         let checkout = crate::browser::ReviewCheckout {
-            repo_key: "/work/repo/.git".into(),
+            repo_key: Some("/work/repo/.git".into()),
             branch: "feature".into(),
             checkout: Some("/work/repo".into()),
         };

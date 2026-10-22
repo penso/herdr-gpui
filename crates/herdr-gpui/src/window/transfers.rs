@@ -1,7 +1,7 @@
 //! Large files travel on an independent SSH stream; the daemon input lane stays
 //! responsive. Only completed copies can paste paths, into their captured target.
 
-use super::HerdrWindow;
+use super::{HerdrWindow, pending_input::Delivery};
 use crate::{connection::ConnectionBridge, fonts::StyledFont, terminal::InputTarget};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, protocol::ClientPaneInputEvent};
@@ -156,12 +156,12 @@ impl HerdrWindow {
         }
     }
 
-    pub(crate) fn start_file_transfer(
+    pub(super) fn start_file_transfer(
         &mut self,
         target: InputTarget,
         paths: Vec<PathBuf>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Delivery {
         self.start_file_transfer_with(
             target,
             paths,
@@ -170,7 +170,7 @@ impl HerdrWindow {
             },
             herdr_client::remove_uploaded_files,
             cx,
-        );
+        )
     }
 
     fn start_file_transfer_with(
@@ -187,24 +187,25 @@ impl HerdrWindow {
         + 'static,
         cleanup: impl FnOnce(&str, &[String]) -> herdr_client::Result<()> + Send + 'static,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Delivery {
         if !self.accepts_remote_images() || paths.is_empty() {
-            return;
+            return Delivery::Refused;
         }
         if self.file_transfer.is_some() {
+            self.local_error = Some("Files not pasted: another copy is running".into());
             self.local_transfer_notice(
                 "Copy not started",
                 "Another file copy is still running. Cancel it or wait for it to finish.".into(),
                 cx,
             );
-            return;
+            return Delivery::Refused;
         }
         let endpoint = &self.endpoints[self.selected_endpoint];
         let ConnectTarget::Ssh { target: host, .. } = &endpoint.connection.target else {
-            return;
+            return Delivery::Refused;
         };
         let Some(snapshot) = &self.live.snapshot else {
-            return;
+            return Delivery::Refused;
         };
         let host = host.clone();
         let boot = snapshot.boot_id.clone();
@@ -304,6 +305,7 @@ impl HerdrWindow {
             shown: (0, 0, false),
         });
         cx.notify();
+        Delivery::Copying
     }
 
     pub(super) fn render_file_transfer(

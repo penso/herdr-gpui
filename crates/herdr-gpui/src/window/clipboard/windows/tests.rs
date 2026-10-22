@@ -64,13 +64,19 @@ fn a_reader_that_never_returns_times_out_and_blocks_the_next() {
         let _ = done.send(());
         Ok(())
     });
-    assert!(matches!(result, Err(Error::ClipboardTimeout)));
+    assert!(matches!(
+        result,
+        Err(Error::Clipboard(ClipboardError::Timeout))
+    ));
     assert!(start.elapsed() < Duration::from_secs(5));
     // The stuck reader still holds its slot: no second thread starts.
     let refused: Result<()> = bounded(&BUSY, Duration::from_secs(5), |_| {
         panic!("a second reader must not start")
     });
-    assert!(matches!(refused, Err(Error::ClipboardTimeout)));
+    assert!(matches!(
+        refused,
+        Err(Error::Clipboard(ClipboardError::Timeout))
+    ));
     release.send(()).unwrap();
     finished.recv_timeout(Duration::from_secs(5)).unwrap();
     // Once it returns, the slot is free again.
@@ -89,9 +95,12 @@ fn reader_errors_and_deadline_reach_the_caller() {
     static BUSY: AtomicBool = AtomicBool::new(false);
     let result: Result<()> = bounded(&BUSY, Duration::from_secs(5), |deadline| {
         assert!(deadline > Instant::now());
-        Err(Error::ClipboardChanged)
+        Err(Error::Clipboard(ClipboardError::Changed))
     });
-    assert!(matches!(result, Err(Error::ClipboardChanged)));
+    assert!(matches!(
+        result,
+        Err(Error::Clipboard(ClipboardError::Changed))
+    ));
 }
 
 /// Reads the real clipboard, so it is opt-in: copy an image first (for example

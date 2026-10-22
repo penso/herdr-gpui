@@ -1,9 +1,9 @@
 //! The window's periodic endpoint work: draining each connection, activating
 //! the selected surface, and probing sessions.
 use super::{ACTIVATION_TIMEOUT, LOCAL, Redraw};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, avatars::Checkout};
 use gpui::{ClipboardItem, Context};
-use herdr_client::RemoteHost;
+use herdr_client::{ConnectTarget, RemoteHost};
 use std::time::Instant;
 
 impl HerdrWindow {
@@ -62,6 +62,12 @@ impl HerdrWindow {
         // OSC 52 writes are drained per endpoint so they are written once and
         // never linger in a live state that a later poll would re-read.
         let mut clipboard_writes = std::collections::VecDeque::new();
+        // A device removed from the catalog is never followed again, so its
+        // avatar reads stop here rather than dialing a deleted host.
+        if let Some(avatars) = &mut self.avatars {
+            let endpoints = &self.endpoints;
+            avatars.keep_links(|id| endpoints.iter().any(|endpoint| endpoint.id == id));
+        }
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
             let updated = endpoint.poll(Instant::now());
             clipboard_writes.append(&mut endpoint.live.clipboard_writes);
@@ -79,14 +85,26 @@ impl HerdrWindow {
                 Instant::now(),
             );
             changed = changed.max(updated);
-            // Remote cwd strings must never be resolved against this machine's Git repos.
+            // An SSH device's avatar reads follow its connection, before any
+            // request below, so a reconnection's first snapshot asks again.
+            if let (Some(avatars), ConnectTarget::Ssh { target, .. }) =
+                (&mut self.avatars, &endpoint.connection.target)
+            {
+                avatars.follow(&endpoint.id, target, endpoint.online_since());
+            }
+            // Remote cwd strings must never be resolved against this machine's
+            // Git repos; `Checkout::of` reads a saved SSH device's over SSH.
             if updated == Redraw::Window
-                && index == 0
+                && endpoint.online_since().is_some()
                 && let (Some(avatars), Some(snapshot)) =
                     (&mut self.avatars, &endpoint.live.snapshot)
             {
+                let target = &endpoint.connection.target;
+                let now = Instant::now();
                 for workspace in &snapshot.workspaces {
-                    avatars.request(&workspace.new_workspace_cwd);
+                    if let Some(checkout) = Checkout::of(index == 0, target, workspace) {
+                        avatars.request(checkout, now);
+                    }
                 }
             }
             if endpoint.enabled

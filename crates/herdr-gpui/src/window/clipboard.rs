@@ -1,6 +1,6 @@
 //! Bounded clipboard acquisition, including image copies and hashing, off the UI thread.
 
-use crate::{Error, Result};
+use crate::{Error, Result, error::ClipboardError};
 use gpui::ClipboardItem;
 #[cfg(any(target_os = "macos", target_os = "linux", windows, test))]
 use gpui::{Image, ImageFormat};
@@ -18,12 +18,7 @@ const IMAGE_LIMIT: usize = super::image_source::MAX_IMAGE_INPUT_BYTES;
 pub(super) fn read(image_only: bool) -> Result<Option<ClipboardItem>> {
     #[cfg(target_os = "macos")]
     {
-        objc2::rc::autoreleasepool(|_| {
-            read_pasteboard(
-                &objc2_app_kit::NSPasteboard::generalPasteboard(),
-                image_only,
-            )
-        })
+        macos::read(image_only)
     }
     #[cfg(target_os = "linux")]
     {
@@ -36,11 +31,12 @@ pub(super) fn read(image_only: bool) -> Result<Option<ClipboardItem>> {
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
         let _ = image_only;
-        Err(Error::ClipboardUnsupported)
+        Err(Error::Clipboard(ClipboardError::Unsupported))
     }
 }
 
-/// `read` against one pasteboard; call inside an autorelease pool.
+/// Native acquisition in the helper process (or a private test pasteboard).
+/// Call inside an autorelease pool; the GUI must not call this on a worker.
 #[cfg(target_os = "macos")]
 fn read_pasteboard(
     pasteboard: &objc2_app_kit::NSPasteboard,
@@ -79,13 +75,13 @@ fn read_pasteboard(
             // AppKit materializes NSData before exposing its length. Bound the
             // additional Rust allocation before copying, decoding, or hashing.
             if data.len() > limit {
-                return Err(Error::ClipboardSize { limit });
+                return Err(Error::Clipboard(ClipboardError::Size { limit }));
             }
             Ok(Some(data.to_vec()))
         })
     };
     if pasteboard.changeCount() != revision {
-        return Err(Error::ClipboardChanged);
+        return Err(Error::Clipboard(ClipboardError::Changed));
     }
     result
 }
@@ -121,10 +117,10 @@ fn read_with(
 ) -> Result<Option<ClipboardItem>> {
     if !image_only && let Some(bytes) = acquire(None, TEXT_LIMIT)? {
         if bytes.len() > TEXT_LIMIT {
-            return Err(Error::ClipboardSize { limit: TEXT_LIMIT });
+            return Err(Error::Clipboard(ClipboardError::Size { limit: TEXT_LIMIT }));
         }
         let text = String::from_utf8(bytes)
-            .map_err(|error| Error::ClipboardEncoding(error.utf8_error()))?;
+            .map_err(|error| Error::Clipboard(ClipboardError::Encoding(error.utf8_error())))?;
         return Ok(Some(ClipboardItem::new_string(text)));
     }
     // TIFF is last: AppKit apps often publish it beside a PNG that needs no
@@ -139,7 +135,9 @@ fn read_with(
     ] {
         if let Some(bytes) = acquire(Some(format), IMAGE_LIMIT)? {
             if bytes.len() > IMAGE_LIMIT {
-                return Err(Error::ClipboardSize { limit: IMAGE_LIMIT });
+                return Err(Error::Clipboard(ClipboardError::Size {
+                    limit: IMAGE_LIMIT,
+                }));
             }
             if !bytes.is_empty() {
                 // From<Image> moves the bytes; new_image(&Image) would clone them.
@@ -237,14 +235,15 @@ mod linux {
 
     fn output(command: &mut Command, limit: usize, deadline: Instant) -> Result<Option<Vec<u8>>> {
         if Instant::now() >= deadline {
-            return Err(Error::ClipboardTimeout);
+            return Err(Error::Clipboard(ClipboardError::Timeout));
         }
         // A nonblocking socket avoids reader threads that can outlive a timed-out
         // child when a descendant inherits stdout. Never merge stderr into images.
-        let (mut reader, writer) = UnixStream::pair().map_err(Error::ClipboardProcess)?;
+        let (mut reader, writer) =
+            UnixStream::pair().map_err(|error| Error::Clipboard(ClipboardError::Process(error)))?;
         reader
             .set_nonblocking(true)
-            .map_err(Error::ClipboardProcess)?;
+            .map_err(|error| Error::Clipboard(ClipboardError::Process(error)))?;
         let spawned = command
             .stdin(Stdio::null())
             .stdout(Stdio::from(OwnedFd::from(writer)))
@@ -254,7 +253,9 @@ mod linux {
         let mut child = match spawned {
             Ok(child) => child,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(Error::ClipboardProcess(error)),
+            Err(error) => {
+                return Err(Error::Clipboard(ClipboardError::Process(error)));
+            }
         };
         let result = (|| {
             let mut bytes = Vec::new();
@@ -262,22 +263,26 @@ mod linux {
             let mut eof = false;
             loop {
                 if Instant::now() >= deadline {
-                    return Err(Error::ClipboardTimeout);
+                    return Err(Error::Clipboard(ClipboardError::Timeout));
                 }
                 match reader.read(&mut buffer) {
                     Ok(0) => eof = true,
                     Ok(count) => {
                         if count > limit - bytes.len() {
-                            return Err(Error::ClipboardSize { limit });
+                            return Err(Error::Clipboard(ClipboardError::Size { limit }));
                         }
                         bytes.extend_from_slice(&buffer[..count]);
                         continue;
                     }
                     Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(error) => return Err(Error::ClipboardProcess(error)),
+                    Err(error) => {
+                        return Err(Error::Clipboard(ClipboardError::Process(error)));
+                    }
                 }
-                if let Some(status) = child.try_wait().map_err(Error::ClipboardProcess)?
+                if let Some(status) = child
+                    .try_wait()
+                    .map_err(|error| Error::Clipboard(ClipboardError::Process(error)))?
                     && eof
                 {
                     return Ok(status.success().then_some(bytes));
@@ -288,7 +293,9 @@ mod linux {
         if result.is_err() {
             let _ = child.kill();
         }
-        let waited = child.wait().map_err(Error::ClipboardProcess);
+        let waited = child
+            .wait()
+            .map_err(|error| Error::Clipboard(ClipboardError::Process(error)));
         let result = result?;
         waited?;
         Ok(result)
@@ -353,7 +360,7 @@ mod linux {
             );
             assert!(matches!(
                 run("printf abcde", 4),
-                Err(Error::ClipboardSize { limit: 4 })
+                Err(Error::Clipboard(ClipboardError::Size { limit: 4 }))
             ));
             assert!(run("printf partial; exit 1", 16)?.is_none());
             assert_eq!(run("exit 0", 0)?, Some(Vec::new()));
@@ -381,7 +388,10 @@ mod linux {
                     usize::MAX,
                     start + Duration::from_millis(100),
                 );
-                assert!(matches!(result, Err(Error::ClipboardTimeout)));
+                assert!(matches!(
+                    result,
+                    Err(Error::Clipboard(ClipboardError::Timeout))
+                ));
                 assert!(start.elapsed() < Duration::from_secs(5));
             }
         }
@@ -390,6 +400,9 @@ mod linux {
 
 #[cfg(windows)]
 mod windows;
+
+#[cfg(target_os = "macos")]
+pub(super) mod macos;
 
 #[cfg(all(test, target_os = "macos"))]
 mod pasteboard_tests;
@@ -464,20 +477,23 @@ mod tests {
             // Exercise that contract without allocating a 128 MiB test clipboard.
             assert!(matches!(read_with(image_only, |_, requested| {
                     assert_eq!(requested, limit);
-                    Err(Error::ClipboardSize { limit: requested })
+                    Err(Error::Clipboard(ClipboardError::Size{ limit: requested }))
                 }),
-                Err(Error::ClipboardSize { limit: actual }) if actual == limit));
+                Err(Error::Clipboard(ClipboardError::Size{ limit: actual })) if actual == limit));
         }
         assert!(read_with(false, |_, _| Ok(Some(vec![b'a'; TEXT_LIMIT])))?.is_some());
         assert!(matches!(
             read_with(false, |_, _| Ok(Some(vec![b'a'; TEXT_LIMIT + 1]))),
-            Err(Error::ClipboardSize { limit: TEXT_LIMIT })
+            Err(Error::Clipboard(ClipboardError::Size { limit: TEXT_LIMIT }))
         ));
         let result = read_with(false, |format, _| {
             assert_eq!(format, None);
             Ok(Some(vec![255]))
         });
-        assert!(matches!(result, Err(Error::ClipboardEncoding(_))));
+        assert!(matches!(
+            result,
+            Err(Error::Clipboard(ClipboardError::Encoding(_)))
+        ));
         if let Err(error) = result {
             assert!(
                 error
@@ -509,6 +525,9 @@ mod tests {
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     #[test]
     fn unsupported_platform_is_explicit() {
-        assert!(matches!(read(true), Err(Error::ClipboardUnsupported)));
+        assert!(matches!(
+            read(true),
+            Err(Error::Clipboard(ClipboardError::Unsupported))
+        ));
     }
 }

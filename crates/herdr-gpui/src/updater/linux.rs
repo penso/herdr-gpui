@@ -157,8 +157,10 @@ fn install_command(format: Format, path: &Path) -> Command {
             command
         }
         Format::Rpm => {
+            // dnf5 rejects "--"; the path is always absolute, so it cannot
+            // be parsed as an option.
             let mut command = herdr_client::new_command("/usr/bin/dnf");
-            command.args(["install", "--assumeyes", "--"]);
+            command.args(["install", "--assumeyes"]);
             command
         }
         Format::Arch => {

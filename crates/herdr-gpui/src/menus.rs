@@ -6,8 +6,8 @@ pub(crate) mod in_window;
 
 use crate::{
     CheckForUpdates, Quit, RunCommand, ShowLogs,
-    actions::{Copy, Cut, Paste, SelectAll, SetLayout},
-    config::{Layout, LayoutMode},
+    actions::{Copy, Cut, Paste, SelectAll, SetLayout, SetTabLayout},
+    config::{Layout, LayoutMode, TabLayoutMode},
     controls::Command,
 };
 #[cfg(target_os = "macos")]
@@ -32,10 +32,12 @@ impl gpui::Global for Headings {}
 
 /// Installs the menu bar, checking the layout the latest config picked.
 pub(crate) fn install(cx: &mut App) {
-    let layout = cx
+    let (layout, tabs) = cx
         .try_global::<crate::app::InitialAppearance>()
-        .map_or_else(Layout::default, |appearance| appearance.config.layout);
-    let menus = menus(layout);
+        .map_or_else(Default::default, |appearance| {
+            (appearance.config.layout, appearance.config.tab_layout)
+        });
+    let menus = menus(layout, tabs);
     cx.set_global(Headings(
         menus
             .iter()
@@ -61,8 +63,17 @@ fn layout_menu(current: LayoutMode) -> MenuItem {
     MenuItem::submenu(Menu::new("Layout").items(items))
 }
 
-/// The menu bar, with `layout`'s mode checked under View > Layout.
-pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
+/// View > Tab Layout: how tab strips draw their tabs, the one in use checked.
+fn tab_layout_menu(current: TabLayoutMode) -> MenuItem {
+    let items = TabLayoutMode::ALL.iter().map(|&mode| {
+        MenuItem::action(mode.label(), SetTabLayout { mode }).checked(mode == current)
+    });
+    MenuItem::submenu(Menu::new("Tab Layout").items(items))
+}
+
+/// The menu bar, with `layout`'s mode checked under View > Layout and
+/// `tabs` under View > Tab Layout.
+pub(crate) fn menus(layout: Layout, tabs: TabLayoutMode) -> Vec<Menu> {
     vec![
         Menu {
             name: "Herdr".into(),
@@ -207,6 +218,7 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 layout_menu(layout.mode),
+                tab_layout_menu(tabs),
                 MenuItem::action(
                     "Devices Overview",
                     RunCommand {

@@ -308,6 +308,14 @@ impl WheelTarget {
             })
     }
 
+    /// The cell under the pointer, also for an application that asked for pixels.
+    pub(crate) fn cell(&self) -> (u16, u16) {
+        match self.position {
+            ClientMousePosition::Cell { column, row }
+            | ClientMousePosition::Pixels { column, row, .. } => (column, row),
+        }
+    }
+
     pub(crate) fn mouse_event(
         &self,
         kind: ClientMouseKind,

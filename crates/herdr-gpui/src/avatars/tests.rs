@@ -1,7 +1,11 @@
 #![allow(clippy::expect_used)]
 use super::*;
 
+mod reconnect;
+mod remote;
 mod remote_userinfo;
+mod retry;
+mod workers;
 
 // Exercises the disk cache; other platforms have no cache root.
 #[cfg(any(unix, windows))]
@@ -82,19 +86,20 @@ fn profile_avatar_urls_never_accept_credentials_or_other_hosts() {
 #[ignore = "requires HERDR_AVATAR_TEST_REPO and network access to GitHub avatars"]
 fn loads_local_repository_owner_avatar() {
     let cwd = std::env::var("HERDR_AVATAR_TEST_REPO").expect("set a local GitHub repository path");
-    let owner = repo_owner(&cwd).expect("repository has a GitHub origin");
+    let checkout = Checkout::Local(cwd.as_str());
+    let owner = repo_owner(checkout, &Default::default())
+        .ok()
+        .flatten()
+        .expect("repository has a GitHub origin");
     let mut avatars = Avatars::new();
-    avatars.request(&cwd);
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while avatars.image(&cwd).is_none() {
-        avatars.poll();
-        assert!(
-            std::time::Instant::now() < deadline,
-            "avatar worker timed out"
-        );
+    avatars.request(checkout, Instant::now());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while avatars.image(checkout).is_none() {
+        avatars.poll(Instant::now());
+        assert!(Instant::now() < deadline, "avatar worker timed out");
         thread::sleep(Duration::from_millis(20));
     }
-    let image = avatars.image(&cwd).expect("owner avatar downloaded");
+    let image = avatars.image(checkout).expect("owner avatar downloaded");
     assert!(!image.bytes.is_empty());
     eprintln!("Avatar loaded for {owner}: {} bytes", image.bytes.len());
 }
@@ -184,33 +189,61 @@ fn accepts_only_supported_content_types() {
     }
 }
 
-#[test]
-fn deduplicates_pending_hits_and_misses_and_drains_results() {
+type Results = mpsc::Sender<(Checkout<String>, Lookup)>;
+
+/// An `Avatars` whose worker ends are the test's: the request receiver and
+/// the result sender.
+pub(super) fn detached() -> (Avatars, mpsc::Receiver<Checkout<String>>, Results) {
     let (requests, incoming) = mpsc::sync_channel(MAX_REQUESTS);
     let (outgoing, results) = mpsc::channel();
-    let mut avatars = Avatars {
-        requests,
+    let avatars = Avatars {
+        local_requests: requests.clone(),
+        remote_requests: requests,
         results,
-        images: HashMap::new(),
+        local: HashMap::new(),
+        remote: HashMap::new(),
+        links: HashMap::new(),
+        offline: links::Offline::default(),
     };
-    assert!(!avatars.poll());
-    assert!(avatars.image("hit").is_none());
+    (avatars, incoming, outgoing)
+}
+
+#[test]
+fn deduplicates_pending_hits_and_misses_and_drains_results() {
+    let (mut avatars, incoming, outgoing) = detached();
+    let now = Instant::now();
+    assert!(!avatars.poll(now));
+    assert!(avatars.image(Checkout::Local("hit")).is_none());
     for cwd in ["hit", "miss", "hit", "miss"] {
-        avatars.request(cwd);
+        avatars.request(Checkout::Local(cwd), now);
     }
-    assert_eq!(incoming.try_iter().collect::<Vec<_>>(), ["hit", "miss"]);
+    assert_eq!(
+        incoming.try_iter().collect::<Vec<_>>(),
+        [
+            Checkout::Local("hit".into()),
+            Checkout::Local("miss".into())
+        ]
+    );
     let image = Arc::new(Image::empty());
-    assert!(outgoing.send(("hit".into(), Some(image.clone()))).is_ok());
-    assert!(outgoing.send(("miss".into(), None)).is_ok());
-    assert!(avatars.poll());
-    assert!(!avatars.poll());
+    assert!(
+        outgoing
+            .send((Checkout::Local("hit".into()), Ok(Some(image.clone()))))
+            .is_ok()
+    );
+    assert!(
+        outgoing
+            .send((Checkout::Local("miss".into()), Ok(None)))
+            .is_ok()
+    );
+    assert!(avatars.poll(now));
+    assert!(!avatars.poll(now));
     assert!(
         avatars
-            .image("hit")
+            .image(Checkout::Local("hit"))
             .is_some_and(|cached| Arc::ptr_eq(&cached, &image))
     );
-    assert!(avatars.image("miss").is_none());
-    avatars.request("hit");
-    avatars.request("miss");
+    assert!(avatars.image(Checkout::Local("miss")).is_none());
+    avatars.request(Checkout::Local("hit"), now);
+    avatars.request(Checkout::Local("miss"), now);
     assert!(incoming.try_recv().is_err());
 }

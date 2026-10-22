@@ -19,6 +19,7 @@ use super::{
 };
 use crate::{
     Command, HerdrWindow, NavigationTarget,
+    avatars::Checkout,
     config::{AgentsPlacement, FontConfig, Theme},
     fonts::StyledFont,
 };
@@ -394,10 +395,11 @@ impl HerdrWindow {
                             // Not a Git checkout, so no mark that reads as one.
                             RowIcon::Blank
                         } else {
+                            let target = &endpoint.connection.target;
                             self.avatars
                                 .as_ref()
-                                .filter(|_| endpoint_index == 0)
-                                .and_then(|avatars| avatars.image(&workspace.new_workspace_cwd))
+                                .zip(Checkout::of(endpoint_index == 0, target, workspace))
+                                .and_then(|(avatars, checkout)| avatars.image(checkout))
                                 .map_or(RowIcon::Mark, RowIcon::Avatar)
                         },
                         fold,

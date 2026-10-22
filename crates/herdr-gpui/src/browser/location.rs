@@ -123,18 +123,21 @@ impl OrchestratorRepo {
 }
 
 /// The local checkout a review tab shows. Saved with the tabs, so it is
-/// checked again whenever it is read.
+/// checked again whenever it is read. `repo_key` is the daemon's Git common
+/// directory; a space it has no worktree metadata for is saved by its
+/// directory alone, which the worker resolves and verifies on every read.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "SavedReviewCheckout")]
 pub(crate) struct ReviewCheckout {
-    pub(crate) repo_key: String,
+    pub(crate) repo_key: Option<String>,
     pub(crate) branch: String,
     pub(crate) checkout: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct SavedReviewCheckout {
-    repo_key: String,
+    #[serde(default)]
+    repo_key: Option<String>,
     branch: String,
     checkout: Option<String>,
 }
@@ -152,7 +155,11 @@ impl TryFrom<SavedReviewCheckout> for ReviewCheckout {
         let branch = !saved.branch.is_empty()
             && saved.branch.len() <= 1024
             && !saved.branch.chars().any(char::is_control);
-        if !path(&saved.repo_key) || !branch || saved.checkout.as_deref().is_some_and(|c| !path(c))
+        let named = saved.repo_key.is_some() || saved.checkout.is_some();
+        if !named
+            || saved.repo_key.as_deref().is_some_and(|key| !path(key))
+            || !branch
+            || saved.checkout.as_deref().is_some_and(|c| !path(c))
         {
             return Err(crate::Error::InvalidReviewCheckout);
         }
@@ -164,14 +171,18 @@ impl TryFrom<SavedReviewCheckout> for ReviewCheckout {
     }
 }
 
-/// A review is saved by repository, so only a checkout the daemon named one
-/// for can be reviewed.
+/// A review is saved by the repository the daemon names, or else by the
+/// workspace directory the Git chip follows; one naming neither has nothing
+/// to read.
 impl TryFrom<&crate::pull_request::Input> for ReviewCheckout {
     type Error = crate::Error;
 
     fn try_from(input: &crate::pull_request::Input) -> crate::Result<Self> {
+        if input.repo_key.is_none() && input.checkout.is_none() {
+            return Err(crate::Error::PrMetadata);
+        }
         Ok(Self {
-            repo_key: input.repo_key.clone().ok_or(crate::Error::PrMetadata)?,
+            repo_key: input.repo_key.clone(),
             branch: input.branch.clone(),
             checkout: input.checkout.clone(),
         })
@@ -182,7 +193,7 @@ impl From<&ReviewCheckout> for crate::pull_request::Input {
     fn from(checkout: &ReviewCheckout) -> Self {
         Self {
             checkout: checkout.checkout.clone(),
-            repo_key: Some(checkout.repo_key.clone()),
+            repo_key: checkout.repo_key.clone(),
             branch: checkout.branch.clone(),
         }
     }

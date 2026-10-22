@@ -387,6 +387,12 @@ impl Endpoint {
         self.retry_at = self.retry_at.min(now);
     }
 
+    /// When the current connection came up with a snapshot, while it is up.
+    /// Each reconnection gives a new instant.
+    pub(crate) fn online_since(&self) -> Option<Instant> {
+        self.online_since
+    }
+
     /// Why the endpoint is reconnecting, while it is.
     pub(crate) fn outage(&self) -> Option<&str> {
         self.outage.as_deref()

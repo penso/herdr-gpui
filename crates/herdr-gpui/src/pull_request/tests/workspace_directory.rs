@@ -42,7 +42,9 @@ fn daemon_metadata_still_wins_and_remote_devices_still_require_it() {
     let cwd = std::env::temp_dir().join("repo");
     let cwd = cwd.to_str().unwrap();
     let key = std::env::temp_dir().join("other/.git");
-    let mut known = workspace(cwd, Some("main"));
+    // A subdirectory of the checkout the metadata names, as Herdr opens it.
+    let inside = std::env::temp_dir().join("other/src");
+    let mut known = workspace(inside.to_str().unwrap(), Some("main"));
     known.worktree = Some(ClientShellWorktree {
         key: key.to_str().unwrap().into(),
         label: "other".into(),
@@ -70,6 +72,29 @@ fn daemon_metadata_still_wins_and_remote_devices_still_require_it() {
             Err(Error::PrBranch)
         ));
     }
+}
+
+/// A space opened through a symlink names the repository Git finds behind
+/// it, and the checkout still verifies against that repository.
+#[cfg(unix)]
+#[test]
+fn a_space_opened_through_a_symlink_resolves_to_its_repository() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().join("repo");
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    git(&repo, &["init", "--quiet", "--template=", "-b", "feature"]);
+    let link = directory.path().join("link");
+    std::os::unix::fs::symlink(repo.join("src"), &link).unwrap();
+    let input = workspace_input(
+        &workspace(link.to_str().unwrap(), Some("feature")),
+        &Origin::Local,
+    )
+    .unwrap();
+    let checkout = local_checkout(&input, Instant::now() + TIMEOUT, &|| false).unwrap();
+    assert_eq!(
+        std::path::Path::new(&checkout).canonicalize().unwrap(),
+        repo.canonicalize().unwrap()
+    );
 }
 
 #[test]

@@ -442,12 +442,17 @@ pub(crate) fn repository_input(
 /// that merely sits in a repository falls back to its directory. Its
 /// repository is resolved by Git on the worker, and the checkout is still
 /// verified against the branch before anything is read. Remote devices keep
-/// requiring metadata: their directories are not this machine's.
+/// requiring metadata: their directories are not this machine's. Metadata of
+/// a main checkout whose shell has left that repository names a repository
+/// the workspace is no longer in, so it is not used.
 pub(crate) fn workspace_input(
     workspace: &herdr_client::protocol::ClientShellWorkspace,
     origin: &Origin,
 ) -> crate::Result<Input> {
-    let worktree = workspace.worktree.as_ref();
+    let worktree = workspace.worktree.as_ref().filter(|tree| {
+        tree.is_linked_worktree
+            || !crate::worktree::left_checkout(&tree.key, &workspace.new_workspace_cwd)
+    });
     let branch = workspace.branch.as_deref();
     if worktree.is_some() || *origin != Origin::Local || workspace.new_workspace_cwd.is_empty() {
         return repository_input(worktree, branch);

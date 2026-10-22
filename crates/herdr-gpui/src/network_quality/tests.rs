@@ -37,11 +37,14 @@ fn a_listening_port_answers() {
 
 #[test]
 fn a_closed_port_is_lost() {
-    // Bound then dropped, so nothing listens there.
-    let target: SocketAddr = TcpListener::bind("127.0.0.1:0")
-        .expect("bind")
-        .local_addr()
-        .expect("address");
+    // The listener is dropped so nothing listens there, while the connection
+    // it accepted keeps the port in use: a parallel test cannot be given it
+    // for its own listener, and a probe cannot connect to itself through it.
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let target: SocketAddr = listener.local_addr().expect("address");
+    let _client = std::net::TcpStream::connect(target).expect("connect");
+    let _held = listener.accept().expect("accept");
+    drop(listener);
     // Windows retries a refused connect for about two seconds before
     // reporting it, so the kind may be a refusal or a timeout; either way
     // the probe is lost.

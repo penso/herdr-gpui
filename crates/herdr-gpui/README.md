@@ -1511,6 +1511,11 @@ motion. Hold Shift to select locally instead; releasing a selection of terminal
 text in a pane also offers the annotation pill described below. In applications
 without mouse reporting, selection works without Shift. A forwarded drag stays
 in the pane or popup where it started, including when the pointer moves outside it.
+Many agent TUIs take the mouse without selecting text, so the first left drag an
+application receives in a session shows **Hold Shift and drag to select text**
+for a few seconds, where the `copied to clipboard` flash appears. It shows once
+per session, never for a click, and not at all once you have pressed with Shift
+over such a pane.
 
 Right-click opens the GUI pane menu unless Herdr routes that pane's right-clicks
 to the application (`herdr pane input --right-click pane`, or **Send
@@ -2138,8 +2143,15 @@ work. Cancelling an image already partially written closes that client connectio
 to avoid corrupting framing; it does not stop the daemon. Slow/stalled transfers
 have a 60-second deadline. There is no upload acknowledgement or progress API.
 
-macOS uses the native pasteboard on a background executor; AppKit may materialize
-its data before the client can check its size. Linux uses `wl-paste` (Wayland) or
+macOS acquires clipboard data in a short-lived copy of the application, on that
+process's main thread before any windows or daemon connections are opened. The
+background preparation task accepts only a complete, bounded response from a
+successful reader, with a three-second deadline. A native pasteboard crash or
+stall fails that paste without closing the GUI; the reader is killed and reaped
+on timeout. Clipboard data travels only over a private socket, never a temporary
+file or a log. The existing format priority, revision check, and paste ordering
+are preserved. AppKit may still materialize data inside the reader before its
+size can be checked. Linux uses `wl-paste` (Wayland) or
 `xclip` (X11) for explicit Ctrl-V image acquisition, with bounded output and a
 three-second acquisition deadline. Ordinary Linux paste retains GPUI's native
 clipboard reader and needs no helper; that existing synchronous API can still

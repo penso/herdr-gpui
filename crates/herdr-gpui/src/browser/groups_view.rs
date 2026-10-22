@@ -264,7 +264,7 @@ impl HerdrWindow {
         const GROWN: f32 = 480.;
         match self.browser.appear.growth(group, pick, Instant::now()) {
             Some(k) => tab
-                .min_w(px(crate::TAB_WIDTH * k))
+                .min_w(px(self.tab_layout().min_width() * k))
                 .max_w(px(GROWN * k))
                 .overflow_hidden()
                 .opacity(k),

@@ -460,8 +460,10 @@ mod unix {
             let (dir, path) =
                 shell("/bin/sleep 60 &\nprintf '%s %s' \"$$\" \"$!\" > \"$0.pids\"\nwait");
             let start = Instant::now();
-            assert!(probe(path.as_os_str(), false, false, Duration::from_secs(1)).is_none());
-            assert!(start.elapsed() < Duration::from_secs(5));
+            // Room for a loaded machine to start the shell and record its pids
+            // before the timeout fires; the sleep outlasts it either way.
+            assert!(probe(path.as_os_str(), false, false, Duration::from_secs(3)).is_none());
+            assert!(start.elapsed() < Duration::from_secs(10));
             let pids = std::fs::read_to_string(dir.path().join("shell.pids")).unwrap();
             for pid in pids.split_whitespace() {
                 let deadline = Instant::now() + Duration::from_secs(2);

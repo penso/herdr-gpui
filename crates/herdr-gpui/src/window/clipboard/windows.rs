@@ -36,7 +36,7 @@ fn bounded<T: Send + 'static>(
     read: impl FnOnce(Instant) -> Result<T> + Send + 'static,
 ) -> Result<T> {
     if busy.swap(true, Ordering::AcqRel) {
-        return Err(Error::ClipboardTimeout);
+        return Err(Error::Clipboard(ClipboardError::Timeout));
     }
     let deadline = Instant::now() + timeout;
     let (sender, receiver) = mpsc::sync_channel(1);
@@ -50,11 +50,11 @@ fn bounded<T: Send + 'static>(
         });
     if let Err(error) = spawned {
         busy.store(false, Ordering::Release);
-        return Err(Error::ClipboardProcess(error));
+        return Err(Error::Clipboard(ClipboardError::Process(error)));
     }
     receiver
         .recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        .map_err(|_| Error::ClipboardTimeout)?
+        .map_err(|_| Error::Clipboard(ClipboardError::Timeout))?
 }
 
 fn read_now(image_only: bool, deadline: Instant) -> Result<Option<ClipboardItem>> {
@@ -69,14 +69,14 @@ fn read_now(image_only: bool, deadline: Instant) -> Result<Option<ClipboardItem>
         })),
         None => read_with(image_only, |format, limit| {
             if Instant::now() >= deadline {
-                return Err(Error::ClipboardTimeout);
+                return Err(Error::Clipboard(ClipboardError::Timeout));
             }
             acquire(format, limit)
         }),
     };
     drop(clipboard);
     if raw::seq_num() != revision {
-        return Err(Error::ClipboardChanged);
+        return Err(Error::Clipboard(ClipboardError::Changed));
     }
     result
 }
@@ -88,13 +88,15 @@ fn open(deadline: Instant) -> Result<Clipboard> {
         match Clipboard::new() {
             Ok(clipboard) => return Ok(clipboard),
             Err(_) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
-            Err(_) => return Err(Error::ClipboardTimeout),
+            Err(_) => return Err(Error::Clipboard(ClipboardError::Timeout)),
         }
     }
 }
 
 fn system(error: clipboard_win::ErrorCode) -> Error {
-    Error::ClipboardProcess(std::io::Error::from_raw_os_error(error.raw_code()))
+    Error::Clipboard(ClipboardError::Process(std::io::Error::from_raw_os_error(
+        error.raw_code(),
+    )))
 }
 
 /// The paths of a file copy, one more than a drop accepts at most, so an
@@ -104,7 +106,7 @@ fn files() -> Result<Option<Vec<PathBuf>>> {
         return Ok(None);
     };
     if size.get() > TEXT_LIMIT {
-        return Err(Error::ClipboardSize { limit: TEXT_LIMIT });
+        return Err(Error::Clipboard(ClipboardError::Size { limit: TEXT_LIMIT }));
     }
     let mut paths = Vec::new();
     raw::get_file_list_path(&mut paths).map_err(system)?;
@@ -139,7 +141,7 @@ fn bytes(format: u32, limit: usize) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     };
     if size.get() > limit {
-        return Err(Error::ClipboardSize { limit });
+        return Err(Error::Clipboard(ClipboardError::Size { limit }));
     }
     let mut bytes = Vec::new();
     raw::get_vec(format, &mut bytes).map_err(system)?;
@@ -153,7 +155,7 @@ fn text(limit: usize) -> Result<Option<Vec<u8>>> {
         return Ok(None);
     };
     if size.get() / 2 > limit + 1 {
-        return Err(Error::ClipboardSize { limit });
+        return Err(Error::Clipboard(ClipboardError::Size { limit }));
     }
     let mut bytes = Vec::new();
     raw::get_string(&mut bytes).map_err(system)?;

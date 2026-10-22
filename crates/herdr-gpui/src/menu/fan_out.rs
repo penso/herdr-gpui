@@ -2,7 +2,7 @@
 //! creates every lane's worktree, branched from the row's own branch when the
 //! row is a linked checkout.
 
-use super::{Page, WorkspaceTarget};
+use super::{Page, WorkspaceTarget, workspace::Source as Addressed};
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
@@ -34,10 +34,45 @@ impl HerdrWindow {
                 base: source.base_ref().unwrap_or_else(|_| "HEAD".to_owned()),
             }
         };
+        // Lanes are created through the workspace, so one whose shell left
+        // the repository Herdr keeps for it would branch that repository.
         if target.can_create() {
-            return Some(describe(target));
+            return (target.source == Addressed::Workspace).then(|| describe(target));
         }
-        self.linked_new_worktree_target().as_ref().map(describe)
+        self.linked_new_worktree_target()
+            .filter(|target| target.source == Addressed::Workspace)
+            .as_ref()
+            .map(describe)
+    }
+
+    /// Whether the workspace a fan-out creates its lanes through is still in
+    /// the repository the fan-out was opened for. Its shell may have moved
+    /// since, while Herdr keeps the old repository for it.
+    pub(crate) fn fan_out_origin_current(&self) -> bool {
+        let Some(origin) = self.fan_out.as_ref().map(FanOut::origin) else {
+            return false;
+        };
+        let Some(index) = self
+            .endpoints
+            .iter()
+            .position(|endpoint| endpoint.id == origin.endpoint_id)
+        else {
+            return false;
+        };
+        self.endpoint_snapshot(index)
+            .and_then(|snapshot| {
+                snapshot
+                    .workspaces
+                    .iter()
+                    .find(|workspace| workspace.workspace_id == origin.workspace_id)
+            })
+            .is_some_and(
+                |workspace| match super::workspace::known_worktree(workspace) {
+                    Some(tree) => tree.key == origin.repo_key,
+                    // A branch-only workspace has no key to compare.
+                    None => workspace.worktree.is_none() && origin.repo_key.is_empty(),
+                },
+            )
     }
 
     /// The workspace menu's fan-out row: the comparison of a launched fan-out

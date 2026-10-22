@@ -231,11 +231,7 @@ impl HerdrWindow {
                 .ok_or(crate::Error::StaleWorkspace)?;
             self.endpoints[self.selected_endpoint]
                 .connection
-                .request_dialog(
-                    &target.boot_id,
-                    Method::WorktreeList,
-                    serde_json::json!({"workspace_id": target.id, "trust_repository": false}),
-                )
+                .request_dialog(&target.boot_id, Method::WorktreeList, target.list_params())
         })();
         let mut picker = Picker::new(search);
         picker._subscription = Some(subscription);

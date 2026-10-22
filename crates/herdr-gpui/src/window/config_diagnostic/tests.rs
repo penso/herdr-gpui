@@ -4,7 +4,9 @@ use herdr_client::protocol::ClientShellSnapshot;
 use std::sync::Arc;
 
 mod command_chip;
+mod fold;
 mod narrow_window;
+mod stack;
 
 fn set_diagnostic(
     view: &gpui::Entity<crate::HerdrWindow>,

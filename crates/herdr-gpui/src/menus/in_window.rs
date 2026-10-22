@@ -143,7 +143,7 @@ impl HerdrWindow {
             return;
         }
         let return_focus = window.focused(cx);
-        let mut menus: Vec<_> = super::menus(self.config.layout)
+        let mut menus: Vec<_> = super::menus(self.config.layout, self.config.tab_layout)
             .into_iter()
             .map(Menu::owned)
             .collect();

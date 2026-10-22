@@ -9,6 +9,7 @@ use crate::{
         groups::{GroupId, Pick, Slot},
     },
     listening_ports::Link,
+    tab_layout::{Mark, Probe, TabContext, TabFace},
     window::Flash,
 };
 use gpui::{prelude::*, *};
@@ -28,6 +29,7 @@ impl HerdrWindow {
         &self,
         slot: Slot,
         shown: Option<TabId>,
+        faces: &TabContext<'_>,
         cx: &mut Context<Self>,
     ) -> Vec<(TabId, Stateful<Div>)> {
         let (Some((scope, workspace)), Some(store)) = (self.browser_key(), store(cx)) else {
@@ -38,10 +40,10 @@ impl HerdrWindow {
             .filter(|tab| self.group_lists(slot.id, &Pick::Page(tab.id)))
             .cloned()
             .collect();
+        let layout = self.tab_layout();
         tabs.into_iter()
             .map(|tab| {
                 let id = tab.id;
-                let (background, text) = self.tab_colors(shown == Some(id), slot.id);
                 // The VS Code tab bears its mark; a review tab shows a diff,
                 // a code tab a file, and the overview devices, not a page.
                 let icon = match (tab.place.editor(), &tab.location) {
@@ -52,64 +54,32 @@ impl HerdrWindow {
                     (_, Some(Location::Devices)) => "icons/devices.svg",
                     _ => GLOBE,
                 };
-                let tab = div()
+                // A page's own icon stands in for the globe.
+                let mark = match self.tab_favicon(id).filter(|_| icon == GLOBE) {
+                    Some(favicon) => Mark::Favicon(favicon),
+                    None => Mark::Icon(icon),
+                };
+                let base = div()
                     .id(SharedString::from(format!("browser-tab-{id}")))
-                    .debug_selector(move || slot.selector(&format!("browser-tab-{id}")))
-                    .pl(px(10.))
-                    .pr(px(3.))
-                    .py(px(2.))
-                    .min_w(px(crate::TAB_WIDTH))
-                    .map(|tab| self.grow_tab(tab, slot.id, &Pick::Page(id)))
-                    .border_r_1()
-                    .border_color(rgb(self.theme.active))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .cursor_pointer()
-                    .bg(rgb(background))
-                    .text_color(rgb(text))
-                    // A page's own icon stands in for the globe.
-                    .child(match self.tab_favicon(id).filter(|_| icon == GLOBE) {
-                        Some(favicon) => img(favicon)
-                            .debug_selector(move || slot.selector(&format!("favicon-{id}")))
-                            .size(px(12.))
-                            .flex_none()
-                            .into_any_element(),
-                        None => svg()
-                            .path(icon)
-                            .size(px(12.))
-                            .flex_none()
-                            .text_color(rgb(text))
-                            .into_any_element(),
-                    })
-                    .child(tab_label(&tab.title))
-                    .child(
-                        div()
-                            .id("close-browser-tab")
-                            .debug_selector(move || {
-                                slot.selector(&format!("close-browser-tab-{id}"))
-                            })
-                            .size(px(18.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .hover(move |s| s.bg(rgba((text << 8) | 0x24)))
-                            .child(
-                                svg()
-                                    .path("icons/close.svg")
-                                    .size(px(12.))
-                                    .text_color(rgb(text)),
-                            )
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            // Split, the page closes in its group alone.
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.close_strip_tab(Pick::Page(id), window, cx);
-                            })),
+                    .debug_selector(move || slot.selector(&format!("browser-tab-{id}")));
+                let face = TabFace {
+                    label: tab_label(&tab.title),
+                    mark,
+                    zoomed: false,
+                    probe: Probe::Page(id),
+                    // Split, the page closes in its group alone.
+                    close: Box::new(cx.listener(move |this, _, window, cx| {
+                        this.close_strip_tab(Pick::Page(id), window, cx);
+                    })),
+                };
+                let tab = layout
+                    .tab(
+                        base,
+                        face,
+                        self.tab_state(shown == Some(id), slot.id),
+                        faces,
                     )
+                    .map(|tab| self.grow_tab(tab, slot.id, &Pick::Page(id)))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.show_browser_tab_in(Some(slot.id), id, window, cx);
                     }));

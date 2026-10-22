@@ -37,10 +37,11 @@ fn only_a_local_daemon_checkout_is_tracked(cx: &mut TestAppContext) {
             assert_eq!(input.repo_key.as_deref(), Some(REPO_KEY));
             assert_eq!(input.branch, "develop");
             assert_eq!(input.checkout, None, "the checkout is resolved by Git");
-            // A workspace without worktree metadata cannot be acted on.
+            // A folder the daemon reports no branch for is not a checkout.
             if let Some(snapshot) = view.live.snapshot.as_ref().map(Arc::clone) {
                 let mut snapshot = (*snapshot).clone();
                 snapshot.focused_workspace_id = Some("w0".into());
+                snapshot.workspaces[0].branch = None;
                 view.live.snapshot = Some(Arc::new(snapshot));
             }
             assert!(view.git_input().is_none());

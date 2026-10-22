@@ -3,7 +3,8 @@
 //!
 //! Herdr shows `snapshot.config_diagnostic` for as long as the snapshot carries
 //! it and clears it with the first snapshot that does not. This mirrors that,
-//! adding only a dismissal that holds for the exact text the user dismissed.
+//! adding a dismissal that holds for the exact text the user dismissed, and
+//! whether the user opened the card to read lines too long for one row.
 use std::sync::Arc;
 
 /// Bounds the scan as well as the output: daemon text is untrusted.
@@ -19,6 +20,8 @@ pub(crate) struct ConfigDiagnostic {
     /// Display lines prepared from `source`, sanitized and bounded.
     lines: Option<Arc<[String]>>,
     dismissed: bool,
+    /// The card shows its lines in full rather than one row each.
+    expanded: bool,
 }
 
 impl ConfigDiagnostic {
@@ -27,8 +30,10 @@ impl ConfigDiagnostic {
         if self.source.as_deref() == text {
             return;
         }
-        // Gone or changed: a dismissal covered only the text it was made on.
+        // Gone or changed: a dismissal or an opened card covered only the
+        // text it was made on.
         self.dismissed = false;
+        self.expanded = false;
         self.source = text.map(str::to_owned);
         self.lines = text.and_then(display_lines);
     }
@@ -43,6 +48,19 @@ impl ConfigDiagnostic {
     pub(crate) fn dismiss(&mut self, lines: &Arc<[String]>) -> bool {
         let current = self.lines.as_ref().is_some_and(|own| own == lines);
         self.dismissed |= current;
+        current
+    }
+
+    /// Whether the card shows its lines in full.
+    pub(crate) fn expanded(&self) -> bool {
+        self.expanded
+    }
+
+    /// Opens or closes the card on `lines`, fenced like [`Self::dismiss`]:
+    /// a click on a card whose text changed underneath it does nothing.
+    pub(crate) fn toggle(&mut self, lines: &Arc<[String]>) -> bool {
+        let current = self.visible().is_some_and(|own| own == lines);
+        self.expanded ^= current;
         current
     }
 }
@@ -63,6 +81,8 @@ fn display_lines(text: &str) -> Option<Arc<[String]>> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    mod expansion;
 
     fn shown(state: &ConfigDiagnostic) -> Option<Vec<String>> {
         state.visible().map(|lines| lines.to_vec())

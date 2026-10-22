@@ -1,7 +1,8 @@
-//! Tabs & panes: tab bar, closing confirmations, pane focus and session restore.
+//! Tabs & panes: tab layout and bar, closing confirmations, pane focus and
+//! session restore.
 use super::{SettingsWindow, on_value, ui};
 use crate::{
-    config::preferences::Preference,
+    config::{TabLayoutMode, preferences::Preference},
     herdr_settings::{Edit, TabBarPosition},
     settings_window::remote_history::HostState,
 };
@@ -15,9 +16,29 @@ impl SettingsWindow {
         let position = shared.map(|shared| shared.tab_bar_position);
         let hide = shared.is_some_and(|shared| shared.hide_tab_bar_when_single_tab);
         let history = shared.is_some_and(|shared| shared.pane_history);
+        let layouts: Vec<_> = TabLayoutMode::ALL
+            .iter()
+            .map(|&mode| (mode, mode.label()))
+            .collect();
+        let open = !self.quitting && self.closing.is_none();
         let mut page = div()
             .flex()
             .flex_col()
+            .child(ui::section(theme, "Layout", None))
+            .child(
+                ui::row(theme, "tabs-layout", "Tab layout")
+                    .description("How tab strips draw their tabs. Also under View > Tab Layout.")
+                    .control(ui::segmented(
+                        theme,
+                        "tabs-layout-control",
+                        &layouts,
+                        Some(self.config.tab_layout),
+                        open,
+                        on_value(cx, |this, mode, _, cx| {
+                            this.save_preference(Preference::TabLayout(mode), cx)
+                        }),
+                    )),
+            )
             .child(ui::section(theme, "Tab bar", Some(ui::Source::Herdr)))
             .child(
                 self.gate_shared(ui::row(theme, "tabs-position", "Position"))
@@ -118,7 +139,6 @@ impl SettingsWindow {
                     ),
                 ),
             );
-        let open = !self.quitting && self.closing.is_none();
         for (index, host) in self.remote_history.hosts().iter().enumerate() {
             let (checked, settled) = match &host.state {
                 HostState::Ready(history) => (history.enabled, true),

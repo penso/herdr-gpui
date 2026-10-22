@@ -1,7 +1,7 @@
 //! The daemon's product announcement, drawn as a dismissible card among the
 //! notices over the top-right of the terminal area. Dismissing asks the daemon to mark it seen,
 //! so every client of that daemon stops showing it.
-use super::HerdrWindow;
+use super::{HerdrWindow, render::Notice};
 use crate::{notifications::safe_text, state::AnnouncementDismissal};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
@@ -11,7 +11,7 @@ const MAX_BODY_HEIGHT: f32 = 240.;
 const MAX_TITLE: usize = 160;
 
 impl HerdrWindow {
-    pub(super) fn announcement_card(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(super) fn announcement_card(&self, cx: &mut Context<Self>) -> Option<Notice> {
         let announcement = self.live.product_announcement()?;
         let lines = self.daemon_text.announcement.lines(&announcement.body);
         let theme = &self.theme;
@@ -26,6 +26,7 @@ impl HerdrWindow {
             .id("announcement")
             .debug_selector(|| "announcement".into())
             .min_w_0()
+            .min_h_0()
             .w_full()
             .max_w(px(MAX_WIDTH))
             .occlude()
@@ -45,12 +46,20 @@ impl HerdrWindow {
                 div()
                     .flex_1()
                     .min_w_0()
+                    .min_h_0()
                     .flex()
                     .flex_col()
                     .gap(px(4.))
-                    .child(div().truncate().text_color(rgb(theme.muted)).child(caption))
                     .child(
                         div()
+                            .flex_none()
+                            .truncate()
+                            .text_color(rgb(theme.muted))
+                            .child(caption),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
                             .debug_selector(|| "announcement-title".into())
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(safe_text(&announcement.title, MAX_TITLE)),
@@ -58,6 +67,8 @@ impl HerdrWindow {
                     .child(
                         div()
                             .id("announcement-body")
+                            .debug_selector(|| "announcement-body".into())
+                            .min_h_0()
                             .max_h(px(MAX_BODY_HEIGHT))
                             .overflow_y_scroll()
                             .child(crate::release_notes::render(
@@ -72,6 +83,9 @@ impl HerdrWindow {
                 div()
                     .id("announcement-dismiss")
                     .debug_selector(|| "announcement-dismiss".into())
+                    .role(Role::Button)
+                    .aria_label("Dismiss")
+                    .map(|control| self.chrome_stop(super::chrome_focus::Region::Notices, control))
                     .flex_none()
                     .size(px(24.))
                     .rounded(px(crate::config::corners::CONTROL))
@@ -91,7 +105,11 @@ impl HerdrWindow {
                         this.dismiss_announcement(&version, &id, cx);
                     })),
             );
-        Some(card.into_any_element())
+        // Its body always scrolls, so it gives up height like an open card.
+        Some(Notice {
+            card: card.into_any_element(),
+            shrinks: true,
+        })
     }
 
     /// Hides the announcement at once and asks the daemon to mark it seen. A

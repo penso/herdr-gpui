@@ -69,6 +69,13 @@ pub(crate) struct SetLayout {
     pub(crate) mode: crate::config::LayoutMode,
 }
 
+/// Picks how tab strips draw their tabs, from View > Tab Layout.
+#[derive(Clone, PartialEq, serde::Deserialize, Action)]
+#[action(no_json)]
+pub(crate) struct SetTabLayout {
+    pub(crate) mode: crate::config::TabLayoutMode,
+}
+
 #[derive(Clone, PartialEq, serde::Deserialize, Action)]
 #[action(no_json)]
 pub(crate) struct ShowToastPreview {

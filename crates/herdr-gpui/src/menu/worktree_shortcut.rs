@@ -69,6 +69,16 @@ impl WorktreeShortcut {
             .filter(|tree| tree.is_linked_worktree);
         let row = match (self, linked) {
             (Self::Open, Some(tree)) => super::workspace::main_checkout(snapshot, tree)
+                // A main checkout whose shell wandered off would list the
+                // repository it moved to, so the dialog opens through the
+                // linked checkout and names the repository's root instead.
+                .or_else(|| {
+                    snapshot
+                        .workspaces
+                        .iter()
+                        .any(|w| super::workspace::is_main_of(w, tree))
+                        .then_some(focused)
+                })
                 .ok_or(Unavailable::MainCheckoutClosed)?,
             (Self::Open, None) | (Self::Remove, Some(_)) => focused,
             (Self::Remove, None) => return Err(Unavailable::MainCheckout),

@@ -228,6 +228,7 @@ fn notes_go_to_the_focused_agent_or_the_workspace_s_first() {
     assert!(pick_agent(&snapshot(base(None, vec![agent("w0:p1", "w0", None)]))).is_none());
 }
 
+mod any_repository;
 mod base;
 mod colours;
 mod editor;

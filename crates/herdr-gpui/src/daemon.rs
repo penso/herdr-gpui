@@ -101,13 +101,9 @@ pub(crate) fn executable() -> PathBuf {
                 }),
         )
         .chain(
-            [
-                PathBuf::from("/opt/homebrew/bin/herdr"),
-                PathBuf::from("/usr/local/bin/herdr"),
-                PathBuf::from("/home/linuxbrew/.linuxbrew/bin/herdr"),
-            ]
-            .into_iter()
-            .filter(|_| cfg!(unix)),
+            crate::local_path::HOMEBREW_DIRS
+                .iter()
+                .map(|dir| Path::new(dir).join(NAME)),
         );
     candidates
         .into_iter()

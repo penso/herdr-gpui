@@ -5,7 +5,7 @@ use crate::browser::{Location, ReviewCheckout, Store, scope};
 
 fn checkout() -> ReviewCheckout {
     ReviewCheckout {
-        repo_key: "/work/repo/.git".into(),
+        repo_key: Some("/work/repo/.git".into()),
         branch: "feature".into(),
         checkout: Some("/work/repo".into()),
     }
@@ -74,4 +74,39 @@ fn saved_review_tabs_are_checked_when_read() {
     ] {
         assert!(serde_json::from_str::<Location>(&bad).is_err(), "{bad}");
     }
+}
+
+#[test]
+fn a_review_saved_by_its_directory_alone_is_read_back() {
+    // A space in a repository Herdr did not make as a worktree has no daemon
+    // key: its directory is saved, and the worker resolves and verifies it.
+    let directory = std::env::temp_dir().join("clone/src");
+    let directory = directory.to_str().unwrap();
+    let saved = |checkout: serde_json::Value| {
+        serde_json::json!({ "kind": "review", "checkout": checkout }).to_string()
+    };
+    for text in [
+        saved(serde_json::json!({ "repo_key": null, "branch": "main", "checkout": directory })),
+        saved(serde_json::json!({ "branch": "main", "checkout": directory })),
+    ] {
+        let location: Location = serde_json::from_str(&text).unwrap();
+        let again: Location =
+            serde_json::from_str(&serde_json::to_string(&location).unwrap()).unwrap();
+        assert_eq!(again, location, "{text}");
+        let Location::Review { checkout } = location else {
+            panic!("not a review: {text}");
+        };
+        assert_eq!(
+            crate::pull_request::Input::from(&checkout),
+            crate::pull_request::Input {
+                checkout: Some(directory.into()),
+                repo_key: None,
+                branch: "main".into(),
+            }
+        );
+    }
+    // With neither a key nor a directory it names no checkout at all.
+    let neither =
+        saved(serde_json::json!({ "repo_key": null, "branch": "main", "checkout": null }));
+    assert!(serde_json::from_str::<Location>(&neither).is_err());
 }

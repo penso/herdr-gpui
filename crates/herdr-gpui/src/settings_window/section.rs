@@ -138,7 +138,7 @@ impl Section {
             Self::Fonts => "icons/pencil.svg",
             Self::StatusBar => "icons/status-bar.svg",
             Self::General => "icons/settings.svg",
-            Self::Tabs => "icons/sessions.svg",
+            Self::Tabs => "icons/tabs.svg",
             Self::Code => "icons/vscode.svg",
             Self::Notifications => "icons/bell.svg",
             Self::Integrations => "icons/agent-generic.svg",

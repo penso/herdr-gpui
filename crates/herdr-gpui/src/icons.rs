@@ -253,6 +253,7 @@ embedded_icons! {
     "status-orbit.svg",
     "status-orca-blocked.svg",
     "status-orca-working.svg",
+    "tabs.svg",
     "teleport-back.svg",
     "teleport.svg",
     "terminal.svg",

@@ -81,6 +81,14 @@ impl IconFontNotice {
         self.dismissed |= current;
         current
     }
+
+    pub(crate) fn expanded(&self) -> bool {
+        self.card.expanded()
+    }
+
+    pub(crate) fn toggle(&mut self, lines: &Arc<[String]>) -> bool {
+        self.visible().is_some_and(|own| own == lines) && self.card.toggle(lines)
+    }
 }
 
 /// Whether any drawn cell needs an icon font. The solid separators are

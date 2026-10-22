@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+mod held;
+
 use super::*;
 use crate::{sidebar::layout_tests::fixture_window, window::MockPeer};
 use gpui::{

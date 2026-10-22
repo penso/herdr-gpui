@@ -17,7 +17,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// Helpers defined once per remote session. `herdr_field` prints the string
 /// or number at a JSON path from stdin. A real parser is required: matching
 /// only the last key can select another provider's credentials.
-const PRELUDE: &str = r#"PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
+const PRELUDE: &str = r#"herdr_linuxbrew=
+case "$(uname -s)" in Linux) herdr_linuxbrew=/home/linuxbrew/.linuxbrew/bin:;; esac
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$herdr_linuxbrew$PATH"
 export PATH
 herdr_field() {
     if command -v python3 >/dev/null 2>&1; then

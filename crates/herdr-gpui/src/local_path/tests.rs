@@ -2,6 +2,9 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 fn fallback() -> Vec<PathBuf> {
     std::env::split_paths(&local_path()).collect()
 }
@@ -14,6 +17,7 @@ fn fallback_includes_homebrew() {
             .iter()
             .any(|path| path == Path::new("/opt/homebrew/bin"))
     );
+    #[cfg(target_os = "linux")]
     assert!(
         paths
             .iter()
@@ -22,6 +26,7 @@ fn fallback_includes_homebrew() {
 }
 
 /// Linuxbrew is appended so an existing `/usr/local` install keeps precedence.
+#[cfg(target_os = "linux")]
 #[test]
 fn linuxbrew_follows_usr_local() {
     let paths = fallback();

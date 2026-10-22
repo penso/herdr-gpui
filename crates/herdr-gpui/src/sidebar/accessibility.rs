@@ -2,26 +2,10 @@
 //! as plain text, which assistive technology never sees, so each row is one
 //! list item whose name says what the row shows, most telling part first.
 
-use crate::{HerdrWindow, accessibility::update, window::chrome_focus::Region};
-use gpui::{AccessibleAction, Context, Role, StatefulInteractiveElement, WeakEntity, Window};
+pub(super) use crate::accessibility::expandable;
+use crate::{HerdrWindow, window::chrome_focus::Region};
+use gpui::{Context, Role, StatefulInteractiveElement};
 use herdr_client::protocol::AgentStatus;
-
-/// Gives a row that folds its children the expanded state and the Expand and
-/// Collapse actions, which run the same `toggle` as its arrow. AccessKit only
-/// asks for the action that changes the state, so both toggle.
-pub(super) fn expandable<E: StatefulInteractiveElement>(
-    row: E,
-    expanded: bool,
-    view: WeakEntity<HerdrWindow>,
-    toggle: impl Fn(&mut HerdrWindow, &mut Window, &mut Context<HerdrWindow>) + Clone + 'static,
-) -> E {
-    row.aria_expanded(expanded)
-        .on_a11y_action(
-            AccessibleAction::Expand,
-            update(view.clone(), toggle.clone()),
-        )
-        .on_a11y_action(AccessibleAction::Collapse, update(view, toggle))
-}
 
 impl HerdrWindow {
     /// A sidebar button: its name, and its place among the sidebar's stops.

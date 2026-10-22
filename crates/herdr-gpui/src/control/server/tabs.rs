@@ -77,7 +77,7 @@ fn location(tab: &Tab) -> Option<String> {
         Location::Review { checkout } => checkout
             .checkout
             .clone()
-            .unwrap_or_else(|| checkout.repo_key.clone()),
+            .or_else(|| checkout.repo_key.clone())?,
         Location::Orchestrator { repo } => repo.checkout.clone(),
         Location::Code { file } => file.path.clone(),
         Location::Devices => return None,

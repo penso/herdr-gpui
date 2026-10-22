@@ -514,11 +514,7 @@ impl HerdrWindow {
                 .ok_or(crate::Error::StaleWorkspace)?;
             self.endpoints[self.selected_endpoint]
                 .connection
-                .request_dialog(
-                    &target.boot_id,
-                    Method::WorktreeList,
-                    serde_json::json!({"workspace_id": target.id, "trust_repository": false}),
-                )
+                .request_dialog(&target.boot_id, Method::WorktreeList, target.list_params())
         })();
         let Some(source) = &mut self.menu.worktree else {
             return;
@@ -625,10 +621,7 @@ impl HerdrWindow {
         if self.selected_endpoint != 0 || !self.live.local_daemon_peer {
             return Err(crate::Error::PrUntrustedEndpoint);
         }
-        let workspace = self
-            .menu_target_workspace()
-            .ok_or(crate::Error::StaleWorkspace)?;
-        crate::pull_request::workspace_input(workspace, &crate::pull_request::Origin::Local)
+        self.menu_target_input(&crate::pull_request::Origin::Local)
     }
 
     /// The checkout to read and the token to read GitHub with.

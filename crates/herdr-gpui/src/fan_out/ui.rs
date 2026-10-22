@@ -123,6 +123,7 @@ impl HerdrWindow {
             .as_ref()
             .map(|input| input.text.clone())
             .unwrap_or_default();
+        let current = self.fan_out_origin_current();
         // Other hosts are described before the fan-out is borrowed to launch.
         let destinations: Vec<_> = self
             .fan_out
@@ -137,6 +138,12 @@ impl HerdrWindow {
             return;
         };
         match fan_out.stage {
+            Stage::Compose(_) if !current => {
+                fan_out.error = Some(
+                    "This workspace has moved to another repository since the fan-out opened"
+                        .to_owned(),
+                );
+            }
             Stage::Compose(_) => {
                 let destination = |endpoint: &str| {
                     destinations

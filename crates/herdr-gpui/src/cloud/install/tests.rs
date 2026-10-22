@@ -27,6 +27,7 @@ fn the_probe_finds_herdr_where_the_bridge_looks() {
         "/run/current-system/sw/bin/herdr",
     ]
     .iter()
+    .filter(|path| cfg!(target_os = "linux") || !path.starts_with("/home/linuxbrew/"))
     .any(|path| std::path::Path::new(path).exists());
     if !system {
         assert!(!installed(local(home.path()), &|| false).unwrap());

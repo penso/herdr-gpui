@@ -209,6 +209,10 @@ pub(crate) fn open_additional_window_then(
 pub(crate) fn run() -> std::process::ExitCode {
     use cli::{LaunchMode, LaunchOptions};
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
+    #[cfg(target_os = "macos")]
+    if let Some(exit) = crate::window::run_clipboard_helper(&args) {
+        return exit;
+    }
     if let Some(exit) = updater::run_helper(&args) {
         return exit;
     }

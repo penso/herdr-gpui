@@ -5,25 +5,24 @@
 mod dividers;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
+#[cfg(test)]
+use crate::tab_layout::{DOT_GAP, ZOOM_ICON};
 use crate::{
-    TAB_HEIGHT, TAB_WIDTH,
+    TAB_HEIGHT,
     browser::{Fold, GroupId, Leaving, Listed, Pick, Shown, Slot, ThumbDrag},
     controls::Command,
     fonts::StyledFont,
     herdr_settings::TabBarPosition,
-    sidebar::{Indicators, status_indicator},
+    icons::AgentIcon,
+    sidebar::Indicators,
+    tab_layout::{Lead, Mark, Probe, TabContext, TabFace, TabLayout, TabShape, TabState},
     titlebar::Ends,
 };
 use gpui::{prelude::*, *};
+#[cfg(test)]
 use herdr_client::protocol::AgentStatus;
 
 pub(super) use dividers::{Reach, native_page};
-
-/// The gap between a Herdr tab's status indicator and its title.
-const DOT_GAP: f32 = 6.;
-
-/// How large the mark after a zoomed tab's title draws, `DOT_GAP` after it.
-const ZOOM_ICON: f32 = 11.;
 
 /// How tall the thumb along a scrolling strip's foot draws.
 const THUMB_HEIGHT: f32 = 4.;
@@ -35,45 +34,42 @@ const LIFT_GROW: f32 = 5.;
 const THUMB_ALPHA: u32 = 0x80;
 const THUMB_HELD_ALPHA: u32 = 0xc0;
 
-/// What a tab draws before its title.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Lead {
-    Nothing,
-    /// A Herdr tab whose agents report a status.
-    Status,
-    /// A browser tab's globe.
-    Globe,
-}
-
-impl Lead {
-    /// Unknown is what a tab without an agent reports, so it draws nothing
-    /// rather than the sidebar's small grey dot.
-    fn of(status: AgentStatus) -> Self {
-        match status {
-            AgentStatus::Unknown => Self::Nothing,
-            _ => Self::Status,
-        }
-    }
-}
-
 /// What a group without tabs says, where its tab would show.
 const NO_TABS: &str =
     "Open a terminal tab with \"+\", or another kind of tab from the \"\u{22ef}\" menu.";
 
 impl HerdrWindow {
-    /// A tab's colors. The chosen tab carries the theme's accent in the group
-    /// in use and a quieter wash elsewhere, so a split shows which group has
-    /// the keyboard; the rest recede into the strip.
-    pub(crate) fn tab_colors(&self, selected: bool, group: GroupId) -> (u32, u32) {
-        let active = !self.is_split() || self.active_group() == Some(group);
-        match (selected, active) {
-            (true, true) => {
-                let background = self.theme.primary_wash();
-                (background, self.theme.text_on(background))
-            }
-            (true, false) => (self.theme.active, self.theme.foreground),
-            (false, _) => (self.theme.surface, self.theme.muted),
+    /// The layout View > Tab Layout picked.
+    pub(crate) fn tab_layout(&self) -> &'static dyn TabLayout {
+        crate::tab_layout::layout_for(self.config.tab_layout)
+    }
+
+    /// What every tab of `slot`'s strip shares.
+    pub(crate) fn tab_context(&self, slot: Slot, indicators: Indicators) -> TabContext<'_> {
+        TabContext {
+            theme: &self.theme,
+            font: &self.config.tabs,
+            indicators,
+            fill: self.fill(),
+            slot,
+            ring: (self.chrome_region == Some(crate::window::chrome_focus::Region::TitleBar))
+                .then(|| self.theme.primary()),
         }
+    }
+
+    /// How a tab of `group` is marked: whether it is the one shown, and
+    /// whether the group has the keyboard, so a split shows which one does.
+    pub(crate) fn tab_state(&self, selected: bool, group: GroupId) -> TabState {
+        TabState {
+            selected,
+            active: !self.is_split() || self.active_group() == Some(group),
+        }
+    }
+
+    /// A tab's colors, as the layout in use draws them.
+    pub(crate) fn tab_colors(&self, selected: bool, group: GroupId) -> (u32, u32) {
+        self.tab_layout()
+            .colors(self.tab_state(selected, group), &self.theme)
     }
 
     /// How wide a tab with `label` draws, as its padding, gaps, close
@@ -81,8 +77,7 @@ impl HerdrWindow {
     fn tab_width(
         &self,
         label: &SharedString,
-        lead: Lead,
-        zoomed: bool,
+        shape: TabShape,
         indicators: Indicators,
         window: &Window,
     ) -> f32 {
@@ -100,16 +95,9 @@ impl HerdrWindow {
                 .shape_line(label.clone(), px(self.config.tabs.size), &[run], None)
                 .width,
         );
-        // Padding, the gap before the close button, the button, the rule;
-        // a status dot or a browser tab's globe, and its gap.
-        let chrome = match lead {
-            Lead::Nothing => 12. + 10.,
-            Lead::Status => 12. + indicators.width(&self.config.tabs) + DOT_GAP + 10.,
-            Lead::Globe => 10. + 12. + 6. + 6.,
-        };
-        let zoom = if zoomed { DOT_GAP + ZOOM_ICON } else { 0. };
         // GPUI rounds the text element's intrinsic width up during layout.
-        (chrome + zoom + text.ceil() + 18. + 3. + 1.).max(TAB_WIDTH)
+        self.tab_layout()
+            .width(text.ceil(), shape, &self.config.tabs, indicators)
     }
 
     /// A closed tab where it stood, narrowing and fading out.
@@ -180,7 +168,7 @@ impl HerdrWindow {
                                 Pick::Herdr(t.tab_id.clone()),
                                 SharedString::from(t.label.clone()),
                             ),
-                            Lead::of(t.agent_status),
+                            herdr_mark(snapshot, t).lead(),
                             t.zoomed,
                         )
                     })
@@ -192,13 +180,20 @@ impl HerdrWindow {
             .chain(
                 self.browser_tab_labels(cx)
                     .into_iter()
-                    .map(|entry| (entry, Lead::Globe, false)),
+                    .map(|entry| (entry, Lead::Icon, false)),
             )
             .filter(|((pick, _), _, _)| self.group_lists(slot.id, pick))
-            .map(|((pick, label), lead, zoomed)| Listed {
-                width: self.tab_width(&label, lead, zoomed, indicators, window),
-                pick,
-                label,
+            .map(|((tab, label), lead, zoomed)| {
+                let shape = TabShape {
+                    lead,
+                    zoomed,
+                    selected: pick.as_ref() == Some(&tab),
+                };
+                Listed {
+                    width: self.tab_width(&label, shape, indicators, window),
+                    pick: tab,
+                    label,
+                }
             })
             .collect();
         // Leaving tabs slot in among these below; `None` marks where.
@@ -211,6 +206,8 @@ impl HerdrWindow {
             .map_or(0., |tab| tab.width);
         self.observe_strip(slot.id, listed, now);
         let scroll = self.strip_scroll(slot.id);
+        let layout = self.tab_layout();
+        let faces = self.tab_context(slot, indicators);
         let mut built: Vec<(Pick, Stateful<Div>)> = Vec::new();
         let mut tabs = div()
             .id(SharedString::from(slot.selector("tabs")))
@@ -223,6 +220,7 @@ impl HerdrWindow {
             .text_size(px(self.config.tabs.size))
             .overflow_x_scroll()
             .track_scroll(&scroll)
+            .px(px(layout.padding()))
             .bg(self.fill().over(self.theme.surface, self.theme.surface))
             .text_color(rgb(self.theme.foreground));
         if let Some(snapshot) = &self.live.snapshot {
@@ -234,115 +232,30 @@ impl HerdrWindow {
                 let context_id = id.clone();
                 let close_id = id.clone();
                 let selected = matches!(&pick, Some(Pick::Herdr(picked)) if *picked == id);
-                let (background, text) = self.tab_colors(selected, slot.id);
+                let base = div()
+                    .id(SharedString::from(format!("tab-{id}")))
+                    .debug_selector({
+                        let id = id.clone();
+                        move || slot.selector(&format!("tab-{id}"))
+                    })
+                    .role(Role::Tab)
+                    .aria_label(tab.label.clone())
+                    .aria_selected(selected)
+                    .map(|control| faces.stop(control));
+                let face = TabFace {
+                    label: tab.label.clone().into(),
+                    mark: herdr_mark(snapshot, tab),
+                    zoomed: tab.zoomed,
+                    probe: Probe::Herdr(id.clone()),
+                    close: Box::new(cx.listener(move |this, _, window, cx| {
+                        this.close_strip_tab(Pick::Herdr(close_id.clone()), window, cx);
+                    })),
+                };
                 built.push((
                     Pick::Herdr(id.clone()),
-                    div()
-                        .id(SharedString::from(format!("tab-{id}")))
-                        .debug_selector({
-                            let id = id.clone();
-                            move || slot.selector(&format!("tab-{id}"))
-                        })
-                        .role(Role::Tab)
-                        .aria_label(tab.label.clone())
-                        .aria_selected(selected)
-                        .map(|control| {
-                            self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
-                        })
-                        .pl(px(12.))
-                        // The close button hugs the tab's inner right edge, well
-                        // clear of the label it would otherwise crowd.
-                        .pr(px(3.))
-                        .py(px(2.))
-                        // Even cells divided by a single rule, as in the reference UI.
-                        .min_w(px(TAB_WIDTH))
+                    layout
+                        .tab(base, face, self.tab_state(selected, slot.id), &faces)
                         .map(|tab| self.grow_tab(tab, slot.id, &Pick::Herdr(id.clone())))
-                        .border_r_1()
-                        .border_color(rgb(self.theme.active))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .cursor_pointer()
-                        .bg(self.fill().over(self.theme.surface, background))
-                        .text_color(rgb(text))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(DOT_GAP))
-                                .when(Lead::of(tab.agent_status) == Lead::Status, |title| {
-                                    title.child(
-                                        status_indicator(
-                                            tab.agent_status,
-                                            &self.config.tabs,
-                                            indicators,
-                                        )
-                                        .mt_0()
-                                        .debug_selector({
-                                            let id = id.clone();
-                                            move || slot.selector(&format!("tab-status-{id}"))
-                                        }),
-                                    )
-                                })
-                                .child(tab.label.clone())
-                                // Herdr's " Z": one pane fills the tab, the
-                                // rest are hidden behind it.
-                                .when(tab.zoomed, |title| {
-                                    title.child(
-                                        svg()
-                                            .path("icons/zoom.svg")
-                                            .debug_selector({
-                                                let id = id.clone();
-                                                move || slot.selector(&format!("tab-zoom-{id}"))
-                                            })
-                                            .flex_none()
-                                            .size(px(ZOOM_ICON))
-                                            .text_color(rgb(text)),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .id("close-tab")
-                                .role(Role::Button)
-                                .aria_label("Close tab")
-                                .map(|control| {
-                                    self.chrome_stop(
-                                        crate::window::chrome_focus::Region::TitleBar,
-                                        control,
-                                    )
-                                })
-                                .debug_selector({
-                                    let id = id.clone();
-                                    move || slot.selector(&format!("close-tab-{id}"))
-                                })
-                                .size(px(18.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .hover(move |s| s.bg(rgba((text << 8) | 0x24)))
-                                .child(
-                                    svg()
-                                        .path("icons/close.svg")
-                                        .debug_selector({
-                                            let id = id.clone();
-                                            move || slot.selector(&format!("close-tab-icon-{id}"))
-                                        })
-                                        .size(px(12.))
-                                        .text_color(rgb(text)),
-                                )
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                    cx.stop_propagation();
-                                })
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    cx.stop_propagation();
-                                    let pick = Pick::Herdr(close_id.clone());
-                                    this.close_strip_tab(pick, window, cx);
-                                })),
-                        )
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, event: &MouseDownEvent, window, cx| {
@@ -369,7 +282,7 @@ impl HerdrWindow {
             _ => None,
         };
         built.extend(
-            self.browser_tab_entries(slot, shown, cx)
+            self.browser_tab_entries(slot, shown, &faces, cx)
                 .into_iter()
                 .map(|(id, tab)| (Pick::Page(id), tab)),
         );
@@ -474,24 +387,18 @@ impl HerdrWindow {
                     .map(|control| {
                         self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
                     })
-                    .w(px(34.))
-                    .min_h(px(TAB_HEIGHT))
-                    .border_r_1()
-                    .border_color(rgb(self.theme.active))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(self.theme.active)))
-                    .child(
-                        svg()
-                            .path("icons/plus.svg")
-                            .debug_selector(move || slot.selector("new-tab-icon"))
-                            .size(px(14.))
-                            // Quiet like the unselected tabs beside it.
-                            .text_color(rgb(self.theme.muted)),
-                    )
+                    .map(|button| {
+                        layout.new_tab(
+                            button,
+                            svg()
+                                .path("icons/plus.svg")
+                                .debug_selector(move || slot.selector("new-tab-icon"))
+                                .size(px(14.))
+                                // Quiet like the unselected tabs beside it.
+                                .text_color(rgb(self.theme.muted)),
+                            &self.theme,
+                        )
+                    })
                     // A new Herdr tab opens in the group that asked for it;
                     // other kinds of tab are behind "…".
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -933,6 +840,24 @@ impl HerdrWindow {
             )
             .child(div().flex_1().bg(self.fill().ground()))
             .into_any_element()
+    }
+}
+
+/// What leads a Herdr tab: its status, and the agent running in it, the
+/// focused one when several do.
+fn herdr_mark(
+    snapshot: &herdr_client::protocol::ClientShellSnapshot,
+    tab: &herdr_client::protocol::ClientShellTab,
+) -> Mark {
+    let agent = snapshot
+        .agents
+        .iter()
+        .filter(|agent| agent.tab_id == tab.tab_id)
+        .max_by_key(|agent| agent.focused)
+        .map(|agent| AgentIcon::from_identity(agent.agent.as_deref()));
+    Mark::Herdr {
+        status: tab.agent_status,
+        agent,
     }
 }
 

@@ -217,6 +217,7 @@ impl HerdrWindow {
             network_quality_seen: 0,
             next_orchestrator: 0,
             notes_width: crate::panel_resize::NOTES,
+            notice_overflow: Default::default(),
             options: ConnectOptions::default(),
             orchestrator_events: Vec::new(),
             orchestrator_live: Default::default(),

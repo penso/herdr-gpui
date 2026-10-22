@@ -19,14 +19,10 @@ pub(super) fn search_path(home: Option<&Path>, path: Option<&OsStr>) -> Vec<Path
         ]
         .map(|dir| home.join(dir))
     });
-    let system = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/home/linuxbrew/.linuxbrew/bin",
-    ]
-    .into_iter()
-    .filter(|_| cfg!(unix))
-    .map(PathBuf::from);
+    let system = crate::local_path::HOMEBREW_DIRS
+        .iter()
+        .copied()
+        .map(PathBuf::from);
     let nix = home.map(|home| home.join(".nix-profile/bin"));
     tools
         .chain(system)

@@ -188,8 +188,10 @@ impl HerdrWindow {
                         crate::caffeine::set_scope(config.status_bar.keep_awake_scope, cx);
                         if config.keybindings != this.config.keybindings {
                             crate::actions::rebind_keys(cx);
-                        } else if config.layout.mode != this.config.layout.mode {
-                            // The View menu checks the layout in use.
+                        } else if config.layout.mode != this.config.layout.mode
+                            || config.tab_layout != this.config.tab_layout
+                        {
+                            // The View menu checks the layouts in use.
                             crate::menus::install(cx);
                         }
                         if this.config.notifications.delivery() == crate::config::NotificationDelivery::Off

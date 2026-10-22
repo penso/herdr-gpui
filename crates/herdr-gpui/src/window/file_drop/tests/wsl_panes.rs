@@ -18,7 +18,10 @@ fn a_wsl_pane_is_given_mapped_paths_and_never_a_file_copy(cx: &mut gpui::TestApp
             session: "default".into(),
         };
         let dropped = [PathBuf::from("C:/Users/me/report.pdf")];
-        assert!(view.paste_files(InputTarget::Pane("pane-0".into()), &dropped, cx));
+        assert_ne!(
+            view.paste_files(InputTarget::Pane("pane-0".into()), &dropped, cx),
+            Delivery::Refused
+        );
         assert!(view.file_transfer.is_none());
     });
     cx.run_until_parked();
@@ -42,7 +45,10 @@ fn a_wsl_pane_that_is_not_ready_refuses_the_files(cx: &mut gpui::TestAppContext)
         };
         view.live.status = ConnectionStatus::Disconnected;
         let dropped = [PathBuf::from("C:/Users/me/report.pdf")];
-        assert!(!view.paste_files(InputTarget::Pane("pane-0".into()), &dropped, cx));
+        assert_eq!(
+            view.paste_files(InputTarget::Pane("pane-0".into()), &dropped, cx),
+            Delivery::Refused
+        );
         assert_eq!(
             view.local_error.as_deref(),
             Some("Files not pasted: The connection is not ready. Try again.")

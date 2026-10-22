@@ -2,6 +2,8 @@ use super::super::WorkspaceMenuAction;
 use super::*;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+mod moved;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod spread;
 
 fn offered(view: &HerdrWindow) -> Option<&'static str> {

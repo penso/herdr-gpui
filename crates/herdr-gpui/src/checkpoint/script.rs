@@ -37,7 +37,9 @@ const EXIT_BUSY: i32 = 69;
 fn prelude(checkout: &Checkout) -> String {
     format!(
         r#"set -eu
-PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$HOME/.nix-profile/bin"
+herdr_linuxbrew=
+case "$(uname -s)" in Linux) herdr_linuxbrew=/home/linuxbrew/.linuxbrew/bin:;; esac
+PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$herdr_linuxbrew$HOME/.nix-profile/bin"
 export PATH
 # Never prefix `g` with an assignment: before a function call, bash's POSIX
 # mode (macOS /bin/sh) keeps it set afterwards, so a temporary index would

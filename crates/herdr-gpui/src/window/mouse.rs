@@ -22,6 +22,9 @@ use serde_json::json;
 pub(crate) struct Gesture {
     hit: WheelTarget,
     button: MouseButton,
+    /// The application was sent motion to another cell: the press became a
+    /// drag, which may have been meant as a selection.
+    dragged: bool,
     /// Modifiers the application never sees for this gesture: the
     /// passthrough combination that sent a right-click to it.
     strip: Modifiers,
@@ -217,6 +220,12 @@ impl HerdrWindow {
         let Some((hit, strip)) = self
             .terminal_mouse_at(event.position)
             .filter(|hit| hit.mouse_reporting)
+            // Shift keeps this press local, so its user needs no hint.
+            .inspect(|_| {
+                if event.button == MouseButton::Left && event.modifiers.shift {
+                    super::select_hint::learned(cx);
+                }
+            })
             .and_then(|hit| {
                 let strip = if event.button == MouseButton::Right {
                     self.right_click_to_application(&hit.target, event.modifiers)?
@@ -249,6 +258,7 @@ impl HerdrWindow {
             self.terminal_mouse = Some(Gesture {
                 hit,
                 button: event.button,
+                dragged: false,
                 strip,
                 boot: snapshot.boot_id.clone(),
                 epoch: self.selection_epoch,
@@ -315,10 +325,14 @@ impl HerdrWindow {
                     return true;
                 }
                 let modifiers = without(event.modifiers, gesture.strip);
+                // Pixel motion within one cell is forwarded but selects no
+                // text, so only reaching another cell makes it a drag.
+                let moved_cell = hit.cell() != gesture.hit.cell();
                 if self.send_mouse(&hit, kind, modifiers, cx)
                     && let Some(gesture) = &mut self.terminal_mouse
                 {
                     gesture.hit = hit;
+                    gesture.dragged |= moved_cell;
                 }
             } else if !waits {
                 self.cancel_terminal_mouse(cx);
@@ -408,10 +422,12 @@ impl HerdrWindow {
             .terminal_mouse
             .as_ref()
             .and_then(|gesture| self.gesture_hit(gesture, event.position));
-        let strip = self
+        let (strip, dragged) = self
             .terminal_mouse
             .as_ref()
-            .map_or_else(Modifiers::default, |gesture| gesture.strip);
+            .map_or((Modifiers::default(), false), |gesture| {
+                (gesture.strip, gesture.dragged)
+            });
         if hit.is_none() {
             self.cancel_terminal_mouse(cx);
             return true;
@@ -425,8 +441,15 @@ impl HerdrWindow {
                 without(event.modifiers, strip),
                 cx,
             )
-            && let InputTarget::Pane(id) = &hit.target
         {
+            // A left drag the application took is where a selection was
+            // most likely expected and did not happen.
+            if dragged && event.button == MouseButton::Left {
+                self.hint_shift_select(cx);
+            }
+            let InputTarget::Pane(id) = &hit.target else {
+                return true;
+            };
             // Finish targeted input before navigation fences the surface. This
             // also lets the first click in an inactive split reach its app.
             self.focus_clicked_pane(id, cx);

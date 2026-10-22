@@ -1,23 +1,5 @@
 //! Tab requests against a headless window showing workspace `w0`.
 use super::*;
-use crate::control::protocol::Request;
-
-/// A request queued on a private socket, and the caller waiting for it.
-fn queued(
-    server: &socket::Server,
-    op: TabOp,
-    caller: Caller,
-) -> (
-    Call<TabOp>,
-    socket::Incoming,
-    std::thread::JoinHandle<crate::Result<Response>>,
-) {
-    let path = server.path().to_owned();
-    let call = Call { caller, op };
-    let request = Request::Tab(call.clone());
-    let waiting = std::thread::spawn(move || socket::call(&path, &request));
-    (call, server.next().unwrap(), waiting)
-}
 
 #[gpui::test]
 fn tabs_are_listed_focused_and_closed(cx: &mut gpui::TestAppContext) {

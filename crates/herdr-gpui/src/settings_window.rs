@@ -495,8 +495,11 @@ impl SettingsWindow {
         let previous = cx.try_global::<crate::app::InitialAppearance>();
         let keys_changed =
             previous.is_none_or(|previous| previous.config.keybindings != self.config.keybindings);
-        let layout_changed =
-            previous.is_some_and(|previous| previous.config.layout.mode != self.config.layout.mode);
+        // Both layouts are checked in the View menu.
+        let layout_changed = previous.is_some_and(|previous| {
+            previous.config.layout.mode != self.config.layout.mode
+                || previous.config.tab_layout != self.config.tab_layout
+        });
         // Future windows inherit an explicit Settings draft, but not a main
         // picker's cancellable hover preview. Logs follow live appearance.
         let previewing = cx.windows().into_iter().any(|window| {

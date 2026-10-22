@@ -465,7 +465,9 @@ pub(crate) fn snapshot(workspace_count: usize) -> ClientShellSnapshot {
         })).collect::<Vec<_>>(),
         "panes": [], "commands": [],
         "workspaces": (0..workspace_count).map(|i| serde_json::json!({
-            "workspace_id": format!("w{i}"), "active_tab_id": "t0", "new_workspace_cwd": "/tmp",
+            "workspace_id": format!("w{i}"), "active_tab_id": "t0",
+            // The main checkout's shell stands in its repository, as Herdr opens it.
+            "new_workspace_cwd": if i == 3 { REPO_KEY.trim_end_matches("/.git") } else { "/tmp" },
             "number": i + 1,
             "label": match i { 0 => "herdr", 1 => "herdr-gpui-sidebar-rendering-regression-investigation", 3..=5 => "agent-launcher", _ => "another workspace" },
             "custom_label": false,
@@ -595,6 +597,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         deliveries: Default::default(),
         terminal_notes: Default::default(),
         notes_width: crate::panel_resize::NOTES,
+        notice_overflow: Default::default(),
         review_files_width: crate::panel_resize::REVIEW_FILES,
         reviews: Default::default(),
         code_views: Default::default(),
