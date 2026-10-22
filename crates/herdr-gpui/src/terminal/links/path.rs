@@ -12,15 +12,18 @@ const MAX_PATH_BYTES: usize = 4096;
 /// A file path read from a row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PlainPath<'a> {
-    /// The bytes of the row it covers, a `:line` or `:line:column` suffix
-    /// included.
+    /// The bytes of the row it covers, a `:line` or `:line:column` suffix and
+    /// a `?query` or `#fragment` included.
     pub(super) range: Range<usize>,
     /// The path without that suffix, with shell escapes such as `\ ` removed.
     pub(super) path: Cow<'a, str>,
-    /// The line the suffix names.
+    /// The line the suffix names, or else a `#L10` fragment.
     pub(super) line: Option<u32>,
-    /// Whether the path runs to the end of the row, where it may continue on
-    /// the next one.
+    /// The `?query` or `#fragment` a page's address ends in, with its `?` or
+    /// `#`; the range covers it too.
+    pub(super) query: Option<&'a str>,
+    /// Whether the path runs to the end of the text read, where it may
+    /// continue off-screen.
     pub(super) open: bool,
 }
 
@@ -28,7 +31,9 @@ pub(super) struct PlainPath<'a> {
 /// after a backslash belongs to the path, as in the `/tmp/a\ b` a file drop
 /// or a shell's completion prints, except in a word that starts with a
 /// drive, such as `C:\Users\me`, where every backslash is part of the path.
-pub(super) fn plain_path(text: &str, hit: usize) -> Option<PlainPath<'_>> {
+/// `windows_paths` says the pane's host writes Windows paths, whose
+/// backslashes separate folders when a `?query` or `#fragment` is split off.
+pub(super) fn plain_path(text: &str, hit: usize, windows_paths: bool) -> Option<PlainPath<'_>> {
     let mut start = 0;
     let mut end = text.len();
     let mut drive = drive_path(text);
@@ -56,7 +61,9 @@ pub(super) fn plain_path(text: &str, hit: usize) -> Option<PlainPath<'_>> {
     if hit < start || hit >= start + token.len() {
         return None;
     }
-    let (located, line) = without_location(token);
+    let (named, query) = split_suffix(token, drive || windows_paths)?;
+    let (located, line) = without_location(named);
+    let line = line.or_else(|| query.and_then(fragment_line));
     let (path, separators): (_, &[char]) = if drive {
         // A Windows name holds no colon but the drive's.
         if located.matches(':').count() > 1 {
@@ -73,13 +80,121 @@ pub(super) fn plain_path(text: &str, hit: usize) -> Option<PlainPath<'_>> {
         range: start..start + token.len(),
         path,
         line,
+        query,
         open: end == text.len(),
     })
 }
 
+/// `token` split into the path it names and the `?query` or `#fragment` a
+/// page's address ends in, as in `index.html?sheet=1`, the suffix keeping its
+/// leading `?` or `#`. Only an unescaped mark after a folder, not starting a
+/// name, with something after it splits: a `?` before `key=` or after a name
+/// with an extension, and a `#` before an anchor or a `L10` line after a
+/// name with an extension, or a `page=3` after a PDF's. So `notes#1`,
+/// `~/.emacs.d/#init.el#`, and `/tmp/a?b` stay whole. `drive` says whether
+/// the token is a Windows path, whose backslashes separate folders rather
+/// than escape. `None` when the suffix is longer than [`MAX_SUFFIX_BYTES`].
+pub(super) fn split_suffix(token: &str, drive: bool) -> Option<(&str, Option<&str>)> {
+    let separator = |c: char| c == '/' || (drive && c == '\\');
+    let mut after_folder = false;
+    let mut previous = None;
+    let mut chars = token.char_indices();
+    while let Some((index, c)) = chars.next() {
+        if c == '\\' && !drive {
+            // The escaped character is part of the name.
+            previous = chars.next().map(|(_, escaped)| escaped);
+            continue;
+        }
+        if matches!(c, '?' | '#') && after_folder && previous.is_some_and(|p| !separator(p)) {
+            let (path, suffix) = token.split_at(index);
+            if page_suffix(path, &suffix[1..], c == '?', drive) {
+                return (suffix.len() <= MAX_SUFFIX_BYTES).then_some((path, Some(suffix)));
+            }
+        }
+        after_folder |= separator(c);
+        previous = Some(c);
+    }
+    Some((token, None))
+}
+
+/// The longest `?query` or `#fragment` read after a path, so a page's whole
+/// address stays within the 8192 bytes a web address may have.
+pub(super) const MAX_SUFFIX_BYTES: usize = 4096;
+
+/// Whether `rest`, after the `?` (`query`) or `#` that follows `path`, reads
+/// as a page's query or fragment.
+fn page_suffix(path: &str, rest: &str, query: bool, drive: bool) -> bool {
+    if rest.is_empty() {
+        return false;
+    }
+    let separators: &[char] = if drive { &['/', '\\'] } else { &['/'] };
+    let name = without_location(path)
+        .0
+        .rsplit(separators)
+        .next()
+        .unwrap_or_default();
+    let extension = name
+        .rsplit_once('.')
+        .map(|(_, extension)| extension)
+        .filter(|extension| {
+            (1..=10).contains(&extension.len())
+                && extension.bytes().all(|b| b.is_ascii_alphanumeric())
+        });
+    if query {
+        extension.is_some() || starts_like_query(rest)
+    } else {
+        extension.is_some_and(|extension| {
+            anchor(rest) || (extension.eq_ignore_ascii_case("pdf") && pdf_page(rest))
+        })
+    }
+}
+
+/// Whether `fragment` names a PDF's page, as in `page=3`.
+fn pdf_page(fragment: &str) -> bool {
+    fragment
+        .strip_prefix("page=")
+        .is_some_and(|page| !page.is_empty() && page.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Whether `rest` starts with a `key=`.
+fn starts_like_query(rest: &str) -> bool {
+    let key = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'~' | b'-'))
+        .count();
+    key > 0 && rest.as_bytes().get(key) == Some(&b'=')
+}
+
+/// Whether `fragment` is an anchor such as `intro`, which a line such as
+/// `L10` or `L10-L20` is too.
+fn anchor(fragment: &str) -> bool {
+    let mut bytes = fragment.bytes();
+    bytes.next().is_some_and(|b| b.is_ascii_alphabetic())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+}
+
+/// The line a `#L10` or `#L10-L20` fragment at the end of `suffix` names:
+/// the first of the range.
+pub(super) fn fragment_line(suffix: &str) -> Option<u32> {
+    let (_, fragment) = suffix.split_once('#')?;
+    let lines = fragment.strip_prefix('L')?;
+    let number = |digits: &str| {
+        (!digits.is_empty() && digits.len() <= 9 && digits.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| digits.parse().ok())
+            .flatten()
+    };
+    match lines.split_once('-') {
+        Some((first, last)) => {
+            number(last.strip_prefix('L').unwrap_or(last))?;
+            number(first)
+        }
+        None => number(lines),
+    }
+}
+
 /// Whether `word` starts with a drive and the separator after it, as in
 /// `C:\` or `C:/`: a Windows path, whose backslashes separate folders.
-fn drive_path(word: &str) -> bool {
+pub(super) fn drive_path(word: &str) -> bool {
     matches!(word.as_bytes(), [letter, b':', b'\\' | b'/', ..] if letter.is_ascii_alphabetic())
 }
 

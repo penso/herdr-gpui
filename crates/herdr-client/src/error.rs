@@ -250,6 +250,8 @@ pub enum Error {
         source: Box<Error>,
         cleanup: Box<Error>,
     },
+    #[error(transparent)]
+    RemoteFile(#[from] crate::remote_file::Error),
     #[error("host scripts require a Linux or macOS client")]
     ScriptUnsupported,
     #[error("could not start host script")]

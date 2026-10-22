@@ -1,12 +1,14 @@
 use super::*;
 
 fn located(text: &str, column: u16) -> Option<(String, Option<u32>, Range<u16>)> {
-    frame_link(&frame(text, 60, 1), column, 0, 0, 60).and_then(|link| match link.target {
-        RowTarget::Path { path, line, .. } => Some((path, line, link.columns)),
-        RowTarget::Web(_)
-        | RowTarget::External(_)
-        | RowTarget::OtherHost(_)
-        | RowTarget::Malformed => None,
+    frame_link(&frame(text, 60, 1), column, 0, 0, 60).and_then(|link| {
+        match (columns(&link), link.target) {
+            (columns, RowTarget::Path { path, line, .. }) => Some((path, line, columns)),
+            (_, RowTarget::Web(_))
+            | (_, RowTarget::External(_))
+            | (_, RowTarget::OtherHost(_))
+            | (_, RowTarget::Malformed) => None,
+        }
     })
 }
 
@@ -43,11 +45,13 @@ fn every_cell_of_a_pasted_path_links_to_the_original_name() {
                 RowTarget::Path {
                     path: name.into(),
                     line: None,
+                    query: None,
                     explicit: false,
+                    unjoined: None,
                 },
                 "{text} at {column}"
             );
-            assert_eq!(found.columns, link, "{text}");
+            assert_eq!(found.rows, vec![(0, link.clone())], "{text}");
         }
         assert!(read(link.end).is_none(), "{text}");
     }

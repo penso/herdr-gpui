@@ -197,26 +197,32 @@ fn a_resolved_file_hyperlink_keeps_its_local_fallback(cx: &mut gpui::TestAppCont
     view.read_with(cx, |view, _| assert!(view.links.activating.is_none()));
 }
 
-/// A pane on an SSH host prints that host's `file://` links, which never open
-/// here, yet a quick click, before any hover resolved it, still reaches the
-/// daemon so a handler on that host can claim it. Declined, nothing opens.
+/// A pane on an SSH host prints that host's `file://` links. A quick click,
+/// before any hover resolved one, still reaches the daemon first so a handler
+/// on that host can claim it. Declined, the file is fetched from the host and
+/// its copy opens here. A Windows client reads no path from a `file://` URL
+/// naming a POSIX path, so there the link is no file and opens nothing.
 #[gpui::test]
 fn a_remote_file_hyperlink_still_reaches_plugin_handlers(cx: &mut gpui::TestAppContext) {
+    use crate::remote_files::tests::{FakeHost, notes};
+    let opens = !cfg!(windows);
+    let host = FakeHost::new();
     let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
     let (view, cx) = window(&peer, true, cx);
-    let url = "file://devbox/home/dev/notes.md";
+    let url = "file:///home/dev/notes.md";
     view.update(cx, |view, _| {
         view.live.surface = Some(hyperlinked(url));
         let selected = view.selected_endpoint;
         view.endpoints[selected].connection.target = herdr_client::ConnectTarget::Ssh {
-            target: "devbox.invalid".into(),
+            target: "dev@devbox.invalid".into(),
             session: "default".into(),
         };
+        host.serve(&mut view.remote_files, notes);
         assert!(view.selected_is_remote());
     });
     let link = at(&view, cx, 3, 0);
     view.read_with(cx, |view, _| {
-        assert!(view.file_link_at(link).is_none(), "not this machine's file");
+        assert_eq!(view.file_link_at(link).is_some(), opens, "the host's file");
         assert!(view.hovered_daemon_link().is_none());
     });
 
@@ -224,6 +230,7 @@ fn a_remote_file_hyperlink_still_reaches_plugin_handlers(cx: &mut gpui::TestAppC
         cx.simulate_click(link, Modifiers::secondary_key());
         let request = activation(&mut peer);
         assert_eq!(request["params"]["col"], 3);
+        assert!(host.asked().is_empty(), "the daemon answers first");
         reply(
             &mut peer,
             &view,
@@ -231,7 +238,23 @@ fn a_remote_file_hyperlink_still_reaches_plugin_handlers(cx: &mut gpui::TestAppC
             &request,
             json!({"result": {"type": "pane_link_activated", "url": url, "handled": handled}}),
         );
-        assert!(cx.opened_url().is_none(), "handled={handled}");
+        if handled || !opens {
+            assert!(cx.opened_url().is_none(), "handled={handled}");
+            assert!(host.asked().is_empty(), "handled={handled}");
+        }
+    }
+    if opens {
+        assert_eq!(
+            host.asked(),
+            vec![RemotePath {
+                target: "dev@devbox.invalid".into(),
+                shell: herdr_client::RemoteShell::Posix,
+                path: "/home/dev/notes.md".into(),
+                line: None,
+            }]
+        );
+        let opened = cx.opened_url().unwrap();
+        assert!(opened.ends_with("/notes.md"), "{opened}");
     }
     // Without the modifier the click stays the pane's, as on any hyperlink
     // this client cannot open.

@@ -136,7 +136,8 @@ open_links_in = "system"
 # in a pane split beside the one that printed it) or "system" (the default
 # application). Folders, images, and PDFs always open in the system's
 # application, as does every file on Windows. Holding Alt (Option) as well opens a
-# file in the other one.
+# file in the other one. A path an SSH pane prints opens a fetched copy in the
+# system's application, and saves to it ask before uploading.
 open_files_in = "editor"
 # How that editor starts. Unset, the pane's $VISUAL or $EDITOR runs, then vi,
 # as `$EDITOR +LINE FILE`. `{file}` and `{line}` place the two yourself:

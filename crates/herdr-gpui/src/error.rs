@@ -172,6 +172,8 @@ pub enum Error {
     #[cfg(feature = "daytona")]
     #[error(transparent)]
     Daytona(#[from] crate::daytona::Error),
+    #[error(transparent)]
+    DefaultBrowser(#[from] crate::default_browser::Error),
     #[error("Checkout lookup failed. Dismiss and reopen the menu.")]
     DeletionLookup,
     #[error("HEAD is detached. Check a branch out first.")]
@@ -709,6 +711,8 @@ pub enum Error {
     RelativeConfigRoot,
     #[error("Could not install the agent tools on the SSH host: {0}")]
     RemoteAgentTools(#[source] herdr_client::Error),
+    #[error(transparent)]
+    RemoteFiles(#[from] crate::remote_files::Error),
     #[error("{method}: {source}")]
     Request {
         method: herdr_client::Method,

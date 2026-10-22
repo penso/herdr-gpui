@@ -4,7 +4,8 @@
 //! exists off the UI thread, so a word that only looks like a path opens
 //! nothing. A hyperlink's path is a link without that check, so a click on
 //! one that is not there says so. A pane on an SSH host prints that host's
-//! paths, which this machine cannot open, so none are read there.
+//! paths, which a click fetches from there (see `remote_files`), so they
+//! are links by their shape alone. A WSL or cloud pane's paths are not read.
 //!
 //! Terminal output is untrusted, and a hyperlink's text need not match its
 //! target, so a click never launches anything. Only a plain folder or a
@@ -15,8 +16,9 @@
 
 use super::HerdrWindow;
 use crate::editor::EditorTarget;
-use crate::terminal::{PaneLink, RowTarget, pane_link_at};
+use crate::terminal::{PaneLink, RowTarget};
 use gpui::{Context, Pixels, Point};
+use herdr_client::ConnectTarget;
 use std::{
     fs::Metadata,
     path::{Component, Path, PathBuf, Prefix},
@@ -33,18 +35,36 @@ const DOCUMENTS: [&str; 52] = [
     "zig",
 ];
 
+/// Extensions of the pages a link's `?query` or `#fragment` is kept for, by
+/// opening them in the default browser: web pages and PDFs. A file with no
+/// extension is one too.
+const PAGES: [&str; 5] = [
+    // keep-sorted start
+    "htm", "html", "pdf", "svg", "xhtml",
+    // keep-sorted end
+];
+
 /// A path a pane printed, the line printed after it, and the pane and the
 /// directory it was in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileLink {
     pub(crate) path: String,
     pub(crate) line: Option<u32>,
+    /// The `?query` or `#fragment` printed after the path, with its `?` or
+    /// `#`. A page that opens itself opens in the default browser with it.
+    pub(crate) query: Option<String>,
     pub(crate) pane_id: String,
     pub(crate) cwd: Option<String>,
     /// Whether an explicit hyperlink named the path. Such a path is a link
     /// whether or not its file is there, so a click on a missing one says
     /// so; a path read from printed text is a link only when it exists.
     pub(crate) explicit: bool,
+    /// The SSH target of the host the pane runs on, whose file the path
+    /// names; `None` for a pane on this machine.
+    pub(crate) remote: Option<String>,
+    /// The path the first row alone reads, when a raw wrap joined the next
+    /// row's text to it. A local path ignores it.
+    pub(crate) unjoined: Option<String>,
 }
 
 /// Why a path has no real one.
@@ -156,8 +176,8 @@ fn real_path(path: &Path) -> Result<PathBuf, Unresolved> {
 /// What a click on `path` opens, once symlinks are resolved: a plain folder
 /// or a document itself, and otherwise the nearest folder holding it that
 /// is not itself a bundle the system would launch. `None` when the path
-/// does not exist or leads to another machine.
-fn opened(path: &Path) -> Option<PathBuf> {
+/// does not exist or leads to another machine. Reads the disk.
+pub(crate) fn opened(path: &Path) -> Option<PathBuf> {
     let real = real_path(path).ok()?;
     let metadata = std::fs::metadata(&real).ok()?;
     let extension = real
@@ -180,6 +200,86 @@ fn opened(path: &Path) -> Option<PathBuf> {
         .skip(1)
         .find(|folder| folder.extension().is_none())
         .map(Path::to_owned)
+}
+
+/// The address the system opens for a click on `path`: the page itself with
+/// `query` when [`page_url`] keeps it, and otherwise what [`opened`]
+/// decides, without it. Reads the disk.
+pub(crate) fn opened_url(path: &Path, query: Option<&str>) -> Option<url::Url> {
+    page_url(path, query).or_else(|| url::Url::from_file_path(opened(path)?).ok())
+}
+
+/// The address of the file at `path` with `query`, for the default browser,
+/// when there is a query and the file is a page: a regular file that is a
+/// web page, a PDF, or has no extension. A folder never takes a query.
+/// Reads the disk.
+fn page_url(path: &Path, query: Option<&str>) -> Option<url::Url> {
+    let query = query?;
+    let real = real_path(path).ok()?;
+    if !std::fs::metadata(&real).is_ok_and(|metadata| metadata.is_file()) {
+        return None;
+    }
+    let page = real.extension().is_none_or(|extension| {
+        PAGES.contains(&extension.to_string_lossy().to_ascii_lowercase().as_str())
+    });
+    if !page {
+        return None;
+    }
+    let url = url::Url::from_file_path(&real).ok()?;
+    Some(with_query(url, query))
+}
+
+/// `url` with the `?query` and `#fragment` of `suffix`, which holds them as
+/// [`FileLink::query`] does.
+fn with_query(mut url: url::Url, suffix: &str) -> url::Url {
+    let (query, fragment) = match suffix.strip_prefix('#') {
+        Some(fragment) => (None, Some(fragment)),
+        None => {
+            let rest = suffix.strip_prefix('?').unwrap_or(suffix);
+            match rest.split_once('#') {
+                Some((query, fragment)) => (Some(query), Some(fragment)),
+                None => (Some(rest), None),
+            }
+        }
+    };
+    url.set_query(query);
+    url.set_fragment(fragment);
+    url
+}
+
+/// Starts the default browser on an address: [`crate::default_browser::open`]
+/// in the app, and a fake in tests. Blocking.
+pub(crate) type StartBrowser =
+    std::sync::Arc<dyn Fn(&url::Url) -> crate::default_browser::Result<()> + Send + Sync>;
+
+/// Whether `error` says this platform cannot start its default browser with
+/// a URL at all, which every page click there meets: not worth a warning.
+#[cfg(not(windows))]
+fn unsupported(error: &crate::default_browser::Error) -> bool {
+    matches!(error, crate::default_browser::Error::Unsupported)
+}
+
+/// Windows always can; any failure there is worth a warning.
+#[cfg(windows)]
+fn unsupported(_: &crate::default_browser::Error) -> bool {
+    false
+}
+
+/// The default browser a new window starts pages in.
+#[cfg(not(test))]
+pub(crate) fn start_browser() -> StartBrowser {
+    std::sync::Arc::new(crate::default_browser::open)
+}
+
+/// A test window never starts a real browser: this one always fails, so the
+/// system opener answers unless a test sets its own.
+#[cfg(test)]
+pub(crate) fn start_browser() -> StartBrowser {
+    std::sync::Arc::new(|_: &url::Url| {
+        Err(crate::default_browser::Error::UnparsableCommand {
+            command: "test window".into(),
+        })
+    })
 }
 
 impl FileLink {
@@ -208,7 +308,8 @@ fn executable(_: &Metadata) -> bool {
 
 impl HerdrWindow {
     /// The row-local link of either kind under `position` in a pane. Paths
-    /// count only on a pane this machine runs.
+    /// count only on a pane this machine runs, or on an SSH host when this
+    /// client can reach its files.
     pub(crate) fn local_link_at(&self, position: Point<Pixels>) -> Option<PaneLink> {
         if self.menu.page.is_some()
             || !self.live.surface_ready()
@@ -217,15 +318,23 @@ impl HerdrWindow {
             return None;
         }
         let (x, y) = self.drawn_position(position)?;
-        let link = pane_link_at(
+        let link = self.link_reading((x, y)).pane_link_at(
             self.live.surface.as_deref()?,
             x,
             y,
             self.cell_width,
             self.config.terminal.line_height(),
         )?;
-        (!matches!(link.link.target, RowTarget::Path { .. }) || !self.selected_is_remote())
-            .then_some(link)
+        let paths = !self.selected_is_remote() || self.ssh_target().is_some();
+        (!matches!(link.link.target, RowTarget::Path { .. }) || paths).then_some(link)
+    }
+
+    /// The SSH target the selected endpoint runs on, if it runs on one.
+    fn ssh_target(&self) -> Option<String> {
+        match &self.endpoints[self.selected_endpoint].connection.target {
+            ConnectTarget::Ssh { target, .. } => Some(target.clone()),
+            _ => None,
+        }
     }
 
     /// The file path under `position`, with the directory it is relative to.
@@ -240,7 +349,9 @@ impl HerdrWindow {
         let RowTarget::Path {
             path,
             line,
+            query,
             explicit,
+            unjoined,
         } = link.target
         else {
             return None;
@@ -252,23 +363,66 @@ impl HerdrWindow {
         Some(FileLink {
             path,
             line,
+            query,
             pane_id,
             cwd,
             explicit,
+            remote: self.ssh_target(),
+            unjoined,
         })
     }
 
     /// Opens `path` with the system's default application under the same
     /// rule as a clicked path: a document itself, and otherwise the folder
-    /// holding it, so an executable or a bundle is never launched. Checked
-    /// on the background executor.
-    pub(crate) fn open_in_system_app(&self, path: PathBuf, cx: &mut Context<Self>) {
+    /// holding it, so an executable or a bundle is never launched. A page
+    /// opens with `query`, the `?query` or `#fragment` a link printed after
+    /// it; see [`page_url`] and [`Self::open_file_url`]. Checked on the
+    /// background executor.
+    pub(crate) fn open_in_system_app(
+        &self,
+        path: PathBuf,
+        query: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let found = cx
             .background_executor()
-            .spawn(async move { url::Url::from_file_path(opened(&path)?).ok() });
-        cx.spawn(async move |_, cx| {
+            .spawn(async move { opened_url(&path, query.as_deref()) });
+        cx.spawn(async move |this, cx| {
             if let Some(url) = found.await {
-                cx.update(|cx| cx.open_url(url.as_str()));
+                // The window may have closed meanwhile; nothing opens then.
+                let _ = this.update(cx, |this, cx| this.open_file_url(url, cx));
+            }
+        })
+        .detach();
+    }
+
+    /// Opens the `file://` address `url` with the system's opener, which
+    /// drops a query and a fragment. One that has either opens in the
+    /// default browser, started on the background executor, which keeps
+    /// them and never runs the file. When it cannot be started, the system
+    /// opener opens what a click on the file opens without them, by
+    /// [`opened`]: the page itself when it is a document, and otherwise the
+    /// folder holding it, so an executable page is never launched.
+    pub(crate) fn open_file_url(&self, url: url::Url, cx: &mut Context<Self>) {
+        if url.query().is_none() && url.fragment().is_none() {
+            cx.open_url(url.as_str());
+            return;
+        }
+        let browser = self.default_browser.clone();
+        let fallback = cx.background_executor().spawn(async move {
+            let error = browser(&url).err()?;
+            if unsupported(&error) {
+                tracing::debug!(%error, "default browser not started; opening without the query");
+            } else {
+                tracing::warn!(%error, "default browser not started; opening without the query");
+            }
+            let path = url.to_file_path().ok()?;
+            url::Url::from_file_path(opened(&path)?).ok()
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(url) = fallback.await {
+                // The window may have closed meanwhile; nothing opens then.
+                let _ = this.update(cx, |_, cx| cx.open_url(url.as_str()));
             }
         })
         .detach();
@@ -295,6 +449,11 @@ impl HerdrWindow {
                 Err(Unresolved::Missing) if link.explicit => return Some(Opened::Missing(path)),
                 Err(_) => return None,
             };
+            // A page with a query opens in the default browser with it,
+            // wherever its kind would otherwise open.
+            if let Some(url) = page_url(&path, link.query.as_deref()) {
+                return Some(Opened::System(url));
+            }
             if in_editor
                 && std::fs::metadata(&real)
                     .is_ok_and(|metadata| EditorTarget::editable(&real, &metadata))
@@ -320,7 +479,7 @@ impl HerdrWindow {
             // asked for then.
             let _ = this.update(cx, |this, cx| match opened {
                 Opened::Editor(target) => this.open_in_editor(&target, Some(&pane), cx),
-                Opened::System(url) => cx.open_url(url.as_str()),
+                Opened::System(url) => this.open_file_url(url, cx),
                 Opened::Missing(path) => this.show_flash(
                     super::flash::Flash::warning(
                         crate::Error::LinkedFileMissing { path }.to_string(),

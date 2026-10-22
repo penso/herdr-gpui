@@ -24,6 +24,49 @@ fn frame(text: &str, width: u16, height: u16) -> FrameData {
     }
 }
 
+/// A frame of `lines`, one row each, padded with blanks to `width`.
+fn rows(lines: &[&str], width: u16) -> FrameData {
+    let text: String = lines
+        .iter()
+        .map(|line| {
+            let padding = usize::from(width) - line.chars().count();
+            format!("{line}{}", " ".repeat(padding))
+        })
+        .collect();
+    frame(&text, width, lines.len() as u16)
+}
+
+/// Reads as a client whose daemon does not resolve links, so an address
+/// joins a raw wrap too.
+const JOINED: LinkReading = LinkReading {
+    raw_url_wraps: true,
+    windows_paths: false,
+};
+
+fn link_at(surface: &PaneSurfaceFrame, x: f32, y: f32, w: f32, h: f32) -> Option<String> {
+    JOINED.link_at(surface, x, y, w, h)
+}
+
+fn pane_link_at(surface: &PaneSurfaceFrame, x: f32, y: f32, w: f32, h: f32) -> Option<PaneLink> {
+    JOINED.pane_link_at(surface, x, y, w, h)
+}
+
+/// What `frame` reads at a cell, with the pane between columns `start`
+/// and `end` and over every row.
+fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) -> Option<RowLink> {
+    let bounds = Bounds {
+        columns: start..end,
+        rows: 0..frame.height,
+    };
+    JOINED.frame_link(frame, column, row, &bounds)
+}
+
+/// The columns of a link that lies on one row.
+fn columns(link: &RowLink) -> Range<u16> {
+    assert_eq!(link.rows.len(), 1, "{link:?}");
+    link.rows[0].1.clone()
+}
+
 fn surface(text: &str) -> PaneSurfaceFrame {
     let rect = SurfaceRect {
         x: 0,
@@ -157,27 +200,51 @@ fn geometry_is_bounded_and_popup_blocks_underlying_links() {
 }
 
 #[test]
-fn plain_links_do_not_cross_panes_or_guess_wrapped_destinations() {
+fn plain_links_do_not_cross_panes_and_read_wrapped_destinations_whole() {
+    // The pane ends where its cells do: what lies beyond is another pane's,
+    // and a blank row below says the address ends at the edge.
     let mut s = surface("https://example.com");
     s.panes[0].inner_rect.width = 12;
-    assert!(link_at(&s, 1., 1., 10., 20.).is_none());
+    assert_eq!(
+        link_at(&s, 1., 1., 10., 20.).as_deref(),
+        Some("https://exam/")
+    );
+    // Filling the pane's bottom row, it may continue off-screen.
     let wrapped = frame("https://example.com/long", 12, 2);
     assert!(frame_link(&wrapped, 0, 0, 0, 12).is_none());
+    let wrapped = frame("https://example.com/long", 12, 3);
+    assert_eq!(
+        frame_link(&wrapped, 0, 0, 0, 12),
+        Some(RowLink {
+            target: RowTarget::Web("https://example.com/long".into()),
+            rows: vec![(0, 0..12), (1, 0..12)],
+        })
+    );
     for punctuation in ['.', ',', ';', ':', '!', '?', ')', ']', '}'] {
         let text = format!("https://example{punctuation}com/path");
         let wrapped = frame(&text, 16, 2);
-        assert!(frame_link(&wrapped, 0, 0, 0, 16).is_none(), "{text}");
+        assert_eq!(
+            frame_link(&wrapped, 0, 0, 0, 16),
+            web_url(&text).map(|url| RowLink {
+                target: RowTarget::Web(url),
+                rows: vec![(0, 0..16), (1, 0..8)],
+            }),
+            "{text}"
+        );
         let mut s = surface(&text);
         s.panes[0].inner_rect.width = 16;
-        assert!(link_at(&s, 1., 1., 10., 20.).is_none(), "{text}");
+        assert_eq!(
+            link_at(&s, 1., 1., 10., 20.).as_deref(),
+            Some("https://example/"),
+            "{text}"
+        );
     }
     let unicode = frame("界 https://example.com ", 40, 1);
     assert_eq!(
         frame_link(&unicode, 3, 0, 0, 40),
         Some(RowLink {
             target: RowTarget::Web("https://example.com/".into()),
-            row: 0,
-            columns: 2..21,
+            rows: vec![(0, 2..21)],
         })
     );
 }
@@ -294,3 +361,5 @@ mod drive_paths;
 mod escaped_paths;
 mod external;
 mod paths;
+mod queries;
+mod wraps;

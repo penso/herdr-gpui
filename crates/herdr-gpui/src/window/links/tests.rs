@@ -13,6 +13,8 @@ mod external;
 #[cfg(unix)]
 mod file_checks;
 mod file_handlers;
+mod windows_paths;
+mod wraps;
 
 const URL: &str = "https://example.com/wrapped/path";
 
@@ -259,20 +261,20 @@ fn a_daemon_without_link_methods_keeps_the_local_detector(cx: &mut gpui::TestApp
     view.read_with(cx, |view, _| {
         assert!(view.links.hover.is_none() && view.links.resolving.is_none());
     });
-    // The row-local reading does not guess where a wrapped address
-    // ends, so neither row is a link and nothing opens.
+    // The local reading joins the terminal's wrap, so either row is the
+    // whole address and a click on it opens that.
     let continuation = at(&view, cx, 2, 1);
     for position in [link, continuation] {
         view.read_with(cx, |view, _| {
-            assert!(!view.terminal_link_hovered(position, Modifiers::secondary_key()));
+            assert!(view.terminal_link_hovered(position, Modifiers::secondary_key()));
             assert!(
                 view.terminal_link_press(position, Modifiers::default())
                     .is_none()
             );
         });
         cx.simulate_click(position, Modifiers::secondary_key());
+        assert_eq!(cx.opened_url().as_deref(), Some(URL));
     }
-    assert!(cx.opened_url().is_none());
 }
 
 #[gpui::test]
@@ -291,6 +293,7 @@ fn a_replaced_connection_retires_link_requests_unanswered(cx: &mut gpui::TestApp
             inbox: Arc::default(),
             context: PendingActivation {
                 fallback: WebUrl::try_from(URL).ok().map(Fallback::Web),
+                local_first: false,
                 in_tab: false,
             },
         });

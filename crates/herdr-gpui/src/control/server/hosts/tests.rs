@@ -8,6 +8,7 @@ mod cloud_setup;
 mod info;
 mod ports;
 mod pr;
+mod remote_files;
 mod security;
 mod security_open;
 mod strict;

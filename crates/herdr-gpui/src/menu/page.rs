@@ -73,6 +73,14 @@ pub(crate) enum Page {
     PrMerge,
     /// The open pull request's checks and review conversation.
     PrReview,
+    /// A remote file's host changed since its copy was synced, so a save
+    /// was not uploaded.
+    RemoteConflict,
+    /// A file an SSH path click asked for is not on the host; offers the
+    /// path to edit and open again.
+    RemoteMissing,
+    /// Asks before a save to a remote file's copy is uploaded.
+    RemoteUpload,
     RemoveDevice,
     /// Confirming a saved WSL distribution should be forgotten.
     RemoveWsl,

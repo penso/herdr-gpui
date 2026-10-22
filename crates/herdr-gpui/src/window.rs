@@ -20,6 +20,9 @@ mod device_themes;
 mod double_shift;
 mod file_drop;
 mod file_links;
+#[cfg(test)]
+pub(crate) use file_links::opened;
+pub(crate) use file_links::{opened_url, start_browser};
 mod find;
 mod flash;
 pub(crate) use commands::run_window_command;
@@ -40,6 +43,8 @@ mod plugin_selection;
 pub(crate) mod prefix;
 mod reconnecting;
 mod regions;
+mod remote_paths;
+pub(crate) use remote_paths::RemotePath;
 mod render;
 mod report_issue;
 mod select_hint;
@@ -163,6 +168,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) copy_mode: Option<copy_mode::CopyModeState>,
     /// Prepared daemon announcement and release notes text.
     pub(crate) daemon_text: crate::release_notes::DaemonText,
+    /// Starts the default browser on a page with a query or fragment, which
+    /// the system opener would drop.
+    pub(crate) default_browser: file_links::StartBrowser,
     /// Notes waiting for their agents to be ready for them.
     pub(crate) deliveries: crate::agent_notes::Deliveries,
     /// A press on a device's header that may lift it for reordering.
@@ -277,6 +285,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) regions: Vec<regions::RegionLayers>,
     /// Pages remote agents asked for, waiting for their port's forward.
     pub(crate) remote_browser: Vec<crate::remote_browser::Forwarding>,
+    /// Copies of files on SSH hosts that clicks fetched; see `remote_files`.
+    pub(crate) remote_files: crate::remote_files::RemoteFiles,
     /// A `worktree.remove` queued after its dialog closed.
     pub(crate) removal: Option<menu::Removal>,
     /// Herdr's resize mode: direction keys resize the focused pane until
@@ -552,6 +562,7 @@ impl HerdrWindow {
         self.ring_bell(window);
         self.poll_integrations(cx);
         self.poll_links(window, cx);
+        self.poll_remote_files(window, cx);
         if self.settings.task.is_none() {
             let mut reload = false;
             for endpoint in &self.endpoints {

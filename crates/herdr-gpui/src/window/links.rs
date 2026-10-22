@@ -10,14 +10,17 @@
 //! daemon first when it offers activation, which lets a plugin link handler
 //! claim it, `file://` links included; otherwise, or when nothing claims it,
 //! this client opens the address or file itself. A handler that fails spends
-//! the click. Daemons without these methods keep the row-local detector.
+//! the click. Daemons without these methods keep the local detector, which
+//! also reads a link that wraps onto the next rows whole. Where the local
+//! reading strictly contains the daemon's, as at an application's word wrap,
+//! the local one is underlined and opened.
 
-use super::{HerdrWindow, file_links::FileLink};
+use super::{HerdrWindow, RemotePath, file_links::FileLink, remote_paths};
 use crate::terminal::PaneLink;
 use crate::{
     browser::WebUrl,
     links::{Activation, LinkCell, LinkInbox, LinkRequest, ResolvedLink},
-    terminal::{ExternalUrl, RowLink, RowTarget},
+    terminal::{ExternalUrl, InputTarget, LinkReading, RowLink, RowTarget, wheel_target},
 };
 use gpui::{Context, Modifiers, Pixels, Point, Task, Window};
 use std::{
@@ -86,6 +89,10 @@ struct PendingActivation {
     /// What the row-local detector read at the click, opened when the
     /// daemon neither handles nor reads a web address there.
     fallback: Option<Fallback>,
+    /// Whether the fallback wins over the address the daemon declines with:
+    /// the local reading strictly contains the daemon's link, which it
+    /// reads cut off at an application's word wrap.
+    local_first: bool,
     in_tab: bool,
 }
 
@@ -200,10 +207,90 @@ impl HerdrWindow {
             .then_some(link)
     }
 
-    /// The verified row-local link under the pointer while the link modifier
+    /// The verified local link under the pointer while the link modifier
     /// is held.
     pub(crate) fn hovered_local_link(&self) -> Option<&RowLink> {
         self.links.local.as_ref()
+    }
+
+    /// How this client reads plain text on the selected daemon, at the
+    /// `drawn` surface point it is about to read.
+    pub(crate) fn link_reading(&self, drawn: (f32, f32)) -> LinkReading {
+        LinkReading {
+            raw_url_wraps: !self.live.supports_link_resolve,
+            windows_paths: self.windows_paths_at(drawn),
+        }
+    }
+
+    /// Whether the pane at the `drawn` surface point runs on a host that
+    /// writes Windows paths, judged by its working directory as a file link
+    /// resolves against it; by this machine when no directory is known.
+    fn windows_paths_at(&self, (x, y): (f32, f32)) -> bool {
+        let pane_id = self.live.surface.as_deref().and_then(|surface| {
+            let hit = wheel_target(
+                surface,
+                x,
+                y,
+                self.cell_width,
+                self.config.terminal.line_height(),
+            )?;
+            match hit.target {
+                InputTarget::Pane(id) => Some(id),
+                InputTarget::Popup(_) => None,
+            }
+        });
+        let cwd = pane_id.and_then(|pane_id| {
+            let snapshot = self.live.snapshot.as_ref()?;
+            let pane = snapshot.panes.iter().find(|pane| pane.pane_id == pane_id)?;
+            pane.foreground_cwd.clone().or_else(|| pane.cwd.clone())
+        });
+        match cwd.as_deref() {
+            Some(cwd) if remote_paths::windows(cwd) => true,
+            Some(cwd) if cwd.starts_with('/') => false,
+            _ => cfg!(windows),
+        }
+    }
+
+    /// The cells to underline: the daemon's resolved link while it reads
+    /// the content on screen, unless the local reading strictly contains
+    /// it, as it does for an application's word wrap, which reads to the
+    /// daemon as separate lines; otherwise the local reading.
+    pub(crate) fn underlined_link_rows(&self) -> Vec<(u16, std::ops::Range<u16>)> {
+        let daemon: Option<Vec<_>> = self
+            .live
+            .surface
+            .as_deref()
+            .zip(self.hovered_daemon_link())
+            .filter(|(surface, link)| link.cell.current(surface))
+            .map(|(_, link)| link.frame_rows().collect());
+        let local = self.hovered_local_link();
+        match (daemon, local) {
+            (Some(daemon), Some(local)) if local.strictly_contains(&daemon) => local.rows.clone(),
+            (Some(daemon), _) => daemon,
+            (None, Some(local)) => local.rows.clone(),
+            (None, None) => Vec::new(),
+        }
+    }
+
+    /// Whether the local reading at `position` strictly contains the
+    /// daemon's resolved link there, so a click opens the local target when
+    /// no handler claims it. A click before the hover's answer arrives has
+    /// no resolved link to compare: then a local reading spanning more than
+    /// one row wins. It is an application's word wrap or a raw wrap, and a
+    /// daemon offering `pane.link.resolve` is left every raw-wrapped
+    /// address, so a multi-row address read here is one the daemon reads as
+    /// separate lines. A handler still claims the click first.
+    fn local_contains_daemon(&self, position: Point<Pixels>) -> bool {
+        let Some(local) = self.local_link_at(position) else {
+            return false;
+        };
+        match self.hovered_daemon_link() {
+            Some(daemon) => {
+                let rows: Vec<_> = daemon.frame_rows().collect();
+                local.link.strictly_contains(&rows)
+            }
+            None => local.link.rows.len() > 1,
+        }
     }
 
     /// The cell at `position` when it lies on the hovered resolved link.
@@ -216,6 +303,11 @@ impl HerdrWindow {
     /// first question about a path starts a check on the background
     /// executor, whose answer is applied to wherever the pointer is then.
     fn file_found(&mut self, link: FileLink, cx: &mut Context<Self>) -> bool {
+        // A host's file counts by its shape: asking the host on every hover
+        // would cost an SSH round trip each time.
+        if link.remote.is_some() {
+            return RemotePath::from_link(&link).is_some();
+        }
         if let Some((checked, found)) = &self.links.checked
             && *checked == link
         {
@@ -248,16 +340,21 @@ impl HerdrWindow {
     /// disk again, and opens nothing for a printed path that is not there.
     fn clickable_file(&self, link: PaneLink) -> Option<FileLink> {
         let file = self.file_link(link)?;
+        if file.remote.is_some() {
+            return RemotePath::from_link(&file).map(|_| file);
+        }
         let missing =
             matches!(&self.links.checked, Some((checked, Some(false))) if *checked == file);
         (file.explicit || !missing).then_some(file)
     }
 
     /// Whether a press is on a link known to be one: anything but a printed
-    /// path whose check has not found it yet, which may name nothing.
+    /// path whose check has not found it yet, which may name nothing. A
+    /// host's file is one by its shape, as for a hover.
     pub(crate) fn verified_press(&self, press: &PressedLink) -> bool {
         press.file.as_ref().is_none_or(|file| {
             file.explicit
+                || file.remote.is_some()
                 || matches!(&self.links.checked, Some((checked, Some(true))) if checked == file)
         })
     }
@@ -518,13 +615,18 @@ impl HerdrWindow {
             if self.links.activating.is_some() {
                 return true;
             }
+            let local_first = self.local_contains_daemon(release.position);
             let connection = &self.endpoints[self.selected_endpoint].connection;
             match connection.request_link(LinkRequest::Activate, cell) {
                 Ok(id) => {
                     self.links.activating = Some(InFlight {
                         id,
                         inbox: connection.links.clone(),
-                        context: PendingActivation { fallback, in_tab },
+                        context: PendingActivation {
+                            fallback,
+                            local_first,
+                            in_tab,
+                        },
                     });
                     return true;
                 }
@@ -538,7 +640,11 @@ impl HerdrWindow {
     fn finish_activation(
         &mut self,
         activation: Activation,
-        PendingActivation { fallback, in_tab }: PendingActivation,
+        PendingActivation {
+            fallback,
+            local_first,
+            in_tab,
+        }: PendingActivation,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -549,7 +655,13 @@ impl HerdrWindow {
                 cx.notify();
             }
             Activation::Declined(url) => {
-                self.open_link(url.map(Fallback::Web).or(fallback), in_tab, window, cx);
+                let declined = url.map(Fallback::Web);
+                let link = if local_first {
+                    fallback.or(declined)
+                } else {
+                    declined.or(fallback)
+                };
+                self.open_link(link, in_tab, window, cx);
             }
         }
     }
@@ -563,6 +675,14 @@ impl HerdrWindow {
     ) {
         match link {
             Some(Fallback::Web(url)) => self.open_web_link(url, in_tab, window, cx),
+            // The terminal editor never opens a pane on another host, so a
+            // host's file always opens in the system's application.
+            Some(Fallback::File { link, .. }) if link.remote.is_some() => {
+                if let Some(remote) = RemotePath::from_link(&link) {
+                    let unjoined = RemotePath::unjoined(&link);
+                    self.open_remote_file(remote, link.query, unjoined, link.cwd, cx);
+                }
+            }
             Some(Fallback::File { link, in_editor }) => self.open_file_link(link, in_editor, cx),
             Some(Fallback::External(url)) if url.trusted() => cx.open_url(url.as_str()),
             Some(Fallback::External(url)) => self.ask_to_open_link(url, window, cx),
