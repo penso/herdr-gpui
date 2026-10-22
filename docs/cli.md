@@ -157,6 +157,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `cloud wait BATCH [--timeout S]` | Each machine of a batch once all are settled, or after S seconds (default 60, at most 600) |
 | `cloud batches` | The batches the app keeps, newest last; the oldest are left out when they would not fit in one answer |
 | `processes [--pane ID]` | The processes under a pane, with CPU and memory (no app needed) |
+| `remote-files [list]` | Copies of SSH hosts' files that link clicks in this window fetched, and whether each is synced, edited, or in conflict. Uploads are confirmed in the app |
 | `search symbol\|file QUERY` | Go to Symbol or Go to File over the current checkout (no app needed) |
 
 ### Settings and services

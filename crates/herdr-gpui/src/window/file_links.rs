@@ -4,7 +4,8 @@
 //! exists off the UI thread, so a word that only looks like a path opens
 //! nothing. A hyperlink's path is a link without that check, so a click on
 //! one that is not there says so. A pane on an SSH host prints that host's
-//! paths, which this machine cannot open, so none are read there.
+//! paths, which a click fetches from there (see `remote_files`), so they
+//! are links by their shape alone. A WSL or cloud pane's paths are not read.
 //!
 //! Terminal output is untrusted, and a hyperlink's text need not match its
 //! target, so a click never launches anything. Only a plain folder or a
@@ -17,6 +18,7 @@ use super::HerdrWindow;
 use crate::editor::EditorTarget;
 use crate::terminal::{PaneLink, RowTarget, pane_link_at};
 use gpui::{Context, Pixels, Point};
+use herdr_client::ConnectTarget;
 use std::{
     fs::Metadata,
     path::{Component, Path, PathBuf, Prefix},
@@ -45,6 +47,9 @@ pub(crate) struct FileLink {
     /// whether or not its file is there, so a click on a missing one says
     /// so; a path read from printed text is a link only when it exists.
     pub(crate) explicit: bool,
+    /// The SSH target of the host the pane runs on, whose file the path
+    /// names; `None` for a pane on this machine.
+    pub(crate) remote: Option<String>,
 }
 
 /// Why a path has no real one.
@@ -156,8 +161,8 @@ fn real_path(path: &Path) -> Result<PathBuf, Unresolved> {
 /// What a click on `path` opens, once symlinks are resolved: a plain folder
 /// or a document itself, and otherwise the nearest folder holding it that
 /// is not itself a bundle the system would launch. `None` when the path
-/// does not exist or leads to another machine.
-fn opened(path: &Path) -> Option<PathBuf> {
+/// does not exist or leads to another machine. Reads the disk.
+pub(crate) fn opened(path: &Path) -> Option<PathBuf> {
     let real = real_path(path).ok()?;
     let metadata = std::fs::metadata(&real).ok()?;
     let extension = real
@@ -208,7 +213,8 @@ fn executable(_: &Metadata) -> bool {
 
 impl HerdrWindow {
     /// The row-local link of either kind under `position` in a pane. Paths
-    /// count only on a pane this machine runs.
+    /// count only on a pane this machine runs, or on an SSH host when this
+    /// client can reach its files.
     pub(crate) fn local_link_at(&self, position: Point<Pixels>) -> Option<PaneLink> {
         if self.menu.page.is_some()
             || !self.live.surface_ready()
@@ -224,8 +230,16 @@ impl HerdrWindow {
             self.cell_width,
             self.config.terminal.line_height(),
         )?;
-        (!matches!(link.link.target, RowTarget::Path { .. }) || !self.selected_is_remote())
-            .then_some(link)
+        let paths = !self.selected_is_remote() || self.ssh_target().is_some();
+        (!matches!(link.link.target, RowTarget::Path { .. }) || paths).then_some(link)
+    }
+
+    /// The SSH target the selected endpoint runs on, if it runs on one.
+    fn ssh_target(&self) -> Option<String> {
+        match &self.endpoints[self.selected_endpoint].connection.target {
+            ConnectTarget::Ssh { target, .. } => Some(target.clone()),
+            _ => None,
+        }
     }
 
     /// The file path under `position`, with the directory it is relative to.
@@ -255,6 +269,7 @@ impl HerdrWindow {
             pane_id,
             cwd,
             explicit,
+            remote: self.ssh_target(),
         })
     }
 

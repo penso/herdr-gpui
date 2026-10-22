@@ -2,6 +2,7 @@
 use super::*;
 use crate::control::protocol::{Call, Caller, MAX_WAIT_SECONDS, Request, Response};
 
+mod remote_files;
 mod security;
 
 #[test]

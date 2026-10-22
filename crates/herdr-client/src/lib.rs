@@ -24,6 +24,7 @@ mod options;
 pub mod private_endpoint;
 mod process;
 mod queue;
+mod remote_file;
 mod remote_host;
 mod script;
 pub mod scrollback;
@@ -69,6 +70,10 @@ pub use options::ConnectOptions;
 #[cfg(windows)]
 pub use process::CREATE_NO_WINDOW;
 pub use process::new_command;
+pub use remote_file::{
+    Access as RemoteFileAccess, Error as RemoteFileError, Expect, Fetched, MAX_REMOTE_FILE_BYTES,
+    RemoteFile, RemoteShell, fetch_remote_file, push_remote_file,
+};
 pub use remote_host::RemoteHost;
 pub use script::{ScriptHost, ScriptLimits, run_script, run_script_command, shell_quote};
 pub use sessions::{

@@ -115,6 +115,9 @@ fn family(name: &str) -> &'static str {
         "ports" => {
             "herdr-gpui ports [list]\n    Ports the caller's workspace's processes listen on, and forwards.\n    Listening ports are known only while show_listening_ports is on.\nherdr-gpui ports forward|unforward PORT\n    Forward a port of the workspace's SSH host to this machine, or stop.\nherdr-gpui ports open PORT\n    Show localhost:PORT in a browser tab, forwarding it first if remote."
         }
+        "remote-files" => {
+            "herdr-gpui remote-files [list]\n    Copies of SSH hosts' files that link clicks fetched, with whether\n    each is synced, edited, or in conflict. Uploads are confirmed in the\n    app."
+        }
         "processes" => {
             "herdr-gpui processes [--pane ID]\n    The processes under a pane (default HERDR_PANE_ID), with CPU and\n    memory. Runs here; Herdr UI need not run."
         }

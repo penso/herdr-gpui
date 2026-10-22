@@ -10,6 +10,9 @@ use herdr_client::{
 };
 use std::sync::Arc;
 
+mod remote;
+mod remote_saves;
+
 #[test]
 fn paths_resolve_under_home_or_the_pane_directory() {
     let home = Path::new("home");
@@ -20,6 +23,7 @@ fn paths_resolve_under_home_or_the_pane_directory() {
         pane_id: "pane".into(),
         cwd: cwd.map(|cwd| cwd.to_str().unwrap().into()),
         explicit: false,
+        remote: None,
     };
     assert_eq!(
         link("~/notes/a.md", None).resolve(Some(home)),
@@ -280,22 +284,36 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
     assert_eq!(cx.opened_url().as_deref(), Some(expected.as_str()));
 }
 
+/// A pane on an SSH host prints that host's paths, which a click fetches from
+/// there, so they are links by their shape alone, shown without a check. A
+/// WSL pane's are not links at all.
 #[gpui::test]
-fn a_pane_on_an_ssh_host_has_no_file_links(cx: &mut gpui::TestAppContext) {
+fn an_ssh_pane_s_paths_are_links_and_a_wsl_pane_s_are_not(cx: &mut gpui::TestAppContext) {
     let root = tempfile::tempdir().unwrap();
-    std::fs::write(root.path().join("a.txt"), "a").unwrap();
-    let (view, cx) = window("open ./a.txt", root.path(), cx);
+    let (view, cx) = window(r"open C:\dev\notes.md", root.path(), cx);
     let position = at(&view, cx, 7);
     view.update(cx, |view, _| {
-        assert!(view.file_link_at(position).is_some());
         view.endpoints[view.selected_endpoint].connection.target = ConnectTarget::Ssh {
-            target: "unused".into(),
+            target: "me@devbox".into(),
+            session: "default".into(),
+        };
+    });
+    cx.simulate_mouse_move(position, None, Modifiers::secondary_key());
+    view.read_with(cx, |view, _| {
+        let link = view.file_link_at(position);
+        assert!(link.is_some(), "{link:?}");
+        assert!(view.hovered_local_link().is_some());
+    });
+
+    view.update(cx, |view, _| {
+        view.endpoints[view.selected_endpoint].connection.target = ConnectTarget::Wsl {
+            distro: "Ubuntu".into(),
             session: "default".into(),
         };
         assert!(view.file_link_at(position).is_none());
         assert!(view.local_link_at(position).is_none());
-        assert!(!view.terminal_link_hovered(position, Modifiers::secondary_key()));
     });
     modifier_click(cx, position, Modifiers::secondary_key());
     assert!(cx.opened_url().is_none());
+    view.read_with(cx, |view, _| assert!(view.flash.is_none()));
 }

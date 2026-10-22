@@ -81,6 +81,8 @@ pub enum ControlCommand {
     Host(HostCommand),
     Cloud(CloudCommand),
     Ports(PortsCommand),
+    /// The copies of SSH hosts' files that link clicks fetched.
+    RemoteFiles,
     Processes {
         pane: Option<String>,
     },
@@ -190,6 +192,10 @@ pub const FAMILIES: &[(&str, &str)] = &[
     (
         "ports",
         "Listening ports, and forwarding them to this machine",
+    ),
+    (
+        "remote-files",
+        "Copies of SSH hosts' files that link clicks fetched",
     ),
     ("processes", "The processes running under a pane"),
     ("usage", "AI plan usage on the selected host"),
@@ -343,6 +349,10 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "host" => ControlCommand::Host(hosts::host(args)?),
         "cloud" => ControlCommand::Cloud(hosts::cloud(args)?),
         "ports" => ControlCommand::Ports(hosts::ports(args)?),
+        "remote-files" => {
+            hosts::remote_files(args)?;
+            ControlCommand::RemoteFiles
+        }
         "processes" => ControlCommand::Processes {
             pane: args.text_option("--pane")?,
         },
