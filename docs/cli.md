@@ -129,7 +129,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `checkpoint diff A [B]` | What changed between two, or since one (no app needed) |
 | `checkpoint restore [ID]` | Open the checkpoints dialog; you confirm there |
 | `scripts [list]` | The repository's `.herdr/worktree.toml` scripts (no app needed) |
-| `scripts setup\|run` | Run one in a new tab; an unseen script still asks first. Archive removes the worktree, so it stays behind the app's delete dialog |
+| `scripts setup\|run` | Run one in a new tab; an unseen script still asks first. Setup first copies the ignored files `.worktreeinclude` names from the main checkout. Archive removes the worktree, so it stays behind the app's delete dialog |
 | `teleport --to HOST` | Open the teleport dialog for your linked worktree, reviewing HOST; you confirm there |
 | `fan-out PROMPT [--agent KIND[:N]]...` | Open the fan-out dialog prefilled; you start it there |
 | `chat [status]` | The `herdr-acp` chat panes of the window's host, this machine or an SSH host: agent, status, model, context window use, and whether the chat view or the terminal shows |
