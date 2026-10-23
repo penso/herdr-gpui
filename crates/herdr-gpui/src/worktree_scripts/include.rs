@@ -33,6 +33,10 @@ const IDLE: Duration = Duration::from_secs(60);
 /// the copy; `check-ignore` exits 1 when nothing is ignored. Each file is
 /// copied beside its destination and renamed into place, so a copy that
 /// fails partway leaves no partial file for every later run to skip.
+///
+/// The copy runs under `umask 077`: a directory it creates is private, as
+/// one around a secret in the main checkout may be, and so is a file while
+/// it is written; `cp -p` then gives each file its own mode.
 const BODY: &str = r#"set -eu
 [ -f "$r/.worktreeinclude" ] || exit 0
 herdr_linuxbrew=
@@ -48,6 +52,7 @@ trap 'rm -f "$listed" "$ignored"' EXIT
 g ls-files -z --others --ignored --exclude-from=.worktreeinclude >"$listed"
 g check-ignore -z --stdin <"$listed" >"$ignored" || [ $? -eq 1 ]
 W=$w xargs -0 sh -ec '
+umask 077
 for f do
   if [ -e "$W/$f" ] || [ -L "$W/$f" ]; then continue; fi
   if [ ! -f "$f" ] && [ ! -L "$f" ]; then continue; fi

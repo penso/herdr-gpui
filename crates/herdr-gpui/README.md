@@ -1885,7 +1885,8 @@ Before a setup script's file is read, after a worktree is created or from
 matches the list and that Git ignores there; tracked and merely untracked
 files are not copied. A file the worktree already has is never
 overwritten, missing files are skipped, symbolic links are copied as links,
-and nothing is written below a worktree directory that leads outside it.
+directories the copy creates are private to you, and nothing is written
+below a worktree directory that leads outside it.
 The copy happens before the trust question and whether or not the file has a
 setup script, so a copied `.herdr/worktree.toml` is the one read. The list
 is read from the main checkout, so it can itself be ignored. Git runs the

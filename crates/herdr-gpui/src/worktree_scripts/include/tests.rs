@@ -335,3 +335,29 @@ fn a_failing_git_command_fails_the_copy() {
     );
     assert!(!linked.join(".env").exists());
 }
+
+#[cfg(not(windows))]
+#[test]
+fn directories_made_for_a_copy_are_private() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_dir, main, linked) = repository(".secrets/\n");
+    write(&main.join(PATH), ".secrets/\n");
+    write(&main.join(".secrets/nested/token"), "SECRET=1\n");
+    fs::set_permissions(main.join(".secrets"), fs::Permissions::from_mode(0o700)).unwrap();
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+
+    // A common umask, under which a plain `mkdir` is readable by everyone.
+    run_isolated(&main, &linked, "umask 022\n").unwrap();
+
+    assert_eq!(
+        fs::read_to_string(linked.join(".secrets/nested/token")).unwrap(),
+        "SECRET=1\n"
+    );
+    assert_eq!(mode(&linked.join(".secrets")), 0o700);
+    assert_eq!(mode(&linked.join(".secrets/nested")), 0o700);
+    // The file keeps its own mode.
+    assert_eq!(
+        mode(&linked.join(".secrets/nested/token")),
+        mode(&main.join(".secrets/nested/token"))
+    );
+}
