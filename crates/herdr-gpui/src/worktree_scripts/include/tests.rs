@@ -57,11 +57,17 @@ fn repository(ignored: &str) -> (tempfile::TempDir, std::path::PathBuf, std::pat
 /// Run the copy from `main` into `linked` with Git isolated.
 #[cfg(not(windows))]
 fn copy_isolated(main: &Path, linked: &Path) -> Vec<u8> {
+    run_isolated(main, linked, "").unwrap()
+}
+
+/// Run the copy after `prelude`, which can change its environment.
+#[cfg(not(windows))]
+fn run_isolated(main: &Path, linked: &Path, prelude: &str) -> herdr_client::Result<Vec<u8>> {
     let mut output = Vec::new();
     run_script(
         ScriptHost::Local,
         &format!(
-            "{ENV}{}",
+            "{ENV}{prelude}{}",
             script(main.to_str().unwrap(), linked.to_str().unwrap())
         ),
         std::io::empty(),
@@ -71,9 +77,8 @@ fn copy_isolated(main: &Path, linked: &Path) -> Vec<u8> {
             idle: IDLE,
         },
         &AtomicBool::new(false),
-    )
-    .unwrap();
-    output
+    )?;
+    Ok(output)
 }
 
 fn write(path: &Path, text: &str) {
@@ -266,4 +271,67 @@ fn a_windows_client_refuses_a_local_list_it_cannot_copy() {
         copy(&ConnectTarget::Local, &checkout),
         Err(crate::Error::WorktreeInclude(Error::Unsupported))
     ));
+}
+
+#[cfg(not(windows))]
+#[test]
+fn a_copy_that_fails_partway_leaves_nothing_for_a_retry_to_skip() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, main, linked) = repository(".env\n");
+    write(&main.join(PATH), ".env\n");
+    write(&main.join(".env"), "SECRET=1\n");
+    // A `cp` that writes part of its destination, then fails, as a full disk would.
+    let bin = dir.path().join("bin");
+    write(
+        &bin.join("cp"),
+        "#!/bin/sh\nfor last do :; done\nprintf partial >\"$last\"\nexit 1\n",
+    );
+    fs::set_permissions(bin.join("cp"), fs::Permissions::from_mode(0o755)).unwrap();
+    let failing = format!(
+        "PATH={}:$PATH\nexport PATH\n",
+        shell_quote(bin.to_str().unwrap())
+    );
+
+    let result = run_isolated(&main, &linked, &failing);
+
+    assert!(
+        matches!(result, Err(herdr_client::Error::ScriptExit { .. })),
+        "{result:?}"
+    );
+    assert!(!linked.join(".env").exists(), "a partial file was left");
+    let leftovers: Vec<_> = fs::read_dir(&linked)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .filter(|name| name.to_string_lossy().starts_with(PATH))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+    // The next run copies the whole file.
+    copy_isolated(&main, &linked);
+    assert_eq!(
+        fs::read_to_string(linked.join(".env")).unwrap(),
+        "SECRET=1\n"
+    );
+}
+
+#[cfg(not(windows))]
+#[test]
+fn a_failing_git_command_fails_the_copy() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_dir, main, linked) = repository(".env\n");
+    write(&main.join(PATH), ".env\n");
+    write(&main.join(".env"), "SECRET=1\n");
+    // Present, so the copy goes ahead, but Git cannot read it.
+    fs::set_permissions(main.join(PATH), fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::read(main.join(PATH)).is_ok() {
+        // Running as root, which reads it anyway.
+        return;
+    }
+
+    let result = run_isolated(&main, &linked, "");
+
+    assert!(
+        matches!(result, Err(herdr_client::Error::ScriptExit { .. })),
+        "{result:?}"
+    );
+    assert!(!linked.join(".env").exists());
 }

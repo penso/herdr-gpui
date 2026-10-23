@@ -27,6 +27,12 @@ const IDLE: Duration = Duration::from_secs(60);
 /// `PATH` an app or a non-interactive SSH shell starts with, and turns off
 /// `core.fsmonitor`, a command the repository's configuration would
 /// otherwise have Git run.
+///
+/// The lists pass through temporary files rather than a pipeline, whose
+/// status would be the last command's alone, so a failing Git command fails
+/// the copy; `check-ignore` exits 1 when nothing is ignored. Each file is
+/// copied beside its destination and renamed into place, so a copy that
+/// fails partway leaves no partial file for every later run to skip.
 const BODY: &str = r#"set -eu
 [ -f "$r/.worktreeinclude" ] || exit 0
 herdr_linuxbrew=
@@ -36,10 +42,12 @@ export PATH
 g() { git -c core.fsmonitor=false "$@"; }
 w=$(cd -P -- "$w" && pwd -P)
 cd -- "$r"
-g rev-parse --is-inside-work-tree >/dev/null
-g ls-files -z --others --ignored --exclude-from=.worktreeinclude \
-  | g check-ignore -z --stdin \
-  | W=$w xargs -0 sh -ec '
+listed=$(mktemp "${TMPDIR:-/tmp}/herdr-worktreeinclude.XXXXXX")
+ignored=$(mktemp "${TMPDIR:-/tmp}/herdr-worktreeinclude.XXXXXX")
+trap 'rm -f "$listed" "$ignored"' EXIT
+g ls-files -z --others --ignored --exclude-from=.worktreeinclude >"$listed"
+g check-ignore -z --stdin <"$listed" >"$ignored" || [ $? -eq 1 ]
+W=$w xargs -0 sh -ec '
 for f do
   if [ -e "$W/$f" ] || [ -L "$W/$f" ]; then continue; fi
   if [ ! -f "$f" ] && [ ! -L "$f" ]; then continue; fi
@@ -49,9 +57,13 @@ for f do
   real=$(cd -P -- "$W/$a" 2>/dev/null && pwd -P) || continue
   case $real/ in "$W"/*) ;; *) continue ;; esac
   mkdir -p -- "$W/$d"
-  cp -RPp -- "$f" "$W/$f"
+  t=$W/$d/.worktreeinclude.$$.tmp
+  rm -f -- "$t"
+  if ! cp -RPp -- "$f" "$t"; then rm -f -- "$t"; exit 1; fi
+  if [ -e "$W/$f" ] || [ -L "$W/$f" ]; then rm -f -- "$t"; continue; fi
+  mv -f -- "$t" "$W/$f"
   printf "\n"
-done' sh
+done' sh <"$ignored"
 "#;
 
 #[derive(Debug, thiserror::Error)]
