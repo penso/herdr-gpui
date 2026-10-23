@@ -89,7 +89,7 @@ fn signout_drains_inflight_profile_refresh_before_deleting_its_rotated_credentia
             .profile_with(
                 |token| {
                     if token.expose_secret() == "old-access" {
-                        return Err(Error::GitHubAuthentication);
+                        return Err(crate::Error::GitHub(Error::Authentication));
                     }
                     assert_eq!(token.expose_secret(), "new-access");
                     let mut profile = Auth::connected_fixture().profile.unwrap();

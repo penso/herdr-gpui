@@ -5,14 +5,13 @@
 #[cfg(any(test, feature = "integration-test"))]
 use super::VERIFY_URL;
 use super::{
-    Account, Device, Profile, Reply, Result, SETUP_MESSAGE, Store, cli,
+    Account, Device, Error, Profile, Reply, Result, SETUP_MESSAGE, Store, cli,
     device::{with_access, with_organizations},
     http::oauth,
     log, profile, save,
     store::save_github_cli,
     token_reply, valid_token,
 };
-use crate::Error;
 use secrecy::{ExposeSecret, SecretString};
 use std::{
     sync::{Arc, mpsc},
@@ -396,7 +395,7 @@ impl Auth {
         self.use_token_with(store, move || {
             let token = token.expose_secret().trim();
             if !valid_token(token) {
-                return Err(Error::GitHubToken);
+                return Err(Error::Token.into());
             }
             let token: SecretString = token.into();
             let profile = profile(Arc::new(token.clone()))?;
@@ -577,7 +576,7 @@ impl Auth {
             let result = match rx.try_recv() {
                 Ok(result) => Some(result),
                 Err(mpsc::TryRecvError::Empty) => None,
-                Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::GitHubWorker("profile"))),
+                Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::Worker("profile").into())),
             };
             if let Some(result) = result {
                 self.profile_incoming = None;
@@ -602,13 +601,15 @@ impl Auth {
                             self.credential_cleanup = true;
                             if matches!(
                                 error,
-                                Error::GitHubAuthentication
-                                    | Error::GitHubExpired
-                                    | Error::GitHubDenied
-                                    | Error::GitHubAuthorization
-                                    | Error::GitHubCliMissing
-                                    | Error::GitHubCliSignedOut
-                                    | Error::GitHubCliRejected
+                                crate::Error::GitHub(
+                                    Error::Authentication
+                                        | Error::Expired
+                                        | Error::Denied
+                                        | Error::Authorization
+                                        | Error::CliMissing
+                                        | Error::CliSignedOut
+                                        | Error::CliRejected
+                                )
                             ) {
                                 self.profile = None;
                             }
@@ -625,7 +626,7 @@ impl Auth {
                 Ok(reply) => Some(reply),
                 Err(mpsc::TryRecvError::Empty) => None,
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    Some(Err(Error::GitHubWorker("authentication")))
+                    Some(Err(Error::Worker("authentication").into()))
                 }
             };
             if let Some(reply) = reply {

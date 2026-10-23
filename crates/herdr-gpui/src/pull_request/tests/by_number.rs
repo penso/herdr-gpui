@@ -24,7 +24,7 @@ fn any_pull_request_is_found_by_number_and_checked_against_its_own_head() {
     // The number asked for is the one answered.
     assert!(matches!(
         parse_by_number(numbered(same_repository()), "example", "project", 9),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
     assert!(
         parse_by_number(numbered(serde_json::Value::Null), "example", "project", 8)
@@ -34,6 +34,6 @@ fn any_pull_request_is_found_by_number_and_checked_against_its_own_head() {
     // Another repository's pull request does not pass for this one's.
     assert!(matches!(
         parse_by_number(numbered(same_repository()), "example", "other", 8),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
 }

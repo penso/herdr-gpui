@@ -13,8 +13,9 @@
 //! quota windows.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json, number},
@@ -118,16 +119,16 @@ fn with_key(probe: &mut Probe, key: &Secret, hosts: &Hosts) -> Result<Report> {
             // A key the Token Plan rejects may still be a legacy Coding Plan key.
             Err(error) => match first.take() {
                 None => first = Some(error),
-                Some(Error::UsageRejected) => return Err(Error::UsageRejected),
+                Some(crate::Error::Usage(Error::Rejected)) => return Err(Error::Rejected.into()),
                 Some(_) => return Err(error),
             },
         }
     }
-    Err(first.unwrap_or(Error::UsageStatus(404)))
+    Err(first.unwrap_or_else(|| Error::Status(404).into()))
 }
 
 fn with_cookie(probe: &mut Probe, cookie: &Secret, hosts: &Hosts) -> Result<Report> {
-    let mut last = Error::UsageStatus(404);
+    let mut last: crate::Error = Error::Status(404).into();
     for base in [hosts.platform, hosts.www] {
         let request = Request::get(format!("{base}{CODING_PLAN_PATH}"))
             .cookie(cookie)
@@ -145,7 +146,7 @@ fn with_cookie(probe: &mut Probe, cookie: &Secret, hosts: &Hosts) -> Result<Repo
             .and_then(|body| parse(&body, SystemTime::now()))
         {
             Ok(report) => return Ok(report),
-            Err(error @ Error::UsageRejected) => return Err(error),
+            Err(error @ crate::Error::Usage(Error::Rejected)) => return Err(error),
             Err(error) => last = error,
         }
     }
@@ -164,7 +165,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     match status {
         None => {}
         Some(0.) => {}
-        Some(1004.) => return Err(Error::UsageRejected),
+        Some(1004.) => return Err(Error::Rejected.into()),
         Some(_) => return Err(values::invalid()),
     }
     let data = root.data.unwrap_or(root.plan);
@@ -500,7 +501,7 @@ mod tests {
         let body = r#"{"base_resp": {"status_code": 1004, "status_msg": "cookie is missing, log in again"}}"#;
         assert!(matches!(
             parse(body, at(0)).unwrap_err(),
-            Error::UsageRejected
+            crate::Error::Usage(Error::Rejected)
         ));
     }
 }

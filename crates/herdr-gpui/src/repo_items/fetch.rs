@@ -3,10 +3,7 @@
 //! has a deadline and runs off the UI thread.
 
 use super::{Item, Kind, Origin, model::LIMIT, model::parse};
-use crate::{
-    Error,
-    pull_request::{Input, local_checkout, local_repository, run},
-};
+use crate::pull_request::{Input, local_checkout, local_repository, run};
 use std::time::{Duration, Instant};
 
 pub(super) const TIMEOUT: Duration = Duration::from_secs(20);
@@ -39,7 +36,7 @@ pub(super) fn list(
     let token = tokens.for_owner(&origin.owner).clone();
     let timeout = deadline
         .checked_duration_since(Instant::now())
-        .ok_or(Error::PrTimeout)?;
+        .ok_or(crate::pull_request::Error::Timeout)?;
     let response = crate::github::graphql(
         "repo_items",
         &token,
@@ -79,8 +76,9 @@ pub(super) fn fetch_branch(
     if ok {
         return Ok(());
     }
-    Err(Error::GitFailed {
+    Err(crate::git::Error::Failed {
         operation: "fetch the pull request branch",
         details: crate::pull_request::clean(output.trim()),
-    })
+    }
+    .into())
 }

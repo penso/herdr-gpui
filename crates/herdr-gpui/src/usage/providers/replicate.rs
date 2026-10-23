@@ -8,8 +8,9 @@
 //! ported: the first matching session is used.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -106,7 +107,7 @@ pub(crate) fn owner(html: &str) -> Result<Owner> {
         }
     }
     if lower.contains("<title>sign in | replicate</title>") || lower.contains("/login/github/") {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     Err(invalid())
 }
@@ -285,9 +286,15 @@ mod tests {
     #[test]
     fn props_outside_the_component_script_are_ignored() {
         let page = r#"<script>{"account":{"kind":"user","username":"wrong"}}</script>"#;
-        assert!(matches!(owner(page), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            owner(page),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
         let signed_out = r#"<title>Sign in | Replicate</title><a href="/login/github/">GitHub</a>"#;
-        assert!(matches!(owner(signed_out), Err(Error::UsageRejected)));
+        assert!(matches!(
+            owner(signed_out),
+            Err(crate::Error::Usage(Error::Rejected))
+        ));
     }
 
     #[test]

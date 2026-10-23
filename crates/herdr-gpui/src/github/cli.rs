@@ -5,8 +5,7 @@
 //! logout` or a refreshed token takes effect at the next session check. The
 //! token arrives on a pipe, never an argument, and is never logged or shown.
 
-use super::{Profile, Result, profile_from, valid_token};
-use crate::Error;
+use super::{Error, Profile, Result, profile_from, valid_token};
 use secrecy::SecretString;
 use std::{
     process::Command,
@@ -37,7 +36,7 @@ pub(super) fn profile() -> Result<Profile> {
 /// revoked token, which only `gh` can replace.
 pub(super) fn verify(token: SecretString) -> Result<Profile> {
     profile_from(Arc::new(token), true).map_err(|error| match error {
-        Error::GitHubAuthentication => Error::GitHubCliRejected,
+        crate::Error::GitHub(Error::Authentication) => Error::CliRejected.into(),
         error => error,
     })
 }
@@ -57,7 +56,7 @@ pub(super) fn run(command: &mut Command) -> Result<SecretString> {
 /// stdout and stderr, so the token is the one line shaped like one.
 pub(super) fn parse(ok: bool, output: &[u8]) -> Result<SecretString> {
     if !ok {
-        return Err(Error::GitHubCliSignedOut);
+        return Err(Error::CliSignedOut.into());
     }
     let mut tokens = output
         .split(|byte| *byte == b'\n')
@@ -66,19 +65,21 @@ pub(super) fn parse(ok: bool, output: &[u8]) -> Result<SecretString> {
         .filter(|line| valid_token(line));
     match (tokens.next(), tokens.next()) {
         (Some(token), None) => Ok(token.into()),
-        (None, _) => Err(Error::GitHubCliSignedOut),
-        (Some(_), Some(_)) => Err(Error::GitHubToken),
+        (None, _) => Err(Error::CliSignedOut.into()),
+        (Some(_), Some(_)) => Err(Error::Token.into()),
     }
 }
 
 /// Process failures, told in terms of the GitHub CLI rather than Git.
-pub(super) fn process_error(error: Error) -> Error {
+pub(super) fn process_error(error: crate::Error) -> Error {
     match error {
-        Error::PrProcess { source, .. } if source.kind() == std::io::ErrorKind::NotFound => {
-            Error::GitHubCliMissing
+        crate::Error::PullRequest(crate::pull_request::Error::Process { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            Error::CliMissing
         }
-        Error::PrTimeout => Error::GitHubCliTimeout,
-        error => Error::GitHubCliProcess(Box::new(error)),
+        crate::Error::PullRequest(crate::pull_request::Error::Timeout) => Error::CliTimeout,
+        error => Error::CliProcess(Box::new(error)),
     }
 }
 

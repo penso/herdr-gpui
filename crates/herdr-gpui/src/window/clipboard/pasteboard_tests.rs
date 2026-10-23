@@ -150,7 +150,10 @@ fn unresolved_urls_never_hide_files_past_the_bound() {
         let pasteboard = pasteboard(&items);
         let read = paths(read_pasteboard(&pasteboard, false).unwrap());
         assert_eq!(read, files);
-        assert!(matches!(quote_paths(&read), Err(Error::FileDropSize)));
+        assert!(matches!(
+            quote_paths(&read),
+            Err(Error::FileDrop(super::super::file_drop::Error::Size))
+        ));
         pasteboard.clearContents();
     });
 }

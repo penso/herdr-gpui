@@ -15,7 +15,7 @@ fn due_checkouts_share_one_request_and_each_keeps_its_own_answer() {
         .map(|input| {
             let result = match input.branch.as_str() {
                 "0" => Ok(Some(fixture().unwrap())),
-                "1" => Err(Error::PrOrigin),
+                "1" => Err(crate::pull_request::Error::Origin.into()),
                 _ => Ok(None),
             };
             (input, result)
@@ -62,7 +62,10 @@ fn a_failed_request_keeps_every_checkouts_last_answer_and_pauses_once() {
             generation,
             Batch {
                 found: Vec::new(),
-                failed: vec![(inputs.clone(), Error::GitHubRateLimit { reset: None })],
+                failed: vec![(
+                    inputs.clone(),
+                    Error::GitHub(crate::github::Error::RateLimit { reset: None }),
+                )],
                 paused: vec![Paused {
                     login: "fixture".into(),
                     cooldown: Duration::from_secs(600),

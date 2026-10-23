@@ -63,16 +63,16 @@ fn the_current_checkout_is_named_as_the_daemon_names_it() {
     ));
     assert!(matches!(
         rejected(crate::Error::DetachedHead),
-        crate::Error::ControlRejected {
+        crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             ..
-        }
+        })
     ));
     assert!(matches!(
-        rejected(crate::Error::CheckpointMissing),
-        crate::Error::ControlRejected {
+        rejected(crate::Error::Checkpoint(crate::checkpoint::Error::Missing)),
+        crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::NotFound,
             ..
-        }
+        })
     ));
 }

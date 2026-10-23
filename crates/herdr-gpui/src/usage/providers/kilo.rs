@@ -10,8 +10,9 @@
 //! such answers.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -162,7 +163,7 @@ fn entries(root: &Value) -> Result<Vec<Option<&Map<String, Value>>>> {
     }
 }
 
-fn trpc_error(error: &Value) -> Error {
+fn trpc_error(error: &Value) -> crate::Error {
     const PATHS: &[&[&str]] = &[
         &["json", "data", "code"],
         &["data", "code"],
@@ -177,9 +178,9 @@ fn trpc_error(error: &Value) -> Error {
         .collect::<Vec<_>>()
         .join(" ");
     if code.contains("unauthorized") || code.contains("forbidden") {
-        Error::UsageRejected
+        Error::Rejected.into()
     } else if code.contains("not_found") || code.contains("not found") {
-        Error::UsageStatus(404)
+        Error::Status(404).into()
     } else {
         invalid()
     }
@@ -551,6 +552,9 @@ mod tests {
     fn maps_an_unauthorized_procedure() {
         let body =
             r#"[{"error":{"json":{"message":"UNAUTHORIZED","data":{"code":"UNAUTHORIZED"}}}}]"#;
-        assert!(matches!(parse(body), Err(Error::UsageRejected)));
+        assert!(matches!(
+            parse(body),
+            Err(crate::Error::Usage(Error::Rejected))
+        ));
     }
 }

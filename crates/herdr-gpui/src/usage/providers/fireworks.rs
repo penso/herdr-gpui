@@ -9,8 +9,9 @@
 //! instead, since it never writes the config.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -65,7 +66,7 @@ fn spend(probe: &mut Probe, key: &Secret, configured: Option<&str>) -> Result<Re
     let now = SystemTime::now();
     if let Some(slug) = configured {
         if !valid_slug(slug) {
-            return Err(Error::UsageNotSignedIn);
+            return Err(Error::NotSignedIn.into());
         }
         // A stale slug answers 404; the key's own account is then looked up.
         if let Some(body) = summary(probe, key, slug, now)? {
@@ -73,7 +74,7 @@ fn spend(probe: &mut Probe, key: &Secret, configured: Option<&str>) -> Result<Re
         }
     }
     let slug = only_account(probe, key)?;
-    let body = summary(probe, key, &slug, now)?.ok_or(Error::UsageStatus(404))?;
+    let body = summary(probe, key, &slug, now)?.ok_or(Error::Status(404))?;
     parse(&body, &slug)
 }
 
@@ -125,7 +126,7 @@ fn only_account(probe: &mut Probe, key: &Secret) -> Result<String> {
     }
     match <[String; 1]>::try_from(slugs) {
         Ok([slug]) => Ok(slug),
-        Err(_) => Err(Error::UsageNotSignedIn),
+        Err(_) => Err(Error::NotSignedIn.into()),
     }
 }
 

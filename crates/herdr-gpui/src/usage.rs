@@ -7,6 +7,7 @@
 
 mod access;
 mod cookies;
+mod error;
 mod icons;
 mod model;
 mod panel;
@@ -24,6 +25,7 @@ mod values;
 mod tests;
 
 pub(crate) use access::KeychainGrants;
+pub(crate) use error::Error;
 pub(crate) use model::{Host, Provider};
 pub(crate) use panel::PANEL_WIDTH;
 pub(crate) use probe::Shell;
@@ -396,7 +398,7 @@ impl Usage {
                     return;
                 };
                 entry.round.insert(provider);
-                if matches!(report, Err(crate::Error::UsageRejected)) {
+                if matches!(report, Err(crate::Error::Usage(Error::Rejected))) {
                     let strikes = entry
                         .rejected
                         .get(&provider)
@@ -423,10 +425,11 @@ impl Usage {
                         access: None,
                     },
                     Err(error) => {
-                        entry.rate_limited |= matches!(error, crate::Error::UsageRateLimited);
+                        entry.rate_limited |=
+                            matches!(error, crate::Error::Usage(Error::RateLimited));
                         let access = match error {
-                            crate::Error::UsageKeychainAccess => Some(Access::Needed),
-                            crate::Error::UsageKeychainDenied => Some(Access::Denied),
+                            crate::Error::Usage(Error::KeychainAccess) => Some(Access::Needed),
+                            crate::Error::Usage(Error::KeychainDenied) => Some(Access::Denied),
                             _ => None,
                         };
                         if access == Some(Access::Denied) {
@@ -577,7 +580,7 @@ fn read_with(
         let mut probe = Probe::new(exec, provider, config.settings(provider), cookies, consent);
         let answer = match provider.service().fetch(&mut probe) {
             Some(answer) => answer,
-            None if requested => Err(probe.missing()),
+            None if requested => Err(probe.missing().into()),
             None => continue,
         };
         if !report(provider, answer) {

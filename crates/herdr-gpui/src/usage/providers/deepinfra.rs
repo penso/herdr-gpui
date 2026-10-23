@@ -4,8 +4,9 @@
 //! is no agent sign-in to find; everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -58,12 +59,12 @@ pub(crate) fn parse(checklist: &str, usage: &str) -> Result<Report> {
     let recent = checklist
         .recent
         .filter(|value| value.is_finite())
-        .ok_or(Error::UsageJson(Category::Data))?
+        .ok_or(Error::Json(Category::Data))?
         .max(0.);
     let stripe = checklist
         .stripe_balance
         .filter(|value| value.is_finite())
-        .ok_or(Error::UsageJson(Category::Data))?;
+        .ok_or(Error::Json(Category::Data))?;
     // DeepInfra keeps prepaid funds as a negative balance; unbilled recent
     // spend is added back so the figure matches its dashboard.
     let balance = stripe + recent;
@@ -178,11 +179,11 @@ mod tests {
     fn missing_amounts_are_rejected() {
         assert!(matches!(
             parse(r#"{"recent": 1}"#, USAGE),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
         assert!(matches!(
             parse(r#"{"stripe_balance": 1, "recent": 1}"#, r#"{}"#),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
     }
 }

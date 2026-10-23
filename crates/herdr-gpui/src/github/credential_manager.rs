@@ -111,7 +111,7 @@ pub(super) fn read_in(service: &str, account: &str) -> Result<Option<SecretStrin
         return if not_found(&error) {
             Ok(None)
         } else {
-            Err(Error::Read(error).into())
+            Err(super::Error::from(Error::Read(error)).into())
         };
     }
     credential_bytes(Read(credential).secret()).map(Some)
@@ -138,7 +138,11 @@ pub(super) fn save_in(
     let size = u32::try_from(secret.len())
         .ok()
         .filter(|size| *size <= CRED_MAX_CREDENTIAL_BLOB_SIZE)
-        .ok_or_else(|| crate::Error::from(Error::Write(io::ErrorKind::FileTooLarge.into())))?;
+        .ok_or_else(|| {
+            crate::Error::from(super::Error::from(Error::Write(
+                io::ErrorKind::FileTooLarge.into(),
+            )))
+        })?;
     let mut comment = wide(label);
     let mut user = wide(account);
     let credential = CREDENTIALW {
@@ -159,7 +163,7 @@ pub(super) fn save_in(
     #[allow(unsafe_code)]
     let written = unsafe { CredWriteW(&credential, 0) };
     if written == 0 {
-        return Err(Error::Write(io::Error::last_os_error()).into());
+        return Err(super::Error::from(Error::Write(io::Error::last_os_error())).into());
     }
     Ok(())
 }
@@ -172,7 +176,7 @@ fn delete(name: &[u16]) -> Result<()> {
     if deleted == 0 {
         let error = io::Error::last_os_error();
         if !not_found(&error) {
-            return Err(Error::Write(error).into());
+            return Err(super::Error::from(Error::Write(error)).into());
         }
     }
     Ok(())

@@ -150,9 +150,12 @@ pub(super) fn automation(command: AutomationCommand, context: &Context) -> crate
 /// else made absolute against the caller's directory, since a remote
 /// host's file is not on this machine.
 pub(super) fn script_path(file: &std::path::Path) -> crate::Result<String> {
-    let rejected = |message: String| crate::Error::ControlRejected {
-        code: ErrorCode::InvalidRequest,
-        message,
+    let rejected = |message: String| -> crate::Error {
+        crate::control::Error::Rejected {
+            code: ErrorCode::InvalidRequest,
+            message,
+        }
+        .into()
     };
     let path = match file.canonicalize() {
         Ok(path) => path,

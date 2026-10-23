@@ -73,7 +73,7 @@ fn live_session_renews_off_thread_without_restart_and_preserves_token_identity()
                     .profile_with(
                         |token| {
                             if token.expose_secret() == "expired-access" {
-                                return Err(Error::GitHubAuthentication);
+                                return Err(crate::Error::GitHub(Error::Authentication));
                             }
                             let mut profile = Auth::connected_fixture().profile.unwrap();
                             profile.token = token;
@@ -119,10 +119,10 @@ fn live_session_renews_off_thread_without_restart_and_preserves_token_identity()
 #[test]
 fn live_session_transient_failures_preserve_account_and_retry_but_rejection_disconnects() {
     for error in [
-        Error::GitHubStatus(503),
-        Error::GitHubRateLimit { reset: None },
-        Error::GitHubForbidden,
-        Error::CredentialPolicy,
+        crate::Error::GitHub(Error::Status(503)),
+        crate::Error::GitHub(Error::RateLimit { reset: None }),
+        crate::Error::GitHub(Error::Forbidden),
+        crate::Error::GitHub(Error::CredentialPolicy),
     ] {
         let mut auth = Auth::connected_fixture();
         let now = Instant::now();
@@ -137,7 +137,9 @@ fn live_session_transient_failures_preserve_account_and_retry_but_rejection_disc
     }
     let mut auth = Auth::connected_fixture();
     let (tx, rx) = mpsc::sync_channel(1);
-    tx.send(Err(Error::GitHubAuthentication)).ok().unwrap();
+    tx.send(Err(crate::Error::GitHub(Error::Authentication)))
+        .ok()
+        .unwrap();
     auth.profile_incoming = Some(rx);
     auth.poll_at(Instant::now(), |_| panic!(), |_, _| panic!());
     assert!(!auth.connected());

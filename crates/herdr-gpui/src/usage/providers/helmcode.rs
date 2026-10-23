@@ -8,8 +8,9 @@
 //! cookies are read again on each refresh.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -89,11 +90,11 @@ impl Service for Helmcode {
                 continue;
             };
             match fetch(probe, tenant, &cookie) {
-                Err(Error::UsageRejected) => rejected = true,
+                Err(crate::Error::Usage(Error::Rejected)) => rejected = true,
                 other => return Some(other),
             }
         }
-        rejected.then_some(Err(Error::UsageRejected))
+        rejected.then_some(Err(Error::Rejected.into()))
     }
 }
 
@@ -110,7 +111,7 @@ fn fetch(probe: &mut Probe, tenant: &Tenant, cookie: &Secret) -> Result<Report> 
     let response = probe.http(get("/api/usage/quota", QUOTA_TIMEOUT))?;
     // An expired session redirects to the sign-in page.
     if (300..400).contains(&response.status) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let quota = response.ok()?;
     let mut optional = |path: &str| {

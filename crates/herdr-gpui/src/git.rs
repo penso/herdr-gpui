@@ -7,8 +7,11 @@
 //! without a process per row per frame. When the sidebar shows local change
 //! counts, the probe counts lines instead, on the same schedule. Commit, push and pull request creation
 //! are explicit user actions and are never retried or replayed automatically.
+mod error;
+
+pub(crate) use error::Error;
+
 use crate::{
-    Error,
     github::Tokens,
     pull_request::{Input, base_repository, clean, local_checkout, run, run_bytes},
 };
@@ -366,16 +369,16 @@ impl Git {
     /// Queue an explicit user action against the tracked checkout.
     pub fn start(&mut self, action: Action, token: Option<Tokens>) -> crate::Result<()> {
         if self.running.is_some() {
-            return Err(Error::GitBusy);
+            return Err(Error::Busy.into());
         }
-        let input = self.input.clone().ok_or(Error::GitNoCheckout)?;
+        let input = self.input.clone().ok_or(Error::NoCheckout)?;
         if let Action::Commit(message) = &action
             && (message.trim().is_empty() || message.len() > MESSAGE_LIMIT)
         {
-            return Err(Error::GitCommitMessage);
+            return Err(Error::CommitMessage.into());
         }
         if matches!(action, Action::CreatePullRequest) && token.is_none() {
-            return Err(Error::GitHubAuthentication);
+            return Err(crate::github::Error::Authentication.into());
         }
         self.error = None;
         self.outcome = None;
@@ -431,7 +434,7 @@ impl Git {
                     self.waiting = None;
                     self.worker = None;
                     self.running = None;
-                    self.error = Some(Error::GitWorker.to_string());
+                    self.error = Some(Error::Worker.to_string());
                     self.due = Some(now + ERROR_BACKOFF);
                     return true;
                 }
@@ -471,7 +474,7 @@ impl Git {
                     Err(source) => {
                         self.running = None;
                         self.error = Some(
-                            Error::GitProcess {
+                            Error::Process {
                                 operation: "start the Git worker",
                                 source,
                             }
@@ -492,7 +495,7 @@ impl Git {
                     Err(mpsc::TrySendError::Disconnected(_)) => {
                         self.worker = None;
                         self.running = None;
-                        self.error = Some(Error::GitWorker.to_string());
+                        self.error = Some(Error::Worker.to_string());
                         self.due = Some(now + ERROR_BACKOFF);
                         changed = true;
                     }
@@ -554,7 +557,7 @@ fn counted(
         cancelled,
     ) {
         Ok(numstat) => parse_numstat(&numstat),
-        Err(Error::GitFailed { .. }) => Status::default(),
+        Err(crate::Error::Git(Error::Failed { .. })) => Status::default(),
         Err(error) => return Err(error),
     };
     Ok(Counted { lines, dirty })
@@ -637,7 +640,7 @@ fn perform(
         Action::Commit(message) => commit(&checkout, &message, deadline, cancelled),
         Action::Push => push(&checkout, &input.branch, deadline, cancelled),
         Action::CreatePullRequest => {
-            let token = token.ok_or(Error::GitHubAuthentication)?;
+            let token = token.ok_or(crate::github::Error::Authentication)?;
             create_pull_request(&checkout, &input.branch, &token, deadline, cancelled)
         }
     }
@@ -650,7 +653,7 @@ fn commit(
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Outcome> {
     if !checkout_status(checkout, deadline, cancelled)?.dirty() {
-        return Err(Error::GitNothingToCommit);
+        return Err(Error::NothingToCommit.into());
     }
     git(
         checkout,
@@ -720,7 +723,7 @@ fn create_pull_request(
     )?);
     let title: String = title.trim().chars().take(TITLE_LIMIT).collect();
     if title.is_empty() {
-        return Err(Error::GitPullRequestTitle);
+        return Err(Error::PullRequestTitle.into());
     }
     // The head ref must exist on GitHub before a pull request can reference it.
     git(
@@ -743,15 +746,15 @@ fn create_pull_request(
     let id = repository["data"]["repository"]["id"]
         .as_str()
         .filter(|id| !id.is_empty())
-        .ok_or(Error::PrRepository)?
+        .ok_or(crate::pull_request::Error::Repository)?
         .to_owned();
     let default_branch = repository["data"]["repository"]["defaultBranchRef"]["name"]
         .as_str()
         .filter(|name| !name.is_empty())
-        .ok_or(Error::PrRepository)?
+        .ok_or(crate::pull_request::Error::Repository)?
         .to_owned();
     if base.is_own_base(branch, &default_branch) {
-        return Err(Error::GitPullRequestBase);
+        return Err(Error::PullRequestBase.into());
     }
     let created = crate::github::graphql(
         "create_pr",
@@ -773,7 +776,7 @@ fn parse_created(response: &serde_json::Value, owner: &str, repo: &str) -> crate
     let url = pr["url"].as_str().unwrap_or_default();
     let expected = number.map(|number| format!("https://github.com/{owner}/{repo}/pull/{number}"));
     if expected.as_deref() != Some(url) {
-        return Err(Error::PrIdentity);
+        return Err(crate::pull_request::Error::Identity.into());
     }
     Ok(Outcome {
         message: format!("Opened pull request #{}", number.unwrap_or_default()),
@@ -794,10 +797,11 @@ pub(crate) fn git(
     if ok {
         Ok(output.trim_end_matches(['\r', '\n']).to_owned())
     } else {
-        Err(Error::GitFailed {
+        Err(Error::Failed {
             operation,
             details: clean(output.trim()),
-        })
+        }
+        .into())
     }
 }
 
@@ -815,10 +819,11 @@ pub(crate) fn git_bytes(
     if ok {
         Ok(output)
     } else {
-        Err(Error::GitFailed {
+        Err(Error::Failed {
             operation,
             details: clean(String::from_utf8_lossy(&output).trim()),
-        })
+        }
+        .into())
     }
 }
 

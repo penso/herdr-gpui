@@ -62,7 +62,7 @@ fn an_oversized_script_fails_to_load() {
     assert!(
         matches!(
             error,
-            Some(Error::CloudSetup(
+            Some(crate::Error::CloudSetup(
                 crate::cloud_setup::Error::ScriptTooLong { .. }
             ))
         ),

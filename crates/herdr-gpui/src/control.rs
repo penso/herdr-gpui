@@ -7,6 +7,7 @@
 //! an SSH host has no path to this machine's socket.
 
 mod client;
+mod error;
 mod protocol;
 mod server;
 mod socket;
@@ -19,6 +20,7 @@ pub(crate) use client::send_focus;
 #[cfg(feature = "mockup")]
 pub(crate) use client::send_notes;
 pub(crate) use client::{run, send_link, status as exit_status};
+pub(crate) use error::Error;
 use gpui::App;
 use protocol::Caller;
 pub use protocol::ErrorCode;

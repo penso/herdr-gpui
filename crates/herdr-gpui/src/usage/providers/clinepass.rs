@@ -98,7 +98,7 @@ struct Limit {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
     fn rejects_unsuccessful_payload() {
         assert!(matches!(
             parse(r#"{"success": false, "data": {"limits": []}}"#),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

@@ -42,7 +42,9 @@ fn github_public_client_id_and_explicit_environment_precedence() -> anyhow::Resu
     ] {
         assert!(matches!(
             config.github.client_id_with_override(Some(id.as_ref())),
-            Err(Error::InvalidClientId("HERDR_GITHUB_OAUTH_CLIENT_ID"))
+            Err(crate::Error::Settings(Error::InvalidClientId(
+                "HERDR_GITHUB_OAUTH_CLIENT_ID"
+            )))
         ));
     }
     #[cfg(unix)]

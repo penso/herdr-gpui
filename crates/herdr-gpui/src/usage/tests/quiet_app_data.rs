@@ -89,7 +89,7 @@ fn muse_reads_its_keychain_item_only_once_allowed() {
         (muse::token(probe).is_none(), probe.missing())
     });
     assert!(missing.0, "a listed Muse read the item before Allow");
-    assert!(matches!(missing.1, Error::UsageKeychainAccess));
+    assert!(matches!(missing.1, usage::Error::KeychainAccess));
     assert!(
         !mac.runs().contains("security"),
         "another app's keychain item was read without Allow: {}",

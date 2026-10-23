@@ -6,8 +6,9 @@
 //! CodexBar reads is ported; no master key is used.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Balance, DAY, Kind, MONTH, Provider, Report, Section, Unit, WEEK, Window,
         },
@@ -55,7 +56,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let base = probe
         .text_setting("base_url")
         .filter(|base| !base.is_empty())
-        .ok_or(Error::UsageNotSignedIn)?;
+        .ok_or(Error::NotSignedIn)?;
     let root = root_url(&base)?;
     let get = |path: &str, query: &str| {
         Request::get(format!("{root}/{path}{query}"))

@@ -35,7 +35,7 @@ fn an_error_under_one_alias_fails_only_that_checkout() {
     );
     assert!(matches!(
         &answers[1],
-        Err(Error::GitHubRepositoryHidden { repository, app_token: true })
+        Err(crate::Error::GitHub(Error::RepositoryHidden { repository, app_token: true }))
             if repository == "acme/hidden"
     ));
     assert!(cooldown.is_none(), "one hidden repository pauses nothing");
@@ -51,7 +51,7 @@ fn a_rate_limit_or_an_unclaimed_error_fails_the_whole_request() {
     let reset = Some(DateTime::from_timestamp(2_000, 0).unwrap());
     assert!(matches!(
         split_aliases(limited, &aliases(), "oauth_app", reset, now(), &mut cooldown),
-        Err(Error::GitHubRateLimit { reset: at }) if at == reset
+        Err(crate::Error::GitHub(Error::RateLimit { reset: at })) if at == reset
     ));
     assert_eq!(cooldown, Some(Duration::from_secs(1_000)));
 
@@ -59,7 +59,7 @@ fn a_rate_limit_or_an_unclaimed_error_fails_the_whole_request() {
     let mut cooldown = None;
     assert!(matches!(
         split_aliases(unclaimed, &aliases(), "oauth_app", None, now(), &mut cooldown),
-        Err(Error::GitHubRejected(message)) if message == "Something went wrong"
+        Err(crate::Error::GitHub(Error::Rejected(message))) if message == "Something went wrong"
     ));
     assert!(cooldown.is_none());
 }

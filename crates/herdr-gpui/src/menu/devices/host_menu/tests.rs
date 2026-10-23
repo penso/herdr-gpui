@@ -198,11 +198,17 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
             assert!(view.menu.page.is_none());
 
             // A failure clears the mark and says why in the status bar.
-            view.device_removed(HOST, "m5max-ms", true, Err(crate::Error::DeviceAdding), cx);
+            view.device_removed(
+                HOST,
+                "m5max-ms",
+                true,
+                Err(crate::menu::devices::Error::Adding.into()),
+                cx,
+            );
             assert!(view.menu.removing_devices.is_empty());
             assert_eq!(
                 view.local_error.as_deref(),
-                Some(format!("Remove m5max-ms: {}", crate::Error::DeviceAdding).as_str())
+                Some(format!("Remove m5max-ms: {}", crate::menu::devices::Error::Adding).as_str())
             );
             assert!(view.menu.github_hosts.contains_key(HOST));
 
@@ -213,7 +219,9 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
                 HOST,
                 "m5max-ms",
                 true,
-                Ok(Err(crate::Error::CredentialPolicy)),
+                Ok(Err(crate::Error::GitHub(
+                    crate::github::Error::CredentialPolicy,
+                ))),
                 cx,
             );
             assert!(!view.menu.github_hosts.contains_key(HOST));

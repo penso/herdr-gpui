@@ -24,7 +24,12 @@ fn read_wsl(distro: &str) -> crate::Result<Vec<(Provider, crate::Result<Report>)
 fn a_name_that_is_not_a_distribution_starts_no_shell() {
     let error = read_wsl("a;b").err().unwrap();
     assert!(
-        matches!(error, Error::Client(herdr_client::Error::InvalidWslDistro)),
+        matches!(
+            error,
+            Error::Client(herdr_client::Error::Wsl(
+                herdr_client::wsl::Error::InvalidDistro
+            ))
+        ),
         "{error:?}"
     );
 }

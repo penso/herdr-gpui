@@ -41,7 +41,7 @@ fn a_moved_main_checkout_is_looked_up_from_its_directory() {
     // left to look up rather than the wrong repository.
     assert!(matches!(
         workspace_input(&workspace, &Origin::Ssh("device".into())),
-        Err(Error::PrMetadata)
+        Err(Error::PullRequest(crate::pull_request::Error::Metadata))
     ));
 }
 

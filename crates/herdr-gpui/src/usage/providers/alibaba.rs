@@ -21,8 +21,9 @@ use super::oneconsole::{
     form_body, gateway_request, sec_token, string,
 };
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, Provider, Report, Section, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting},
@@ -105,7 +106,7 @@ impl Service for Alibaba {
             return None;
         }
         let now = SystemTime::now();
-        let mut outcome = Err(Error::UsageNotSignedIn);
+        let mut outcome = Err(Error::NotSignedIn.into());
         if let Some(cookie) = &cookie {
             outcome = across(regions, |region| fetch_web(probe, cookie, region, now));
         }
@@ -120,11 +121,13 @@ impl Service for Alibaba {
 
 /// Tries each region in turn while the failure looks like the wrong one.
 fn across(regions: &[Region], mut attempt: impl FnMut(Region) -> Result<Report>) -> Result<Report> {
-    let mut outcome = Err(Error::UsageNotSignedIn);
+    let mut outcome = Err(Error::NotSignedIn.into());
     for region in regions {
         outcome = attempt(*region);
         match &outcome {
-            Err(Error::UsageRejected | Error::UsageStatus(403 | 404) | Error::UsageJson(_)) => {}
+            Err(crate::Error::Usage(
+                Error::Rejected | Error::Status(403 | 404) | Error::Json(_),
+            )) => {}
             _ => break,
         }
     }
@@ -213,7 +216,7 @@ fn fetch_web(
     region: Region,
     now: SystemTime,
 ) -> Result<Report> {
-    let token = sec_token(probe, cookie, region.gateway()).ok_or(Error::UsageRejected)?;
+    let token = sec_token(probe, cookie, region.gateway()).ok_or(Error::Rejected)?;
     let url = format!(
         "{}/data/api.json?action={}&product=sfm_bailian&api={QUOTA_API}&_v=undefined",
         region.rpc(),
@@ -267,8 +270,7 @@ fn fetch_api(probe: &mut Probe, key: &Secret, region: Region, now: SystemTime) -
 /// The Coding Plan instance answer: the active instance's quota windows, or,
 /// for an active plan that reports no counters, just the plan.
 pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
-    let value =
-        expand(serde_json::from_str(body).map_err(|error| Error::UsageJson(error.classify()))?);
+    let value = expand(serde_json::from_str(body).map_err(|error| Error::Json(error.classify()))?);
     check(&value)?;
     let infos: Vec<&Map<String, Value>> = find_value(&value, INFO_KEYS, true, Value::as_array)
         .map(|infos| infos.iter().filter_map(Value::as_object).collect())
@@ -568,7 +570,7 @@ mod tests {
                 r#"{"code":"ConsoleNeedLogin","message":"Please log in"}"#,
                 at(0)
             ),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

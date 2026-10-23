@@ -144,7 +144,7 @@ pub(crate) fn sync(
             cooldown,
         )
         .map_err(|error| match error {
-            crate::Error::PrCancelled => Error::Cancelled,
+            crate::Error::PullRequest(crate::pull_request::Error::Cancelled) => Error::Cancelled,
             error => Error::Github(Box::new(error)),
         })
     };

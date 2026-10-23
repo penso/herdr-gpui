@@ -15,31 +15,37 @@ fn the_token_is_the_one_line_shaped_like_one() {
             .expose_secret(),
         "gho_fixture"
     );
-    assert!(matches!(parse(true, b""), Err(Error::GitHubCliSignedOut)));
+    assert!(matches!(
+        parse(true, b""),
+        Err(crate::Error::GitHub(Error::CliSignedOut))
+    ));
     assert!(matches!(
         parse(true, b"gho_one\ngho_two\n"),
-        Err(Error::GitHubToken)
+        Err(crate::Error::GitHub(Error::Token))
     ));
     // `gh` exits nonzero without a token for the host, whatever it printed.
     assert!(matches!(
         parse(false, b"no oauth token found for github.com\n"),
-        Err(Error::GitHubCliSignedOut)
+        Err(crate::Error::GitHub(Error::CliSignedOut))
     ));
 }
 
 #[test]
 fn process_failures_are_told_in_terms_of_the_github_cli() {
-    let missing = Error::PrProcess {
+    let missing = crate::pull_request::Error::Process {
         operation: "launch Git (install git on PATH)",
         source: std::io::ErrorKind::NotFound.into(),
-    };
-    assert!(matches!(process_error(missing), Error::GitHubCliMissing));
+    }
+    .into();
+    assert!(matches!(process_error(missing), Error::CliMissing));
     assert!(matches!(
-        process_error(Error::PrTimeout),
-        Error::GitHubCliTimeout
+        process_error(crate::pull_request::Error::Timeout.into()),
+        Error::CliTimeout
     ));
-    let error = process_error(Error::PrSize);
-    assert!(matches!(&error, Error::GitHubCliProcess(source) if matches!(**source, Error::PrSize)));
+    let error = process_error(crate::pull_request::Error::Size.into());
+    assert!(
+        matches!(&error, Error::CliProcess(source) if matches!(**source, crate::Error::PullRequest(crate::pull_request::Error::Size)))
+    );
     assert!(std::error::Error::source(&error).is_some());
 }
 
@@ -100,12 +106,12 @@ mod process {
         let (_dir, gh) = fake("echo 'no oauth token found for github.com' >&2; exit 1");
         assert!(matches!(
             run(&mut Command::new(&gh)),
-            Err(Error::GitHubCliSignedOut)
+            Err(crate::Error::GitHub(Error::CliSignedOut))
         ));
         let dir = tempfile::tempdir().unwrap();
         assert!(matches!(
             run(&mut Command::new(dir.path().join("gh"))),
-            Err(Error::GitHubCliMissing)
+            Err(crate::Error::GitHub(Error::CliMissing))
         ));
     }
 

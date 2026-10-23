@@ -77,7 +77,7 @@ struct Credits {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     #[test]
     fn reads_balance_and_lifetime_spend() {
@@ -123,7 +123,7 @@ mod tests {
             "private-response",
         ] {
             assert!(
-                matches!(parse(body), Err(Error::UsageJson(_))),
+                matches!(parse(body), Err(Error::Usage(usage::Error::Json(_)))),
                 "accepted {body}"
             );
         }

@@ -54,7 +54,7 @@ type Pipe = DuplexPipeStream<pipe_mode::Bytes>;
 /// a pipe of its own; otherwise every shell of the user reaches the same
 /// one, whatever `HOME` it was started with.
 pub(super) fn address(state: &Path) -> crate::Result<PathBuf> {
-    let sid = security::user_sid().map_err(crate::Error::ControlUser)?;
+    let sid = security::user_sid().map_err(crate::control::Error::User)?;
     let isolated = std::env::var_os("XDG_STATE_HOME")
         .filter(|value| !value.is_empty())
         .map(|_| state);
@@ -88,7 +88,7 @@ impl Listener {
     /// Creates the pipe. Another live server of this user keeps it, and a
     /// pipe another user made first is refused rather than joined.
     pub(super) fn bind(path: &Path) -> crate::Result<Self> {
-        let sid = security::user_sid().map_err(crate::Error::ControlUser)?;
+        let sid = security::user_sid().map_err(crate::control::Error::User)?;
         // Owned by the user, protected from inherited entries, and open to
         // that user alone: no one else may connect or add an instance.
         let sddl = format!("O:{sid}D:P(A;;GA;;;{sid})");
@@ -106,13 +106,15 @@ impl Listener {
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
                 // The name exists: ours if a server of this user answers.
                 match connect(path, Duration::from_secs(1), Duration::from_secs(1)) {
-                    Ok(_) => Err(crate::Error::ControlSocketInUse {
+                    Ok(_) => Err(crate::control::Error::SocketInUse {
                         path: path.to_owned(),
-                    }),
-                    Err(crate::Error::ControlUnavailable { .. }) => {
-                        Err(crate::Error::ControlPipeForeign {
+                    }
+                    .into()),
+                    Err(crate::Error::Control(crate::control::Error::Unavailable { .. })) => {
+                        Err(crate::control::Error::PipeForeign {
                             path: path.to_owned(),
-                        })
+                        }
+                        .into())
                     }
                     Err(error) => Err(error),
                 }
@@ -207,9 +209,11 @@ pub(super) fn connect(
     io_timeout: Duration,
     read_timeout: Duration,
 ) -> crate::Result<Connection> {
-    let unavailable = |source| crate::Error::ControlUnavailable {
-        path: path.to_owned(),
-        source,
+    let unavailable = |source| {
+        crate::Error::from(crate::control::Error::Unavailable {
+            path: path.to_owned(),
+            source,
+        })
     };
     let until = Instant::now() + io_timeout;
     let file = loop {
@@ -233,11 +237,12 @@ pub(super) fn connect(
     // and lingers after a drop, so the server would not see this end close.
     pipe.assume_flushed();
     let owner = security::owner_sid(pipe.as_handle()).map_err(unavailable)?;
-    let user = security::user_sid().map_err(crate::Error::ControlUser)?;
+    let user = security::user_sid().map_err(crate::control::Error::User)?;
     if owner != user {
-        return Err(crate::Error::ControlPipeForeign {
+        return Err(crate::control::Error::PipeForeign {
             path: path.to_owned(),
-        });
+        }
+        .into());
     }
     Ok(Connection { pipe, read_timeout })
 }

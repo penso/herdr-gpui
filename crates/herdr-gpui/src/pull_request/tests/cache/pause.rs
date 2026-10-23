@@ -26,7 +26,9 @@ fn a_paused_account_shows_why_until_it_resumes() {
     peer.cache.poll(now);
     peer.complete(
         now,
-        Err(Error::GitHubRateLimit { reset: None }),
+        Err(Error::GitHub(crate::github::Error::RateLimit {
+            reset: None,
+        })),
         Some(Duration::from_secs(600)),
     );
     let mut view = Lookup::default();
@@ -49,10 +51,10 @@ fn a_stale_result_keeps_the_reason_its_refresh_failed() {
     peer.cache.poll(now);
     peer.complete(
         now,
-        Err(Error::GitHubRepositoryHidden {
+        Err(Error::GitHub(crate::github::Error::RepositoryHidden {
             repository: "acme/hidden".into(),
             app_token: true,
-        }),
+        })),
         None,
     );
     let mut view = Lookup::default();

@@ -20,8 +20,9 @@ use super::oneconsole::{
     check, cornerstone, encode, expand, form_body, gateway_request, sec_token,
 };
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Provider, Report},
         probe::{Probe, Secret},
         service::{Meta, Service, Setting},
@@ -76,7 +77,7 @@ impl Service for Qwencloud {
 }
 
 fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
-    let token = sec_token(probe, cookie, HOME).ok_or(Error::UsageRejected)?;
+    let token = sec_token(probe, cookie, HOME).ok_or(Error::Rejected)?;
     let mut call = |api: &str, data: Value| -> Result<String> {
         let url = format!(
             "{DATA}/data/api.json?action=IntlBroadScopeAspnGateway&product=sfm_bailian&api={}&_v=undefined",
@@ -127,8 +128,7 @@ pub(crate) fn parse(
     subscription: Option<&str>,
     config: Option<&str>,
 ) -> Result<Report> {
-    let value =
-        expand(serde_json::from_str(usage).map_err(|error| Error::UsageJson(error.classify()))?);
+    let value = expand(serde_json::from_str(usage).map_err(|error| Error::Json(error.classify()))?);
     let optional = |body: Option<&str>| {
         body.and_then(|body| serde_json::from_str::<Value>(body).ok())
             .map(expand)
@@ -223,7 +223,7 @@ mod tests {
                 None,
                 None
             ),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

@@ -120,7 +120,7 @@ impl Lookup {
                     self.loading = false;
                     self.waiting = None;
                     self.worker = None;
-                    self.message = Some(crate::Error::GitHubWorker("list").to_string());
+                    self.message = Some(crate::github::Error::Worker("list").to_string());
                     return true;
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -169,7 +169,7 @@ impl Lookup {
             self.worker = Some(Worker { requests, results });
         } else {
             self.loading = false;
-            self.message = Some(crate::Error::GitHubWorker("list").to_string());
+            self.message = Some(crate::github::Error::Worker("list").to_string());
         }
         started
     }

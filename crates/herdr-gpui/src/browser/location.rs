@@ -179,7 +179,7 @@ impl TryFrom<&crate::pull_request::Input> for ReviewCheckout {
 
     fn try_from(input: &crate::pull_request::Input) -> crate::Result<Self> {
         if input.repo_key.is_none() && input.checkout.is_none() {
-            return Err(crate::Error::PrMetadata);
+            return Err(crate::pull_request::Error::Metadata.into());
         }
         Ok(Self {
             repo_key: input.repo_key.clone(),

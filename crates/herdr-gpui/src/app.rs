@@ -262,7 +262,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     if let LaunchMode::Link(link) = mode {
         match crate::control::send_link(&link) {
             Ok(_) => return std::process::ExitCode::SUCCESS,
-            Err(crate::Error::ControlUnavailable { .. }) => {
+            Err(crate::Error::Control(crate::control::Error::Unavailable { .. })) => {
                 pending_link = Some(link);
                 mode = LaunchMode::Normal;
             }
@@ -550,7 +550,7 @@ fn focus_running(
     }
     match send() {
         Ok(_) => Some(std::process::ExitCode::SUCCESS),
-        Err(crate::Error::ControlUnavailable { .. }) => None,
+        Err(crate::Error::Control(crate::control::Error::Unavailable { .. })) => None,
         Err(error) => {
             tracing::warn!(%error, "The running app did not come forward");
             None
@@ -629,23 +629,25 @@ mod tests {
         assert_eq!(focus_running(&LaunchMode::BuildInfo, &local, unasked), None);
         // No app answers, or the one that does cannot come forward: start one.
         let unavailable = || {
-            Err(crate::Error::ControlUnavailable {
+            Err(crate::control::Error::Unavailable {
                 path: "pipe".into(),
                 source: std::io::ErrorKind::NotFound.into(),
-            })
+            }
+            .into())
         };
         assert_eq!(
             focus_running(&LaunchMode::Normal, &local, unavailable),
             None
         );
         let refused = || {
-            Err(crate::Error::ControlRejected {
+            Err(crate::control::Error::Rejected {
                 code: crate::control::ErrorCode::NoWindow,
                 message: "Herdr UI has no window".into(),
-            })
+            }
+            .into())
         };
         assert_eq!(focus_running(&LaunchMode::Normal, &local, refused), None);
-        let silent = || Err(crate::Error::ControlNoResponse);
+        let silent = || Err(crate::control::Error::NoResponse.into());
         assert_eq!(focus_running(&LaunchMode::Normal, &local, silent), None);
     }
 

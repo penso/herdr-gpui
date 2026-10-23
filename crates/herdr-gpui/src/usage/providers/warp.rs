@@ -6,8 +6,9 @@
 //! read, as CodexBar does not read it either.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -84,7 +85,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let response: Response = json(body)?;
     // GraphQL reports a refused key as errors in a 200 answer.
     if response.errors.is_some_and(|errors| !errors.is_empty()) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let user = response
         .data
@@ -340,7 +341,7 @@ mod tests {
     fn graphql_errors_are_a_rejection() {
         assert!(matches!(
             parse(r#"{"errors":[{"message":"Unauthorized"}]}"#),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

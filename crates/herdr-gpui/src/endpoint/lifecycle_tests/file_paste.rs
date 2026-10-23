@@ -142,7 +142,13 @@ fn unpastable_file_paths_report_like_a_drop_and_paste_nothing(cx: &mut gpui::Tes
         view.update(cx, |view, cx| {
             assert_eq!(
                 view.local_error.as_deref(),
-                Some(format!("Files not pasted: {}", crate::Error::FileDropControl).as_str()),
+                Some(
+                    format!(
+                        "Files not pasted: {}",
+                        crate::window::file_drop::Error::Control
+                    )
+                    .as_str()
+                ),
                 "keyed={keyed}"
             );
             view.send(ClientPaneInputEvent::TextCommit("sentinel".into()), cx);

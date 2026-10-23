@@ -78,9 +78,9 @@ fn sampling_waits_for_measured_cpu_or_returns_the_latest() {
     let (watch, _sender, _commands) = Watch::fake();
     assert!(matches!(
         sample(&watch, Duration::ZERO),
-        Err(crate::Error::ControlRejected {
+        Err(crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::Timeout,
             ..
-        })
+        }))
     ));
 }

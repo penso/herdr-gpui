@@ -34,9 +34,15 @@ fn another_owners_pull_request_from_the_same_branch_name_is_ignored() {
 #[test]
 fn two_open_pull_requests_stay_ambiguous() {
     let nodes = serde_json::json!([with(1, "OPEN", "example"), with(2, "OPEN", "example")]);
-    assert!(matches!(number(nodes), Err(Error::PrAmbiguous)));
+    assert!(matches!(
+        number(nodes),
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
+    ));
     let strangers = serde_json::json!([with(1, "OPEN", "fork"), with(2, "OPEN", "other")]);
-    assert!(matches!(number(strangers), Err(Error::PrAmbiguous)));
+    assert!(matches!(
+        number(strangers),
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
+    ));
 }
 
 #[test]

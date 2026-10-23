@@ -3,7 +3,7 @@
 //! to change daemon behavior. Managed defaults are refreshed from the binary;
 //! `config-gpui.local.toml` holds persistent user overrides.
 use crate::{
-    Error, Result,
+    Result,
     contrast::Contrast,
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
@@ -21,6 +21,7 @@ mod daemon;
 mod daytona;
 mod devices;
 mod edit;
+mod error;
 mod features;
 mod files;
 mod font_weight;
@@ -84,6 +85,7 @@ pub(crate) use daytona::DaytonaFields;
 use devices::MAX_DEVICES;
 pub(crate) use devices::{DeviceSettings, KeybindingSource};
 pub(crate) use edit::{Layer, parse_value};
+pub(crate) use error::{Error, ThemeParseError};
 pub use features::{Feature, Features};
 use files::write_config;
 pub use font_weight::bold as bold_font_weight;
@@ -523,7 +525,7 @@ pub(crate) fn home() -> Result<PathBuf> {
             }
         })
         .map(PathBuf::from)
-        .ok_or(Error::MissingHome)
+        .ok_or(crate::Error::MissingHome)
 }
 
 /// The directory holding this app's `herdr` configuration directory. Upstream
@@ -535,7 +537,7 @@ fn config_root() -> Result<PathBuf> {
         Some(value) => {
             let path = PathBuf::from(value);
             if !path.is_absolute() {
-                return Err(Error::RelativeConfigRoot);
+                return Err(Error::RelativeRoot.into());
             }
             Ok(path)
         }
@@ -632,9 +634,9 @@ impl Config {
                 Ok(text) if text.lines().next() != Some(MANAGED_HEADER) => (text, path.to_owned()),
                 Ok(_) => (LOCAL_CONFIG.into(), local),
                 Err(error) if error.kind() == ErrorKind::NotFound => (LOCAL_CONFIG.into(), local),
-                Err(error) => return Err(Error::from(error).at_path(path)),
+                Err(error) => return Err(crate::Error::from(error).at_path(path)),
             },
-            Err(error) => return Err(Error::from(error).at_path(&local)),
+            Err(error) => return Err(crate::Error::from(error).at_path(&local)),
         })
     }
 
@@ -643,8 +645,8 @@ impl Config {
     fn load_path(path: &Path, daemon: &Path) -> Result<Self> {
         let base = daemon_settings(daemon);
         let (_lock, local) = Self::prepare_files(path)?;
-        let text =
-            fs::read_to_string(&local).map_err(|error| Error::from(error).at_path(&local))?;
+        let text = fs::read_to_string(&local)
+            .map_err(|error| crate::Error::from(error).at_path(&local))?;
         // Validate the override independently so bad types/unknown keys cannot
         // disappear inside the merge. Empty arrays explicitly replace defaults.
         Self::parse_over(&text, &base).map_err(|error| error.at_path(&local))?;
@@ -739,7 +741,7 @@ impl Config {
                 })
             })
         {
-            return Err(Error::GitHubSecretInConfig(name));
+            return Err(crate::github::Error::SecretInConfig(name).into());
         }
         // A newer build may keep more accounts or owners than this one.
         unknown_keys.extend(settings.github.limit_accounts());
@@ -804,7 +806,7 @@ impl Config {
         config.keybinding_overrides = settings.keybindings;
         config.pane_keys = settings.pane_keys;
         if settings.devices.len() > MAX_DEVICES {
-            return Err(Error::TooManyDevices(MAX_DEVICES));
+            return Err(Error::TooManyDevices(MAX_DEVICES).into());
         }
         for (id, device) in &settings.devices {
             device.validate(id)?;
@@ -814,7 +816,7 @@ impl Config {
         config.palette = settings.palette;
         if let Some(theme) = settings.theme {
             if theme.trim().is_empty() {
-                return Err(Error::EmptyTheme);
+                return Err(Error::EmptyTheme.into());
             }
             ThemeName::parse(&theme)?;
             config.theme = theme;

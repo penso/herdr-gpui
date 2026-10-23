@@ -8,10 +8,7 @@
 //! comment is a duplicate and a repeated merge is a different decision. A
 //! merge names the head commit the user saw, so GitHub refuses it if the
 //! branch moved since. Remote text is cleaned and bounded before display.
-use crate::{
-    Error,
-    pull_request::{MergeMethod, PullRequest, State, clean},
-};
+use crate::pull_request::{MergeMethod, PullRequest, State, clean};
 use secrecy::SecretString;
 use serde_json::Value;
 use std::{
@@ -24,8 +21,11 @@ use std::{
     time::Duration,
 };
 
+mod error;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use error::Error;
 
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 /// GitHub accepts far longer bodies; the dialog field is one line, so this is
@@ -96,11 +96,11 @@ impl Target {
 }
 
 impl TryFrom<&PullRequest> for Target {
-    type Error = Error;
+    type Error = crate::Error;
 
     fn try_from(pr: &PullRequest) -> crate::Result<Self> {
         if pr.state != State::Open {
-            return Err(Error::PrActionTarget);
+            return Err(Error::Target.into());
         }
         Self::of(pr, true)
     }
@@ -109,13 +109,13 @@ impl TryFrom<&PullRequest> for Target {
 impl Target {
     fn of(pr: &PullRequest, writable: bool) -> crate::Result<Self> {
         if pr.id.is_empty() || pr.head_ref_oid.is_empty() {
-            return Err(Error::PrActionTarget);
+            return Err(Error::Target.into());
         }
         // Parsing re-wrote the URL to exactly this shape after checking it.
         let path = pr
             .url
             .strip_prefix("https://github.com/")
-            .ok_or(Error::PrActionTarget)?;
+            .ok_or(Error::Target)?;
         let mut parts = path.split('/');
         let (Some(owner), Some(repo), Some("pull"), Some(number), None) = (
             parts.next(),
@@ -124,10 +124,10 @@ impl Target {
             parts.next(),
             parts.next(),
         ) else {
-            return Err(Error::PrActionTarget);
+            return Err(Error::Target.into());
         };
         if owner.is_empty() || repo.is_empty() || number != pr.number.to_string() {
-            return Err(Error::PrActionTarget);
+            return Err(Error::Target.into());
         }
         Ok(Self {
             owner: owner.into(),
@@ -346,9 +346,9 @@ impl Actions {
     /// Read the review conversation. An explicit request each time the user
     /// opens it; a failure is shown, not retried in the background.
     pub fn load_comments(&mut self, token: Arc<SecretString>) -> crate::Result<()> {
-        let target = self.target.clone().ok_or(Error::PrActionTarget)?;
+        let target = self.target.clone().ok_or(Error::Target)?;
         if self.running.is_some() {
-            return Err(Error::PrActionBusy);
+            return Err(Error::Busy.into());
         }
         self.generation.fetch_add(1, Ordering::Relaxed);
         self.loading = true;
@@ -366,23 +366,23 @@ impl Actions {
         token: Arc<SecretString>,
     ) -> crate::Result<()> {
         if self.running.is_some() {
-            return Err(Error::PrActionBusy);
+            return Err(Error::Busy.into());
         }
         let target = self
             .target
             .clone()
             .filter(|target| target.writable)
-            .ok_or(Error::PrActionTarget)?;
+            .ok_or(Error::Target)?;
         let action = match action {
             Action::Comment(body) => {
                 let body = body.trim();
                 if body.is_empty() || body.chars().count() > BODY_LIMIT {
-                    return Err(Error::PrCommentBody);
+                    return Err(Error::CommentBody.into());
                 }
                 Action::Comment(body.to_owned())
             }
             Action::Merge(method) if !allowed.contains(&method) => {
-                return Err(Error::PrMergeMethod);
+                return Err(Error::MergeMethod.into());
             }
             action @ Action::Merge(_) => action,
         };
@@ -433,7 +433,7 @@ impl Actions {
                     }
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    self.stopped(Error::PrActionWorker);
+                    self.stopped(Error::Worker.into());
                     return true;
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -459,7 +459,7 @@ impl Actions {
                         self.waiting = Some((target, job, token))
                     }
                     Err(mpsc::TrySendError::Disconnected(_)) => {
-                        self.stopped(Error::PrActionWorker);
+                        self.stopped(Error::Worker.into());
                         changed = true;
                     }
                 }
@@ -470,7 +470,7 @@ impl Actions {
 
     /// The worker is gone. Nothing is resubmitted: an action that may have
     /// reached GitHub is reported as unknown rather than sent again.
-    fn stopped(&mut self, error: Error) {
+    fn stopped(&mut self, error: crate::Error) {
         self.busy = false;
         self.waiting = None;
         self.worker = None;
@@ -505,7 +505,7 @@ fn spawn(current: Arc<AtomicU64>) -> crate::Result<Worker> {
                 }
             }
         })
-        .map_err(|source| Error::PrActionProcess { source })?;
+        .map_err(|source| Error::Process { source })?;
     Ok(Worker { requests, results })
 }
 
@@ -574,7 +574,7 @@ pub(super) fn commented(response: &Value, target: &Target) -> Outcome {
 pub(super) fn merged(response: &Value, target: &Target) -> crate::Result<Outcome> {
     let pr = &response["data"]["mergePullRequest"]["pullRequest"];
     if pr["url"].as_str() != Some(target.url.as_str()) {
-        return Err(Error::PrIdentity);
+        return Err(crate::pull_request::Error::Identity.into());
     }
     Ok(Outcome {
         message: if pr["state"] == "MERGED" {
@@ -593,7 +593,7 @@ pub(super) fn merged(response: &Value, target: &Target) -> crate::Result<Outcome
 pub(super) fn parse_conversation(response: &Value, target: &Target) -> crate::Result<Vec<Comment>> {
     let pr = &response["data"]["repository"]["pullRequest"];
     if pr["id"].as_str() != Some(target.id.as_str()) {
-        return Err(Error::PrIdentity);
+        return Err(crate::pull_request::Error::Identity.into());
     }
     let nodes = |value: &Value| value["nodes"].as_array().cloned().unwrap_or_default();
     let mut comments = Vec::new();

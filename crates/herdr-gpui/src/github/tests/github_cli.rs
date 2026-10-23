@@ -53,7 +53,9 @@ fn choosing_the_cli_connects_and_marks_the_session() {
 #[test]
 fn a_cli_failure_is_shown_and_leaves_nothing_to_sign_out() {
     let mut auth = Auth::default();
-    auth.use_github_cli_with(Store::Keyring, || Err(Error::GitHubCliSignedOut));
+    auth.use_github_cli_with(Store::Keyring, || {
+        Err(crate::Error::GitHub(Error::CliSignedOut))
+    });
     auth.cancel(); // The worker may save the marker; dismissal waits for it.
     finish(&mut auth);
     auth.poll_with_store(|_| panic!("nothing to save"));
@@ -63,7 +65,11 @@ fn a_cli_failure_is_shown_and_leaves_nothing_to_sign_out() {
     assert!(!auth.can_sign_out());
     assert_eq!(
         auth.message.as_deref(),
-        Some(Error::GitHubCliSignedOut.to_string().as_str())
+        Some(
+            crate::Error::GitHub(Error::CliSignedOut)
+                .to_string()
+                .as_str()
+        )
     );
 }
 
@@ -124,9 +130,9 @@ fn stopping_the_cli_session_removes_only_the_marker() {
 #[test]
 fn signing_out_of_gh_ends_the_session_at_its_next_check() {
     for error in [
-        Error::GitHubCliSignedOut,
-        Error::GitHubCliRejected,
-        Error::GitHubCliMissing,
+        crate::Error::GitHub(Error::CliSignedOut),
+        crate::Error::GitHub(Error::CliRejected),
+        crate::Error::GitHub(Error::CliMissing),
     ] {
         let mut auth = connected_with_cli();
         let now = Instant::now() + Duration::from_secs(6 * 60);
@@ -151,7 +157,7 @@ fn signing_out_of_gh_ends_the_session_at_its_next_check() {
     }
     // A slow `gh` is not a sign-out: the session survives it.
     let mut auth = connected_with_cli();
-    auth.complete_profile_fixture(Err(Error::GitHubCliTimeout));
+    auth.complete_profile_fixture(Err(crate::Error::GitHub(Error::CliTimeout)));
     auth.poll_with_store(|_| panic!("no storage"));
     assert!(auth.connected());
     assert!(auth.failed);

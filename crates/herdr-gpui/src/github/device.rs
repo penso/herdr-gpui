@@ -3,13 +3,12 @@
 //! deserialized straight into redacted types and never pass through a String.
 
 use super::{
-    Result,
+    Error, Result,
     http::{agent, authorization, response},
     log,
     token::Credential,
     valid_token,
 };
-use crate::Error;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::{
@@ -70,7 +69,7 @@ impl Device {
                 interval = self.interval,
                 "GitHub device authorization response rejected"
             );
-            return Err(Error::GitHubDevice);
+            return Err(Error::Device.into());
         }
         Ok(self)
     }
@@ -298,10 +297,11 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                 "GitHub rejected the device authorization"
             );
             Err(match code {
-                "expired_token" => Error::GitHubExpired,
-                "access_denied" => Error::GitHubDenied,
-                _ => Error::GitHubAuthorization,
-            })
+                "expired_token" => Error::Expired,
+                "access_denied" => Error::Denied,
+                _ => Error::Authorization,
+            }
+            .into())
         }
         None => {
             let token = value
@@ -312,7 +312,7 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                         category = "github_oauth",
                         "GitHub returned no usable access token"
                     );
-                    Error::GitHubToken
+                    Error::Token
                 })?;
             if value
                 .token_type
@@ -324,7 +324,7 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                     token_type = value.token_type.as_deref().unwrap_or_default(),
                     "GitHub returned an unsupported token type"
                 );
-                return Err(Error::GitHubTokenType);
+                return Err(Error::TokenType.into());
             }
             Ok(Reply::Token(
                 Credential::new(token, value.refresh_token, client)?

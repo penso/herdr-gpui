@@ -14,7 +14,7 @@ fn another_features_record_uses_its_own_check_and_file() {
         if value.expose_secret().starts_with("{\"coder\"") {
             Ok(())
         } else {
-            Err(Error::CredentialPermissions)
+            Err(crate::Error::GitHub(Error::CredentialPermissions))
         }
     };
     let record: SecretString = r#"{"coder":1}"#.into();

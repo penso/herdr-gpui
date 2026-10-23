@@ -7,17 +7,19 @@
 //! their answers on later ticks, so a slow `lsof` or an unreachable host never
 //! blocks rendering or delays another host.
 
+mod error;
 mod render;
 mod scan;
 mod tunnel;
 
+pub(crate) use error::Error;
 pub(crate) use tunnel::Error as TunnelError;
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
-    Error, Result,
+    Result,
     system_load::Stop,
     usage::{Host, Shell},
 };
@@ -120,7 +122,7 @@ fn open(host: &Host) -> Result<Shell> {
         // A distribution is scanned as a Linux host, with its own `ss`.
         Host::Wsl(distro) => Shell::connect_wsl(distro),
         #[cfg(feature = "azure")]
-        Host::Azure { .. } => Err(Error::CloudHostUnsupported),
+        Host::Azure { .. } => Err(crate::Error::CloudHostUnsupported),
     }
     .map_err(failed)
 }
@@ -139,7 +141,7 @@ fn local_shell() -> Result<Shell> {
 /// Windows has neither `ss` nor `lsof`, and its own tools are not wired up.
 #[cfg(windows)]
 fn local_shell() -> Result<Shell> {
-    Err(Error::ListeningPortsUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 fn scan(shell: &mut Shell) -> Result<Ports> {
@@ -147,8 +149,8 @@ fn scan(shell: &mut Shell) -> Result<Ports> {
     parse(&output.stdout)
 }
 
-fn failed(error: Error) -> Error {
-    Error::ListeningPorts(Box::new(error))
+fn failed(error: crate::Error) -> crate::Error {
+    Error::Scan(Box::new(error)).into()
 }
 
 struct Worker {
@@ -189,7 +191,7 @@ fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Ports>>) {
         let result = opened.and_then(|mut opened| {
             let ports = scan(&mut opened);
             // A failed step leaves the shell unusable; a missing tool does not.
-            if !matches!(ports, Err(Error::ListeningPorts(_))) {
+            if !matches!(ports, Err(crate::Error::ListeningPorts(Error::Scan(_)))) {
                 shell = Some(opened);
             }
             ports

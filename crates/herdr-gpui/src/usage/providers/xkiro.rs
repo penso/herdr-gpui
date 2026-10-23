@@ -187,7 +187,7 @@ struct FreeTokens {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     /// https://docs.xkiro.com/api/usage/: the PAYG example CodexBar tests
     /// with, with a synthetic identity.
@@ -271,7 +271,10 @@ mod tests {
         ] {
             let body = format!(r#"{{"object":"usage","free_tokens":{{"used_today":{value}}}}}"#);
             assert!(
-                matches!(parse(&body, at(0)), Err(Error::UsageJson(_))),
+                matches!(
+                    parse(&body, at(0)),
+                    Err(Error::Usage(usage::Error::Json(_)))
+                ),
                 "accepted {value}"
             );
         }
@@ -284,7 +287,7 @@ mod tests {
             r#"{"object":"other","free_tokens":{"used_today":1}}"#,
         ] {
             assert!(
-                matches!(parse(body, at(0)), Err(Error::UsageJson(_))),
+                matches!(parse(body, at(0)), Err(Error::Usage(usage::Error::Json(_)))),
                 "accepted {body}"
             );
         }

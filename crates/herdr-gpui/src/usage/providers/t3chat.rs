@@ -198,7 +198,7 @@ fn plan_name(raw: &str) -> String {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     /// The JSONL shape of a `getCustomerData` batch, with a subscription.
     const FIXTURE: &str = concat!(
@@ -262,10 +262,13 @@ mod tests {
 
     #[test]
     fn rejects_answers_without_customer_data() {
-        assert!(matches!(parse("{\"json\":{}}\n"), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse("{\"json\":{}}\n"),
+            Err(Error::Usage(usage::Error::Json(_)))
+        ));
         assert!(matches!(
             parse(r#"{"usageFourHourPercentage":"high"}"#),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

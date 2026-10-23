@@ -9,8 +9,9 @@
 //! since the probe cannot strip a prefix from a secret.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, title_case},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -56,7 +57,7 @@ impl Service for Devin {
             .text_setting("organization")
             .and_then(|raw| Organization::parse(&raw))
         else {
-            return Some(Err(Error::UsageNotSignedIn));
+            return Some(Err(Error::NotSignedIn.into()));
         };
         Some(read(probe, &token, &organization))
     }
@@ -64,7 +65,7 @@ impl Service for Devin {
 
 /// Where the quota lives: tried in CodexBar's order until one answers.
 fn read(probe: &mut Probe, token: &Secret, organization: &Organization) -> Result<Report> {
-    let mut last = Error::UsageStatus(404);
+    let mut last: crate::Error = Error::Status(404).into();
     for path in organization.paths() {
         let mut request = Request::get(format!("{BASE}/{path}/billing/quota/usage"))
             .bearer(token)
@@ -76,7 +77,7 @@ fn read(probe: &mut Probe, token: &Secret, organization: &Organization) -> Resul
         }
         match probe.body(request) {
             Ok(body) => return parse(&body, organization.display()),
-            Err(error @ Error::UsageRejected) => return Err(error),
+            Err(error @ crate::Error::Usage(Error::Rejected)) => return Err(error),
             Err(error) => last = error,
         }
     }

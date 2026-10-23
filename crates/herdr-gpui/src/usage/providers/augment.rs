@@ -12,8 +12,9 @@
 //! shows as rejected until the browser session is refreshed.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Unit, Window, group},
         probe::{HostPath, Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -123,7 +124,7 @@ pub(crate) fn parse_cli(output: &str) -> Result<Report> {
     let (mut cycle_end, mut plan) = (None, None);
     for line in output.lines().map(str::trim) {
         if line.contains("Authentication failed") || line.contains("auggie login") {
-            return Err(Error::UsageRejected);
+            return Err(Error::Rejected.into());
         }
         if line.contains("credits / month") {
             monthly = number_before(line, "credits / month");
@@ -170,10 +171,10 @@ pub(crate) fn parse_cli(output: &str) -> Result<Report> {
                 .map(SystemTime::from);
         }
     }
-    let remaining = remaining.ok_or(Error::UsageCommand("auggie account status"))?;
+    let remaining = remaining.ok_or(Error::Command("auggie account status"))?;
     let limit = total
         .or(monthly)
-        .ok_or(Error::UsageCommand("auggie account status"))?;
+        .ok_or(Error::Command("auggie account status"))?;
     let usage = Usage {
         remaining: Some(remaining),
         used: Some(used.unwrap_or((limit - remaining).max(0.))),
@@ -318,9 +319,12 @@ mod tests {
     fn a_signed_out_cli_is_rejected() {
         assert!(matches!(
             parse_cli("Authentication failed. Run auggie login."),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
-        assert!(matches!(parse_cli(""), Err(Error::UsageCommand(_))));
+        assert!(matches!(
+            parse_cli(""),
+            Err(crate::Error::Usage(Error::Command(_)))
+        ));
     }
 
     #[test]

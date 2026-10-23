@@ -135,7 +135,7 @@ pub(super) fn wait(what: WaitFor, timeout: u64, context: &Context) -> crate::Res
             .max(1);
         match wait_once(what, left, context) {
             // `wait window` also waits for the app itself to start.
-            Err(crate::Error::ControlUnavailable { .. })
+            Err(crate::Error::Control(crate::control::Error::Unavailable { .. }))
                 if what == WaitFor::Window && std::time::Instant::now() < deadline =>
             {
                 std::thread::sleep(START_POLL);

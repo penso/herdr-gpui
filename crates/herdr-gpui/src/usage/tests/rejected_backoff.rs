@@ -9,7 +9,11 @@ fn read_once(usage: &mut Usage, host: &Host, now: Instant) {
     begin(usage, host, now);
     if !usage.current().unwrap().held.contains(&claude) {
         usage.apply(
-            Message::Reading(host.clone(), claude, Err(Error::UsageRejected)),
+            Message::Reading(
+                host.clone(),
+                claude,
+                Err(Error::Usage(usage::Error::Rejected)),
+            ),
             now,
         );
     }
@@ -47,7 +51,7 @@ fn a_rejected_sign_in_is_asked_less_often_while_others_keep_their_pace() {
         .iter()
         .find(|reading| reading.provider == claude)
         .unwrap();
-    assert_eq!(held.error, Some(Error::UsageRejected.to_string()));
+    assert_eq!(held.error, Some(usage::Error::Rejected.to_string()));
     assert_eq!(again(&usage, claude), Some((1, start + REFRESH * 2)));
 
     // Once due it is asked again, and a second rejection waits twice as long.
@@ -119,7 +123,11 @@ fn an_outage_between_rejections_keeps_the_wait_growing() {
     let due = start + REFRESH * 2;
     begin(&mut usage, &local, due);
     usage.apply(
-        Message::Reading(local.clone(), claude, Err(Error::UsageRateLimited)),
+        Message::Reading(
+            local.clone(),
+            claude,
+            Err(Error::Usage(usage::Error::RateLimited)),
+        ),
         due,
     );
     usage.apply(Message::Done(local.clone(), Ok(())), due);

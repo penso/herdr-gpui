@@ -3,13 +3,14 @@
 //! and lookups GitHub prices below a point share one instead of costing one
 //! each. Every alias is still parsed and verified like a single lookup.
 
+use super::Error;
 use super::{
     Input, Origin, Origins, Result,
     fetch::{Ask, FIELDS, Head, NUMBER_QUERY, TIMEOUT, Target, target},
     parse::current,
     parse_graphql, parse_numbered,
 };
-use crate::{Error, github::Tokens};
+use crate::github::Tokens;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 use std::{
@@ -50,7 +51,7 @@ const HEADS: &str = r#"query($owner: String!, $repo: String!, $branch: String!) 
 #[derive(Default)]
 pub(super) struct Batch {
     pub found: Vec<(Input, Result)>,
-    pub failed: Vec<(Vec<Input>, Error)>,
+    pub failed: Vec<(Vec<Input>, crate::Error)>,
     pub deferred: Vec<Input>,
     pub paused: Vec<Paused>,
     /// Checkouts read by an account that was already paused, never asked,
@@ -224,7 +225,7 @@ pub(super) fn ask(
                     }
                 }
             }
-            Err(Error::GitHubSize) if group.len() > 1 => {
+            Err(crate::Error::GitHub(crate::github::Error::Size)) if group.len() > 1 => {
                 let second = group.split_off(group.len() / 2);
                 groups.push(second);
                 groups.push(group);
@@ -313,11 +314,11 @@ fn crowded(
 pub(super) fn matching_number(heads: &Value, head: &Head) -> crate::Result<Option<u64>> {
     let listing = &heads["data"]["repository"]["pullRequests"];
     if listing["pageInfo"]["hasNextPage"] == true {
-        return Err(Error::PrAmbiguous);
+        return Err(Error::Ambiguous.into());
     }
     let heads: Vec<&Value> = listing["nodes"]
         .as_array()
-        .ok_or(Error::PrRepository)?
+        .ok_or(Error::Repository)?
         .iter()
         .filter(|pr| {
             pr["headRepositoryOwner"]["login"]

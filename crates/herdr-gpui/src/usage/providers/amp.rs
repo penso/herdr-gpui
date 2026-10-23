@@ -10,8 +10,9 @@
 //! is empty; the probe discards standard error, so such a report is missed.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, DAY, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
@@ -56,14 +57,14 @@ impl Service for Amp {
 
     fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
         let now = SystemTime::now();
-        let mut failure = None;
+        let mut failure: Option<crate::Error> = None;
         if let Ok(output) = probe.command("sh", &["-c", CLI], Duration::from_secs(15))
             && output.success
         {
             match parse_report(&output.stdout, now) {
                 Ok(report) => return Some(Ok(report)),
-                Err(Error::UsageRejected) => failure = Some(Error::UsageRejected),
-                Err(_) => failure = Some(Error::UsageCommand("amp usage")),
+                Err(crate::Error::Usage(Error::Rejected)) => failure = Some(Error::Rejected.into()),
+                Err(_) => failure = Some(Error::Command("amp usage").into()),
             }
         }
 
@@ -104,7 +105,7 @@ pub(crate) fn parse_api(body: &str, now: SystemTime) -> Result<Report> {
     if !response.ok {
         return Err(
             match response.error.and_then(|error| error.code).as_deref() {
-                Some("auth-required") => Error::UsageRejected,
+                Some("auth-required") => Error::Rejected.into(),
                 _ => invalid(),
             },
         );
@@ -164,7 +165,7 @@ pub(crate) fn parse_report(text: &str, now: SystemTime) -> Result<Report> {
         }
     }
     if identity.is_none() && looks_signed_out(&text) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     if free.is_none() && subscription.is_none() && individual.is_none() && workspaces.is_empty() {
         return Err(invalid());
@@ -251,7 +252,7 @@ pub(crate) fn parse_html(html: &str, now: SystemTime) -> Result<Report> {
         });
     let Some((quota, used, hourly, window_hours)) = usage else {
         return Err(if looks_signed_out(html) {
-            Error::UsageRejected
+            Error::Rejected.into()
         } else {
             invalid()
         });
@@ -712,14 +713,14 @@ mod tests {
     fn maps_sign_in_failures() {
         assert!(matches!(
             parse_report("Please log in with `amp login`", SystemTime::now()),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         assert!(matches!(
             parse_api(
                 r#"{"ok":false,"error":{"code":"auth-required"}}"#,
                 SystemTime::now()
             ),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 
@@ -733,7 +734,7 @@ mod tests {
         assert_eq!(free.length, Some(Duration::from_secs(24 * 3600)));
         assert!(matches!(
             parse_html("<a href=\"/login\">Log in</a>", now),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

@@ -223,7 +223,7 @@ fn size(root: &Path, name: &str) -> Option<u64> {
 /// Git's output outgrew what is read: say so in the review's terms.
 fn too_large(error: crate::Error) -> crate::Error {
     match error {
-        crate::Error::PrSize => crate::Error::ReviewTooLarge,
+        crate::Error::PullRequest(crate::pull_request::Error::Size) => crate::Error::ReviewTooLarge,
         error => error,
     }
 }
@@ -468,12 +468,12 @@ fn diff_files(source: &Source, files: &[&Request], asked: bool, read: &mut Vec<(
                 read.push((file.file, body));
             }
         }
-        Err(crate::Error::PrSize) if files.len() > 1 => {
+        Err(crate::Error::PullRequest(crate::pull_request::Error::Size)) if files.len() > 1 => {
             let (first, second) = files.split_at(files.len() / 2);
             diff_files(source, first, asked, read);
             diff_files(source, second, asked, read);
         }
-        Err(crate::Error::PrSize) => {
+        Err(crate::Error::PullRequest(crate::pull_request::Error::Size)) => {
             let body = if asked {
                 Body::Failed("Too large to show".into())
             } else {

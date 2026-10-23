@@ -161,7 +161,7 @@ impl HerdrWindow {
         };
         match cwd.filter(|_| !self.selected_is_remote()) {
             Some(cwd) => self.locate_checkout(&code, cwd, cx),
-            None => code.status = Status::Failed(crate::Error::CodeIndexRoot.to_string()),
+            None => code.status = Status::Failed(code_index::Error::Root.to_string()),
         }
         self.menu.code_search = Some(code);
         cx.notify();

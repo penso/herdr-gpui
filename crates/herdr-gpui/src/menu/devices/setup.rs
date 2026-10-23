@@ -2,7 +2,8 @@
 //! a compatible Herdr is saved without a terminal; anything that needs SSH or
 //! installation prompts runs in this app on a terminal that a local workspace
 //! shows (see `setup_relay`), so no remote installer policy is duplicated here.
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use herdr_client::{Destination, HostProbe, SavedHost};
 use std::{
     io::Read,
@@ -49,7 +50,7 @@ impl Claim {
                 claims = claims.len(),
                 "Host is already claimed by this process"
             );
-            return Err(Error::DeviceAdding);
+            return Err(Error::Adding.into());
         }
         tracing::debug!(category = "device_claim", "Host claimed");
         claims.push((destination.clone(), session.to_owned()));
@@ -130,16 +131,17 @@ pub(super) fn remove(id: &str) -> Result<()> {
 fn remove_with(executable: &std::ffi::OsStr, id: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
         tracing::warn!(category = "device_remove", "Invalid profile ID");
-        return Err(Error::DeviceSetupInput("This device has no saved profile."));
+        return Err(Error::SetupInput("This device has no saved profile.").into());
     }
     let (status, _, stderr) = run_cli(executable, &["machine", "remove", id], REMOVE_TIMEOUT)?;
     if status.success() {
         return Ok(());
     }
-    Err(Error::DeviceRemove {
+    Err(Error::Remove {
         status,
         detail: last_line(&stderr),
-    })
+    }
+    .into())
 }
 
 /// Rename a saved device with `herdr machine rename`, which edits only the
@@ -150,7 +152,7 @@ pub(super) fn rename(id: &str, label: &str) -> Result<()> {
 
 fn rename_with(executable: &std::ffi::OsStr, id: &str, label: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
-        return Err(Error::DeviceSetupInput("This device has no saved profile."));
+        return Err(Error::SetupInput("This device has no saved profile.").into());
     }
     // The `=` form keeps a label that starts with `-` from reading as a flag.
     let (status, _, stderr) = run_cli(
@@ -161,10 +163,11 @@ fn rename_with(executable: &std::ffi::OsStr, id: &str, label: &str) -> Result<()
     if status.success() {
         return Ok(());
     }
-    Err(Error::DeviceRename {
+    Err(Error::Rename {
         status,
         detail: last_line(&stderr),
-    })
+    }
+    .into())
 }
 
 /// Check the catalog on disk again, right before a step that saves.
@@ -219,7 +222,7 @@ fn ensure_unsaved(
                 saved_id = host.id,
                 "Host is already saved"
             );
-            Err(Error::DeviceExists(host.label.clone()))
+            Err(Error::Exists(host.label.clone()).into())
         }
         None => Ok(()),
     }
@@ -245,9 +248,10 @@ pub(super) fn device_label(label: &str, target: &str) -> Result<String> {
         label
     };
     if label.is_empty() || label.len() > LABEL_LIMIT || label.chars().any(char::is_control) {
-        return Err(Error::DeviceSetupInput(
+        return Err(Error::SetupInput(
             "Device names are at most 128 bytes, without control characters.",
-        ));
+        )
+        .into());
     }
     Ok(label.to_owned())
 }
@@ -274,9 +278,10 @@ impl Request {
                 .is_some_and(|(user, _)| user.contains(':'))
             || target.chars().any(|c| c.is_whitespace() || c.is_control())
         {
-            return Err(Error::DeviceSetupInput(
+            return Err(Error::SetupInput(
                 "Enter an SSH target such as user@hostname or an SSH alias.",
-            ));
+            )
+            .into());
         }
         let label = device_label(label, target)?;
         let session = if session.is_empty() {
@@ -290,9 +295,9 @@ impl Request {
                 .bytes()
                 .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
         {
-            return Err(Error::DeviceSetupInput(
+            return Err(Error::SetupInput(
                 "Session names use letters, digits, dots, underscores, or hyphens (at most 64 bytes), excluding '.' and '..'.",
-            ));
+            ).into());
         }
         Ok(Self {
             target: target.into(),
@@ -435,7 +440,7 @@ pub(super) fn save(request: &Request, claim: &Claim) -> Result<SaveOutcome> {
             };
             let saved = herdr_client::store_saved_host(false, &host)?;
             if saved.id != host.id {
-                return Err(Error::DeviceExists(saved.label));
+                return Err(Error::Exists(saved.label).into());
             }
             Ok(())
         },
@@ -468,12 +473,12 @@ fn finish_save(
 ) -> Result<SaveOutcome> {
     match result {
         Ok(()) => Ok(SaveOutcome::Ready),
-        Err(Error::DeviceServerRestart) => {
+        Err(crate::Error::Devices(Error::ServerRestart)) => {
             // The CLI's provisioning requirements are stricter than this
             // client's endpoint protocol. Recheck after its failed attempt:
             // only a still-running, compatible host can use the local save.
             if probe()? != HostProbe::Running {
-                return Err(Error::DeviceServerRestart);
+                return Err(Error::ServerRestart.into());
             }
             store()?;
             tracing::warn!(
@@ -506,9 +511,9 @@ fn save_with(
         // Without a terminal to confirm in, the CLI refuses rather than
         // restart a server whose panes would stop.
         if detail.contains(RESTART_REFUSAL) {
-            return Err(Error::DeviceServerRestart);
+            return Err(Error::ServerRestart.into());
         }
-        return Err(Error::DeviceSetup { status, detail });
+        return Err(Error::Setup { status, detail }.into());
     }
     // Without the ID the CLI printed, there is no profile known to be ours.
     let Some(id) = saved_id(&stdout) else {
@@ -529,7 +534,7 @@ fn save_with(
                 "Another client saved this host first; removing ours"
             );
             remove_with(executable, &id)?;
-            Err(Error::DeviceExists(first.label.clone()))
+            Err(Error::Exists(first.label.clone()).into())
         }
         _ => Ok(()),
     }
@@ -637,7 +642,7 @@ fn run_bounded_untraced(
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(Error::DeviceSetupTimeout);
+            return Err(Error::SetupTimeout.into());
         }
         std::thread::sleep(Duration::from_millis(50));
     };
@@ -677,7 +682,7 @@ impl TerminalSetup {
 pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<TerminalSetup> {
     let app = std::env::current_exe()?;
     let dir = crate::preferences::state_dir()
-        .ok_or(Error::DeviceSetupInput("Herdr UI has no state directory."))?;
+        .ok_or(Error::SetupInput("Herdr UI has no state directory."))?;
     let mut command = setup_command(
         app.as_os_str(),
         crate::daemon::executable().as_os_str(),
@@ -697,7 +702,7 @@ fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String>
     let word = |path: &std::path::Path| {
         path.to_str()
             .map(quote)
-            .ok_or(Error::DeviceSetupInput("The setup paths must be UTF-8."))
+            .ok_or(Error::SetupInput("The setup paths must be UTF-8."))
     };
     Ok(format!(
         "{} {} {}",
@@ -711,9 +716,7 @@ fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String>
 /// run `herdr machine add` in a terminal instead and never calls this.
 #[cfg(windows)]
 pub(super) fn terminal_setup(_: &Request, _: bool) -> Result<TerminalSetup> {
-    Err(Error::DeviceSetupInput(
-        "Setting up a device in a terminal is unavailable on Windows.",
-    ))
+    Err(Error::SetupInput("Setting up a device in a terminal is unavailable on Windows.").into())
 }
 
 #[cfg(test)]

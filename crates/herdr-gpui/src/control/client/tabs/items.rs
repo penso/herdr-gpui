@@ -75,7 +75,7 @@ pub(super) fn git_common_dir(folder: &Path) -> crate::Result<PathBuf> {
         .arg(folder)
         .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
         .output()
-        .map_err(|source| crate::Error::GitCommonDir {
+        .map_err(|source| crate::git::Error::CommonDir {
             path: folder.to_owned(),
             source,
         })?;
@@ -87,10 +87,12 @@ pub(super) fn git_common_dir(folder: &Path) -> crate::Result<PathBuf> {
         .ok_or_else(|| crate::Error::NotAGitRepository {
             path: folder.to_owned(),
         })?;
-    std::fs::canonicalize(common).map_err(|source| crate::Error::GitCommonDir {
-        path: folder.to_owned(),
-        source,
-    })
+    Ok(
+        std::fs::canonicalize(common).map_err(|source| crate::git::Error::CommonDir {
+            path: folder.to_owned(),
+            source,
+        })?,
+    )
 }
 
 pub(super) fn list(repo: Option<&Path>, which: Items) -> crate::Result<Output> {

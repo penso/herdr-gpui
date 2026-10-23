@@ -116,7 +116,9 @@ fn invalid_wallet_is_absent_and_does_not_discard_valid_quota() {
         assert!(
             matches!(
                 parse(&body, None, Account::default(), SystemTime::UNIX_EPOCH),
-                Err(Error::UsageJson(serde_json::error::Category::Data))
+                Err(crate::Error::Usage(Error::Json(
+                    serde_json::error::Category::Data
+                )))
             ),
             "{wallet}"
         );

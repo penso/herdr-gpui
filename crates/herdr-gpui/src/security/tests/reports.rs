@@ -98,10 +98,18 @@ fn reporting_switch_and_malformed_answers() {
 
 #[test]
 fn a_refusal_hides_reports_but_a_spent_quota_is_an_error() {
-    assert!(hidden(&crate::Error::GitHubForbidden));
-    assert!(hidden(&crate::Error::GitHubStatus(404)));
-    assert!(!hidden(&crate::Error::GitHubStatus(500)));
-    assert!(!hidden(&crate::Error::GitHubRateLimit { reset: None }));
+    assert!(hidden(&crate::Error::GitHub(
+        crate::github::Error::Forbidden
+    )));
+    assert!(hidden(&crate::Error::GitHub(crate::github::Error::Status(
+        404
+    ))));
+    assert!(!hidden(&crate::Error::GitHub(
+        crate::github::Error::Status(500)
+    )));
+    assert!(!hidden(&crate::Error::GitHub(
+        crate::github::Error::RateLimit { reset: None }
+    )));
 }
 
 #[test]

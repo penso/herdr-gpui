@@ -7,7 +7,7 @@
 //! anything started outside Herdr) belong to no workspace and are dropped.
 
 use super::tunnel::Key;
-use crate::{Error, Result, browser::WebUrl, usage::Host};
+use crate::{Result, browser::WebUrl, listening_ports::Error, usage::Host};
 use std::{collections::HashMap, net::IpAddr};
 
 /// Listener lines read from one answer; the rest are ignored.
@@ -221,7 +221,7 @@ pub(crate) fn parse(text: &str) -> Result<Ports> {
     for line in text.lines() {
         let mut words = line.splitn(4, ' ');
         match words.next() {
-            Some("N") => return Err(Error::ListeningPortsTool),
+            Some("N") => return Err(Error::Tool.into()),
             Some("L") if listeners.len() < MAX_LISTENERS => {
                 let (Some(pid), Some(address)) = (words.next(), words.next()) else {
                     continue;

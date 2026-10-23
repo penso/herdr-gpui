@@ -4,16 +4,17 @@ use std::cell::Cell;
 
 fn code(error: &crate::Error) -> Option<ErrorCode> {
     match error {
-        crate::Error::ControlRejected { code, .. } => Some(*code),
+        crate::Error::Control(crate::control::Error::Rejected { code, .. }) => Some(*code),
         _ => None,
     }
 }
 
 fn unavailable() -> crate::Error {
-    crate::Error::ControlUnavailable {
+    crate::control::Error::Unavailable {
         path: PathBuf::from("pipe"),
         source: std::io::ErrorKind::NotFound.into(),
     }
+    .into()
 }
 
 #[test]
@@ -82,10 +83,11 @@ fn a_starting_app_is_retried_until_it_answers() {
             attempts.set(attempts.get() + 1);
             match attempts.get() {
                 1 => Err(unavailable()),
-                2 => Err(crate::Error::ControlRejected {
+                2 => Err(crate::control::Error::Rejected {
                     code: ErrorCode::Busy,
                     message: "not connected".into(),
-                }),
+                }
+                .into()),
                 _ => Ok(Output::message("Opening")),
             }
         },
@@ -104,10 +106,11 @@ fn a_refusal_is_not_retried_and_the_wait_is_bounded() {
         start + START_WAIT,
         || {
             attempts.set(attempts.get() + 1);
-            Err(crate::Error::ControlRejected {
+            Err(crate::control::Error::Rejected {
                 code: ErrorCode::WindowBusy,
                 message: "A dialog is open".into(),
-            })
+            }
+            .into())
         },
         |_| {},
         || start,

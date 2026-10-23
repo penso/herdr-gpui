@@ -7,7 +7,7 @@ use super::{
     probe::{Consent, Exec, Probe},
     registry,
 };
-use crate::Error;
+use crate::{Error, usage};
 use std::time::{Duration, Instant, SystemTime};
 
 #[cfg(unix)]

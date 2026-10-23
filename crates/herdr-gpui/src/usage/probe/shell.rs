@@ -2,7 +2,7 @@
 //! WSL distribution, holding secrets as shell variables and running requests
 //! with `curl` there.
 use super::{Held, LIMIT, Method, Output, Part, Request, Response, STEP_TIMEOUT, Secret, quote};
-use crate::{Error, Result};
+use crate::{Result, usage::Error};
 use std::{
     io::{Read, Write},
     process::{Child, ChildStdin, Command, Stdio},
@@ -76,7 +76,7 @@ impl Shell {
     /// `/bin/sh` inside a WSL distribution, through `wsl.exe`.
     pub fn connect_wsl(distro: &str) -> Result<Self> {
         if !cfg!(windows) {
-            return Err(Error::WslHostUnsupported);
+            return Err(crate::Error::WslHostUnsupported);
         }
         let mut command = herdr_client::wsl_shell_command(distro)?;
         command
@@ -89,7 +89,7 @@ impl Shell {
     /// Any `sh` reading steps from stdin: SSH or `wsl.exe` in production, a
     /// local shell in tests.
     pub fn start(mut command: Command) -> Result<Self> {
-        let process = |source| Error::UsageProcess {
+        let process = |source| Error::Process {
             operation: "start the remote usage shell",
             source,
         };
@@ -97,7 +97,7 @@ impl Shell {
         let (Some(stdin), Some(mut stdout)) = (child.stdin.take(), child.stdout.take()) else {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(process(std::io::Error::other("no pipes")));
+            return Err(process(std::io::Error::other("no pipes")).into());
         };
         let (sender, output) = mpsc::sync_channel(64);
         let reader = thread::Builder::new()
@@ -123,7 +123,7 @@ impl Shell {
         if let Err(source) = reader {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(process(source));
+            return Err(process(source).into());
         }
         let mut shell = Self {
             child,
@@ -138,7 +138,7 @@ impl Shell {
         shell.write(PRELUDE)?;
         let ready = shell.run("true", CONNECT_TIMEOUT)?;
         if !ready.success {
-            return Err(Error::UsageUnreachable);
+            return Err(Error::Unreachable.into());
         }
         Ok(shell)
     }
@@ -149,7 +149,7 @@ impl Shell {
             .and_then(|()| self.stdin.flush())
             .map_err(|_| {
                 self.broken = true;
-                Error::UsageUnreachable
+                Error::Unreachable.into()
             })
     }
 
@@ -167,7 +167,7 @@ impl Shell {
     /// the session, since its output could still arrive later.
     pub fn run(&mut self, step: &str, timeout: Duration) -> Result<Output> {
         if self.broken {
-            return Err(Error::UsageUnreachable);
+            return Err(Error::Unreachable.into());
         }
         let marker = self.marker.clone();
         self.write(&format!(
@@ -193,18 +193,18 @@ impl Shell {
             }
             if self.buffer.len() > LIMIT {
                 self.broken = true;
-                return Err(Error::UsageSize);
+                return Err(Error::Size.into());
             }
             let left = deadline.saturating_duration_since(Instant::now());
             match self.output.recv_timeout(left) {
                 Ok(Ok(chunk)) => self.buffer.extend_from_slice(&chunk),
                 Ok(Err(_)) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                     self.broken = true;
-                    return Err(Error::UsageUnreachable);
+                    return Err(Error::Unreachable.into());
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     self.broken = true;
-                    return Err(Error::UsageTimeout);
+                    return Err(Error::Timeout.into());
                 }
             }
         }
@@ -254,16 +254,16 @@ impl Shell {
 
     pub(super) fn http(&mut self, request: &Request) -> Result<Response> {
         let curl = Self::curl(request, "-w '\\n@@herdr-status %{http_code}'", "")
-            .ok_or(Error::UsageMixedSecrets)?;
+            .ok_or(Error::MixedSecrets)?;
         let output = self.run(
             &format!("command -v curl >/dev/null 2>&1 || exit 127\n{curl}"),
             request.timeout + Duration::from_secs(5),
         )?;
         let Some((body, status)) = output.stdout.rsplit_once("\n@@herdr-status ") else {
             return Err(if output.stdout.is_empty() && !output.success {
-                Error::UsageMissingCurl
+                Error::MissingCurl.into()
             } else {
-                Error::UsageConnect
+                Error::Connect.into()
             });
         };
         Ok(Response {
@@ -279,7 +279,7 @@ impl Shell {
             .collect::<Vec<_>>()
             .join(" ");
         let curl = Self::curl(request, "-f", &format!("| herdr_field {keys}"))
-            .ok_or(Error::UsageMixedSecrets)?;
+            .ok_or(Error::MixedSecrets)?;
         self.variables += 1;
         let variable = format!("herdr_s{}", self.variables);
         let output = self.run(
@@ -289,7 +289,7 @@ impl Shell {
         if output.success {
             Ok(Secret(Held::There(variable)))
         } else {
-            Err(Error::UsageRejected)
+            Err(Error::Rejected.into())
         }
     }
 }

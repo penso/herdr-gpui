@@ -8,21 +8,35 @@ use crate::security::fetch::{checked, readable};
 fn an_empty_listing_rest_refuses_reads_as_hidden() {
     let empty = || open(Vec::new());
     assert_eq!(
-        checked(empty(), Err(crate::Error::GitHubForbidden)),
+        checked(
+            empty(),
+            Err(crate::Error::GitHub(crate::github::Error::Forbidden))
+        ),
         Alerts::Hidden
     );
     assert_eq!(
-        checked(empty(), Err(crate::Error::GitHubStatus(404))),
+        checked(
+            empty(),
+            Err(crate::Error::GitHub(crate::github::Error::Status(404)))
+        ),
         Alerts::Hidden
     );
     assert_eq!(checked(empty(), Ok(())), empty());
     // A failure that is no refusal leaves the listing as GraphQL read it.
     assert_eq!(
-        checked(empty(), Err(crate::Error::GitHubStatus(500))),
+        checked(
+            empty(),
+            Err(crate::Error::GitHub(crate::github::Error::Status(500)))
+        ),
         empty()
     );
     assert_eq!(
-        checked(empty(), Err(crate::Error::GitHubRateLimit { reset: None })),
+        checked(
+            empty(),
+            Err(crate::Error::GitHub(crate::github::Error::RateLimit {
+                reset: None
+            }))
+        ),
         empty()
     );
 }

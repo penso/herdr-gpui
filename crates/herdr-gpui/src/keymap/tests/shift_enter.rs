@@ -49,6 +49,6 @@ fn shift_enter_default_can_be_removed_or_replaced() {
             &BTreeMap::new(),
             &no_keys()
         ),
-        Err(Error::KeystrokeWithoutModifier { .. })
+        Err(crate::Error::Keymap(Error::KeystrokeWithoutModifier { .. }))
     ));
 }

@@ -150,10 +150,11 @@ pub(super) fn run_command(name: &str, context: &Context) -> crate::Result<Output
         .iter()
         .any(|info| info.name == name)
     {
-        return Err(crate::Error::ControlRejected {
+        return Err(crate::control::Error::Rejected {
             code: crate::control::ErrorCode::NotFound,
             message: format!("No command is named {name}; `herdr-gpui commands` lists them"),
-        });
+        }
+        .into());
     }
     context.act(
         Request::Command,

@@ -2,12 +2,16 @@
 //! image bridge, and a WSL distribution is given its own paths for them. A
 //! drop never submits the terminal command.
 
+mod error;
+
+pub(crate) use error::Error;
+
 use super::{
     HerdrWindow,
     pending_input::{Delivery, DropAt},
 };
 use crate::{
-    Error, Result,
+    Result,
     connection::ConnectionBridge,
     terminal::{InputTarget, escape_into, escaped_len, wheel_target},
 };
@@ -184,7 +188,7 @@ impl HerdrWindow {
                 &self.endpoints[self.selected_endpoint].connection.target
             {
                 if !self.accepts_remote_images() {
-                    return Err(Error::ConnectionNotReady);
+                    return Err(crate::Error::ConnectionNotReady);
                 }
                 return self
                     .paste_wsl_files(target.clone(), distro.clone(), paths.to_vec(), cx)
@@ -192,7 +196,7 @@ impl HerdrWindow {
             }
             if remote {
                 if !self.accepts_remote_images() {
-                    return Err(Error::ConnectionNotReady);
+                    return Err(crate::Error::ConnectionNotReady);
                 }
                 if let [path] = paths
                     && let Some(source) = super::image_source::from_path(path)
@@ -214,8 +218,12 @@ impl HerdrWindow {
                 .connection
                 .handle
                 .as_ref()
-                .ok_or(Error::NotConnected)?;
-            let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
+                .ok_or(crate::Error::NotConnected)?;
+            let snapshot = self
+                .live
+                .snapshot
+                .as_ref()
+                .ok_or(crate::Error::NoSnapshot)?;
             ConnectionBridge::send_input(
                 handle,
                 &snapshot.boot_id,
@@ -270,24 +278,24 @@ impl HerdrWindow {
 /// whole drop before allocating its output so failures never paste a prefix.
 pub(super) fn quote_paths(paths: &[PathBuf]) -> Result<String> {
     if paths.len() > MAX_PATHS {
-        return Err(Error::FileDropSize);
+        return Err(Error::Size.into());
     }
     let mut bytes = paths.len().saturating_sub(1);
     for path in paths {
         // Bound UTF-8 validation and escape counting as well as output allocation.
         if path.as_os_str().len() > MAX_PASTE_BYTES {
-            return Err(Error::FileDropSize);
+            return Err(Error::Size.into());
         }
-        let text = path.to_str().ok_or(Error::FileDropEncoding)?;
+        let text = path.to_str().ok_or(Error::Encoding)?;
         if text.is_empty() {
-            return Err(Error::FileDropEmptyPath);
+            return Err(Error::EmptyPath.into());
         }
         if text.chars().any(char::is_control) {
-            return Err(Error::FileDropControl);
+            return Err(Error::Control.into());
         }
         bytes += escaped_len(text);
         if bytes > MAX_PASTE_BYTES {
-            return Err(Error::FileDropSize);
+            return Err(Error::Size.into());
         }
     }
     let mut quoted = String::with_capacity(bytes);
@@ -295,7 +303,7 @@ pub(super) fn quote_paths(paths: &[PathBuf]) -> Result<String> {
         if !quoted.is_empty() {
             quoted.push(' ');
         }
-        escape_into(path.to_str().ok_or(Error::FileDropEncoding)?, &mut quoted);
+        escape_into(path.to_str().ok_or(Error::Encoding)?, &mut quoted);
     }
     Ok(quoted)
 }

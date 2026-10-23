@@ -7,8 +7,9 @@
 //! supported by the upstream command.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::Probe,
         service::{Meta, Service, Setting},
@@ -49,7 +50,7 @@ impl Service for Coderabbit {
             Some(report) => Some(Ok(report)),
             // A missing CLI or a signed-out one is no sign-in.
             None if !output.success || signed_out(&output.stdout) => None,
-            None => Some(Err(Error::UsageCommand("read CodeRabbit usage"))),
+            None => Some(Err(Error::Command("read CodeRabbit usage").into())),
         }
     }
 }

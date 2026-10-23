@@ -9,8 +9,9 @@
 //! That file belongs to CodexBar's own tooling, not to MiMo.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group,
             title_case,
@@ -85,7 +86,7 @@ fn fetch(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
         let response = probe.http(request)?;
         // An expired session is redirected to the login flow.
         if (300..400).contains(&response.status) {
-            return Err(Error::UsageRejected);
+            return Err(Error::Rejected.into());
         }
         response.ok()
     };
@@ -160,7 +161,7 @@ fn payload<T: for<'de> Deserialize<'de>>(body: &str) -> Result<T> {
     let envelope: Envelope<T> = json(body)?;
     match envelope.code {
         0 => envelope.data.ok_or_else(invalid),
-        401 | 403 => Err(Error::UsageRejected),
+        401 | 403 => Err(Error::Rejected.into()),
         _ => Err(invalid()),
     }
 }
@@ -267,7 +268,7 @@ mod tests {
     fn a_login_code_is_a_rejection() {
         assert!(matches!(
             parse(r#"{"code":401,"message":"login","data":null}"#, None, None),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

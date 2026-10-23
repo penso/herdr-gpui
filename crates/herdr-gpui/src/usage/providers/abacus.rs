@@ -8,8 +8,9 @@
 //! and nothing is cached.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Unit, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -132,7 +133,7 @@ fn result(body: &str) -> Result<Value> {
     .iter()
     .any(|word| message.contains(word));
     Err(if signed_out {
-        Error::UsageRejected
+        Error::Rejected.into()
     } else {
         values::invalid()
     })
@@ -177,8 +178,14 @@ mod tests {
     #[test]
     fn expired_session_is_rejected() {
         let body = r#"{"success": false, "error": "Session expired, please login"}"#;
-        assert!(matches!(parse(body, None), Err(Error::UsageRejected)));
+        assert!(matches!(
+            parse(body, None),
+            Err(crate::Error::Usage(Error::Rejected))
+        ));
         let body = r#"{"success": true, "result": {"totalComputePoints": 1}}"#;
-        assert!(matches!(parse(body, None), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse(body, None),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
     }
 }

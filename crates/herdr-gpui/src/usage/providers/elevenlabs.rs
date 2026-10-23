@@ -171,7 +171,7 @@ struct Subscription {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
     use std::time::{Duration, SystemTime};
 
     /// Shaped like the documented subscription response.
@@ -233,7 +233,7 @@ mod tests {
     fn missing_counts_are_an_error() {
         assert!(matches!(
             parse(r#"{"tier":"free"}"#),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

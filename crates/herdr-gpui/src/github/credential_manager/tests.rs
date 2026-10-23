@@ -88,7 +88,7 @@ fn a_secret_too_large_for_credential_manager_is_refused_and_keeps_the_old_one() 
         )
         .unwrap_err();
     assert!(
-        matches!(&error, crate::Error::CredentialManager(Error::Write(source)) if source.kind() == io::ErrorKind::FileTooLarge),
+        matches!(&error, crate::Error::GitHub(crate::github::Error::CredentialManager(Error::Write(source))) if source.kind() == io::ErrorKind::FileTooLarge),
         "{error:?}"
     );
     assert_eq!(scratch.read(main).as_deref(), Some("kept"));
@@ -114,6 +114,6 @@ fn a_saved_entry_that_is_not_utf8_is_an_encoding_error() {
     assert_ne!(written, 0, "{}", io::Error::last_os_error());
     assert!(matches!(
         read_in(&scratch.service, main),
-        Err(crate::Error::GitHubEncoding(_))
+        Err(crate::Error::GitHub(crate::github::Error::Encoding(_)))
     ));
 }

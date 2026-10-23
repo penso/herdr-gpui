@@ -8,8 +8,9 @@
 //! reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, MONTH, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -78,7 +79,9 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
                 parsed.monthly = parsed.monthly.or(quotas.monthly);
                 parsed.fallback.extend(quotas.fallback);
             }
-            Err(Error::UsageRejected) => return Err(Error::UsageRejected),
+            Err(crate::Error::Usage(Error::Rejected)) => {
+                return Err(crate::Error::Usage(Error::Rejected));
+            }
             _ => {}
         }
     }
@@ -116,7 +119,9 @@ fn quotas(probe: &mut Probe, get: &impl Fn(&str) -> Request) -> Result<Parsed> {
                     .and_then(|body| document(&body))
                 {
                     Ok(usage) => Some(usage),
-                    Err(Error::UsageRejected) => return Err(Error::UsageRejected),
+                    Err(crate::Error::Usage(Error::Rejected)) => {
+                        return Err(crate::Error::Usage(Error::Rejected));
+                    }
                     Err(_) => None,
                 }
             }

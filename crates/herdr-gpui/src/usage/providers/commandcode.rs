@@ -214,7 +214,7 @@ fn time(value: Option<&Value>) -> Option<SystemTime> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     const CREDITS: &str = r#"{
       "credits": {"monthlyCredits": 8.5, "purchasedCredits": 2, "premiumMonthlyCredits": 0,
@@ -275,7 +275,7 @@ mod tests {
         assert!(failed.windows.is_empty());
         assert!(matches!(
             parse(r#"{"credits": {}}"#, None),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

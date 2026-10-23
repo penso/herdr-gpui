@@ -11,8 +11,9 @@
 //! the parent-domain cookies, since the probe takes one cookie header.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -96,11 +97,14 @@ fn mint(probe: &mut Probe, cookie: &Secret) -> Result<Secret> {
 /// The hosts serve the same API; a rejection or a malformed answer comes
 /// from a host that answered, so only other failures move to the next one.
 fn failover<T>(mut attempt: impl FnMut(&str) -> Result<T>) -> Result<T> {
-    let mut last = Error::UsageConnect;
+    let mut last: crate::Error = Error::Connect.into();
     for host in HOSTS {
         match attempt(host) {
             Ok(value) => return Ok(value),
-            Err(error @ (Error::UsageRejected | Error::UsageJson(_))) => return Err(error),
+            Err(
+                error
+                @ (crate::Error::Usage(Error::Rejected) | crate::Error::Usage(Error::Json(_))),
+            ) => return Err(error),
             Err(error) => last = error,
         }
     }
@@ -242,15 +246,15 @@ mod tests {
         let mut tried = Vec::new();
         let result: Result<()> = failover(|host| {
             tried.push(host.to_owned());
-            Err(Error::UsageRejected)
+            Err(Error::Rejected.into())
         });
-        assert!(matches!(result, Err(Error::UsageRejected)));
+        assert!(matches!(result, Err(crate::Error::Usage(Error::Rejected))));
         assert_eq!(tried, ["ai.zoom.us"]);
         let mut tried = Vec::new();
         let result = failover(|host| {
             tried.push(host.to_owned());
             if host == "ai.zoom.us" {
-                Err(Error::UsageStatus(502))
+                Err(Error::Status(502).into())
             } else {
                 Ok(host.len())
             }

@@ -14,8 +14,9 @@
 //! token chart, which the panel has no chart for.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Balance, DAY, Kind, MONTH, Provider, Report, SESSION, Section, Unit, WEEK,
             Window, group,
@@ -143,11 +144,11 @@ fn read(probe: &mut Probe, key: &Secret, china: bool) -> Result<Report> {
             probe
                 .text_setting("organization")
                 .filter(|value| !value.is_empty())
-                .ok_or(Error::UsageNotSignedIn)?,
+                .ok_or(Error::NotSignedIn)?,
             probe
                 .text_setting("project")
                 .filter(|value| !value.is_empty())
-                .ok_or(Error::UsageNotSignedIn)?,
+                .ok_or(Error::NotSignedIn)?,
         )),
         _ => None,
     };
@@ -226,7 +227,7 @@ fn https(value: &str) -> Result<String> {
     if value.starts_with("https://") {
         Ok(value.to_owned())
     } else if value.contains("://") {
-        Err(Error::UsageNotSignedIn)
+        Err(Error::NotSignedIn.into())
     } else {
         Ok(format!("https://{value}"))
     }
@@ -268,7 +269,7 @@ fn token_range(now: chrono::DateTime<chrono::Local>) -> (String, String) {
 pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     let root: Root = json(body)?;
     if root.success != Some(true) || root.code != Some(200) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let data = root.data.ok_or_else(invalid)?;
     let limits: Vec<Limit> = data
@@ -671,7 +672,7 @@ mod tests {
         let body = r#"{"code":1001,"msg":"token invalid","success":false}"#;
         assert!(matches!(
             parse(body, at(0)).unwrap_err(),
-            Error::UsageRejected
+            crate::Error::Usage(Error::Rejected)
         ));
     }
 

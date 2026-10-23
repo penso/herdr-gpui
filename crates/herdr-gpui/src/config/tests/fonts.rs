@@ -120,7 +120,7 @@ fn font_size_batches_validate_every_change_before_writing() -> anyhow::Result<()
     fs::write(&path, original)?;
     assert!(matches!(
         Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 49.)], &path),
-        Err(Error::InvalidFontSize("ui"))
+        Err(crate::Error::Settings(Error::InvalidFontSize("ui")))
     ));
     assert_eq!(fs::read_to_string(&path)?, original);
     Config::save_font_sizes_path(&[(FontFace::Sidebar, 14.), (FontFace::Ui, 20.)], &path)?;
@@ -229,7 +229,7 @@ fn configured_fallbacks_reach_the_shaping_font_in_order() -> anyhow::Result<()> 
 fn fallback_lists_are_validated_per_face() {
     assert!(matches!(
         Config::parse("[terminal]\nfallback = ['Menlo', '  ']"),
-        Err(Error::EmptyFontFallback("terminal"))
+        Err(crate::Error::Settings(Error::EmptyFontFallback("terminal")))
     ));
     let list = |count: usize| {
         (0..count)
@@ -242,7 +242,9 @@ fn fallback_lists_are_validated_per_face() {
             "[sidebar]\nfallback = [{}]",
             list(MAX_FONT_FALLBACKS + 1)
         )),
-        Err(Error::TooManyFontFallbacks("sidebar"))
+        Err(crate::Error::Settings(Error::TooManyFontFallbacks(
+            "sidebar"
+        )))
     ));
     assert!(
         Config::parse(&format!(

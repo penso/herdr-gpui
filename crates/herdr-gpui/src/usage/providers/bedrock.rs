@@ -13,8 +13,9 @@
 //! totals, and the daily cost history.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::Probe,
         service::{Meta, Service, Setting, json, number},
@@ -107,7 +108,7 @@ fn fetch(probe: &mut Probe, profile: Option<&str>, budget: Option<f64>) -> Resul
     }
     let output = probe.command(&program, &args, TIMEOUT)?;
     if !output.success {
-        return Err(Error::UsageCommand("aws ce get-cost-and-usage"));
+        return Err(Error::Command("aws ce get-cost-and-usage").into());
     }
     parse(&output.stdout, budget, today)
 }

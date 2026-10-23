@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The storage step that failed. Replacement retains both source and destination paths.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,18 +47,10 @@ pub enum Error {
     Full,
     #[error("client is disconnected")]
     Disconnected,
-    #[error("a clipboard image upload is already reserved or in progress")]
-    ClipboardImageBusy,
-    #[error("clipboard image upload cancelled")]
-    ClipboardImageCancelled,
-    #[error("clipboard image write timed out; reconnect required")]
-    ClipboardImageWriteTimeout,
+    #[error(transparent)]
+    Clipboard(#[from] crate::clipboard::Error),
     #[error("terminal input write timed out; reconnect required")]
     InputWriteTimeout,
-    #[error("semantic input fallback requires a pane or popup target")]
-    ClipboardImageInputTarget,
-    #[error("clipboard image preparation timed out; reservation skipped")]
-    ClipboardImagePreparationTimeout,
     #[error("invalid client command: snapshot boot ID required")]
     MissingBootId,
     #[error("command does not match a ready snapshot boot")]
@@ -73,18 +65,8 @@ pub enum Error {
     GeometryLimit,
     #[error("invalid session name")]
     InvalidSession,
-    #[error("The default session cannot be deleted")]
-    DefaultSession,
-    #[error("Session deletion timed out; refresh the list before trying again")]
-    SessionDeleteTimeout,
-    #[error(
-        "Herdr refused session deletion ({0}); the session may be running, inaccessible, or unsupported by the installed CLI"
-    )]
-    SessionDeleteFailed(std::process::ExitStatus),
     #[error("remote endpoints have no local socket path")]
     NoLocalSocket,
-    #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
-    InvalidSshTarget,
     #[error("client stopped")]
     Cancelled,
     #[error("event receiver dropped")]
@@ -160,17 +142,12 @@ pub enum Error {
     ResponseId,
     #[error("{0}")]
     ServerShutdown(String),
-    #[error("SSH port forwarding is not supported on this platform")]
-    SshUnsupported,
-    #[error("SSH connection cancelled")]
-    SshCancelled,
-    #[error("SSH discovery timed out")]
-    SshTimeout,
-    #[error("SSH bridge closed; check host trust, authentication, and remote Herdr installation")]
-    SshClosed,
-    /// `ssh` closed the bridge before it was ready, for the reason classified.
-    #[error("SSH bridge closed: {0}")]
-    SshRefused(#[source] crate::SshFailure),
+    #[error(transparent)]
+    Sessions(#[from] crate::sessions::Error),
+    #[error(transparent)]
+    Ssh(#[from] crate::ssh::Error),
+    #[error(transparent)]
+    Wsl(#[from] crate::wsl::Error),
     /// Every Herdr installed on the SSH host or WSL distribution was skipped
     /// as unable to serve this client. Fields describe the first one;
     /// `version` is bounded text.
@@ -183,37 +160,6 @@ pub enum Error {
         generation: Option<u32>,
         version: Option<String>,
     },
-    /// `ssh -G` named no user known hosts file a host key could be saved to.
-    #[error("SSH has no user known hosts file to save the host key to")]
-    KnownHostsUnavailable,
-    #[error("SSH startup output exceeds limit")]
-    SshOutputLimit,
-    #[error("invalid WSL distribution name")]
-    InvalidWslDistro,
-    #[error("WSL distributions are only available on Windows")]
-    WslUnsupported,
-    #[error("WSL did not answer in time; the distribution may be stopped or waiting for setup")]
-    WslTimeout,
-    #[error("WSL bridge closed; check that the distribution starts and Herdr is installed in it")]
-    WslClosed,
-    #[error("wsl.exe failed ({0})")]
-    WslCommand(std::process::ExitStatus),
-    #[error("invalid WSL device list schema")]
-    WslCatalogSchema(#[source] serde_json::Error),
-    #[error("unsupported WSL device list version, size, or entries")]
-    WslCatalog,
-    #[error("this WSL distribution is already a device")]
-    WslHostExists,
-    #[error("this WSL distribution is not a saved device")]
-    WslHostMissing,
-    #[error("a WSL distribution takes at most 256 dropped paths at once")]
-    WslPathLimit,
-    #[error("{} is not an absolute Windows path a WSL distribution can map", .0.display())]
-    WslPathInvalid(PathBuf),
-    #[error("{} is not reachable from this WSL distribution; only its own files and mounted drives are", .0.display())]
-    WslPathUnmapped(PathBuf),
-    #[error("invalid answer from wslpath")]
-    WslPathResponse,
     #[error("remote Git directory must be an absolute path")]
     InvalidGitDir,
     #[error("remote command failed ({0})")]
@@ -311,8 +257,6 @@ pub enum Error {
     ProfileId,
     #[error("invalid endpoint label")]
     ProfileLabel,
-    #[error("too many sessions to list")]
-    SessionLimit,
     /// An endpoint answered a request with an error. The message is the
     /// daemon's own display text; act on `code`, never on the message.
     #[error("{message}")]
@@ -361,43 +305,19 @@ impl Error {
             } else {
                 io::ErrorKind::InvalidData
             }),
-            Self::InvalidSession
-            | Self::DefaultSession
-            | Self::NoLocalSocket
-            | Self::InvalidSshTarget
-            | Self::InvalidWslDistro
-            | Self::WslPathLimit
-            | Self::WslPathInvalid(_) => io::ErrorKind::InvalidInput,
-            Self::WslPathUnmapped(_) => io::ErrorKind::NotFound,
-            Self::SshUnsupported | Self::WslUnsupported => io::ErrorKind::Unsupported,
-            Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
-            Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
-                io::ErrorKind::TimedOut
-            }
-            Self::Cancelled | Self::SshCancelled => io::ErrorKind::Interrupted,
+            Self::InvalidSession | Self::NoLocalSocket => io::ErrorKind::InvalidInput,
+            Self::Clipboard(error) => error.kind(),
+            Self::Cancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
-            Self::SocketClosed | Self::SshClosed | Self::WslClosed | Self::ClosedBeforeWelcome => {
-                io::ErrorKind::UnexpectedEof
-            }
-            Self::SshRefused(failure) => match failure {
-                crate::SshFailure::HostKey | crate::SshFailure::Auth => {
-                    io::ErrorKind::PermissionDenied
-                }
-                crate::SshFailure::Unreachable
-                | crate::SshFailure::NoRoute
-                | crate::SshFailure::LocalNetworkDenied => io::ErrorKind::NotConnected,
-                crate::SshFailure::HerdrMissing => io::ErrorKind::NotFound,
-                crate::SshFailure::Other => io::ErrorKind::UnexpectedEof,
-            },
+            Self::SocketClosed | Self::ClosedBeforeWelcome => io::ErrorKind::UnexpectedEof,
+            Self::Sessions(error) => error.kind(),
+            Self::Ssh(error) => error.kind(),
+            Self::Wsl(error) => error.kind(),
             Self::ForwardSpawn(error)
             | Self::ForwardLocalPort(error)
             | Self::ForwardControl(error) => error.kind(),
-            Self::HealthTimeout
-            | Self::SshTimeout
-            | Self::WslTimeout
-            | Self::SessionDeleteTimeout
-            | Self::ForwardTimeout => io::ErrorKind::TimedOut,
-            Self::Full | Self::ClipboardImageBusy => io::ErrorKind::WouldBlock,
+            Self::HealthTimeout | Self::ForwardTimeout => io::ErrorKind::TimedOut,
+            Self::Full => io::ErrorKind::WouldBlock,
             _ => io::ErrorKind::InvalidData,
         }
     }

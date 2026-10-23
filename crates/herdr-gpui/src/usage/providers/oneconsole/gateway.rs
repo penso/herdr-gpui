@@ -6,8 +6,9 @@ use super::{
     fields::{find_value, first_match, string},
 };
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         probe::{Part, Probe, Request, Secret},
         values::{self, number},
     },
@@ -88,12 +89,12 @@ pub(in crate::usage::providers) fn check(value: &Value) -> Result<()> {
         .any(|marker| combined.contains(marker));
     let bad_status = status.filter(|code| *code != 0. && *code != 200.);
     if login || unauthorized || bad_status.is_some_and(|code| code == 401. || code == 403.) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     if failing.is_some() || bad_status.is_some() {
         return Err(
             match bad_status.and_then(|code| u16::try_from(code as i64).ok()) {
-                Some(code) if (100..=599).contains(&code) => Error::UsageStatus(code),
+                Some(code) if (100..=599).contains(&code) => Error::Status(code).into(),
                 _ => values::invalid(),
             },
         );

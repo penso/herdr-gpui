@@ -10,8 +10,9 @@
 //! pasted as a whole `cookie` header.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json, number},
@@ -80,8 +81,8 @@ impl Service for Venice {
 /// The API key's balance: USD, DIEM, or both, and whether it can be spent.
 pub(crate) fn parse_balance(body: &str) -> Result<Report> {
     let answer: BalanceAnswer = json(body)?;
-    let can_consume = answer.can_consume.ok_or(Error::UsageJson(Category::Data))?;
-    let balances = answer.balances.ok_or(Error::UsageJson(Category::Data))?;
+    let can_consume = answer.can_consume.ok_or(Error::Json(Category::Data))?;
+    let balances = answer.balances.ok_or(Error::Json(Category::Data))?;
     let currency = answer
         .consumption_currency
         .map(|currency| currency.trim().to_uppercase())
@@ -133,21 +134,21 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
     let token = session
         .token
         .filter(|token| !token.trim().is_empty())
-        .ok_or(Error::UsageRejected)?;
+        .ok_or(Error::Rejected)?;
     let payload = token
         .split('.')
         .nth(1)
         .and_then(base64url)
-        .ok_or(Error::UsageJson(Category::Syntax))?;
+        .ok_or(Error::Json(Category::Syntax))?;
     let claims: Claims =
-        serde_json::from_slice(&payload).map_err(|error| Error::UsageJson(error.classify()))?;
+        serde_json::from_slice(&payload).map_err(|error| Error::Json(error.classify()))?;
     let expires = claims
         .exp
         .filter(|exp| (1e9..=4e9).contains(exp))
         .and_then(|exp| SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs_f64(exp)))
-        .ok_or(Error::UsageRejected)?;
+        .ok_or(Error::Rejected)?;
     if expires + EXPIRY_SKEW < now {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let user_type = claims
         .user_type
@@ -163,19 +164,19 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
         ]
         .contains(&kind.to_lowercase().as_str())
     }) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let usage = claims
         .bundled_credits_usage
-        .ok_or(Error::UsageJson(Category::Data))?;
+        .ok_or(Error::Json(Category::Data))?;
     let used = usage
         .used_this_cycle
         .filter(|used| *used >= 0.)
-        .ok_or(Error::UsageJson(Category::Data))?;
+        .ok_or(Error::Json(Category::Data))?;
     let refill = usage
         .monthly_refill_credits
         .filter(|refill| *refill > 0.)
-        .ok_or(Error::UsageJson(Category::Data))?;
+        .ok_or(Error::Json(Category::Data))?;
     let credits = || Unit::Count("credits".into());
     let available = usage
         .available_credits
@@ -369,7 +370,7 @@ mod tests {
         assert_eq!(report.sections.len(), 1);
         assert!(matches!(
             parse_balance(r#"{"balances": {}}"#),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
     }
 
@@ -409,12 +410,12 @@ mod tests {
         );
         assert!(matches!(
             parse_session(&expired, at(1_789_000_000)),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         let anonymous = session(r#"{"exp": 1790000000, "userType": "guest"}"#);
         assert!(matches!(
             parse_session(&anonymous, at(1_789_000_000)),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

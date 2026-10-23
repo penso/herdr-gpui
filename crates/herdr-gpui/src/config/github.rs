@@ -2,8 +2,12 @@
 //! accounts the GitHub page adds. An account's token is never here: only the
 //! credential store entry it signs in under and the owners it reads.
 
+use super::Error;
 use super::{Config, daemon_config_path};
-use crate::{Error, Result, error::GitHubAccountsError};
+use crate::{
+    Result,
+    github::{self, AccountsError},
+};
 use serde::Deserialize;
 use std::{env, path::Path};
 
@@ -39,7 +43,8 @@ impl GitHubAccount {
     /// A new account with a random ID and no owners of its own yet.
     pub(crate) fn generate() -> Result<Self> {
         let mut bytes = [0_u8; ID_BYTES];
-        getrandom::fill(&mut bytes).map_err(GitHubAccountsError::Random)?;
+        getrandom::fill(&mut bytes)
+            .map_err(|error| github::Error::Accounts(AccountsError::Random(error)))?;
         Ok(Self {
             id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(),
             owners: Vec::new(),
@@ -100,7 +105,7 @@ impl GitHubConfig {
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.')))
         {
-            return Err(Error::InvalidClientId(source));
+            return Err(Error::InvalidClientId(source).into());
         }
         Ok(id.map(str::to_owned))
     }
@@ -124,24 +129,20 @@ impl GitHubConfig {
 
     /// Refuses accounts the app could not tell apart or store.
     pub(super) fn check_accounts(&self) -> Result<()> {
-        check_accounts(&self.accounts).map_err(Error::from)
+        Ok(check_accounts(&self.accounts).map_err(github::Error::from)?)
     }
 }
 
-pub(super) fn check_accounts(
-    accounts: &[GitHubAccount],
-) -> std::result::Result<(), GitHubAccountsError> {
+pub(super) fn check_accounts(accounts: &[GitHubAccount]) -> std::result::Result<(), AccountsError> {
     for (index, account) in accounts.iter().enumerate() {
         if !valid_account_id(&account.id) {
-            return Err(GitHubAccountsError::Id);
+            return Err(AccountsError::Id);
         }
         if accounts[..index].iter().any(|other| other.id == account.id) {
-            return Err(GitHubAccountsError::DuplicateId(account.id.clone()));
+            return Err(AccountsError::DuplicateId(account.id.clone()));
         }
         if let Some(owner) = account.owners.iter().find(|owner| !valid_owner(owner)) {
-            return Err(GitHubAccountsError::Owner(
-                owner.chars().take(100).collect(),
-            ));
+            return Err(AccountsError::Owner(owner.chars().take(100).collect()));
         }
     }
     Ok(())
@@ -171,11 +172,11 @@ impl Config {
         account: &GitHubAccount,
     ) -> Result<()> {
         if !valid_account_id(&account.id) {
-            return Err(GitHubAccountsError::Id.into());
+            return Err(github::Error::Accounts(AccountsError::Id).into());
         }
         let mut accounts = written_accounts(local)?;
         if accounts.len() >= MAX_ACCOUNTS {
-            return Err(GitHubAccountsError::TooMany(MAX_ACCOUNTS).into());
+            return Err(github::Error::Accounts(AccountsError::TooMany(MAX_ACCOUNTS)).into());
         }
         let mut entry = toml_edit::InlineTable::new();
         entry.insert("id", account.id.as_str().into());
@@ -210,10 +211,11 @@ impl Config {
 /// `[github] accounts` as the local file writes it, each entry an inline
 /// table with every field kept, including ones a newer build added.
 fn written_accounts(local: &Path) -> Result<toml_edit::Array> {
-    let text = std::fs::read_to_string(local).map_err(|error| Error::from(error).at_path(local))?;
+    let text =
+        std::fs::read_to_string(local).map_err(|error| crate::Error::from(error).at_path(local))?;
     let document = text
         .parse::<toml_edit::DocumentMut>()
-        .map_err(|error| Error::from(error).at_path(local))?;
+        .map_err(|error| crate::Error::from(error).at_path(local))?;
     let mut array = toml_edit::Array::new();
     match document
         .get("github")
@@ -229,7 +231,7 @@ fn written_accounts(local: &Path) -> Result<toml_edit::Array> {
                 array.push(table.clone().into_inline_table());
             }
         }
-        Some(_) => return Err(GitHubAccountsError::NotAList.into()),
+        Some(_) => return Err(github::Error::Accounts(AccountsError::NotAList).into()),
     }
     array.set_trailing_comma(false);
     Ok(array)

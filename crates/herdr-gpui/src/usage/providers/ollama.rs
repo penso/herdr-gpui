@@ -13,8 +13,9 @@
 //! search where CodexBar uses regular expressions.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Kind, MONTH, Provider, Report, SESSION, Section, WEEK, Window, title_case,
         },
@@ -112,7 +113,7 @@ fn web(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     let response = probe.http(request)?;
     // An expired session is redirected to the sign-in page.
     if (300..400).contains(&response.status) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     parse(&response.ok()?)
 }
@@ -173,7 +174,7 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
     let weekly = block(html, WEEKLY);
     if monthly.is_none() && session.is_none() && weekly.is_none() {
         return Err(if signed_out(html) {
-            Error::UsageRejected
+            Error::Rejected.into()
         } else {
             invalid()
         });
@@ -500,10 +501,13 @@ mod tests {
             <form action="/auth/signin" method="post">
               <input type="email" name="email" /><input type="password" name="password" />
             </form></body></html>"#;
-        assert!(matches!(parse(html), Err(Error::UsageRejected)));
+        assert!(matches!(
+            parse(html),
+            Err(crate::Error::Usage(Error::Rejected))
+        ));
         assert!(matches!(
             parse("<html><body>No usage here.</body></html>"),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
     }
 

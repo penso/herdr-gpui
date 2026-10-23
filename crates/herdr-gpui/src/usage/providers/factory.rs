@@ -12,8 +12,9 @@
 //! writes the session store that keeps rotated refresh tokens.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window,
             title_case,
@@ -101,7 +102,7 @@ fn request(url: String, auth: &Auth) -> Request {
 fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
     // The API host answers keys; the app host is the fallback. A rejection
     // is kept over later host noise such as a 404.
-    let mut failure: Option<Error> = None;
+    let mut failure: Option<crate::Error> = None;
     let mut found = None;
     for base in [API, APP] {
         match probe.body(request(format!("{base}/api/app/auth/me"), auth)) {
@@ -110,14 +111,14 @@ fn read(probe: &mut Probe, auth: &Auth) -> Result<Report> {
                 break;
             }
             Err(error) => {
-                if !matches!(failure, Some(Error::UsageRejected)) {
+                if !matches!(failure, Some(crate::Error::Usage(Error::Rejected))) {
                     failure = Some(error);
                 }
             }
         }
     }
     let Some((base, me)) = found else {
-        return Err(failure.unwrap_or(Error::UsageRejected));
+        return Err(failure.unwrap_or_else(|| Error::Rejected.into()));
     };
     let me = parse_me(&me)?;
     let now = SystemTime::now();

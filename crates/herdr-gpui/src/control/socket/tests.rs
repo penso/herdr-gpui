@@ -114,7 +114,9 @@ fn a_live_server_keeps_its_address() {
     let _server = Server::bind(&address.path).unwrap();
     assert!(matches!(
         Server::bind(&address.path),
-        Err(crate::Error::ControlSocketInUse { .. })
+        Err(crate::Error::Control(
+            crate::control::Error::SocketInUse { .. }
+        ))
     ));
 }
 
@@ -215,6 +217,8 @@ fn a_missing_server_is_reported_as_unavailable() {
     let address = address();
     assert!(matches!(
         call(&address.path, &open("https://a.test/")),
-        Err(crate::Error::ControlUnavailable { .. })
+        Err(crate::Error::Control(
+            crate::control::Error::Unavailable { .. }
+        ))
     ));
 }

@@ -1,8 +1,8 @@
 //! Opt-in Unix plaintext storage. All callers run on a background worker.
 #![forbid(unsafe_code)]
 
+use super::Error;
 use super::Result;
-use crate::Error;
 use secrecy::SecretString;
 use std::{ffi::CStr, path::Path};
 
@@ -83,7 +83,7 @@ pub(super) fn store(
     _plaintext: bool,
 ) -> Result<()> {
     if token.is_some() {
-        return Err(Error::CredentialUnsupported);
+        return Err(Error::CredentialUnsupported.into());
     }
     Ok(())
 }
@@ -100,7 +100,7 @@ fn directory(path: &Path) -> Result<File> {
     );
     let metadata = dir.metadata().map_err(Error::CredentialIo)?;
     if metadata.uid() != geteuid().as_raw() || metadata.mode() & 0o022 != 0 {
-        return Err(Error::CredentialPermissions);
+        return Err(Error::CredentialPermissions.into());
     }
     Ok(dir)
 }
@@ -116,7 +116,7 @@ fn existing(dir: &File, name: &CStr) -> Result<Option<File>> {
     ) {
         Ok(fd) => File::from(fd),
         Err(rustix::io::Errno::NOENT) => return Ok(None),
-        Err(error) => return Err(Error::CredentialIo(error.into())),
+        Err(error) => return Err(Error::CredentialIo(error.into()).into()),
     };
     let metadata = file.metadata().map_err(Error::CredentialIo)?;
     if !metadata.is_file()
@@ -125,7 +125,7 @@ fn existing(dir: &File, name: &CStr) -> Result<Option<File>> {
         || metadata.nlink() != 1
         || metadata.len() > LIMIT as u64
     {
-        return Err(Error::CredentialPermissions);
+        return Err(Error::CredentialPermissions.into());
     }
     Ok(Some(file))
 }
@@ -155,7 +155,7 @@ pub(crate) fn read_checked(
     file.take((LIMIT + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(Error::CredentialIo)?;
-    let text = std::str::from_utf8(&bytes).map_err(Error::GitHubEncoding)?;
+    let text = std::str::from_utf8(&bytes).map_err(Error::Encoding)?;
     let value = SecretString::from(text);
     validate(&value)?;
     Ok(Some(value))
@@ -169,7 +169,7 @@ pub(super) fn store(
     plaintext: bool,
 ) -> Result<()> {
     if token.is_some() && !plaintext {
-        return Err(Error::CredentialPolicy);
+        return Err(Error::CredentialPolicy.into());
     }
     // Explicit removal is allowed even after opting out of plaintext storage.
     write(path, name, token)
@@ -196,7 +196,7 @@ pub(super) fn store_checked(
     validate: fn(&SecretString) -> Result<()>,
 ) -> Result<()> {
     if token.is_some() && !plaintext {
-        return Err(Error::CredentialPolicy);
+        return Err(Error::CredentialPolicy.into());
     }
     write_checked(path, name, token, validate)
 }
@@ -220,7 +220,7 @@ fn write_checked(
             unlinkat(&dir, target, AtFlags::empty())
                 .map_err(|error| Error::CredentialIo(error.into()))?;
         }
-        return dir.sync_all().map_err(Error::CredentialIo);
+        return Ok(dir.sync_all().map_err(Error::CredentialIo)?);
     };
     validate(token)?;
     static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -246,7 +246,7 @@ fn write_checked(
         // Replace the directory entry atomically, never a symlink's target.
         renameat(&dir, name.as_str(), &dir, target)
             .map_err(|error| Error::CredentialIo(error.into()))?;
-        dir.sync_all().map_err(Error::CredentialIo)
+        Ok(dir.sync_all().map_err(Error::CredentialIo)?)
     })();
     let _ = unlinkat(&dir, name.as_str(), AtFlags::empty());
     result

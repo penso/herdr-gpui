@@ -228,7 +228,7 @@ fn time(value: Option<&Value>) -> Option<std::time::SystemTime> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     #[test]
     fn api_key_reads_credits_only() {
@@ -291,6 +291,9 @@ mod tests {
     fn missing_quota_is_shown_as_spent() {
         let report = parse(r#"{"remainingBalance": 0}"#, Some("not json"), None).unwrap();
         assert!((report.windows[0].used - 100.).abs() < 1e-4);
-        assert!(matches!(parse("[]", None, None), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse("[]", None, None),
+            Err(Error::Usage(usage::Error::Json(_)))
+        ));
     }
 }

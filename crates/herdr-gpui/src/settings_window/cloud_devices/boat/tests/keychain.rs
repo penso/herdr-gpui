@@ -12,9 +12,9 @@ fn unreadable_credentials_keep_saved_devices_visible_and_removable(cx: &mut Test
             view.config.boat.api_url = Some(crate::boat::DEFAULT_API_URL.into());
             view.boat_card.as_mut().unwrap().account = Account::Known(Box::new(Overview {
                 pending: Ok(None),
-                key: Err(crate::boat::Error::Storage(Box::new(
-                    crate::Error::CredentialIo(std::io::ErrorKind::PermissionDenied.into()),
-                ))),
+                key: Err(crate::boat::Error::Storage(Box::new(crate::Error::GitHub(
+                    crate::github::Error::CredentialIo(std::io::ErrorKind::PermissionDenied.into()),
+                )))),
                 sandboxes: None,
                 devices: vec![SavedDevice {
                     provider: CloudProvider::Boat,

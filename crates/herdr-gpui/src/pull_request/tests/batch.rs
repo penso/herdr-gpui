@@ -119,7 +119,7 @@ fn preparation_stops_at_its_deadline_and_defers_the_rest() {
                 "every checkout shares the batch's deadline"
             );
             match input.branch.as_str() {
-                "broken" => Err(Error::PrOrigin),
+                "broken" => Err(crate::pull_request::Error::Origin.into()),
                 "slow" => {
                     clock.set(deadline);
                     Ok(branch("slow").1)
@@ -136,7 +136,13 @@ fn preparation_stops_at_its_deadline_and_defers_the_rest() {
         names(&mut targets.iter().map(|(input, _)| input)),
         ["fast", "slow"]
     );
-    assert!(matches!(batch.found[..], [(_, Err(Error::PrOrigin))]));
+    assert!(matches!(
+        batch.found[..],
+        [(
+            _,
+            Err(Error::PullRequest(crate::pull_request::Error::Origin))
+        )]
+    ));
     assert_eq!(names(&mut batch.deferred.iter()), ["late"]);
 }
 
@@ -150,7 +156,7 @@ fn a_response_too_large_is_halved_until_each_part_fits() {
         |_, _, aliases, _| {
             sizes.push(aliases.len());
             if aliases.len() > 1 {
-                return Err(Error::GitHubSize);
+                return Err(Error::GitHub(crate::github::Error::Size));
             }
             Ok(vec![Ok(serde_json::Value::Null)])
         },
@@ -177,10 +183,12 @@ fn a_refusal_fails_its_group_and_defers_the_others() {
         |_, _, aliases, cooldown| {
             asked += 1;
             if aliases.len() > 2 {
-                return Err(Error::GitHubSize);
+                return Err(Error::GitHub(crate::github::Error::Size));
             }
             *cooldown = Some(Duration::from_secs(600));
-            Err(Error::GitHubRateLimit { reset: None })
+            Err(Error::GitHub(crate::github::Error::RateLimit {
+                reset: None,
+            }))
         },
         |_, _, _| Some(Ok(None)),
         (&mut batch, &mut None),
@@ -189,7 +197,7 @@ fn a_refusal_fails_its_group_and_defers_the_others() {
     assert!(batch.found.is_empty());
     assert!(matches!(
         &batch.failed[..],
-        [(inputs, Error::GitHubRateLimit { .. })] if inputs.len() == 2
+        [(inputs, Error::GitHub(crate::github::Error::RateLimit { .. }))] if inputs.len() == 2
     ));
     assert_eq!(batch.deferred.len(), 2);
 }
@@ -224,11 +232,11 @@ fn a_crowded_branch_keeps_only_its_own_heads_pull_request() {
     let two = serde_json::json!([node(1, "example"), node(2, "example")]);
     assert!(matches!(
         matching_number(&heads(two, false), &head),
-        Err(Error::PrAmbiguous)
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
     ));
     assert!(matches!(
         matching_number(&heads(serde_json::json!([]), true), &head),
-        Err(Error::PrAmbiguous)
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
     ));
 }
 
@@ -257,7 +265,9 @@ fn a_pause_set_mid_batch_holds_and_stops_further_lookups() {
             lookups.push(branch.clone());
             if branch == "0" {
                 *pause = Some(Duration::from_secs(600));
-                return Some(Err(Error::GitHubRateLimit { reset: None }));
+                return Some(Err(Error::GitHub(crate::github::Error::RateLimit {
+                    reset: None,
+                })));
             }
             // A later success must not lift the pause.
             *pause = None;
@@ -269,7 +279,10 @@ fn a_pause_set_mid_batch_holds_and_stops_further_lookups() {
     assert_eq!(cooldown, Some(Duration::from_secs(600)));
     assert!(matches!(
         batch.found[..],
-        [(_, Err(Error::GitHubRateLimit { .. }))]
+        [(
+            _,
+            Err(Error::GitHub(crate::github::Error::RateLimit { .. }))
+        )]
     ));
     assert_eq!(batch.deferred.len(), 2);
 }

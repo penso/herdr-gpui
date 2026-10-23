@@ -33,7 +33,7 @@ fn only_the_main_account_reads_the_github_cli() {
         restore(Store::Environment, &host, true, || panic!(
             "must not read gh"
         )),
-        Err(Error::GitHubToken)
+        Err(crate::Error::GitHub(Error::Token))
     ));
     // Without the choice there is no store to hold a marker, so no `gh` either.
     assert!(

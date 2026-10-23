@@ -83,7 +83,9 @@ fn a_pause_is_kept_under_the_account_that_hit_it() {
                     (inputs[0].clone(), Ok(None)),
                     (
                         inputs[0].clone(),
-                        Err(Error::GitHubRateLimit { reset: None }),
+                        Err(Error::GitHub(crate::github::Error::RateLimit {
+                            reset: None,
+                        })),
                     ),
                 ],
                 paused: vec![Paused {
@@ -136,10 +138,10 @@ fn moving_an_owner_to_an_account_does_not_reuse_what_the_old_one_hid() {
     peer.cache.poll(now);
     peer.complete(
         now,
-        Err(Error::GitHubRepositoryHidden {
+        Err(Error::GitHub(crate::github::Error::RepositoryHidden {
             repository: "acme/project".into(),
             app_token: false,
-        }),
+        })),
         None,
     );
     peer.cache.schedule([hidden.clone()], now);

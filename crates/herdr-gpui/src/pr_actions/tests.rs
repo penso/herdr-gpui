@@ -26,7 +26,10 @@ fn a_target_comes_only_from_an_open_pull_request_with_its_identity() {
     );
     let mut pr = fixture().unwrap();
     pr.state = State::Merged;
-    assert!(matches!(Target::try_from(&pr), Err(Error::PrActionTarget)));
+    assert!(matches!(
+        Target::try_from(&pr),
+        Err(crate::Error::PrActions(Error::Target))
+    ));
     for strip in [
         |pr: &mut PullRequest| pr.id.clear(),
         |pr: &mut PullRequest| pr.head_ref_oid.clear(),
@@ -36,7 +39,10 @@ fn a_target_comes_only_from_an_open_pull_request_with_its_identity() {
     ] {
         let mut pr = fixture().unwrap();
         strip(&mut pr);
-        assert!(matches!(Target::try_from(&pr), Err(Error::PrActionTarget)));
+        assert!(matches!(
+            Target::try_from(&pr),
+            Err(crate::Error::PrActions(Error::Target))
+        ));
     }
 }
 
@@ -49,11 +55,13 @@ fn a_merge_sends_one_mutation_naming_the_seen_head_and_is_not_retried() {
         Action::Merge(MergeMethod::Squash),
         |context, query, variables| {
             sent.push((context, query.to_owned(), variables));
-            Err(Error::GitHubRejected("Head branch was modified".into()))
+            Err(crate::Error::GitHub(crate::github::Error::Rejected(
+                "Head branch was modified".into(),
+            )))
         },
     );
     assert!(
-        matches!(result, Err(Error::GitHubRejected(reason)) if reason == "Head branch was modified")
+        matches!(result, Err(crate::Error::GitHub(crate::github::Error::Rejected(reason))) if reason == "Head branch was modified")
     );
     assert_eq!(sent.len(), 1, "a refused merge is never sent again");
     let (context, query, variables) = &sent[0];
@@ -83,7 +91,9 @@ fn a_merge_reply_must_name_the_same_pull_request() {
             &reply("MERGED", "https://github.com/example/project/pull/9"),
             &target
         ),
-        Err(Error::PrIdentity)
+        Err(crate::Error::PullRequest(
+            crate::pull_request::Error::Identity
+        ))
     ));
 }
 
@@ -163,7 +173,9 @@ fn the_conversation_is_cleaned_bounded_ordered_and_fenced_by_identity() {
     other["data"]["repository"]["pullRequest"]["id"] = json!("PR_other");
     assert!(matches!(
         parse_conversation(&other, &target),
-        Err(Error::PrIdentity)
+        Err(crate::Error::PullRequest(
+            crate::pull_request::Error::Identity
+        ))
     ));
 
     let many: Vec<_> = (0..60)
@@ -207,13 +219,13 @@ fn actions_are_validated_before_they_are_queued_and_never_overlap() {
     let mut actions = Actions::default();
     assert!(matches!(
         actions.start(Action::Comment("hi".into()), &[], token()),
-        Err(Error::PrActionTarget)
+        Err(crate::Error::PrActions(Error::Target))
     ));
     let mut actions = tracked();
     for body in ["", "   ", &"x".repeat(BODY_LIMIT + 1)] {
         assert!(matches!(
             actions.start(Action::Comment(body.into()), &[], token()),
-            Err(Error::PrCommentBody)
+            Err(crate::Error::PrActions(Error::CommentBody))
         ));
     }
     assert!(matches!(
@@ -222,7 +234,7 @@ fn actions_are_validated_before_they_are_queued_and_never_overlap() {
             &[MergeMethod::Squash],
             token()
         ),
-        Err(Error::PrMergeMethod)
+        Err(crate::Error::PrActions(Error::MergeMethod))
     ));
     assert!(actions.running().is_none());
     actions
@@ -235,11 +247,11 @@ fn actions_are_validated_before_they_are_queued_and_never_overlap() {
     assert_eq!(actions.running(), Some(&Action::Merge(MergeMethod::Squash)));
     assert!(matches!(
         actions.start(Action::Comment("again".into()), &[], token()),
-        Err(Error::PrActionBusy)
+        Err(crate::Error::PrActions(Error::Busy))
     ));
     assert!(matches!(
         actions.load_comments(token()),
-        Err(Error::PrActionBusy)
+        Err(crate::Error::PrActions(Error::Busy))
     ));
 }
 
@@ -321,10 +333,7 @@ fn a_lost_worker_reports_instead_of_resending() {
     assert!(actions.running().is_none());
     assert!(actions.waiting.is_none());
     assert!(actions.take_settled());
-    assert_eq!(
-        actions.error(),
-        Some(Error::PrActionWorker.to_string().as_str())
-    );
+    assert_eq!(actions.error(), Some(Error::Worker.to_string().as_str()));
 }
 
 #[test]
@@ -342,7 +351,7 @@ fn a_closed_pull_request_can_be_read_but_never_written() {
     ] {
         assert!(matches!(
             actions.start(action, &[MergeMethod::Merge], token()),
-            Err(Error::PrActionTarget)
+            Err(crate::Error::PrActions(Error::Target))
         ));
     }
     // An open one reads and writes alike.

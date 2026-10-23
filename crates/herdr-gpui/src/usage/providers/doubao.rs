@@ -8,8 +8,9 @@
 //! probe does not return. Neither declares a setting here for that reason.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, MONTH, Provider, Report, SESSION, WEEK, Window},
         probe::Probe,
         service::{Meta, Service, Timestamp, json},
@@ -37,7 +38,7 @@ impl Service for Doubao {
         ) {
             Ok(output) => output,
             // Not installed on this host.
-            Err(Error::UsageProcess { .. }) => return None,
+            Err(crate::Error::Usage(Error::Process { .. })) => return None,
             Err(error) => return Some(Err(error)),
         };
         // A missing or signed-out arkcli exits with an error and prints no JSON.
@@ -45,7 +46,7 @@ impl Service for Doubao {
             return None;
         }
         match parse(&output.stdout) {
-            Err(Error::UsageNotSignedIn) => None,
+            Err(crate::Error::Usage(Error::NotSignedIn)) => None,
             result => Some(result),
         }
     }
@@ -64,7 +65,7 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
         .as_deref()
         .is_some_and(|method| method.eq_ignore_ascii_case("none"))
     {
-        return Err(Error::UsageNotSignedIn);
+        return Err(Error::NotSignedIn.into());
     }
     let mut windows = Vec::new();
     for item in answer.items {
@@ -97,7 +98,7 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
         }
     }
     if windows.is_empty() {
-        return Err(Error::UsageJson(Category::Data));
+        return Err(Error::Json(Category::Data).into());
     }
     let account = Account {
         email: None,
@@ -203,11 +204,11 @@ mod tests {
     fn signed_out_and_empty_output() {
         assert!(matches!(
             parse(r#"{"viewer": {"auth_method": "none"}, "items": []}"#),
-            Err(Error::UsageNotSignedIn)
+            Err(crate::Error::Usage(Error::NotSignedIn))
         ));
         assert!(matches!(
             parse(r#"{"items": [{"product": "coding-plan", "error": "boom"}]}"#),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
     }
 }

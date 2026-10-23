@@ -18,7 +18,7 @@ fn foreign_keychain_items_wait_for_the_user() {
             .foreign_keychain_internet(SERVER, Some("42"))
             .is_none()
     );
-    assert!(matches!(probe.missing(), Error::UsageNotSignedIn));
+    assert!(matches!(probe.missing(), usage::Error::NotSignedIn));
 
     let ask = Consent::Ask { browsers: true };
     let mut probe = Probe::new(&mut exec, zed, None, &mut jar, ask);
@@ -28,7 +28,7 @@ fn foreign_keychain_items_wait_for_the_user() {
             .is_none()
     );
     assert!(probe.cookies(&["zed.dev"], &["zed.session"]).is_none());
-    assert!(matches!(probe.missing(), Error::UsageKeychainAccess));
+    assert!(matches!(probe.missing(), usage::Error::KeychainAccess));
     assert!(!jar.refused(zed, &item), "nothing asked before Allow");
 
     let mut probe = Probe::new(&mut exec, zed, None, &mut jar, Consent::Keychain);
@@ -37,7 +37,7 @@ fn foreign_keychain_items_wait_for_the_user() {
             .foreign_keychain_internet(SERVER, Some("42"))
             .is_none()
     );
-    assert!(matches!(probe.missing(), Error::UsageKeychainDenied));
+    assert!(matches!(probe.missing(), usage::Error::KeychainDenied));
     assert!(jar.refused(zed, &item), "a refusal is remembered");
 
     jar.forgive(zed);
@@ -51,7 +51,11 @@ fn a_denied_prompt_is_reported_for_its_grant_to_be_dropped() {
     let mut usage = Usage::default();
     begin(&mut usage, &Host::Local, now);
     usage.apply(
-        Message::Reading(Host::Local, zed, Err(Error::UsageKeychainAccess)),
+        Message::Reading(
+            Host::Local,
+            zed,
+            Err(Error::Usage(usage::Error::KeychainAccess)),
+        ),
         now,
     );
     let entry = usage.current().unwrap();
@@ -64,7 +68,11 @@ fn a_denied_prompt_is_reported_for_its_grant_to_be_dropped() {
     assert!(usage.take_denied().is_empty());
 
     usage.apply(
-        Message::Reading(Host::Local, zed, Err(Error::UsageKeychainDenied)),
+        Message::Reading(
+            Host::Local,
+            zed,
+            Err(Error::Usage(usage::Error::KeychainDenied)),
+        ),
         now,
     );
     assert_eq!(

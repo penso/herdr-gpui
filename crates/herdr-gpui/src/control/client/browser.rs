@@ -96,10 +96,11 @@ fn open(
 
 fn reload() -> crate::Result<Output> {
     match send(&Request::Reload(caller(None)?))? {
-        Response::Reloaded { tabs: 0 } => Err(crate::Error::ControlRejected {
+        Response::Reloaded { tabs: 0 } => Err(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: "This pane has no browser tabs open".into(),
-        }),
+        }
+        .into()),
         Response::Reloaded { tabs } => Output::data(
             format!("Reloaded {tabs} browser tab(s)"),
             &serde_json::json!({ "tabs": tabs }),
@@ -111,7 +112,7 @@ fn reload() -> crate::Result<Output> {
 /// The user's notes for this pane: page, review, and terminal notes alike
 /// are kept for it whenever they could not be typed into the pane.
 pub(super) fn feedback(wait: u64, _: &Context) -> crate::Result<Output> {
-    let pane_id = super::env_id("HERDR_PANE_ID").ok_or(crate::Error::ControlRejected {
+    let pane_id = super::env_id("HERDR_PANE_ID").ok_or(crate::control::Error::Rejected {
         code: ErrorCode::InvalidRequest,
         message: "feedback runs in the Herdr pane that should receive the notes".into(),
     })?;

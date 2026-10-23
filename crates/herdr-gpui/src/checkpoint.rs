@@ -10,13 +10,15 @@
 //! an explicit, confirmed action that first checkpoints the current state.
 
 pub(crate) mod direct;
+mod error;
 mod script;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use error::Error;
 pub(crate) use script::valid_id;
 
-use crate::{Error, Result, usage::Host};
+use crate::{Result, usage::Host};
 use herdr_client::{
     ConnectTarget, ScriptHost, ScriptLimits,
     protocol::{AgentStatus, ClientShellSnapshot},
@@ -117,7 +119,7 @@ enum Request {
 
 impl Request {
     /// The answer this request gets when it could not run at all.
-    fn failed(&self, error: Error) -> Answer {
+    fn failed(&self, error: crate::Error) -> Answer {
         match self {
             Self::Capture { .. } => Answer::Captured(Err(error)),
             Self::List => Answer::Listed(Err(error)),
@@ -176,7 +178,7 @@ fn run_bytes(checkout: &Checkout, body: &str, limits: ScriptLimits) -> Result<Ve
         Host::Ssh(target) => ScriptHost::Ssh(target),
         Host::Wsl(distro) => ScriptHost::Wsl(distro),
         #[cfg(feature = "azure")]
-        Host::Azure { .. } => return Err(Error::CloudHostUnsupported),
+        Host::Azure { .. } => return Err(crate::Error::CloudHostUnsupported),
     };
     let mut output = Vec::new();
     run_script(
@@ -208,7 +210,7 @@ fn spawn() -> Result<Worker> {
                 }
             }
         })
-        .map_err(Error::CheckpointThread)?;
+        .map_err(Error::Thread)?;
     Ok(Worker { requests, results })
 }
 
@@ -494,7 +496,7 @@ impl Checkpoints {
                     Err(mpsc::TryRecvError::Disconnected) => {
                         lane.worker = None;
                         answers.extend(lane.running.take().map(|job| {
-                            let answer = job.request.failed(Error::CheckpointWorker);
+                            let answer = job.request.failed(Error::Worker.into());
                             (job, answer)
                         }));
                     }
@@ -619,7 +621,7 @@ impl Checkpoints {
 }
 
 /// The display boundary: an error and every cause behind it.
-pub(crate) fn describe(error: &Error) -> String {
+pub(crate) fn describe(error: &crate::Error) -> String {
     let mut text = error.to_string();
     let mut source = std::error::Error::source(error);
     while let Some(cause) = source {

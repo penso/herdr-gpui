@@ -1,6 +1,7 @@
 //! The terminal's configured font weight, the heavier weight its bold cells
 //! use, and whether the configured family has a face at that weight.
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use gpui::FontWeight;
 
 /// CSS weight names, lightest first. The first name for each weight is the
@@ -48,7 +49,7 @@ pub(super) fn parse(value: toml::Value, name: &'static str) -> Result<FontWeight
             .then_some(FontWeight(value as f32)),
         _ => None,
     };
-    weight.ok_or(Error::InvalidFontWeight(name))
+    weight.ok_or_else(|| Error::InvalidFontWeight(name).into())
 }
 
 /// The weight bold cells draw at: a fixed step heavier than `weight`, never

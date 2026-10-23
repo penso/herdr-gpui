@@ -182,7 +182,7 @@ impl Summary {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     #[test]
     fn parses_credits_and_reset() {
@@ -239,7 +239,7 @@ mod tests {
     fn rejects_missing_quota() {
         assert!(matches!(
             parse(r#"{"status":"active"}"#, false),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

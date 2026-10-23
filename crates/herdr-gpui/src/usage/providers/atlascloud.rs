@@ -85,7 +85,7 @@ struct Available {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     fn fixture(value: &str) -> String {
         format!(
@@ -127,7 +127,7 @@ mod tests {
             "private-response".into(),
         ] {
             assert!(
-                matches!(parse(&body), Err(Error::UsageJson(_))),
+                matches!(parse(&body), Err(Error::Usage(usage::Error::Json(_)))),
                 "accepted {body}"
             );
         }

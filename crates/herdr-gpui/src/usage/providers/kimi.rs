@@ -22,8 +22,9 @@
 //! session when one is rejected, and multiple labeled web accounts.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, MONTH, Provider, Report, SESSION, Section, WEEK, Window, group},
         probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -131,7 +132,7 @@ impl Service for Kimi {
                         return Some(code(probe, request, web.as_ref(), region));
                     }
                     // CodexBar never refreshes the CLI's token: sign in again there.
-                    None if web.is_none() => return Some(Err(Error::UsageRejected)),
+                    None if web.is_none() => return Some(Err(Error::Rejected.into())),
                     None => {}
                 }
             }
@@ -771,7 +772,10 @@ mod tests {
 
     #[test]
     fn rejects_an_answer_without_windows() {
-        assert!(matches!(parse_code("{}"), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse_code("{}"),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
     }
 
     #[test]

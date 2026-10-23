@@ -26,14 +26,18 @@ use serde_json::json;
 
 /// No app to ask: it is not running.
 fn not_running(error: &crate::Error) -> bool {
-    matches!(error, crate::Error::ControlUnavailable { .. })
+    matches!(
+        error,
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
+    )
 }
 
 fn refused(code: ErrorCode, message: impl Into<String>) -> crate::Error {
-    crate::Error::ControlRejected {
+    crate::control::Error::Rejected {
         code,
         message: message.into(),
     }
+    .into()
 }
 
 fn settings(context: &Context, op: SettingsOp) -> crate::Result<Reply> {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::ThemeParseError;
+use crate::config::ThemeParseError;
 
 #[test]
 fn startup_reads_settings_without_writes_or_waiting_for_maintenance() -> anyhow::Result<()> {
@@ -188,7 +188,7 @@ fn legacy_config_migrates_verbatim_and_conflicts_never_overwrite() -> anyhow::Re
     fs::write(&path, "theme = 'Dracula'")?;
     assert!(matches!(
         Config::load_path(&path, &daemon),
-        Err(Error::ConfigMigrationConflict { .. })
+        Err(crate::Error::Settings(Error::MigrationConflict { .. }))
     ));
     assert_eq!(fs::read_to_string(&local)?, legacy);
     assert_eq!(fs::read_to_string(&path)?, "theme = 'Dracula'");
@@ -249,7 +249,7 @@ fn unknown_keys_are_ignored_and_reported() -> anyhow::Result<()> {
     for name in ["client_secret", "private_key", "token"] {
         assert!(matches!(
             Config::parse(&format!("[github]\n{name} = 'x'")),
-            Err(Error::GitHubSecretInConfig(found)) if found == name
+            Err(crate::Error::GitHub(crate::github::Error::SecretInConfig(found))) if found == name
         ));
     }
 
@@ -286,8 +286,8 @@ fn invalid_local_overrides_keep_their_path_and_contents() -> anyhow::Result<()> 
             .err()
             .context("accepted bad local config")?;
         assert!(
-            matches!(&error, Error::Path { path, source } if path == &local
-                && matches!(source.as_ref(), Error::ConfigFile { .. } | Error::Toml(_))),
+            matches!(&error, crate::Error::Path { path, source } if path == &local
+                && matches!(source.as_ref(), crate::Error::ConfigFile { .. } | crate::Error::Toml(_))),
             "{error:?}"
         );
         assert_eq!(fs::read_to_string(&local)?, text);
@@ -334,7 +334,7 @@ fn errors_retain_paths_categories_and_parser_sources() -> anyhow::Result<()> {
             .to_string()
             .starts_with(&format!("{}: ", path.display()))
     );
-    let Error::Path {
+    let crate::Error::Path {
         path: actual,
         source,
     } = error
@@ -342,11 +342,11 @@ fn errors_retain_paths_categories_and_parser_sources() -> anyhow::Result<()> {
         anyhow::bail!("missing path context");
     };
     assert_eq!(actual, path);
-    assert!(matches!(source.as_ref(), Error::ConfigFile { .. }));
+    assert!(matches!(source.as_ref(), crate::Error::ConfigFile { .. }));
     assert!(source.source().is_some());
     assert!(matches!(
         Config::parse("[ui]\nsize = nan"),
-        Err(Error::InvalidFontSize("ui"))
+        Err(crate::Error::Settings(Error::InvalidFontSize("ui")))
     ));
 
     let error = Theme::parse_ghostty("# ignored\npalette=bad=ffffff")
@@ -358,11 +358,11 @@ fn errors_retain_paths_categories_and_parser_sources() -> anyhow::Result<()> {
     );
     assert!(matches!(
         &error,
-        Error::ThemeLine {
+        crate::Error::Settings(Error::ThemeLine {
             line: 2,
             source: ThemeParseError::InvalidPaletteIndex(_),
             ..
-        }
+        })
     ));
     assert!(
         error
@@ -372,10 +372,10 @@ fn errors_retain_paths_categories_and_parser_sources() -> anyhow::Result<()> {
     );
     assert!(matches!(
         Theme::parse_ghostty("palette=256=ffffff"),
-        Err(Error::ThemeLine {
+        Err(crate::Error::Settings(Error::ThemeLine {
             source: ThemeParseError::PaletteIndexOutOfRange,
             ..
-        })
+        }))
     ));
     Ok(())
 }

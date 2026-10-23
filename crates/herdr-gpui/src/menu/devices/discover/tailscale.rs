@@ -2,7 +2,10 @@
 //! Only the local Tailscale client is asked; peers are never contacted.
 
 use super::{Candidate, Source, valid_host};
-use crate::{Error, Result, menu::devices::setup};
+use crate::{
+    Result,
+    menu::devices::{Error, setup},
+};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -80,7 +83,9 @@ pub(super) fn peers() -> Result<Vec<Candidate>> {
         TIMEOUT,
         OUTPUT_LIMIT,
     ) {
-        Err(Error::DeviceSetupTimeout) => return Err(Error::TailscaleTimeout),
+        Err(crate::Error::Devices(Error::SetupTimeout)) => {
+            return Err(Error::TailscaleTimeout.into());
+        }
         result => result?,
     };
     // The CLI fails when its daemon is not running, which only means this

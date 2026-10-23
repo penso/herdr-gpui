@@ -446,7 +446,7 @@ mod busy_load_tests {
 
         view.update(cx, |view, cx| {
             view.save_preference(
-                || Err(crate::Error::InvalidTerminalPadding("padding_x")),
+                || Err(crate::config::Error::InvalidTerminalPadding("padding_x").into()),
                 cx,
             );
         });

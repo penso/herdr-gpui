@@ -2,9 +2,9 @@
 //! pair a lookup is keyed by. Remote text is untrusted: it is cleaned and
 //! length-bounded before it can reach a label.
 
+use super::Error;
 #[cfg(any(test, all(feature = "integration-test", target_os = "macos")))]
 use super::parse::parse;
-use crate::Error;
 use serde::Deserialize;
 use std::path::Path;
 
@@ -425,10 +425,10 @@ pub(crate) fn repository_input(
 ) -> crate::Result<Input> {
     let key = worktree
         .map(|tree| tree.key.as_str())
-        .ok_or(Error::PrMetadata)?;
+        .ok_or(Error::Metadata)?;
     let branch = valid_branch(branch)?;
     if !Path::new(key).is_absolute() {
-        return Err(Error::PrAbsolutePath);
+        return Err(Error::AbsolutePath.into());
     }
     Ok(Input {
         checkout: None,
@@ -459,7 +459,7 @@ pub(crate) fn workspace_input(
     }
     let branch = valid_branch(branch)?;
     if !Path::new(&workspace.new_workspace_cwd).is_absolute() {
-        return Err(Error::PrAbsolutePath);
+        return Err(Error::AbsolutePath.into());
     }
     Ok(Input {
         checkout: Some(workspace.new_workspace_cwd.clone()),
@@ -473,7 +473,7 @@ fn valid_branch(branch: Option<&str>) -> crate::Result<&str> {
         .filter(|branch| {
             !branch.is_empty() && branch.len() <= 1024 && !branch.chars().any(char::is_control)
         })
-        .ok_or(Error::PrBranch)
+        .ok_or(Error::Branch.into())
 }
 
 pub(crate) fn clean(text: &str) -> String {
@@ -509,5 +509,5 @@ pub(crate) fn fixture() -> crate::Result<PullRequest> {
         pr.merge_methods = MergeMethod::ALL.to_vec();
         pr
     })
-    .ok_or(Error::PrRepository)
+    .ok_or(Error::Repository.into())
 }

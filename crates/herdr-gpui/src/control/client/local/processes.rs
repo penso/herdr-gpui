@@ -127,9 +127,12 @@ fn sample(watch: &Watch, wait: Duration) -> crate::Result<Listing> {
             }
         }
         if Instant::now() >= until {
-            return latest.ok_or_else(|| crate::Error::ControlRejected {
-                code: ErrorCode::Timeout,
-                message: "Herdr did not describe the pane's processes in time".into(),
+            return latest.ok_or_else(|| {
+                crate::control::Error::Rejected {
+                    code: ErrorCode::Timeout,
+                    message: "Herdr did not describe the pane's processes in time".into(),
+                }
+                .into()
             });
         }
         std::thread::sleep(POLL);
@@ -138,18 +141,20 @@ fn sample(watch: &Watch, wait: Duration) -> crate::Result<Listing> {
 
 pub(crate) fn processes(pane: Option<&str>) -> crate::Result<Output> {
     let Some(pane) = pane.map(str::to_owned).or_else(|| env_id("HERDR_PANE_ID")) else {
-        return Err(crate::Error::ControlRejected {
+        return Err(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: "Name a pane with --pane ID, or run this in a Herdr pane".into(),
-        });
+        }
+        .into());
     };
     // Herdr's CLI, which this asks, finds the caller's own daemon from the
     // environment Herdr gave the pane, as it does when an agent runs it.
     let Some(daemon) = Daemon::for_target(&herdr_client::ConnectTarget::Local) else {
-        return Err(crate::Error::ControlRejected {
+        return Err(crate::control::Error::Rejected {
             code: ErrorCode::Unsupported,
             message: "Listing a pane's processes needs Linux or macOS".into(),
-        });
+        }
+        .into());
     };
     let watch = Watch::start(daemon, pane.clone())?;
     let tree = Tree::new(&pane, &sample(&watch, WAIT)?);

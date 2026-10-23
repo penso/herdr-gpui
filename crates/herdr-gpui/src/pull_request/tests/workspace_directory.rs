@@ -56,20 +56,20 @@ fn daemon_metadata_still_wins_and_remote_devices_still_require_it() {
     // A saved device's directory is not on this machine.
     assert!(matches!(
         workspace_input(&workspace(cwd, Some("main")), &Origin::Ssh("device".into())),
-        Err(Error::PrMetadata)
+        Err(Error::PullRequest(crate::pull_request::Error::Metadata))
     ));
     assert!(matches!(
         workspace_input(&workspace("", Some("main")), &Origin::Local),
-        Err(Error::PrMetadata)
+        Err(Error::PullRequest(crate::pull_request::Error::Metadata))
     ));
     assert!(matches!(
         workspace_input(&workspace("relative", Some("main")), &Origin::Local),
-        Err(Error::PrAbsolutePath)
+        Err(Error::PullRequest(crate::pull_request::Error::AbsolutePath))
     ));
     for branch in [None, Some(""), Some("bad\nbranch")] {
         assert!(matches!(
             workspace_input(&workspace(cwd, branch), &Origin::Local),
-            Err(Error::PrBranch)
+            Err(Error::PullRequest(crate::pull_request::Error::Branch))
         ));
     }
 }
@@ -139,7 +139,9 @@ fn the_worker_resolves_the_directory_and_verifies_repository_and_branch() {
     input.branch = "main".into();
     assert!(matches!(
         local_checkout(&input, deadline(), &|| false),
-        Err(Error::PrBranchChanged)
+        Err(Error::PullRequest(
+            crate::pull_request::Error::BranchChanged
+        ))
     ));
     input.branch = "feature".into();
 
@@ -152,7 +154,9 @@ fn the_worker_resolves_the_directory_and_verifies_repository_and_branch() {
     input.checkout = Some(repo.to_str().unwrap().into());
     assert!(matches!(
         local_checkout(&input, deadline(), &|| false),
-        Err(Error::PrRepositoryMismatch)
+        Err(Error::PullRequest(
+            crate::pull_request::Error::RepositoryMismatch
+        ))
     ));
 
     // A directory outside any repository says so instead of guessing.
@@ -165,6 +169,8 @@ fn the_worker_resolves_the_directory_and_verifies_repository_and_branch() {
     .unwrap();
     assert!(matches!(
         local_checkout(&outside, deadline(), &|| false),
-        Err(Error::PrWorkspaceRepository)
+        Err(Error::PullRequest(
+            crate::pull_request::Error::WorkspaceRepository
+        ))
     ));
 }

@@ -2,8 +2,8 @@
 //! the checkouts the user keeps notes on, and the check that a chosen
 //! destination still exists.
 
-use super::{Action, Entry, Source, frecency, projects};
-use crate::{Error, NavigationTarget, Result};
+use super::{Action, Entry, Error, Source, frecency, projects};
+use crate::{NavigationTarget, Result};
 use gpui::SharedString;
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 
@@ -14,7 +14,7 @@ pub(super) fn destination_exists(
     target: NavigationTarget<&str>,
 ) -> Result<()> {
     if boot.is_empty() || boot != snapshot.boot_id {
-        return Err(Error::PaletteSessionChanged);
+        return Err(Error::SessionChanged.into());
     }
     match target {
         NavigationTarget::Workspace(id) => snapshot
@@ -22,19 +22,19 @@ pub(super) fn destination_exists(
             .iter()
             .any(|w| w.workspace_id == id)
             .then_some(())
-            .ok_or(Error::PaletteWorkspaceRemoved),
+            .ok_or(Error::WorkspaceRemoved.into()),
         NavigationTarget::Tab(id) => snapshot
             .tabs
             .iter()
             .any(|t| t.tab_id == id)
             .then_some(())
-            .ok_or(Error::PaletteTabRemoved),
+            .ok_or(Error::TabRemoved.into()),
         NavigationTarget::Pane(id) => snapshot
             .panes
             .iter()
             .any(|p| p.pane_id == id)
             .then_some(())
-            .ok_or(Error::PaletteDestinationRemoved),
+            .ok_or(Error::DestinationRemoved.into()),
     }
 }
 

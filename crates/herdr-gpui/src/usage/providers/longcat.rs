@@ -9,8 +9,9 @@
 //! accepted.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -99,7 +100,7 @@ fn required(probe: &mut Probe, request: Request) -> Result<String> {
     let response = probe.http(request)?;
     // An expired session redirects to the sign-in page.
     if (300..400).contains(&response.status) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     response.ok()
 }
@@ -123,9 +124,10 @@ fn payload(body: &str) -> Result<Value> {
             .ok_or_else(invalid)?;
         if code != 0. && code != 200. {
             return Err(if code == 401. || code == 403. {
-                Error::UsageRejected
+                Error::Rejected.into()
             } else {
-                u16::try_from(code as i64).map_or(invalid(), Error::UsageStatus)
+                u16::try_from(code as i64)
+                    .map_or_else(|_| invalid(), |code| Error::Status(code).into())
             });
         }
     }
@@ -321,15 +323,15 @@ mod tests {
     fn envelope_codes_map_to_errors() {
         assert!(matches!(
             payload(r#"{"code":401,"message":"login"}"#),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         assert!(matches!(
             payload(r#"{"code":"500","msg":"busy"}"#),
-            Err(Error::UsageStatus(500))
+            Err(crate::Error::Usage(Error::Status(500)))
         ));
         assert!(matches!(
             payload(r#"{"code":"x"}"#),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
         assert_eq!(data(r#"{"code":200,"data":{"a":1}}"#)["a"], 1);
         assert_eq!(data(r#"{"a":1}"#)["a"], 1);

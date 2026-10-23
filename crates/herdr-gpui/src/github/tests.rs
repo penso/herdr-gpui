@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{Auth, Device, Note, Profile, Reply, SETUP_MESSAGE, Store, VERIFY_URL};
+use super::{Auth, Device, Error, Note, Profile, Reply, SETUP_MESSAGE, Store, VERIFY_URL};
 use super::{
     credentials,
     device::TokenResponse,
@@ -13,7 +13,7 @@ use super::{
     store::{KEYRING, credential_bytes},
     token::Credential,
 };
-use crate::{Error, Result};
+use crate::Result;
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::Value;
 use std::{

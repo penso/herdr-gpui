@@ -125,8 +125,11 @@ pub(super) fn deliver(
         Err(error) => error,
     };
     let rejected = match &unreached {
-        crate::Error::ControlUnavailable { .. } | crate::Error::MissingStateRoot => true,
-        crate::Error::ControlRejected { code, .. } => *code != crate::control::ErrorCode::Timeout,
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
+        | crate::Error::MissingStateRoot => true,
+        crate::Error::Control(crate::control::Error::Rejected { code, .. }) => {
+            *code != crate::control::ErrorCode::Timeout
+        }
         _ => false,
     };
     if !rejected {

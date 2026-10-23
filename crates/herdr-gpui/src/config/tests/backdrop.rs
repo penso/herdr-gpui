@@ -48,9 +48,9 @@ fn backdrop_keys_parse_and_bad_values_are_refused() -> anyhow::Result<()> {
     ] {
         let error = Config::parse(invalid).err().context(invalid)?;
         let matched = match &error {
-            Error::Backdrop(crate::backdrop::Error::Opacity) => "opacity",
-            Error::Backdrop(crate::backdrop::Error::EmptyImage) => "empty",
-            Error::Backdrop(crate::backdrop::Error::RelativeImage) => "relative",
+            crate::Error::Backdrop(crate::backdrop::Error::Opacity) => "opacity",
+            crate::Error::Backdrop(crate::backdrop::Error::EmptyImage) => "empty",
+            crate::Error::Backdrop(crate::backdrop::Error::RelativeImage) => "relative",
             _ => "other",
         };
         assert_eq!(matched, expected, "{invalid}: {error}");

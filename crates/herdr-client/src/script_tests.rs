@@ -1,4 +1,5 @@
 use super::*;
+use crate::ssh;
 use std::io::Cursor;
 
 #[path = "script_tests/command.rs"]
@@ -130,7 +131,7 @@ fn ssh_targets_are_validated_before_spawning() {
         LIMITS,
         &AtomicBool::new(false),
     );
-    assert!(matches!(result, Err(Error::InvalidSshTarget)), "{result:?}");
+    assert!(matches!(result, Err(Error::Ssh(ssh::Error::InvalidTarget))), "{result:?}");
 }
 
 #[test]

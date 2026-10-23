@@ -1,10 +1,10 @@
 use super::*;
 
 fn hidden() -> Error {
-    Error::GitHubRepositoryHidden {
+    Error::GitHub(crate::github::Error::RepositoryHidden {
         repository: "acme/hidden".into(),
         app_token: true,
-    }
+    })
 }
 
 fn elsewhere(branch: &str) -> Input {
@@ -81,7 +81,7 @@ fn an_ordinary_failure_does_not_pause_the_repository() {
     let now = Instant::now();
     peer.cache.schedule([input("first"), input("second")], now);
     peer.cache.poll(now);
-    peer.complete(now, Err(Error::GitHubQuery), None);
+    peer.complete(now, Err(Error::GitHub(crate::github::Error::Query)), None);
     let (_, next, _, _, _) = peer.incoming.try_recv().unwrap();
     assert_eq!(next, [input("second")]);
 }

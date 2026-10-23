@@ -41,7 +41,9 @@ fn successful_signin_dismisses_only_the_signin_panel_and_restores_focus(cx: &mut
             view.github_fixture(false, window, cx);
             view.menu
                 .github
-                .complete_profile_fixture(Err(crate::Error::GitHubAuthentication));
+                .complete_profile_fixture(Err(crate::Error::GitHub(
+                    crate::github::Error::Authentication,
+                )));
             view.poll_github(window, cx);
             assert!(view.menu.page == Some(crate::menu::Page::GitHub));
             assert!(!view.menu.github.connected());

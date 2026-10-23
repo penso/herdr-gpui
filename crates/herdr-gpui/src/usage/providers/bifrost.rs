@@ -5,8 +5,9 @@
 //! ported; the per-budget list and model rows are shown as facts.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -58,7 +59,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let base = probe
         .text_setting("base_url")
         .filter(|base| !base.is_empty())
-        .ok_or(Error::UsageNotSignedIn)?;
+        .ok_or(Error::NotSignedIn)?;
     let request = Request::get(quota_url(&base)?)
         .secret_header("x-bf-vk", "", key)
         .header("Accept", "application/json");
@@ -195,7 +196,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     }
     let inactive = root.is_active == Some(false);
     if inactive && budgets.is_empty() && rate_limits.is_empty() && unknown_limits.is_empty() {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
 
     let mut windows = Vec::new();

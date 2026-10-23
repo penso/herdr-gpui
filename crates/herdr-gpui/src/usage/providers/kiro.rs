@@ -11,8 +11,9 @@
 //! through pipes; the `/context` window breakdown is left out too.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe},
         service::{Meta, Service},
@@ -76,7 +77,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     let text = strip_ansi(output);
     let lower = text.to_lowercase();
     if text.trim().is_empty() || lower.contains("could not retrieve usage information") {
-        return Err(Error::UsageCommand("kiro-cli /usage"));
+        return Err(Error::Command("kiro-cli /usage").into());
     }
     if [
         "not logged in",
@@ -88,7 +89,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     .iter()
     .any(|marker| lower.contains(marker))
     {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
 
     let plan = plan(&text);
@@ -97,7 +98,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     let credits = covered(&text);
     let has_metrics = percent.is_some() || credits.is_some();
     if !has_metrics && !(plan.new_format && (managed || plan.summary)) {
-        return Err(Error::UsageCommand("kiro-cli /usage"));
+        return Err(Error::Command("kiro-cli /usage").into());
     }
 
     let mut windows = Vec::new();
@@ -482,11 +483,11 @@ mod tests {
     fn maps_sign_in_and_format_failures() {
         assert!(matches!(
             parse("Not logged in. Run kiro-cli login", None, now()),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         assert!(matches!(
             parse("Welcome to Kiro", None, now()),
-            Err(Error::UsageCommand(_))
+            Err(crate::Error::Usage(Error::Command(_)))
         ));
     }
 

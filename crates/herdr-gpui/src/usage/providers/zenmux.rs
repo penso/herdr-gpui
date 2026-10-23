@@ -5,8 +5,9 @@
 //! and CodexBar reads no cookies for it either.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -44,7 +45,9 @@ impl Service for Zenmux {
         // the whole refresh as CodexBar does.
         let balance = match probe.body(Request::get(format!("{BASE}/payg/balance")).bearer(&key)) {
             Ok(body) => Some(body),
-            Err(Error::UsageRejected) => return Some(Err(Error::UsageRejected)),
+            Err(crate::Error::Usage(Error::Rejected)) => {
+                return Some(Err(crate::Error::Usage(Error::Rejected)));
+            }
             Err(_) => None,
         };
         Some(parse(&subscription, balance.as_deref()))

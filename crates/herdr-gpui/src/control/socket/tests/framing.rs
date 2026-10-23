@@ -20,7 +20,7 @@ fn a_line_over_the_limit_is_refused_without_reading_further() {
     let endless = std::io::repeat(b'x');
     assert!(matches!(
         read_line(endless),
-        Err(crate::Error::ControlMessageSize { limit }) if limit == MAX_MESSAGE
+        Err(crate::Error::Control(crate::control::Error::MessageSize { limit })) if limit == MAX_MESSAGE
     ));
 }
 

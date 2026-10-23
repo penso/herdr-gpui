@@ -8,8 +8,9 @@
 //! are only balances.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit, title_case},
         probe::{Probe, Request, Response, Secret},
         service::{Meta, Service, Setting, Timestamp},
@@ -91,7 +92,7 @@ fn post(probe: &mut Probe, cookie: &Secret, id: &str) -> Result<Response> {
 /// session has ended.
 fn checked(status: u16, body: String) -> Result<String> {
     if (300..400).contains(&status) || login_landing(&body) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     Response { status, body }.ok()
 }
@@ -119,7 +120,7 @@ fn discover(probe: &mut Probe, cookie: &Secret) -> Result<String> {
         // Chunks are public, so they carry no cookie.
         match probe.http(Request::get(url).timeout(Duration::from_secs(4))) {
             Ok(chunk) if chunk.status == 408 || chunk.status == 429 || chunk.status >= 500 => {
-                return Err(chunk.ok().err().unwrap_or(Error::UsageStatus(0)));
+                return Err(chunk.ok().err().unwrap_or(Error::Status(0).into()));
             }
             Ok(chunk) if (200..300).contains(&chunk.status) => {
                 if let Some(id) = action_id(&chunk.body) {
@@ -232,7 +233,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .cloned()
         .ok_or_else(invalid)?;
     let billing: Billing =
-        serde_json::from_value(billing).map_err(|error| Error::UsageJson(error.classify()))?;
+        serde_json::from_value(billing).map_err(|error| Error::Json(error.classify()))?;
     let spent = billing
         .spent
         .filter(|value| value.is_finite())
@@ -392,11 +393,11 @@ mod tests {
         let page = r#"<script>self.__next_f.push([1,"0:{\"f\":[[[\"\",{\"children\":[\"(auth)\",{\"children\":[\"login\",{\"children\":[\"__PAGE__\",{}]}]}]}]]}"])</script>"#;
         assert!(matches!(
             checked(200, page.into()),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         assert!(matches!(
             checked(307, String::new()),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

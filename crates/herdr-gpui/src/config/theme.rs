@@ -1,7 +1,8 @@
 //! Terminal and chrome colors: built-in palettes, Ghostty theme files, and
 //! where they are found.
 use super::{Config, config_root, home, omarchy};
-use crate::{Error, Result, contrast::Contrast, error::ThemeParseError};
+use super::{Error, ThemeParseError};
+use crate::{Result, contrast::Contrast};
 use std::{
     collections::HashSet,
     env, fs,
@@ -45,7 +46,7 @@ impl<'a> ThemeName<'a> {
             {
                 Ok(Self::System { light, dark })
             }
-            _ => Err(Error::InvalidThemePair),
+            _ => Err(Error::InvalidThemePair.into()),
         }
     }
 
@@ -135,15 +136,15 @@ impl Config {
             let entries = match fs::read_dir(directory) {
                 Ok(entries) => entries,
                 Err(error) if missing(&error) => continue,
-                Err(error) => return Err(Error::from(error).at_path(directory)),
+                Err(error) => return Err(crate::Error::from(error).at_path(directory)),
             };
             for entry in entries {
-                let entry = entry.map_err(|error| Error::from(error).at_path(directory))?;
+                let entry = entry.map_err(|error| crate::Error::from(error).at_path(directory))?;
                 // Follow symlinks just as the named theme loader does.
                 let metadata = match fs::metadata(entry.path()) {
                     Ok(metadata) => metadata,
                     Err(error) if error.kind() == ErrorKind::NotFound => continue,
-                    Err(error) => return Err(Error::from(error).at_path(&entry.path())),
+                    Err(error) => return Err(crate::Error::from(error).at_path(&entry.path())),
                 };
                 if metadata.is_file()
                     && let Some(name) = entry.file_name().to_str()
@@ -227,7 +228,8 @@ pub(super) fn resolve(
         return Ok(theme);
     }
     let path = theme_file(name, directories)?;
-    let text = fs::read_to_string(&path).map_err(|error| Error::from(error).at_path(&path))?;
+    let text =
+        fs::read_to_string(&path).map_err(|error| crate::Error::from(error).at_path(&path))?;
     Theme::parse_ghostty(&text).map_err(|error| error.at_path(&path))
 }
 
@@ -283,7 +285,7 @@ fn theme_file(name: &str, directories: impl FnOnce() -> Result<Vec<PathBuf>>) ->
             Some(Component::Normal(_))
         )
     {
-        return Err(Error::InvalidThemePath);
+        return Err(Error::InvalidThemePath.into());
     }
     let directories = directories()?;
     for directory in &directories {
@@ -292,13 +294,14 @@ fn theme_file(name: &str, directories: impl FnOnce() -> Result<Vec<PathBuf>>) ->
             Ok(metadata) if metadata.is_file() => return Ok(candidate),
             Ok(_) => {}
             Err(error) if missing(&error) => {}
-            Err(error) => return Err(Error::from(error).at_path(&candidate)),
+            Err(error) => return Err(crate::Error::from(error).at_path(&candidate)),
         }
     }
     Err(Error::ThemeNotFound {
         name: name.into(),
         directories,
-    })
+    }
+    .into())
 }
 
 /// Colors are packed 24-bit RGB, without an alpha channel.
@@ -608,10 +611,13 @@ impl Theme {
             let (key, value) = line.split_once('=').unwrap_or((line, ""));
             let key = key.trim();
             let value = value.trim();
-            let error = |source| Error::ThemeLine {
-                line: index + 1,
-                key: key.into(),
-                source,
+            let error = |source| -> crate::Error {
+                Error::ThemeLine {
+                    line: index + 1,
+                    key: key.into(),
+                    source,
+                }
+                .into()
             };
             let color = |value: &str| -> Result<u32> {
                 let hex = value.strip_prefix('#').unwrap_or(value);

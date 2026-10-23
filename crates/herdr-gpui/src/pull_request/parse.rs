@@ -1,8 +1,8 @@
 //! Turning a GraphQL response into a `PullRequest`, rejecting anything whose
 //! repository or branch does not match what was asked for.
 
+use super::Error;
 use super::{MergeMethod, PullRequest, Result, State, clean, fetch::OUTPUT_LIMIT};
-use crate::Error;
 
 pub(super) fn parse_graphql(
     response: serde_json::Value,
@@ -12,11 +12,11 @@ pub(super) fn parse_graphql(
     head: Option<&super::fetch::Head>,
 ) -> Result {
     if response["data"]["repository"]["pullRequests"]["pageInfo"]["hasNextPage"] == true {
-        return Err(Error::PrAmbiguous);
+        return Err(Error::Ambiguous.into());
     }
     let mut nodes = response["data"]["repository"]["pullRequests"]["nodes"]
         .as_array()
-        .ok_or(Error::PrRepository)?
+        .ok_or(Error::Repository)?
         .clone();
     if let Some(head) = head {
         nodes.retain(|pr| {
@@ -37,7 +37,7 @@ pub(super) fn parse_graphql(
         pr["statusCheckRollup"] = checks;
     }
     let mut result = parse_with_owner(
-        &serde_json::to_string(&nodes).map_err(Error::github_json)?,
+        &serde_json::to_string(&nodes).map_err(crate::github::Error::json)?,
         owner,
         repo,
         branch,
@@ -90,7 +90,7 @@ pub(super) fn parse_by_number(
         return Ok(None);
     }
     if pr["number"].as_u64() != Some(number) {
-        return Err(Error::PrIdentity);
+        return Err(Error::Identity.into());
     }
     let (Some(head_owner), Some(head_repo), Some(branch)) = (
         pr["headRepositoryOwner"]["login"].as_str(),
@@ -116,9 +116,10 @@ pub(super) fn parse(text: &str, owner: &str, repo: &str, branch: &str) -> Result
 
 fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owner: &str) -> Result {
     if text.len() > OUTPUT_LIMIT {
-        return Err(Error::PrSize);
+        return Err(Error::Size.into());
     }
-    let mut values: Vec<PullRequest> = serde_json::from_str(text).map_err(Error::github_json)?;
+    let mut values: Vec<PullRequest> =
+        serde_json::from_str(text).map_err(crate::github::Error::json)?;
     // A lone pull request from another head owner is held to the identity
     // check below; among several, other owners' ones are not this branch's.
     if values.len() > 1 {
@@ -128,7 +129,7 @@ fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owne
                 .eq_ignore_ascii_case(head_owner)
         });
         if values.is_empty() {
-            return Err(Error::PrAmbiguous);
+            return Err(Error::Ambiguous.into());
         }
     }
     let Some(mut pr) = current(values, |pr| pr.state == State::Open)? else {
@@ -144,7 +145,7 @@ fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owne
             .login
             .eq_ignore_ascii_case(head_owner)
     {
-        return Err(Error::PrIdentity);
+        return Err(Error::Identity.into());
     }
     pr.url = expected;
     pr.title = clean(&pr.title);
@@ -182,7 +183,7 @@ pub(super) fn current<T>(
         [index] => Ok(Some(values.swap_remove(*index))),
         [] if values.is_empty() => Ok(None),
         [] => Ok(Some(values.swap_remove(0))),
-        _ => Err(Error::PrAmbiguous),
+        _ => Err(Error::Ambiguous.into()),
     }
 }
 

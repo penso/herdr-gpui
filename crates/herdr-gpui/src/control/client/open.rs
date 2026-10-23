@@ -23,7 +23,9 @@ pub(super) fn open(path: &Path, context: &Context) -> crate::Result<Output> {
     match send() {
         // A window ID names a window of a running app, so there is nothing
         // to start for one.
-        Err(crate::Error::ControlUnavailable { .. }) if context.window.is_none() => {
+        Err(crate::Error::Control(crate::control::Error::Unavailable { .. }))
+            if context.window.is_none() =>
+        {
             start_app()?;
             retry(
                 Instant::now() + START_WAIT,
@@ -87,13 +89,14 @@ fn retry(
         match send() {
             Err(error) if starting(&error) && now() < deadline => continue,
             Err(error) if starting(&error) => {
-                return Err(crate::Error::ControlRejected {
+                return Err(crate::control::Error::Rejected {
                     code: ErrorCode::Timeout,
                     message: format!(
                         "Herdr UI did not open the folder within {} seconds of starting: {error}",
                         START_WAIT.as_secs()
                     ),
-                });
+                }
+                .into());
             }
             result => return result,
         }
@@ -105,11 +108,11 @@ fn retry(
 fn starting(error: &crate::Error) -> bool {
     matches!(
         error,
-        crate::Error::ControlUnavailable { .. }
-            | crate::Error::ControlRejected {
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
+            | crate::Error::Control(crate::control::Error::Rejected {
                 code: ErrorCode::Busy,
                 ..
-            }
+            })
     )
 }
 
@@ -118,7 +121,9 @@ fn starting(error: &crate::Error) -> bool {
 /// from whoever runs the command, an Explorer verb included, so it is
 /// checked here where the caller's directory is known and again in the app.
 pub(crate) fn directory(path: &Path) -> crate::Result<String> {
-    let refused = |code, message: String| crate::Error::ControlRejected { code, message };
+    let refused = |code, message: String| {
+        crate::Error::from(crate::control::Error::Rejected { code, message })
+    };
     let path = &unquoted(path);
     let resolved: PathBuf = crate::palette::canonicalize(path).map_err(|error| {
         refused(

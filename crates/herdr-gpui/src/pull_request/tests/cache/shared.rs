@@ -41,7 +41,9 @@ fn a_rate_limit_one_window_hit_pauses_the_others() {
     first.cache.poll(now);
     first.complete(
         now,
-        Err(Error::GitHubRateLimit { reset: None }),
+        Err(Error::GitHub(crate::github::Error::RateLimit {
+            reset: None,
+        })),
         Some(Duration::from_secs(600)),
     );
     second.cache.schedule([input("other")], now);

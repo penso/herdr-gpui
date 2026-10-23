@@ -87,15 +87,27 @@ fn cli_requires_numeric_ratios() {
 #[test]
 fn maps_gateway_errors() {
     let login = serde_json::json!({"code":"ConsoleNeedLogin","message":"please login"});
-    assert!(matches!(check(&login), Err(Error::UsageRejected)));
+    assert!(matches!(
+        check(&login),
+        Err(crate::Error::Usage(Error::Rejected))
+    ));
     let failed = serde_json::json!({"successResponse":true,"data":{"success":false,
         "errorCode":"Throttling","errorMsg":"busy"}});
-    assert!(matches!(check(&failed), Err(Error::UsageJson(_))));
+    assert!(matches!(
+        check(&failed),
+        Err(crate::Error::Usage(Error::Json(_)))
+    ));
     let status = serde_json::json!({"statusCode":500,"message":"oops"});
-    assert!(matches!(check(&status), Err(Error::UsageStatus(500))));
+    assert!(matches!(
+        check(&status),
+        Err(crate::Error::Usage(Error::Status(500)))
+    ));
     let workspace = serde_json::json!({"success":false,
         "code":"BailianGateway.Workspace.NotAuthorised"});
-    assert!(matches!(check(&workspace), Err(Error::UsageJson(_))));
+    assert!(matches!(
+        check(&workspace),
+        Err(crate::Error::Usage(Error::Json(_)))
+    ));
     assert!(check(&serde_json::json!({"code":"200","data":{}})).is_ok());
 }
 

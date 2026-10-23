@@ -24,7 +24,7 @@ fn symlinks_and_shared_directories_are_rejected_before_generation() {
     fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o777)).unwrap();
     assert!(
         matches!(snapshot(dir.path(), |_| panic!("must not generate")),
-        Err(Error::KeyFile(source)) if matches!(*source, crate::Error::CredentialPermissions))
+        Err(Error::KeyFile(source)) if matches!(*source, crate::Error::GitHub(crate::github::Error::CredentialPermissions)))
     );
 }
 #[test]
@@ -60,7 +60,7 @@ fn generation_preserves_another_apps_winning_key_and_rejects_open_permissions() 
     fs::set_permissions(&destination, fs::Permissions::from_mode(0o644)).unwrap();
     assert!(
         matches!(snapshot(dir.path(), |_| panic!("must not replace")),
-        Err(Error::KeyFile(source)) if matches!(*source, crate::Error::CredentialPermissions))
+        Err(Error::KeyFile(source)) if matches!(*source, crate::Error::GitHub(crate::github::Error::CredentialPermissions)))
     );
 }
 #[test]
@@ -85,5 +85,5 @@ fn writable_non_sticky_temp_parents_are_rejected() {
     fs::set_permissions(&child, fs::Permissions::from_mode(0o700)).unwrap();
     fs::set_permissions(parent.path(), fs::Permissions::from_mode(0o777)).unwrap();
     assert!(matches!(protected_path(&child), Err(Error::KeyFile(source))
-        if matches!(*source, crate::Error::CredentialPermissions)));
+        if matches!(*source, crate::Error::GitHub(crate::github::Error::CredentialPermissions))));
 }

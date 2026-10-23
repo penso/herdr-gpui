@@ -32,11 +32,19 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
 
     begin(&mut usage, &local, now);
     usage.apply(
-        Message::Reading(local.clone(), claude, Err(Error::UsageRateLimited)),
+        Message::Reading(
+            local.clone(),
+            claude,
+            Err(Error::Usage(usage::Error::RateLimited)),
+        ),
         now,
     );
     usage.apply(
-        Message::Reading(local.clone(), codex, Err(Error::UsageRejected)),
+        Message::Reading(
+            local.clone(),
+            codex,
+            Err(Error::Usage(usage::Error::Rejected)),
+        ),
         now,
     );
     usage.apply(Message::Done(local.clone(), Ok(())), now);
@@ -47,13 +55,13 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
             Reading {
                 provider: codex,
                 report: None,
-                error: Some(Error::UsageRejected.to_string()),
+                error: Some(usage::Error::Rejected.to_string()),
                 access: None,
             },
             Reading {
                 provider: claude,
                 report: Some(report(claude, 20.)),
-                error: Some(Error::UsageRateLimited.to_string()),
+                error: Some(usage::Error::RateLimited.to_string()),
                 access: None,
             },
         ],
@@ -63,7 +71,7 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
 
     begin(&mut usage, &local, now);
     usage.apply(
-        Message::Done(local.clone(), Err(Error::UsageUnreachable)),
+        Message::Done(local.clone(), Err(Error::Usage(usage::Error::Unreachable))),
         now,
     );
     let entry = usage.current().unwrap();

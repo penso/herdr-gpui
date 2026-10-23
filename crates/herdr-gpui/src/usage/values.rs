@@ -3,12 +3,12 @@
 //! URL components, and how amounts read in facts.
 
 use super::model::group;
-use crate::{Error, Result};
+use crate::{Result, usage::Error};
 use serde_json::Value;
 
 /// A response that parsed but does not hold what the service documents.
-pub(crate) fn invalid() -> Error {
-    Error::UsageJson(serde_json::error::Category::Data)
+pub(crate) fn invalid() -> crate::Error {
+    Error::Json(serde_json::error::Category::Data).into()
 }
 
 /// A finite number sent as a JSON number or a numeric string.
@@ -49,9 +49,9 @@ pub(crate) fn https_base(raw: Option<String>, default: &str) -> Result<String> {
     } else {
         format!("https://{raw}")
     };
-    let parsed = url::Url::parse(&url).map_err(|_| Error::UsageNotSignedIn)?;
+    let parsed = url::Url::parse(&url).map_err(|_| Error::NotSignedIn)?;
     if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
+        return Err(Error::NotSignedIn.into());
     }
     Ok(url.trim_end_matches('/').to_owned())
 }
@@ -59,7 +59,7 @@ pub(crate) fn https_base(raw: Option<String>, default: &str) -> Result<String> {
 /// A self-hosted gateway's address: HTTPS, or plain HTTP only to this
 /// machine or a private network, and never with credentials in it.
 pub(crate) fn gateway(raw: &str) -> Result<url::Url> {
-    let url = url::Url::parse(raw.trim()).map_err(|_| Error::UsageNotSignedIn)?;
+    let url = url::Url::parse(raw.trim()).map_err(|_| Error::NotSignedIn)?;
     let private = match url.host() {
         Some(url::Host::Domain(name)) => {
             let name = name.to_ascii_lowercase();
@@ -70,11 +70,11 @@ pub(crate) fn gateway(raw: &str) -> Result<url::Url> {
             let first = ip.segments()[0];
             ip.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
         }
-        None => return Err(Error::UsageNotSignedIn),
+        None => return Err(Error::NotSignedIn.into()),
     };
     let secure = url.scheme() == "https" || (url.scheme() == "http" && private);
     if !secure || !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
+        return Err(Error::NotSignedIn.into());
     }
     Ok(url)
 }

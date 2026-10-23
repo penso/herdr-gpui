@@ -8,8 +8,9 @@
 //! fixed dashboard link cannot, so none is given.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit, group},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
@@ -51,7 +52,7 @@ impl Service for Wayfinder {
         };
         Some(
             gateway(&raw)
-                .ok_or(Error::UsageNotSignedIn)
+                .ok_or_else(|| Error::NotSignedIn.into())
                 .and_then(|base| fetch(probe, &base, None)),
         )
     }

@@ -1,8 +1,7 @@
 //! Persist the device-flow refresh token with its access token and issuing client.
 //! Legacy entries contain only an access token; they remain readable.
 
-use super::{Profile, Result, device::TokenResponse, http::oauth, valid_token};
-use crate::Error;
+use super::{Error, Profile, Result, device::TokenResponse, http::oauth, valid_token};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
@@ -72,7 +71,7 @@ impl Credential {
                         .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
             })
         {
-            return Err(Error::GitHubToken);
+            return Err(Error::Token.into());
         }
         Ok(())
     }
@@ -98,12 +97,12 @@ impl Credential {
     pub(super) fn decode(value: &SecretString) -> Result<Self> {
         let text = value.expose_secret().trim();
         if text.len() > LIMIT {
-            return Err(Error::GitHubToken);
+            return Err(Error::Token.into());
         }
         if !text.starts_with('{') {
             return Self::new(text.into(), None, "");
         }
-        let credential: Self = serde_json::from_str(text).map_err(Error::github_json)?;
+        let credential: Self = serde_json::from_str(text).map_err(Error::json)?;
         credential.validate()?;
         Ok(credential)
     }
@@ -135,16 +134,13 @@ impl Credential {
                 expires_at: self.expires_at,
             },
         )
-        .map_err(Error::github_json)?;
-        let text = std::str::from_utf8(&bytes).map_err(Error::GitHubEncoding)?;
+        .map_err(Error::json)?;
+        let text = std::str::from_utf8(&bytes).map_err(Error::Encoding)?;
         Ok(text.into())
     }
 
     pub(super) fn refresh(&self) -> Result<Self> {
-        let refresh = self
-            .refresh_token
-            .as_ref()
-            .ok_or(Error::GitHubAuthentication)?;
+        let refresh = self.refresh_token.as_ref().ok_or(Error::Authentication)?;
         tracing::info!(category = "github_refresh", "Renewing saved GitHub sign-in");
         let reply: TokenResponse = oauth(
             "oauth/access_token",
@@ -157,7 +153,7 @@ impl Credential {
         )?;
         match super::device::token_reply(reply, &self.client_id)? {
             super::Reply::Token(credential) => Ok(credential),
-            _ => Err(Error::GitHubToken),
+            _ => Err(Error::Token.into()),
         }
     }
 
@@ -175,7 +171,7 @@ impl Credential {
             return profile(Arc::new(renewed.access_token));
         }
         match profile(Arc::new(self.access_token.expose_secret().into())) {
-            Err(Error::GitHubAuthentication) if self.refresh_token.is_some() => {
+            Err(crate::Error::GitHub(Error::Authentication)) if self.refresh_token.is_some() => {
                 let renewed = refresh(&self)?;
                 // GitHub invalidates the old pair on rotation. Persist the new
                 // pair before any further HTTP request, even if profile fails.

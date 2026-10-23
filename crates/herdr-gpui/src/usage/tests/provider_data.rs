@@ -132,16 +132,31 @@ fn statuses_become_typed_errors_without_echoing_the_body() {
         status,
         body: "secret@example.com".into(),
     };
-    assert!(matches!(response(0).ok(), Err(Error::UsageConnect)));
-    assert!(matches!(response(401).ok(), Err(Error::UsageRejected)));
-    assert!(matches!(response(403).ok(), Err(Error::UsageRejected)));
-    assert!(matches!(response(429).ok(), Err(Error::UsageRateLimited)));
-    assert!(matches!(response(500).ok(), Err(Error::UsageStatus(500))));
+    assert!(matches!(
+        response(0).ok(),
+        Err(Error::Usage(usage::Error::Connect))
+    ));
+    assert!(matches!(
+        response(401).ok(),
+        Err(Error::Usage(usage::Error::Rejected))
+    ));
+    assert!(matches!(
+        response(403).ok(),
+        Err(Error::Usage(usage::Error::Rejected))
+    ));
+    assert!(matches!(
+        response(429).ok(),
+        Err(Error::Usage(usage::Error::RateLimited))
+    ));
+    assert!(matches!(
+        response(500).ok(),
+        Err(Error::Usage(usage::Error::Status(500)))
+    ));
     assert_eq!(response(204).ok().unwrap(), "secret@example.com");
     let error = codex::parse(r#"{"plan_type": "secret@example.com"#).unwrap_err();
     assert!(matches!(
         error,
-        Error::UsageJson(serde_json::error::Category::Eof)
+        Error::Usage(usage::Error::Json(serde_json::error::Category::Eof))
     ));
     assert!(!error.to_string().contains("secret"));
 }

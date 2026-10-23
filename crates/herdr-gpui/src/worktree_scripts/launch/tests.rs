@@ -94,11 +94,11 @@ fn locates_a_workspace_checkout_and_its_main_checkout() {
     assert_eq!(locate(&response, "w1").unwrap().path, "/r");
     assert!(matches!(
         locate(&response, "w9"),
-        Err(crate::Error::WorktreeScriptsCheckout)
+        Err(crate::Error::WorktreeScripts(Error::Checkout))
     ));
     assert!(matches!(
         locate(&json!({"error":{"code":"x","message":"no"}}), "w2"),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
     // Two entries claiming the workspace identify nothing.
     let ambiguous = json!({"result":{"type":"worktree_list","worktrees":[
@@ -122,10 +122,10 @@ fn created_tabs_name_their_pane() {
     );
     assert!(matches!(
         created_tab(&json!({"result":{"type":"workspace_created"}})),
-        Err(crate::Error::WorktreeScriptsResponse)
+        Err(crate::Error::WorktreeScripts(Error::Response))
     ));
     assert!(matches!(
         created_tab(&json!({"error":{"code":"denied","message":"no"}})),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }

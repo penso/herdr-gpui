@@ -56,7 +56,10 @@ fn the_server_never_joins_a_pipe_someone_else_created() {
     assert!(
         matches!(
             refused,
-            Err(crate::Error::ControlSocketInUse { .. } | crate::Error::ControlPipeForeign { .. })
+            Err(
+                crate::Error::Control(crate::control::Error::SocketInUse { .. })
+                    | crate::Error::Control(crate::control::Error::PipeForeign { .. })
+            )
         ),
         "{:?}",
         refused.err()

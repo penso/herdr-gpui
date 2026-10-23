@@ -4,8 +4,9 @@
 //! configured `base_url`. Everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -68,7 +69,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
 fn usage_url(raw: &str) -> Result<String> {
     let mut url = gateway(raw)?;
     if url.query().is_some() || url.fragment().is_some() {
-        return Err(Error::UsageNotSignedIn);
+        return Err(Error::NotSignedIn.into());
     }
     let path = url.path().trim_end_matches('/');
     let path = format!("{}/v1/usage", path.strip_suffix("/v1").unwrap_or(path));

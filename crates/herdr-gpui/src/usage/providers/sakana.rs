@@ -8,8 +8,9 @@
 //! for Sakana; the automatic import here is an addition.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, SESSION, Section, Unit, WEEK, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting},
@@ -56,7 +57,7 @@ fn read(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
     let response = probe.http(page(BILLING_URL))?;
     // The console redirects a signed-out session to its login page.
     if (300..400).contains(&response.status) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let billing = response.ok()?;
     // Pay-as-you-go credit is optional; the subscription windows stand without it.
@@ -77,7 +78,7 @@ pub(crate) fn parse(billing: &str, payg: Option<&str>) -> Result<Report> {
     .collect::<Result<_>>()?;
     if windows.is_empty() {
         // A page without usage windows is the login page or a changed layout.
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let plan = plan(&nodes);
     let (balances, sections) = payg.and_then(pay_as_you_go).unwrap_or_default();
@@ -375,10 +376,13 @@ mod tests {
     #[test]
     fn invalid_percentages_and_login_pages_fail() {
         let over = BILLING.replace("92% used", "101% used");
-        assert!(matches!(parse(&over, None), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse(&over, None),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
         assert!(matches!(
             parse("<html><body>Sign in</body></html>", None),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

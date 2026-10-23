@@ -59,7 +59,7 @@ fn competing_restores_load_the_rotated_credential_inside_the_transaction() {
                 credential.profile_with(
                     |token| {
                         if token.expose_secret() == "old-access" {
-                            return Err(Error::GitHubAuthentication);
+                            return Err(crate::Error::GitHub(Error::Authentication));
                         }
                         assert_eq!(token.expose_secret(), "new-access");
                         Ok(Profile {

@@ -6,8 +6,9 @@
 //! consumer subscription; there is no local sign-in to find.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
@@ -50,7 +51,7 @@ impl Service for Xai {
             .text_setting("team_id")
             .filter(|team| !team.is_empty() && !team.contains('/') && team != "." && team != "..")
         else {
-            return Some(Err(Error::UsageNotSignedIn));
+            return Some(Err(Error::NotSignedIn.into()));
         };
         let root = format!(
             "{ROOT}/{}",
@@ -68,7 +69,9 @@ impl Service for Xai {
                 .json(query(now)),
         ) {
             Ok(body) => Some(body),
-            Err(Error::UsageRejected) => return Some(Err(Error::UsageRejected)),
+            Err(crate::Error::Usage(Error::Rejected)) => {
+                return Some(Err(crate::Error::Usage(Error::Rejected)));
+            }
             // History only enriches the balance.
             Err(_) => None,
         };

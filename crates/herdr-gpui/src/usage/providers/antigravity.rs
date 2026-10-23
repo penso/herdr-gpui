@@ -15,8 +15,9 @@
 //! OAuth client); and the local SQLite conversation history.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, Provider, Report, SESSION, WEEK, Window},
         probe::{HostPath, Probe},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -74,9 +75,10 @@ impl Service for Antigravity {
             .ok()
             .filter(|output| output.success)?;
         if parse_version(&version.stdout).is_none_or(|version| version < MINIMUM) {
-            return Some(Err(Error::UsageCommand(
+            return Some(Err(Error::Command(
                 "agy 1.1.11 or later is needed for usage reports",
-            )));
+            )
+            .into()));
         }
         Some(
             probe
@@ -89,9 +91,7 @@ impl Service for Antigravity {
                     if output.success {
                         parse(&output.stdout)
                     } else {
-                        Err(Error::UsageCommand(
-                            "agy could not report usage; run agy to sign in",
-                        ))
+                        Err(Error::Command("agy could not report usage; run agy to sign in").into())
                     }
                 }),
         )
@@ -114,9 +114,7 @@ fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
 pub(crate) fn parse(body: &str) -> Result<Report> {
     let report: CliReport = json(body.trim())?;
     if report.status != "SUCCESS" || report.command.name != "usage" {
-        return Err(Error::UsageCommand(
-            "agy could not report usage; run agy to sign in",
-        ));
+        return Err(Error::Command("agy could not report usage; run agy to sign in").into());
     }
     let windows: Vec<Window> = report
         .command
@@ -351,7 +349,10 @@ mod tests {
     #[test]
     fn failed_report_and_versions() {
         let failed = r#"{"status": "ERROR", "command": {"name": "usage", "data": {}}}"#;
-        assert!(matches!(parse(failed), Err(Error::UsageCommand(_))));
+        assert!(matches!(
+            parse(failed),
+            Err(crate::Error::Usage(Error::Command(_)))
+        ));
         assert_eq!(parse_version("1.2.3\n"), Some((1, 2, 3)));
         assert_eq!(parse_version("agy 1.1.11"), Some((1, 1, 11)));
         assert_eq!(parse_version("1.2"), None);

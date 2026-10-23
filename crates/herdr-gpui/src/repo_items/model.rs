@@ -3,10 +3,7 @@
 //! length-bounded before they can reach a label or a daemon request.
 
 use super::Origin;
-use crate::{
-    Error,
-    pull_request::{Remote, clean},
-};
+use crate::pull_request::{Remote, clean};
 use serde_json::Value;
 
 /// Items per list. The tabs are a picker, not a mirror of the repository, so a
@@ -143,7 +140,7 @@ pub(crate) fn issue_branch(number: u64, title: &str) -> String {
 pub(super) fn parse(response: &Value, origin: &Origin, kind: Kind) -> crate::Result<Vec<Item>> {
     let nodes = response["data"]["repository"][kind.field()]["nodes"]
         .as_array()
-        .ok_or(Error::PrRepository)?;
+        .ok_or(crate::pull_request::Error::Repository)?;
     Ok(nodes
         .iter()
         .take(LIMIT)

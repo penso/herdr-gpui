@@ -46,7 +46,7 @@ fn image_writer_preserves_offsets_through_short_writes_and_timeouts() {
     writer.started = Some(Instant::now() - COMMAND_TIMEOUT);
     assert!(matches!(
         writer.check_timeout(),
-        Err(Error::ClipboardImageWriteTimeout)
+        Err(Error::Clipboard(clipboard::Error::WriteTimeout))
     ));
 }
 

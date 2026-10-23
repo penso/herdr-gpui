@@ -7,7 +7,7 @@
 //! request using them runs here whichever host is selected.
 
 use super::{cookies::CookieJar, model::Provider, service::Setting, settings::ProviderSettings};
-use crate::{Error, Result};
+use crate::{Result, usage::Error};
 use secrecy::{ExposeSecret, SecretString};
 use std::{
     io::Read,
@@ -234,10 +234,10 @@ impl Response {
     pub fn ok(self) -> Result<String> {
         match self.status {
             200..=299 => Ok(self.body),
-            0 => Err(Error::UsageConnect),
-            401 | 403 => Err(Error::UsageRejected),
-            429 => Err(Error::UsageRateLimited),
-            status => Err(Error::UsageStatus(status)),
+            0 => Err(Error::Connect.into()),
+            401 | 403 => Err(Error::Rejected.into()),
+            429 => Err(Error::RateLimited.into()),
+            status => Err(Error::Status(status).into()),
         }
     }
 
@@ -488,9 +488,9 @@ impl<'a> Probe<'a> {
     /// ask macOS was withheld or refused, or there simply is none.
     pub(super) fn missing(&self) -> Error {
         match self.prompt {
-            Prompt::Withheld => Error::UsageKeychainAccess,
-            Prompt::Refused => Error::UsageKeychainDenied,
-            Prompt::None => Error::UsageNotSignedIn,
+            Prompt::Withheld => Error::KeychainAccess,
+            Prompt::Refused => Error::KeychainDenied,
+            Prompt::None => Error::NotSignedIn,
         }
     }
 
@@ -692,7 +692,7 @@ impl<'a> Probe<'a> {
             Place::Here => http_local(&request),
             Place::There => match self.exec {
                 Exec::Remote(shell) => shell.http(&request),
-                Exec::Local => Err(Error::UsageMixedSecrets),
+                Exec::Local => Err(Error::MixedSecrets.into()),
             },
         }
     }
@@ -711,11 +711,11 @@ impl<'a> Probe<'a> {
                 let body = http_local(&request)?.ok()?;
                 json_field(&body, path)
                     .map(|value| Secret::from(SecretString::from(value)))
-                    .ok_or(Error::UsageJson(serde_json::error::Category::Data))
+                    .ok_or(Error::Json(serde_json::error::Category::Data).into())
             }
             Place::There => match self.exec {
                 Exec::Remote(shell) => shell.exchange(&request, path),
-                Exec::Local => Err(Error::UsageMixedSecrets),
+                Exec::Local => Err(Error::MixedSecrets.into()),
             },
         }
     }
@@ -732,7 +732,7 @@ impl<'a> Probe<'a> {
             }
         }
         match (here, there, self.is_remote()) {
-            (true, true, _) => Err(Error::UsageMixedSecrets),
+            (true, true, _) => Err(Error::MixedSecrets.into()),
             (true, false, _) | (false, _, false) => Ok(Place::Here),
             (false, _, true) => Ok(Place::There),
         }
@@ -809,8 +809,8 @@ fn http_local(request: &Request) -> Result<Response> {
         .into();
     let mut headers = Vec::with_capacity(request.headers.len());
     for (name, parts) in &request.headers {
-        let text = text_of(parts).ok_or(Error::UsageMixedSecrets)?;
-        let mut value = ureq::http::HeaderValue::from_str(&text).map_err(Error::UsageHeader)?;
+        let text = text_of(parts).ok_or(Error::MixedSecrets)?;
+        let mut value = ureq::http::HeaderValue::from_str(&text).map_err(Error::Header)?;
         value.set_sensitive(parts.iter().any(|part| matches!(part, Part::Secret(_))));
         headers.push((name.as_str(), value));
     }
@@ -828,13 +828,13 @@ fn http_local(request: &Request) -> Result<Response> {
                 call = call.header(name, value);
             }
             let body = match &request.body {
-                Some(parts) => text_of(parts).ok_or(Error::UsageMixedSecrets)?,
+                Some(parts) => text_of(parts).ok_or(Error::MixedSecrets)?,
                 None => Zeroizing::new(String::new()),
             };
             call.send(body.as_bytes())
         }
     };
-    let mut response = result.map_err(Error::UsageNetwork)?;
+    let mut response = result.map_err(Error::Network)?;
     let status = response.status().as_u16();
     let mut body = String::new();
     response
@@ -842,9 +842,9 @@ fn http_local(request: &Request) -> Result<Response> {
         .as_reader()
         .take(LIMIT as u64 + 1)
         .read_to_string(&mut body)
-        .map_err(|source| Error::UsageNetwork(ureq::Error::Io(source)))?;
+        .map_err(|source| Error::Network(ureq::Error::Io(source)))?;
     if body.len() > LIMIT {
-        return Err(Error::UsageSize);
+        return Err(Error::Size.into());
     }
     Ok(Response { status, body })
 }
@@ -862,7 +862,7 @@ pub(super) fn output(
     timeout: Duration,
     operation: &'static str,
 ) -> Result<(bool, Zeroizing<Vec<u8>>)> {
-    let process = |source| Error::UsageProcess { operation, source };
+    let process = |source| Error::Process { operation, source };
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -872,7 +872,7 @@ pub(super) fn output(
     let Some(stdout) = child.stdout.take() else {
         let _ = child.kill();
         let _ = child.wait();
-        return Err(process(std::io::Error::other("no output pipe")));
+        return Err(process(std::io::Error::other("no output pipe")).into());
     };
     let (sender, reads) = mpsc::sync_channel(1);
     let reader = thread::Builder::new()
@@ -888,13 +888,13 @@ pub(super) fn output(
     if let Err(source) = reader {
         let _ = child.kill();
         let _ = child.wait();
-        return Err(process(source));
+        return Err(process(source).into());
     }
     let result = match reads.recv_timeout(timeout) {
-        Ok(Ok(bytes)) if bytes.len() > LIMIT => Err(Error::UsageSize),
+        Ok(Ok(bytes)) if bytes.len() > LIMIT => Err(Error::Size),
         Ok(Ok(bytes)) => Ok(bytes),
         Ok(Err(source)) => Err(process(source)),
-        Err(_) => Err(Error::UsageTimeout),
+        Err(_) => Err(Error::Timeout),
     };
     let bytes = match result {
         Ok(bytes) => bytes,
@@ -902,7 +902,7 @@ pub(super) fn output(
             // Killing the child closes the pipe, which ends the reader.
             let _ = child.kill();
             let _ = child.wait();
-            return Err(error);
+            return Err(error.into());
         }
     };
     let status = child.wait().map_err(process)?;

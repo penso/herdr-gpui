@@ -73,7 +73,10 @@ fn malformed_node_reports_are_rejected() {
         r#"{"memory":1,"loaded":{}}"#,
     ] {
         assert!(
-            matches!(parse(body, false, None), Err(Error::UsageJson(_))),
+            matches!(
+                parse(body, false, None),
+                Err(crate::Error::Usage(Error::Json(_)))
+            ),
             "accepted {body}"
         );
     }

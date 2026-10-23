@@ -28,9 +28,10 @@ impl Listener {
             Ok(listener) => listener,
             Err(error) if error.kind() == io::ErrorKind::AddrInUse => {
                 if UnixStream::connect(path).is_ok() {
-                    return Err(crate::Error::ControlSocketInUse {
+                    return Err(crate::control::Error::SocketInUse {
                         path: path.to_owned(),
-                    });
+                    }
+                    .into());
                 }
                 std::fs::remove_file(path)?;
                 UnixListener::bind(path)?
@@ -94,10 +95,11 @@ pub(super) fn connect(
     io_timeout: Duration,
     read_timeout: Duration,
 ) -> crate::Result<Connection> {
-    let stream = UnixStream::connect(path).map_err(|source| crate::Error::ControlUnavailable {
-        path: path.to_owned(),
-        source,
-    })?;
+    let stream =
+        UnixStream::connect(path).map_err(|source| crate::control::Error::Unavailable {
+            path: path.to_owned(),
+            source,
+        })?;
     stream.set_write_timeout(Some(io_timeout))?;
     stream.set_read_timeout(Some(read_timeout))?;
     Ok(Connection(stream))

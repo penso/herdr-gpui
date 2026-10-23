@@ -5,7 +5,7 @@
 //! trait: a provider reads through a [`Probe`] and draws through a [`Ui`].
 
 use super::{model::Report, probe::Probe, ui::Ui};
-use crate::{Error, Result};
+use crate::{Result, usage::Error};
 use gpui::{AnyElement, App};
 use serde::Deserialize;
 use std::time::{Duration, SystemTime};
@@ -98,7 +98,7 @@ pub(crate) trait Service: Sync {
 }
 
 pub(super) fn json<'a, T: Deserialize<'a>>(body: &'a str) -> Result<T> {
-    serde_json::from_str(body).map_err(|error| Error::UsageJson(error.classify()))
+    serde_json::from_str(body).map_err(|error| Error::Json(error.classify()).into())
 }
 
 /// Seconds, milliseconds, or RFC 3339, as services variously send times.

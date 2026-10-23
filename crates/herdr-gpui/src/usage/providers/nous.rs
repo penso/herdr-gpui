@@ -12,8 +12,9 @@
 //! still honored.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -106,7 +107,7 @@ fn hermes(probe: &mut Probe) -> Option<Result<(Secret, Option<String>)>> {
         let portal = probe.text(&file, &state.key("portal_base_url"));
         return Some(Ok((token, portal)));
     }
-    expired.then_some(Err(Error::UsageRejected))
+    expired.then_some(Err(Error::Rejected.into()))
 }
 
 /// Where in an auth file the Nous state sits: `providers.nous`, the best

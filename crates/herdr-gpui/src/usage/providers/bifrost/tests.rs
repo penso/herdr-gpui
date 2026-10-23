@@ -106,7 +106,7 @@ fn unlimited_budget_keeps_spend_without_window() {
 fn inactive_key_without_quotas_is_rejected() {
     assert!(matches!(
         parse(r#"{"is_active":false,"budgets":null}"#, now()),
-        Err(Error::UsageRejected)
+        Err(crate::Error::Usage(Error::Rejected))
     ));
     let report = parse(
         r#"{"is_active":false,"budgets":[{"id":"u","max_limit":0,"current_usage":5}]}"#,

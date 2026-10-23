@@ -16,8 +16,9 @@ use super::opencode::{
     windows as meter_windows, workspace_id,
 };
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit, Window},
         probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -157,7 +158,7 @@ fn fetch_web(probe: &mut Probe, cookie: &Secret) -> Result<Report> {
         .and_then(|body| parse_balance(&body));
     match status {
         Ok(body) => parse_console(&body, balance, now),
-        Err(Error::UsageRejected) => Err(Error::UsageRejected),
+        Err(crate::Error::Usage(Error::Rejected)) => Err(crate::Error::Usage(Error::Rejected)),
         Err(error) if workspace.starts_with("wrk_") => {
             let page = Request::get(format!("{BASE}/workspace/{workspace}/go"))
                 .cookie(cookie)

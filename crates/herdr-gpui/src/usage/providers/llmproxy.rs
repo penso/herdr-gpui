@@ -4,8 +4,9 @@
 //! `base_url`. Everything CodexBar reads is ported.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -52,7 +53,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let base = probe
         .text_setting("base_url")
         .filter(|base| !base.is_empty())
-        .ok_or(Error::UsageNotSignedIn)?;
+        .ok_or(Error::NotSignedIn)?;
     let request = Request::get(quota_url(&base)?)
         .bearer(key)
         .header("Accept", "application/json");

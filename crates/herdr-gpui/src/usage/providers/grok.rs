@@ -12,8 +12,9 @@
 //! sign-in scope are recognized.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, WEEK, Window},
         probe::{HostPath, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -79,7 +80,7 @@ impl Service for Grok {
         {
             Some(token) => Some(fetch(probe, &token, Account::default())),
             // `grok login` expires after about a week; say so rather than hide Grok.
-            None => expired.then_some(Err(Error::UsageRejected)),
+            None => expired.then_some(Err(Error::Rejected.into())),
         }
     }
 }

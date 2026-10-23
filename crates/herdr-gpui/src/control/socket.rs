@@ -182,7 +182,7 @@ fn read_line(reader: impl Read) -> crate::Result<Vec<u8>> {
     if line.last() == Some(&b'\n') {
         line.pop();
     } else if line.len() > MAX_MESSAGE {
-        return Err(crate::Error::ControlMessageSize { limit: MAX_MESSAGE });
+        return Err(crate::control::Error::MessageSize { limit: MAX_MESSAGE }.into());
     }
     Ok(line)
 }
@@ -311,7 +311,7 @@ pub(crate) fn call(path: &Path, request: &Request) -> crate::Result<Response> {
     write_line(&stream, request)?;
     let line = read_line(&stream)?;
     if line.is_empty() {
-        return Err(crate::Error::ControlNoResponse);
+        return Err(crate::control::Error::NoResponse.into());
     }
     Ok(serde_json::from_slice(&line)?)
 }

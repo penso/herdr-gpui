@@ -2,8 +2,7 @@
 //! headers, the GraphQL call, and the account-wide rate-limit cooldown. Remote
 //! diagnostics stay bounded so a hostile response cannot flood the UI.
 
-use super::{Result, log};
-use crate::Error;
+use super::{Error, Result, log};
 use crate::updater::{quota_exhausted, rate_limit_reset};
 use chrono::{DateTime, Utc};
 use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox as Secret, SecretString};
@@ -35,13 +34,14 @@ pub(super) fn response<T: DeserializeOwned>(
         log::http(context, status, response.headers());
         let headers = response.headers();
         return Err(match status {
-            401 => Error::GitHubAuthentication,
-            403 if !quota_exhausted(headers) => Error::GitHubForbidden,
-            403 | 429 => Error::GitHubRateLimit {
+            401 => Error::Authentication,
+            403 if !quota_exhausted(headers) => Error::Forbidden,
+            403 | 429 => Error::RateLimit {
                 reset: rate_limit_reset(headers, Utc::now()),
             },
-            status => Error::GitHubStatus(status),
-        });
+            status => Error::Status(status),
+        }
+        .into());
     }
     // Allocate the bounded capacity up front: no reallocations leave old body
     // fragments behind, and partial reads are wiped even on I/O errors.
@@ -51,7 +51,7 @@ pub(super) fn response<T: DeserializeOwned>(
         .as_reader()
         .take(LIMIT + 1)
         .read_to_end(&mut bytes)
-        .map_err(Error::GitHubRead)?;
+        .map_err(Error::Read)?;
     if bytes.len() > LIMIT as usize {
         tracing::warn!(
             category = "github_http",
@@ -59,9 +59,9 @@ pub(super) fn response<T: DeserializeOwned>(
             status,
             "GitHub response exceeded the size limit"
         );
-        return Err(Error::GitHubSize);
+        return Err(Error::Size.into());
     }
-    serde_json::from_slice(&bytes).map_err(|error| {
+    Ok(serde_json::from_slice(&bytes).map_err(|error| {
         // The body may hold credentials, so only its shape is recorded.
         tracing::warn!(
             category = "github_http",
@@ -70,8 +70,8 @@ pub(super) fn response<T: DeserializeOwned>(
             bytes = bytes.len() as u64,
             "GitHub response was not the expected JSON"
         );
-        Error::github_json(error)
-    })
+        Error::json(error)
+    })?)
 }
 
 pub(crate) fn graphql(
@@ -85,12 +85,12 @@ pub(crate) fn graphql(
 ) -> Result<Value> {
     let deadline = Instant::now() + timeout;
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     let repository = requested_repository(&variables);
     let (result, exchange) = post(token, query, variables, deadline, cooldown)?;
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     if let Some(errors) = result.get("errors") {
         let kind = log::token_kind(token);
@@ -105,7 +105,7 @@ pub(crate) fn graphql(
         }) {
             *cooldown = Some(pause_until(exchange.reset, Utc::now()));
         }
-        return Err(query_error(errors, repository, kind, exchange.reset));
+        return Err(query_error(errors, repository, kind, exchange.reset).into());
     }
     Ok(result)
 }
@@ -126,11 +126,11 @@ pub(crate) fn graphql_aliases(
 ) -> Result<Vec<Result<Value>>> {
     let deadline = Instant::now() + timeout;
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     let (result, exchange) = post(token, query, variables, deadline, cooldown)?;
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     let kind = log::token_kind(token);
     if let Some(errors) = result.get("errors") {
@@ -170,7 +170,7 @@ pub(super) fn split_aliases(
             .is_some_and(|alias| aliases.iter().any(|(known, _)| known == alias))
     };
     if typed(&["RATE_LIMITED"]) || !listed.iter().all(claimed) {
-        return Err(query_error(&errors, None, token_kind, reset));
+        return Err(query_error(&errors, None, token_kind, reset).into());
     }
     Ok(aliases
         .iter()
@@ -194,7 +194,8 @@ pub(super) fn split_aliases(
                     Some(repository.clone()),
                     token_kind,
                     reset,
-                ))
+                )
+                .into())
             }
         })
         .collect())
@@ -217,7 +218,7 @@ pub(crate) fn mutation(
     if let Some(errors) = result.get("errors") {
         let kind = log::token_kind(token);
         log::graphql(context, kind, &exchange, errors);
-        return Err(query_error(errors, repository, kind, exchange.reset));
+        return Err(query_error(errors, repository, kind, exchange.reset).into());
     }
     Ok(result)
 }
@@ -235,7 +236,7 @@ pub(crate) fn rest<T: DeserializeOwned>(
     cancelled: impl Fn() -> bool,
 ) -> Result<T> {
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     let reply = agent(timeout)
         .get(format!("https://api.github.com{path}"))
@@ -246,7 +247,7 @@ pub(crate) fn rest<T: DeserializeOwned>(
         .call()
         .map_err(log::network(context))?;
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(crate::pull_request::Error::Cancelled.into());
     }
     response(context, reply)
 }
@@ -286,19 +287,19 @@ pub(super) fn query_error(
         .iter()
         .any(|error| error["type"].as_str() == Some("RATE_LIMITED"))
     {
-        return Error::GitHubRateLimit { reset };
+        return Error::RateLimit { reset };
     }
     let hidden = listed.iter().any(|error| {
         error["type"].as_str() == Some("NOT_FOUND")
             && error["path"] == serde_json::json!(["repository"])
     });
     if let Some(repository) = repository.filter(|_| hidden) {
-        return Error::GitHubRepositoryHidden {
+        return Error::RepositoryHidden {
             repository,
             app_token: token_kind == "github_app_user",
         };
     }
-    rejection(errors).map_or(Error::GitHubQuery, Error::GitHubRejected)
+    rejection(errors).map_or(Error::Query, Error::Rejected)
 }
 
 /// GraphQL endpoints that tests stand in for GitHub, by the token that reads
@@ -343,7 +344,7 @@ fn post(
     let body = serde_json::json!({"query":query,"variables":variables}).to_string();
     let timeout = deadline
         .checked_duration_since(Instant::now())
-        .ok_or(Error::PrTimeout)?;
+        .ok_or(crate::pull_request::Error::Timeout)?;
     let reply = agent(timeout)
         .post(graphql_url(token))
         .header("User-Agent", "Herdr-GPUI")
@@ -385,7 +386,7 @@ pub(super) fn authorization(token: &SecretString) -> Result<ureq::http::HeaderVa
     text.expose_secret_mut().push_str("Bearer ");
     text.expose_secret_mut().push_str(token.expose_secret());
     let mut header =
-        ureq::http::HeaderValue::from_str(text.expose_secret()).map_err(Error::GitHubHeader)?;
+        ureq::http::HeaderValue::from_str(text.expose_secret()).map_err(Error::Header)?;
     header.set_sensitive(true);
     Ok(header)
 }

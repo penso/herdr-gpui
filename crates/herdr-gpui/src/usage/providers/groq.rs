@@ -10,8 +10,9 @@
 //! cut out of a Cookie header.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Provider, Report, Section},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -84,9 +85,9 @@ fn base_url(raw: Option<String>) -> Result<String> {
     let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
         return Ok(BASE.to_owned());
     };
-    let parsed = url::Url::parse(&raw).map_err(|_| Error::UsageNotSignedIn)?;
+    let parsed = url::Url::parse(&raw).map_err(|_| Error::NotSignedIn)?;
     if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(Error::UsageNotSignedIn);
+        return Err(Error::NotSignedIn.into());
     }
     Ok(raw.trim_end_matches('/').to_owned())
 }

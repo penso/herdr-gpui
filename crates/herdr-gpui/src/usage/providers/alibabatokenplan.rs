@@ -19,8 +19,9 @@ use super::oneconsole::{
     gateway_request, sec_token, string,
 };
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{
             Account, Balance, Kind, MONTH, Provider, Report, SESSION, Section, Unit, WEEK, Window,
             group, title_case,
@@ -293,9 +294,8 @@ fn fetch_personal(
             body,
         );
         let body = probe.body(request)?;
-        let value = expand(
-            serde_json::from_str(&body).map_err(|error| Error::UsageJson(error.classify()))?,
-        );
+        let value =
+            expand(serde_json::from_str(&body).map_err(|error| Error::Json(error.classify()))?);
         check(&value)?;
         Ok(value)
     };
@@ -422,8 +422,7 @@ const PLAN_KEYS: &[&str] = &[
 /// A Team subscription summary: the credit pool used, left, and when the
 /// nearest plan expires.
 pub(crate) fn parse_team(body: &str) -> Result<Report> {
-    let value =
-        expand(serde_json::from_str(body).map_err(|error| Error::UsageJson(error.classify()))?);
+    let value = expand(serde_json::from_str(body).map_err(|error| Error::Json(error.classify()))?);
     check(&value)?;
     team(&value)
         .map(|report| report_with(Provider(&Alibabatokenplan), report))

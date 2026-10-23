@@ -55,7 +55,9 @@ fn close_probe_detects_untracked_staged_unstaged_and_unpublished_work() {
     assert_eq!(probe(), (true, true));
     assert!(matches!(
         close_status(&input, Instant::now() + Duration::from_secs(15), &|| true),
-        Err(Error::PrCancelled)
+        Err(crate::Error::PullRequest(
+            crate::pull_request::Error::Cancelled
+        ))
     ));
 }
 
@@ -183,18 +185,18 @@ fn one_action_runs_at_a_time_and_reports_its_own_result() {
     peer.git.track(Some(input("feature")), true, now);
     assert!(matches!(
         peer.git.start(Action::Commit("  ".into()), None),
-        Err(Error::GitCommitMessage)
+        Err(crate::Error::Git(Error::CommitMessage))
     ));
     assert!(matches!(
         peer.git.start(Action::CreatePullRequest, None),
-        Err(Error::GitHubAuthentication)
+        Err(crate::Error::GitHub(crate::github::Error::Authentication))
     ));
     peer.git
         .start(Action::Commit("subject".into()), None)
         .unwrap();
     assert!(matches!(
         peer.git.start(Action::Push, None),
-        Err(Error::GitBusy)
+        Err(crate::Error::Git(Error::Busy))
     ));
     peer.git.poll(now);
     let (requested, job) = peer.request();
@@ -219,10 +221,11 @@ fn one_action_runs_at_a_time_and_reports_its_own_result() {
     let (requested, _) = peer.request();
     peer.complete(
         requested,
-        Completion::Action(Err(Error::GitFailed {
+        Completion::Action(Err(Error::Failed {
             operation: "push",
             details: "rejected".into(),
-        })),
+        }
+        .into())),
         now,
     );
     assert!(peer.git.outcome().is_none());
@@ -265,7 +268,7 @@ fn listed_checkouts_are_probed_round_robin_and_forgotten_when_they_go() {
     let (requested, _) = peer.request();
     peer.complete(
         requested,
-        Completion::Dirty(Err(Error::GitNoCheckout)),
+        Completion::Dirty(Err(Error::NoCheckout.into())),
         now + PROBE_REFRESH,
     );
     assert_eq!(peer.git.dirty("/repo/.git", "other"), None);
@@ -316,10 +319,7 @@ fn a_stopped_worker_is_reported_and_does_not_strand_an_action() {
     drop(peer.outgoing);
     assert!(peer.git.poll(now));
     assert!(peer.git.running().is_none());
-    assert_eq!(
-        peer.git.error(),
-        Some(Error::GitWorker.to_string().as_str())
-    );
+    assert_eq!(peer.git.error(), Some(Error::Worker.to_string().as_str()));
 }
 
 #[test]
@@ -344,7 +344,9 @@ fn created_pull_requests_must_match_their_repository() {
     ] {
         assert!(matches!(
             parse_created(&response(url, number), "example", "project"),
-            Err(Error::PrIdentity)
+            Err(crate::Error::PullRequest(
+                crate::pull_request::Error::Identity
+            ))
         ));
     }
 }

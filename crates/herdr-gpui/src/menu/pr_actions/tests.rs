@@ -157,7 +157,7 @@ fn a_branch_that_moved_after_the_dialog_opened_is_not_merged(cx: &mut TestAppCon
             assert_eq!(view.menu.page, Some(Page::PrMerge));
             assert_eq!(
                 view.menu.error.as_deref(),
-                Some(crate::Error::PrMergeChanged.to_string().as_str())
+                Some(crate::pr_actions::Error::MergeChanged.to_string().as_str())
             );
         })
     });
@@ -173,7 +173,7 @@ fn commenting_refuses_an_empty_body_and_queues_a_written_one(cx: &mut TestAppCon
             view.submit_pr_comment(cx);
             assert_eq!(
                 view.menu.error.as_deref(),
-                Some(crate::Error::PrCommentBody.to_string().as_str())
+                Some(crate::pr_actions::Error::CommentBody.to_string().as_str())
             );
             assert!(view.pr_actions.running().is_none());
             if let Some(dialog) = view.menu.input.as_mut() {

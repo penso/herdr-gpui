@@ -48,7 +48,7 @@ fn the_server_address_is_saved_and_removed_keeping_the_rest() -> anyhow::Result<
         .err()
         .context("a code key that is not a table must be rejected")?;
     assert!(
-        matches!(&error, Error::Path { source, .. } if matches!(**source, Error::InvalidCodeTable)),
+        matches!(&error, crate::Error::Path { source, .. } if matches!(**source, crate::Error::Settings(Error::InvalidCodeTable))),
         "{error:?}"
     );
     Ok(())

@@ -2,8 +2,8 @@
 //! remote that reaches it. A fork checkout names the base repository with an
 //! `upstream` remote and pushes to its own `origin`.
 
+use super::Error;
 use super::fetch::{git, origin_repository};
-use crate::Error;
 use std::time::Instant;
 
 /// A Git remote this client reads pull request refs from.
@@ -43,7 +43,7 @@ impl Base {
         match self.remote {
             Remote::Origin => Ok(branch.to_owned()),
             Remote::Upstream => {
-                let fork = self.fork_owner.as_deref().ok_or(Error::PrOrigin)?;
+                let fork = self.fork_owner.as_deref().ok_or(Error::Origin)?;
                 Ok(format!("{fork}:{branch}"))
             }
         }

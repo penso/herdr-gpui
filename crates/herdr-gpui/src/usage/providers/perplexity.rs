@@ -10,8 +10,9 @@
 //! which the site's own session library also accepts.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, MONTH, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -77,10 +78,10 @@ impl Service for Perplexity {
             );
         }
         let token = probe.setting("session_token")?;
-        let mut outcome = Err(Error::UsageRejected);
+        let mut outcome = Err(Error::Rejected.into());
         for name in SESSION_NAMES {
             outcome = credits(probe, &token, &format!("{name}="));
-            if !matches!(outcome, Err(Error::UsageRejected)) {
+            if !matches!(outcome, Err(crate::Error::Usage(Error::Rejected))) {
                 break;
             }
         }

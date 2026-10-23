@@ -9,8 +9,9 @@
 //! dashboard endpoints whose calendar bucketing adds little to a balance.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json, number},
@@ -80,13 +81,9 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
         .map(|info| {
             Ok(Wallet {
                 currency: info.currency,
-                total: info.total_balance.ok_or(Error::UsageJson(Category::Data))?,
-                granted: info
-                    .granted_balance
-                    .ok_or(Error::UsageJson(Category::Data))?,
-                paid: info
-                    .topped_up_balance
-                    .ok_or(Error::UsageJson(Category::Data))?,
+                total: info.total_balance.ok_or(Error::Json(Category::Data))?,
+                granted: info.granted_balance.ok_or(Error::Json(Category::Data))?,
+                paid: info.topped_up_balance.ok_or(Error::Json(Category::Data))?,
             })
         })
         .collect::<Result<_>>()?;
@@ -98,9 +95,9 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
 pub(crate) fn parse_summary(body: &str) -> Result<Report> {
     let answer: SummaryAnswer = json(body)?;
     check_code(answer.code)?;
-    let data = answer.data.ok_or(Error::UsageJson(Category::Data))?;
+    let data = answer.data.ok_or(Error::Json(Category::Data))?;
     check_code(data.biz_code)?;
-    let summary = data.biz_data.ok_or(Error::UsageJson(Category::Data))?;
+    let summary = data.biz_data.ok_or(Error::Json(Category::Data))?;
     let mut wallets: Vec<Wallet> = Vec::new();
     let entries = summary
         .normal_wallets
@@ -113,7 +110,7 @@ pub(crate) fn parse_summary(body: &str) -> Result<Report> {
                 .map(|wallet| (wallet, true)),
         );
     for (wallet, granted) in entries {
-        let amount = wallet.balance.ok_or(Error::UsageJson(Category::Data))?;
+        let amount = wallet.balance.ok_or(Error::Json(Category::Data))?;
         let index = match wallets
             .iter()
             .position(|known| known.currency == wallet.currency)
@@ -148,8 +145,8 @@ pub(crate) fn parse_summary(body: &str) -> Result<Report> {
 fn check_code(code: Option<i64>) -> Result<()> {
     match code {
         None | Some(0) => Ok(()),
-        Some(40002 | 40003) => Err(Error::UsageRejected),
-        Some(_) => Err(Error::UsageJson(Category::Data)),
+        Some(40002 | 40003) => Err(Error::Rejected.into()),
+        Some(_) => Err(Error::Json(Category::Data).into()),
     }
 }
 
@@ -303,7 +300,10 @@ mod tests {
         let body = r#"{"is_available": true, "balance_infos": [
             {"currency": "USD", "total_balance": "n/a", "granted_balance": "0", "topped_up_balance": "0"}
         ]}"#;
-        assert!(matches!(parse_balance(body), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse_balance(body),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
     }
 
     #[test]
@@ -331,11 +331,11 @@ mod tests {
     fn platform_summary_maps_expired_sessions() {
         assert!(matches!(
             parse_summary(r#"{"code": 40003}"#),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
         assert!(matches!(
             parse_summary(r#"{"code": 0, "data": {"biz_code": 40002}}"#),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

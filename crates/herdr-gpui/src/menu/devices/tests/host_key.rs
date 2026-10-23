@@ -69,7 +69,10 @@ fn a_failed_key_fetch_offers_the_terminal_with_its_reason(cx: &mut gpui::TestApp
             );
 
             fetching(view, cx);
-            view.host_key_fetched(Err(herdr_client::Error::SshTimeout), cx);
+            view.host_key_fetched(
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout)),
+                cx,
+            );
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
             assert_eq!(
                 view.menu.device_setup.as_ref().unwrap().error.as_deref(),

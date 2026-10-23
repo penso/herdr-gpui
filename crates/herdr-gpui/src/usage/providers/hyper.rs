@@ -5,8 +5,9 @@
 //! mode does. The service reports only a balance: no plan, limit, or reset.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -65,8 +66,13 @@ impl Service for Hyper {
             match answer {
                 Ok(report) => return Some(Ok(report)),
                 Err(error) if key.is_none() => return Some(Err(error)),
-                Err(Error::UsageRejected | Error::UsageStatus(300..=399))
-                | Err(Error::UsageConnect | Error::UsageNetwork(_)) => {}
+                Err(
+                    crate::Error::Usage(Error::Rejected)
+                    | crate::Error::Usage(Error::Status(300..=399)),
+                )
+                | Err(
+                    crate::Error::Usage(Error::Connect) | crate::Error::Usage(Error::Network(_)),
+                ) => {}
                 Err(error) => return Some(Err(error)),
             }
         }
@@ -92,7 +98,7 @@ pub(crate) enum Source {
 pub(crate) fn parse(body: &str, source: Source) -> Result<Report> {
     // A signed-out session lands on the HTML sign-in page with HTTP 200.
     if source == Source::Session && body.trim_start().starts_with('<') {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let credits: Credits = json(body)?;
     let balance = credits
@@ -149,7 +155,7 @@ mod tests {
     fn sign_in_page_rejects_the_session() {
         assert!(matches!(
             parse("<!doctype html><title>Sign in</title>", Source::Session),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 }

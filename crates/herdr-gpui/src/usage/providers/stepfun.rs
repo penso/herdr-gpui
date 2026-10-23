@@ -10,8 +10,9 @@
 //! decoding the secret here. The web id is therefore its own setting.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, MONTH, Provider, Report, Window},
         probe::{Part, Probe, Request},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -108,7 +109,7 @@ pub(crate) fn parse(body: &str, plan: Option<String>) -> Result<Report> {
     let limits: RateLimit = json(body)?;
     // StepFun answers an expired or foreign token with 200 and a failed status.
     if limits.status != Some(1) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let account = Account { email: None, plan };
     if limits.is_credit_plan() {
@@ -309,14 +310,17 @@ mod tests {
     #[test]
     fn failed_status_is_rejected() {
         let body = r#"{"status": 0, "message": "Unauthorized"}"#;
-        assert!(matches!(parse(body, None), Err(Error::UsageRejected)));
+        assert!(matches!(
+            parse(body, None),
+            Err(crate::Error::Usage(Error::Rejected))
+        ));
     }
 
     #[test]
     fn missing_window_fields_fail() {
         assert!(matches!(
             parse(r#"{"status": 1}"#, None),
-            Err(Error::UsageJson(_))
+            Err(crate::Error::Usage(Error::Json(_)))
         ));
     }
 

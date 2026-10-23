@@ -23,17 +23,18 @@ use std::fmt::Write as _;
 /// the message with its causes, and the exit status the refusal deserves.
 fn rejected(error: crate::Error) -> crate::Error {
     let code = match &error {
-        crate::Error::CheckpointMissing => ErrorCode::NotFound,
+        crate::Error::Checkpoint(crate::checkpoint::Error::Missing) => ErrorCode::NotFound,
         crate::Error::NotInCheckout
         | crate::Error::DetachedHead
-        | crate::Error::CheckpointCheckout
-        | crate::Error::CheckpointUnborn => ErrorCode::InvalidRequest,
+        | crate::Error::Checkpoint(crate::checkpoint::Error::Checkout)
+        | crate::Error::Checkpoint(crate::checkpoint::Error::Unborn) => ErrorCode::InvalidRequest,
         _ => ErrorCode::Failed,
     };
-    crate::Error::ControlRejected {
+    crate::control::Error::Rejected {
         code,
         message: crate::checkpoint::describe(&error),
     }
+    .into()
 }
 
 /// A repository's name from its Git common directory: the directory the
@@ -111,12 +112,13 @@ pub(super) fn teleport(
     context: &Context,
 ) -> crate::Result<Output> {
     if let Some(worktree) = worktree {
-        return Err(crate::Error::ControlRejected {
+        return Err(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: format!(
                 "teleport moves the caller's own worktree, not {worktree}; run it from a pane there"
             ),
-        });
+        }
+        .into());
     }
     context.act(Request::Work, WorkOp::Teleport { host })
 }

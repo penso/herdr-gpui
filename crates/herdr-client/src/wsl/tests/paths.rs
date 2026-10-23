@@ -32,12 +32,15 @@ fn only_absolute_windows_paths_are_sent() {
         "",
     ] {
         assert!(
-            matches!(input_of(bad), Err(Error::WslPathInvalid(path)) if path == Path::new(bad)),
+            matches!(input_of(bad), Err(crate::Error::Wsl(Error::PathInvalid(path))) if path == Path::new(bad)),
             "{bad:?}"
         );
     }
     let long = format!("C:\\{}", "a".repeat(PATH_BYTES));
-    assert!(matches!(input_of(&long), Err(Error::WslPathInvalid(_))));
+    assert!(matches!(
+        input_of(&long),
+        Err(crate::Error::Wsl(Error::PathInvalid(_)))
+    ));
 }
 
 fn input_of(path: &str) -> Result<String> {
@@ -47,14 +50,17 @@ fn input_of(path: &str) -> Result<String> {
 #[test]
 fn a_drop_is_bounded_before_anything_starts() {
     let many = vec![PathBuf::from(r"C:\x"); PATH_LIMIT + 1];
-    assert!(matches!(input(&many), Err(Error::WslPathLimit)));
+    assert!(matches!(
+        input(&many),
+        Err(crate::Error::Wsl(Error::PathLimit))
+    ));
     assert!(matches!(
         wsl_paths("Ubuntu", &many, &AtomicBool::new(false)),
-        Err(Error::WslPathLimit)
+        Err(crate::Error::Wsl(Error::PathLimit))
     ));
     assert!(matches!(
         wsl_paths("a;b", &paths(&[r"C:\x"]), &AtomicBool::new(false)),
-        Err(Error::InvalidWslDistro)
+        Err(crate::Error::Wsl(Error::InvalidDistro))
     ));
 }
 
@@ -66,7 +72,7 @@ fn every_path_needs_its_own_answer() {
         ["/mnt/c/a b", "/etc"]
     );
     assert!(
-        matches!(parse(b"/mnt/c/a b\n-\n", &asked), Err(Error::WslPathUnmapped(path)) if path == asked[1])
+        matches!(parse(b"/mnt/c/a b\n-\n", &asked), Err(crate::Error::Wsl(Error::PathUnmapped(path))) if path == asked[1])
     );
     for wrong in [
         &b"/mnt/c/a b\n"[..],
@@ -76,7 +82,10 @@ fn every_path_needs_its_own_answer() {
         b"/mnt/c/a b\n/\xff\n",
     ] {
         assert!(
-            matches!(parse(wrong, &asked), Err(Error::WslPathResponse)),
+            matches!(
+                parse(wrong, &asked),
+                Err(crate::Error::Wsl(Error::PathResponse))
+            ),
             "{wrong:?}"
         );
     }
@@ -84,7 +93,7 @@ fn every_path_needs_its_own_answer() {
 
 #[test]
 fn an_unreachable_path_names_itself() {
-    let error = Error::WslPathUnmapped(PathBuf::from(r"\\server\share\x"));
+    let error = crate::Error::Wsl(Error::PathUnmapped(PathBuf::from(r"\\server\share\x")));
     assert_eq!(
         error.to_string(),
         r"\\server\share\x is not reachable from this WSL distribution; only its own files and mounted drives are"
@@ -97,7 +106,7 @@ fn an_unreachable_path_names_itself() {
 fn mapping_needs_a_windows_client() {
     assert!(matches!(
         wsl_paths("Ubuntu", &paths(&[r"C:\x"]), &AtomicBool::new(false)),
-        Err(Error::WslUnsupported)
+        Err(crate::Error::Wsl(Error::Unsupported))
     ));
 }
 
@@ -124,7 +133,7 @@ fn live_wsl_paths() {
         let error =
             wsl_paths(&distro, &paths(&[unreachable]), &AtomicBool::new(false)).unwrap_err();
         assert!(
-            matches!(&error, Error::WslPathUnmapped(path) if path == Path::new(unreachable)),
+            matches!(&error, crate::Error::Wsl(Error::PathUnmapped(path)) if path == Path::new(unreachable)),
             "{error:?}"
         );
     }

@@ -619,7 +619,7 @@ impl HerdrWindow {
             return Err(crate::Error::StaleWorkspace);
         }
         if self.selected_endpoint != 0 || !self.live.local_daemon_peer {
-            return Err(crate::Error::PrUntrustedEndpoint);
+            return Err(crate::pull_request::Error::UntrustedEndpoint.into());
         }
         self.menu_target_input(&crate::pull_request::Origin::Local)
     }
@@ -631,7 +631,7 @@ impl HerdrWindow {
         let input = self.local_repository_input()?;
         let tokens = self
             .main_tokens()
-            .ok_or(crate::Error::GitHubAuthentication)?;
+            .ok_or(crate::github::Error::Authentication)?;
         Ok((input, tokens))
     }
 

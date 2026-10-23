@@ -4,10 +4,9 @@
 //! keeps the token unencrypted on disk says so plainly.
 
 use super::{
-    Profile, Result, cli, credentials, profile,
+    Error, Profile, Result, cli, credentials, profile,
     token::{Credential, GITHUB_CLI, Saved},
 };
-use crate::Error;
 use secrecy::{ExposeSecret, SecretString};
 use zeroize::Zeroizing;
 
@@ -97,10 +96,10 @@ pub(super) fn resolve_token(
         Some(token) => Some(token),
         None => saved()?,
     }
-    .ok_or(Error::GitHubAuthentication)?;
+    .ok_or(Error::Authentication)?;
     let trimmed = token.expose_secret().trim();
     if !valid_token(trimmed) {
-        return Err(Error::GitHubToken);
+        return Err(Error::Token.into());
     }
     if trimmed.len() == token.expose_secret().len() {
         Ok(token)
@@ -114,7 +113,7 @@ pub(super) fn credential_bytes(bytes: Vec<u8>) -> Result<SecretString> {
     // Validate by borrowing so invalid UTF-8 never escapes in FromUtf8Error.
     std::str::from_utf8(&bytes)
         .map(SecretString::from)
-        .map_err(Error::GitHubEncoding)
+        .map_err(|error| Error::Encoding(error).into())
 }
 
 pub(super) fn environment_token(name: &str) -> Result<Option<SecretString>> {
@@ -232,7 +231,7 @@ fn keyring_save(token: Option<&SecretString>, account: &Account) -> Result<()> {
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 fn keyring_save(_: Option<&SecretString>, _: &Account) -> Result<()> {
-    Err(Error::CredentialPolicy)
+    Err(Error::CredentialPolicy.into())
 }
 
 /// A credential another feature saves under the same policy as GitHub's:
@@ -287,7 +286,7 @@ fn keychain_read(service: &str, account: &str) -> Result<Option<SecretString>> {
     match security_framework::passwords::get_generic_password(service, account) {
         Ok(bytes) => credential_bytes(bytes).map(Some),
         Err(e) if e.code() == -25300 => Ok(None),
-        Err(error) => Err(Error::KeychainRead(error)),
+        Err(error) => Err(Error::KeychainRead(error).into()),
     }
 }
 
@@ -301,7 +300,7 @@ fn keychain_save(service: &str, account: &str, token: Option<&SecretString>) -> 
     match result {
         Ok(()) => Ok(()),
         Err(e) if token.is_none() && e.code() == -25300 => Ok(()),
-        Err(error) => Err(Error::KeychainWrite(error)),
+        Err(error) => Err(Error::KeychainWrite(error).into()),
     }
 }
 
@@ -356,7 +355,7 @@ pub(crate) fn save_entry(store: Store, entry: &Entry, token: Option<&SecretStrin
             super::credential_manager::save_in(entry.service, entry.label, token, entry.account)
         }
         #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-        Store::Keyring => Err(Error::CredentialPolicy),
+        Store::Keyring => Err(Error::CredentialPolicy.into()),
         // Removal stays allowed without an opt-in, as for GitHub sign-out.
         Store::Environment => credentials::store_checked(
             &credential_directory()?,
@@ -467,7 +466,7 @@ fn load_saved(store: Store, account: &Account, github_cli: bool) -> Result<Resto
         // The local GitHub CLI is this computer's account. A host's own
         // sign-in exists to differ from it, so only the main one uses it.
         Some(Saved::GitHubCli) if *account == Account::Main => Ok(Restored::GitHubCli),
-        Some(Saved::GitHubCli) => Err(Error::GitHubToken),
+        Some(Saved::GitHubCli) => Err(Error::Token.into()),
         Some(Saved::Token(credential)) => credential
             .profile_with(profile, Credential::refresh, |value| {
                 save_unlocked(Some(value), store, account)
@@ -489,7 +488,7 @@ pub(super) fn credential_directory() -> Result<std::path::PathBuf> {
     crate::config::Config::path()?
         .parent()
         .map(std::path::Path::to_owned)
-        .ok_or(Error::CredentialDirectory)
+        .ok_or(Error::CredentialDirectory.into())
 }
 
 pub(super) fn save(token: Option<&SecretString>, store: Store, account: &Account) -> Result<()> {

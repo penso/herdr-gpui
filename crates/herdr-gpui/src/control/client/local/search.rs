@@ -86,10 +86,12 @@ pub(super) fn search_in(
     limit: usize,
 ) -> crate::Result<Output> {
     let cancelled = AtomicBool::new(false);
-    let dir = dir.to_str().ok_or_else(|| crate::Error::ControlRejected {
-        code: ErrorCode::InvalidRequest,
-        message: "The current directory's path is not UTF-8".into(),
-    })?;
+    let dir = dir
+        .to_str()
+        .ok_or_else(|| crate::control::Error::Rejected {
+            code: ErrorCode::InvalidRequest,
+            message: "The current directory's path is not UTF-8".into(),
+        })?;
     let root = code_index::checkout_root(dir, &cancelled)?;
     let index = Index::build(&root, &cancelled)?;
     let results = Results {

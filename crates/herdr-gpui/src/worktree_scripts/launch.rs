@@ -6,7 +6,7 @@
 //! it. The typed line holds no repository content, so nothing from the file
 //! is ever parsed by the user's interactive shell, whatever shell that is.
 
-use super::ScriptKind;
+use super::{Error, ScriptKind};
 use serde_json::{Value, json};
 
 /// The variable the typed line runs. Internal plumbing, not a stable API.
@@ -73,7 +73,7 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
     let entries = (result["type"] == "worktree_list")
         .then(|| result["worktrees"].as_array())
         .flatten()
-        .ok_or(crate::Error::WorktreeScriptsCheckout)?;
+        .ok_or(Error::Checkout)?;
     let mut own = entries
         .iter()
         .filter(|entry| entry["open_workspace_id"] == workspace);
@@ -81,7 +81,7 @@ pub(crate) fn locate(response: &Value, workspace: &str) -> crate::Result<Checkou
         (Some(entry), None) => entry["path"].as_str().filter(|path| !path.is_empty()),
         _ => None,
     }
-    .ok_or(crate::Error::WorktreeScriptsCheckout)?;
+    .ok_or(Error::Checkout)?;
     Ok(Checkout {
         path: path.to_owned(),
         root: main_checkout(result),
@@ -121,12 +121,12 @@ pub(crate) fn created_tab(response: &Value) -> crate::Result<(String, String)> {
             ))
         })
         .flatten()
-        .ok_or(crate::Error::WorktreeScriptsResponse)
+        .ok_or(Error::Response.into())
 }
 
 fn response_result(response: &Value) -> crate::Result<&Value> {
     match response.get("error").filter(|error| !error.is_null()) {
-        Some(error) => Err(crate::Error::DaemonResponse(error.clone())),
+        Some(error) => Err(crate::daemon::Error::Response(error.clone()).into()),
         None => Ok(&response["result"]),
     }
 }

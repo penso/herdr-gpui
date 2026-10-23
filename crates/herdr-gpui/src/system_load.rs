@@ -6,14 +6,17 @@
 //! workers and takes their samples on later ticks, so a slow or unreachable
 //! host never blocks rendering or delays another host.
 
+mod error;
 mod render;
 mod sample;
 
 #[cfg(test)]
 mod tests;
 
+pub(crate) use error::Error;
+
 use crate::{
-    Error, Result,
+    Result,
     usage::{Host, Shell},
 };
 pub(crate) use render::{
@@ -70,16 +73,15 @@ impl Source {
             Host::Azure { account, id } => Self::remote(azure_shell(account, id)),
             // A remote shell needs a Unix client, as an SSH host's does.
             #[cfg(all(feature = "azure", not(unix)))]
-            Host::Azure { .. } => Err(Error::CloudHostUnsupported),
+            Host::Azure { .. } => Err(crate::Error::CloudHostUnsupported),
         }
     }
 
     fn remote(shell: Result<Shell>) -> Result<Self> {
         let mut shell = shell.map_err(remote)?;
         let uname = shell.run("uname -s", STEP_TIMEOUT).map_err(remote)?;
-        let os = Os::from_uname(&uname.stdout).ok_or_else(|| {
-            Error::SystemLoadUnsupported(uname.stdout.trim().chars().take(32).collect())
-        })?;
+        let os = Os::from_uname(&uname.stdout)
+            .ok_or_else(|| Error::Unsupported(uname.stdout.trim().chars().take(32).collect()))?;
         Ok(Self::Remote {
             shell,
             os,
@@ -184,8 +186,8 @@ fn azure_shell(account: &str, id: &str) -> Result<Shell> {
     Shell::start(command)
 }
 
-fn remote(error: Error) -> Error {
-    Error::SystemLoadRemote(Box::new(error))
+fn remote(error: crate::Error) -> crate::Error {
+    Error::Remote(Box::new(error)).into()
 }
 
 /// Tells a worker to stop, waking it from its wait between samples. The

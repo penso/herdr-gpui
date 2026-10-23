@@ -3,6 +3,7 @@
 
 mod batch;
 mod cache;
+mod error;
 mod fetch;
 mod lookup;
 mod model;
@@ -13,6 +14,7 @@ mod store;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use error::Error;
 pub(crate) use {
     cache::Cache,
     fetch::{local_checkout, run, run_bytes},

@@ -8,9 +8,11 @@
 //! and a symlinked folder cannot pass outside files off as the checkout's.
 
 mod changes;
+mod error;
 mod symbols;
 
 pub(crate) use changes::Change;
+pub(crate) use error::Error;
 pub(crate) use symbols::{Kind, Language, scan};
 
 use std::{
@@ -58,7 +60,7 @@ pub(crate) struct Index {
 impl Index {
     /// Lists and scans the checkout at `root`. Blocking.
     pub(crate) fn build(root: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
-        let checkout = root.to_str().ok_or(crate::Error::CodeIndexRoot)?;
+        let checkout = root.to_str().ok_or(Error::Root)?;
         let stop = || cancelled.load(Ordering::Acquire);
         let git = |args: &[&str], operation| {
             crate::git::git_bytes(
@@ -104,7 +106,7 @@ impl Index {
         let mut real = HashSet::new();
         for file in 0..index.files.len() {
             if stop() {
-                return Err(crate::Error::CodeIndexCancelled);
+                return Err(Error::Cancelled.into());
             }
             if index.symbols.len() >= MAX_SYMBOLS {
                 index.truncated = true;
@@ -280,7 +282,7 @@ pub(crate) fn checkout_root(dir: &str, cancelled: &AtomicBool) -> crate::Result<
     )?;
     let root = PathBuf::from(root);
     if !root.is_absolute() {
-        return Err(crate::Error::CodeIndexRoot);
+        return Err(Error::Root.into());
     }
     Ok(root)
 }

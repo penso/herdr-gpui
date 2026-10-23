@@ -7,8 +7,9 @@
 //! Daily totals use UTC days, where CodexBar passes the Mac's time zone.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -51,7 +52,7 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
     let base = probe
         .text_setting("base_url")
         .and_then(|raw| endpoint(&raw))
-        .ok_or(Error::UsageNotSignedIn)?;
+        .ok_or(Error::NotSignedIn)?;
     let request = Request::get(format!("{base}?days=30&timezone=UTC"))
         .bearer(key)
         .timeout(Duration::from_secs(15));
@@ -85,7 +86,7 @@ fn endpoint(raw: &str) -> Option<String> {
 fn parse(body: &str) -> Result<Report> {
     let usage: Usage = json(body)?;
     if usage.is_valid == Some(false) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     let unit = usage
         .unit
@@ -388,7 +389,7 @@ mod tests {
     fn an_invalid_key_is_rejected() {
         assert!(matches!(
             parse(r#"{"isValid": false}"#),
-            Err(Error::UsageRejected)
+            Err(crate::Error::Usage(Error::Rejected))
         ));
     }
 

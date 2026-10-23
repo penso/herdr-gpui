@@ -15,10 +15,11 @@ use crate::{
 use std::{fmt::Write as _, path::Path};
 
 fn rejected(code: ErrorCode, message: impl Into<String>) -> crate::Error {
-    crate::Error::ControlRejected {
+    crate::control::Error::Rejected {
         code,
         message: message.into(),
     }
+    .into()
 }
 
 /// One line per tab: its ID, kind, title, what it shows, and where.

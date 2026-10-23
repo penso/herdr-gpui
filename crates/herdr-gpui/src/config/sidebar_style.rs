@@ -3,8 +3,9 @@
 //! the device footer is drawn, whose change counts a row shows, and whether
 //! the activity bar leads it.
 
+use super::Error;
 use super::fonts::FontSettings;
-use crate::{Error, Result};
+use crate::Result;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -44,7 +45,7 @@ impl SidebarOverrides {
             if let Some(value) = value
                 && (!value.is_finite() || !(0.0..=max).contains(&value))
             {
-                return Err(Error::InvalidSidebarMetric { key, max });
+                return Err(Error::InvalidSidebarMetric { key, max }.into());
             }
         }
         Ok(())
@@ -193,9 +194,12 @@ impl SidebarSettings {
             .map(|(host, value)| {
                 parse_hex(value)
                     .map(|color| (host.clone(), color))
-                    .ok_or_else(|| Error::InvalidHostColor {
-                        host: host.clone(),
-                        value: value.clone(),
+                    .ok_or_else(|| {
+                        Error::InvalidHostColor {
+                            host: host.clone(),
+                            value: value.clone(),
+                        }
+                        .into()
                     })
             })
             .collect::<Result<_>>()?;

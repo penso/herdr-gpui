@@ -524,7 +524,7 @@ mod tests {
         assert_eq!(report.balances.len(), 1);
         assert!(matches!(
             parse("[]", None, None),
-            Err(crate::Error::UsageJson(_))
+            Err(crate::Error::Usage(crate::usage::Error::Json(_)))
         ));
     }
 }

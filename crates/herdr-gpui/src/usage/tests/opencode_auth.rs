@@ -104,7 +104,7 @@ impl HostFixture {
 done
 PATH="$HOME/.local/bin"
 command -v curl"#,
-                    parser = crate::usage::probe::quote(parser.unwrap_or_default()),
+                    parser = usage::probe::quote(parser.unwrap_or_default()),
                 ),
                 Duration::from_secs(5),
             )
@@ -163,7 +163,10 @@ fn codex_oauth_takes_precedence_without_switching_accounts_on_rejection() {
             .contains("ChatGPT-Account-Id: codex-fixture-account")
     );
     write(&host.root.path().join("home/status"), "401");
-    assert!(matches!(host.fetch(), Some(Err(Error::UsageRejected))));
+    assert!(matches!(
+        host.fetch(),
+        Some(Err(Error::Usage(usage::Error::Rejected)))
+    ));
     assert!(!host.requests().contains("opencode-fixture"));
     assert_eq!(host.requests().matches("args: ").count(), 2);
 }

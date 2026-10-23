@@ -48,7 +48,7 @@ impl HerdrWindow {
         if self.pr_profile().is_none() {
             return;
         }
-        let result = (|| {
+        let result = (|| -> crate::Result<_> {
             let target = self
                 .menu
                 .target
@@ -60,9 +60,9 @@ impl HerdrWindow {
             if target.branch.as_deref().is_none_or(str::is_empty)
                 || (target.worktree.is_none() && origin != Some(Origin::Local))
             {
-                return Err(crate::Error::PrMetadata);
+                return Err(crate::pull_request::Error::Metadata.into());
             }
-            let origin = origin.ok_or(crate::Error::PrUntrustedEndpoint)?;
+            let origin = origin.ok_or(crate::pull_request::Error::UntrustedEndpoint)?;
             if !self.workspace_pr_target_current() {
                 return Err(crate::Error::StaleWorkspace);
             }

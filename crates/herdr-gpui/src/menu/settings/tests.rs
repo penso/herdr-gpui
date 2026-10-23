@@ -221,7 +221,10 @@ fn config_reload_toggles_tab_flags_and_preserves_them_on_failure(cx: &mut gpui::
             assert!(view.config_load.is_none());
             assert!(view.local_error.is_none());
         });
-        for error in [crate::Error::MissingHome, crate::Error::EmptyTheme] {
+        for error in [
+            crate::Error::MissingHome,
+            crate::config::Error::EmptyTheme.into(),
+        ] {
             view.update(cx, |view, cx| {
                 view.load_gui_config_with(move || Err(error), cx);
             });
@@ -283,7 +286,7 @@ fn config_load_is_coherent_bounded_and_cancellable(cx: &mut gpui::TestAppContext
         assert_eq!(view.theme, view.config.theme(false).unwrap());
         assert!(view.config_load.is_none());
         assert_eq!(view.config_load_revision, 1);
-        view.load_gui_config_with(|| Err(crate::Error::EmptyTheme), cx);
+        view.load_gui_config_with(|| Err(crate::config::Error::EmptyTheme.into()), cx);
     });
     cx.run_until_parked();
     cx.update(|window, cx| {

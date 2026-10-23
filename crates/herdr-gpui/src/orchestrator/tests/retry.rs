@@ -18,13 +18,17 @@ fn a_beads_failure_ignores_a_pause_github_left_behind() {
 
 #[test]
 fn a_github_failure_waits_as_long_as_github_asked() {
-    let limited = github(crate::Error::GitHubRateLimit { reset: None });
+    let limited = github(crate::Error::GitHub(crate::github::Error::RateLimit {
+        reset: None,
+    }));
     assert_eq!(retry_wait(&limited, Some(HOUR)), HOUR);
     assert_eq!(retry_wait(&limited, None), FIVE_MINUTES);
-    let hidden = github(crate::Error::GitHubRepositoryHidden {
-        repository: "acme/hidden".into(),
-        app_token: true,
-    });
+    let hidden = github(crate::Error::GitHub(
+        crate::github::Error::RepositoryHidden {
+            repository: "acme/hidden".into(),
+            app_token: true,
+        },
+    ));
     assert_eq!(retry_wait(&hidden, None), HALF_HOUR);
     assert_eq!(retry_wait(&hidden, Some(FIVE_MINUTES)), HALF_HOUR);
     assert_eq!(retry_wait(&hidden, Some(HOUR)), HOUR);

@@ -3,8 +3,8 @@ use std::{error::Error as _, path::Path};
 
 #[test]
 fn github_network_message_names_the_transport_failure() {
-    let error = Error::GitHubNetwork(ureq::Error::Io(io::Error::other(
-        "invalid peer certificate: UnknownIssuer",
+    let error = Error::from(crate::github::Error::Network(ureq::Error::Io(
+        io::Error::other("invalid peer certificate: UnknownIssuer"),
     )));
     let message = error.to_string();
     assert!(message.starts_with("GitHub network request failed or timed out"));
@@ -33,8 +33,11 @@ fn github_failures_keep_typed_sources_and_redact_parser_diagnostics() -> anyhow:
     let source = serde_json::from_str::<u64>("\"fixture-private-value\"")
         .err()
         .ok_or_else(|| anyhow::anyhow!("expected JSON type error"))?;
-    let error = Error::github_json(source);
-    assert!(matches!(error, Error::GitHubJson(_)));
+    let error = Error::from(crate::github::Error::json(source));
+    assert!(matches!(
+        error,
+        Error::GitHub(crate::github::Error::Json(_))
+    ));
     assert!(!format!("{error} {error:?}").contains("fixture-private-value"));
     assert!(
         error
@@ -43,16 +46,20 @@ fn github_failures_keep_typed_sources_and_redact_parser_diagnostics() -> anyhow:
             .is_some_and(|source| source.is::<serde_json::Error>())
     );
 
-    let error = Error::CredentialIo(io::Error::from(io::ErrorKind::PermissionDenied));
+    let error = Error::from(crate::github::Error::CredentialIo(io::Error::from(
+        io::ErrorKind::PermissionDenied,
+    )));
     assert!(
         error
             .source()
             .and_then(|source| source.downcast_ref::<io::Error>())
             .is_some_and(|source| source.kind() == io::ErrorKind::PermissionDenied)
     );
-    let error = Error::GitHubRead(io::Error::from(io::ErrorKind::TimedOut));
+    let error = Error::from(crate::github::Error::Read(io::Error::from(
+        io::ErrorKind::TimedOut,
+    )));
     assert!(
-        matches!(&error, Error::GitHubRead(source) if source.kind() == io::ErrorKind::TimedOut)
+        matches!(&error, Error::GitHub(crate::github::Error::Read(source)) if source.kind() == io::ErrorKind::TimedOut)
     );
     Ok(())
 }

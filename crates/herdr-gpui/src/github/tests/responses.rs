@@ -13,7 +13,7 @@ fn credentials_and_authorization_debug_are_redacted() {
     assert!(!debug.contains("fixture-device"));
     assert!(!debug.contains("ABCD-1234"));
     let error = credential_bytes(b"private-invalid-secret\xff".to_vec()).unwrap_err();
-    assert!(matches!(error, Error::GitHubEncoding(_)));
+    assert!(matches!(error, crate::Error::GitHub(Error::Encoding(_))));
     assert_eq!(error.to_string(), "Invalid GitHub credential encoding.");
     assert!(authorization(&SecretString::from("private\nsecret")).is_err());
 }
@@ -173,10 +173,13 @@ fn diagnostics_keep_public_details_and_drop_the_sso_request_id() {
     headers.insert("x-github-request-id", "ABCD:1234".parse().unwrap());
     assert_eq!(header(&headers, "x-github-request-id"), "ABCD:1234");
     // Categories stay stable so a log filter keeps working across releases.
-    assert_eq!(kind(&Error::GitHubForbidden), "forbidden");
-    assert_eq!(kind(&Error::GitHubStatus(500)), "status");
-    assert_eq!(kind(&Error::GitHubWorker("profile")), "worker");
-    assert_eq!(kind(&Error::PrTimeout), "other");
+    assert_eq!(kind(&crate::Error::GitHub(Error::Forbidden)), "forbidden");
+    assert_eq!(kind(&crate::Error::GitHub(Error::Status(500))), "status");
+    assert_eq!(
+        kind(&crate::Error::GitHub(Error::Worker("profile"))),
+        "worker"
+    );
+    assert_eq!(kind(&crate::pull_request::Error::Timeout.into()), "other");
 }
 
 #[test]

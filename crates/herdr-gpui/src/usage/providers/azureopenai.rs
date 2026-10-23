@@ -8,8 +8,9 @@
 //! either. There is no local sign-in to detect.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Provider, Report, Section},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
@@ -69,14 +70,14 @@ impl Service for Azureopenai {
             .text_setting("deployment")
             .filter(|value| !value.is_empty());
         let (Some(endpoint), Some(deployment)) = (endpoint, deployment) else {
-            return Some(Err(Error::UsageNotSignedIn));
+            return Some(Err(Error::NotSignedIn.into()));
         };
         let version = probe
             .text_setting("api_version")
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| DEFAULT_VERSION.to_owned());
         let Some(target) = Target::new(&endpoint, &deployment, &version) else {
-            return Some(Err(Error::UsageNotSignedIn));
+            return Some(Err(Error::NotSignedIn.into()));
         };
         let request = Request::post(target.url.clone())
             .secret_header("api-key", "", &key)

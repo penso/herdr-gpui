@@ -16,8 +16,9 @@
 //! as a UTF-16 blob, which CodexBar also decodes, is not read.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, DAY, Kind, Provider, Report, Section, WEEK, Window},
         probe::{HostPath, Part, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -83,7 +84,7 @@ impl Service for Windsurf {
             Duration::from_secs(10),
         ) {
             Ok(output) if output.success => output,
-            Ok(_) => return Some(Err(Error::UsageCommand("read the Windsurf plan cache"))),
+            Ok(_) => return Some(Err(Error::Command("read the Windsurf plan cache").into())),
             Err(error) => return Some(Err(error)),
         };
         let cached = output.stdout.trim();
@@ -118,7 +119,7 @@ fn web(probe: &mut Probe, bundle: &Secret) -> Result<Report> {
 
 /// One value of the pasted bundle; a bundle missing one is no sign-in.
 fn value(probe: &mut Probe, bundle: &Secret, key: &str) -> Result<Secret> {
-    probe.field(bundle, &[key]).ok_or(Error::UsageNotSignedIn)
+    probe.field(bundle, &[key]).ok_or(Error::NotSignedIn.into())
 }
 
 /// A `GetPlanStatus` answer in Connect's JSON encoding.
@@ -375,6 +376,9 @@ mod tests {
 
     #[test]
     fn an_empty_status_is_an_error() {
-        assert!(matches!(parse_web("{}"), Err(Error::UsageJson(_))));
+        assert!(matches!(
+            parse_web("{}"),
+            Err(crate::Error::Usage(Error::Json(_)))
+        ));
     }
 }

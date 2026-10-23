@@ -12,7 +12,7 @@ fn renewed() -> Credential {
 
 fn profile(token: Arc<SecretString>) -> Result<Profile> {
     if token.expose_secret() == "old-access" {
-        return Err(Error::GitHubAuthentication);
+        return Err(crate::Error::GitHub(Error::Authentication));
     }
     Ok(Profile {
         login: "fixture".into(),
@@ -140,7 +140,7 @@ fn legacy_and_nonexpiring_tokens_survive_without_rotation() {
         Credential::decode(&"old-access".into())
             .unwrap()
             .profile_with(profile, |_| panic!(), |_| panic!()),
-        Err(Error::GitHubAuthentication)
+        Err(crate::Error::GitHub(Error::Authentication))
     ));
 }
 
@@ -191,9 +191,9 @@ fn refresh_can_replace_an_expiring_pair_with_a_nonexpiring_access_only_token() {
 #[test]
 fn transient_failure_never_refreshes_or_deletes_saved_credentials() {
     for error in [
-        Error::GitHubRateLimit { reset: None },
-        Error::GitHubStatus(500),
-        Error::GitHubForbidden,
+        crate::Error::GitHub(Error::RateLimit { reset: None }),
+        crate::Error::GitHub(Error::Status(500)),
+        crate::Error::GitHub(Error::Forbidden),
     ] {
         let mut error = Some(error);
         assert!(
@@ -213,31 +213,31 @@ fn refresh_and_persistence_failures_are_reported_without_profile_retry() {
     assert!(matches!(
         credential().profile_with(
             profile,
-            |_| Err(Error::GitHubDenied),
+            |_| Err(crate::Error::GitHub(Error::Denied)),
             |_| panic!("failed rotation must not write")
         ),
-        Err(Error::GitHubDenied)
+        Err(crate::Error::GitHub(Error::Denied))
     ));
     assert!(matches!(
         credential().profile_with(
             |token| {
                 assert_eq!(token.expose_secret(), "old-access");
-                Err(Error::GitHubAuthentication)
+                Err(crate::Error::GitHub(Error::Authentication))
             },
             |_| Ok(renewed()),
-            |_| Err(Error::CredentialPolicy)
+            |_| Err(crate::Error::GitHub(Error::CredentialPolicy))
         ),
-        Err(Error::CredentialPolicy)
+        Err(crate::Error::GitHub(Error::CredentialPolicy))
     ));
     let wrote = std::cell::Cell::new(false);
     assert!(matches!(
         credential().profile_with(
             |token| {
                 if token.expose_secret() == "old-access" {
-                    Err(Error::GitHubAuthentication)
+                    Err(crate::Error::GitHub(Error::Authentication))
                 } else {
                     assert!(wrote.get());
-                    Err(Error::GitHubStatus(503))
+                    Err(crate::Error::GitHub(Error::Status(503)))
                 }
             },
             |_| Ok(renewed()),
@@ -246,7 +246,7 @@ fn refresh_and_persistence_failures_are_reported_without_profile_retry() {
                 Ok(())
             }
         ),
-        Err(Error::GitHubStatus(503))
+        Err(crate::Error::GitHub(Error::Status(503)))
     ));
     assert!(wrote.get());
 }

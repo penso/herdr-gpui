@@ -137,7 +137,7 @@ struct BalanceData {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     /// The documented `GET /v1/users/me/balance` answer.
     const FIXTURE: &str = r#"{"code":0,"data":{"available_balance":49.58894,
@@ -183,7 +183,7 @@ mod tests {
             "voucher_balance":0,"cash_balance":0}}"#;
         assert!(matches!(
             parse(body, Region::International),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 

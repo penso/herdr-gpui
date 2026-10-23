@@ -11,8 +11,9 @@
 //! ChatGPT sign-in is the separate Codex provider.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Provider, Report, Section, Unit, group},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json, number},
@@ -107,7 +108,7 @@ impl Service for Openai {
                 // A rejected Admin key says less than the balance endpoint's
                 // own answer; any other Admin failure is the one to show.
                 balance.map_err(|balance_error| {
-                    if matches!(error, Error::UsageRejected) {
+                    if matches!(error, crate::Error::Usage(Error::Rejected)) {
                         balance_error
                     } else {
                         error

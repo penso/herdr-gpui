@@ -4,8 +4,7 @@
 //! no runtime: zbus drives its own connection thread and these calls block the
 //! background worker that makes them. Never call them on the UI thread.
 
-use super::{Result, store::credential_bytes};
-use crate::Error;
+use super::{Error, Result, store::credential_bytes};
 use futures_lite::future::block_on;
 use oo7::{Keyring, zbus};
 use secrecy::{ExposeSecret, SecretString};
@@ -14,12 +13,12 @@ const SERVICE: &str = "dev.herdr.gpui.github";
 const LABEL: &str = "Herdr UI GitHub sign-in";
 
 // `oo7::Error` is several times larger than the crate's other variants.
-fn read_error(error: oo7::Error) -> Error {
-    Error::SecretServiceRead(Box::new(error))
+fn read_error(error: oo7::Error) -> crate::Error {
+    Error::SecretServiceRead(Box::new(error)).into()
 }
 
-fn write_error(error: oo7::Error) -> Error {
-    Error::SecretServiceWrite(Box::new(error))
+fn write_error(error: oo7::Error) -> crate::Error {
+    Error::SecretServiceWrite(Box::new(error)).into()
 }
 
 /// Why a Secret Service could not be opened.
@@ -115,9 +114,9 @@ pub(super) fn save_in(
         let keyring = match (open().await, token) {
             (Ok(Some(keyring)), _) => keyring,
             (Ok(None), None) => return Ok(()),
-            (Ok(None), Some(_)) => return Err(Error::SecretServiceUnavailable),
-            (Err(Error::SecretServiceRead(error)), _) => {
-                return Err(Error::SecretServiceWrite(error));
+            (Ok(None), Some(_)) => return Err(Error::SecretServiceUnavailable.into()),
+            (Err(crate::Error::GitHub(Error::SecretServiceRead(error))), _) => {
+                return Err(Error::SecretServiceWrite(error).into());
             }
             (Err(error), _) => return Err(error),
         };
@@ -214,7 +213,7 @@ mod tests {
         save(None, "github.com").unwrap();
         assert!(matches!(
             save(Some(&"token".into()), "github.com"),
-            Err(Error::SecretServiceUnavailable)
+            Err(crate::Error::GitHub(Error::SecretServiceUnavailable))
         ));
     }
 

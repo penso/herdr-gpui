@@ -348,12 +348,16 @@ fn snapshot_metadata_is_the_lookup_key_and_leaves_checkout_to_git() {
     assert_eq!(input.branch, "feature");
     assert!(matches!(
         repository_input(None, Some("feature")),
-        Err(crate::Error::PrMetadata)
+        Err(crate::Error::PullRequest(
+            crate::pull_request::Error::Metadata
+        ))
     ));
     for branch in [None, Some(""), Some("bad\nbranch")] {
         assert!(matches!(
             repository_input(Some(&tree), branch),
-            Err(crate::Error::PrBranch)
+            Err(crate::Error::PullRequest(
+                crate::pull_request::Error::Branch
+            ))
         ));
     }
     let relative = ClientShellWorktree {
@@ -362,6 +366,8 @@ fn snapshot_metadata_is_the_lookup_key_and_leaves_checkout_to_git() {
     };
     assert!(matches!(
         repository_input(Some(&relative), Some("feature")),
-        Err(crate::Error::PrAbsolutePath)
+        Err(crate::Error::PullRequest(
+            crate::pull_request::Error::AbsolutePath
+        ))
     ));
 }

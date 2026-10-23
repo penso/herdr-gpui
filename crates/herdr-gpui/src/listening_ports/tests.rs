@@ -5,7 +5,7 @@ use super::{
     scan::{Bind, Link, MAX_PORTS, Origin, Port, Ports, parse},
     tunnel::{self, Key},
 };
-use crate::{Error, usage::Host};
+use crate::{Error, listening_ports, usage::Host};
 use herdr_client::ConnectTarget;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -129,7 +129,10 @@ fn malformed_and_untrusted_lines_are_dropped() {
 
 #[test]
 fn a_host_without_tools_says_so() {
-    assert!(matches!(parse("N\n"), Err(Error::ListeningPortsTool)));
+    assert!(matches!(
+        parse("N\n"),
+        Err(Error::ListeningPorts(listening_ports::Error::Tool))
+    ));
     // An idle host answers with nothing at all, which is no ports, not an error.
     assert_eq!(parse("\n").unwrap(), Ports::new());
 }
@@ -184,9 +187,9 @@ fn only_a_different_scan_changes_what_is_shown() {
     assert!(reading.apply(Ok(found.clone())));
     assert!(!reading.apply(Ok(found.clone())));
     // A failed scan keeps the last ports and is not a change.
-    assert!(!reading.apply(Err(Error::ListeningPorts(Box::new(
-        Error::UsageUnreachable
-    )))));
+    assert!(!reading.apply(Err(
+        listening_ports::Error::Scan(Box::new(crate::usage::Error::Unreachable.into())).into()
+    )));
     assert_eq!(reading.ports, found);
     let error = reading.error.clone().unwrap();
     assert!(
@@ -247,7 +250,7 @@ fn this_machine_lists_a_socket_this_process_holds() {
         // Neither ss nor lsof here; parse must say so rather than show nothing.
         assert!(matches!(
             parse(&output.stdout),
-            Err(Error::ListeningPortsTool)
+            Err(Error::ListeningPorts(listening_ports::Error::Tool))
         ));
         return;
     }

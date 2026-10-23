@@ -54,7 +54,7 @@ fn keyring_is_used_by_signed_macos_releases_linux_and_windows() {
                 Some(&"token".into()),
                 true
             ),
-            Err(Error::CredentialUnsupported)
+            Err(crate::Error::GitHub(Error::CredentialUnsupported))
         ));
         assert!(
             credentials::store(

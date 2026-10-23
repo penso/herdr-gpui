@@ -29,7 +29,7 @@ fn an_exhausted_quota_is_a_rate_limit_with_its_reset_not_a_refusal() {
     )
     .unwrap_err();
     assert!(
-        matches!(error, Error::GitHubRateLimit { reset: Some(at) } if at.timestamp() == reset),
+        matches!(error, crate::Error::GitHub(Error::RateLimit { reset: Some(at) }) if at.timestamp() == reset),
         "{error:?}"
     );
     assert!(error.to_string().contains("Retry after "), "{error}");
@@ -37,11 +37,17 @@ fn an_exhausted_quota_is_a_rate_limit_with_its_reset_not_a_refusal() {
 
     // A secondary limit sends only a delay.
     let error = response::<Value>("test", reply(403, &[("retry-after", "120")])).unwrap_err();
-    assert!(matches!(error, Error::GitHubRateLimit { reset: Some(_) }));
+    assert!(matches!(
+        error,
+        crate::Error::GitHub(Error::RateLimit { reset: Some(_) })
+    ));
 
     // 429 is always a rate limit; without a time it says so.
     let error = response::<Value>("test", reply(429, &[])).unwrap_err();
-    assert!(matches!(error, Error::GitHubRateLimit { reset: None }));
+    assert!(matches!(
+        error,
+        crate::Error::GitHub(Error::RateLimit { reset: None })
+    ));
     assert_eq!(error.to_string(), "GitHub rate limit reached. Retry later.");
 }
 
@@ -49,7 +55,10 @@ fn an_exhausted_quota_is_a_rate_limit_with_its_reset_not_a_refusal() {
 fn a_403_with_quota_left_stays_a_permission_refusal() {
     for headers in [&[][..], &[("x-ratelimit-remaining", "4999")]] {
         let error = response::<Value>("test", reply(403, headers)).unwrap_err();
-        assert!(matches!(error, Error::GitHubForbidden), "{error:?}");
+        assert!(
+            matches!(error, crate::Error::GitHub(Error::Forbidden)),
+            "{error:?}"
+        );
     }
 }
 
@@ -57,7 +66,7 @@ fn a_403_with_quota_left_stays_a_permission_refusal() {
 fn graphql_rate_limits_carry_the_reset_time() {
     let errors = json!([{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]);
     let error = query_error(&errors, Some("a/b".into()), "oauth_app", Some(at(2_000)));
-    assert!(matches!(error, Error::GitHubRateLimit { reset: Some(reset) } if reset == at(2_000)));
+    assert!(matches!(error, Error::RateLimit { reset: Some(reset) } if reset == at(2_000)));
 }
 
 #[test]
@@ -70,17 +79,17 @@ fn a_repository_the_sign_in_cannot_see_says_which_and_why() {
     let error = query_error(&errors, Some("acme/hidden".into()), "github_app_user", None);
     assert!(matches!(
         &error,
-        Error::GitHubRepositoryHidden { repository, app_token: true } if repository == "acme/hidden"
+        Error::RepositoryHidden { repository, app_token: true } if repository == "acme/hidden"
     ));
     let text = error.to_string();
     assert!(text.contains("acme/hidden"), "{text}");
     assert!(text.contains("installed on"), "{text}");
-    assert_eq!(kind(&error), "repository_hidden");
+    assert_eq!(kind(&error.into()), "repository_hidden");
 
     let error = query_error(&errors, Some("acme/hidden".into()), "oauth_app", None);
     assert!(matches!(
         error,
-        Error::GitHubRepositoryHidden {
+        Error::RepositoryHidden {
             app_token: false,
             ..
         }
@@ -98,7 +107,7 @@ fn other_graphql_errors_show_github_reason() {
     }]);
     assert!(matches!(
         query_error(&nested, Some("a/b".into()), "github_app_user", None),
-        Error::GitHubRejected(message) if message.contains("PullRequest")
+        Error::Rejected(message) if message.contains("PullRequest")
     ));
     let forbidden =
         json!([{"type": "FORBIDDEN", "message": "Resource not accessible by integration"}]);
@@ -108,7 +117,7 @@ fn other_graphql_errors_show_github_reason() {
     );
     assert!(matches!(
         query_error(&json!([]), None, "unknown", None),
-        Error::GitHubQuery
+        Error::Query
     ));
 }
 

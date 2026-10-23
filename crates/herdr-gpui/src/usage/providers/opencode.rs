@@ -14,8 +14,9 @@
 //! are shared with [`super::opencodego`].
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp},
@@ -174,7 +175,7 @@ fn server_request(request: Request, cookie: &Secret, id: &str, referer: &str) ->
 pub(super) fn call(probe: &mut Probe, request: Request) -> Result<String> {
     let response = probe.http(request)?;
     if signed_out(&response.body) {
-        return Err(Error::UsageRejected);
+        return Err(Error::Rejected.into());
     }
     response.ok()
 }

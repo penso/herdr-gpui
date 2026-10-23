@@ -16,8 +16,9 @@
 //! when the host is this machine, as in CodexBar.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, Kind, Provider, Report, Section, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, json},
@@ -62,7 +63,7 @@ impl Service for Llmman {
             None => (probe.env_text("LLMMAN_HOST"), Source::Host),
         };
         let Some(daemon) = daemon(address.as_deref()) else {
-            return Some(Err(Error::UsageConnect));
+            return Some(Err(Error::Connect.into()));
         };
         let host_key = probe.env("LLMMAN_API_KEY");
         let key = host_key.or_else(|| {
@@ -78,7 +79,7 @@ impl Service for Llmman {
             Err(error) => return Some(Err(error)),
         };
         match response.status {
-            401 | 403 if key.is_none() => return Some(Err(Error::UsageNotSignedIn)),
+            401 | 403 if key.is_none() => return Some(Err(Error::NotSignedIn.into())),
             200..=299 => {}
             // Nothing, or another server, answers at the default address.
             _ if !configured => return None,

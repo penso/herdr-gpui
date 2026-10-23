@@ -11,8 +11,12 @@
 //! and are delivered once the same pane takes input again. One drop maps at
 //! a time.
 
+mod error;
+
+pub(crate) use error::Error;
+
 use super::{HerdrWindow, file_drop::quote_paths, pending_input::Delivery};
-use crate::{Error, Result, connection::ConnectionBridge, terminal::InputTarget};
+use crate::{Result, connection::ConnectionBridge, terminal::InputTarget};
 use gpui::Context;
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::{
@@ -49,12 +53,16 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Result<()> {
         if self.wsl_paste.is_some() {
-            return Err(Error::WslPasteBusy);
+            return Err(Error::Busy.into());
         }
         // Records where held keys go before any are held.
         self.flush_pending_input(cx);
         let endpoint = &self.endpoints[self.selected_endpoint];
-        let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
+        let snapshot = self
+            .live
+            .snapshot
+            .as_ref()
+            .ok_or(crate::Error::NoSnapshot)?;
         let token = Arc::new(());
         let answer = token.clone();
         self.wsl_paste = Some(WslPaste {
@@ -101,7 +109,7 @@ impl HerdrWindow {
             }
             Err(error) => {
                 self.wsl_paste = None;
-                self.local_error = Some(format!("Files not pasted: {}", Error::from(error)));
+                self.local_error = Some(format!("Files not pasted: {}", crate::Error::from(error)));
                 // Keys typed after the drop never run without its paths.
                 self.discard_all_held(Delivery::Refused, cx);
                 cx.notify();
@@ -170,14 +178,14 @@ impl HerdrWindow {
                 .is_some_and(|snapshot| snapshot.boot_id == paste.boot)
             && self.input_target_shown(&paste.target);
         if !current {
-            return Err(Error::WslPasteTargetGone);
+            return Err(Error::TargetGone.into());
         }
         let text = quote_paths(&mapped.into_iter().map(PathBuf::from).collect::<Vec<_>>())?;
         let handle = endpoint
             .connection
             .handle
             .as_ref()
-            .ok_or(Error::NotConnected)?;
+            .ok_or(crate::Error::NotConnected)?;
         ConnectionBridge::send_input(
             handle,
             &paste.boot,

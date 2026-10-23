@@ -15,8 +15,9 @@
 //! is the usual rejected sign-in.
 
 use crate::{
-    Error, Result,
+    Result,
     usage::{
+        Error,
         model::{Account, DAY, Kind, Provider, Report, Section, Window},
         probe::{HostPath, Part, Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp, json},
@@ -114,7 +115,7 @@ fn read(probe: &mut Probe, credentials: &Secret, email: Option<String>) -> Resul
         .map(|body| parse_code_assist(&body))
         .unwrap_or_default();
     if assist.ineligible {
-        return Err(Error::UsageNoPlan);
+        return Err(Error::NoPlan.into());
     }
     let project = match assist.project.clone() {
         Some(project) => Some(project),
@@ -149,8 +150,8 @@ fn access_token(probe: &mut Probe, credentials: &Secret) -> Result<Secret> {
     }
     let refresh = probe
         .field(credentials, &["refresh_token"])
-        .ok_or(Error::UsageRejected)?;
-    let (id, secret) = client(probe).ok_or(Error::UsageCommand(
+        .ok_or(Error::Rejected)?;
+    let (id, secret) = client(probe).ok_or(Error::Command(
         "find the Gemini CLI's OAuth client to refresh the sign-in",
     ))?;
     let request = Request::post(TOKEN_URL)

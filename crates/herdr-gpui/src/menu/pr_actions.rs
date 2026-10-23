@@ -46,7 +46,7 @@ impl HerdrWindow {
         self.menu.error = None;
         let result = self
             .pr_token()
-            .ok_or(crate::Error::GitHubAuthentication)
+            .ok_or(crate::Error::from(crate::github::Error::Authentication))
             .and_then(|token| self.pr_actions.load_comments(token));
         if let Err(error) = result {
             self.menu.error = Some(error.to_string());
@@ -87,7 +87,7 @@ impl HerdrWindow {
             .unwrap_or_default();
         let result = self
             .pr_token()
-            .ok_or(crate::Error::GitHubAuthentication)
+            .ok_or(crate::Error::from(crate::github::Error::Authentication))
             .and_then(|token| self.pr_actions.start(Action::Comment(body), &[], token));
         match result {
             Ok(()) => {
@@ -103,18 +103,23 @@ impl HerdrWindow {
     /// The confirmation itself: only this button, or Enter on this dialog,
     /// sends a merge, and only for the head the dialog was opened with.
     pub(super) fn submit_pr_merge(&mut self, cx: &mut Context<Self>) {
-        let result = (|| {
-            let method = self.menu.merge_method.ok_or(crate::Error::PrMergeMethod)?;
+        let result = (|| -> crate::Result<_> {
+            let method = self
+                .menu
+                .merge_method
+                .ok_or(crate::pr_actions::Error::MergeMethod)?;
             if self.menu.merge_target.is_none()
                 || self.menu.merge_target.as_ref() != self.pr_actions.target()
             {
-                return Err(crate::Error::PrMergeChanged);
+                return Err(crate::pr_actions::Error::MergeChanged.into());
             }
             let allowed = self
                 .git_open_pull_request()
                 .map(|pr| pr.merge_methods.clone())
                 .unwrap_or_default();
-            let token = self.pr_token().ok_or(crate::Error::GitHubAuthentication)?;
+            let token = self
+                .pr_token()
+                .ok_or(crate::github::Error::Authentication)?;
             self.pr_actions
                 .start(Action::Merge(method), &allowed, token)
         })();

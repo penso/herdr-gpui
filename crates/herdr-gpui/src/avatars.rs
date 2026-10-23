@@ -210,7 +210,9 @@ impl Avatars {
                 Ok(image) => Slot::Resolved(image),
                 // Stopped because its device disconnected: due again as soon
                 // as one is connected, since only then is it asked for.
-                Err(herdr_client::Error::SshCancelled) => Slot::Unreachable { retry_at: now },
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Cancelled)) => {
+                    Slot::Unreachable { retry_at: now }
+                }
                 Err(_) if reconnected => Slot::Unreachable { retry_at: now },
                 Err(_) => Slot::Unreachable {
                     retry_at: now + RETRY_AFTER,
@@ -300,7 +302,7 @@ fn repo_owner(
             // what is left.
             // A read queued before its device disconnected never dials.
             Checkout::Ssh { target, .. } if links::is_offline(offline, target) => {
-                return Err(herdr_client::Error::SshCancelled);
+                return Err(herdr_client::ssh::Error::Cancelled.into());
             }
             Checkout::Ssh { target, git_dir } => herdr_client::remote_config_value(
                 target,
@@ -308,7 +310,7 @@ fn repo_owner(
                 key,
                 deadline
                     .checked_duration_since(Instant::now())
-                    .ok_or(herdr_client::Error::SshTimeout)?,
+                    .ok_or(herdr_client::ssh::Error::Timeout)?,
                 || links::is_offline(offline, target),
             )?,
         };

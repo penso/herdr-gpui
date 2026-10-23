@@ -128,7 +128,7 @@ fn remote_steps_report_failure_and_keep_the_session() {
     assert_eq!(output.stdout, "ok");
     assert!(matches!(
         shell.run("sleep 5", Duration::from_millis(200)),
-        Err(Error::UsageTimeout)
+        Err(Error::Usage(usage::Error::Timeout))
     ));
     // A step that overran leaves the session unusable rather than out of step.
     assert!(shell.run("true", Duration::from_secs(5)).is_err());

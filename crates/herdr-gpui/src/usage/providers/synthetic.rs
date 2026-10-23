@@ -431,7 +431,7 @@ fn window_minutes(payload: &Object) -> Option<u64> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::Error;
+    use crate::{Error, usage};
 
     fn at(seconds: f64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs_f64(seconds)
@@ -506,7 +506,7 @@ mod tests {
     fn a_response_without_quotas_is_an_error() {
         assert!(matches!(
             parse(r#"{"plan":"Starter"}"#),
-            Err(Error::UsageJson(_))
+            Err(Error::Usage(usage::Error::Json(_)))
         ));
     }
 }

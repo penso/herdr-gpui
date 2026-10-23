@@ -106,10 +106,10 @@ fn check(context: &Context) -> crate::Result<Output> {
             if not_running(&error)
                 || matches!(
                     error,
-                    crate::Error::ControlRejected {
+                    crate::Error::Control(crate::control::Error::Rejected {
                         code: ErrorCode::NoWindow,
                         ..
-                    }
+                    })
                 ) =>
         {
             false
