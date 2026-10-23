@@ -1867,6 +1867,34 @@ scripts, so a team shares them and they follow the branch, as Conductor's
 `.conductor/settings.toml` and Superset's `.superset/config.json` do. Only
 the trust decision is local.
 
+**Copying ignored files.** A new worktree is a clean checkout, so it lacks
+the main checkout's ignored files, such as `.env`, `CLAUDE.local.md`, or a
+personal `.herdr/worktree.toml` kept out of Git. List them in
+`.worktreeinclude` at the root of the main checkout, in `.gitignore` syntax,
+as Conductor, Orca, and Claude Code also read it:
+
+```gitignore
+.herdr/worktree.toml
+CLAUDE.local.md
+.claude/settings.local.json
+.env*
+```
+
+Before a setup script's file is read, after a worktree is created or from
+**Run setup script**, Herdr UI copies every file from the main checkout that
+matches the list and that Git ignores there; tracked and merely untracked
+files are not copied. A file the worktree already has is never
+overwritten, missing files are skipped, symbolic links are copied as links,
+directories the copy creates are private to you, and nothing is written
+below a worktree directory that leads outside it.
+The copy happens before the trust question and whether or not the file has a
+setup script, so a copied `.herdr/worktree.toml` is the one read. The list
+is read from the main checkout, so it can itself be ignored. Git runs the
+match on the daemon's host, over SSH for a remote one; it needs `sh`, `git`,
+and `xargs` there. WSL distributions, cloud machines, and a local daemon on
+a Windows client are not supported yet, and a worktree created outside
+Herdr UI gets the files only when you run its setup script from Herdr UI.
+
 ## Worktree Notes
 
 Right-click a Git checkout and choose Note... to keep a reminder on it, such as

@@ -897,6 +897,8 @@ pub enum Error {
     WorkspaceRepositoryChanged,
     #[error(transparent)]
     WorktreeIdentity(#[from] crate::worktree_identity::Error),
+    #[error(transparent)]
+    WorktreeInclude(#[from] crate::worktree_scripts::IncludeError),
     #[error("Invalid or oversized worktree list. Dismiss and reopen the menu.")]
     WorktreeList,
     #[error("Malformed worktree list. Dismiss and reopen the menu.")]
