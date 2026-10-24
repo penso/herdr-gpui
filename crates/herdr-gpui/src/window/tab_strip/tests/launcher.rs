@@ -58,7 +58,7 @@ fn shown(cx: &mut VisualTestContext, selector: &'static str) -> bool {
 /// it back, or `None` before the pointer ever came.
 fn dealing(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> Option<bool> {
     view.read_with(cx, |view, _| {
-        view.chats.launcher_deck.map(|(_, deck)| deck.is_open())
+        view.chats.launcher_deck.map(|deck| deck.toggle.is_open())
     })
 }
 
@@ -84,14 +84,22 @@ fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
     );
 
     // Once dealt, each card stands in its place after "+" and the rule.
+    let before = cx.debug_bounds("new-tab").unwrap();
     let group = view.read_with(cx, |view, _| view.group_slots()[0].id);
     view.update(cx, |view, _| {
-        let mut deck = crate::motion::Toggle::default();
-        deck.set(true, crate::motion::now(), true);
-        view.chats.launcher_deck = Some((group, deck));
+        let mut toggle = crate::motion::Toggle::default();
+        toggle.set(true, crate::motion::now(), true);
+        view.chats.launcher_deck = Some(crate::chat::LauncherDeck {
+            group,
+            over_cards: false,
+            over_plus: false,
+            toggle,
+        });
     });
     draw(cx);
     let plus = cx.debug_bounds("new-tab").unwrap();
+    // Dealt over what follows "+", so "+" stays under the pointer.
+    assert_eq!(plus, before, "+ never moves as the deck deals");
     let deck = cx.debug_bounds("chat-launcher-deck").unwrap();
     let claude = cx.debug_bounds(CLAUDE).unwrap();
     let codex = cx.debug_bounds(CODEX).unwrap();
@@ -102,6 +110,30 @@ fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
     assert_eq!(deck.size.width, px(RULE + 2. * BUTTON + GAP));
     assert_eq!(claude.left(), deck.left() + px(RULE));
     assert_eq!(codex.left(), claude.right() + px(GAP));
+}
+
+/// When tabs fill the strip, a deck that took room beside "+" would squeeze
+/// them and slide "+" away from the pointer, so a click meant for "+" could
+/// start a chat. Moving from "+" onto a card keeps the deck dealt.
+#[gpui::test]
+fn the_deck_keeps_plus_in_place_and_stays_dealt_over_its_cards(cx: &mut TestAppContext) {
+    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
+    cx.simulate_resize(size(px(420.), px(600.)));
+    draw(cx);
+    let before = cx.debug_bounds("new-tab").unwrap();
+    hover(cx, "new-tab");
+    // Let the deal finish, so the cards stand where the pointer goes next.
+    view.update(cx, |view, _| {
+        if let Some(deck) = &mut view.chats.launcher_deck {
+            deck.toggle.set(true, crate::motion::now(), true);
+        }
+    });
+    draw(cx);
+    assert_eq!(cx.debug_bounds("new-tab").unwrap(), before);
+    hover(cx, CODEX);
+    assert_eq!(dealing(&view, cx), Some(true), "still dealt over a card");
+    let codex = cx.debug_bounds(CODEX).unwrap();
+    assert!(codex.left() >= before.right());
 }
 
 #[test]

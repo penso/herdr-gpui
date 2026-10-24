@@ -4,7 +4,7 @@
 //! gather back under "+" in reverse.
 
 use super::{BUTTON, HerdrWindow, RULE};
-use crate::{browser::Slot, config::corners, motion::Toggle};
+use crate::{browser::Slot, chat::LauncherDeck, config::corners, motion::Toggle};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Agent;
 
@@ -29,13 +29,47 @@ pub(in crate::window::tab_strip) fn card_left(t: f32, index: usize) -> f32 {
     -BUTTON + (rest + BUTTON) * t
 }
 
+/// What the pointer is over that keeps a deck dealt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Over {
+    Plus,
+    Cards,
+}
+
 impl HerdrWindow {
     /// How far `slot`'s deck is dealt at `now`, and whether it still moves.
     fn deck_shown(&self, slot: Slot, now: std::time::Instant) -> (f32, bool) {
         self.chats
             .launcher_deck
-            .filter(|(group, _)| *group == slot.id)
-            .map_or((0., false), |(_, deck)| (deck.shown(now), deck.moving(now)))
+            .filter(|deck| deck.group == slot.id)
+            .map_or((0., false), |deck| {
+                (deck.toggle.shown(now), deck.toggle.moving(now))
+            })
+    }
+
+    /// Notes the pointer entering or leaving "+" or the cards: the deck
+    /// deals out while it is over either, and gathers back once over
+    /// neither. Moving from one to the other keeps it dealt.
+    fn deck_hover(&mut self, slot: Slot, over: Over, hovered: bool, cx: &mut Context<Self>) {
+        let deck = match &mut self.chats.launcher_deck {
+            Some(deck) if deck.group == slot.id => deck,
+            _ if !hovered => return,
+            other => other.insert(LauncherDeck {
+                group: slot.id,
+                over_cards: false,
+                over_plus: false,
+                toggle: Toggle::default(),
+            }),
+        };
+        match over {
+            Over::Plus => deck.over_plus = hovered,
+            Over::Cards => deck.over_cards = hovered,
+        }
+        let open = deck.over_plus || deck.over_cards;
+        if deck.toggle.is_open() != open {
+            deck.toggle.set(open, crate::motion::now(), false);
+            cx.notify();
+        }
     }
 
     /// "+" with its deck of agents, dealt out while the pointer is over
@@ -57,20 +91,12 @@ impl HerdrWindow {
         let group = div()
             .id(SharedString::from(slot.selector(name)))
             .debug_selector(move || slot.selector(name))
+            .relative()
             .flex()
             .flex_none()
             .items_center()
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                let now = crate::motion::now();
-                let deck = match &mut this.chats.launcher_deck {
-                    Some((group, deck)) if *group == slot.id => deck,
-                    _ if !*hovered => return,
-                    other => &mut other.insert((slot.id, Toggle::default())).1,
-                };
-                if deck.is_open() != *hovered {
-                    deck.set(*hovered, now, false);
-                    cx.notify();
-                }
+                this.deck_hover(slot, Over::Plus, *hovered, cx);
             }))
             .child(plus);
         if shown <= 0. {
@@ -80,8 +106,7 @@ impl HerdrWindow {
         let travelled: Vec<f32> = (0..count)
             .map(|index| spread(shown, index, count))
             .collect();
-        // The deck is as wide as its farthest card reaches, so what follows
-        // "+" moves aside with the deal rather than all at once.
+        // The deck is as wide as its farthest card reaches.
         let width = travelled
             .iter()
             .enumerate()
@@ -105,25 +130,40 @@ impl HerdrWindow {
                     .border_color(edge)
                     .rounded(px(corners::CONTROL))
             });
-        group
+        // Dealt over whatever follows "+" rather than beside it, so "+"
+        // never moves under the pointer and a click meant for it always
+        // lands on it; drawn after the rest of the strip, so on top.
+        let deck = div()
+            .debug_selector(move || slot.selector("chat-launcher-deck"))
+            .relative()
+            .flex_none()
+            .h(px(BUTTON))
+            .w(px(width.max(0.)))
+            .overflow_hidden()
             .child(
-                div()
-                    .debug_selector(move || slot.selector("chat-launcher-deck"))
-                    .relative()
-                    .flex_none()
-                    .h(px(BUTTON))
-                    .w(px(width.max(0.)))
-                    .overflow_hidden()
-                    .child(
-                        self.launcher_rule()
-                            .absolute()
-                            .top(px((BUTTON - 14.) / 2.))
-                            .left_0()
-                            .opacity(shown),
-                    )
-                    // The first card dealt lies on top of the rest.
-                    .children(cards.rev()),
+                self.launcher_rule()
+                    .absolute()
+                    .top(px((BUTTON - 14.) / 2.))
+                    .left_0()
+                    .opacity(shown),
             )
+            // The first card dealt lies on top of the rest.
+            .children(cards.rev());
+        group
+            .child(deferred(
+                div()
+                    .id(SharedString::from(slot.selector("chat-launcher-cards")))
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left(relative(1.))
+                    .flex()
+                    .items_center()
+                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                        this.deck_hover(slot, Over::Cards, *hovered, cx);
+                    }))
+                    .child(deck),
+            ))
             .into_any_element()
     }
 }
