@@ -10,7 +10,7 @@
 //! so nothing typed depends on where the app is installed, and the agent's
 //! name comes from the shared table, never from daemon text.
 
-use crate::{HerdrWindow, NavigationTarget, window::Flash};
+use crate::{HerdrWindow, NavigationTarget, browser::GroupId, window::Flash};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Agent;
 use herdr_client::Method;
@@ -273,6 +273,7 @@ impl HerdrWindow {
                 ),
             )
             .map_err(|_| Error::NotConnected)?;
+        self.chats.last_started = Some(agent);
         self.chats.starting = Some(Starting {
             agent,
             remote: program.is_none(),
@@ -288,12 +289,26 @@ impl HerdrWindow {
     /// [`Self::start_chat`], reporting a failure as a flash.
     pub(crate) fn start_chat_or_flash(&mut self, agent: Agent, cx: &mut Context<Self>) {
         if let Err(error) = self.start_chat(agent, None) {
-            self.show_flash(
-                Flash::warning(format!("The chat did not start: {error}")),
-                cx,
-            );
+            self.flash_chat_error(&error, cx);
         }
         cx.notify();
+    }
+
+    /// Starts a chat from a tab strip's launcher, so its tab opens in that
+    /// strip's group as one from the strip's "+" does.
+    pub(crate) fn start_chat_in(&mut self, agent: Agent, group: GroupId, cx: &mut Context<Self>) {
+        match self.start_chat(agent, None) {
+            Ok(()) => self.expect_new_tab_in(group),
+            Err(error) => self.flash_chat_error(&error, cx),
+        }
+        cx.notify();
+    }
+
+    fn flash_chat_error(&mut self, error: &Error, cx: &mut Context<Self>) {
+        self.show_flash(
+            Flash::warning(format!("The chat did not start: {error}")),
+            cx,
+        );
     }
 
     /// Runs every tick: once the tab exists, types the line that starts the

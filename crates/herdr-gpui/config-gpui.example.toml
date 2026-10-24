@@ -462,6 +462,14 @@ size = 12
 # Scroll smoothly to a streaming reply's new text, rather than jumping to it
 # as each chunk lands. Settings > General edits this while ACP chats are on.
 # glide = false
+#
+# Where tab strips offer a one-click chat with each installed agent; "+" keeps
+# opening a terminal tab in every placement. "plus" (the agents slide out
+# beside "+" under the pointer), "beside" (right after "+"), "leading" (before
+# the tabs), "trailing" (at the strip's right end), "button" (one button for
+# the agent last started, the others sliding out beside it), or "off".
+# Settings > General edits this while ACP chats are on.
+# launcher = "plus"
 
 # Variables every chat's tab starts with, on this machine or an SSH host, so
 # an agent reaches a company endpoint the pane's shell does not set up: GitHub

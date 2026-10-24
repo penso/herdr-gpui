@@ -272,6 +272,11 @@ impl ChatPane {
 pub(crate) struct Chats {
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
+    /// The agent a chat was last started with, which the strips' one-button
+    /// launcher offers first.
+    pub(crate) last_started: Option<herdr_chat_protocol::Agent>,
+    /// The strip whose launcher shows its hidden agents under the pointer.
+    pub(crate) launcher_open: Option<crate::browser::GroupId>,
     /// The layout the lists' rows were last measured in.
     measured: crate::config::ChatLayoutMode,
     /// Chat pages opened so far, which numbers the next one.

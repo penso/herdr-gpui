@@ -60,7 +60,7 @@ mod zen;
 pub use accent::Accent;
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
-pub use chat::ChatLayoutMode;
+pub use chat::{ChatLauncher, ChatLayoutMode};
 pub use cloud::CloudConfig;
 #[cfg(test)]
 use daemon::MAX_DAEMON_CONFIG_BYTES;

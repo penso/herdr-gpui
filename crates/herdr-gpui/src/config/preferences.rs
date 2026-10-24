@@ -7,6 +7,8 @@ pub(crate) enum Preference {
     AgentsPlacement(AgentsPlacement),
     /// `[chat] glide`: whether chats scroll smoothly to new output.
     ChatGlide(bool),
+    /// `[chat] launcher`: where tab strips offer one-click chats.
+    ChatLauncher(ChatLauncher),
     /// `[chat] layout`: how chat views draw.
     ChatLayout(ChatLayoutMode),
     ConfirmCloseTab(bool),
@@ -109,6 +111,9 @@ impl Config {
                     (None, "agents_placement", Some(placement.as_str().into()))
                 }
                 Preference::ChatGlide(value) => (Some("chat"), "glide", Some(value.into())),
+                Preference::ChatLauncher(launcher) => {
+                    (Some("chat"), "launcher", Some(launcher.name().into()))
+                }
                 Preference::ChatLayout(mode) => (Some("chat"), "layout", Some(mode.name().into())),
                 Preference::ConfirmCloseTab(value) => {
                     (None, "confirm_close_tab", Some(value.into()))
