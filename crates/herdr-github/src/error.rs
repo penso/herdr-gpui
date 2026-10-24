@@ -19,7 +19,9 @@ pub enum Error {
     Authorization,
     #[error(transparent)]
     Cli(#[from] crate::cli::Error),
-    #[error(transparent)]
+    // Not transparent: the client error stays in the source chain, where
+    // `StorageFailure::find` and the chain printers look for it.
+    #[error("{0}")]
     Client(#[from] herdr_client::Error),
     #[error("HERDR_GITHUB_OAUTH_CLIENT_ID must be UTF-8")]
     ClientIdEncoding,

@@ -3,10 +3,7 @@
 //! off the UI thread.
 
 use super::model::branch_name;
-use crate::{
-    Error,
-    pull_request::{Input, clean, repository_key, run},
-};
+use crate::pull_request::{Input, clean, repository_key, run};
 use std::{
     collections::HashSet,
     path::Path,
@@ -158,7 +155,7 @@ mod tests {
         };
         assert!(matches!(
             list(&input, &|| false),
-            Err(Error::GitHub(herdr_github::Error::PullRequest(
+            Err(crate::Error::GitHub(herdr_github::Error::PullRequest(
                 herdr_github::pull_request::Error::AbsolutePath
             )))
         ));

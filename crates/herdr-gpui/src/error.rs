@@ -326,8 +326,9 @@ pub enum Error {
     /// A usage read failed, or the usage shell the port and load scans share.
     #[error(transparent)]
     Usage(#[from] herdr_usage::Error),
-    /// A Git, checkpoint, or code index failure; see `error/vcs.rs` for
-    /// what is handled elsewhere.
+    /// A Git, checkpoint, or code index failure. Build it with `.into()`, never
+    /// directly: `error/vcs.rs` sends a GitHub failure carried by `herdr-vcs`
+    /// to `GitHub`, where callers match it.
     #[error(transparent)]
     Vcs(herdr_vcs::Error),
     #[cfg(any(target_os = "macos", windows))]

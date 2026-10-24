@@ -3,10 +3,7 @@
 //! has a deadline and runs off the UI thread.
 
 use super::{Item, Kind, Origin, model::LIMIT, model::parse};
-use crate::{
-    Error,
-    pull_request::{Input, local_checkout, local_repository, run},
-};
+use crate::pull_request::{Input, local_checkout, local_repository, run};
 use std::time::{Duration, Instant};
 
 pub(super) const TIMEOUT: Duration = Duration::from_secs(20);
