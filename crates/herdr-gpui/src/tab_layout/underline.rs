@@ -3,8 +3,9 @@
 //! button shows on the chosen tab and under the pointer.
 
 use super::{
-    DOT_GAP, FLOATING_PADDING, Lead, TabContext, TabFace, TabLayout, TabShape, TabState, ZOOM_ICON,
-    close_button, floating_new_tab, lead_mark, status_width, zoom_mark,
+    DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, Lead, TabContext, TabFace, TabLayout,
+    TabShape, TabState, ZOOM_ICON, close_button, floating_new_tab, lead_mark, status_width,
+    zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme},
@@ -132,7 +133,11 @@ impl TabLayout for Underline {
         FLOATING_PADDING
     }
 
-    fn new_tab(&self, base: Stateful<Div>, icon: Svg, theme: &Theme) -> Stateful<Div> {
+    fn new_tab(&self, base: Stateful<Div>, icon: AnyElement, theme: &Theme) -> Stateful<Div> {
         floating_new_tab(base, icon, theme)
+    }
+
+    fn new_tab_width(&self) -> f32 {
+        FLOATING_NEW_TAB_WIDTH
     }
 }

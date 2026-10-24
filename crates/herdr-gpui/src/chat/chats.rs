@@ -275,6 +275,17 @@ pub(crate) struct LauncherDeck {
     pub(crate) over_cards: bool,
     pub(crate) over_plus: bool,
     pub(crate) toggle: crate::motion::Toggle,
+    /// The side it deals toward, chosen as it starts to deal.
+    pub(crate) toward: Toward,
+}
+
+/// The side of "+" a deck deals its agents out to: the right while the
+/// window has room there for all of them, else the left, over the tabs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Toward {
+    Left,
+    #[default]
+    Right,
 }
 
 /// Every chat pane of the window's daemon, in its snapshot's order.

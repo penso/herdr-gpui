@@ -3127,9 +3127,10 @@ also be started by hand in any pane: `herdr-acp claude`.
 
 **One click.** Each tab strip also offers a button per installed agent that
 starts its chat in a new tab of that group; the chat's tab looks like any
-other, and **+** still opens a terminal tab. `[chat] launcher` places the
-buttons: `plus` (the default) slides them out beside **+** under the
-pointer, `beside` keeps them right after **+**, `leading` puts them before
+other, and **+** still opens a terminal tab. Each button takes the shape
+the tab layout gives **+**. `[chat] launcher` places the buttons: `plus`
+(the default) deals them out from under **+** while the pointer is over it,
+to the right, or to the left when the window has no room there, `beside` keeps them right after **+**, `leading` puts them before
 the tabs, `trailing` at the strip's right end, and `button` shows one named
 button for the agent last started, the others sliding out beside it; `off`
 hides them. Settings > General picks one while ACP chats are on, and

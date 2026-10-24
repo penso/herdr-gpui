@@ -399,7 +399,8 @@ impl HerdrWindow {
                                     .debug_selector(move || slot.selector("new-tab-icon"))
                                     .size(px(14.))
                                     // Quiet like the unselected tabs beside it.
-                                    .text_color(rgb(self.theme.muted)),
+                                    .text_color(rgb(self.theme.muted))
+                                    .into_any_element(),
                                 &self.theme,
                             )
                         })

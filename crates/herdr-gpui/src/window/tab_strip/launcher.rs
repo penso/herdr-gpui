@@ -15,14 +15,11 @@ use herdr_chat_protocol::Agent;
 
 mod deck;
 #[cfg(test)]
-pub(super) use deck::{GAP, card_left, spread};
+pub(super) use deck::{card_offset, deal_toward, spread};
 
-/// An agent button and the mark inside it.
-pub(super) const BUTTON: f32 = 24.;
+/// The one-button launcher's height, and an agent's mark.
+const BUTTON: f32 = 24.;
 const ICON: f32 = 14.;
-/// The rule before revealed agents, and the room either side of it.
-const RULE_MARGIN: f32 = 4.;
-pub(super) const RULE: f32 = 1. + 2. * RULE_MARGIN;
 /// How long hidden agents take to slide out.
 const SLIDE: std::time::Duration = std::time::Duration::from_millis(180);
 
@@ -66,7 +63,6 @@ impl HerdrWindow {
             (ChatLauncher::Leading, Spot::Leading) => Some(
                 self.launcher_group(slot, "chat-launcher-leading")
                     .children(self.agent_buttons(slot, &agents, cx))
-                    .child(self.launcher_rule())
                     .into_any_element(),
             ),
             (ChatLauncher::Trailing, Spot::Trailing) => Some(
@@ -92,11 +88,13 @@ impl HerdrWindow {
         if agents.is_empty() {
             return plus.into_any_element();
         }
+        // As tall as the strip, as it is without agents: classic's "+" draws
+        // its rule and hover fill from top to bottom.
+        let plus = plus.self_stretch();
         match self.config.chat.launcher {
             ChatLauncher::Beside => self
                 .launcher_group(slot, "chat-launcher-beside")
                 .child(plus)
-                .child(self.launcher_rule())
                 .children(self.agent_buttons(slot, &agents, cx))
                 .into_any_element(),
             ChatLauncher::Plus => self.plus_deck(slot, plus, &agents, window, cx),
@@ -107,13 +105,12 @@ impl HerdrWindow {
         }
     }
 
-    /// The row a placement's buttons stand in.
+    /// The row a placement's buttons stand in, as tall as the strip.
     fn launcher_group(&self, slot: Slot, name: &'static str) -> Div {
         div()
             .debug_selector(move || slot.selector(name))
             .flex()
             .flex_none()
-            .items_center()
     }
 
     /// A row that tells the window when the pointer enters or leaves it, so
@@ -129,7 +126,6 @@ impl HerdrWindow {
             .debug_selector(move || slot.selector(name))
             .flex()
             .flex_none()
-            .items_center()
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 let open = if *hovered {
                     Some(slot.id)
@@ -143,42 +139,44 @@ impl HerdrWindow {
             }))
     }
 
-    /// One button per agent, in the order the host listed them.
+    /// One button per agent, in the order the host listed them, each drawn
+    /// as the layout draws "+" with the agent's mark in place of the plus.
     fn agent_buttons(
         &self,
         slot: Slot,
         agents: &[Agent],
         cx: &mut Context<Self>,
     ) -> Vec<Stateful<Div>> {
+        let layout = self.tab_layout();
         agents
             .iter()
             .map(|&agent| {
-                self.agent_button(slot, agent, cx)
-                    .size(px(BUTTON))
-                    .justify_center()
+                layout.new_tab(
+                    self.agent_button(slot, agent, cx),
+                    self.agent_mark(agent),
+                    &self.theme,
+                )
             })
             .collect()
     }
 
-    /// The button that starts a chat with `agent`, without its size, so the
-    /// one-button launcher can add the agent's name.
+    /// `agent`'s mark, in color.
+    fn agent_mark(&self, agent: Agent) -> AnyElement {
+        AgentIcon::from_identity(Some(agent.name())).element(ICON, self.theme.foreground)
+    }
+
+    /// The button that starts a chat with `agent`: its identity, tooltip,
+    /// and click, for the caller to shape and fill.
     fn agent_button(&self, slot: Slot, agent: Agent, cx: &mut Context<Self>) -> Stateful<Div> {
         let selector = format!("chat-launch-{}", agent.name());
         let label = SharedString::from(format!("New {} chat", agent.display_name()));
-        let (foreground, surface, hover) =
-            (self.theme.foreground, self.theme.surface, self.theme.active);
+        let (foreground, surface) = (self.theme.foreground, self.theme.surface);
         div()
             .id(SharedString::from(slot.selector(&selector)))
             .debug_selector(move || slot.selector(&selector))
             .role(Role::Button)
             .aria_label(label.clone())
             .map(|control| self.chrome_stop(Region::TitleBar, control))
-            .flex_none()
-            .flex()
-            .items_center()
-            .rounded(px(corners::CONTROL))
-            .cursor_pointer()
-            .hover(move |style| style.bg(rgb(hover)))
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::usage::Hint {
                     text: label.clone(),
@@ -192,7 +190,6 @@ impl HerdrWindow {
                 cx.stop_propagation();
                 this.start_chat_in(agent, slot.id, cx);
             }))
-            .child(AgentIcon::from_identity(Some(agent.name())).element(ICON, foreground))
     }
 
     /// One button, named, for the agent last started (else the first), with
@@ -209,10 +206,11 @@ impl HerdrWindow {
             .filter(|agent| *agent != first)
             .collect();
         let open = self.launcher_open(slot);
+        let hover = self.theme.active;
         self.launcher_hover(slot, "chat-launcher-button", cx)
             .gap(px(2.))
             .when(open && !others.is_empty(), |group| {
-                let width = BUTTON * others.len() as f32;
+                let width = self.tab_layout().new_tab_width() * others.len() as f32;
                 group.child(
                     self.launcher_slide(slot, width)
                         .children(self.agent_buttons(slot, &others, cx)),
@@ -220,6 +218,13 @@ impl HerdrWindow {
             })
             .child(
                 self.agent_button(slot, first, cx)
+                    .self_center()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .rounded(px(corners::CONTROL))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(hover)))
                     .h(px(BUTTON))
                     .px(px(6.))
                     .gap(px(6.))
@@ -227,6 +232,7 @@ impl HerdrWindow {
                     .border_color(rgb(self.theme.active))
                     .text_size(px(self.config.ui.size - 1.))
                     .text_color(rgb(self.theme.foreground))
+                    .child(self.agent_mark(first))
                     .child(first.display_name()),
             )
             .into_any_element()
@@ -242,7 +248,6 @@ impl HerdrWindow {
             .debug_selector(move || slot.selector("chat-launcher-slide"))
             .flex()
             .flex_none()
-            .items_center()
             .overflow_hidden()
             // The end by the button stays put; the far end moves out.
             .justify_end()
@@ -251,15 +256,5 @@ impl HerdrWindow {
                 Animation::new(crate::motion::duration(SLIDE)).with_easing(ease_out_quint()),
                 move |row, delta| row.w(px(width * delta)).opacity(delta),
             )
-    }
-
-    /// The thin rule between "+" or the tabs and the agents.
-    fn launcher_rule(&self) -> Div {
-        div()
-            .flex_none()
-            .mx(px(RULE_MARGIN))
-            .w(px(1.))
-            .h(px(14.))
-            .bg(rgb(self.theme.active))
     }
 }

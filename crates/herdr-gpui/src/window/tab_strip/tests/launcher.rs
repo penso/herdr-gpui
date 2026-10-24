@@ -1,10 +1,11 @@
 use super::*;
 use crate::{
     chat::Program,
-    config::ChatLauncher,
+    chat::Toward,
+    config::{ChatLauncher, TabLayoutMode},
     window::{
         MockPeer,
-        tab_strip::launcher::{BUTTON, GAP, RULE, card_left, spread},
+        tab_strip::launcher::{card_offset, deal_toward, spread},
     },
 };
 use herdr_chat_protocol::Agent;
@@ -50,6 +51,23 @@ fn hover(cx: &mut VisualTestContext, selector: &'static str) {
     draw(cx);
 }
 
+/// Deals `view`'s first strip's deck all the way out toward `toward`.
+fn deal(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, toward: Toward) {
+    view.update(cx, |view, _| {
+        let group = view.group_slots()[0].id;
+        let mut toggle = crate::motion::Toggle::default();
+        toggle.set(true, crate::motion::now(), true);
+        view.chats.launcher_deck = Some(crate::chat::LauncherDeck {
+            group,
+            over_cards: false,
+            over_plus: true,
+            toggle,
+            toward,
+        });
+    });
+    draw(cx);
+}
+
 fn shown(cx: &mut VisualTestContext, selector: &'static str) -> bool {
     cx.debug_bounds(selector).is_some()
 }
@@ -83,20 +101,9 @@ fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
         "gathering back, not gone at once"
     );
 
-    // Once dealt, each card stands in its place after "+" and the rule.
+    // Once dealt, each card stands in its place after "+", shaped like it.
     let before = cx.debug_bounds("new-tab").unwrap();
-    let group = view.read_with(cx, |view, _| view.group_slots()[0].id);
-    view.update(cx, |view, _| {
-        let mut toggle = crate::motion::Toggle::default();
-        toggle.set(true, crate::motion::now(), true);
-        view.chats.launcher_deck = Some(crate::chat::LauncherDeck {
-            group,
-            over_cards: false,
-            over_plus: false,
-            toggle,
-        });
-    });
-    draw(cx);
+    deal(&view, cx, Toward::Right);
     let plus = cx.debug_bounds("new-tab").unwrap();
     // Dealt over what follows "+", so "+" stays under the pointer.
     assert_eq!(plus, before, "+ never moves as the deck deals");
@@ -107,9 +114,44 @@ fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
         (deck.left() - plus.right()).abs() <= px(0.5),
         "{deck:?} after {plus:?}"
     );
-    assert_eq!(deck.size.width, px(RULE + 2. * BUTTON + GAP));
-    assert_eq!(claude.left(), deck.left() + px(RULE));
-    assert_eq!(codex.left(), claude.right() + px(GAP));
+    assert_eq!(deck.size.width, plus.size.width * 2.);
+    assert_eq!(claude.left(), deck.left());
+    assert_eq!(codex.left(), claude.right());
+    assert_eq!(claude.size, plus.size);
+}
+
+/// With no room for the cards past "+", as in the rightmost group when the
+/// tabs fill it, the deck deals to the left of "+", over the tabs.
+#[gpui::test]
+fn the_deck_deals_left_where_the_window_ends(cx: &mut TestAppContext) {
+    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
+    let plus = cx.debug_bounds("new-tab").unwrap();
+    deal(&view, cx, Toward::Left);
+    let claude = cx.debug_bounds(CLAUDE).unwrap();
+    let codex = cx.debug_bounds(CODEX).unwrap();
+    assert_eq!(cx.debug_bounds("new-tab").unwrap(), plus);
+    assert_eq!(claude.right(), plus.left(), "the first card beside +");
+    assert_eq!(codex.right(), claude.left());
+
+    // Hovered with room past "+" for both cards, it picks the right.
+    view.update(cx, |view, _| view.chats.launcher_deck = None);
+    hover(cx, "new-tab");
+    let toward = view.read_with(cx, |view, _| {
+        view.chats.launcher_deck.map(|deck| deck.toward)
+    });
+    assert_eq!(toward, Some(Toward::Right));
+}
+
+#[test]
+fn the_deck_deals_right_only_while_every_card_fits_there() {
+    // From the middle of "+": its own far half, then each card.
+    assert_eq!(deal_toward(17. + 3. * 34., 34., 3), Toward::Right);
+    assert_eq!(deal_toward(17. + 3. * 34. - 1., 34., 3), Toward::Left);
+    assert_eq!(
+        deal_toward(65., 30., 3),
+        Toward::Left,
+        "the third card cut off"
+    );
 }
 
 /// When tabs fill the strip, a deck that took room beside "+" would squeeze
@@ -136,14 +178,40 @@ fn the_deck_keeps_plus_in_place_and_stays_dealt_over_its_cards(cx: &mut TestAppC
     assert!(codex.left() >= before.right());
 }
 
+/// Every layout draws its own "+", and the agents beside it, dealt or
+/// standing, take that same shape: classic's full-height cells, the
+/// floating layouts' small rounded buttons.
+#[gpui::test]
+fn the_agents_take_each_layouts_own_plus(cx: &mut TestAppContext) {
+    for &mode in TabLayoutMode::ALL {
+        let (view, cx, _peer) = strip(cx, ChatLauncher::Off);
+        view.update(cx, |view, _| view.config.tab_layout = mode);
+        draw(cx);
+        let alone = cx.debug_bounds("new-tab").unwrap();
+        let width = view.read_with(cx, |view, _| view.tab_layout().new_tab_width());
+        assert_eq!(alone.size.width, px(width), "{mode:?}");
+        for launcher in [ChatLauncher::Plus, ChatLauncher::Beside] {
+            view.update(cx, |view, _| view.config.chat.launcher = launcher);
+            draw(cx);
+            deal(&view, cx, Toward::Right);
+            let plus = cx.debug_bounds("new-tab").unwrap();
+            assert_eq!(plus, alone, "{mode:?} {launcher:?}");
+            let claude = cx.debug_bounds(CLAUDE).unwrap();
+            assert_eq!(claude.size, plus.size, "{mode:?} {launcher:?}");
+            assert_eq!(claude.top(), plus.top(), "{mode:?} {launcher:?}");
+        }
+    }
+}
+
 #[test]
 fn the_deck_deals_its_cards_one_after_another_from_under_plus() {
     let count = 3;
+    let width = 34.;
     for index in 0..count {
         assert_eq!(spread(0., index, count), 0.);
         assert_eq!(spread(1., index, count), 1.);
-        assert_eq!(card_left(0., index), -BUTTON, "hidden under +");
-        assert_eq!(card_left(1., index), RULE + (BUTTON + GAP) * index as f32);
+        assert_eq!(card_offset(0., index, width), -width, "hidden under +");
+        assert_eq!(card_offset(1., index, width), width * index as f32);
     }
     // Midway the first card has gone further than the last, and none moves
     // back as the deal goes on.
