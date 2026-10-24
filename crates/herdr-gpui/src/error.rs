@@ -119,18 +119,8 @@ pub enum Error {
     DispatchBusy,
     #[error("{0} cannot be reached by script. Choose another host.")]
     DispatchHostUnavailable(String),
-    #[error("keybindings: {keystroke:?} is bound to both {first} and {second}")]
-    DuplicateKeystroke {
-        keystroke: String,
-        first: &'static str,
-        second: &'static str,
-    },
-    #[error("pane_keys: {0:?} is listed twice")]
-    DuplicatePaneKey(String),
     #[error(transparent)]
     Editor(#[from] crate::editor::Error),
-    #[error("pane_keys.{0:?}: text: needs something to send")]
-    EmptyPaneKeyText(String),
     #[error("Enter a tab name.")]
     EmptyTabName,
     #[error("Workspace label must not be empty.")]
@@ -262,23 +252,10 @@ pub enum Error {
     InvalidExternalUrl,
     #[error("Invalid saved editor groups")]
     InvalidGroupLayouts,
-    #[error("keybindings.{command}: invalid keystroke {keystroke:?}")]
-    InvalidKeystroke {
-        command: &'static str,
-        keystroke: String,
-        #[source]
-        source: gpui::InvalidKeystrokeError,
-    },
     #[error(
         "Local pages must be a plain file in a folder that is not hidden and does not hold your home directory."
     )]
     InvalidLocalPage,
-    #[error("pane_keys: invalid keystroke {keystroke:?}")]
-    InvalidPaneKey {
-        keystroke: String,
-        #[source]
-        source: gpui::InvalidKeystrokeError,
-    },
     #[error("A saved review tab names a checkout that is not a local absolute path.")]
     InvalidReviewCheckout,
     #[error("invalid sidebar width")]
@@ -293,13 +270,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("{0}")]
     Json(#[from] serde_json::Error),
-    #[error(
-        "keybindings.{command}: {keystroke:?} needs a cmd, ctrl, alt, or fn modifier so typing still reaches the terminal"
-    )]
-    KeystrokeWithoutModifier {
-        command: &'static str,
-        keystroke: String,
-    },
+    #[error(transparent)]
+    Keymap(#[from] crate::keymap::Error),
     #[cfg(windows)]
     #[error(transparent)]
     LaunchAtLogin(#[from] crate::launch_at_login::Error),
@@ -360,17 +332,6 @@ pub enum Error {
     PaneImageDecode(#[source] image::ImageError),
     #[error("An image a pane placed exceeds the decoded size limit.")]
     PaneImageLimit,
-    #[error("pane_keys: {keystroke:?} is also bound to keybindings.{command}")]
-    PaneKeyBound {
-        keystroke: String,
-        command: &'static str,
-    },
-    #[error("pane_keys.{keystroke:?}: text may be at most {limit} bytes")]
-    PaneKeyTextTooLong { keystroke: String, limit: usize },
-    #[error(
-        "pane_keys: {0:?} needs a cmd, ctrl, alt, or fn modifier so typing still reaches the terminal"
-    )]
-    PaneKeyWithoutModifier(String),
     #[error(transparent)]
     PaneMove(#[from] crate::pane_move::Error),
     #[error("{}: {source}", path.display())]
@@ -542,16 +503,8 @@ pub enum Error {
     Toml(#[from] toml::de::Error),
     #[error("{0}")]
     TomlEdit(#[from] toml_edit::TomlError),
-    #[error("keybindings.{0} must list at most 8 keystrokes")]
-    TooManyKeystrokes(&'static str),
-    #[error("pane_keys must list at most {0} keystrokes")]
-    TooManyPaneKeys(usize),
     #[error(transparent)]
     Tunnel(#[from] crate::listening_ports::tunnel::Error),
-    #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]
-    UnknownKeybinding(String),
-    #[error("pane_keys.{from:?}: a pane cannot receive {to:?}")]
-    UnsendablePaneKey { from: String, to: String },
     #[error("This command action is not supported by this client.")]
     UnsupportedCommand,
     #[error("{0}")]

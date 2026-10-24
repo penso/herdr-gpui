@@ -114,34 +114,34 @@ fn invalid_configuration_reports_the_command() {
     let error = |entries: &[(&str, Binding)]| with(entries).unwrap_err();
     assert!(matches!(
         error(&[("new_space", one("cmd-n"))]),
-        Error::UnknownKeybinding(name) if name == "new_space"
+        crate::Error::Keymap(Error::UnknownKeybinding(name)) if name == "new_space"
     ));
     let invalid = error(&[("new_tab", one("cmd-n-t"))]);
     assert!(std::error::Error::source(&invalid).is_some());
     assert!(matches!(
         invalid,
-        Error::InvalidKeystroke { command: "new_tab", ref keystroke, .. } if keystroke == "cmd-n-t"
+        crate::Error::Keymap(Error::InvalidKeystroke { command: "new_tab", ref keystroke, .. }) if keystroke == "cmd-n-t"
     ));
     for keystroke in ["n", "shift-n"] {
         assert!(matches!(
             error(&[("new_tab", one(keystroke))]),
-            Error::KeystrokeWithoutModifier {
+            crate::Error::Keymap(Error::KeystrokeWithoutModifier {
                 command: "new_tab",
                 ..
-            }
+            })
         ));
     }
     assert!(matches!(
         error(&[("new_tab", Binding::Many(vec!["cmd-n".into(); 9]))]),
-        Error::TooManyKeystrokes("new_tab")
+        crate::Error::Keymap(Error::TooManyKeystrokes("new_tab"))
     ));
     assert!(matches!(
         error(&[("new_tab", one("cmd-k")), ("themes", one("cmd-k"))]),
-        Error::DuplicateKeystroke {
+        crate::Error::Keymap(Error::DuplicateKeystroke {
             first: "new_tab",
             second: "themes",
             ..
-        }
+        })
     ));
     // Repeating a keystroke within one command is harmless.
     with(&[(
@@ -536,30 +536,30 @@ fn pane_keys_reject_typing_unsendable_targets_and_configured_commands() {
     };
     assert!(matches!(
         resolve(&[("a", "ctrl-a")], &[]),
-        Err(Error::PaneKeyWithoutModifier(_))
+        Err(crate::Error::Keymap(Error::PaneKeyWithoutModifier(_)))
     ));
     assert!(matches!(
         resolve(&[("shift-space", "ctrl-a")], &[]),
-        Err(Error::PaneKeyWithoutModifier(_))
+        Err(crate::Error::Keymap(Error::PaneKeyWithoutModifier(_)))
     ));
     assert!(matches!(
         resolve(&[("cmd-left", "cmd-a")], &[]),
-        Err(Error::UnsendablePaneKey { .. })
+        Err(crate::Error::Keymap(Error::UnsendablePaneKey { .. }))
     ));
     assert!(matches!(
         resolve(&[("cmd-left", "ctrl-nope-a")], &[]),
-        Err(Error::InvalidPaneKey { .. })
+        Err(crate::Error::Keymap(Error::InvalidPaneKey { .. }))
     ));
     assert!(matches!(
         resolve(&[("cmd-left", "ctrl-a"), ("super-left", "ctrl-e")], &[]),
-        Err(Error::DuplicatePaneKey(_))
+        Err(crate::Error::Keymap(Error::DuplicatePaneKey(_)))
     ));
     assert!(matches!(
         resolve(&[("cmd-y", "ctrl-a")], &[("new_tab", one("cmd-y"))]),
-        Err(Error::PaneKeyBound {
+        Err(crate::Error::Keymap(Error::PaneKeyBound {
             command: "new_tab",
             ..
-        })
+        }))
     ));
     // A key that cannot be text needs no modifier.
     assert!(resolve(&[("shift-enter", "alt-enter"), ("f13", "ctrl-u")], &[]).is_ok());
@@ -569,6 +569,6 @@ fn pane_keys_reject_typing_unsendable_targets_and_configured_commands() {
         .collect();
     assert!(matches!(
         Keymap::with_overrides(&BTreeMap::new(), &many, &no_keys()),
-        Err(Error::TooManyPaneKeys(MAX_PANE_KEYS))
+        Err(crate::Error::Keymap(Error::TooManyPaneKeys(MAX_PANE_KEYS)))
     ));
 }

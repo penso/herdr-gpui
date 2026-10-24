@@ -154,7 +154,9 @@ fn keybindings_override_defaults_and_reject_bad_entries() -> anyhow::Result<()> 
     assert_eq!(config.keybindings.primary(Command::Themes), "cmd-k");
     assert!(matches!(
         Config::parse("[keybindings]\nnew_tab = \"t\""),
-        Err(crate::Error::KeystrokeWithoutModifier { .. })
+        Err(crate::Error::Keymap(
+            crate::keymap::Error::KeystrokeWithoutModifier { .. }
+        ))
     ));
     assert!(Config::parse("[keybindings]\nnew_tab = 5").is_err());
     Ok(())
@@ -258,10 +260,10 @@ fn pane_keys_reach_the_keymap_as_written() -> anyhow::Result<()> {
         Config::parse(
             "[pane_keys]\n\"cmd-k\" = \"ctrl-l\"\n[keybindings]\nclear_pane = \"cmd-k\"\n"
         ),
-        Err(crate::Error::PaneKeyBound {
+        Err(crate::Error::Keymap(crate::keymap::Error::PaneKeyBound {
             command: "clear_pane",
             ..
-        })
+        }))
     ));
     Ok(())
 }
