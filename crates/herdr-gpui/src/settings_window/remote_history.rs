@@ -5,7 +5,7 @@
 use super::SettingsWindow;
 use crate::herdr_settings::RemotePaneHistory;
 use gpui::{AsyncApp, Context, WeakEntity};
-use herdr_client::{ConnectTarget, ScriptHost};
+use herdr_client::{ConnectTarget, ScriptHost, SshLane};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -61,7 +61,7 @@ impl Default for RemoteHistory {
             hosts: Vec::new(),
             generation: 0,
             read: Arc::new(|target, cancel| {
-                RemotePaneHistory::load(ScriptHost::Ssh(target), cancel)
+                RemotePaneHistory::load(ScriptHost::Ssh(target, SshLane::Quick), cancel)
             }),
         }
     }
@@ -227,7 +227,11 @@ impl SettingsWindow {
             return;
         };
         let task = cx.background_executor().spawn(async move {
-            let result = history.save(ScriptHost::Ssh(&job.target), enabled, &job.cancel);
+            let result = history.save(
+                ScriptHost::Ssh(&job.target, SshLane::Quick),
+                enabled,
+                &job.cancel,
+            );
             (job, result)
         });
         let source = self.source.clone();

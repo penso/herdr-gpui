@@ -5,7 +5,7 @@
 //! parsing it never runs anything. Its digest is what the user trusts.
 
 use super::ScriptKind;
-use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, run_script, shell_quote};
+use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, SshLane, run_script, shell_quote};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -136,7 +136,7 @@ fn read_remote(
     );
     let mut output = Vec::new();
     run_script(
-        ScriptHost::Ssh(target),
+        ScriptHost::Ssh(target, SshLane::Quick),
         &body,
         io::empty(),
         &mut output,

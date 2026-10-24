@@ -10,7 +10,7 @@ use crate::{
     agent_skill::{AgentSkill, Choice},
 };
 use gpui::{Context, Global};
-use herdr_client::{ScriptHost, ScriptLimits, run_script};
+use herdr_client::{ScriptHost, ScriptLimits, SshLane, run_script};
 use std::{collections::HashSet, sync::atomic::AtomicBool, time::Duration};
 
 pub(super) const SHIM: &str = include_str!("herdr-gpui.sh");
@@ -72,7 +72,7 @@ impl Global for Tried {}
 
 /// Blocking: short SSH sessions. Run off the UI thread.
 fn apply(target: &str, choice: Choice) -> crate::Result<()> {
-    let host = ScriptHost::Ssh(target);
+    let host = ScriptHost::Ssh(target, SshLane::Quick);
     let never = AtomicBool::new(false);
     let run = |script: &str, input: &[u8]| {
         run_script(host, script, input, std::io::sink(), LIMITS, &never)

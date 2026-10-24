@@ -115,6 +115,19 @@ recorded so the next one starts over in full.
 
 `remote_config_value` reads a single Git configuration key on a saved SSH host
 with the same bounded, noninteractive process policy as `remote_origin_url`.
+
+On Unix, one-shot commands on a saved SSH host (`remote_config_value`,
+`run_script` with `ScriptHost::Ssh`, and `shared_script_command`) share a
+master connection per host and `SshLane`: `Quick` for small reads, `Bulk` for
+transfers, so a large upload never queues ahead of a read. `ssh::mux` starts
+each master on first use, under a `/bin/sh` watchdog that ends it when this
+process exits, in an owner-only socket directory. A command waiting for one
+gives up at its own deadline; a full master (8 quick or 2 bulk channels, under
+sshd's default `MaxSessions` of 10), one that failed to start (backing off from
+60 seconds to 30 minutes), or a host with a live master from the user's own
+`ControlPath` all connect directly instead. A bridge reconnecting to a host
+retires its masters, since the network path may have changed. The bridge,
+port forwards, `script_command`, and Windows never share.
 Both are blocking helpers for background workers; absent or empty keys return `None`.
 
 All fallible client APIs return the crate-root `Error`, derived with `thiserror`.

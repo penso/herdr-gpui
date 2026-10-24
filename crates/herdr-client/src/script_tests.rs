@@ -125,7 +125,7 @@ fn output_write_failure_is_typed() {
 #[test]
 fn ssh_targets_are_validated_before_spawning() {
     let result = run_script(
-        ScriptHost::Ssh("-oProxyCommand=x"),
+        ScriptHost::Ssh("-oProxyCommand=x", SshLane::Quick),
         "true",
         io::empty(),
         io::sink(),
