@@ -163,6 +163,8 @@ agents in Herdr panes can use what only this client shows or keeps
 - Keep glyph visibility separate from decorations: spaces and wide-character continuation cells may still need underline/strikethrough painting.
 - Preserve menu input isolation, focus behavior, Unicode composition, and semantic input routing. Do not synthesize terminal keys for operations with endpoint API methods.
 - Activity indicators come from the daemon's snapshot, not guessed terminal output or a client-local seen ledger. Every client shows the same dot; do not reintroduce per-client acknowledgement without asking.
+- Animate UI that appears, disappears, moves, or changes in response to a click or hover when motion helps the user follow it: tabs, panels, popovers, revealed controls. Animate both ways, so what slides in slides back out, and reverse from where it is when interrupted. Skip it where motion would only delay the result, such as typing, scrolling content, or terminal output.
+- Time animations through `crate::motion`: read `motion::now()` instead of `Instant::now()` for start stamps and progress, pass GPUI `Animation` lengths through `motion::duration`, and prefer `motion::ENTER`/`LEAVE`, `progress`, and `Toggle` over new curves and constants. That keeps motion consistent and lets QA > Slow Animations slow every animation tenfold.
 
 ## Protocol And Safety
 
