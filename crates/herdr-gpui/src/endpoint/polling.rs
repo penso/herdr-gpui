@@ -29,7 +29,7 @@ impl HerdrWindow {
     }
 
     pub(crate) fn poll_endpoints(&mut self, cx: &mut Context<Self>) {
-        self.recover_after_sleep(Instant::now(), std::time::SystemTime::now());
+        self.recover_connections(Instant::now(), std::time::SystemTime::now());
         // Record the focused target the user last saw before a newer snapshot
         // can replace it; input held across a gap may only go there.
         self.flush_pending_input(cx);

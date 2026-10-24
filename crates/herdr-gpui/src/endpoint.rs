@@ -390,7 +390,7 @@ impl Endpoint {
         changed
     }
 
-    /// After a sleep. Failures before it, often from dark
+    /// After a sleep or a network change. Failures before it, often from dark
     /// wakes with no network, say nothing about the network now, so the
     /// backoff starts over. A live link is asked to prove itself, which a
     /// healthy one does in a round trip. A remote attempt still dialing was
