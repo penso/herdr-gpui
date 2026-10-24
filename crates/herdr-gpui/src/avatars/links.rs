@@ -78,6 +78,17 @@ impl Avatars {
         })
     }
 
+    /// Forget `target`'s failed reads for directories `listed` no longer
+    /// names, such as a closed workspace's, so they never keep the host due.
+    /// Only failed reads go: a read that worked is kept for good. Another
+    /// session on the same host whose read is forgotten asks again with its
+    /// next snapshot.
+    pub(crate) fn forget_unlisted(&mut self, target: &str, listed: impl Fn(&str) -> bool) {
+        if let Some(slots) = self.remote.get_mut(target) {
+            slots.retain(|dir, slot| !matches!(slot, Slot::Unreachable { .. }) || listed(dir));
+        }
+    }
+
     /// Whether a pending SSH read's host has connected again since it was
     /// asked for.
     pub(super) fn reconnected_since_asked(&self, checkout: Checkout<&str>) -> bool {

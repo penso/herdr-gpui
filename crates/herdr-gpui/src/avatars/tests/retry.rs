@@ -114,3 +114,36 @@ fn a_failed_read_is_due_for_its_host_only_after_the_retry_interval() {
     assert!(!avatars.retry_due("other", now + RETRY_AFTER));
     assert!(avatars.retry_due("devbox", now + RETRY_AFTER));
 }
+
+#[test]
+fn a_closed_workspace_does_not_keep_its_host_due() {
+    let (mut avatars, _incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert!(
+        outgoing
+            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .is_ok()
+    );
+    assert!(avatars.poll(now));
+    // Still listed: it stays due.
+    avatars.forget_unlisted("devbox", |dir| dir == "/home/user/src/app/.git");
+    assert!(avatars.retry_due("devbox", now + RETRY_AFTER));
+    // Its workspace closed: forgotten, so the host is no longer due.
+    avatars.forget_unlisted("devbox", |_| false);
+    assert!(!avatars.retry_due("devbox", now + RETRY_AFTER));
+}
+
+#[test]
+fn forgetting_keeps_reads_that_worked() {
+    let (mut avatars, incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert_eq!(incoming.try_iter().count(), 1);
+    assert!(outgoing.send((DEVBOX.to_owned(), Ok(None))).is_ok());
+    assert!(avatars.poll(now));
+    avatars.forget_unlisted("devbox", |_| false);
+    // Resolved, so it is not asked again.
+    avatars.request(DEVBOX, now);
+    assert!(incoming.try_recv().is_err());
+}

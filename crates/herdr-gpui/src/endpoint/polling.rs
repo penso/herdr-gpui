@@ -110,6 +110,16 @@ impl HerdrWindow {
                         avatars.request(checkout, now);
                     }
                 }
+                if let ConnectTarget::Ssh { target: host, .. } = target {
+                    avatars.forget_unlisted(host, |dir| {
+                        snapshot.workspaces.iter().any(|workspace| {
+                            matches!(
+                                Checkout::of(index == 0, target, workspace),
+                                Some(Checkout::Ssh { dir: listed, .. }) if listed == dir
+                            )
+                        })
+                    });
+                }
             }
             if endpoint.enabled
                 && !endpoint.detached
