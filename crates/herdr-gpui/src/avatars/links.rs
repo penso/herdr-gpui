@@ -67,6 +67,17 @@ impl Avatars {
         }
     }
 
+    /// Whether a read on SSH host `target` failed and its retry time has
+    /// passed at `now`. A connected host that stays idle sends no snapshot to
+    /// ask again with, so the poll loop asks for its checkouts when this holds.
+    pub(crate) fn retry_due(&self, target: &str, now: Instant) -> bool {
+        self.remote.get(target).is_some_and(|slots| {
+            slots
+                .values()
+                .any(|slot| matches!(slot, Slot::Unreachable { retry_at } if now >= *retry_at))
+        })
+    }
+
     /// Whether a pending SSH read's host has connected again since it was
     /// asked for.
     pub(super) fn reconnected_since_asked(&self, checkout: Checkout<&str>) -> bool {

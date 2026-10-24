@@ -97,3 +97,20 @@ fn local_checkouts_never_fail_the_lookup() {
         Ok(None)
     ));
 }
+
+#[test]
+fn a_failed_read_is_due_for_its_host_only_after_the_retry_interval() {
+    let (mut avatars, _incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert!(
+        outgoing
+            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .is_ok()
+    );
+    assert!(avatars.poll(now));
+    // An idle host sends no snapshot, so the poll loop asks when this holds.
+    assert!(!avatars.retry_due("devbox", now));
+    assert!(!avatars.retry_due("other", now + RETRY_AFTER));
+    assert!(avatars.retry_due("devbox", now + RETRY_AFTER));
+}

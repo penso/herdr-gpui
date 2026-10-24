@@ -94,13 +94,17 @@ impl HerdrWindow {
             }
             // Remote cwd strings must never be resolved against this machine's
             // Git repos; `Checkout::of` reads a saved SSH device's over SSH.
-            if updated == Redraw::Window
-                && endpoint.online_since().is_some()
+            // A failed read is asked again once due, even on an idle host that
+            // sends no new snapshot.
+            let now = Instant::now();
+            if endpoint.online_since().is_some()
                 && let (Some(avatars), Some(snapshot)) =
                     (&mut self.avatars, &endpoint.live.snapshot)
+                && (updated == Redraw::Window
+                    || matches!(&endpoint.connection.target,
+                        ConnectTarget::Ssh { target, .. } if avatars.retry_due(target, now)))
             {
                 let target = &endpoint.connection.target;
-                let now = Instant::now();
                 for workspace in &snapshot.workspaces {
                     if let Some(checkout) = Checkout::of(index == 0, target, workspace) {
                         avatars.request(checkout, now);
