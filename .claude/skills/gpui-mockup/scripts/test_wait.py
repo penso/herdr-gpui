@@ -12,6 +12,17 @@ import time
 import unittest
 
 
+BASH = shutil.which("bash")
+
+
+def sh_quote(value):
+    """Double-quote a value for a POSIX sh script."""
+    escaped = value.replace("\\", "\\\\")
+    for character in ('"', "$", "`"):
+        escaped = escaped.replace(character, "\\" + character)
+    return f'"{escaped}"'
+
+
 def process_exists(pid):
     """Return whether `pid` names a running process."""
     if os.name != "nt":
@@ -37,6 +48,8 @@ def process_exists(pid):
 
 class WaitTests(unittest.TestCase):
     def setUp(self):
+        if BASH is None:
+            self.fail("bash is not on PATH; wait.sh needs it")
         self.directory = tempfile.TemporaryDirectory(prefix="mockup-wait-")
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
@@ -45,8 +58,8 @@ class WaitTests(unittest.TestCase):
         shutil.copyfile(Path(__file__).with_name("wait.sh"), self.script)
         app = self.root / "target/debug/herdr-gpui"
         app.parent.mkdir(parents=True)
-        app.write_text(
-            f"#!{sys.executable}\n"
+        fake = app.with_name("fake_app.py")
+        fake.write_text(
             "import json, os, pathlib, signal, sys, time\n"
             "root = pathlib.Path(os.environ['TEST_ROOT'])\n"
             "(root / 'called').write_text(json.dumps(sys.argv[1:]))\n"
@@ -64,13 +77,18 @@ class WaitTests(unittest.TestCase):
             "    sys.exit(1)\n"
             "sys.exit(3 if mode == 'absent' else 4)\n"
         )
+        app.write_text(
+            "#!/bin/sh\n"
+            f"exec {sh_quote(Path(sys.executable).as_posix())} "
+            f'{sh_quote(fake.as_posix())} "$@"\n'
+        )
         app.chmod(0o700)
         self.feedback = self.root / "feedback.md"
         self.env = dict(os.environ, HERDR_PANE_ID="test:pane", TEST_ROOT=str(self.root))
 
     def run_wait(self, seconds=0, mode="empty"):
         return subprocess.run(
-            ["bash", str(self.script), str(self.feedback), str(seconds)],
+            [BASH, self.script.as_posix(), self.feedback.as_posix(), str(seconds)],
             env=dict(self.env, TEST_MODE=mode),
             capture_output=True,
             text=True,
@@ -119,7 +137,7 @@ class WaitTests(unittest.TestCase):
         # Older apps accept browser.feedback but reject notes.send, so the
         # mockup writes its fallback while the feedback request is still open.
         process = subprocess.Popen(
-            ["bash", str(self.script), str(self.feedback), "60"],
+            [BASH, self.script.as_posix(), self.feedback.as_posix(), "60"],
             env=dict(self.env, TEST_MODE="waiting"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
