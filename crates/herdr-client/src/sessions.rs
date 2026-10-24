@@ -283,7 +283,9 @@ exit 127"#
 fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
     let (mut stream, child_stream) = Stream::pair()?;
     stream.set_read_timeout(Some(POLL))?;
-    let mut command = script_command(target, script)?;
+    // Dropped after the guard below reaps the child.
+    let (mut command, _channel) =
+        crate::ssh::shared_script_command(target, script, crate::SshLane::Quick)?;
     command
         .stdin(Stdio::null())
         .stdout(Stdio::from(OwnedFd::from(child_stream)))

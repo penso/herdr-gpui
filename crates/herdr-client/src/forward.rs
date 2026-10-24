@@ -5,20 +5,16 @@
 //! port some other local process took first. Nothing reconnects; a forward
 //! that ends stays ended until someone starts it again. Callers name the
 //! remote port, so this knows nothing of how that port was found.
+#[cfg(unix)]
+use crate::control_dir::{ControlDir, control_path};
 use crate::{Error, Result, catalog::validate_target};
 use std::num::NonZeroU16;
 #[cfg(unix)]
 use std::{
-    fs::DirBuilder,
     net::{Ipv4Addr, TcpListener},
-    os::unix::fs::DirBuilderExt,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Stdio},
-    sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
-        atomic::{AtomicU64, Ordering},
-        mpsc,
-    },
+    sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc},
     thread,
     time::{Duration, Instant},
 };
@@ -165,50 +161,6 @@ impl PortForward {
     }
 }
 
-/// A fresh owner-only directory for one master's control socket, removed
-/// with everything in it once the master is reaped. Creation fails rather
-/// than reuse anything already at the path.
-#[cfg(unix)]
-struct ControlDir(PathBuf);
-
-#[cfg(unix)]
-impl ControlDir {
-    fn create() -> Result<Self> {
-        static NEXT: AtomicU64 = AtomicU64::new(1);
-        let name = format!(
-            "herdr-fwd-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        );
-        let path = Self::place(&std::env::temp_dir(), &name);
-        DirBuilder::new()
-            .mode(0o700)
-            .create(&path)
-            .map_err(Error::ForwardControl)?;
-        Ok(Self(path))
-    }
-
-    /// Where to create the directory `name`: the temporary directory,
-    /// unless the socket SSH binds there would not fit. SSH binds it under a
-    /// 17-byte random suffix first, and Unix socket paths are limited to 104
-    /// bytes on macOS (108 on Linux).
-    fn place(temp: &Path, name: &str) -> PathBuf {
-        let path = temp.join(name);
-        if path.join("c").as_os_str().len() + 17 < 104 {
-            path
-        } else {
-            Path::new("/tmp").join(name)
-        }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for ControlDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 #[cfg(unix)]
 enum Master {
     Running,
@@ -243,8 +195,8 @@ fn run(
         return Ok(());
     }
     // Dropped last, after the master that listens in it is reaped.
-    let dir = ControlDir::create()?;
-    let socket = dir.0.join("c");
+    let dir = ControlDir::create("herdr-fwd").map_err(Error::ForwardControl)?;
+    let socket = dir.socket();
     // Stderr can carry banners or secrets; nothing reads it.
     let child = master_command(&socket)
         .stdin(Stdio::null())
@@ -353,15 +305,6 @@ fn system_port() -> Result<u16> {
         .and_then(|listener| listener.local_addr())
         .map(|address| address.port())
         .map_err(Error::ForwardLocalPort)
-}
-
-/// SSH expands `%` tokens in a `ControlPath`, so a literal one is doubled.
-#[cfg(unix)]
-fn control_path(socket: &Path) -> String {
-    format!(
-        "ControlPath={}",
-        socket.to_string_lossy().replace('%', "%%")
-    )
 }
 
 /// The forward's master: noninteractive like the bridge, its own connection

@@ -51,7 +51,7 @@ fn a_windows_client_runs_scripts_only_on_remote_hosts() {
     // An SSH host is accepted: cancelled first, it reports the cancellation
     // instead of the platform, and never starts `ssh`.
     let result = run_script(
-        ScriptHost::Ssh("me@box"),
+        ScriptHost::Ssh("me@box", SshLane::Quick),
         "true",
         std::io::empty(),
         std::io::sink(),

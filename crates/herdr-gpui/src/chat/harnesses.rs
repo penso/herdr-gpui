@@ -108,18 +108,20 @@ enum Probing {
 impl Probing {
     /// Runs `herdr-acp agents`; blocking, for the background executor.
     fn run(self) -> Option<Vec<Agent>> {
-        let command = match self {
+        // Held until the lookup's child is reaped below.
+        let (command, _channel) = match self {
             Self::Local(program) => {
                 let mut command = herdr_client::new_command(program);
                 command.arg("agents");
                 if let Some(path) = crate::login_env::path() {
                     command.env("PATH", path);
                 }
-                command
+                (command, None)
             }
             Self::Ssh(host) => {
                 let script = super::remote_program_script("agents");
-                herdr_client::script_command(&host, &script).ok()?
+                herdr_client::shared_script_command(&host, &script, herdr_client::SshLane::Quick)
+                    .ok()?
             }
         };
         let mut output = Vec::new();

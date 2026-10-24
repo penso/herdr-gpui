@@ -13,8 +13,17 @@ daemons, spawn a local PTY, or emulate a terminal. Herdr's remote bridge may sta
 the named remote session. SSH requires an installed POSIX Herdr, noninteractive authentication,
 and an already trusted host key. For hosts that need MFA or a password, configure
 `ControlMaster auto` with a `ControlPath` in `~/.ssh/config` and authenticate once
-with `ssh HOST` in a terminal: the app reuses that master connection while it lives,
-but never creates or keeps one itself. Set `ForwardAgent yes` only for trusted hosts;
+with `ssh HOST` in a terminal: the app reuses that master connection while it lives.
+Otherwise, on macOS and Linux, the app's own short commands on a host (Git reads,
+avatars, usage, scripts) share one SSH login per host instead of a login each, so
+hosts that rate-limit new SSH connections (a firewall `limit` rule, sshd's
+`MaxStartups`) are not flooded; large transfers such as Teleport get a second
+login of their own, and terminals keep their own connection. These shared logins
+are the app's private children: their sockets are in a directory only the app
+can open, they never touch a master of yours, and they end with the app, even
+if it crashes. One that cannot log in leaves that host's commands connecting
+directly as before, trying again at most once a minute, then less often.
+Set `ForwardAgent yes` only for trusted hosts;
 Herdr servers that support it then keep remote panes' `SSH_AUTH_SOCK` working
 across reconnects. A failed host is retried with backoff capped at 30 seconds.
 Runtime dependencies include GPUI, `herdr-client`, `serde_json` for API parameters,

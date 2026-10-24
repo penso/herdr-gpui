@@ -2,7 +2,7 @@
 //! its `herdr` CLI addresses.
 
 use super::error::{Error, Result, Step, decode, script};
-use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, run_script, shell_quote};
+use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, SshLane, run_script, shell_quote};
 use serde::de::DeserializeOwned;
 use std::{
     io::{Read, Write},
@@ -151,15 +151,29 @@ export PATH
         limits: ScriptLimits,
         cancelled: &AtomicBool,
     ) -> Result<u64> {
-        self.stream(body, input, output, limits, cancelled)
+        // Teleport's steps move checkouts and archives, so they share the
+        // host's bulk connection and never delay the small reads.
+        self.stream_on(SshLane::Bulk, body, input, output, limits, cancelled)
             .map_err(script(step))
     }
 
-    /// [`Host::run`] without Teleport's step context. Whatever the script
-    /// printed stays in `output` when it fails, for callers whose programs
-    /// explain a failure on stdout.
+    /// [`Host::run`] without Teleport's step context, for queries and other
+    /// small scripts. Whatever the script printed stays in `output` when it
+    /// fails, for callers whose programs explain a failure on stdout.
     pub fn stream(
         &self,
+        body: &str,
+        input: impl Read + Send,
+        output: impl Write + Send,
+        limits: ScriptLimits,
+        cancelled: &AtomicBool,
+    ) -> herdr_client::Result<u64> {
+        self.stream_on(SshLane::Quick, body, input, output, limits, cancelled)
+    }
+
+    fn stream_on(
+        &self,
+        lane: SshLane,
         body: &str,
         input: impl Read + Send,
         output: impl Write + Send,
@@ -169,7 +183,7 @@ export PATH
         let script_text = format!("{}{body}", self.prelude());
         let host = match &self.route {
             Route::Local => ScriptHost::Local,
-            Route::Ssh(target) => ScriptHost::Ssh(target),
+            Route::Ssh(target) => ScriptHost::Ssh(target, lane),
             #[cfg(feature = "cloud")]
             Route::Cloud {
                 provider,

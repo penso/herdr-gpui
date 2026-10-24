@@ -25,6 +25,7 @@ use std::{
 
 mod failure;
 mod host_key;
+pub(crate) mod mux;
 pub use failure::SshFailure;
 pub use host_key::{HostKeyFingerprint, HostKeyScan, NewHostKey, scan_host_key, trust_host_key};
 mod powershell;
@@ -331,13 +332,26 @@ fn parse_destination(output: &[u8]) -> Option<Destination> {
 
 /// Runs one noninteractive SSH command, keeping at most `PROBE_OUTPUT_LIMIT`
 /// bytes of stdout and never stderr, which can carry banners or secrets.
+/// It shares the host's quick-lane master when it can; waiting for one
+/// counts against `timeout`.
 fn run_remote(
     target: &str,
     remote_command: &str,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<(std::process::ExitStatus, Vec<u8>)> {
-    run(&mut command(target, remote_command), timeout, cancelled)
+    let deadline = Instant::now() + timeout;
+    let (mut command, _channel) = mux::command(
+        target,
+        remote_command,
+        mux::Lane::Quick,
+        deadline,
+        &cancelled,
+    );
+    let timeout = deadline
+        .checked_duration_since(Instant::now())
+        .ok_or(Error::SshTimeout)?;
+    run(&mut command, timeout, cancelled)
 }
 
 /// Runs `command` with a deadline, keeping at most `PROBE_OUTPUT_LIMIT` bytes
@@ -433,7 +447,7 @@ fn noninteractive() -> Command {
 
 /// The bridge's connection policy. OpenSSH keeps the first value it reads for
 /// an option, so a caller that needs another value passes it before these.
-const POLICY: &[&str] = &[
+pub(crate) const POLICY: &[&str] = &[
     "-T",
     "-C",
     "-o",
@@ -517,6 +531,36 @@ pub fn script_command(target: &str, script: &str) -> Result<Command> {
     Ok(command(target, &format!("/bin/sh -c {}", quote(script))))
 }
 
+/// An open channel on a host's shared connection. Keep it until the child
+/// it was handed out with is reaped; dropping it frees the channel.
+#[derive(Debug)]
+pub struct SshChannel(#[allow(dead_code)] mux::Channel);
+
+/// [`script_command`] on the host's shared `lane` connection when one is
+/// available (see `ssh::mux`), else connecting directly as
+/// [`script_command`] does. Keep the channel until the child is reaped. May
+/// wait briefly for the host's connection to come up: call it off the UI
+/// thread.
+pub fn shared_script_command(
+    target: &str,
+    script: &str,
+    lane: mux::Lane,
+) -> Result<(Command, Option<SshChannel>)> {
+    validate_target(target)?;
+    let (command, channel) = mux::command(
+        target,
+        &format!("/bin/sh -c {}", quote(script)),
+        lane,
+        Instant::now() + SHARED_WAIT,
+        || false,
+    );
+    Ok((command, channel.map(SshChannel)))
+}
+
+/// How long [`shared_script_command`] waits for a host's shared connection
+/// before connecting directly.
+const SHARED_WAIT: Duration = Duration::from_secs(10);
+
 pub(crate) fn connect(
     target: &str,
     session: &str,
@@ -524,6 +568,7 @@ pub(crate) fn connect(
 ) -> Result<(Stream, ChildGuard)> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
+    mux::bridge_connecting(target, session);
     match start_bridge(command(target, &bridge_command(session)), stop, handshake)? {
         Ok(bridge) => Ok(bridge),
         Err(closed) if powershell::rejected_posix(closed.code) => {

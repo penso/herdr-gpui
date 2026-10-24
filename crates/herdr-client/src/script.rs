@@ -4,7 +4,7 @@
 //! This exists for work the endpoint connection cannot express, such as Git
 //! plumbing in a remote checkout or `herdr` CLI queries whose methods are not
 //! advertised to GUI clients. It never touches a daemon connection.
-use crate::{Error, Result, catalog::validate_target};
+use crate::{Error, Result, SshLane, catalog::validate_target};
 use std::{
     io::{Read, Write},
     process::Command,
@@ -16,8 +16,11 @@ use std::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScriptHost<'a> {
     Local,
-    /// A validated `[user@]host` target, using the endpoint SSH trust policy.
-    Ssh(&'a str),
+    /// A validated `[user@]host` target, using the endpoint SSH trust policy,
+    /// and which of the host's shared connections the script runs on: the
+    /// bulk lane for scripts that move real data, so they never delay small
+    /// reads.
+    Ssh(&'a str, SshLane),
     /// A WSL distribution, reached through `wsl.exe` on a Windows client.
     Wsl(&'a str),
 }
@@ -54,7 +57,7 @@ pub fn run_script(
 ) -> Result<u64> {
     match host {
         ScriptHost::Local => {}
-        ScriptHost::Ssh(target) => validate_target(target)?,
+        ScriptHost::Ssh(target, _) => validate_target(target)?,
         ScriptHost::Wsl(distro) => {
             if !crate::wsl::valid_distro(distro) {
                 return Err(Error::InvalidWslDistro);
@@ -63,15 +66,20 @@ pub fn run_script(
     }
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        let command = match host {
+        // Held until the script's child is reaped, as its shared channel.
+        let (command, _channel) = match host {
             ScriptHost::Local => {
                 let mut command = crate::new_command("/bin/sh");
                 command.args(["-c", script]);
-                command
+                (command, None)
             }
-            ScriptHost::Ssh(target) => {
-                crate::ssh::command(target, &format!("/bin/sh -c {}", shell_quote(script)))
-            }
+            ScriptHost::Ssh(target, lane) => crate::ssh::mux::command(
+                target,
+                &format!("/bin/sh -c {}", shell_quote(script)),
+                lane,
+                std::time::Instant::now() + limits.idle,
+                || cancelled.load(std::sync::atomic::Ordering::Acquire),
+            ),
             ScriptHost::Wsl(_) => return Err(Error::WslUnsupported),
         };
         run_script_command(command, input, output, limits, cancelled)
@@ -81,7 +89,8 @@ pub fn run_script(
         // This machine has no `/bin/sh`; a remote host runs the script.
         let command = match host {
             ScriptHost::Local => return Err(Error::ScriptUnsupported),
-            ScriptHost::Ssh(target) => {
+            // Windows OpenSSH cannot share a connection.
+            ScriptHost::Ssh(target, _) => {
                 crate::ssh::command(target, &format!("/bin/sh -c {}", shell_quote(script)))
             }
             ScriptHost::Wsl(distro) => crate::wsl::command(distro, script),

@@ -54,6 +54,9 @@ pub struct Shell {
     marker: String,
     macos: Option<bool>,
     broken: bool,
+    /// The SSH host's shared channel this shell runs on, if any. Fields drop
+    /// after `Drop::drop` reaps the child, so it is freed only then.
+    channel: Option<herdr_client::SshChannel>,
 }
 
 impl Drop for Shell {
@@ -65,12 +68,18 @@ impl Drop for Shell {
 
 impl Shell {
     pub fn connect(target: &str) -> Result<Self> {
-        let mut command = herdr_client::script_command(target, "exec /bin/sh -s")?;
+        let (mut command, channel) = herdr_client::shared_script_command(
+            target,
+            "exec /bin/sh -s",
+            herdr_client::SshLane::Quick,
+        )?;
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
-        Self::start(command)
+        let mut shell = Self::start(command)?;
+        shell.channel = channel;
+        Ok(shell)
     }
 
     /// `/bin/sh` inside a WSL distribution, through `wsl.exe`.
@@ -134,6 +143,7 @@ impl Shell {
             marker: format!("@@herdr-{}", uuid::Uuid::new_v4().simple()),
             macos: None,
             broken: false,
+            channel: None,
         };
         shell.write(PRELUDE)?;
         let ready = shell.run("true", CONNECT_TIMEOUT)?;

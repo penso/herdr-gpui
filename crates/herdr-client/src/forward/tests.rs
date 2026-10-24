@@ -1,5 +1,5 @@
 use super::*;
-use std::ffi::OsStr;
+use std::{ffi::OsStr, path::PathBuf};
 
 const WAIT: Duration = Duration::from_secs(10);
 

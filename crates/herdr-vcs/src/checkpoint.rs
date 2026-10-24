@@ -18,7 +18,7 @@ pub use script::valid_id;
 
 use crate::{Error, Result};
 use herdr_client::{
-    ConnectTarget, ScriptHost, ScriptLimits,
+    ConnectTarget, ScriptHost, ScriptLimits, SshLane,
     protocol::{AgentStatus, ClientShellSnapshot},
     run_script,
 };
@@ -174,7 +174,7 @@ fn run_limited(checkout: &Checkout, body: &str, limits: ScriptLimits) -> Result<
 fn run_bytes(checkout: &Checkout, body: &str, limits: ScriptLimits) -> Result<Vec<u8>> {
     let host = match &checkout.host {
         Host::Local => ScriptHost::Local,
-        Host::Ssh(target) => ScriptHost::Ssh(target),
+        Host::Ssh(target) => ScriptHost::Ssh(target, SshLane::Quick),
         Host::Wsl(distro) => ScriptHost::Wsl(distro),
         #[cfg(feature = "azure")]
         Host::Azure { .. } => return Err(Error::CloudHostUnsupported),
