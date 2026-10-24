@@ -404,12 +404,8 @@ pub enum Error {
     LinkedFileMissing { path: PathBuf },
     #[error("This link names a file on another computer, {host}. It is not opened from here.")]
     LinkOnAnotherHost { host: String },
-    #[error("Could not read listening ports on this host.")]
-    ListeningPorts(#[source] Box<Error>),
-    #[error("Neither ss nor lsof is installed on this host, so listening ports cannot be read.")]
-    ListeningPortsTool,
-    #[error("Listening ports cannot be read on this platform.")]
-    ListeningPortsUnsupported,
+    #[error(transparent)]
+    ListeningPorts(#[from] crate::listening_ports::Error),
     #[error("Could not list this machine's network addresses: {0}")]
     LocalAddresses(#[source] io::Error),
     #[error("Git could not run")]
@@ -725,7 +721,7 @@ pub enum Error {
     #[error("pane_keys must list at most {0} keystrokes")]
     TooManyPaneKeys(usize),
     #[error(transparent)]
-    Tunnel(#[from] crate::listening_ports::TunnelError),
+    Tunnel(#[from] crate::listening_ports::tunnel::Error),
     #[error("Herdr UI has no setting {}; config-gpui.toml lists every setting", .0.join(", "))]
     UnknownConfigKeys(Vec<String>),
     #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]

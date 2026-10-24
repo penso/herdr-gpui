@@ -3,7 +3,7 @@ use super::*;
 /// Whatever went wrong opening the shell, beneath the scan's own error.
 fn cause(host: &Host) -> Error {
     match super::super::open(host).err() {
-        Some(Error::ListeningPorts(cause)) => *cause,
+        Some(Error::ListeningPorts(crate::listening_ports::Error::Scan(cause))) => *cause,
         other => panic!("{other:?}"),
     }
 }
