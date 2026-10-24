@@ -182,7 +182,7 @@ fn one_search_field_searches_every_tab(cx: &mut gpui::TestAppContext) {
     // "fix/login" is a checkout and "feature/login" a branch; no GitHub row says so.
     assert_eq!(hits(cx), [None, Some(1), Some(1), Some(0), Some(0)]);
 
-    cx.simulate_keystrokes("tab");
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::Branches);
     cx.update(|_, cx| {
         let source = view.read(cx).menu.worktree.as_ref().unwrap();

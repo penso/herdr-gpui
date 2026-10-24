@@ -346,6 +346,7 @@ impl HerdrWindow {
         let name = cx.new(SearchInput::new);
         name.update(cx, |input, cx| {
             input.set_placeholder("Default name", cx);
+            input.set_label("Name", cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let naming = cx.subscribe_in(
@@ -403,7 +404,7 @@ impl HerdrWindow {
         }
         // A fresh draft, so it is selected like the first proposal and painted
         // from its start rather than at the scroll a longer one needed.
-        *input = DialogInput::new(branch.clone());
+        *input = DialogInput::branch(branch.clone());
         source.written = branch;
         cx.notify();
     }

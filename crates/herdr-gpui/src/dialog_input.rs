@@ -14,6 +14,13 @@ pub(super) struct DialogInput {
     pub bounds: Bounds<Pixels>,
     line: Option<ShapedLine>,
     scroll: Pixels,
+    /// Rewrites committed text, given the text left and right of where it
+    /// goes, before it is inserted. Composition is shown as typed and only
+    /// its commit is rewritten, so the IME is never fought mid-word.
+    format: Option<fn(&str, &str, &str) -> String>,
+    /// What a screen reader calls the field, when a caption beside it
+    /// names it rather than the field itself.
+    pub label: Option<&'static str>,
 }
 
 impl DialogInput {
@@ -22,6 +29,16 @@ impl DialogInput {
             selection: 0..text.len(),
             text,
             ..Self::default()
+        }
+    }
+
+    /// The new worktree dialog's branch field, which keeps out what Git
+    /// refuses as it is typed.
+    pub fn branch(text: String) -> Self {
+        Self {
+            format: Some(crate::worktree::format_typed),
+            label: Some("Branch"),
+            ..Self::new(text)
         }
     }
 
@@ -46,7 +63,22 @@ impl DialogInput {
             .map(|r| self.range_from_utf16(r))
             .or_else(|| self.marked.clone())
             .unwrap_or_else(|| self.selection.clone());
-        let text: String = text
+        let formatted = self
+            .format
+            .filter(|_| !marked)
+            .map(|format| format(&self.text[..range.start], text, &self.text[range.end..]));
+        // Text that is all left out changes nothing, so a stray key does not
+        // also delete the selection it was typed over; a composition being
+        // committed is still removed.
+        if formatted.as_ref().is_some_and(String::is_empty)
+            && !text.is_empty()
+            && self.marked.is_none()
+        {
+            return;
+        }
+        let text: String = formatted
+            .as_deref()
+            .unwrap_or(text)
             .chars()
             .filter(|c| !c.is_control())
             .take(4096)
@@ -227,6 +259,10 @@ impl HerdrWindow {
                     .as_ref()
                     .map(|input| SharedString::from(input.text.clone()))
                     .unwrap_or_default(),
+            )
+            .when_some(
+                self.menu.input.as_ref().and_then(|input| input.label),
+                |field, label| field.aria_label(label),
             )
             .w_full()
             .h(px(self.config.ui.line_height() + 10.))

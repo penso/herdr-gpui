@@ -761,7 +761,7 @@ impl HerdrWindow {
             )),
             // Propose the daemon's own branch shape, selected so typing replaces it.
             WorkspaceAction::NewWorktree => {
-                Some(DialogInput::new(crate::worktree::proposed_branch()))
+                Some(DialogInput::branch(crate::worktree::proposed_branch()))
             }
             WorkspaceAction::Note => note.map(DialogInput::new),
             WorkspaceAction::Close

@@ -12,6 +12,19 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// The branch form's text fields, in the order they are drawn and Tab visits
+/// them. The host picker is pointer only, so it is not one of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Field {
+    Search,
+    Name,
+    Branch,
+}
+
+impl Field {
+    const ALL: [Self; 3] = [Self::Search, Self::Name, Self::Branch];
+}
+
 impl HerdrWindow {
     /// The search every tab shares, then the tab strip. Each listed tab counts
     /// what the search kept in it, so a match elsewhere is visible from any
@@ -27,8 +40,12 @@ impl HerdrWindow {
         let busy = source.busy();
         let (foreground, surface) = (theme.foreground, theme.surface);
         let mut strip = div()
+            .id("worktree-tabs")
             .debug_selector(|| "worktree-tabs".into())
+            .role(Role::TabList)
+            .aria_label("Worktree source")
             .flex()
+            .items_center()
             .gap(px(4.))
             .px(px(16.))
             .pt(px(10.));
@@ -44,6 +61,12 @@ impl HerdrWindow {
                 div()
                     .id(label)
                     .debug_selector(move || format!("worktree-tab-{label}"))
+                    .role(Role::Tab)
+                    .aria_label(match hits {
+                        Some(hits) => SharedString::from(format!("{label} {hits}")),
+                        None => SharedString::from(label),
+                    })
+                    .aria_selected(selected)
                     .flex()
                     .flex_none()
                     .gap(px(5.))
@@ -97,6 +120,17 @@ impl HerdrWindow {
                     }),
             );
         }
+        // The strip's own key, quiet at its end, as the palette's footer
+        // names its filter key.
+        strip = strip.child(
+            div()
+                .debug_selector(|| "worktree-tabs-hint".into())
+                .ml_auto()
+                .flex_none()
+                .pl(px(8.))
+                .text_color(rgb(theme.muted))
+                .child("⌃Tab"),
+        );
         div()
             .flex_none()
             .child(
@@ -341,8 +375,85 @@ impl HerdrWindow {
             .is_some_and(|source| source.search.read(cx).is_composing())
     }
 
-    /// Keys the new worktree dialog's listings own. Reports whether the key was
-    /// consumed, so the branch form keeps its existing handling untouched.
+    /// Move to the next tab of the strip, or the previous one, skipping the
+    /// GitHub tabs while no account is connected.
+    fn step_worktree_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self
+            .menu
+            .worktree
+            .as_ref()
+            .map_or(Tab::New, |source| source.tab);
+        let connected = self.menu.github.connected();
+        let tabs: Vec<Tab> = Tab::ALL
+            .into_iter()
+            .filter(|tab| tab.kind().is_none() || connected)
+            .collect();
+        if let Some(index) = tabs.iter().position(|tab| *tab == current) {
+            let next = if forward {
+                (index + 1) % tabs.len()
+            } else {
+                (index + tabs.len() - 1) % tabs.len()
+            };
+            self.select_worktree_tab(tabs[next], window, cx);
+        }
+    }
+
+    /// Move typing to the branch form's next field, or the previous one, in
+    /// the order they are drawn, wrapping at either end. The field Tab lands
+    /// in has its text selected, as a native field's is.
+    fn step_worktree_field(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.worktree_field(window, cx);
+        let Some(source) = &self.menu.worktree else {
+            return;
+        };
+        let fields = Field::ALL;
+        let index = fields
+            .iter()
+            .position(|field| *field == current)
+            .unwrap_or_default();
+        let next = fields[if forward {
+            (index + 1) % fields.len()
+        } else {
+            (index + fields.len() - 1) % fields.len()
+        }];
+        let field = match next {
+            Field::Search => Some(source.search.clone()),
+            Field::Name => Some(source.name.clone()),
+            Field::Branch => None,
+        };
+        match field {
+            Some(field) => {
+                let focus = field.read(cx).focus.clone();
+                window.focus(&focus, cx);
+                field.update(cx, |field, cx| field.select_all(cx));
+            }
+            None => {
+                window.focus(&self.menu.focus, cx);
+                if let Some(input) = &mut self.menu.input {
+                    input.selection = 0..input.text.len();
+                    input.reversed = false;
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    /// The branch form's field that has typing. The branch is the dialog's
+    /// own focus, so it is the answer whenever neither other field has it.
+    fn worktree_field(&self, window: &Window, cx: &App) -> Field {
+        if self.worktree_search_focused(window, cx) {
+            Field::Search
+        } else if self.worktree_name_focused(window, cx) {
+            Field::Name
+        } else {
+            Field::Branch
+        }
+    }
+
+    /// Keys the new worktree dialog owns beyond typing: Tab between the
+    /// form's fields, Ctrl-Tab through the strip, and the listings' rows.
+    /// Reports whether the key was consumed, so the branch form keeps its
+    /// existing handling untouched.
     pub(super) fn worktree_source_key(
         &mut self,
         event: &KeyDownEvent,
@@ -360,28 +471,34 @@ impl HerdrWindow {
         {
             return false;
         }
-        let key = event.keystroke.key.as_str();
+        // A composition in either text field owns Tab until it commits.
+        if self.menu.worktree.as_ref().is_some_and(|source| {
+            source.search.read(cx).is_composing() || source.name.read(cx).is_composing()
+        }) {
+            return false;
+        }
+        let modifiers = event.keystroke.modifiers;
+        let mut key = event.keystroke.key.as_str();
         if key == "tab" {
-            let forward = !event.keystroke.modifiers.shift;
-            let current = self
-                .menu
-                .worktree
-                .as_ref()
-                .map_or(Tab::New, |source| source.tab);
-            let connected = self.menu.github.connected();
-            let tabs: Vec<Tab> = Tab::ALL
-                .into_iter()
-                .filter(|tab| tab.kind().is_none() || connected)
-                .collect();
-            if let Some(index) = tabs.iter().position(|tab| *tab == current) {
-                let next = if forward {
-                    (index + 1) % tabs.len()
-                } else {
-                    (index + tabs.len() - 1) % tabs.len()
-                };
-                self.select_worktree_tab(tabs[next], window, cx);
+            if modifiers.alt || modifiers.platform {
+                return false;
             }
-            return true;
+            let forward = !modifiers.shift;
+            // Tab moves between fields, as in every form; Ctrl-Tab steps
+            // through the strip, as it steps through the palette's filters
+            // and the add device rail.
+            if modifiers.control {
+                self.step_worktree_tab(forward, window, cx);
+                return true;
+            }
+            if self.worktree_listing() {
+                // A listing has one field, so Tab moves its selection, as it
+                // moves the palette's.
+                key = if forward { "down" } else { "up" };
+            } else {
+                self.step_worktree_field(forward, window, cx);
+                return true;
+            }
         }
         let search_focused = self.worktree_search_focused(window, cx);
         let Some(source) = &mut self.menu.worktree else {

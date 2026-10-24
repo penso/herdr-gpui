@@ -39,8 +39,8 @@ fn the_dialog_opens_on_the_branch(cx: &mut gpui::TestAppContext) {
     });
 }
 
-/// Tabbing round the strip back to the form puts typing on the branch again,
-/// even when the name had it before.
+/// Stepping round the strip with Ctrl-Tab back to the form puts typing on
+/// the branch again, even when the name had it before.
 #[gpui::test]
 fn returning_to_the_form_tab_focuses_the_branch(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
@@ -49,7 +49,7 @@ fn returning_to_the_form_tab_focuses_the_branch(cx: &mut gpui::TestAppContext) {
     click_name(cx);
     assert!(naming(&view, cx));
     // Without GitHub the strip is new, existing and branch.
-    cx.simulate_keystrokes("tab tab tab");
+    cx.simulate_keystrokes("ctrl-tab ctrl-tab ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::New);
     assert!(!naming(&view, cx));
     assert!(!cx.update(|window, cx| view.read(cx).worktree_search_focused(window, cx)));

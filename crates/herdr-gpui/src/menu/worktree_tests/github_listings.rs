@@ -239,29 +239,29 @@ fn action_errors_stay_visible_in_every_listing_tab(cx: &mut gpui::TestAppContext
     }
 }
 
-/// Tab moves between the dialog's tabs, and the listing owns the keys that
-/// drive its rows rather than leaking them to the branch form.
+/// Ctrl-Tab moves between the dialog's tabs, and the listing owns the keys
+/// that drive its rows rather than leaking them to the branch form.
 #[gpui::test]
 fn keys_move_between_tabs_and_through_the_rows(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
     cx.simulate_resize(gpui::size(gpui::px(900.), gpui::px(700.)));
     open_dialog(&view, cx, true, Tab::New);
     assert_eq!(tab(&view, cx), Tab::New);
-    cx.simulate_keystrokes("tab");
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::Existing);
-    cx.simulate_keystrokes("tab");
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::Branches);
-    cx.simulate_keystrokes("tab");
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::Items(Kind::PullRequest));
-    cx.simulate_keystrokes("tab");
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::Items(Kind::Issue));
-    // The strip wraps, and shift-tab walks it the other way.
-    cx.simulate_keystrokes("tab");
+    // The strip wraps, and Ctrl-Shift-Tab walks it the other way.
+    cx.simulate_keystrokes("ctrl-tab");
     assert_eq!(tab(&view, cx), Tab::New);
-    cx.simulate_keystrokes("shift-tab");
+    cx.simulate_keystrokes("ctrl-shift-tab");
     assert_eq!(tab(&view, cx), Tab::Items(Kind::Issue));
 
-    cx.simulate_keystrokes("shift-tab");
+    cx.simulate_keystrokes("ctrl-shift-tab");
     draw(cx);
     let selected = |cx: &mut VisualTestContext| {
         cx.update(|_, cx| view.read(cx).menu.worktree.as_ref().unwrap().selected)
