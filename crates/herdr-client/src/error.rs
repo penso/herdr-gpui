@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The storage step that failed. Replacement retains both source and destination paths.
 #[derive(Debug, Clone, PartialEq, Eq)]
