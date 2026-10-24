@@ -1736,10 +1736,13 @@ With Herdr's `[ui] copy_on_select = false`, shared with the TUI, the release
 copies nothing: the highlight waits for Cmd-C, Ctrl-C, or **Edit > Copy**, and
 any other key drops it, as in Herdr.
 
-Cmd-V sends semantic paste. While a terminal has focus, the native **Edit** menu
-enables **Paste**, and **Copy** while a selection is highlighted. In dialogs and
-search fields, **Cut**, **Copy**, **Paste**, and **Select All** do the same as
-Cmd-X, Cmd-C, Cmd-V, and Cmd-A.
+Cmd-V sends semantic paste (Ctrl-Shift-V on Linux; on Windows, Ctrl-V while
+the clipboard holds text, and Ctrl-Shift-V). While a terminal has focus, the
+native **Edit** menu enables **Paste**, and **Copy** while a selection is
+highlighted. In dialogs and search fields, **Cut**, **Copy**, **Paste**, and
+**Select All** do the same as Cmd-X, Cmd-C, Cmd-V, and Cmd-A on macOS, and
+Ctrl-Shift-X, Ctrl-Shift-C, Ctrl-Shift-V (Ctrl-V on Windows), and Ctrl-Shift-A
+on Linux and Windows, where fields also accept plain Ctrl.
 
 The terminal is exposed to accessibility clients, such as VoiceOver and
 selection tools that read the focused element's selected text (PopClip,
@@ -2317,6 +2320,12 @@ paste cannot carry image data. Local drops and pasted
 paths stay ordinary path pastes, except a live screenshot thumbnail (see
 [File Drops](#file-drops)), and local Ctrl-V is sent to the terminal
 unchanged so agents can read the shared clipboard themselves.
+
+On Windows, Ctrl-V is the app's paste while the clipboard holds text, and that
+keystroke is not sent to the pane. When the clipboard holds no text, Ctrl-V
+behaves as described above: on an SSH or WSL endpoint a clipboard image goes
+through the image bridge, and on a local endpoint Ctrl-V is sent to the
+terminal.
 
 The daemon writes a temporary file and pastes its path into the
 target terminal. OpenCode or another agent can recognize that path as an image;
@@ -3627,7 +3636,8 @@ Ctrl+Shift+U is left unbound for
   reports failures in the active dialog tab rather than the connection status, and selects
   and reveals the created checkout once the daemon reports it. Rename and branch
   dialogs support Unicode/IME, grapheme
-  editing, Shift-arrow selection, Home/End, and Cmd-A/C/X/V. Escape/outside click
+  editing, Shift-arrow selection, Home/End, and Cmd-A/C/X/V (Ctrl-A/C/X/V on
+  Linux and Windows). Escape/outside click
   cancels; dialog input never reaches terminals or native creation actions.
   Context menus and dialogs anchor to the pointer and clamp to the viewport.
   Rename trims surrounding whitespace and rejects blank labels inline.
@@ -4151,10 +4161,11 @@ Ctrl+Shift+U is left unbound for
   Cmd-, opens Settings; Cmd-/ opens the grouped native shortcut reference.
   Native shortcut labels and keycaps come from the shared `controls::COMMANDS`
   catalog, overridden by the config's `[keybindings]` table, with Cmd-V semantic
-  paste shown separately. **Plugin & custom commands** lists the connected
+  paste (Ctrl-Shift-V on Linux, Ctrl-V on Windows) shown separately.
+  **Plugin & custom commands** lists the connected
   daemon's `[[keys.command]]` entries, including plugin actions, with their
   effective prefix and key combinations. A binding that cannot run says why:
-  a Herdr or GUI shortcut (Cmd-V paste and the Edit menu included) holds it,
+  a Herdr or GUI shortcut (the paste key and the Edit menu included) holds it,
   an earlier command holds it, it lacks a modifier, no usable prefix exists,
   it is past the eight-shortcut limit, or this client cannot type it (such as
   Herdr's `hyper`). A command named like a GUI action or an earlier command
@@ -4228,7 +4239,8 @@ Ctrl+Shift+U is left unbound for
 - Pointer selection of terminal cells, copied to the clipboard on release with
   a configurable flash. Selections stay within one pane or the popup above it,
   anchor on half cells, and never reach the daemon.
-- Cmd-V sends semantic Paste; Cmd-Q or window close detaches without killing
+- Cmd-V (Ctrl-Shift-V on Linux, Ctrl-V with clipboard text on Windows) sends
+  semantic Paste; Cmd-Q or window close detaches without killing
   the daemon or its terminals. Window activation is reported to the daemon.
 - Resize uses the actual terminal canvas bounds and measured configured font cell width,
   excluding the native sidebar, tabs and status bar.
