@@ -70,7 +70,7 @@ impl Device {
                 interval = self.interval,
                 "GitHub device authorization response rejected"
             );
-            return Err(Error::GitHubDevice);
+            return Err(Error::Device);
         }
         Ok(self)
     }
@@ -295,9 +295,9 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                 "GitHub rejected the device authorization"
             );
             Err(match code {
-                "expired_token" => Error::GitHubExpired,
-                "access_denied" => Error::GitHubDenied,
-                _ => Error::GitHubAuthorization,
+                "expired_token" => Error::Expired,
+                "access_denied" => Error::Denied,
+                _ => Error::Authorization,
             })
         }
         None => {
@@ -309,7 +309,7 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                         category = "github_oauth",
                         "GitHub returned no usable access token"
                     );
-                    Error::GitHubToken
+                    Error::Token
                 })?;
             if value
                 .token_type
@@ -321,7 +321,7 @@ pub(super) fn token_reply(value: TokenResponse, client: &str) -> Result<Reply> {
                     token_type = value.token_type.as_deref().unwrap_or_default(),
                     "GitHub returned an unsupported token type"
                 );
-                return Err(Error::GitHubTokenType);
+                return Err(Error::TokenType);
             }
             Ok(Reply::Token(
                 Credential::new(token, value.refresh_token, client)?

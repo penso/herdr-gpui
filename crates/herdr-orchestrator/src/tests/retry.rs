@@ -18,10 +18,10 @@ fn a_beads_failure_ignores_a_pause_github_left_behind() {
 
 #[test]
 fn a_github_failure_waits_as_long_as_github_asked() {
-    let limited = github(herdr_github::Error::GitHubRateLimit { reset: None });
+    let limited = github(herdr_github::Error::RateLimit { reset: None });
     assert_eq!(retry_wait(&limited, Some(HOUR)), HOUR);
     assert_eq!(retry_wait(&limited, None), FIVE_MINUTES);
-    let hidden = github(herdr_github::Error::GitHubRepositoryHidden {
+    let hidden = github(herdr_github::Error::RepositoryHidden {
         repository: "acme/hidden".into(),
         app_token: true,
     });

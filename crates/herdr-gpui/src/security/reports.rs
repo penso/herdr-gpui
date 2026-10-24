@@ -92,7 +92,7 @@ pub(super) fn read(
 pub(super) fn hidden(error: &crate::Error) -> bool {
     matches!(
         error,
-        crate::Error::GitHubForbidden | crate::Error::GitHubStatus(404)
+        crate::Error::GitHub(herdr_github::Error::Forbidden | herdr_github::Error::Status(404))
     )
 }
 

@@ -6,7 +6,7 @@
 //!
 //! Every `wsl.exe` call is bounded: a distribution waiting on a first-run prompt
 //! or a pending update makes `wsl.exe` print nothing and never exit.
-use crate::{Error, Result, session_socket};
+use crate::{Result, session_socket};
 #[cfg(windows)]
 use crate::{
     limits::POLL,
@@ -41,7 +41,7 @@ pub fn valid_distro(name: &str) -> bool {
 
 pub(crate) fn validate(distro: &str, session: &str) -> Result<()> {
     if !valid_distro(distro) {
-        return Err(Error::InvalidWslDistro);
+        return Err(Error::InvalidDistro.into());
     }
     session_socket(Path::new(""), session).map(drop)
 }
@@ -128,7 +128,7 @@ pub(crate) fn command(distro: &str, script: &str) -> Command {
 #[cfg(windows)]
 pub fn wsl_shell_command(distro: &str) -> Result<Command> {
     if !valid_distro(distro) {
-        return Err(Error::InvalidWslDistro);
+        return Err(Error::InvalidDistro.into());
     }
     let mut command = wsl_exe();
     command.args([
@@ -146,9 +146,9 @@ pub fn wsl_shell_command(distro: &str) -> Result<Command> {
 #[cfg(not(windows))]
 pub fn wsl_shell_command(distro: &str) -> Result<std::process::Command> {
     if !valid_distro(distro) {
-        return Err(Error::InvalidWslDistro);
+        return Err(Error::InvalidDistro.into());
     }
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// The distributions installed for this user, the default first. Blocks for at
@@ -165,7 +165,7 @@ pub fn list_distros() -> Result<Vec<String>> {
 
 #[cfg(not(windows))]
 pub fn list_distros() -> Result<Vec<String>> {
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// What a distribution offers for `session`, learned without installing,
@@ -180,13 +180,13 @@ pub fn probe_distro(distro: &str, session: &str) -> Result<HostProbe> {
         || false,
     )
     .map_err(wsl_error)?;
-    ssh::classify_probe(&output).ok_or(Error::WslCommand(status))
+    ssh::classify_probe(&output).ok_or(Error::Command(status).into())
 }
 
 #[cfg(not(windows))]
 pub fn probe_distro(distro: &str, session: &str) -> Result<crate::HostProbe> {
     validate(distro, session)?;
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// The sessions a distribution's Herdr owns, as its own CLI lists them. Blocks:
@@ -206,7 +206,7 @@ pub fn list_distro_sessions(distro: &str) -> Result<Vec<RemoteSession>> {
 #[cfg(not(windows))]
 pub fn list_distro_sessions(distro: &str) -> Result<Vec<crate::RemoteSession>> {
     validate(distro, "default")?;
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// Stop and delete a named session inside a distribution after the user
@@ -225,7 +225,7 @@ pub fn delete_distro_session(distro: &str, name: &str) -> Result<()> {
 pub fn delete_distro_session(distro: &str, name: &str) -> Result<()> {
     validate(distro, name)?;
     crate::sessions::validate_delete(name)?;
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// Attach to `session` inside `distro` through upstream's remote client bridge,
@@ -261,25 +261,27 @@ pub(crate) fn connect(
     _stop: &AtomicBool,
 ) -> Result<(crate::Stream, crate::ssh::ChildGuard)> {
     validate(distro, session)?;
-    Err(Error::WslUnsupported)
+    Err(Error::Unsupported.into())
 }
 
 /// The shared bridge and runner report SSH failures; say WSL instead, since the
 /// remedies differ.
 #[cfg(windows)]
-fn wsl_error(error: Error) -> Error {
+fn wsl_error(error: crate::Error) -> crate::Error {
     match error {
-        Error::SshClosed => Error::WslClosed,
-        Error::SshTimeout => Error::WslTimeout,
+        crate::Error::Ssh(ssh::Error::Closed) => Error::Closed.into(),
+        crate::Error::Ssh(ssh::Error::Timeout) => Error::Timeout.into(),
         other => other,
     }
 }
 
 mod catalog;
+mod error;
 mod paths;
 pub use catalog::{
     WslHost, WslHosts, add_wsl_host, load_wsl_hosts, remove_wsl_host, store_wsl_selection,
 };
+pub use error::Error;
 pub use paths::wsl_paths;
 
 #[cfg(test)]

@@ -6,7 +6,11 @@
 //! disabled, the window closes, or the app quits, and stays ended until the
 //! user starts it again. Ports are named by the caller, never discovered here.
 
-use crate::{Error, Result};
+mod error;
+
+pub(crate) use error::Error;
+
+use crate::Result;
 use herdr_client::{ForwardEvent, PortForward};
 use std::num::NonZeroU16;
 
@@ -113,9 +117,9 @@ impl Notice {
 pub(crate) fn parse_port(text: &str) -> Result<NonZeroU16> {
     let text = text.trim();
     if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(Error::ForwardPort);
+        return Err(Error::Port.into());
     }
-    text.parse().map_err(|_| Error::ForwardPort)
+    text.parse().map_err(|_| Error::Port.into())
 }
 
 #[derive(Default)]
@@ -134,7 +138,7 @@ impl PortForwards {
     /// same port is replaced; a running one is left alone.
     pub fn start(&mut self, target: &str, remote_port: NonZeroU16) -> Result<()> {
         self.insert(target, remote_port, || {
-            PortForward::start(target, remote_port).map_err(Error::from)
+            PortForward::start(target, remote_port).map_err(crate::Error::from)
         })
     }
 
@@ -151,11 +155,11 @@ impl PortForwards {
             .iter()
             .any(|forward| same(forward) && !matches!(forward.state, State::Ended(_)))
         {
-            return Err(Error::ForwardDuplicate(remote_port.get()));
+            return Err(Error::Duplicate(remote_port.get()).into());
         }
         self.forwards.retain(|forward| !same(forward));
         if self.forwards.len() >= LIMIT {
-            return Err(Error::ForwardLimit(LIMIT));
+            return Err(Error::Limit(LIMIT).into());
         }
         let handle = start()?;
         self.forwards.push(Forward {

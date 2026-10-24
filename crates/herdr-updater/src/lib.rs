@@ -9,8 +9,7 @@
 mod channel;
 mod error;
 pub use channel::UpdateChannel;
-pub use error::UpdateError;
-use error::{Result, UpdateError as Error};
+pub use error::{Error, Result};
 pub use error::{quota_exhausted, rate_limit_reset, retry_hint};
 #[cfg(unix)]
 mod brew;

@@ -1,8 +1,9 @@
 //! FIFO reservations with an optional image lease held through transport.
 
-use crate::{
-    Error, Result, frame::ImageWriter, limits::COMMAND_TIMEOUT, protocol::*, queue::Waker,
-};
+mod error;
+pub use error::Error;
+
+use crate::{Result, frame::ImageWriter, limits::COMMAND_TIMEOUT, protocol::*, queue::Waker};
 use crossbeam_channel::{Receiver, Sender};
 use std::sync::{
     Arc,
@@ -104,7 +105,7 @@ impl ClipboardImageUpload {
                     }
                 }
                 ClientClipboardImageTarget::DirectTerminal => {
-                    return Err(Error::ClipboardImageInputTarget);
+                    return Err(Error::InputTarget.into());
                 }
             };
             Ok(encode_message(&message, MAX_FRAME_SIZE)?)
@@ -115,15 +116,17 @@ impl ClipboardImageUpload {
         self.check_ready()?;
         let bytes = encode(&self)?;
         self.check_ready()?;
-        self.sender.try_send(bytes).map_err(|_| Error::Disconnected)
+        self.sender
+            .try_send(bytes)
+            .map_err(|_| crate::Error::Disconnected)
     }
 
     fn check_ready(&self) -> Result<()> {
         if self.stop.load(Ordering::Acquire) {
-            return Err(Error::Disconnected);
+            return Err(crate::Error::Disconnected);
         }
         if self.is_cancelled() {
-            return Err(Error::ClipboardImageCancelled);
+            return Err(Error::Cancelled.into());
         }
         Ok(())
     }
@@ -145,7 +148,7 @@ impl ImageLease {
         if !self.claimed.load(Ordering::Acquire) {
             self.busy
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .map_err(|_| Error::ClipboardImageBusy)?;
+                .map_err(|_| Error::Busy)?;
             self.claimed.store(true, Ordering::Release);
         }
         Ok(())

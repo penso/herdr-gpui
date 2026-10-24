@@ -81,10 +81,7 @@ fn a_pause_is_kept_under_the_account_that_hit_it() {
             Batch {
                 found: vec![
                     (inputs[0].clone(), Ok(None)),
-                    (
-                        inputs[0].clone(),
-                        Err(Error::GitHubRateLimit { reset: None }),
-                    ),
+                    (inputs[0].clone(), Err(Error::RateLimit { reset: None })),
                 ],
                 paused: vec![Paused {
                     login: "emu".into(),
@@ -136,7 +133,7 @@ fn moving_an_owner_to_an_account_does_not_reuse_what_the_old_one_hid() {
     peer.cache.poll(now);
     peer.complete(
         now,
-        Err(Error::GitHubRepositoryHidden {
+        Err(Error::RepositoryHidden {
             repository: "acme/project".into(),
             app_token: false,
         }),

@@ -64,7 +64,7 @@ fn devices_opt_into_server_keybindings_one_by_one() -> anyhow::Result<()> {
         .collect();
     assert!(matches!(
         Config::parse(&many),
-        Err(Error::TooManyDevices(MAX_DEVICES))
+        Err(crate::Error::Settings(Error::TooManyDevices(MAX_DEVICES)))
     ));
     Ok(())
 }
@@ -109,7 +109,7 @@ fn device_keybindings_save_in_place_and_local_removes_them() -> anyhow::Result<(
     // An ID that is not a catalog profile never reaches the file.
     assert!(matches!(
         Config::save_device_keybindings_path("../x", KeybindingSource::Server, &path),
-        Err(Error::InvalidDeviceId(_))
+        Err(crate::Error::Settings(Error::InvalidDeviceId(_)))
     ));
     assert_eq!(fs::read_to_string(&path)?, kept);
     fs::remove_file(&path)?;
@@ -154,7 +154,9 @@ fn keybindings_override_defaults_and_reject_bad_entries() -> anyhow::Result<()> 
     assert_eq!(config.keybindings.primary(Command::Themes), "cmd-k");
     assert!(matches!(
         Config::parse("[keybindings]\nnew_tab = \"t\""),
-        Err(Error::KeystrokeWithoutModifier { .. })
+        Err(crate::Error::Keymap(
+            crate::keymap::Error::KeystrokeWithoutModifier { .. }
+        ))
     ));
     assert!(Config::parse("[keybindings]\nnew_tab = 5").is_err());
     Ok(())
@@ -258,10 +260,10 @@ fn pane_keys_reach_the_keymap_as_written() -> anyhow::Result<()> {
         Config::parse(
             "[pane_keys]\n\"cmd-k\" = \"ctrl-l\"\n[keybindings]\nclear_pane = \"cmd-k\"\n"
         ),
-        Err(Error::PaneKeyBound {
+        Err(crate::Error::Keymap(crate::keymap::Error::PaneKeyBound {
             command: "clear_pane",
             ..
-        })
+        }))
     ));
     Ok(())
 }

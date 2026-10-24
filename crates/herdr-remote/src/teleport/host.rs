@@ -52,6 +52,27 @@ pub struct Host {
 impl Host {
     /// How long a query may go without output.
     pub const QUERY_IDLE: Duration = QUERY_IDLE;
+    /// Most a query may print.
+    pub const QUERY_OUTPUT: u64 = QUERY_OUTPUT;
+
+    /// Names the daemon this host scripts: its route, session, and
+    /// installation, so a saved reference is never applied to another
+    /// daemon behind the same endpoint ID.
+    pub fn identity(&self) -> String {
+        let route = match &self.route {
+            Route::Local => "local".to_owned(),
+            Route::Ssh(target) => format!("ssh:{target}"),
+            #[cfg(feature = "cloud")]
+            Route::Cloud {
+                provider,
+                account,
+                id,
+            } => format!("cloud:{provider:?}:{account}:{id}"),
+        };
+        let session = self.session.as_deref().unwrap_or_default();
+        let installation = if self.development { "dev" } else { "release" };
+        format!("{route}|{session}|{installation}")
+    }
 
     /// A host for `target`. Custom sockets are refused: the CLI could not be
     /// pointed at them without also trusting that socket's daemon identity.
@@ -434,21 +455,7 @@ export PATH
                 .map(|program| (*program).to_owned())
                 .collect());
         }
-        let names = programs
-            .iter()
-            .map(|p| shell_quote(p))
-            .collect::<Vec<_>>()
-            .join(" ");
-        // The login shell sees version managers configured in the user's
-        // profile; the prelude PATH covers the common install locations.
-        let body = format!(
-            r#"login=$("${{SHELL:-/bin/sh}}" -lc 'printf %s "$PATH"' </dev/null 2>/dev/null || :)
-PATH="$PATH:$login"
-for program in {names}; do
-    if command -v "$program" >/dev/null 2>&1; then printf '%s\n' "$program"; fi
-done
-"#
-        );
+        let body = installed_programs_script(programs);
         let output = self.capture(&body, cancelled)?;
         Ok(String::from_utf8_lossy(&output)
             .lines()
@@ -456,6 +463,28 @@ done
             .map(str::to_owned)
             .collect())
     }
+}
+
+/// A script printing each of `programs` the user's login shell can find on
+/// its host, one per line, for [`Host::installed_programs`] or a caller that
+/// reads it as part of a larger script. It changes `PATH`, so a caller that
+/// goes on afterwards runs it in a subshell.
+pub fn installed_programs_script(programs: &[&str]) -> String {
+    let names = programs
+        .iter()
+        .map(|p| shell_quote(p))
+        .collect::<Vec<_>>()
+        .join(" ");
+    // The login shell sees version managers configured in the user's
+    // profile; the prelude PATH covers the common install locations.
+    format!(
+        r#"login=$("${{SHELL:-/bin/sh}}" -lc 'printf %s "$PATH"' </dev/null 2>/dev/null || :)
+PATH="$PATH:$login"
+for program in {names}; do
+    if command -v "$program" >/dev/null 2>&1; then printf '%s\n' "$program"; fi
+done
+"#
+    )
 }
 
 #[cfg(test)]

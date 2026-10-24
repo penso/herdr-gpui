@@ -42,7 +42,7 @@ fn a_failed_hold_stays_off_and_keeps_its_source(cx: &mut gpui::TestAppContext) {
 
     assert_eq!(cup_of(cx), Cup::Off);
     let errors = reports.take();
-    let [Error::Caffeine(Failure::Hold(source))] = errors.as_slice() else {
+    let [crate::Error::Caffeine(Error::Hold(source))] = errors.as_slice() else {
         panic!("expected one Caffeine error, got {errors:?}");
     };
     assert!(matches!(
@@ -109,7 +109,7 @@ fn a_worker_that_dies_releasing_reads_off_and_is_replaced(cx: &mut gpui::TestApp
     assert_eq!(cup_of(cx), Cup::Off);
     assert!(matches!(
         reports.take().as_slice(),
-        [Error::Caffeine(Failure::WorkerStopped)]
+        [crate::Error::Caffeine(Error::WorkerStopped)]
     ));
 
     // A fresh worker takes the next click.

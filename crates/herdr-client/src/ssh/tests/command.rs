@@ -38,6 +38,6 @@ printf '%s\n' "$hello"
     std::fs::remove_dir_all(root).unwrap();
     assert!(matches!(
         connect_command(Command::new("true"), "../bad", &AtomicBool::new(false)),
-        Err(Error::InvalidSession)
+        Err(crate::Error::InvalidSession)
     ));
 }

@@ -325,7 +325,7 @@ and fails if GPUI is among its dependencies. On Linux it also exercises a signed
 helper handoff, actual standalone replacement/relaunch, tampering refusal,
 cancellation, and rollback in private temporary installations under a test HOME.
 It does not build or test the complete Linux GUI or prove macOS Gatekeeper acceptance.
-The helper and updater use typed `UpdateError` variants; active unit tests check
+The helper and updater use typed `herdr_updater::Error` variants; active unit tests check
 source preservation, diagnostic redaction, and compound recovery failures. These
 tests are included in the standalone harness, not disabled integration fixtures.
 

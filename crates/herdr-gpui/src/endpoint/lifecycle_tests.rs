@@ -17,6 +17,7 @@ use std::{
 };
 
 mod atomic_projection;
+mod background_commands;
 mod close_pane;
 mod close_sequence;
 mod dead_keys;
@@ -47,6 +48,7 @@ mod popup_projection;
 mod prompts;
 mod reconnect_backoff;
 mod remote_drop;
+mod resize_claim_fence;
 mod resize_reassert;
 mod scrollbar_drag;
 mod shift_select_hint;
@@ -250,6 +252,7 @@ fn connected_endpoint_reporting(id: &str, server_version: Option<&str>) -> (Endp
             Method::WorktreeCreate,
             Method::WorktreeOpen,
             Method::WorktreeRemove,
+            Method::ServerReloadConfig,
         ]
         .map(|method| method.as_str().to_owned()),
     );

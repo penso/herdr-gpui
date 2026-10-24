@@ -1,4 +1,6 @@
-# Run on the repository's SSH host, with checkout quoted by the caller.
+# Run on the repository's SSH host, with checkout quoted by the caller, and
+# `after` defined by it: run with the main checkout once the repository is
+# printed (empty for a Beads folder outside Git), it may print more lines.
 set -eu
 cd -- "$checkout"
 
@@ -29,6 +31,7 @@ else
     if [ -d .beads ]; then
         root=$(pwd -P)
         printf 'common\t%s/.beads\nmain\t%s\nbeads\t1\n' "$root" "$root"
+        after ''
     else
         printf 'not-repository\n'
     fi
@@ -50,3 +53,4 @@ for name in $remotes; do
     url=$(git remote get-url "$name")
     printf 'remote\t%s\t%s\n' "$name" "$url"
 done
+after "${main:-$root}"

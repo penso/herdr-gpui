@@ -3,7 +3,7 @@ use super::*;
 /// Whatever went wrong opening the shell, beneath the scan's own error.
 fn cause(host: &Host) -> Error {
     match super::super::open(host).err() {
-        Some(Error::ListeningPorts(cause)) => *cause,
+        Some(Error::ListeningPorts(crate::listening_ports::Error::Scan(cause))) => *cause,
         other => panic!("{other:?}"),
     }
 }
@@ -13,7 +13,12 @@ fn cause(host: &Host) -> Error {
 fn a_name_that_is_not_a_distribution_starts_no_shell() {
     let error = cause(&Host::Wsl("-d".into()));
     assert!(
-        matches!(error, Error::Client(herdr_client::Error::InvalidWslDistro)),
+        matches!(
+            error,
+            Error::Usage(herdr_usage::Error::Client(herdr_client::Error::Wsl(
+                herdr_client::wsl::Error::InvalidDistro
+            )))
+        ),
         "{error:?}"
     );
 }
@@ -22,7 +27,10 @@ fn a_name_that_is_not_a_distribution_starts_no_shell() {
 #[test]
 fn a_distribution_is_only_scanned_from_windows() {
     let error = cause(&Host::Wsl("Ubuntu".into()));
-    assert!(matches!(error, Error::WslHostUnsupported), "{error:?}");
+    assert!(
+        matches!(error, Error::Usage(herdr_usage::Error::WslHostUnsupported)),
+        "{error:?}"
+    );
 }
 
 /// Scans a real distribution through `wsl.exe` and prints what it found:

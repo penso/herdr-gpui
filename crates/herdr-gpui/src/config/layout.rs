@@ -1,5 +1,6 @@
 //! Named sidebar layouts.
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use serde::Deserialize;
 
 /// Sidebar layout and spacing the config file can adjust.
@@ -164,13 +165,13 @@ impl From<Density> for LayoutMode {
 }
 
 impl TryFrom<&str> for LayoutMode {
-    type Error = Error;
+    type Error = crate::Error;
 
     fn try_from(name: &str) -> Result<Self> {
         Self::ALL
             .into_iter()
             .find(|mode| mode.name() == name)
-            .ok_or_else(|| Error::UnknownLayout(name.to_owned()))
+            .ok_or_else(|| Error::UnknownLayout(name.to_owned()).into())
     }
 }
 

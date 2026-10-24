@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 mod actions;
 mod beads;
 mod beads_only;
+#[cfg(unix)]
+mod beads_script;
 mod full_listing;
 mod git;
 mod github;
@@ -12,6 +14,8 @@ mod incremental;
 mod keys;
 mod location;
 mod naming;
+#[cfg(unix)]
+mod opening_script;
 mod prompt;
 mod repo;
 mod repo_output;

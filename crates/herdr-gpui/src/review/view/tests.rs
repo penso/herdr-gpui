@@ -194,10 +194,18 @@ fn a_stale_load_never_replaces_a_newer_one(cx: &mut gpui::TestAppContext) {
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.seed_review(changes(), window, cx);
-            view.review_loaded(the(view), 0, Err(crate::Error::GitWorker));
+            view.review_loaded(
+                the(view),
+                0,
+                Err(herdr_vcs::Error::from(crate::git::Error::Worker).into()),
+            );
             let review = view.reviews.values().next().unwrap();
             assert!(review.loaded().is_some());
-            view.review_loaded(the(view), 1, Err(crate::Error::GitWorker));
+            view.review_loaded(
+                the(view),
+                1,
+                Err(herdr_vcs::Error::from(crate::git::Error::Worker).into()),
+            );
             let review = view.reviews.values().next().unwrap();
             assert!(matches!(review.state, State::Failed(_)));
         });

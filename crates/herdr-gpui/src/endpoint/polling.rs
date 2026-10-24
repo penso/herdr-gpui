@@ -117,6 +117,13 @@ impl HerdrWindow {
                 selected_changed |= index == self.selected_endpoint;
                 changed = Redraw::Window;
             }
+            // Only a requested surface flushes, which in practice is the
+            // selected endpoint's, so its error is the one the window shows.
+            if let Err(error) = endpoint.flush_config_reload()
+                && index == self.selected_endpoint
+            {
+                self.local_error = Some(format!("Reload config: {error}"));
+            }
         }
         crate::palette::LastSeen::trim(
             self.endpoints

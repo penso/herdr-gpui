@@ -267,11 +267,39 @@ impl ChatPane {
     }
 }
 
+/// A tab strip's deck of agents under "+": how far it is dealt, and where
+/// the pointer is. Over "+" or over the cards, it stays dealt.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LauncherDeck {
+    pub(crate) group: crate::browser::GroupId,
+    pub(crate) over_cards: bool,
+    pub(crate) over_plus: bool,
+    pub(crate) toggle: crate::motion::Toggle,
+    /// The side it deals toward, chosen as it starts to deal.
+    pub(crate) toward: Toward,
+}
+
+/// The side of "+" a deck deals its agents out to: the right while the
+/// window has room there for all of them, else the left, over the tabs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Toward {
+    Left,
+    #[default]
+    Right,
+}
+
 /// Every chat pane of the window's daemon, in its snapshot's order.
 #[derive(Default)]
 pub(crate) struct Chats {
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
+    /// The agent a chat was last started with, which the strips' one-button
+    /// launcher offers first.
+    pub(crate) last_started: Option<herdr_chat_protocol::Agent>,
+    /// The strip whose launcher shows its hidden agents under the pointer.
+    pub(crate) launcher_open: Option<crate::browser::GroupId>,
+    /// The strip whose "+" deals its agents out, and how far it has.
+    pub(crate) launcher_deck: Option<LauncherDeck>,
     /// The layout the lists' rows were last measured in.
     measured: crate::config::ChatLayoutMode,
     /// Chat pages opened so far, which numbers the next one.

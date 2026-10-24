@@ -83,7 +83,8 @@ fn a_refusal_only_the_user_can_fix_waits_the_longest_retry_delay() {
         (SshFailure::Unreachable, false),
     ] {
         let (mut endpoint, _server) = connected_endpoint("ssh:remote");
-        let error = herdr_client::Error::SshRefused(failure).to_string();
+        let error =
+            herdr_client::Error::Ssh(herdr_client::ssh::Error::Refused(failure)).to_string();
         endpoint
             .connection
             .inbox
@@ -170,7 +171,8 @@ fn a_refusal_that_arrives_after_its_stop_still_waits_the_longest_delay() {
     assert_eq!(endpoint.outage(), Some("connection lost"));
     assert_eq!(endpoint.retry_at, dropped + endpoint.retry_delay());
 
-    let error = herdr_client::Error::SshRefused(SshFailure::HostKey).to_string();
+    let error = herdr_client::Error::Ssh(herdr_client::ssh::Error::Refused(SshFailure::HostKey))
+        .to_string();
     endpoint
         .connection
         .inbox

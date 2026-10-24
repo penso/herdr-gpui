@@ -162,7 +162,7 @@ fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
             view.local_error,
             Some(format!(
                 "Image not sent: {}",
-                herdr_client::Error::ClipboardImageBusy
+                herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
             ))
         );
     });
@@ -233,7 +233,7 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
                 view.local_error,
                 Some(format!(
                     "Image not sent: {}",
-                    herdr_client::Error::ClipboardImageBusy
+                    herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
                 ))
             );
             view.endpoints[1]
@@ -317,7 +317,7 @@ fn connected_image_paste_queued_upload_remains_cancellable_after_preparation(
                 view.local_error,
                 Some(format!(
                     "Image not sent: {}",
-                    herdr_client::Error::ClipboardImageBusy
+                    herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
                 ))
             );
             match change {

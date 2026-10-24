@@ -2,7 +2,11 @@
 //! notes panel, notes. Each is a function of when it started and the time
 //! now, so a frame never depends on the one before it, and a view keeps
 //! drawing frames only while something is still moving.
+mod slow;
+
 use std::time::{Duration, Instant};
+
+pub(crate) use slow::{duration, is_slow, now, set_slow};
 
 /// How long something takes to grow in.
 pub(crate) const ENTER: Duration = Duration::from_millis(180);
@@ -17,8 +21,6 @@ pub(crate) fn progress(since: Instant, now: Instant, length: Duration) -> Option
 }
 
 /// Something that opens and closes, such as a panel: how much of it shows.
-/// Only the notes panel uses one, and only builds that show pages have it.
-#[cfg(any(target_os = "macos", windows, test))]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Toggle {
     open: bool,
@@ -27,7 +29,6 @@ pub(crate) struct Toggle {
     since: Option<Instant>,
 }
 
-#[cfg(any(target_os = "macos", windows, test))]
 impl Toggle {
     /// Opens or closes it at `now`. The first report sets where it is
     /// without moving, as a view first drawn shows what it has.
@@ -46,6 +47,11 @@ impl Toggle {
             self.open = open;
             self.since = Some(now.checked_sub(back).unwrap_or(now));
         }
+    }
+
+    /// Whether it is open or opening, rather than closed or closing.
+    pub(crate) fn is_open(&self) -> bool {
+        self.open
     }
 
     /// How much of it shows at `now`, from 0 closed to 1 open.

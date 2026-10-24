@@ -127,24 +127,26 @@ impl HerdrWindow {
             group,
             layout.share(group),
             |other| layout.share(other),
-            Instant::now(),
+            crate::motion::now(),
         )
     }
 
     /// How far `group` has opened from its split, or `None` once open.
     pub(crate) fn group_opened(&self, group: GroupId) -> Option<f32> {
-        self.browser.group_motion.opened(group, Instant::now())
+        self.browser
+            .group_motion
+            .opened(group, crate::motion::now())
     }
 
     /// The closed groups still folding away.
     pub(crate) fn folding_groups(&self) -> Vec<super::Fold> {
-        self.browser.group_motion.folding(Instant::now())
+        self.browser.group_motion.folding(crate::motion::now())
     }
 
     /// Whether a group is still opening or folding, so the window draws
     /// another frame.
     pub(crate) fn groups_moving(&mut self) -> bool {
-        self.browser.group_motion.animating(Instant::now())
+        self.browser.group_motion.animating(crate::motion::now())
     }
 
     /// The tab `group` picked, the focused one when it follows the terminal.
@@ -203,7 +205,7 @@ impl HerdrWindow {
         let growing = self
             .browser
             .appear
-            .growth(group, pick, Instant::now())
+            .growth(group, pick, crate::motion::now())
             .is_some();
         self.browser
             .tab_scroll
@@ -262,7 +264,11 @@ impl HerdrWindow {
         /// Wider than any label a strip shows, so the last frame of growth
         /// does not visibly clamp a long one.
         const GROWN: f32 = 480.;
-        match self.browser.appear.growth(group, pick, Instant::now()) {
+        match self
+            .browser
+            .appear
+            .growth(group, pick, crate::motion::now())
+        {
             Some(k) => tab
                 .min_w(px(self.tab_layout().min_width() * k))
                 .max_w(px(GROWN * k))
@@ -872,7 +878,9 @@ impl HerdrWindow {
         if let Some(primary) = primary {
             self.set_primary_group(primary);
         }
-        self.browser.group_motion.open(new, group, Instant::now());
+        self.browser
+            .group_motion
+            .open(new, group, crate::motion::now());
         self.bring_group_tab(new, window, cx);
         self.sync_addresses(true, window, cx);
         cx.notify();
@@ -903,7 +911,7 @@ impl HerdrWindow {
         if let Some((index, share, into)) = target {
             self.browser
                 .group_motion
-                .fold(group, index, share, into, Instant::now());
+                .fold(group, index, share, into, crate::motion::now());
         }
         self.browser.addresses.remove(&group);
         self.forget_group_terminal(group);

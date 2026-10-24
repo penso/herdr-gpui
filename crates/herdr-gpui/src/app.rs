@@ -1,7 +1,6 @@
 //! Process bootstrap and window opening. CLI parsing and the updater helper
 //! run before GPUI starts, so an invalid option or `--build-info` exits without
 //! ever creating a window.
-use crate::control::ControlError;
 
 use crate::{
     APP_VERSION, HerdrWindow, Hide, HideOthers, Quit, ShowAll, ShowLogs, WINDOW_TITLE, app_icon,
@@ -263,7 +262,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     if let LaunchMode::Link(link) = mode {
         match crate::control::send_link(&link) {
             Ok(_) => return std::process::ExitCode::SUCCESS,
-            Err(crate::Error::Control(ControlError::Unavailable { .. })) => {
+            Err(crate::Error::Control(crate::control::Error::Unavailable { .. })) => {
                 pending_link = Some(link);
                 mode = LaunchMode::Normal;
             }
@@ -418,6 +417,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::dispatch::History::default()
     };
+    // Nor with the user's fan-outs, which they would restore or forget.
+    let fan_out_journal = if mode == LaunchMode::Normal {
+        crate::fan_out::Journal::load()
+    } else {
+        crate::fan_out::Journal::default()
+    };
     // Whether the launcher is installed is read once here, never while a window opens.
     let taskbar = crate::taskbar::Taskbar::load();
     gpui_platform::application()
@@ -433,6 +438,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             overview_marks.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);
+            fan_out_journal.install(cx);
             agent_skill.install_global(cx);
             keychain_grants.install(cx);
             taskbar.install(cx);
@@ -463,6 +469,12 @@ pub(crate) fn run() -> std::process::ExitCode {
             cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
             cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
             cx.on_action(|_: &ShowLogs, cx| log_window::open(cx));
+            cx.on_action(|_: &crate::actions::ToggleSlowAnimations, cx| {
+                crate::motion::set_slow(!crate::motion::is_slow());
+                // The menu shows the switch checked while it is on.
+                menus::install(cx);
+                cx.refresh_windows();
+            });
             bind_keys(cx);
             menus::install(cx);
             cx.on_window_closed(move |cx, _| {
@@ -550,7 +562,7 @@ fn focus_running(
     }
     match send() {
         Ok(_) => Some(std::process::ExitCode::SUCCESS),
-        Err(crate::Error::Control(ControlError::Unavailable { .. })) => None,
+        Err(crate::Error::Control(crate::control::Error::Unavailable { .. })) => None,
         Err(error) => {
             tracing::warn!(%error, "The running app did not come forward");
             None
@@ -564,7 +576,6 @@ mod tests {
     #[cfg(feature = "integration-test")]
     use super::{ConnectTarget, HerdrWindow};
     use crate::config::LayoutMode;
-    use crate::control::ControlError;
     #[cfg(feature = "integration-test")]
     use gpui::px;
 
@@ -630,23 +641,25 @@ mod tests {
         assert_eq!(focus_running(&LaunchMode::BuildInfo, &local, unasked), None);
         // No app answers, or the one that does cannot come forward: start one.
         let unavailable = || {
-            Err(crate::Error::Control(ControlError::Unavailable {
+            Err(crate::control::Error::Unavailable {
                 path: "pipe".into(),
                 source: std::io::ErrorKind::NotFound.into(),
-            }))
+            }
+            .into())
         };
         assert_eq!(
             focus_running(&LaunchMode::Normal, &local, unavailable),
             None
         );
         let refused = || {
-            Err(crate::Error::Control(ControlError::Rejected {
+            Err(crate::control::Error::Rejected {
                 code: crate::control::ErrorCode::NoWindow,
                 message: "Herdr UI has no window".into(),
-            }))
+            }
+            .into())
         };
         assert_eq!(focus_running(&LaunchMode::Normal, &local, refused), None);
-        let silent = || Err(crate::Error::Control(ControlError::NoResponse));
+        let silent = || Err(crate::control::Error::NoResponse.into());
         assert_eq!(focus_running(&LaunchMode::Normal, &local, silent), None);
     }
 

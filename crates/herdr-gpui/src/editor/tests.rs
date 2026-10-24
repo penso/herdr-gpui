@@ -140,7 +140,7 @@ fn paths_a_shell_could_reinterpret_are_refused() {
         assert!(
             matches!(
                 command_line(&target(path, Some(1)), None, None),
-                Err(crate::Error::EditorPath)
+                Err(crate::Error::Editor(Error::Path))
             ),
             "{path:?}"
         );
@@ -160,7 +160,7 @@ fn commands_that_would_break_the_quoting_are_rejected() {
         assert!(
             matches!(
                 EditorCommand::try_from(command.to_owned()),
-                Err(crate::Error::EditorCommand)
+                Err(crate::Error::Editor(Error::Command))
             ),
             "{command:?}"
         );
@@ -173,11 +173,11 @@ fn the_split_response_names_the_new_pane() {
     assert_eq!(created_pane(&ok).unwrap(), "w1:p9");
     assert!(matches!(
         created_pane(&json!({"result": {"pane": {"pane_id": ""}}})),
-        Err(crate::Error::EditorResponse)
+        Err(crate::Error::Editor(Error::Response))
     ));
     assert!(matches!(
         created_pane(&json!({"error": {"message": "no such pane"}})),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }
 
@@ -204,7 +204,7 @@ fn media_files_are_left_to_the_system() {
 #[cfg(unix)]
 mod flow {
     // Not a glob: the parent's imports would shadow `#[test]`.
-    use super::{EditorTarget, PathBuf, command_line, json};
+    use super::{EditorTarget, Error, PathBuf, command_line, json};
     use crate::{
         NavigationTarget, sidebar::layout_tests::fixture_window, window::MockPeer,
         worktree_scripts::tests::connect,
@@ -230,7 +230,7 @@ mod flow {
                 view.flash = None;
                 view.open_in_editor(&target, Some("w1:p1"), cx);
                 let (flash, _) = view.flash.as_ref().unwrap();
-                assert_eq!(flash.text.as_ref(), crate::Error::EditorBusy.to_string());
+                assert_eq!(flash.text.as_ref(), Error::Busy.to_string());
             })
         });
         let split = peer.request();
@@ -404,7 +404,7 @@ fn a_listening_neovim_opens_files_at_their_line() {
                 line: None
             }
         ),
-        Err(crate::Error::EditorRemote)
+        Err(crate::Error::Editor(Error::Remote))
     ));
 }
 
@@ -433,7 +433,7 @@ fn an_untypable_path_opens_in_the_system_app_but_is_never_run(cx: &mut gpui::Tes
         assert_eq!(cx.opened_url().as_deref(), Some(url.as_str()));
         view.read_with(cx, |view, _| {
             let (flash, _) = view.flash.as_ref().unwrap();
-            assert_eq!(flash.text.as_ref(), crate::Error::EditorPath.to_string());
+            assert_eq!(flash.text.as_ref(), Error::Path.to_string());
         });
     }
 }

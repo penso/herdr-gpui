@@ -274,7 +274,7 @@ impl HerdrWindow {
         if let Some(drag) = &mut self.tab_drag
             && drag.lifted.is_none()
         {
-            drag.lifted = Some(Instant::now());
+            drag.lifted = Some(motion::now());
             cx.notify();
         }
     }

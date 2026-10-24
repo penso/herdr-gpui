@@ -3,8 +3,9 @@
 //! thread per setup accepts, spawns, and waits; two more copy bytes, each
 //! blocking on its own descriptor with one frame of buffer, so a stalled
 //! side stalls the other instead of growing a queue.
+use super::Error;
 use super::frame::{Frame, MAX_PAYLOAD, Size};
-use crate::{Error, Result};
+use crate::Result;
 use rustix::{
     fs::{Mode, OFlags},
     process::{Pid, Signal},
@@ -174,7 +175,7 @@ pub(super) fn make_private(dir: &Path) -> Result<()> {
         .create(dir)?;
     let metadata = std::fs::symlink_metadata(dir)?;
     if !metadata.is_dir() || metadata.uid() != rustix::process::getuid().as_raw() {
-        return Err(Error::SetupRelayDir(dir.to_owned()));
+        return Err(Error::Dir(dir.to_owned()).into());
     }
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     Ok(())
@@ -241,7 +242,7 @@ pub(super) fn relay(
     stream.set_read_timeout(Some(HELLO_WAIT))?;
     let mut reader = stream.try_clone()?;
     let Some(Frame::Hello { size, term }) = Frame::read(&mut reader)? else {
-        return Err(Error::SetupRelayFrame);
+        return Err(Error::Frame.into());
     };
     stream.set_read_timeout(None)?;
     // A pane that stops reading ends the session rather than holding its

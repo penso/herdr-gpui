@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::control::ControlError;
 use crate::control::protocol::tabs::TabKind;
 
 mod items;
@@ -45,14 +44,14 @@ fn files_and_folders_are_resolved_before_they_are_sent() {
     assert_eq!(Path::new(&resolved), file.canonicalize().unwrap());
     assert!(matches!(
         local_file(folder.path()),
-        Err(crate::Error::Control(ControlError::Rejected {
+        Err(crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             ..
         }))
     ));
     assert!(matches!(
         local_file(&folder.path().join("missing.rs")),
-        Err(crate::Error::Control(ControlError::Rejected {
+        Err(crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::NotFound,
             ..
         }))

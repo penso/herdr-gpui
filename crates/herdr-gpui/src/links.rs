@@ -315,7 +315,7 @@ impl From<crate::Result<Value>> for Activation {
         };
         if let Some(error) = response.get("error").filter(|error| !error.is_null()) {
             return if error["code"] == "plugin_link_failed" {
-                Self::HandlerFailed(crate::Error::DaemonResponse(error.clone()))
+                Self::HandlerFailed(crate::daemon::Error::Response(error.clone()).into())
             } else {
                 Self::Declined(None)
             };

@@ -22,7 +22,7 @@
 
 use crate::{smooth_scroll::SmoothScroll, state::LiveState};
 use herdr_client::{SurfaceImages, protocol::PaneSurfaceFrame};
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 /// A frame with the pixels for the images it places.
 #[derive(Clone)]
@@ -98,7 +98,8 @@ impl Presentation {
     /// positive, and returns the lines to send (see `SmoothScroll::wheel`).
     pub(crate) fn wheel(&mut self, pane_id: &str, rows: f32) -> Option<i16> {
         let presented = self.presented.as_ref()?;
-        self.scroll.wheel(presented, pane_id, rows, Instant::now())
+        self.scroll
+            .wheel(presented, pane_id, rows, crate::motion::now())
     }
 
     /// A daemon that restarted while the connection was down no longer has

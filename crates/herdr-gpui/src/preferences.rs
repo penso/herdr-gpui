@@ -253,7 +253,7 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
     let value: serde_json::Value = serde_json::from_slice(&bytes)?;
     let object = value
         .as_object()
-        .ok_or(crate::Error::PreferencesNotObject)?;
+        .ok_or(crate::config::Error::PreferencesNotObject)?;
     // Earlier builds always wrote `agent_sort`, so its default value cannot be
     // told from a choice; only "priority" proves the user toggled it.
     let agent_sort = AgentSort::parse(object.get("agent_sort_manual")).or_else(|| {
@@ -420,7 +420,7 @@ mod busy_load_tests {
 
         view.update(cx, |view, cx| {
             view.save_preference(
-                || Err(crate::Error::InvalidTerminalPadding("padding_x")),
+                || Err(crate::config::Error::InvalidTerminalPadding("padding_x").into()),
                 cx,
             );
         });

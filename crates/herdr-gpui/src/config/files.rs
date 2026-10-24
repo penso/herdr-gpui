@@ -1,10 +1,11 @@
 //! The config files on disk: locking, migration, managed defaults refresh,
 //! and targeted edits to the local overrides file.
+use super::Error;
 use super::{
     Config, DEFAULT_CONFIG, Daemon, FONT_SIZE_RANGE, FontFace, LOCAL_CONFIG, LayoutMode,
     MANAGED_HEADER,
 };
-use crate::{Error, Result, contrast::Contrast};
+use crate::{Result, contrast::Contrast};
 use std::{
     fs,
     io::{ErrorKind, Write},
@@ -19,7 +20,7 @@ impl Config {
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
-        fs::create_dir_all(parent).map_err(|error| Error::from(error).at_path(parent))?;
+        fs::create_dir_all(parent).map_err(|error| crate::Error::from(error).at_path(parent))?;
         let lock_path = path.with_extension("lock");
         let lock = fs::OpenOptions::new()
             .read(true)
@@ -30,17 +31,17 @@ impl Config {
             .inspect_err(|error| {
                 tracing::warn!(operation = "config_lock_open", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
             })
-            .map_err(|error| Error::from(error).at_path(&lock_path))?;
+            .map_err(|error| crate::Error::from(error).at_path(&lock_path))?;
         lock.lock()
             .inspect_err(|error| {
                 tracing::warn!(operation = "config_lock_acquire", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
             })
-            .map_err(|error| Error::from(error).at_path(&lock_path))?;
+            .map_err(|error| crate::Error::from(error).at_path(&lock_path))?;
         let local = path.with_extension("local.toml");
         let original = match fs::read_to_string(path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == ErrorKind::NotFound => None,
-            Err(error) => return Err(Error::from(error).at_path(path)),
+            Err(error) => return Err(crate::Error::from(error).at_path(path)),
         };
         let legacy = original
             .as_deref()
@@ -52,24 +53,25 @@ impl Config {
         }
         match fs::read_to_string(&local) {
             Ok(text) if legacy.is_some_and(|legacy| legacy != text) => {
-                return Err(Error::ConfigMigrationConflict {
+                return Err(Error::MigrationConflict {
                     original: path.into(),
                     local,
-                });
+                }
+                .into());
             }
             Ok(_) => {}
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 let mut file = tempfile::NamedTempFile::new_in(parent)
-                    .map_err(|error| Error::from(error).at_path(&local))?;
+                    .map_err(|error| crate::Error::from(error).at_path(&local))?;
                 file.write_all(legacy.unwrap_or(LOCAL_CONFIG).as_bytes())
-                    .map_err(|error| Error::from(error).at_path(&local))?;
+                    .map_err(|error| crate::Error::from(error).at_path(&local))?;
                 file.as_file()
                     .sync_all()
-                    .map_err(|error| Error::from(error).at_path(&local))?;
+                    .map_err(|error| crate::Error::from(error).at_path(&local))?;
                 file.persist_noclobber(&local)
-                    .map_err(|error| Error::from(error.error).at_path(&local))?;
+                    .map_err(|error| crate::Error::from(error.error).at_path(&local))?;
             }
-            Err(error) => return Err(Error::from(error).at_path(&local)),
+            Err(error) => return Err(crate::Error::from(error).at_path(&local)),
         }
         if legacy.is_some() {
             // Windows FlushFileBuffers requires write access, including when
@@ -78,13 +80,13 @@ impl Config {
                 .write(true)
                 .open(&local)
                 .and_then(|file| file.sync_all())
-                .map_err(|error| Error::from(error).at_path(&local))?;
+                .map_err(|error| crate::Error::from(error).at_path(&local))?;
             // Publish the migration copy durably before replacing the only old
             // copy. Windows does not expose directory sync through std::fs.
             #[cfg(unix)]
             fs::File::open(parent)
                 .and_then(|directory| directory.sync_all())
-                .map_err(|error| Error::from(error).at_path(parent))?;
+                .map_err(|error| crate::Error::from(error).at_path(parent))?;
         }
         if original.as_deref() != Some(DEFAULT_CONFIG) {
             write_config(path, DEFAULT_CONFIG)?;
@@ -341,7 +343,7 @@ impl Config {
         path: &Path,
     ) -> Result<()> {
         if family.is_some_and(|name| name.trim().is_empty()) {
-            return Err(Error::EmptyFontFamily("fonts"));
+            return Err(Error::EmptyFontFamily("fonts").into());
         }
         let result = (|| -> Result<()> {
             let text = fs::read_to_string(path)?;
@@ -375,7 +377,7 @@ impl Config {
     pub(super) fn save_font_sizes_path(sizes: &[(FontFace, f32)], path: &Path) -> Result<()> {
         for &(face, size) in sizes {
             if !size.is_finite() || !FONT_SIZE_RANGE.contains(&size) {
-                return Err(Error::InvalidFontSize(face.name()));
+                return Err(Error::InvalidFontSize(face.name()).into());
             }
         }
         let result = (|| -> Result<()> {
@@ -416,5 +418,5 @@ pub(super) fn write_config(path: &Path, text: &str) -> Result<()> {
         file.persist(&target).map_err(|error| error.error)?;
         Ok(())
     })();
-    result.map_err(|error| Error::from(error).at_path(path))
+    result.map_err(|error| crate::Error::from(error).at_path(path))
 }

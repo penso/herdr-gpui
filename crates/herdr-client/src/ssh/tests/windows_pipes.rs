@@ -114,7 +114,7 @@ fn an_idle_pipe_times_out_rather_than_closing_and_cancellation_ends_the_wait() {
     let stop = AtomicBool::new(true);
     assert!(matches!(
         await_ready(&mut stream, &stop, Instant::now()),
-        Err(Error::SshCancelled)
+        Err(crate::Error::Ssh(Error::Cancelled))
     ));
     drop(child);
 }
@@ -131,6 +131,6 @@ fn a_banner_without_a_ready_line_is_bounded() {
     read_expected(&mut stream, b"x");
     assert!(matches!(
         await_ready(&mut stream, &AtomicBool::new(false), Instant::now()),
-        Err(Error::SshOutputLimit)
+        Err(crate::Error::Ssh(Error::OutputLimit))
     ));
 }

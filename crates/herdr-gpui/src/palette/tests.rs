@@ -181,7 +181,7 @@ fn go_to_rejects_a_disabled_or_missing_host_and_keeps_the_palette_open(cx: &mut 
                 let palette = view.menu.palette.as_ref().unwrap();
                 assert_eq!(
                     palette.error.as_deref(),
-                    Some(Error::PaletteHostUnavailable.to_string().as_str())
+                    Some(Error::HostUnavailable.to_string().as_str())
                 );
                 assert!(view.pending_navigation.is_none());
             }
@@ -439,24 +439,24 @@ fn go_to_destinations_are_revalidated_against_the_current_snapshot() {
         assert!(destination_exists(&snapshot, "boot-v1", target.clone()).is_ok());
         assert!(matches!(
             destination_exists(&snapshot, "boot-v2", target.clone()),
-            Err(Error::PaletteSessionChanged)
+            Err(crate::Error::Palette(Error::SessionChanged))
         ));
         assert!(matches!(
             destination_exists(&snapshot, "", target),
-            Err(Error::PaletteSessionChanged)
+            Err(crate::Error::Palette(Error::SessionChanged))
         ));
     }
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Workspace("gone")),
-        Err(Error::PaletteWorkspaceRemoved)
+        Err(crate::Error::Palette(Error::WorkspaceRemoved))
     ));
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Tab("gone")),
-        Err(Error::PaletteTabRemoved)
+        Err(crate::Error::Palette(Error::TabRemoved))
     ));
     assert!(matches!(
         destination_exists(&snapshot, "boot-v1", NavigationTarget::Pane("gone")),
-        Err(Error::PaletteDestinationRemoved)
+        Err(crate::Error::Palette(Error::DestinationRemoved))
     ));
 }
 

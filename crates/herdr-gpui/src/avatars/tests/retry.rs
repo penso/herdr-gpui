@@ -13,7 +13,10 @@ fn an_unreachable_host_is_asked_again_only_after_the_retry_interval() {
     assert_eq!(incoming.try_iter().count(), 1);
     assert!(
         outgoing
-            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));
@@ -78,7 +81,10 @@ fn an_unreachable_retry_is_not_refused_by_the_request_bound() {
     };
     assert!(
         outgoing
-            .send((first.to_owned(), Err(herdr_client::Error::SshClosed)))
+            .send((
+                first.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Closed))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));

@@ -66,7 +66,7 @@ fn a_reader_that_never_returns_times_out_and_blocks_the_next() {
     });
     assert!(matches!(
         result,
-        Err(Error::Clipboard(ClipboardError::Timeout))
+        Err(crate::Error::Clipboard(Error::Timeout))
     ));
     assert!(start.elapsed() < Duration::from_secs(5));
     // The stuck reader still holds its slot: no second thread starts.
@@ -75,7 +75,7 @@ fn a_reader_that_never_returns_times_out_and_blocks_the_next() {
     });
     assert!(matches!(
         refused,
-        Err(Error::Clipboard(ClipboardError::Timeout))
+        Err(crate::Error::Clipboard(Error::Timeout))
     ));
     release.send(()).unwrap();
     finished.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -95,11 +95,11 @@ fn reader_errors_and_deadline_reach_the_caller() {
     static BUSY: AtomicBool = AtomicBool::new(false);
     let result: Result<()> = bounded(&BUSY, Duration::from_secs(5), |deadline| {
         assert!(deadline > Instant::now());
-        Err(Error::Clipboard(ClipboardError::Changed))
+        Err(Error::Changed.into())
     });
     assert!(matches!(
         result,
-        Err(Error::Clipboard(ClipboardError::Changed))
+        Err(crate::Error::Clipboard(Error::Changed))
     ));
 }
 

@@ -104,7 +104,7 @@ fn stalled_reader_is_killed_and_reaped() -> anyhow::Result<()> {
     probe.assert_gone_and_reaped()?;
     assert!(matches!(
         result,
-        Err(crate::Error::Clipboard(ClipboardError::Timeout))
+        Err(crate::Error::Clipboard(clipboard::Error::Timeout))
     ));
     assert!(started.elapsed() < TIMEOUT);
     assert!(acquire(&mut shell(r"printf '\000'"), Instant::now() + TIMEOUT, 100).is_ok());
@@ -118,7 +118,7 @@ fn oversized_reader_is_killed_and_reaped() -> anyhow::Result<()> {
     probe.assert_gone_and_reaped()?;
     assert!(matches!(
         result,
-        Err(crate::Error::Clipboard(ClipboardError::Size { limit: 4 }))
+        Err(crate::Error::Clipboard(clipboard::Error::Size { limit: 4 }))
     ));
     assert!(acquire(&mut shell(r"printf '\000'"), Instant::now() + TIMEOUT, 100).is_ok());
     Ok(())

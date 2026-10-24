@@ -69,7 +69,10 @@ fn a_failed_key_fetch_offers_the_terminal_with_its_reason(cx: &mut gpui::TestApp
             );
 
             fetching(view, cx);
-            view.host_key_fetched(Err(herdr_client::Error::SshTimeout), cx);
+            view.host_key_fetched(
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout)),
+                cx,
+            );
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
             assert_eq!(
                 view.menu.device_setup.as_ref().unwrap().error.as_deref(),
@@ -104,7 +107,7 @@ fn cancel_gives_up_the_host_so_it_can_be_tried_again(cx: &mut gpui::TestAppConte
             view.set_device_error(Some("SSH to dev@box: refused".into()));
             view.cancel_device_step(cx);
             assert!(matches!(step(view), Step::Form));
-            // A held claim would refuse the next submit as DeviceAdding.
+            // A held claim would refuse the next submit as `Error::Adding`.
             assert!(view.menu.device_setup.as_ref().unwrap().claim.is_none());
             assert!(view.menu.device_setup.as_ref().unwrap().error.is_none());
         });

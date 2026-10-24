@@ -48,6 +48,20 @@ pub(crate) enum Error {
     AgentMissing { agent: &'static str, host: String },
     #[error("Fan-out cancelled")]
     Cancelled,
+    #[error("The saved fan-outs could not be read")]
+    JournalRead(#[source] Box<crate::Error>),
+    #[error("The saved fan-outs are not valid JSON")]
+    JournalJson(#[source] serde_json::Error),
+    #[error("The fan-out's progress could not be saved")]
+    JournalWrite(#[source] Box<crate::Error>),
+    #[error(
+        "Too many fan-outs are saved; this one will not come back after a quit. Forget one to make room."
+    )]
+    JournalFull,
+    #[error(
+        "A name or path in this fan-out is too long to save; it will not come back after a quit."
+    )]
+    JournalFieldTooLong,
 }
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;

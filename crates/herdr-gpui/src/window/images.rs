@@ -354,7 +354,7 @@ impl HerdrWindow {
         {
             self.local_error = Some(format!(
                 "Image not sent: {}",
-                herdr_client::Error::ClipboardImageBusy
+                herdr_client::clipboard::Error::Busy
             ));
             cx.notify();
             return Delivery::Refused;
@@ -390,7 +390,9 @@ impl HerdrWindow {
         let executor = cx.background_executor().clone();
         let prepare = executor.spawn(async move {
             let result = if upload.is_cancelled() {
-                Err(Error::Client(herdr_client::Error::ClipboardImageCancelled))
+                Err(Error::Client(herdr_client::Error::Clipboard(
+                    herdr_client::clipboard::Error::Cancelled,
+                )))
             } else {
                 prepare()
             };
@@ -555,7 +557,6 @@ impl Prepared {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::error::ClipboardError;
     use herdr_client::ConnectTarget;
     use std::io;
 
@@ -577,14 +578,16 @@ mod tests {
             ))),
             Error::ImageReadTimeout,
             Error::ImageFormat,
-            Error::Clipboard(ClipboardError::Size {
+            crate::window::clipboard::Error::Size {
                 limit: image_source::MAX_IMAGE_INPUT_BYTES,
-            }),
-            Error::Clipboard(ClipboardError::Changed),
-            Error::Clipboard(ClipboardError::Timeout),
-            Error::Clipboard(ClipboardError::Process(io::Error::other(
+            }
+            .into(),
+            crate::window::clipboard::Error::Changed.into(),
+            crate::window::clipboard::Error::Timeout.into(),
+            crate::window::clipboard::Error::Process(io::Error::other(
                 "secret clipboard diagnostic",
-            ))),
+            ))
+            .into(),
         ]
     }
 

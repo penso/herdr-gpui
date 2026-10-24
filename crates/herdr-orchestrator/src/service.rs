@@ -10,7 +10,7 @@ use super::{
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
-    repo::{self, RepoInfo},
+    repo::{self, Extras, RepoInfo},
     ssh_slots,
 };
 use crate::cache::{Cache, Kind};
@@ -64,7 +64,7 @@ const COMMANDS: usize = 8;
 pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
     let floor = match error {
         Error::Github(source) => match **source {
-            herdr_github::Error::GitHubRepositoryHidden { .. } => HIDDEN_BACKOFF,
+            herdr_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
@@ -215,6 +215,7 @@ impl Service {
             store: None,
             host: None,
             unreached: false,
+            branches_fresh: false,
             data_version: None,
             retry: Vec::new(),
             uncached: HashMap::new(),
@@ -286,6 +287,9 @@ struct Worker {
     /// The host could not be reached to find the repository: what was shown
     /// stays, beside the failure, and each sync looks again first.
     unreached: bool,
+    /// The branches were read with the repository, so the sync that follows
+    /// need not read them again.
+    branches_fresh: bool,
     /// SQLite's `data_version` at the last load: it changes when another
     /// connection commits, so unchanged means nothing to reload.
     data_version: Option<i64>,
@@ -480,18 +484,25 @@ impl Worker {
     /// with the failure beside it, until a later sync finds it.
     fn find(&mut self, host: &Host) -> Result<()> {
         let target = &self.request.target;
+        let binaries = AgentKind::ALL.map(AgentKind::binary);
         let detected = ssh_slots::run(target, &self.cancelled, || {
-            repo::detect(target, host, &self.request.checkout, &self.cancelled)
+            repo::detect_opening(
+                target,
+                host,
+                &self.request.checkout,
+                &binaries,
+                &self.cancelled,
+            )
         });
         self.found(host, detected)
     }
 
     /// Acts on what [`Worker::find`] detected.
-    fn found(&mut self, host: &Host, detected: Result<RepoInfo>) -> Result<()> {
+    fn found(&mut self, host: &Host, detected: Result<(RepoInfo, Extras)>) -> Result<()> {
         let cache = self.cache(false);
         let key = cache_key(&self.request.target, &self.request.checkout);
-        let info = match detected {
-            Ok(info) => info,
+        let (info, extras) = match detected {
+            Ok(found) => found,
             Err(Error::Script { operation, source }) if source.host_unreached() => {
                 self.unreached = true;
                 self.snapshot.error = Some(Arc::new(Error::Script { operation, source }));
@@ -522,9 +533,16 @@ impl Worker {
                 tracing::debug!(%error, "Cannot cache the repository");
             }
         }
-        let found = ssh_slots::run(&self.request.target, &self.cancelled, || {
-            installed(self.host.as_ref(), &self.cancelled)
-        });
+        if let Some(branches) = extras.branches {
+            self.snapshot.branches = Arc::new(branches);
+            self.branches_fresh = true;
+        }
+        let found = match extras.programs {
+            Some(binaries) => Ok(agents(&binaries)),
+            None => ssh_slots::run(&self.request.target, &self.cancelled, || {
+                installed(self.host.as_ref(), &self.cancelled)
+            }),
+        };
         match found {
             Ok(agents) => self.snapshot.installed = Some(Arc::new(agents)),
             Err(error) => self.snapshot.installed_error = Some(Arc::new(error)),
@@ -670,7 +688,9 @@ impl Worker {
             return;
         };
         let (target, cancelled) = (&self.request.target, &self.cancelled);
-        if let Some(host) = &self.host {
+        if !std::mem::take(&mut self.branches_fresh)
+            && let Some(host) = &self.host
+        {
             // The branches last read stay when they cannot be read now.
             match ssh_slots::run(target, cancelled, || {
                 naming::local_branches(host, &info.main_root, cancelled)
@@ -797,7 +817,9 @@ impl Worker {
                         &mut self.cooldown,
                     )
                     .map_err(|error| match error {
-                        herdr_github::Error::PrCancelled => Error::Cancelled,
+                        herdr_github::Error::PullRequest(
+                            herdr_github::pull_request::Error::Cancelled,
+                        ) => Error::Cancelled,
                         error => Error::Github(Box::new(error)),
                     })
                 });
@@ -927,10 +949,15 @@ fn installed(host: Option<&Host>, cancelled: &AtomicBool) -> Result<Vec<AgentKin
         .ok_or(Error::UnsupportedHost)?
         .installed_programs(&binaries, cancelled)
         .map_err(super::error::script("Discovering installed agents"))?;
-    Ok(AgentKind::ALL
+    Ok(agents(&found))
+}
+
+/// The agents whose binaries are among `found`.
+fn agents(found: &[String]) -> Vec<AgentKind> {
+    AgentKind::ALL
         .into_iter()
         .filter(|kind| found.iter().any(|binary| binary == kind.binary()))
-        .collect())
+        .collect()
 }
 
 /// The sources a repository has, and whether this build can read each.

@@ -64,7 +64,7 @@ pub enum Error {
 impl Error {
     /// Whether GitHub refused for the account's spent quota.
     fn rate_limited(&self) -> bool {
-        matches!(self, Self::Github(error) if matches!(**error, crate::Error::GitHubRateLimit { .. }))
+        matches!(self, Self::Github(error) if matches!(**error, crate::Error::GitHub(herdr_github::Error::RateLimit { .. })))
     }
 }
 

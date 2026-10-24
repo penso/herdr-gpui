@@ -1,6 +1,7 @@
 //! Local project discovery and path validation run only on background workers.
 
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use herdr_client::protocol::ClientShellSnapshot;
 use std::{
     collections::HashSet,
@@ -25,7 +26,7 @@ pub(super) struct Project {
 #[derive(Default)]
 pub(super) struct Collection {
     pub(super) projects: Vec<Project>,
-    pub(super) errors: Vec<Error>,
+    pub(super) errors: Vec<crate::Error>,
 }
 
 pub(super) struct Cancellation(pub(super) Arc<AtomicBool>);
@@ -47,7 +48,7 @@ fn valid_path(path: &Path) -> Result<&str> {
         .filter(|text| {
             path.is_absolute() && text.len() <= 8192 && !text.chars().any(char::is_control)
         })
-        .ok_or(Error::PaletteProjectPath)
+        .ok_or(Error::ProjectPath.into())
 }
 
 /// Expand variables as path data, never as shell syntax. An unset variable is
@@ -60,14 +61,14 @@ fn expand(
     let mut expanded = OsString::new();
     let mut rest = root;
     if rest == "~" || rest.starts_with("~/") {
-        expanded.push(home.ok_or(Error::MissingHome)?);
+        expanded.push(home.ok_or(crate::Error::MissingHome)?);
         rest = &rest[1..];
     }
     while let Some(index) = rest.find('$') {
         expanded.push(&rest[..index]);
         rest = &rest[index + 1..];
         let (name, consumed) = if let Some(braced) = rest.strip_prefix('{') {
-            let end = braced.find('}').ok_or(Error::PaletteProjectPath)?;
+            let end = braced.find('}').ok_or(Error::ProjectPath)?;
             (&braced[..end], end + 2)
         } else {
             let end = rest
@@ -80,12 +81,12 @@ fn expand(
                 .chars()
                 .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
         {
-            return Err(Error::PaletteProjectPath);
+            return Err(Error::ProjectPath.into());
         }
         expanded.push(
             get(name)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| Error::PaletteProjectVariable(name.into()))?,
+                .ok_or_else(|| Error::ProjectVariable(name.into()))?,
         );
         rest = &rest[consumed..];
     }
@@ -119,17 +120,19 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
             // Children are listed under the verbatim root and each brought
             // to plain form on its own: a short root can hold a child too
             // long for the plain form, which `validate` keeps verbatim.
-            let root =
-                fs::canonicalize(&root).map_err(|error| Error::from(error).at_path(&root))?;
-            for entry in fs::read_dir(&root).map_err(|error| Error::from(error).at_path(&root))? {
+            let root = fs::canonicalize(&root)
+                .map_err(|error| crate::Error::from(error).at_path(&root))?;
+            for entry in
+                fs::read_dir(&root).map_err(|error| crate::Error::from(error).at_path(&root))?
+            {
                 if cancelled.load(Ordering::Relaxed) {
                     break;
                 }
                 visits += 1;
                 if visits > MAX_VISITS || collection.projects.len() >= MAX_PROJECTS {
-                    return Err(Error::PaletteProjectLimit);
+                    return Err(Error::ProjectLimit.into());
                 }
-                let entry = entry.map_err(|error| Error::from(error).at_path(&root))?;
+                let entry = entry.map_err(|error| crate::Error::from(error).at_path(&root))?;
                 let name = entry.file_name();
                 let Some(label) = name.to_str().filter(|name| !name.starts_with('.')) else {
                     continue;
@@ -138,7 +141,7 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
                 // but discovery never escapes them through a child link.
                 if !entry
                     .file_type()
-                    .map_err(|error| Error::from(error).at_path(&entry.path()))?
+                    .map_err(|error| crate::Error::from(error).at_path(&entry.path()))?
                     .is_dir()
                 {
                     continue;
@@ -155,7 +158,7 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
             Ok(())
         })();
         if let Err(error) = result {
-            let limited = matches!(error, Error::PaletteProjectLimit);
+            let limited = matches!(error, crate::Error::Palette(Error::ProjectLimit));
             collection.errors.push(error);
             if limited {
                 break;
@@ -171,9 +174,9 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
 pub(super) fn validate(project: &Project) -> Result<()> {
     valid_path(&project.path)?;
     let path = super::canonical::canonicalize(&project.path)
-        .map_err(|error| Error::from(error).at_path(&project.path))?;
+        .map_err(|error| crate::Error::from(error).at_path(&project.path))?;
     if path != project.path || !path.is_dir() {
-        return Err(Error::PaletteProjectRemoved);
+        return Err(Error::ProjectRemoved.into());
     }
     Ok(())
 }
@@ -252,11 +255,11 @@ mod tests {
         );
         assert!(matches!(
             expand("$MISSING/work", get, None),
-            Err(Error::PaletteProjectVariable(_))
+            Err(crate::Error::Palette(Error::ProjectVariable(_)))
         ));
         assert!(matches!(
             expand("relative", get, None),
-            Err(Error::PaletteProjectPath)
+            Err(crate::Error::Palette(Error::ProjectPath))
         ));
         assert!(expand("${ROOT", get, None).is_err());
         assert!(expand("$(touch x)", get, None).is_err());
@@ -327,7 +330,7 @@ mod tests {
         assert_eq!(result.projects.len(), MAX_PROJECTS);
         assert!(matches!(
             result.errors.as_slice(),
-            [Error::PaletteProjectLimit]
+            [crate::Error::Palette(Error::ProjectLimit)]
         ));
         Ok(())
     }
@@ -370,7 +373,7 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), &path)?;
         assert!(matches!(
             validate(&result.projects[0]),
-            Err(Error::PaletteProjectRemoved)
+            Err(crate::Error::Palette(Error::ProjectRemoved))
         ));
         Ok(())
     }

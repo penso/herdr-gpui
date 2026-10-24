@@ -40,7 +40,7 @@ pub enum SshFailure {
     )]
     LocalNetworkDenied,
     /// No Herdr was found in the known install locations. One that is
-    /// installed but cannot serve this client is `Error::BridgeIncompatible`.
+    /// installed but cannot serve this client is `crate::Error::BridgeIncompatible`.
     #[error("no Herdr is installed on the host")]
     HerdrMissing,
     /// None of the above could be told from what `ssh` reported.

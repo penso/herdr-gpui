@@ -55,7 +55,7 @@ gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
 # Reads local repositories for the orchestrator without starting `git`:
 # discovery, config with its includes and URL rewrites, refs, and rev-parse.
-gix                  = { default-features = false, features = ["sha1"], version = "0.89" }
+gix                  = { default-features = false, features = ["sha1"], version = "0.90" }
 # The web views behind browser tabs; `browser::page` lays them out in the window.
 wry                  = { package = "lb-wry", version = "=0.53.3" }
 # Reports only by default; the daemon turns on the Luau engine.

@@ -18,10 +18,12 @@
 //! as closing a terminal would.
 
 mod attach;
+mod error;
 mod frame;
 mod host;
 mod session;
 
+pub(crate) use error::Error;
 pub(crate) use host::{Listening, listen};
 
 use std::{ffi::OsString, path::Path, process::ExitCode};

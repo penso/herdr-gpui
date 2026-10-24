@@ -54,7 +54,7 @@ fn a_pasted_token_connects_once_github_accepted_it() {
 #[test]
 fn a_refused_token_is_shown_and_leaves_nothing_saved() {
     let mut auth = additional();
-    auth.use_token_with(Store::Keyring, || Err(Error::GitHubAuthentication));
+    auth.use_token_with(Store::Keyring, || Err(Error::Authentication));
     finish(&mut auth);
     auth.poll_with_store(|_| panic!("nothing to save"));
     assert!(!auth.connected());
@@ -62,7 +62,7 @@ fn a_refused_token_is_shown_and_leaves_nothing_saved() {
     assert!(!auth.can_sign_out());
     assert_eq!(
         auth.message.as_deref(),
-        Some(Error::GitHubAuthentication.to_string().as_str())
+        Some(Error::Authentication.to_string().as_str())
     );
 }
 

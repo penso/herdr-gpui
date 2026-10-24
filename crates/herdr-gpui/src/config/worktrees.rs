@@ -3,8 +3,8 @@ use super::parse_hex;
 use crate::worktree_identity::{Error, Surface, Worktrees};
 use serde::Deserialize;
 
-/// The table as written. Unset keys keep the defaults: the theme's hue on
-/// every surface.
+/// The table as written. Unset keys keep the defaults: the theme's hue in
+/// the sidebar, and no rule along the tab strip.
 #[derive(Default, Deserialize)]
 #[serde(default)]
 pub(super) struct WorktreeSettings {

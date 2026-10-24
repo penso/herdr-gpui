@@ -78,11 +78,15 @@ fn a_repository_the_token_cannot_see_is_an_error_not_an_empty_list() {
     for response in [json!({"data": {"repository": null}}), json!({})] {
         assert!(matches!(
             parse(&response, &origin, Kind::PullRequest),
-            Err(Error::PrRepository)
+            Err(Error::GitHub(herdr_github::Error::PullRequest(
+                herdr_github::pull_request::Error::Repository
+            )))
         ));
         assert!(matches!(
             parse(&response, &origin, Kind::Issue),
-            Err(Error::PrRepository)
+            Err(Error::GitHub(herdr_github::Error::PullRequest(
+                herdr_github::pull_request::Error::Repository
+            )))
         ));
     }
 }
@@ -193,7 +197,9 @@ fn fork_pr_fetch_uses_the_origin_pr_ref_without_moving_local_branches() {
     missing.number = 999;
     assert!(matches!(
         super::fetch::fetch_branch(&input, &missing, &|| false),
-        Err(Error::GitFailed { .. })
+        Err(Error::Vcs(herdr_vcs::Error::Git(
+            crate::git::Error::Failed { .. }
+        )))
     ));
 }
 
@@ -270,6 +276,8 @@ fn a_checkout_path_must_be_absolute() {
     let items = parse(&response(), &origin, Kind::Issue).unwrap();
     assert!(matches!(
         write_context(std::path::Path::new("relative"), &items[0], &origin),
-        Err(Error::PrAbsolutePath)
+        Err(Error::GitHub(herdr_github::Error::PullRequest(
+            herdr_github::pull_request::Error::AbsolutePath
+        )))
     ));
 }

@@ -1,7 +1,8 @@
 //! `[devices.<profile-id>]`: settings that differ per saved device, and the
 //! targeted edits that write them.
+use super::Error;
 use super::{Config, LOCAL_CONFIG, ThemeName, write_config};
-use crate::{Error, Result};
+use crate::Result;
 use serde::Deserialize;
 use std::{fs, io::ErrorKind, path::Path};
 
@@ -44,9 +45,11 @@ impl DeviceSettings {
             source: Box::new(source),
         };
         if theme.trim().is_empty() {
-            return Err(wrap(Error::EmptyTheme));
+            return Err(wrap(Error::EmptyTheme.into()).into());
         }
-        ThemeName::parse(theme).map(drop).map_err(wrap)
+        ThemeName::parse(theme)
+            .map(drop)
+            .map_err(|source| wrap(source).into())
     }
 }
 
@@ -127,7 +130,7 @@ fn set_device_key(
     path: &Path,
 ) -> Result<()> {
     if !herdr_client::valid_profile_id(profile) {
-        return Err(Error::InvalidDeviceId(profile.to_owned()));
+        return Err(Error::InvalidDeviceId(profile.to_owned()).into());
     }
     let result = (|| -> Result<()> {
         let text = match fs::read_to_string(path) {
