@@ -96,14 +96,8 @@ pub enum Error {
     EmptyTabName,
     #[error("Workspace label must not be empty.")]
     EmptyWorkspaceLabel,
-    #[error("Dropped paths must not contain control characters.")]
-    FileDropControl,
-    #[error("Dropped paths must not be empty.")]
-    FileDropEmptyPath,
-    #[error("Dropped paths must be UTF-8.")]
-    FileDropEncoding,
-    #[error("File drop exceeds 256 paths or 64 KiB of quoted text.")]
-    FileDropSize,
+    #[error(transparent)]
+    FileDrop(#[from] crate::window::file_drop::Error),
     #[error("Could not run git in {}: {source}", path.display())]
     GitCommonDir {
         path: PathBuf,
@@ -499,10 +493,8 @@ pub enum Error {
     WorktreeScripts(#[from] crate::worktree_scripts::Error),
     #[error("Select a checkout from the daemon's worktree list.")]
     WorktreeSelection,
-    #[error("Another drop's paths are still being mapped in WSL. Try again in a moment.")]
-    WslPasteBusy,
-    #[error("The pane the files were dropped on changed before their paths were ready.")]
-    WslPasteTargetGone,
+    #[error(transparent)]
+    WslDrop(#[from] crate::window::wsl_drop::Error),
     // keep-sorted end
 }
 

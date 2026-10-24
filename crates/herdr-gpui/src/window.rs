@@ -18,7 +18,7 @@ mod construct;
 mod copy_mode;
 mod device_themes;
 mod double_shift;
-mod file_drop;
+pub(crate) mod file_drop;
 mod file_links;
 mod find;
 mod flash;
@@ -56,7 +56,7 @@ mod tab_strip;
 mod tab_tear;
 mod toasts;
 mod transfers;
-mod wsl_drop;
+pub(crate) mod wsl_drop;
 mod zen;
 #[cfg(test)]
 pub(crate) use transfers::tests::Peer as MockPeer;

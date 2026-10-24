@@ -116,7 +116,7 @@ fn a_key_held_after_a_refused_drop_is_not_sent(cx: &mut TestAppContext) {
         frame_returns(view, cx);
         let expected = format!(
             "Files not pasted: {} (1 held input discarded)",
-            crate::Error::FileDropControl
+            crate::window::file_drop::Error::Control
         );
         assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
     });

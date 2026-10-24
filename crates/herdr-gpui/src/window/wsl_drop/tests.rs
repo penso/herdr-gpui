@@ -152,7 +152,7 @@ fn a_second_drop_waits_for_the_first(cx: &mut TestAppContext) {
                 cx,
             )
             .unwrap_err();
-        assert!(matches!(error, Error::WslPasteBusy));
+        assert!(matches!(error, crate::Error::WslDrop(Error::Busy)));
     });
 }
 
