@@ -355,7 +355,11 @@ fn a_watchdog_that_inherits_ignored_sigterm_leaves_no_watcher_behind() {
     // reaped pid when the pipe later closes.
     let dir = ControlDir::create("herdr-mux-test").unwrap();
     let mut watchdog = Command::new("/bin/sh")
-        .args(["-c", r#"trap '' TERM; exec /bin/sh -c "$0" herdr-ssh-mux "$@""#, WATCHDOG])
+        .args([
+            "-c",
+            r#"trap '' TERM; exec /bin/sh -c "$0" herdr-ssh-mux "$@""#,
+            WATCHDOG,
+        ])
         .arg(dir.path())
         .args(["/bin/sh", "-c", "sleep 0.2; exit 3"])
         .stdin(Stdio::piped())
