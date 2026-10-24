@@ -677,30 +677,8 @@ pub enum Error {
     WorktreeList,
     #[error("Malformed worktree list. Dismiss and reopen the menu.")]
     WorktreeListDecode(#[source] serde_json::Error),
-    #[error("Another worktree script is still starting")]
-    WorktreeScriptsBusy,
-    #[error("The daemon did not identify this workspace's checkout")]
-    WorktreeScriptsCheckout,
-    #[error(".herdr/worktree.toml is not valid UTF-8")]
-    WorktreeScriptsEncoding(#[source] std::str::Utf8Error),
-    #[error("This workspace is not a Git checkout Herdr knows yet")]
-    WorktreeScriptsNotGit,
-    #[error(".herdr/worktree.toml scripts must not contain NUL bytes")]
-    WorktreeScriptsNul,
-    #[error(".herdr/worktree.toml: {0}")]
-    WorktreeScriptsParse(#[source] toml::de::Error),
-    #[error("Could not read .herdr/worktree.toml: {0}")]
-    WorktreeScriptsRead(#[source] io::Error),
-    #[error("Could not read .herdr/worktree.toml on the host: {0}")]
-    WorktreeScriptsRemote(#[source] herdr_client::Error),
-    #[error("{0}")]
-    WorktreeScriptsRequest(#[source] std::sync::Arc<Error>),
-    #[error("Unexpected daemon response while opening the script's tab")]
-    WorktreeScriptsResponse,
-    #[error(".herdr/worktree.toml exceeds {limit} bytes")]
-    WorktreeScriptsSize { limit: u64 },
-    #[error("Worktree scripts cannot be read from a WSL distribution yet")]
-    WorktreeScriptsUnsupportedHost,
+    #[error(transparent)]
+    WorktreeScripts(#[from] crate::worktree_scripts::Error),
     #[error("Select a checkout from the daemon's worktree list.")]
     WorktreeSelection,
     #[error("Another drop's paths are still being mapped in WSL. Try again in a moment.")]

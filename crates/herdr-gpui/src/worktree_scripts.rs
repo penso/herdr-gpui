@@ -13,10 +13,12 @@
 //! a replaced connection never opens a tab or types into one.
 
 mod config;
+mod error;
 mod launch;
 mod trust;
 
 pub(crate) use config::{Config, PATH as CONFIG_PATH, read as read_config};
+pub(crate) use error::Error;
 #[cfg(feature = "cloud")]
 pub(crate) use launch::SCRIPT_ENV;
 pub(crate) use launch::{Checkout, command_line, created_tab, main_checkout};
@@ -145,7 +147,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> crate::Result<()> {
         if self.script_slot_busy() {
-            return Err(crate::Error::WorktreeScriptsBusy);
+            return Err(Error::Busy.into());
         }
         let located = launch.checkout.is_some();
         let step = if located {
@@ -177,7 +179,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> crate::Result<()> {
         if self.script_slot_busy() {
-            return Err(crate::Error::WorktreeScriptsBusy);
+            return Err(Error::Busy.into());
         }
         self.worktree_script = Some(Job {
             launch,
@@ -236,7 +238,7 @@ impl HerdrWindow {
             Ok(config) => config.filter(|config| config.scripts.get(kind).is_some()),
             // A setup nobody asked for stays quiet where no file can be read,
             // or every worktree on that host would report it.
-            Err(crate::Error::WorktreeScriptsUnsupportedHost) if !requested => {
+            Err(crate::Error::WorktreeScripts(Error::UnsupportedHost)) if !requested => {
                 self.worktree_script = None;
                 return;
             }
@@ -285,7 +287,7 @@ impl HerdrWindow {
         let kind = job.launch.kind;
         let (Some(script), Some(checkout)) = (config.scripts.get(kind), &job.launch.checkout)
         else {
-            return Err(crate::Error::WorktreeScriptsCheckout);
+            return Err(Error::Checkout.into());
         };
         let request = self.endpoints[self.selected_endpoint]
             .connection
@@ -364,7 +366,7 @@ impl HerdrWindow {
         let response = match result {
             Ok(response) => response,
             Err(error) => {
-                let error = crate::Error::WorktreeScriptsRequest(error);
+                let error = crate::Error::from(Error::Request(error));
                 return self.fail_worktree_script(error, cx);
             }
         };

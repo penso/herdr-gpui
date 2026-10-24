@@ -341,7 +341,7 @@ impl HerdrWindow {
             .map_err(|error| super::Error::from(Error::Request(error)).into())
             .and_then(|response| {
                 crate::worktree_scripts::created_tab(&response).map_err(|error| match error {
-                    crate::Error::WorktreeScriptsResponse => {
+                    crate::Error::WorktreeScripts(crate::worktree_scripts::Error::Response) => {
                         super::Error::from(Error::Response).into()
                     }
                     error => error,
