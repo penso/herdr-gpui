@@ -35,7 +35,7 @@ pub enum Error {
         source: io::Error,
     },
     #[error(transparent)]
-    Caffeine(#[from] crate::caffeine::Failure),
+    Caffeine(#[from] crate::caffeine::Error),
     #[error(transparent)]
     Chat(#[from] crate::chat::Error),
     #[error("{source}; removing {}: {cleanup}", path.display())]
