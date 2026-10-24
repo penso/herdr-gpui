@@ -75,7 +75,7 @@ pub enum Error {
     #[error("The connection is not ready. Try again.")]
     ConnectionNotReady,
     #[error(transparent)]
-    Control(#[from] crate::control::ControlError),
+    Control(#[from] crate::control::Error),
     #[error(transparent)]
     Credentials(#[from] herdr_credentials::Error),
     #[error(transparent)]
