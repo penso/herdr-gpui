@@ -348,6 +348,31 @@ fn a_master_that_ignores_sigterm_is_still_ended() {
 }
 
 #[test]
+fn a_watchdog_that_inherits_ignored_sigterm_leaves_no_watcher_behind() {
+    // A GUI application can start with SIGTERM ignored, and the watchdog and
+    // its watcher inherit that. Once the master exits by itself, nothing may
+    // still hold the pipe: a lingering watcher would signal the master's
+    // reaped pid when the pipe later closes.
+    let dir = ControlDir::create("herdr-mux-test").unwrap();
+    let mut watchdog = Command::new("/bin/sh")
+        .args(["-c", r#"trap '' TERM; exec /bin/sh -c "$0" herdr-ssh-mux "$@""#, WATCHDOG])
+        .arg(dir.path())
+        .args(["/bin/sh", "-c", "sleep 0.2; exit 3"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = watchdog.stdin.take().unwrap();
+    assert_eq!(watchdog.wait().unwrap().code(), Some(3));
+    let written = io::Write::write_all(&mut stdin, b"x");
+    assert_eq!(
+        written.map_err(|error| error.kind()),
+        Err(io::ErrorKind::BrokenPipe)
+    );
+}
+
+#[test]
 fn a_host_with_the_users_own_master_gets_none_of_ours() {
     // Commands connecting directly ride the user's master, which may carry
     // an interactive login this one could not make.

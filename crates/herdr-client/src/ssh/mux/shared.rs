@@ -27,7 +27,11 @@ const STOP_GRACE: Duration = Duration::from_secs(5);
 /// input is `/dev/null`. The master gets SIGTERM, which lets it remove its
 /// socket, then SIGKILL: `ssh` keeps SIGTERM ignored when it started with it
 /// ignored, as a child of a GUI application can, and a shell cannot reset a
-/// signal ignored on entry. The shell exits with the master's status.
+/// signal ignored on entry. The watcher inherits that ignored SIGTERM too, so
+/// once the master exits on its own the shell stops the watcher with SIGKILL
+/// and reaps it: a watcher left behind would wake when the pipe later closes
+/// and signal the master's pid, which by then may be another process's. The
+/// shell exits with the master's status.
 const WATCHDOG: &str = r#"dir=$1
 shift
 exec 3<&0
@@ -43,7 +47,8 @@ watcher=$!
 exec 3<&-
 wait "$master"
 status=$?
-kill "$watcher" 2>/dev/null
+kill -9 "$watcher" 2>/dev/null
+wait "$watcher" 2>/dev/null
 rm -f "$dir/c"
 rmdir "$dir" 2>/dev/null
 exit "$status""#;
