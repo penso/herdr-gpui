@@ -198,7 +198,7 @@ fn branch_base(
             return Ok((short_ref(&candidate).to_owned(), commit));
         }
     }
-    Err(crate::Error::ReviewNoBase)
+    Err(crate::review::Error::NoBase.into())
 }
 
 /// Whether `name`, as Git printed it, stays inside the checkout.
@@ -223,7 +223,7 @@ fn size(root: &Path, name: &str) -> Option<u64> {
 /// Git's output outgrew what is read: say so in the review's terms.
 fn too_large(error: impl Into<crate::Error>) -> crate::Error {
     match error.into() {
-        crate::Error::PrSize => crate::Error::ReviewTooLarge,
+        crate::Error::PrSize => crate::review::Error::TooLarge.into(),
         error => error,
     }
 }

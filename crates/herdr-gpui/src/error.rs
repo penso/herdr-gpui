@@ -389,12 +389,8 @@ pub enum Error {
         #[source]
         source: herdr_client::Error,
     },
-    #[error(
-        "No base branch to compare with: neither the pull request's base nor origin/HEAD, main, or master exists locally. Pick one with the base button above."
-    )]
-    ReviewNoBase,
-    #[error("These changes are too large to review here, even leaving out the largest files.")]
-    ReviewTooLarge,
+    #[error(transparent)]
+    Review(#[from] crate::review::Error),
     #[error("The page's picture could not be turned into a PNG")]
     ScreenshotImage,
     #[error("Could not write the screenshot to {}: {source}", path.display())]
