@@ -7,11 +7,9 @@ mod annotate;
 mod announcement;
 mod backdrop;
 pub(crate) mod chrome_focus;
-mod clipboard;
+pub(crate) mod clipboard;
 #[cfg(target_os = "macos")]
-pub(crate) use clipboard::macos::{
-    Error as ClipboardHelperError, run_helper as run_clipboard_helper,
-};
+pub(crate) use clipboard::macos::run_helper as run_clipboard_helper;
 mod commands;
 mod config_diagnostic;
 mod construct;

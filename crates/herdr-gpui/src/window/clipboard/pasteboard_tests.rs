@@ -152,7 +152,7 @@ fn unresolved_urls_never_hide_files_past_the_bound() {
         assert_eq!(read, files);
         assert!(matches!(
             quote_paths(&read),
-            Err(Error::FileDrop(super::super::file_drop::Error::Size))
+            Err(crate::Error::FileDrop(super::super::file_drop::Error::Size))
         ));
         pasteboard.clearContents();
     });

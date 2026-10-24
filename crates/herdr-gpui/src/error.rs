@@ -1,6 +1,5 @@
 //! Internal failures retain their categories and sources until presentation.
 pub use crate::updater::UpdateError;
-pub use clipboard::ClipboardError;
 pub use github::{GitHubAccountsError, GitHubJsonError};
 use std::{io, path::PathBuf};
 
@@ -48,7 +47,7 @@ pub enum Error {
     #[error("HERDR_GITHUB_OAUTH_CLIENT_ID must be UTF-8")]
     ClientIdEncoding,
     #[error(transparent)]
-    Clipboard(#[from] ClipboardError),
+    Clipboard(#[from] crate::window::clipboard::Error),
     #[cfg(feature = "cloud")]
     #[error(transparent)]
     CloudBatch(#[from] crate::cloud::batch::Error),
@@ -498,7 +497,6 @@ pub enum Error {
     // keep-sorted end
 }
 
-mod clipboard;
 mod config;
 mod github;
 mod path;

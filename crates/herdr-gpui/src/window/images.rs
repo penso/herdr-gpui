@@ -557,7 +557,6 @@ impl Prepared {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::error::ClipboardError;
     use herdr_client::ConnectTarget;
     use std::io;
 
@@ -579,14 +578,16 @@ mod tests {
             ))),
             Error::ImageReadTimeout,
             Error::ImageFormat,
-            Error::Clipboard(ClipboardError::Size {
+            crate::window::clipboard::Error::Size {
                 limit: image_source::MAX_IMAGE_INPUT_BYTES,
-            }),
-            Error::Clipboard(ClipboardError::Changed),
-            Error::Clipboard(ClipboardError::Timeout),
-            Error::Clipboard(ClipboardError::Process(io::Error::other(
+            }
+            .into(),
+            crate::window::clipboard::Error::Changed.into(),
+            crate::window::clipboard::Error::Timeout.into(),
+            crate::window::clipboard::Error::Process(io::Error::other(
                 "secret clipboard diagnostic",
-            ))),
+            ))
+            .into(),
         ]
     }
 
