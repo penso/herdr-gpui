@@ -1,0 +1,96 @@
+[package]
+description            = "Serves Herdr chats to paired phones over HTTPS, with push notifications"
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-remote-control"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[features]
+# The daemon itself. Herdr UI depends on this crate without it, for the
+# control protocol and `app` alone, so Tokio never reaches the GUI.
+default = ["server"]
+server = [
+    "dep:aes-gcm",
+    "dep:axum",
+    "dep:futures-lite",
+    "dep:base64",
+    "dep:getrandom",
+    "dep:hkdf",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:if-addrs",
+    "dep:maud",
+    "dep:p256",
+    "dep:pulldown-cmark",
+    "dep:rcgen",
+    "dep:rustls",
+    "dep:sha2",
+    "dep:socket2",
+    "dep:time",
+    "dep:tokio",
+    "dep:tokio-rustls",
+    "dep:ureq",
+    "dep:url",
+    "dep:webpki-roots",
+    "dep:x509-parser",
+]
+
+[[bin]]
+name              = "herdr-remote-control"
+path              = "src/main.rs"
+required-features = ["server"]
+
+[dependencies]
+herdr-chat-protocol.workspace = true
+herdr-client.workspace        = true
+# The pairing dialog's QR code, drawn by Herdr UI.
+qrcode.workspace              = true
+# The macOS user ID the LaunchAgent loads under, and the server's host name.
+rustix                        = { features = ["system"], workspace = true }
+serde.workspace               = true
+serde_json.workspace          = true
+thiserror.workspace           = true
+# Settings edits to the `[remote]` table.
+toml_edit.workspace           = true
+tracing.workspace             = true
+uuid.workspace                = true
+
+aes-gcm        = { optional = true, workspace = true }
+axum           = { optional = true, workspace = true }
+base64         = { optional = true, workspace = true }
+futures-lite   = { optional = true, workspace = true }
+getrandom      = { optional = true, workspace = true }
+hkdf           = { optional = true, workspace = true }
+http-body-util = { optional = true, workspace = true }
+hyper          = { optional = true, workspace = true }
+hyper-util     = { optional = true, workspace = true }
+if-addrs       = { optional = true, workspace = true }
+maud           = { optional = true, workspace = true }
+p256           = { optional = true, workspace = true }
+pulldown-cmark = { optional = true, workspace = true }
+rcgen          = { optional = true, workspace = true }
+rustls         = { optional = true, workspace = true }
+sha2           = { optional = true, workspace = true }
+socket2        = { optional = true, workspace = true }
+time           = { optional = true, workspace = true }
+tokio          = { optional = true, workspace = true }
+tokio-rustls   = { optional = true, workspace = true }
+ureq           = { optional = true, workspace = true }
+url            = { optional = true, workspace = true }
+webpki-roots   = { optional = true, workspace = true }
+x509-parser    = { optional = true, workspace = true }
+
+# The host name for the CA's name and `HOSTNAME.local`.
+[target.'cfg(unix)'.dependencies]
+
+[dev-dependencies]
+p256.workspace      = true
+roxmltree.workspace = true
+tempfile.workspace  = true
+tower.workspace     = true

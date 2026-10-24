@@ -374,6 +374,7 @@ impl HerdrWindow {
                 | Command::ToggleSidebar
                 | Command::OpenCode
                 | Command::OpenPx0
+                | Command::RemotePair
                 | Command::ToggleStatusBar
                 | Command::FocusNextRegion
                 | Command::FocusPreviousRegion

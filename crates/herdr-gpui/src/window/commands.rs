@@ -423,6 +423,10 @@ impl HerdrWindow {
                 self.open_px0(None, window, cx);
                 return;
             }
+            Command::RemotePair => {
+                self.open_remote_pairing(window, cx);
+                return;
+            }
             Command::InstallBrowserSkill => {
                 self.install_browser_skill(window, cx);
                 return;

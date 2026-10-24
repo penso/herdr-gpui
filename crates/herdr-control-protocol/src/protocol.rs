@@ -7,6 +7,7 @@ pub mod chat;
 pub mod cloud;
 pub mod events;
 pub mod hosts;
+pub mod remote;
 pub mod settings;
 pub mod tabs;
 pub mod work;
@@ -27,8 +28,8 @@ pub enum Placement {
 /// Raised whenever a request or reply changes shape, so `status` can tell
 /// an outdated app from a refused request. 3: `browser.open` placement.
 /// 4: `link`. 5: the `tab` family's `zoom`. 6: the `cloud` family. 7: `chat`.
-/// 8: `host` `automation_approve`.
-pub const PROTOCOL_VERSION: u32 = 8;
+/// 8: `host` `automation_approve`. 9: `remote`.
+pub const PROTOCOL_VERSION: u32 = 9;
 
 /// Older apps and clients know only tabs, so a tab is left off the wire.
 fn is_tab(placement: &Placement) -> bool {
@@ -78,6 +79,8 @@ pub enum Request {
     Chat(Call<chat::ChatOp>),
     #[serde(rename = "cloud")]
     Cloud(Call<cloud::CloudOp>),
+    #[serde(rename = "remote")]
+    Remote(Call<remote::RemoteOp>),
 }
 
 /// A `herdr-gpui://` link the shell started a second copy of the app with.
@@ -107,6 +110,7 @@ impl Request {
             Self::Host(call) => call.op.wait_seconds(),
             Self::Settings(call) => call.op.wait_seconds(),
             Self::Cloud(call) => call.op.wait_seconds(),
+            Self::Remote(call) => call.op.wait_seconds(),
             _ => 0,
         };
         wait.min(MAX_WAIT_SECONDS)
@@ -263,6 +267,9 @@ pub enum Response {
     },
     Cloud {
         reply: cloud::Reply,
+    },
+    Remote {
+        reply: remote::Reply,
     },
     Error {
         code: ErrorCode,

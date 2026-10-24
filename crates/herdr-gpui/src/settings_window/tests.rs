@@ -17,6 +17,7 @@ mod navigation_resize;
 mod navigation_scroll;
 mod pages_behaviour;
 mod quit_saves;
+mod remote_control;
 mod remote_history_reload;
 mod save_now;
 mod scrollbars;

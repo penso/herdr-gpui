@@ -88,7 +88,7 @@ fn play(caller: &crate::control::protocol::Caller, sound: Sound, cx: &mut App) -
 type Slot = Rc<RefCell<Option<Response>>>;
 
 /// Answers `incoming` once `task` finishes, or with a timeout after `wait`.
-fn answer_when_done(
+pub(super) fn answer_when_done(
     task: gpui::Task<Response>,
     wait: Duration,
     incoming: socket::Incoming,

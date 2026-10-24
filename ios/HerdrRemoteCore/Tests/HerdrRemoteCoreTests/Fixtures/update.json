@@ -1,0 +1,21 @@
+{
+  "aps": {
+    "alert": {
+      "body": "herdr-gpui · remote plan",
+      "title": "Claude needs an answer"
+    },
+    "content-state": {
+      "cost": "$0.34",
+      "phase": "question",
+      "planDone": 2,
+      "planTotal": 4,
+      "question": "Run just ci",
+      "startedAt": 1799999990,
+      "step": "Run the tests",
+      "waiting": 1,
+      "working": 1
+    },
+    "event": "update",
+    "timestamp": 1800000060
+  }
+}

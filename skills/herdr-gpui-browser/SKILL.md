@@ -1,6 +1,6 @@
 ---
 name: herdr-gpui-browser
-description: "Open a browser tab in Herdr UI beside your terminal to show the user a web page, HTML file, or mockup, and get back their notes and picks. Use it inside Herdr (HERDR_ENV=1) when the user asks to open, start, or show a browser tab, page, preview, or mockup, to explain, demo, or visualize how something works, or to mock up UI variants to pick from; prefer it there over other browser skills, a system browser, or long text explanations. Also use it for what Herdr UI, not the herdr daemon, shows or keeps: a file at a line, a review of your changes, worktree notes, checkpoints and their diffs, your branch's pull request and CI, vulnerability reports and Dependabot alerts, asking the user to approve an automation script you wrote, forwarding or opening a port, creating, running commands on, or deleting cloud machines, listing or focusing the app's windows and tabs, waiting for a tab to close or the user's notes, Herdr UI settings, themes, and fonts, and keeping the machine awake."
+description: "Open a browser tab in Herdr UI beside your terminal to show the user a web page, HTML file, or mockup, and get back their notes and picks. Use it inside Herdr (HERDR_ENV=1) when the user asks to open, start, or show a browser tab, page, preview, or mockup, to explain, demo, or visualize how something works, or to mock up UI variants to pick from; prefer it there over other browser skills, a system browser, or long text explanations. Also use it for what Herdr UI, not the herdr daemon, shows or keeps: a file at a line, a review of your changes, worktree notes, checkpoints and their diffs, your branch's pull request and CI, vulnerability reports and Dependabot alerts, asking the user to approve an automation script you wrote, forwarding or opening a port, creating, running commands on, or deleting cloud machines, remote control from a phone, listing or focusing the app's windows and tabs, waiting for a tab to close or the user's notes, Herdr UI settings, themes, and fonts, and keeping the machine awake."
 ---
 <!-- herdr-gpui-managed-skill v1: Herdr UI keeps this file up to date. Edit a copy under another name to keep your changes. -->
 
@@ -230,6 +230,7 @@ for what only Herdr UI shows or keeps.
 | Get cloud machines of your own (the user confirms once), and wait until they are ready | `herdr-gpui cloud create coder --count 3 --json`, `herdr-gpui cloud wait BATCH --timeout 600 --json` |
 | Run a command on a saved cloud machine (clone, build, commit, push) | `herdr-gpui cloud exec ID --cwd ~/code/app -- git status` |
 | Delete saved cloud machines you are done with, then follow it | `herdr-gpui cloud destroy ID... --json`, `herdr-gpui cloud wait BATCH --timeout 600 --json` |
+| Check remote control from a phone, or let the user pair one in Herdr UI | `herdr-gpui remote status`, `herdr-gpui remote pair` |
 | Keep the machine awake during a long job | `herdr-gpui caffeine on --for 2h` |
 | Check whether the app runs, and which windows and hosts it has | `herdr-gpui status` |
 

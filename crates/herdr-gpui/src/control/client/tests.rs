@@ -3,6 +3,7 @@ use super::*;
 use crate::control::ControlError;
 
 mod chat_lines;
+mod remote_lines;
 
 #[test]
 fn output_is_whole_and_only_a_terminal_loses_controls() {

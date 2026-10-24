@@ -18,6 +18,7 @@ pub(super) enum Section {
     Plugins,
     #[cfg(feature = "cloud")]
     CloudDevices,
+    RemoteControl,
     Configuration,
 }
 
@@ -66,6 +67,7 @@ impl Section {
         Self::Plugins,
         #[cfg(feature = "cloud")]
         Self::CloudDevices,
+        Self::RemoteControl,
         Self::Configuration,
     ];
 
@@ -84,6 +86,7 @@ impl Section {
             Self::Plugins => "Plugins",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "Cloud devices",
+            Self::RemoteControl => "Remote control",
             Self::Configuration => "Configuration",
         }
     }
@@ -107,6 +110,9 @@ impl Section {
             Self::CloudDevices => {
                 Some("Create machines from your cloud accounts and use them as devices.")
             }
+            Self::RemoteControl => Some(
+                "Use your chats from a phone, over HTTPS on your network or through Tailscale.",
+            ),
             Self::Configuration => {
                 Some("Files behind these settings. Saved edits reload automatically.")
             }
@@ -126,6 +132,7 @@ impl Section {
             Self::Integrations | Self::Plugins => Some(Group::Connect),
             #[cfg(feature = "cloud")]
             Self::CloudDevices => Some(Group::Connect),
+            Self::RemoteControl => Some(Group::Connect),
             Self::Configuration => Some(Group::Advanced),
         }
     }
@@ -145,6 +152,7 @@ impl Section {
             Self::Plugins => "icons/plug.svg",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "icons/globe.svg",
+            Self::RemoteControl => "icons/phone.svg",
             Self::Configuration => "icons/file.svg",
         }
     }

@@ -15,6 +15,7 @@ pub(crate) const LOG_TARGETS: &[&str] = &[
     "herdr_orchestrator",
     "herdr_protocol",
     "herdr_remote",
+    "herdr_remote_control",
     "herdr_updater",
     "herdr_usage",
     "herdr_vcs",

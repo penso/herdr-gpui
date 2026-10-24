@@ -1,0 +1,16 @@
+{
+  "aps": {
+    "content-state": {
+      "cost": "$0.48",
+      "phase": "finished",
+      "startedAt": 1799999990,
+      "step": "Run the tests",
+      "summary": "Worked 6m 2s · $0.48",
+      "waiting": 0,
+      "working": 0
+    },
+    "dismissal-date": 1800001262,
+    "event": "end",
+    "timestamp": 1800000362
+  }
+}

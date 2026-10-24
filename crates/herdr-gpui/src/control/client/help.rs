@@ -128,6 +128,9 @@ fn family(name: &str) -> &'static str {
         "system" => {
             "herdr-gpui system\n    The window's selected host's load, when Herdr UI samples it."
         }
+        "remote" => {
+            "herdr-gpui remote [status]\n    Whether remote control is on and its daemon runs: the addresses it\n    serves, its certificate fingerprint, and paired and connected devices.\nherdr-gpui remote devices\n    The paired devices, with when each was last seen. Exits 4 when there\n    are none.\nherdr-gpui remote pair\n    Open the pairing dialog in Herdr UI. The QR and its token show only\n    there; the user approves the device there.\nherdr-gpui remote revoke DEVICE\n    Ask in Herdr UI to revoke a paired device, named by its ID or name;\n    the user confirms there.\n    pair, devices, and revoke exit 1 while remote control is off."
+        }
         "search" => {
             "herdr-gpui search symbol|file QUERY... [--limit N]\n    Go to Symbol or Go to File over the current directory's checkout,\n    printing paths relative to its root. Runs here; Herdr UI need not run."
         }

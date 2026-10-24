@@ -42,6 +42,8 @@ pub(crate) enum Preference {
     /// `[sound] volume`, in percent.
     SoundVolume(u8),
     StatusBar(status_bar::Edit),
+    /// One `[remote]` key.
+    Remote(remote::Edit),
     /// `[usage] inline`: whether the sidebar draws the daemon's configured rows.
     UsageInline(bool),
     /// `[updates] channel`: whether the updater also offers beta releases.
@@ -267,6 +269,10 @@ impl Config {
                 Preference::StatusBar(edit) => {
                     let (key, value) = edit.entry();
                     (Some("status_bar"), key, Some(value))
+                }
+                Preference::Remote(edit) => {
+                    let (key, value) = edit.entry()?;
+                    (Some("remote"), key, Some(value))
                 }
                 Preference::SoundVolume(value) => {
                     if value > SoundConfig::MAX_VOLUME {

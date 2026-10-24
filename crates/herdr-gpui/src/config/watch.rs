@@ -65,6 +65,53 @@ impl<T: Copy + PartialEq> Watch<T> {
     }
 }
 
+/// One serial loader for an app-wide service's part of the settings,
+/// independent of every window's deferred reloads: whenever the GUI's files
+/// change, they are loaded off the UI thread and `select`'s part goes to
+/// `apply`. An invalid edit keeps the last good value; `name` says whose it
+/// was in the log.
+pub(crate) fn follow<T: Send + 'static>(
+    cx: &mut gpui::App,
+    name: &'static str,
+    select: fn(super::Config) -> T,
+    apply: fn(&mut gpui::App, T),
+) -> gpui::Task<()> {
+    use super::Config;
+    cx.spawn(async move |cx| {
+        let mut watch = Watch::default();
+        loop {
+            let sampled = cx
+                .background_executor()
+                .spawn(async {
+                    Ok::<_, crate::Error>(fingerprint_all([Config::path()?, Config::local_path()?]))
+                })
+                .await;
+            match sampled {
+                Ok(sample) if watch.observe(sample) => {
+                    let loaded = cx
+                        .background_executor()
+                        .spawn(async move { Config::load().map(select) })
+                        .await;
+                    // Acknowledging the sampled bytes leaves any later edit
+                    // pending. No overlapping loads can publish out of order.
+                    watch.accept(sample);
+                    match loaded {
+                        Ok(part) => cx.update(|cx| apply(cx, part)),
+                        Err(error) => {
+                            tracing::warn!(%error, settings = name, "Cannot reload settings")
+                        }
+                    }
+                }
+                Err(error) => tracing::warn!(%error, settings = name, "Cannot watch settings"),
+                _ => {}
+            }
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(250))
+                .await;
+        }
+    })
+}
+
 /// Decides when to read the configured theme again because its files
 /// changed in place, as when a desktop theme switcher rewrites one. The first
 /// sample of a theme value is its baseline: whatever set that value, a config

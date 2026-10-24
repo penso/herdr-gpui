@@ -1,0 +1,205 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile terminal mockups</title>
+<link rel="stylesheet" href="/.herdr/kit.css">
+<link rel="stylesheet" href="phone.css">
+<link rel="stylesheet" href="terminal.css">
+<script src="/.herdr/kit.js"></script>
+<body class="hk">
+<main class="hk-page wide">
+  <h1>Remote control: terminal tabs on the phone</h1>
+  <p class="callout-picked">Picks: <b>typing B</b> (two fixed rows) · <b>actions A</b> (action sheet) · <b>size D</b> (fit to start, size for phone on demand; chosen by default, none picked).</p>
+  <p class="lede">The tabs listed as "Soon" open as real terminals. Pick one variant per row, add notes, then press <b>Send picks</b>. Terminal text is placeholder. <button class="hk-button" id="theme">Light / dark</button></p>
+  <p class="hint">Whatever you pick, Herdr actions (split, new tab, close, zoom, focus) call Herdr's own API, as Herdr UI does, rather than typing <code>ctrl+b</code> keys into the pane. So they work whatever prefix you have set. Only the keys you type go to the program.</p>
+
+  <!-- ───────────── 1. Keyboard and special keys ───────────── -->
+  <section>
+    <h2>1 · Typing: the keyboard and the keys iOS lacks</h2>
+    <p class="hint">Esc, Tab, Ctrl, arrows, and the symbols shells need. Ctrl is sticky: tap it, then a letter.</p>
+    <div class="row" data-group="keys">
+
+      <figure data-variant="A">
+        <figcaption><b>A · One scrolling key row</b><span>A single row above the keyboard, Ctrl-C first in red; swipe the row for more keys (Home, End, PgUp, F-keys).</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act">⋯</span><span class="act herdr">◆</span></div>
+          <pre class="term" data-fill="short"></pre>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk on">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">|</span><span class="xk">~</span><span class="xk">/</span></div>
+          <div class="kbd"></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Two fixed rows</b><span>Everything visible at once, like Termius or Blink: modifiers and symbols on top, navigation below. Costs one more row of terminal.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act">⋯</span><span class="act herdr">◆</span></div>
+          <pre class="term" data-fill="short"></pre>
+          <div class="xbar two">
+            <div class="xr"><span class="xk">esc</span><span class="xk on">ctrl</span><span class="xk">alt</span><span class="xk">⇥</span><span class="xk">|</span><span class="xk">/</span><span class="xk">-</span><span class="xk">~</span><span class="xk">`</span><span class="xk grow stop">^C</span></div>
+            <div class="xr"><span class="xk">home</span><span class="xk">end</span><span class="xk">pgup</span><span class="xk">pgdn</span><span class="grow"></span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span></div>
+          </div>
+          <div class="kbd"></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · Read first, floating toolbar</b><span>The keyboard stays down so the whole screen is terminal; a floating bar holds Ctrl-C, a swipe pad for arrows, Tab, the keyboard, and Herdr. Inspired by Ghostty's app.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act">⋯</span></div>
+          <pre class="term" data-fill="full"></pre>
+          <div class="t-float"><div class="glass"><span class="gk">⌨</span><span class="gk stop">^C</span><span class="dpad"></span><span class="gk">⇥</span><span class="gk">esc</span><span class="gk herdr">◆</span></div></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="D">
+        <figcaption><b>D · Gestures plus a short row</b><span>Swipe on the terminal for arrows, two-finger tap for Ctrl-C, long-press to paste; a short row keeps only the modifiers. Hints show on first use.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act herdr">◆</span></div>
+          <pre class="term" data-fill="short"></pre>
+          <div class="hintbox">
+            <div><b>⇆</b>Swipe: arrow keys (hold to repeat)</div>
+            <div><b>✌︎</b>Two-finger tap: Ctrl-C</div>
+            <div><b>☝︎</b>Long press: paste or select</div>
+          </div>
+          <div class="xbar"><span class="xk">esc</span><span class="xk on">ctrl</span><span class="xk">alt</span><span class="xk">⇥</span><span class="grow"></span><span class="xk stop">^C</span></div>
+          <div class="kbd"></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 2. Herdr actions ───────────── -->
+  <section>
+    <h2>2 · Herdr actions: split, new tab, close, zoom, move between panes</h2>
+    <p class="hint">The ◆ key from row 1 opens these.</p>
+    <div class="row" data-group="actions">
+
+      <figure data-variant="A">
+        <figcaption><b>A · Action sheet</b><span>◆ opens a sheet of large tiles for the pane and the tab, then a list for the workspace. Nothing to memorise.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act herdr">◆</span></div>
+          <pre class="term" data-fill="full"></pre>
+          <div class="dimmed"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <h4>This pane</h4>
+            <div class="tiles">
+              <div class="tile"><i>◫</i>Split right</div>
+              <div class="tile"><i>⊟</i>Split down</div>
+              <div class="tile"><i>⤢</i>Zoom</div>
+              <div class="tile danger"><i>✕</i>Close</div>
+              <div class="tile"><i>←</i>Pane left</div>
+              <div class="tile"><i>→</i>Pane right</div>
+              <div class="tile"><i>⇄</i>Swap</div>
+              <div class="tile"><i>✎</i>Rename</div>
+            </div>
+            <div class="sheet-list">
+              <div><span>New tab</span><span class="muted">＋</span></div>
+              <div><span>New chat in this workspace</span><span class="muted">✳</span></div>
+              <div><span>Close tab</span><span class="muted">✕</span></div>
+            </div>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Prefix mode, like the desktop</b><span>◆ (or Ctrl-B) puts the keyboard in Herdr's prefix mode and labels each key with its action: <code>c</code> new tab, <code>v</code> and <code>-</code> split, <code>x</code> close, <code>z</code> zoom, <code>h j k l</code> move. The same muscle memory as the desktop; a tap runs the action and leaves prefix mode.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>herdr-gpui · tab 2</small></span><span class="act herdr">◆</span></div>
+          <pre class="term" data-fill="short"></pre>
+          <div class="prefix-banner"><span>◆ Herdr</span><span>Pick an action · esc to cancel</span></div>
+          <div class="kbd prefix"></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · Layout map on top</b><span>The tab's panes drawn to scale above the terminal: tap one to focus it, buttons split or close the focused one. Tabs as chips; chat tabs open the chat view.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">herdr-gpui<small>MacBook Pro</small></span><span class="act">⋯</span></div>
+          <div class="tabs"><span class="chat">✳ Remote plan</span><span class="on">2 zsh</span><span>3 nvim</span><span class="add">＋</span></div>
+          <div class="map"><div class="tall on">zsh<br>cargo test</div><div>nvim<br>web.rs</div><div>just ci</div></div>
+          <div class="map-actions"><span>◫ Split</span><span>⊟ Split</span><span>⤢ Zoom</span><span>✕ Close</span></div>
+          <pre class="term small" data-fill="short"></pre>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="D">
+        <figcaption><b>D · Swipe between panes</b><span>One pane fills the screen; swipe sideways to the next pane in the tab (dots show where you are), and the tab chips switch tabs. ◆ holds the rarer actions.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh · cargo test<small>pane 1 of 3</small></span><span class="act herdr">◆</span></div>
+          <div class="tabs"><span class="chat">✳ Remote plan</span><span class="on">2 zsh</span><span>3 nvim</span><span class="add">＋</span></div>
+          <div class="pager"><i class="on"></i><i></i><i></i></div>
+          <pre class="term" data-fill="full"></pre>
+          <span class="edge l">‹</span><span class="edge r">›</span>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 3. Size ───────────── -->
+  <section>
+    <h2>3 · Size: a desktop pane on a phone screen</h2>
+    <p class="hint">A pane is usually 120 or more columns wide; a phone fits about 45 at a readable size. Herdr sizes a pane for the client that shows it.</p>
+    <div class="row" data-group="size">
+
+      <figure data-variant="A">
+        <figcaption><b>A · Fit the width</b><span>The pane keeps its desktop size and shrinks to fit; pinch to zoom in. The desktop is never disturbed, but text is small.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>132 × 40 · pinch to zoom</small></span><span class="act herdr">◆</span></div>
+          <pre class="term small" data-fill="full"></pre>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Readable, pan sideways</b><span>Desktop size at a readable font; drag sideways to see the rest of a long line, and it follows the cursor while you type.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>132 × 40 · columns 1–52</small></span><span class="act herdr">◆</span></div>
+          <div class="pan"><pre class="term" data-fill="full"></pre><div class="scrollbar"></div></div>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · The phone takes the pane</b><span>While you type, the pane resizes to the phone (about 48 × 30) and programs redraw to fit. On the desktop the pane shows smaller, with a notice, until the phone leaves.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>sized for this phone · 48 × 30</small></span><span class="act herdr">◆</span></div>
+          <pre class="term big" data-fill="short"></pre>
+          <div class="desk"><span class="mini"><i></i></span><span>Your desktop shows this pane at 48 columns while you type here.</span></div>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="D">
+        <figcaption><b>D · Fit to start, take it on demand</b><span>Opens as A, so watching never disturbs the desktop; a "Size for phone" button switches to C while you type, and back when you leave.</span></figcaption>
+        <div class="phone"><div class="screen t-screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="t-head"><span class="back">‹</span><span class="name">zsh<small>132 × 40</small></span><span class="act">⤡</span><span class="act herdr">◆</span></div>
+          <pre class="term small" data-fill="full"></pre>
+          <div class="note-bar">Too small to type? <b>⤡ Size for phone</b> resizes the pane while you're here.</div>
+          <div class="xbar"><span class="xk stop">^C</span><span class="xk">esc</span><span class="xk">⇥</span><span class="xk">ctrl</span><span class="xk">alt</span><span class="xk">←</span><span class="xk">↑</span><span class="xk">↓</span><span class="xk">→</span><span class="xk">⌨</span></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <div class="send-row">
+    <input id="notes" class="hk-input" placeholder="Notes (optional)" style="flex:1;max-width:520px">
+    <span id="picks" class="muted"></span>
+    <button class="hk-button" id="send">Send picks</button>
+  </div>
+</main>
+<script src="terminal.js"></script>

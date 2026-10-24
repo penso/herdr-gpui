@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -31,6 +31,8 @@ cbc                  = { features = ["block-padding"], version = "0.2.1" }
 percent-encoding     = "2"
 pbkdf2               = { default-features = false, features = ["hmac"], version = "0.13.0" }
 pulldown-cmark       = { default-features = false, features = ["html"], version = "0.13.4" }
+# The remote control pairing QR, drawn as quads; no image or SVG renderer.
+qrcode               = { default-features = false, version = "0.14.1" }
 base64               = "0.23.1"
 bincode              = { default-features = false, features = ["serde", "std"], version = "2" }
 # Reads the Windows clipboard off the UI thread, sized before it is copied.
@@ -70,6 +72,7 @@ herdr-github         = { path = "crates/herdr-github" }
 herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }
+herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }
@@ -112,6 +115,14 @@ crossterm            = "0.29"
 # TLS for the Azure sandbox exec stream, with the ring provider and roots
 # ureq already links.
 rustls               = { default-features = false, features = ["ring", "std", "tls12"], version = "0.23" }
+# The remote control daemon's own certificate authority and server
+# certificates; ring signs, as rustls does, and x509-parser reloads the CA.
+rcgen                = { default-features = false, features = ["crypto", "pem", "ring", "x509-parser"], version = "0.14.10" }
+# Reads the names a user-supplied remote control certificate lists; rcgen
+# already links it.
+x509-parser          = { default-features = false, version = "0.18" }
+# Checks the remote control daemon's mobileconfig profile in tests.
+roxmltree            = "0.21"
 rusqlite             = { features = ["bundled"], version = "0.40" }
 rodio                = { default-features = false, features = ["playback", "symphonia-mp3", "tracing"], version = "0.22.2" }
 rustix               = { features = ["event", "fs", "process", "pty", "termios"], version = "=1.1.5" }
@@ -121,6 +132,14 @@ serde                = { features = ["derive"], version = "1" }
 serde_json           = "1"
 serde_ignored        = "0.1.14"
 sha1                 = "0.11.0"
+# herdr-remote: P-256 verifies the signatures paired phones make with their
+# WebCrypto keys, and with HKDF and AES-GCM implements Web Push (VAPID ES256,
+# RFC 8291 encryption) on the sha2 below. Not web-push-native, which brings
+# jwt-simple and a second crypto stack; not ring, whose ECDH cannot take the
+# fixed key RFC 8291's test vector uses.
+aes-gcm              = { default-features = false, features = ["aes", "alloc"], version = "0.11" }
+hkdf                 = "0.13"
+p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
 skrifa               = { default-features = false, features = ["std"], version = "0.48" }
@@ -136,6 +155,25 @@ tar                  = "0.4"
 tempfile             = "3"
 test-case            = "3"
 thiserror            = "2"
+# The remote control daemon's runtime and web server; only herdr-remote-control uses them.
+tokio                = { features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"], version = "1" }
+# Server-rendered HTML for the remote control web app, escaped by default.
+maud                 = "0.27"
+axum                 = { default-features = false, features = ["http1", "json", "query", "tokio"], version = "0.8" }
+# Drives herdr-remote-control's router in tests without a socket; axum already links it.
+tower                = { default-features = false, features = ["util"], version = "0.5" }
+tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
+# herdr-remote-control's APNs sender for iOS Live Activities: APNs speaks only
+# HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
+# tokio-rustls above on the daemon's Tokio runtime is the smallest maintained
+# stack for it: axum already links hyper, hyper-util, and http-body-util, so
+# only h2 is new. Not reqwest, which would bring a second connection pool and
+# TLS configuration; not a2, which pins its own HTTP and crypto stacks.
+http-body-util       = "0.1"
+hyper                = { default-features = false, features = ["client", "http2"], version = "1" }
+hyper-util           = { default-features = false, features = ["tokio"], version = "0.1" }
+# Certificate validity dates for rcgen, from a `SystemTime`.
+time                 = { default-features = false, features = ["std"], version = "0.3.47" }
 toml                 = "1.1"
 toml_edit            = "0.25"
 tracing              = "0.1"

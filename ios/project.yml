@@ -1,0 +1,88 @@
+# XcodeGen spec for Herdr Remote, the iOS companion that adds Live
+# Activities to Herdr's remote control web app. Generate the project with
+# `xcodegen` in this directory; the .xcodeproj, Info.plists, and
+# entitlements it writes are not committed. See README.md.
+name: HerdrRemote
+
+options:
+  bundleIdPrefix: so.pen
+  deploymentTarget:
+    iOS: "17.2"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    CURRENT_PROJECT_VERSION: 1
+    # Set your own team here or in Xcode (Signing & Capabilities).
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: 0.1.0
+    SWIFT_STRICT_CONCURRENCY: targeted
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+
+packages:
+  HerdrRemoteCore:
+    path: HerdrRemoteCore
+
+targets:
+  HerdrRemote:
+    type: application
+    platform: iOS
+    sources:
+      - HerdrRemote
+      - Shared
+    dependencies:
+      - package: HerdrRemoteCore
+      - target: HerdrRemoteWidgets
+    info:
+      path: HerdrRemote/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Remote
+        CFBundleURLTypes:
+          - CFBundleURLName: so.pen.herdr-remote
+            CFBundleURLSchemes: [herdr-remote]
+        NSCameraUsageDescription: Herdr Remote reads the pairing QR code Herdr shows on your computer.
+        NSLocalNetworkUsageDescription: Herdr Remote talks to Herdr on your computers over your local network.
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    entitlements:
+      path: HerdrRemote/HerdrRemote.entitlements
+      properties:
+        # Live Activity push tokens need the push capability. Use
+        # `production` for TestFlight and App Store builds.
+        aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-remote
+
+  HerdrRemoteWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - HerdrRemoteWidgets
+      - Shared
+    dependencies:
+      - package: HerdrRemoteCore
+      - sdk: SwiftUI.framework
+      - sdk: WidgetKit.framework
+    info:
+      path: HerdrRemoteWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Remote
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-remote.widgets
+
+schemes:
+  HerdrRemote:
+    build:
+      targets:
+        HerdrRemote: all
+    run:
+      config: Debug
+    archive:
+      config: Release

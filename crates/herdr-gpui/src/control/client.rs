@@ -10,6 +10,7 @@ mod help;
 mod hosts;
 mod local;
 mod open;
+mod remote;
 mod settings;
 mod tabs;
 mod work;
@@ -461,6 +462,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::System => hosts::system(&context),
         ControlCommand::Security(command) => hosts::security(command, &context),
         ControlCommand::Automation(command) => hosts::automation(command, &context),
+        ControlCommand::Remote(command) => remote::remote(command, &context),
         ControlCommand::Search {
             files,
             query,

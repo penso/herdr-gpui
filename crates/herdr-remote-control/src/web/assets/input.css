@@ -1,0 +1,216 @@
+/* Source of app.css: `just web-css` compiles it with the Tailwind
+   standalone CLI, scanning the Rust templates and app.js for classes. The
+   compiled file is committed, so building the crate needs no Node. */
+@import "tailwindcss";
+@source "../render";
+@source "../render.rs";
+@source "./app.js";
+@source "./shell.html";
+
+:root {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --raised: #2c2c2e;
+  --line: #38383a;
+  --text: #f2f2f7;
+  --muted: #8e8e93;
+  --faint: #636366;
+  --accent: #7c9cff;
+  --amber: #f2b33d;
+  --green: #4fd18b;
+  --red: #ff6b6b;
+  --term-bg: #0b0d10; --term-fg: #d6dae3;
+  --t0: #1c1f24; --t1: #ff6b6b; --t2: #4fd18b; --t3: #f2b33d; --t4: #7c9cff; --t5: #c792ea; --t6: #5fd7d7; --t7: #d6dae3;
+  --t8: #5b6273; --t9: #ff8787; --t10: #7ee2a8; --t11: #ffd27a; --t12: #a3b8ff; --t13: #dcb0f5; --t14: #8ae6e6; --t15: #ffffff;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f2f7;
+    --surface: #ffffff;
+    --raised: #e5e5ea;
+    --line: #d1d1d6;
+    --text: #1c1c1e;
+    --muted: #6c6c70;
+    --faint: #aeaeb2;
+    --accent: #3b5bdb;
+    --amber: #c98a0b;
+    --green: #1f9d5c;
+    --red: #d64545;
+    --term-bg: #fbfbfc; --term-fg: #1d222b;
+    --t0: #1d222b; --t1: #c62828; --t2: #1f8a4c; --t3: #9a6b00; --t4: #2f54c8; --t5: #8e3fb5; --t6: #127e86; --t7: #5d6576;
+    --t8: #8b93a5; --t9: #e04848; --t10: #2aa865; --t11: #b98500; --t12: #4a6fe0; --t13: #a95ccd; --t14: #1a9aa3; --t15: #1d222b;
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-claude: #d9643a;
+  --color-codex: #111111;
+  --color-gemini: #3b7cf0;
+  --color-copilot: #6e40c9;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.45 var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    overscroll-behavior-y: none;
+  }
+  [x-cloak] { display: none !important; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+}
+
+@layer components {
+  .group-list { @apply bg-surface rounded-2xl overflow-hidden; }
+  .row { @apply relative flex items-center gap-3 px-3 py-2.5 min-h-11; }
+  .group-list > li + li > .row::before, .group-list > li + li.row::before, .group-list > .row + .row::before {
+    content: ""; @apply absolute top-0 left-[52px] right-0 border-t border-line;
+  }
+  .badge { @apply text-[10.5px] text-muted border border-line rounded-md px-1.5; }
+  .pill-amber { @apply text-[11px] font-bold text-black bg-amber rounded-full px-2 py-0.5; }
+  .count { @apply min-w-5 h-5 rounded-full text-[11px] font-bold grid place-items-center text-black px-1.5; }
+  .dot-corner { @apply absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-surface; }
+  .strip-card {
+    @apply flex shrink-0 basis-[82%] gap-2.5 items-center px-3 py-2.5 rounded-2xl border;
+    background: color-mix(in srgb, var(--amber) 16%, var(--surface));
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+  }
+  .toolbar {
+    @apply fixed left-4 right-4 flex justify-between items-center z-20;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .glass {
+    @apply flex gap-6 items-center px-5 py-2.5 rounded-full text-[19px] border border-white/10 shadow-xl;
+    background: color-mix(in srgb, var(--raised) 70%, transparent);
+    backdrop-filter: blur(18px) saturate(1.6);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  }
+  .glass > a { @apply relative min-w-7 text-center; }
+  .ring {
+    @apply inline-block w-6 h-6 rounded-full;
+    background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--raised) 0);
+    mask: radial-gradient(circle, transparent 7px, #000 8px);
+    -webkit-mask: radial-gradient(circle, transparent 7px, #000 8px);
+  }
+  .picker { @apply flex items-center shrink-0 bg-raised rounded-lg px-2 py-1; }
+  .picker select { @apply bg-transparent outline-none; }
+  .card { @apply bg-surface rounded-xl px-3 py-2.5 border border-transparent; }
+  .fold { @apply text-sm text-muted px-3 py-2 rounded-xl bg-surface; }
+  .tool { @apply bg-surface rounded-xl px-3 py-2 text-[13px]; }
+  .tool > summary { @apply cursor-pointer list-none; }
+  .code { @apply mt-2 p-2 rounded-lg bg-bg text-xs font-mono overflow-x-auto whitespace-pre max-h-80; }
+  .steps { @apply flex flex-col border-l-2 border-line ml-1.5; }
+  .st { @apply relative py-1 pl-4 text-[13px]; }
+  .st::before { content: ""; @apply absolute -left-[6px] top-2 w-2.5 h-2.5 rounded-full bg-raised border-2 border-bg; }
+  .st.ok::before { @apply bg-green; }
+  .st.run::before { @apply bg-amber; }
+  .st.todo { @apply text-faint; }
+  .sheet {
+    @apply fixed left-0 right-0 bottom-0 z-30 bg-surface rounded-t-3xl px-4 pt-2 flex flex-col gap-2 shadow-2xl;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    animation: rise .22s ease-out;
+  }
+  .btn { @apply rounded-2xl py-3.5 text-[15px] font-semibold bg-raised w-full; }
+  .btn-primary { @apply bg-accent text-white; }
+  .btn-subtle { @apply bg-transparent text-muted font-medium text-sm py-2; }
+  .composer {
+    @apply fixed left-0 right-0 bottom-0 z-20 bg-surface border-t border-line px-3 pt-2;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .round-btn { @apply w-9 h-9 rounded-full grid place-items-center text-white shrink-0; }
+  .chip { @apply text-xs px-2 py-1 rounded-lg bg-raised whitespace-nowrap; }
+  .field { @apply bg-surface rounded-xl px-3 py-2.5 outline-none border border-transparent focus:border-accent; }
+  .agent-choice { @apply flex gap-2 items-center bg-surface p-2.5 rounded-xl border-[1.5px] border-transparent; }
+  .agent-choice:has(input:checked) { @apply border-accent; }
+  .section-title { @apply text-xs uppercase tracking-wider text-muted font-semibold mt-6 mb-1.5 px-1; }
+  .switch { @apply w-11 h-6 appearance-none rounded-full bg-raised relative transition checked:bg-green; }
+  .switch::after { content: ""; @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition; }
+  .switch:checked::after { transform: translateX(20px); }
+  .prose { @apply leading-relaxed break-words; }
+  .prose p { @apply my-2; }
+  .prose pre { @apply my-2 p-2 rounded-lg bg-surface text-xs overflow-x-auto; }
+  .prose code { @apply font-mono text-[0.9em] bg-raised rounded px-1; }
+  .prose pre code { @apply bg-transparent p-0; }
+  .prose ul { @apply list-disc pl-5 my-2; }
+  .prose ol { @apply list-decimal pl-5 my-2; }
+  .prose a { @apply text-accent underline; }
+  .prose h1, .prose h2, .prose h3 { @apply font-bold mt-3 mb-1; }
+  .prose table { @apply block overflow-x-auto text-sm my-2; }
+  .prose td, .prose th { @apply border border-line px-2 py-1; }
+  /* Terminal tabs. The page fills the visual viewport, which app.js keeps
+     at the height above the keyboard. */
+  .term-page {
+    @apply fixed left-0 right-0 top-0 flex flex-col bg-bg z-10;
+    height: var(--vvh, 100dvh);
+    padding-top: env(safe-area-inset-top);
+  }
+  .term-screen {
+    @apply flex-1 min-h-0 overflow-auto m-0 px-2 py-1.5 whitespace-pre;
+    font: var(--term-size, 11px)/1.32 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--term-bg); color: var(--term-fg);
+  }
+  .term-input {
+    @apply fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none;
+    /* 16px keeps Safari from zooming the page when it takes focus. */
+    font-size: 16px;
+  }
+  .tbtn { @apply w-8 h-8 rounded-full grid place-items-center bg-raised text-[13px] font-semibold shrink-0; }
+  .tbtn.herdr { @apply bg-accent text-white; }
+  .tchip { @apply shrink-0 text-xs px-2.5 py-1 rounded-full bg-raised whitespace-nowrap; }
+  .tchip.on { @apply bg-accent text-white; }
+  .tkeys { @apply flex flex-col gap-1 px-1.5 pt-1.5 bg-surface border-t border-line; padding-bottom: 6px; }
+  .tkeys-row { @apply flex gap-1; }
+  .tkey {
+    @apply shrink-0 min-w-[30px] h-[34px] px-1.5 rounded-lg bg-raised font-mono text-[12.5px] font-semibold grid place-items-center;
+    touch-action: manipulation;
+  }
+  .tkey.on { @apply bg-accent text-white; }
+  .tkey.stop { @apply bg-red text-white; }
+  .tkeys-row .grow { @apply flex-1; }
+  .sheet-backdrop { @apply fixed inset-0 z-30 bg-black/45; }
+  .tsheet {
+    @apply fixed left-0 right-0 bottom-0 z-40 bg-surface rounded-t-3xl px-3 pt-2 shadow-2xl;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    animation: rise .22s ease-out;
+  }
+  .tsheet .grab { @apply w-9 h-1 rounded-full bg-line mx-auto mb-2; }
+  .tsheet h4 { @apply text-xs uppercase tracking-wider text-muted font-semibold mb-2 px-0.5; }
+  .tiles { @apply grid grid-cols-4 gap-2; }
+  .tile { @apply flex flex-col items-center gap-1 bg-raised rounded-xl py-2.5 text-[11.5px]; }
+  .tile i { @apply not-italic text-lg; }
+  .tile.danger { @apply text-red; }
+  .tsheet-list { @apply grid gap-px mt-3 rounded-xl overflow-hidden; }
+  .tsheet-list > * { @apply flex justify-between bg-raised px-3 py-3 text-[14px] text-left w-full; }
+  /* The 16-color palette, from the theme; 256-color and RGB values come
+     inline. */
+  .t-fg0 { color: var(--t0); } .t-fg1 { color: var(--t1); } .t-fg2 { color: var(--t2); } .t-fg3 { color: var(--t3); }
+  .t-fg4 { color: var(--t4); } .t-fg5 { color: var(--t5); } .t-fg6 { color: var(--t6); } .t-fg7 { color: var(--t7); }
+  .t-fg8 { color: var(--t8); } .t-fg9 { color: var(--t9); } .t-fg10 { color: var(--t10); } .t-fg11 { color: var(--t11); }
+  .t-fg12 { color: var(--t12); } .t-fg13 { color: var(--t13); } .t-fg14 { color: var(--t14); } .t-fg15 { color: var(--t15); }
+  .t-bg0 { background: var(--t0); } .t-bg1 { background: var(--t1); } .t-bg2 { background: var(--t2); } .t-bg3 { background: var(--t3); }
+  .t-bg4 { background: var(--t4); } .t-bg5 { background: var(--t5); } .t-bg6 { background: var(--t6); } .t-bg7 { background: var(--t7); }
+  .t-bg8 { background: var(--t8); } .t-bg9 { background: var(--t9); } .t-bg10 { background: var(--t10); } .t-bg11 { background: var(--t11); }
+  .t-bg12 { background: var(--t12); } .t-bg13 { background: var(--t13); } .t-bg14 { background: var(--t14); } .t-bg15 { background: var(--t15); }
+  .t-fg-bg { color: var(--term-bg); } .t-bg-fg { background: var(--term-fg); }
+  .t-b { font-weight: 700; } .t-d { opacity: .6; } .t-i { font-style: italic; }
+  .t-u { text-decoration: underline; } .t-s { text-decoration: line-through; } .t-h { visibility: hidden; }
+  .banner { @apply fixed top-0 left-0 right-0 z-40 text-center text-xs py-1 bg-amber text-black; padding-top: calc(4px + env(safe-area-inset-top)); }
+}
+
+@keyframes rise { from { transform: translateY(100%); } to { transform: none; } }

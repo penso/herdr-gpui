@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Herdr">
+<title>Herdr</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-180.png">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app.js" defer></script>
+<script src="/assets/alpine.min.js" defer></script>
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+<div id="view" class="px-3.5 min-h-dvh"></div>
+
+<template id="t-loading">
+  <div class="grid place-items-center min-h-dvh text-muted">Connecting…</div>
+</template>
+
+<template id="t-offline">
+  <div class="flex flex-col items-center justify-center gap-3 min-h-dvh text-center px-6">
+    <p class="text-lg font-semibold">Can't reach your computer</p>
+    <p class="text-muted text-sm">Herdr Remote isn't answering at any address it gave this phone. Check that the computer is awake and on the same network, or that Tailscale is on.</p>
+    <button type="button" class="btn btn-primary max-w-60" data-retry>Try again</button>
+  </div>
+</template>
+
+<template id="t-unpaired">
+  <div class="flex flex-col items-center justify-center gap-3 min-h-dvh text-center px-6">
+    <p class="text-lg font-semibold">Pair this phone</p>
+    <p class="text-muted text-sm">In Herdr on your computer, open Settings › Remote control and choose Pair a device, then scan the code with your camera.</p>
+  </div>
+</template>
+
+<template id="t-pair">
+  <form class="flex flex-col gap-3 px-2 pt-6 pb-10" data-pair>
+    <div class="flex gap-1 text-[10.5px]" aria-label="Steps">
+      <span class="flex-1 pt-1.5 border-t-[3px] border-accent font-semibold">1 Certificate</span>
+      <span class="flex-1 pt-1.5 border-t-[3px] border-raised text-faint">2 Name</span>
+      <span class="flex-1 pt-1.5 border-t-[3px] border-raised text-faint">3 Approve</span>
+      <span class="flex-1 pt-1.5 border-t-[3px] border-raised text-faint">4 Install</span>
+    </div>
+    <h1 class="text-[21px] font-bold mt-4">Pair with your computer</h1>
+    <div class="group-list">
+      <div class="row flex-col items-start gap-1">
+        <b>Trust the certificate</b>
+        <small class="text-muted">Your computer uses its own certificate. Install it once so this phone trusts it, then turn on full trust in Settings › General › About › Certificate Trust Settings.</small>
+        <div class="flex gap-2 mt-1">
+          <a class="chip text-accent" href="/ca.mobileconfig">iPhone profile</a>
+          <a class="chip text-accent" href="/ca.pem" download="herdr-remote-ca.pem">Android certificate</a>
+        </div>
+        <small class="text-muted">Fingerprint <span class="font-mono" data-fingerprint></span></small>
+      </div>
+    </div>
+    <label class="block text-xs text-muted mt-2" for="device-name">Name this phone</label>
+    <input id="device-name" name="name" class="field" maxlength="64" required autocomplete="off">
+    <button type="submit" class="btn btn-primary mt-2">Continue</button>
+    <p class="text-red text-sm" data-error></p>
+  </form>
+</template>
+
+<template id="t-approve">
+  <div class="flex flex-col items-center gap-3 px-4 pt-10 text-center">
+    <h1 class="text-[21px] font-bold">Confirm on your computer</h1>
+    <p class="text-muted">Check that this code matches the one Herdr shows, then choose Allow there.</p>
+    <div class="font-mono font-bold text-[38px] tracking-widest px-5 py-4 bg-surface rounded-2xl" data-code></div>
+    <p class="text-muted text-sm" data-state>Waiting for approval…</p>
+  </div>
+</template>
+
+<template id="t-install">
+  <div class="flex flex-col items-center gap-3 px-6 pt-10 text-center">
+    <h1 class="text-[21px] font-bold">Paired</h1>
+    <p class="text-muted">To get notifications on iPhone, add Herdr to your Home Screen: tap Share, then Add to Home Screen, and open it from there.</p>
+    <a href="/" data-nav class="btn btn-primary max-w-60">Open Herdr</a>
+  </div>
+</template>
+</body>
+</html>

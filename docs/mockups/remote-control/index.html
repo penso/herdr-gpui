@@ -1,0 +1,436 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote control mockups</title>
+<link rel="stylesheet" href="/.herdr/kit.css">
+<link rel="stylesheet" href="phone.css">
+<script src="/.herdr/kit.js"></script>
+<body class="hk">
+<main class="hk-page wide">
+  <h1>Remote control — mobile mockups</h1>
+  <p class="callout-picked">Final picks: <b>home F</b> (needs-you strip + grouped by computer) · <b>workspaces and tabs D</b> (attention board) · <b>chat C</b> (focus) · <b>questions A</b> (bottom sheet).</p>
+  <p class="lede">Static mockups of the PWA in <code>docs/remote-control-plan.md</code>. Pick one variant per row, then press <b>Send picks</b> at the bottom. Data is placeholder. Theme toggle: <button class="hk-button" id="theme">Light / dark</button></p>
+
+  <!-- ───────────── 0. Ghostty-inspired home ───────────── -->
+  <section>
+    <h2>Round 3 · Home, inspired by Ghostty's mobile app</h2>
+    <p class="hint">Computers at the top level, workspaces as grouped lists, a floating toolbar. The eye flips home to the attention board you picked (1D). Pick E or F; the third phone is E with the eye on.</p>
+    <div class="row" data-group="home">
+
+      <figure data-variant="E">
+        <figcaption><b>E · Grouped by computer</b><span>Workspaces as inset lists under each computer; questions show as amber rows in place.</span></figcaption>
+        <div class="phone"><div class="screen g">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="scroll g-scroll">
+            <div class="host"><span class="host-ic">💻</span><b>MacBook Pro</b><span class="host-sub">LAN</span><span class="more">•••</span></div>
+            <div class="g-head"><span>herdr-gpui</span><span class="g-act">⊕</span><span class="g-act">⌄</span></div>
+            <div class="g-list">
+              <div class="g-row ask"><span class="g-ic claude">✳<i class="ask-dot"></i></span><span class="g-t">Remote control plan</span><span class="g-pill">Answer</span><span class="g-chev">›</span></div>
+              <div class="g-row"><span class="g-ic codex">◎</span><span class="g-t">Split equalize tests</span><span class="g-busy">•••</span><span class="g-chev">›</span></div>
+              <div class="g-row off"><span class="g-ic term">›_</span><span class="g-t">zsh <small>~/code/herdr-gpui</small></span><span class="g-soon">Soon</span></div>
+              <div class="g-row off"><span class="g-ic nvim">N</span><span class="g-t">Neovim <small>~/code/herdr-gpui</small></span><span class="g-soon">Soon</span></div>
+            </div>
+            <div class="g-head"><span>moltis</span><span class="g-act">⊕</span><span class="g-act">⌄</span></div>
+            <div class="g-list">
+              <div class="g-row"><span class="g-ic claude">✳<i class="unread"></i></span><span class="g-t">Bincode field audit</span><span class="g-chev">›</span></div>
+              <div class="g-row off"><span class="g-ic term">›_</span><span class="g-t">cargo watch <small>~/code/moltis</small></span><span class="g-soon">Soon</span></div>
+            </div>
+            <div class="host"><span class="host-ic">🖥</span><b>devbox</b><span class="host-sub">SSH via MacBook</span><span class="more">•••</span></div>
+            <div class="g-head"><span>infra</span><span class="g-act">⊕</span><span class="g-act">›</span></div>
+          </div>
+          <div class="float-bar"><div class="glass"><span>⚙</span><span class="eye">◉<i></i></span><span>＋</span></div><div class="glass round">⌕</div></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="F">
+        <figcaption><b>F · Needs-you strip + grouped list</b><span>Questions lifted into a strip on top; the rest grouped as in E.</span></figcaption>
+        <div class="phone"><div class="screen g">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="scroll g-scroll">
+            <div class="strip">
+              <div class="strip-card"><span class="g-ic claude sm">✳</span><div><b>Run <code>just ci</code>?</b><small>herdr-gpui · Remote control plan</small></div></div>
+              <div class="strip-card ghost-card"><span class="g-ic codex sm">◎</span><div><b>Edit Cargo.toml?</b><small>moltis</small></div></div>
+            </div>
+            <div class="host"><span class="host-ic">💻</span><b>MacBook Pro</b><span class="host-sub">LAN</span><span class="more">•••</span></div>
+            <div class="g-head"><span>herdr-gpui</span><span class="g-act">⊕</span><span class="g-act">⌄</span></div>
+            <div class="g-list">
+              <div class="g-row"><span class="g-ic claude">✳<i class="ask-dot"></i></span><span class="g-t">Remote control plan</span><span class="g-chev">›</span></div>
+              <div class="g-row"><span class="g-ic codex">◎</span><span class="g-t">Split equalize tests</span><span class="g-busy">•••</span><span class="g-chev">›</span></div>
+              <div class="g-row off"><span class="g-ic term">›_</span><span class="g-t">zsh <small>~/code/herdr-gpui</small></span><span class="g-soon">Soon</span></div>
+            </div>
+            <div class="g-head"><span>moltis</span><span class="g-act">⊕</span><span class="g-act">⌄</span></div>
+            <div class="g-list">
+              <div class="g-row"><span class="g-ic codex">◎<i class="ask-dot"></i></span><span class="g-t">Bincode field audit</span><span class="g-chev">›</span></div>
+            </div>
+          </div>
+          <div class="float-bar"><div class="glass"><span>⚙</span><span class="eye">◉<i></i></span><span>＋</span></div><div class="glass round">⌕</div></div>
+        </div></div>
+      </figure>
+
+      <figure>
+        <figcaption><b>E with the eye on</b><span>Attention board across every computer; tap the eye again to go back.</span></figcaption>
+        <div class="phone"><div class="screen g">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="scroll g-scroll">
+            <div class="g-head big"><span>Needs you</span><span class="cnt amber-bg">2</span></div>
+            <div class="g-list">
+              <div class="g-row ask tall"><span class="g-ic claude">✳</span><span class="g-t">Run <code>just ci</code>?<small>MacBook · herdr-gpui · Remote control plan</small></span><span class="g-chev">›</span></div>
+              <div class="g-row ask tall"><span class="g-ic codex">◎</span><span class="g-t">Edit Cargo.toml?<small>MacBook · moltis · Bincode field audit</small></span><span class="g-chev">›</span></div>
+            </div>
+            <div class="g-head big"><span>Working</span><span class="cnt green-bg">2</span></div>
+            <div class="g-list">
+              <div class="g-row tall"><span class="g-ic codex">◎</span><span class="g-t">Split equalize tests<small>cargo test -p herdr-remote-control · 3m</small></span><span class="g-busy">•••</span></div>
+              <div class="g-row tall"><span class="g-ic claude">✳</span><span class="g-t">Terraform plan<small>devbox · infra · 1m</small></span><span class="g-busy">•••</span></div>
+            </div>
+            <div class="g-head big"><span>Finished recently</span></div>
+            <div class="g-list">
+              <div class="g-row"><span class="g-ic claude">✳<i class="unread"></i></span><span class="g-t">Landing copy <small>site · 12m ago</small></span><span class="g-chev">›</span></div>
+            </div>
+          </div>
+          <div class="float-bar"><div class="glass"><span>⚙</span><span class="eye on">◉</span><span>＋</span></div><div class="glass round">⌕</div></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 1. Navigation ───────────── -->
+  <section>
+    <h2>1. Workspaces and tabs</h2>
+    <p class="hint">How you find a chat and switch workspaces. Terminal tabs are listed but disabled.</p>
+    <div class="row" data-group="navigation">
+
+      <figure data-variant="A">
+        <figcaption><b>A · Inbox + workspaces</b><span>Bottom bar: Inbox (questions first), Workspaces, Settings.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="bar"><h3>Workspaces</h3><button class="icon plus">＋</button></header>
+          <div class="scroll">
+            <div class="attention"><span class="dot amber"></span><div><b>Claude asks</b><small>herdr-gpui · feat/remote — Run <code>just ci</code>?</small></div><span class="chev">›</span></div>
+            <div class="ws open">
+              <div class="ws-head"><span class="ws-icon">h</span><div><b>herdr-gpui</b><small>~/code/herdr-gpui · feat/remote</small></div><span class="badge amber">1</span></div>
+              <div class="tab chat"><span class="dot amber"></span><span class="t">Claude · remote plan</span><small>Waiting</small></div>
+              <div class="tab chat"><span class="dot green pulse"></span><span class="t">Codex · split tests</span><small>Working 3m</small></div>
+              <div class="tab term"><span class="ti">›_</span><span class="t">zsh</span><small>Not available yet</small></div>
+              <div class="tab term"><span class="ti">›_</span><span class="t">cargo watch</span><small>Not available yet</small></div>
+            </div>
+            <div class="ws"><div class="ws-head"><span class="ws-icon m">m</span><div><b>moltis</b><small>~/code/moltis · main</small></div><span class="chev">›</span></div></div>
+            <div class="ws"><div class="ws-head"><span class="ws-icon s">s</span><div><b>site</b><small>~/code/herdr-site · main</small></div><span class="dot grey"></span></div></div>
+          </div>
+          <nav class="tabbar"><span>◉<small>Inbox</small><i>1</i></span><span class="on">▤<small>Workspaces</small></span><span>⚙<small>Settings</small></span></nav>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Workspace switcher</b><span>One workspace at a time; tap the title to switch.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="switcher"><span class="ws-icon">h</span><div><b>herdr-gpui ▾</b><small>feat/remote</small></div><button class="icon">⚙</button></header>
+          <div class="chips"><span class="chip on">herdr-gpui<i>1</i></span><span class="chip">moltis</span><span class="chip">site</span><span class="chip add">＋ New</span></div>
+          <div class="scroll">
+            <p class="section">Chats</p>
+            <div class="card-tab"><div class="ct-top"><span class="agent claude">C</span><b>remote plan</b><span class="pill amber">Needs answer</span></div><p>Can I run <code>just ci</code> in the worktree?</p><small>Claude Opus · 41% context · $0.82</small></div>
+            <div class="card-tab"><div class="ct-top"><span class="agent codex">X</span><b>split tests</b><span class="pill green">Working</span></div><p>Running cargo test -p herdr-remote-control…</p><small>Codex · 12% context · 3m</small></div>
+            <p class="section">Terminals</p>
+            <div class="tab term boxed"><span class="ti">›_</span><span class="t">zsh</span><small>Not available yet</small></div>
+            <div class="tab term boxed"><span class="ti">›_</span><span class="t">cargo watch</span><small>Not available yet</small></div>
+            <button class="ghost">＋ New chat in herdr-gpui</button>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · Drawer like the desktop</b><span>Sidebar slides in over the last chat; mirrors Herdr UI.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="drawer-wrap">
+            <aside class="drawer">
+              <div class="drawer-head"><b>Herdr</b><small>MacBook · LAN</small></div>
+              <p class="section">Workspaces</p>
+              <div class="dw on"><span class="ws-icon">h</span>herdr-gpui<span class="badge amber">1</span></div>
+              <div class="dw-tabs">
+                <div class="dt"><span class="dot amber"></span>Claude · remote plan</div>
+                <div class="dt"><span class="dot green"></span>Codex · split tests</div>
+                <div class="dt off">›_ zsh <em>soon</em></div>
+                <div class="dt off">›_ cargo watch <em>soon</em></div>
+              </div>
+              <div class="dw"><span class="ws-icon m">m</span>moltis</div>
+              <div class="dw"><span class="ws-icon s">s</span>site</div>
+              <button class="ghost small">＋ New workspace</button>
+              <div class="drawer-foot">⚙ Settings · 2 devices</div>
+            </aside>
+            <div class="behind"></div>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="D">
+        <figcaption><b>D · Attention board</b><span>Everything grouped by state, workspace as a label.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="bar"><h3>Herdr</h3><button class="icon">▤</button><button class="icon plus">＋</button></header>
+          <div class="scroll">
+            <p class="section amber-t">Needs you · 1</p>
+            <div class="board amber-b"><b>Claude · remote plan</b><small>herdr-gpui</small><p>Run <code>just ci</code>?</p><div class="mini-btns"><span>Allow once</span><span>Deny</span></div></div>
+            <p class="section green-t">Working · 1</p>
+            <div class="board"><b>Codex · split tests</b><small>herdr-gpui</small><p>cargo test -p herdr-remote-control</p><div class="progress"><i></i></div></div>
+            <p class="section">Idle · 2</p>
+            <div class="board dim"><b>Claude · landing copy</b><small>site</small></div>
+            <div class="board dim"><b>Pi · bincode audit</b><small>moltis</small></div>
+            <p class="section">Terminals</p>
+            <div class="tab term boxed"><span class="ti">›_</span><span class="t">4 terminal tabs</span><small>Not available yet</small></div>
+          </div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 2. Chat ───────────── -->
+  <section>
+    <h2>2. Chat view</h2>
+    <p class="hint">The transcript, tool calls, and composer pinned above the keyboard.</p>
+    <div class="row" data-group="chat">
+
+      <figure data-variant="A">
+        <figcaption><b>A · Messaging</b><span>Bubbles for you, full-width agent text, tool chips.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="chat-head"><span class="back">‹</span><div><b>remote plan</b><small>Claude Opus 5.5 · herdr-gpui</small></div><span class="ring" style="--p:41"></span></header>
+          <div class="scroll chat">
+            <div class="me">Write the plan in docs/ and give me mockups</div>
+            <div class="agent-text">I'll write <code>docs/remote-control-plan.md</code> first, then the mobile mockups.</div>
+            <div class="toolchip ok">✓ <b>Write</b> docs/remote-control-plan.md <small>+312</small></div>
+            <div class="toolchip ok">✓ <b>Read</b> method.rs <small>80 lines</small></div>
+            <div class="toolchip run">◌ <b>Bash</b> just check-file-size</div>
+            <div class="agent-text">The plan covers pairing with <b>dual approval</b>, the private CA for LAN and Tailscale, and push.</div>
+            <div class="typing"><i></i><i></i><i></i> Working · 1m 12s</div>
+          </div>
+          <div class="composer"><div class="slash"><span>/review</span><span>/compact</span><span>/model</span></div><div class="input"><span class="att">＋</span><span class="ph">Message Claude…</span><span class="stop">■</span></div></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Document</b><span>Flat transcript like the desktop chat view; plan pinned.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="chat-head"><span class="back">‹</span><div><b>Claude · remote plan</b><small><span class="pickers"><span>Opus 5.5 ▾</span><span>Default ▾</span></span></small></div><span class="cost">$0.82</span></header>
+          <div class="plan"><b>Plan 2/4</b><span>✓ Write plan</span><span class="cur">◌ Mockups</span></div>
+          <div class="scroll chat doc">
+            <div class="d-user"><small>You</small>Write the plan in docs/ and give me mockups</div>
+            <div class="d-agent"><small>Claude</small>I'll write <code>docs/remote-control-plan.md</code> first.</div>
+            <details class="d-tool" open><summary>✓ Edit <code>Cargo.toml</code></summary><pre><span class="del">- rustls = "0.23"</span>
+<span class="add">+ rustls = { version = "0.23" }</span>
+<span class="add">+ axum   = "0.8"</span></pre></details>
+            <div class="d-tool"><span>◌ Bash</span> <code>just ci</code> <small>40s</small></div>
+            <div class="d-summary">Turn · 2m 04s · 18k tokens · $0.21</div>
+          </div>
+          <div class="composer flat"><div class="input"><span class="att">📎</span><span class="ph">Reply…</span><span class="send">↑</span></div></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · Focus</b><span>Only the latest turn; earlier turns fold into summaries.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="chat-head"><span class="back">‹</span><div><b>remote plan</b><small>Claude · working</small></div><span class="ring" style="--p:41"></span></header>
+          <div class="scroll chat">
+            <div class="fold">▸ 6 earlier turns · 14m · $0.61</div>
+            <div class="focus-prompt">“Write the plan in docs/ and give me mockups”</div>
+            <div class="steps">
+              <div class="st ok">Wrote docs/remote-control-plan.md</div>
+              <div class="st ok">Read method.rs, discovery.rs</div>
+              <div class="st run">Writing mockups/index.html</div>
+              <div class="st todo">Open in browser tab</div>
+            </div>
+            <div class="agent-text big">The plan covers pairing with dual approval, the private CA, and push. Mockups next.</div>
+          </div>
+          <div class="composer"><div class="input"><span class="att">＋</span><span class="ph">Steer or queue a prompt…</span><span class="stop">■</span></div></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 3. Questions ───────────── -->
+  <section>
+    <h2>3. Agent questions</h2>
+    <p class="hint">A permission request from <code>herdr-acp</code>. "Always" options set apart.</p>
+    <div class="row" data-group="question">
+
+      <figure data-variant="A">
+        <figcaption><b>A · Bottom sheet</b><span>Opens by itself; thumb-reach buttons.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="chat-head"><span class="back">‹</span><div><b>remote plan</b><small>Claude · waiting</small></div></header>
+          <div class="scroll chat dimmed"><div class="agent-text">Plan written. I'd like to verify with the CI recipe.</div></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <small class="kicker">Claude wants to run</small>
+            <pre class="cmd">just ci</pre>
+            <small class="where">in ~/.herdr/worktrees/herdr-gpui/calm-valley</small>
+            <button class="btn primary">Allow once</button>
+            <button class="btn">Deny</button>
+            <button class="btn subtle">Always allow <code>just</code>…</button>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="B">
+        <figcaption><b>B · Inline card</b><span>The question sits in the transcript; composer becomes buttons.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="chat-head"><span class="back">‹</span><div><b>remote plan</b><small>Claude · waiting</small></div></header>
+          <div class="scroll chat">
+            <div class="agent-text">Plan written. I'd like to verify with the CI recipe.</div>
+            <div class="qcard"><div class="q-top"><span class="dot amber"></span><b>Run a command</b><small>Bash</small></div><pre class="cmd">just ci</pre><small>~/.herdr/worktrees/herdr-gpui/calm-valley</small></div>
+          </div>
+          <div class="answerbar"><button class="btn primary">Allow once</button><button class="btn">Deny</button><button class="btn more">⋯</button></div>
+        </div></div>
+      </figure>
+
+      <figure data-variant="C">
+        <figcaption><b>C · Full-screen card</b><span>Like a system prompt; swipe right allow, left deny.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="takeover">
+            <small>herdr-gpui · remote plan</small>
+            <div class="big-icon">⌘</div>
+            <h3>Claude wants to run a command</h3>
+            <pre class="cmd">just ci</pre>
+            <p class="muted">2 more questions waiting</p>
+            <div class="swipe"><span>← Deny</span><span class="knob">⇆</span><span>Allow →</span></div>
+            <button class="btn subtle">Other options</button>
+          </div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 4. Flows ───────────── -->
+  <section>
+    <h2>4. Flows (no pick needed, notes welcome)</h2>
+    <div class="row">
+      <figure>
+        <figcaption><b>New workspace</b><span>Project as a native select (grouped: recent, then project roots), optional worktree, agent.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <header class="bar"><span class="back">Cancel</span><h3>New workspace</h3><b class="accent">Create</b></header>
+          <div class="scroll form">
+            <label>Project</label>
+            <div class="select"><span><b>herdr-gpui</b><small>~/code/herdr-gpui</small></span><span class="caret">⌃⌄</span></div>
+            <div class="picker">
+              <small class="pk-group">Recent</small>
+              <div class="pk on">herdr-gpui <span>✓</span></div>
+              <div class="pk">moltis</div>
+              <small class="pk-group">~/code</small>
+              <div class="pk">herdr-site</div>
+              <div class="pk">agent-launcher</div>
+            </div>
+            <label class="sw">New branch as worktree <span class="toggle on"></span></label>
+            <div class="field">feat/remote-push</div>
+            <label>Agent</label>
+            <div class="agents"><span class="on"><i class="agent claude">C</i>Claude</span><span><i class="agent codex">X</i>Codex</span><span><i class="agent">G</i>Gemini</span><span><i class="agent">π</i>Pi</span></div>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Pairing · phone</b><span>After scanning; CA installed; waiting on the desktop.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+          <div class="pair">
+            <div class="steps-h"><span class="ok">1 Certificate</span><span class="ok">2 Name</span><span class="cur">3 Approve</span><span>4 Install</span></div>
+            <h3>Confirm on your Mac</h3>
+            <p class="muted">Check the code matches the one in Herdr UI.</p>
+            <div class="code">428 913</div>
+            <div class="kv"><span>Device</span><b>Fabien's iPhone</b><span>Computer</span><b>MacBook Pro</b><span>CA</span><b class="mono">5F:2A:…:C1:9E</b></div>
+            <div class="wait"><i></i> Waiting for approval…</div>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Pairing · desktop</b><span>Herdr UI dialog: QR, then the approval step.</span></figcaption>
+        <div class="desk">
+          <div class="dlg">
+            <div class="dlg-head"><b>Remote control</b><span class="x">✕</span></div>
+            <div class="dlg-body">
+              <div class="qr" aria-label="placeholder QR"></div>
+              <div>
+                <p><b>Scan with your phone's camera</b></p>
+                <p class="muted">https://192.168.1.20:7443 · 100.64.0.3:7443</p>
+                <p class="muted mono">CA 5F:2A:…:C1:9E</p>
+                <div class="countdown"><span class="cring" style="--p:62"></span> New code in 37 s</div>
+              </div>
+            </div>
+            <div class="approve">
+              <p><b>Fabien's iPhone</b> wants remote control of your chats.</p>
+              <div class="code small">428 913</div>
+              <div class="dlg-btns"><button class="btn">Deny</button><button class="btn primary">Allow</button></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Notifications</b><span>Default: no message text. Cleared when answered elsewhere.</span></figcaption>
+        <div class="phone lock"><div class="screen">
+          <div class="lock-time">9:41<small>Thursday 22 October</small></div>
+          <div class="notif"><span class="app">H</span><div><b>Claude needs an answer</b><small>herdr-gpui · remote plan</small></div><em>now</em></div>
+          <div class="notif"><span class="app">H</span><div><b>Codex finished</b><small>herdr-gpui · split tests · 4m 10s · $0.34</small></div><em>2m</em></div>
+          <div class="notif stack"><span class="app">H</span><div><b>2 more from Herdr</b></div></div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ───────────── 5. iOS Live Activities ───────────── -->
+  <section>
+    <h2>5. iOS Live Activities</h2>
+    <p class="hint">Running agents on the lock screen and in the Dynamic Island. <b>A PWA cannot do this:</b> Live Activities need a native iOS companion app (SwiftUI + ActivityKit) that the daemon updates through APNs. The PWA stays the main app; the companion would only add these.</p>
+    <div class="row">
+      <figure>
+        <figcaption><b>Lock screen</b><span>One activity per running chat, updated as the turn moves; questions turn it amber.</span></figcaption>
+        <div class="phone lock"><div class="screen">
+          <div class="lock-time">9:41<small>Thursday 22 October</small></div>
+          <div class="live">
+            <div class="live-top"><span class="app sm">H</span><b>herdr-gpui · remote plan</b><em>Claude</em></div>
+            <div class="live-main amber-l"><span class="dot amber"></span><div><b>Needs an answer</b><small>Run a command</small></div><span class="live-btn">Open</span></div>
+          </div>
+          <div class="live">
+            <div class="live-top"><span class="app sm">H</span><b>herdr-gpui · split tests</b><em>Codex</em></div>
+            <div class="live-main"><span class="dot green pulse"></span><div><b>Writing mockups/index.html</b><small>Step 3 of 4 · 4m 10s · $0.34</small></div></div>
+            <div class="live-bar"><i style="width:68%"></i></div>
+          </div>
+        </div></div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Dynamic Island</b><span>Compact: agents working and waiting. Long-press: the one that needs you.</span></figcaption>
+        <div class="phone"><div class="screen">
+          <div class="island compact"><span class="i-left"><span class="dot green pulse"></span>2</span><span class="notch"></span><span class="i-right amber-t">● 1</span></div>
+          <div class="island expanded">
+            <div class="ie-top"><span class="app sm">H</span><div><b>Claude needs an answer</b><small>herdr-gpui · remote plan</small></div></div>
+            <pre class="cmd dark">just ci</pre>
+            <div class="ie-btns"><span>Open</span></div>
+          </div>
+          <div class="scroll dimmed"><div class="board"><b>Codex · split tests</b><small>herdr-gpui</small><p>Writing mockups/index.html</p></div><div class="board"><b>Pi · bincode audit</b><small>moltis</small></div></div>
+        </div></div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Turn finished</b><span>The activity ends with the turn summary, then leaves the lock screen.</span></figcaption>
+        <div class="phone lock"><div class="screen">
+          <div class="lock-time">9:58<small>Thursday 22 October</small></div>
+          <div class="live">
+            <div class="live-top"><span class="app sm">H</span><b>herdr-gpui · split tests</b><em>Codex</em></div>
+            <div class="live-main"><span class="ok-mark">✓</span><div><b>Finished</b><small>4 steps · 6m 02s · 41k tokens · $0.48</small></div><span class="live-btn">Reply</span></div>
+            <div class="live-bar done"><i style="width:100%"></i></div>
+          </div>
+        </div></div>
+      </figure>
+    </div>
+  </section>
+
+  <div class="send-row"><span id="picks" class="muted">No picks yet.</span><button class="hk-button" id="send">Send picks</button></div>
+</main>
+<script src="mockup.js?v=4"></script>
+</body>

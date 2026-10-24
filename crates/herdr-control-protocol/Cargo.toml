@@ -11,6 +11,8 @@ workspace = true
 
 [dependencies]
 herdr-client.workspace = true
+# The remote control daemon's status and device types, never its server.
+herdr-remote-control.workspace = true
 serde.workspace        = true
 serde_json.workspace   = true
 # Only for `test-support`: its socket addresses live in private temporary directories.

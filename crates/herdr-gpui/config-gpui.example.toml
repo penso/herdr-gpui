@@ -472,6 +472,29 @@ size = 12
 # GH_HOST = "mycompany.ghe.com"
 # ANTHROPIC_BASE_URL = "https://llm.example.com"
 
+# Remote control from a phone or any browser: over HTTPS on the local network
+# and, when Tailscale runs, from anywhere. Turning it on installs the
+# herdr-remote-control daemon as a user service (a LaunchAgent on macOS, a systemd user
+# unit on Linux, a logon task on Windows); turning it off stops and removes it.
+# Settings > Remote control edits these and pairs devices. Device keys and the
+# certificate authority stay in the daemon's own state directory, never here.
+# [remote]
+# enabled = false
+# port = 7443
+# Every interface ("all"), or one interface's address.
+# bind = "all"
+# The daemon's own certificate authority, trusted once on the phone ("own"),
+# or a certificate and key of your own:
+# certificate = { cert = "/path/to/cert.pem", key = "/path/to/key.pem" }
+# certificate = "own"
+# Keep serving phones, and sending notifications, after Herdr UI quits.
+# keep_running = true
+# "generic" notifications say which chat needs you, without its text;
+# "excerpt" adds a short excerpt of the message.
+# notifications = "generic"
+# Forget a paired device that has not connected for this many days (1 to 365).
+# device_idle_days = 30
+
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.
 # Optionally override with your own Device Flow-enabled app's public client ID.
 # Never put an App ID, client secret, private key, or token here.

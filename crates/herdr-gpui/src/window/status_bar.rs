@@ -113,6 +113,7 @@ impl HerdrWindow {
             .children(self.render_listening_ports(cx))
             .children(self.render_system_load())
             .children(self.render_network_quality(cx))
+            .children(self.remote_indicator(cx))
             .children(self.caffeine_button(items.keep_awake, cx))
             .when(items.theme.shown(), |bar| {
                 bar.child(

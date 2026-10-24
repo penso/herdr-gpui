@@ -186,6 +186,7 @@ impl SettingsWindow {
         self.refresh_code_appearance(cx);
         self.sync_px0_field(cx);
         self.sync_chat_env_field(cx);
+        self.sync_remote_fields(cx);
         if let Some(edit) = &self.number_edit {
             edit.input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
@@ -291,6 +292,7 @@ impl SettingsWindow {
             Section::Theme | Section::Integrations | Section::Plugins | Section::Code => div(),
             #[cfg(feature = "cloud")]
             Section::CloudDevices => div(),
+            Section::RemoteControl => div(),
         };
         div().flex().flex_col().min_w_0().child(content)
     }

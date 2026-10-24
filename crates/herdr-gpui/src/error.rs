@@ -657,6 +657,8 @@ pub enum Error {
     Remote(herdr_remote::Error),
     #[error("Could not install the agent tools on the SSH host: {0}")]
     RemoteAgentTools(#[source] herdr_client::Error),
+    #[error(transparent)]
+    RemoteControl(#[from] crate::remote::Error),
     #[error("{method}: {source}")]
     Request {
         method: herdr_client::Method,

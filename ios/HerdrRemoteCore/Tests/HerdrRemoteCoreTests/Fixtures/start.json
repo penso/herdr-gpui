@@ -1,0 +1,26 @@
+{
+  "aps": {
+    "alert": {
+      "body": "herdr-gpui · remote plan",
+      "title": "Claude is working"
+    },
+    "attributes": {
+      "agent": "Claude",
+      "chatTitle": "remote plan",
+      "computer": "studio",
+      "computerId": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "pane": "w1-p3",
+      "workspace": "herdr-gpui"
+    },
+    "attributes-type": "ChatActivityAttributes",
+    "content-state": {
+      "phase": "working",
+      "startedAt": 1799999990,
+      "step": "Working",
+      "waiting": 0,
+      "working": 1
+    },
+    "event": "start",
+    "timestamp": 1800000000
+  }
+}

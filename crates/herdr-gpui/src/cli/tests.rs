@@ -12,6 +12,7 @@ mod control_commands;
 mod links;
 mod open_command;
 mod px0;
+mod remote;
 mod security;
 mod ui_panel;
 

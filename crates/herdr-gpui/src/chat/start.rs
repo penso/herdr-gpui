@@ -16,7 +16,6 @@ use herdr_chat_protocol::Agent;
 use herdr_client::Method;
 use serde_json::json;
 use std::{
-    ffi::OsStr,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -74,42 +73,12 @@ pub(crate) enum Program {
 /// build` lay it out, else the first on the login shell's `PATH`. Blocking:
 /// run it off the UI thread.
 pub(crate) fn locate() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok();
-    locate_in(exe.as_deref(), crate::login_env::path().as_deref())
+    crate::bundled::locate(PROGRAM)
 }
 
-pub(crate) fn locate_in(exe: Option<&Path>, path: Option<&OsStr>) -> Option<PathBuf> {
-    let beside = exe.into_iter().flat_map(|exe| {
-        // `cargo install` and package managers link the app into a bin
-        // directory; its sibling is beside the real file.
-        let real = std::fs::canonicalize(exe).ok();
-        [
-            exe.parent().map(Path::to_owned),
-            real.and_then(|real| real.parent().map(Path::to_owned)),
-        ]
-    });
-    beside
-        .flatten()
-        .chain(
-            path.into_iter()
-                .flat_map(std::env::split_paths)
-                .filter(|dir| dir.is_absolute()),
-        )
-        .map(|dir| dir.join(PROGRAM))
-        .find(|candidate| runnable(candidate))
-}
-
-fn runnable(path: &Path) -> bool {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return false;
-    };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    metadata.is_file()
+#[cfg(test)]
+pub(crate) fn locate_in(exe: Option<&Path>, path: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
+    crate::bundled::locate_in(PROGRAM, exe, path)
 }
 
 /// The line typed into the new tab's shell. On Unix `sh` runs it, so it

@@ -22,6 +22,8 @@ pub(in crate::settings_window) enum NumberField {
     ToastDelay,
     SoundVolume,
     TerminalPadding(Axis, Side),
+    RemotePort,
+    RemoteIdleDays,
 }
 
 impl NumberField {
@@ -32,6 +34,8 @@ impl NumberField {
             Self::ToastDelay => "notif-delay-control",
             Self::SoundVolume => "notif-volume-control",
             Self::TerminalPadding(axis, side) => padding_ids(axis, side).1,
+            Self::RemotePort => "remote-port-control",
+            Self::RemoteIdleDays => "remote-idle-control",
         }
     }
 
@@ -43,6 +47,11 @@ impl NumberField {
             Self::ToastDelay => 0.0..=3600.0,
             Self::SoundVolume => 0.0..=f32::from(SoundConfig::MAX_VOLUME),
             Self::TerminalPadding(..) => 0.0..=MAX_PADDING,
+            Self::RemotePort => 1.0..=f32::from(u16::MAX),
+            Self::RemoteIdleDays => {
+                let days = crate::config::remote::IDLE_DAYS;
+                f32::from(*days.start())..=f32::from(*days.end())
+            }
         }
     }
 }
@@ -63,6 +72,7 @@ pub(in crate::settings_window) enum DropdownField {
     ClipboardPosition,
     ToastEnabled,
     ToastPosition,
+    RemoteBind,
 }
 
 impl DropdownField {
@@ -73,6 +83,7 @@ impl DropdownField {
             Self::ClipboardPosition => "general-clipboard-position-control",
             Self::ToastEnabled => "notif-show-control",
             Self::ToastPosition => "notif-position-control",
+            Self::RemoteBind => "remote-bind-control",
         }
     }
 }
@@ -124,6 +135,11 @@ impl SettingsWindow {
                 if let Some(mode) = crate::config::LayoutMode::ALL.get(index) {
                     self.accept_layout_choice(*mode, cx);
                 }
+                cx.notify();
+                return;
+            }
+            DropdownField::RemoteBind => {
+                self.pick_remote_bind(index, cx);
                 cx.notify();
                 return;
             }
@@ -262,6 +278,14 @@ impl SettingsWindow {
                     self.set_terminal_padding(axis, side, value, cx);
                 }
                 NumberField::FontSize(face) => self.accept_control_size(face, value, cx),
+                NumberField::RemotePort => {
+                    let edit = crate::config::remote::Edit::Port(value as u16);
+                    self.save_preference(Preference::Remote(edit), cx);
+                }
+                NumberField::RemoteIdleDays => {
+                    let edit = crate::config::remote::Edit::DeviceIdleDays(value as u16);
+                    self.save_preference(Preference::Remote(edit), cx);
+                }
                 NumberField::Spacing(_) => {}
             }
         }

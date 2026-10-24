@@ -1,0 +1,113 @@
+/* Terminal mockups: phone.css supplies the phone frame and tokens. */
+.t-screen { background: #0b0d10; }
+:root.light .t-screen { background: #fbfbfc; }
+.term {
+  flex: 1; overflow: hidden; padding: 6px 8px; margin: 0;
+  font: 10.5px/1.38 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #d6dae3; white-space: pre; background: #0b0d10;
+}
+:root.light .term { color: #1d222b; background: #fbfbfc; }
+.term.small { font-size: 8px; }
+.term.big { font-size: 13px; }
+.term .p { color: #7c9cff; } .term .g { color: #4fd18b; } .term .y { color: #f2b33d; }
+.term .r { color: #ff6b6b; } .term .m { color: #8b93a5; } .term .b { font-weight: 700; }
+.cursor { display: inline-block; width: .6em; height: 1.1em; vertical-align: -2px; background: #d6dae3; animation: blink 1s steps(1) infinite; }
+:root.light .cursor { background: #1d222b; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.t-head { display: flex; align-items: center; gap: 8px; padding: 4px 12px 6px; font-size: 12.5px; }
+.t-head .back { color: var(--accent); font-size: 22px; line-height: 1; }
+.t-head .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-head .name small { display: block; font-size: 10.5px; }
+.t-head .act { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; background: var(--raised); font-size: 13px; }
+.t-head .act.herdr { background: var(--accent); color: white; font-weight: 700; }
+
+/* The iOS keyboard, drawn coarsely. */
+.kbd { background: #2b2d33; padding: 6px 3px 18px; display: flex; flex-direction: column; gap: 6px; }
+:root.light .kbd { background: #d1d4da; }
+.kbd .krow { display: flex; gap: 4px; justify-content: center; }
+.kbd .k { flex: 1; max-width: 25px; height: 30px; border-radius: 5px; background: #55585f; color: #fff; display: grid; place-items: center; font-size: 13px; }
+:root.light .kbd .k { background: #fff; color: #111; }
+.kbd .k.wide { max-width: 44px; background: #3f4248; font-size: 11px; }
+.kbd .k.space { max-width: 140px; }
+:root.light .kbd .k.wide { background: #aeb3bc; }
+
+/* Extra-key bars above the keyboard. */
+.xbar { display: flex; gap: 4px; padding: 5px 5px; background: #1c1e23; overflow: hidden; border-top: 1px solid #000; }
+:root.light .xbar { background: #e6e8ec; border-color: #c8ccd3; }
+.xk { flex: none; min-width: 26px; height: 28px; padding: 0 6px; border-radius: 6px; background: #3a3d44; color: #e8eaf0; display: grid; place-items: center; font: 600 11px/1 ui-monospace, monospace; }
+:root.light .xk { background: #fff; color: #161a22; box-shadow: 0 1px 0 #b9bec7; }
+.xk.on { background: var(--accent); color: white; }
+.xk.stop { background: #c33d3d; color: white; }
+.xk.herdr { background: color-mix(in srgb, var(--accent) 30%, #3a3d44); color: white; }
+:root.light .xk.herdr { background: color-mix(in srgb, var(--accent) 22%, white); color: var(--accent); }
+.xk.dim { opacity: .45; }
+.xbar.two { flex-direction: column; gap: 4px; }
+.xbar.two .xr { display: flex; gap: 4px; }
+.xbar .grow { flex: 1; }
+.xk .lbl { display: block; font: 500 7.5px/1 -apple-system, system-ui, sans-serif; opacity: .8; margin-top: 2px; }
+.xk.tall { height: 36px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 40px; }
+
+/* Floating toolbar (keyboard hidden). */
+.t-float { position: absolute; left: 12px; right: 12px; bottom: 22px; display: flex; gap: 8px; align-items: center; justify-content: center; }
+.t-float .glass { display: flex; gap: 4px; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(14px); box-shadow: 0 6px 20px rgba(0,0,0,.35); border: 1px solid var(--line); }
+.t-float .gk { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; font: 600 12px/1 ui-monospace, monospace; color: var(--text); }
+.t-float .gk.stop { background: #c33d3d; color: white; }
+.t-float .gk.herdr { background: var(--accent); color: white; }
+.dpad { position: relative; width: 34px; height: 34px; border-radius: 17px; background: var(--raised); display: grid; place-items: center; font-size: 9px; color: var(--muted); }
+.dpad::before { content: "◂ ▴ ▾ ▸"; letter-spacing: -1px; }
+
+/* Gesture hints. */
+.hintbox { position: absolute; left: 14px; right: 14px; top: 120px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line); font-size: 11.5px; display: grid; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.hintbox div { display: flex; gap: 8px; align-items: center; }
+.hintbox b { width: 26px; text-align: center; font-size: 15px; }
+
+/* Action sheet. */
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 18px 18px 0 0; padding: 8px 12px 24px; box-shadow: 0 -10px 30px rgba(0,0,0,.4); }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; }
+.sheet h4 { margin: 2px 2px 8px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.tile { background: var(--raised); border-radius: 12px; padding: 9px 4px 7px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10.5px; text-align: center; }
+.tile i { font-style: normal; font-size: 17px; }
+.tile.danger { color: var(--red); }
+.sheet-list { display: grid; gap: 1px; margin-top: 10px; border-radius: 12px; overflow: hidden; }
+.sheet-list div { background: var(--raised); padding: 9px 12px; font-size: 12.5px; display: flex; justify-content: space-between; }
+.dimmed { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+
+/* Prefix mode: keys relabelled with Herdr actions. */
+.prefix-banner { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--accent); color: white; font-size: 11.5px; font-weight: 600; }
+.prefix-banner span:last-child { margin-left: auto; opacity: .8; font-weight: 500; }
+.kbd.prefix .k { flex-direction: column; font-size: 12px; line-height: 1; }
+.kbd.prefix .k small { font-size: 6.5px; color: #c9d3ff; margin-top: 2px; }
+.kbd.prefix .k.mapped { background: color-mix(in srgb, var(--accent) 55%, #55585f); }
+:root.light .kbd.prefix .k.mapped { background: color-mix(in srgb, var(--accent) 25%, white); }
+:root.light .kbd.prefix .k small { color: var(--accent); }
+.kbd.prefix .k:not(.mapped):not(.wide) { opacity: .35; }
+
+/* Layout map. */
+.tabs { display: flex; gap: 5px; padding: 2px 10px 6px; overflow: hidden; }
+.tabs span { padding: 4px 9px; border-radius: 12px; background: var(--raised); font-size: 11px; white-space: nowrap; }
+.tabs span.on { background: var(--accent); color: white; }
+.tabs span.add { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.tabs span.chat { opacity: .55; }
+.map { margin: 0 10px 6px; height: 64px; display: grid; grid-template-columns: 1.3fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; }
+.map div { border-radius: 6px; background: var(--raised); font: 9px/1.2 ui-monospace, monospace; padding: 4px 5px; color: var(--muted); overflow: hidden; border: 1.5px solid transparent; }
+.map div.on { border-color: var(--accent); color: var(--text); }
+.map .tall { grid-row: span 2; }
+.map-actions { display: flex; gap: 6px; padding: 0 10px 6px; }
+.map-actions span { flex: 1; text-align: center; padding: 5px 0; border-radius: 9px; background: var(--raised); font-size: 10.5px; }
+.pager { display: flex; justify-content: center; gap: 5px; padding: 4px 0 2px; }
+.pager i { width: 6px; height: 6px; border-radius: 3px; background: var(--faint); }
+.pager i.on { width: 16px; background: var(--accent); }
+.edge { position: absolute; top: 150px; width: 18px; height: 70px; display: grid; place-items: center; color: var(--faint); font-size: 18px; }
+.edge.l { left: 2px; } .edge.r { right: 2px; }
+
+/* Sizes. */
+.ruler { font: 9px/1 ui-monospace, monospace; color: var(--accent); padding: 2px 10px; display: flex; justify-content: space-between; }
+.pan { position: relative; flex: 1; overflow: hidden; }
+.pan .term { width: 520px; }
+.pan .scrollbar { position: absolute; left: 30px; right: 120px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--accent); opacity: .7; }
+.desk { margin: 4px 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px; font-size: 10.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.desk .mini { width: 70px; height: 40px; border-radius: 4px; background: var(--raised); position: relative; flex: none; }
+.desk .mini i { position: absolute; left: 4px; top: 4px; bottom: 4px; width: 26px; background: color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 2px; }
+.note-bar { padding: 6px 12px; font-size: 10.5px; background: color-mix(in srgb, var(--amber) 16%, var(--surface)); color: var(--text); border-top: 1px solid var(--line); }

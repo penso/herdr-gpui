@@ -82,6 +82,10 @@ pub(crate) struct MenuState {
         Option<crate::cloud::batch::Pending<Vec<crate::cloud::batch::Target>>>,
     #[cfg(feature = "coder")]
     pub(super) coder: Option<super::devices::coder::Wizard>,
+    /// The open pairing dialog. Dropping it cancels its pairing.
+    pub(crate) remote_pairing: Option<crate::remote::PairingDialog>,
+    /// The device the revoke question is about.
+    pub(crate) remote_revoke: Option<crate::remote::Revoke>,
     pub(super) devices_scroll: ScrollHandle,
     /// The sessions list scrolls its own way; the two popups never share one.
     pub(crate) sessions_scroll: ScrollHandle,
@@ -339,6 +343,8 @@ impl MenuState {
             cloud_destroy: None,
             #[cfg(feature = "coder")]
             coder: None,
+            remote_pairing: None,
+            remote_revoke: None,
             devices_scroll: ScrollHandle::new(),
             sessions_scroll: ScrollHandle::new(),
             usage_scroll: ScrollHandle::new(),
@@ -419,6 +425,8 @@ impl MenuState {
         {
             self.coder = None;
         }
+        self.remote_pairing = None;
+        self.remote_revoke = None;
         self.devices_scroll.set_offset(Point::default());
         self.sessions_scroll.set_offset(Point::default());
         self.usage_scroll.set_offset(Point::default());

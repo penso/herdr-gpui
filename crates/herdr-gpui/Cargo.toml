@@ -35,6 +35,8 @@ herdr-diagnostics.workspace    = true
 herdr-github.workspace         = true
 herdr-orchestrator.workspace   = true
 herdr-remote.workspace         = true
+# Remote control without its server: the control protocol and `app`.
+herdr-remote-control.workspace         = true
 herdr-updater.workspace        = true
 herdr-usage.workspace          = true
 herdr-vcs.workspace            = true
