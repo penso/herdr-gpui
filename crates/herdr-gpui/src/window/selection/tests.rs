@@ -9,6 +9,7 @@ mod autoscroll;
 mod clicks_and_scroll;
 mod copy_on_select;
 mod gestures;
+mod link_click_modifier;
 mod overwritten;
 mod select_all;
 

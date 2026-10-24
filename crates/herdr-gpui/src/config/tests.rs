@@ -32,6 +32,7 @@ mod github_accounts;
 mod icon_font;
 mod keybindings;
 mod line_height;
+mod link_click;
 mod loading;
 mod missing_fonts;
 mod notification_settings;

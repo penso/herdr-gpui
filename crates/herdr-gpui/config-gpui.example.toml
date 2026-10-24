@@ -135,15 +135,29 @@ focus_follows_mouse = true
 # layout, true from both, and false never. Alt always reaches the pane on
 # Linux and Windows.
 option_as_alt = "auto"
-# Where a Cmd-click (Ctrl-click elsewhere) on a web link in a terminal opens
-# it: "system" (the default browser) or "browser-tab" (a browser tab beside the
+# What to hold to underline a link in a terminal and open it with a click:
+# "cmd", "ctrl", "shift", or several joined by `+` such as "ctrl+shift", held
+# exactly, or "none" for a plain click. "cmd" is the Super key on Linux and
+# the Windows key on Windows. Unset, it is Cmd on macOS and Ctrl elsewhere,
+# with other keys such as Shift allowed as well; a value set here is exact.
+# Alt (Option) cannot be part of it, since holding Alt as well opens a link in
+# the other target below. A list such as ["none", "cmd"] opens a link with
+# any of its entries, here a plain click or Cmd-click. With "none" or
+# "shift", dragging from a link still selects text, and only a click that
+# does not move opens it.
+# link_click_modifier = "cmd"
+# Underline a verified link under the pointer without holding
+# link_click_modifier; a click still needs the modifier to open it.
+highlight_links_on_hover = false
+# Where a link click (Cmd-click, Ctrl-click elsewhere, unless
+# link_click_modifier says otherwise) on a web link in a terminal opens it:
+# "system" (the default browser) or "browser-tab" (a browser tab beside the
 # workspace's terminals, macOS and Windows only). Holding Alt (Option) as well
 # opens a link in the other one.
 open_links_in = "system"
-# Where a Cmd-click (Ctrl-click elsewhere) on a file path a pane printed, such
-# as `src/main.rs:42`, opens it: "editor" (the terminal editor, at that line,
-# in a pane split beside the one that printed it) or "system" (the default
-# application). Folders, images, and PDFs always open in the system's
+# Where a link click on a file path a pane printed, such as `src/main.rs:42`,
+# opens it: "editor" (the terminal editor, at that line, in a pane split beside
+# the one that printed it) or "system" (the default application). Folders, images, and PDFs always open in the system's
 # application, as does every file on Windows. Holding Alt (Option) as well opens a
 # file in the other one.
 open_files_in = "editor"

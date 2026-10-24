@@ -13,6 +13,7 @@ mod external;
 #[cfg(unix)]
 mod file_checks;
 mod file_handlers;
+mod plain_hover;
 
 const URL: &str = "https://example.com/wrapped/path";
 

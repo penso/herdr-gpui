@@ -78,17 +78,19 @@ impl HerdrWindow {
     }
 
     /// Whether the modifiers keep a press here from a mouse-reporting
-    /// application. Shift keeps any gesture local, for selecting; the platform
-    /// link modifier (cmd on macOS, ctrl elsewhere) claims only a press on a
-    /// verified link, so the application still receives it everywhere else,
-    /// a printed path still being looked for on disk included.
+    /// application. Shift keeps any gesture local, for selecting; the link
+    /// modifier (`link_click_modifier`, cmd on macOS and ctrl elsewhere by
+    /// default) claims only a press on a verified link, so the application
+    /// still receives it everywhere else, a printed path still being looked
+    /// for on disk included. With the modifier set to none, that is a plain
+    /// press on a link.
     pub(crate) fn link_modifier_held(
         &self,
         position: Point<Pixels>,
         modifiers: gpui::Modifiers,
     ) -> bool {
         modifiers.shift
-            || (modifiers.secondary()
+            || (self.config.link_click_modifier.matches(modifiers)
                 && (self.terminal_link_at(position).is_some()
                     || self.daemon_link_at(position).is_some()
                     || self
@@ -105,7 +107,7 @@ impl HerdrWindow {
         position: Point<Pixels>,
         modifiers: gpui::Modifiers,
     ) -> bool {
-        modifiers.secondary()
+        self.config.link_click_modifier.matches(modifiers)
             && (self.terminal_link_at(position).is_some()
                 || self.daemon_link_at(position).is_some()
                 || self.terminal_hyperlink_at(position)

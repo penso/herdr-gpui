@@ -173,7 +173,7 @@ fn overrides(path: &Path) -> String {
 }
 
 /// Settings whose text values name a choice, never a secret, and are kept.
-const PLAIN_TEXT_KEYS: [&str; 10] = [
+const PLAIN_TEXT_KEYS: [&str; 11] = [
     "theme",
     "family",
     "mode",
@@ -182,6 +182,7 @@ const PLAIN_TEXT_KEYS: [&str; 10] = [
     "placement",
     "channel",
     "open_links_in",
+    "link_click_modifier",
     "style",
     "sort",
 ];
