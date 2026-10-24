@@ -8,7 +8,7 @@
 //! catalog default's keystroke takes it over, as a daemon `[keys]` entry does.
 
 mod custom;
-mod daemon;
+pub(crate) mod daemon;
 mod error;
 
 pub(crate) use custom::Reach;

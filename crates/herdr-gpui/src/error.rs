@@ -450,14 +450,8 @@ pub enum Error {
     SelectionSize,
     #[error("The selected pane is no longer on screen.")]
     SelectionStale,
-    #[error("the host did not publish its keybindings")]
-    ServerKeybindingsMissing,
-    #[error("the host's keybindings have no [keys] table")]
-    ServerKeybindingsNoKeys,
-    #[error("the host's keybindings are not valid TOML: {0}")]
-    ServerKeybindingsParse(#[source] toml::de::Error),
-    #[error("the host's keybindings exceed {max} bytes")]
-    ServerKeybindingsTooLarge { max: usize },
+    #[error(transparent)]
+    ServerKeybindings(#[from] crate::keymap::daemon::Error),
     #[error(transparent)]
     Settings(#[from] crate::config::Error),
     #[error("Could not finish saving Settings: {0}")]

@@ -142,17 +142,17 @@ fn a_server_profile_reads_like_the_local_table() {
 fn an_unusable_server_profile_is_an_error() {
     assert!(matches!(
         DaemonKeys::from_profile(None),
-        Err(Error::ServerKeybindingsMissing)
+        Err(crate::Error::ServerKeybindings(Error::Missing))
     ));
     assert!(matches!(
         DaemonKeys::from_profile(Some("[keys\n")),
-        Err(Error::ServerKeybindingsParse(_))
+        Err(crate::Error::ServerKeybindings(Error::Parse(_)))
     ));
     for profile in ["", "prefix = 'ctrl+a'", "keys = 'ctrl+a'"] {
         assert!(
             matches!(
                 DaemonKeys::from_profile(Some(profile)),
-                Err(Error::ServerKeybindingsNoKeys)
+                Err(crate::Error::ServerKeybindings(Error::NoKeys))
             ),
             "{profile:?}"
         );
@@ -160,9 +160,9 @@ fn an_unusable_server_profile_is_an_error() {
     let oversized = format!("[keys]\n{}", "# pad\n".repeat(MAX_PROFILE_BYTES / 6 + 1));
     assert!(matches!(
         DaemonKeys::from_profile(Some(&oversized)),
-        Err(Error::ServerKeybindingsTooLarge {
+        Err(crate::Error::ServerKeybindings(Error::TooLarge {
             max: MAX_PROFILE_BYTES
-        })
+        }))
     ));
     let error = DaemonKeys::from_profile(Some("[keys\n")).unwrap_err();
     assert!(std::error::Error::source(&error).is_some());
