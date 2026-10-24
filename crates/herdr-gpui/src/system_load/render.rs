@@ -176,9 +176,8 @@ pub(crate) fn gpu_line(
     let graphs = detail == Detail::Detailed;
     let stale = reading.error().is_some();
     let label = |name: &'static str| div().flex_none().text_color(rgb(theme.muted)).child(name);
-    let busy = gpu.busy.map(|busy| {
+    let column = |busy: f32| {
         div()
-            .debug_selector(|| "system-load-gpu".into())
             .flex()
             .flex_none()
             .items_center()
@@ -188,7 +187,15 @@ pub(crate) fn gpu_line(
                 row.child(sparkline(reading.gpu_history(), GPU_WARN, theme))
             })
             .child(share(busy, GPU_WARN, stale, theme, glyph))
-    });
+    };
+    let busy = match gpu.busy {
+        Some(busy) => Some(column(busy).debug_selector(|| "system-load-gpu".into())),
+        // A card that reports memory but not utilization (`[N/A]`) keeps
+        // the column's room on aligned rows, so VRAM stays under memory.
+        None => glyph
+            .filter(|_| gpu.memory.is_some())
+            .map(|_| column(0.).invisible()),
+    };
     let memory = gpu.memory.map(|memory| {
         div()
             .debug_selector(|| "system-load-vram".into())
@@ -217,12 +224,26 @@ pub(crate) fn gpu_line(
     )
 }
 
-/// Two vertical gauges with their shares, for a host row with no room for a
-/// second line, and the width they take.
-pub(crate) fn gauges(reading: &Reading, theme: &Theme, glyph: f32, height: f32) -> (f32, Div) {
+/// Vertical gauges with their shares, for a host row with no room for a
+/// second line, and the width they take: CPU and memory when `load`, and the
+/// GPU's busy share when `gpu` and the host reports one.
+pub(crate) fn gauges(
+    reading: &Reading,
+    theme: &Theme,
+    glyph: f32,
+    height: f32,
+    load: bool,
+    gpu: bool,
+) -> (f32, Div) {
     let item_width = GAUGE_WIDTH + 2. + glyph * SHARE_GLYPHS;
-    let width = 2. * item_width + ITEM_GAP;
-    let Some(sample) = reading.latest() else {
+    let sample = reading.latest();
+    let busy = sample
+        .and_then(|sample| sample.gpu)
+        .and_then(|card| card.busy)
+        .filter(|_| gpu);
+    let items = if load { 2. } else { 0. } + if busy.is_some() { 1. } else { 0. };
+    let width = (items * item_width + (items - 1.).max(0.) * ITEM_GAP).max(0.);
+    let Some(sample) = sample else {
         return (width, div().w(px(width)).flex_none());
     };
     let stale = reading.error().is_some();
@@ -243,11 +264,14 @@ pub(crate) fn gauges(reading: &Reading, theme: &Theme, glyph: f32, height: f32) 
         .justify_end()
         .items_center()
         .gap(px(ITEM_GAP));
-    if let Some(cpu) = sample.cpu {
+    if let Some(cpu) = sample.cpu.filter(|_| load) {
         row = row.child(item(cpu, CPU_WARN));
     }
-    if let Some(memory) = sample.memory {
+    if let Some(memory) = sample.memory.filter(|_| load) {
         row = row.child(item(memory.percent(), MEMORY_WARN));
+    }
+    if let Some(busy) = busy {
+        row = row.child(item(busy, GPU_WARN).debug_selector(|| "system-load-gpu-gauge".into()));
     }
     (width, row)
 }

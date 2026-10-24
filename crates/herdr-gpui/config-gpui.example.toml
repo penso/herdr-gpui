@@ -90,7 +90,8 @@ show_system_load = true
 # GPU and video memory, from nvidia-smi, the amdgpu driver, or ioreg on a Mac.
 # show_gpu_load shows the selected host's in the status bar (Settings > Status
 # bar); show_sidebar_gpu_load shows each host's on a sidebar line under its
-# CPU and memory, in densities with detail lines (Settings > Sidebar). While
+# CPU and memory, or as a gauge after its name in compact densities (Settings
+# > Sidebar). While
 # either is on, the Overview and Devices pages show GPUs too; with both off no
 # GPU tool runs on any host.
 show_gpu_load = false

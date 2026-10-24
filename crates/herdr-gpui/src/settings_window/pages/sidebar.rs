@@ -349,7 +349,7 @@ impl SettingsWindow {
             .child(
                 ui::row(theme, "sidebar-gpu-load", "Show GPU and video memory")
                     .description(
-                        "Each host's GPU busy share and VRAM on a line under its CPU and memory, in layouts with detail lines. Off by default.",
+                        "Each host's GPU busy share and VRAM on a line under its CPU and memory, or a GPU gauge after its name in compact layouts. Off by default.",
                     )
                     .switch(self.preference_toggle(
                         "sidebar-gpu-load-toggle",

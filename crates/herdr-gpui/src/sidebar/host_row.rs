@@ -73,21 +73,32 @@ impl HerdrWindow {
         let connected = endpoint.live.status.is_connected();
         // Of cloud machines, only Azure's load is read so far.
         let host = crate::usage::Host::load_of(&endpoint.connection.target);
-        let load = host
-            .as_ref()
-            .filter(|_| self.config.show_system_load)
-            .and_then(|host| self.system_load.get(host));
+        let reading = host.as_ref().and_then(|host| self.system_load.get(host));
+        let load = reading.filter(|_| self.config.show_system_load);
         // Densities with detail lines give the load its own line;
-        // compact ones fit gauges between the name and the status.
+        // compact ones fit gauges between the name and the status, the
+        // GPU's among them when the sidebar shows it.
         let load_line = load.filter(|_| layout.workspace_details());
-        let gauges = load.filter(|_| load_line.is_none()).map(|reading| {
-            crate::system_load::gauges(
-                reading,
-                theme,
-                super::metrics::glyph_width(font),
-                (font.size * 0.8).round(),
-            )
-        });
+        let gpu_gauge = self.config.show_sidebar_gpu_load
+            && reading.is_some_and(|reading| {
+                reading
+                    .latest()
+                    .is_some_and(|sample| sample.gpu.is_some_and(|gpu| gpu.busy.is_some()))
+            });
+        let gauges = reading
+            .filter(|_| !layout.workspace_details())
+            .filter(|_| self.config.show_system_load || gpu_gauge)
+            .map(|reading| {
+                let (width, gauges) = crate::system_load::gauges(
+                    reading,
+                    theme,
+                    super::metrics::glyph_width(font),
+                    (font.size * 0.8).round(),
+                    self.config.show_system_load,
+                    self.config.show_sidebar_gpu_load,
+                );
+                (width, gauges, reading)
+            });
         // The Devices layout counts the agents listed under the header.
         let working = (!self.config.layout.mode.lists_workspaces())
             .then(|| self.working_summary(endpoint))
@@ -104,7 +115,7 @@ impl HerdrWindow {
                 0.
             }
             - working_width
-            - gauges.as_ref().map_or(0., |(width, _)| width + host_gap))
+            - gauges.as_ref().map_or(0., |(width, ..)| width + host_gap))
         .max(0.);
         // A host with a GPU adds its own line under CPU and memory, in the
         // densities that have detail lines.
@@ -288,8 +299,8 @@ impl HerdrWindow {
                         )
                     })
                     .when_some(
-                        gauges.zip(load).zip(host.clone()),
-                        |row, (((_, gauges), reading), host)| {
+                        gauges.zip(host.clone()),
+                        |row, ((_, gauges, reading), host)| {
                             row.child(
                                 div()
                                     .id(SharedString::from(format!(

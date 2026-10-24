@@ -184,7 +184,7 @@ pub(super) const CATALOG: &[Entry] = &[
         Section::Sidebar,
         "sidebar-gpu-load",
         "Show GPU and video memory",
-        "Each host's GPU busy share and VRAM on a line under its CPU and memory, in layouts with detail lines. Off by default.",
+        "Each host's GPU busy share and VRAM on a line under its CPU and memory, or a GPU gauge after its name in compact layouts. Off by default.",
     ),
     entry(
         Section::Sidebar,

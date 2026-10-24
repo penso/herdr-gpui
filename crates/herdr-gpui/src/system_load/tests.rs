@@ -241,3 +241,5 @@ fn a_remote_shell_is_sampled_with_the_host_command() {
 
 mod disk_uptime;
 mod gpu;
+#[cfg(unix)]
+mod gpu_tool;

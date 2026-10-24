@@ -127,7 +127,7 @@ const TOOL_TIMEOUT: Duration = Duration::from_secs(3);
 /// Output a tool may print. `nvidia-smi` prints a few dozen bytes a card,
 /// but `ioreg` prints every accelerator property, already ~43 KB for one
 /// Apple GPU; a longer answer closes the pipe and the tool is given up on.
-const TOOL_LIMIT: usize = 1024 * 1024;
+pub(super) const TOOL_LIMIT: usize = 1024 * 1024;
 
 /// This machine's cards. A tool that is missing or overruns once is not run
 /// again for this worker, so a machine without a GPU spends nothing on it.
@@ -152,14 +152,18 @@ impl Local {
         #[cfg(target_os = "linux")]
         cards.extend(amd_cards());
         if self.nvidia {
-            match tool("nvidia-smi", NVIDIA_QUERY.split(' ')) {
+            match tool("nvidia-smi", NVIDIA_QUERY.split(' '), TOOL_TIMEOUT) {
                 Some(text) => cards.extend(text.lines().filter_map(nvidia)),
                 None => self.nvidia = false,
             }
         }
         #[cfg(target_os = "macos")]
         if self.ioreg {
-            match tool("ioreg", ["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"]) {
+            match tool(
+                "ioreg",
+                ["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+                TOOL_TIMEOUT,
+            ) {
                 Some(text) => cards.extend(apple_cards(&text)),
                 None => self.ioreg = false,
             }
@@ -210,11 +214,18 @@ fn amd_cards() -> Vec<Card> {
         .collect()
 }
 
-/// What `program` printed, or None when it could not start, failed, or
-/// overran [`TOOL_TIMEOUT`]. A reader thread drains its output while this
-/// one waits, so a long answer cannot fill the pipe and stall it.
-fn tool<'a>(program: &str, args: impl IntoIterator<Item = &'a str>) -> Option<String> {
-    use std::{io::Read, process::Stdio, sync::mpsc};
+/// What `program` printed, or None when it could not start, failed, printed
+/// more than [`TOOL_LIMIT`], or was still running after `timeout`. A reader
+/// thread drains its output while this one waits, so a long answer cannot
+/// fill the pipe and stall it; the deadline covers the process, not only its
+/// output, so a tool that closes stdout and keeps running is still ended.
+pub(super) fn tool<'a>(
+    program: &str,
+    args: impl IntoIterator<Item = &'a str>,
+    timeout: Duration,
+) -> Option<String> {
+    use std::{io::Read, process::Stdio, sync::mpsc, time::Instant};
+    let deadline = Instant::now() + timeout;
     let mut child = herdr_client::new_command(program)
         .args(args)
         .stdin(Stdio::null())
@@ -228,9 +239,10 @@ fn tool<'a>(program: &str, args: impl IntoIterator<Item = &'a str>) -> Option<St
         .name("herdr-gpu-tool".into())
         .spawn(move || {
             let mut text = String::new();
+            // One byte past the cap tells a full answer from a cut one.
             let read = stdout.is_some_and(|stdout| {
                 stdout
-                    .take(TOOL_LIMIT as u64)
+                    .take(TOOL_LIMIT as u64 + 1)
                     .read_to_string(&mut text)
                     .is_ok()
             });
@@ -238,12 +250,24 @@ fn tool<'a>(program: &str, args: impl IntoIterator<Item = &'a str>) -> Option<St
         });
     let text = reader
         .ok()
-        .and_then(|_| read.recv_timeout(TOOL_TIMEOUT).ok())
-        .flatten();
-    if text.is_none() {
-        // Ends the child, and with it the reader's pipe.
-        let _ = child.kill();
-    }
-    let status = child.wait().ok()?;
-    text.filter(|_| status.success())
+        .and_then(|_| read.recv_timeout(timeout).ok())
+        .flatten()
+        .filter(|text| text.len() <= TOOL_LIMIT);
+    // Polled on the load worker's thread, which has nothing else to do
+    // until the tool has answered.
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if text.is_some() && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            _ => {
+                // Ends the child, and with it the reader's pipe.
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    text.filter(|_| status.is_some_and(|status| status.success()))
 }
