@@ -1,5 +1,4 @@
 //! Internal failures retain their categories and sources until presentation.
-pub use github::{GitHubAccountsError, GitHubJsonError};
 use std::{io, path::PathBuf};
 
 #[cfg(any(target_os = "macos", windows))]
@@ -43,8 +42,6 @@ pub enum Error {
     },
     #[error("{0}")]
     Client(#[from] herdr_client::Error),
-    #[error("HERDR_GITHUB_OAUTH_CLIENT_ID must be UTF-8")]
-    ClientIdEncoding,
     #[error(transparent)]
     Clipboard(#[from] crate::window::clipboard::Error),
     #[cfg(feature = "cloud")]
@@ -101,70 +98,11 @@ pub enum Error {
         source: io::Error,
     },
     #[error(transparent)]
-    GitHubAccounts(#[from] GitHubAccountsError),
-    #[error(
-        "GitHub authentication required. Use menu > GitHub sign-in or set GH_TOKEN / GITHUB_TOKEN."
-    )]
-    GitHubAuthentication,
-    #[error("GitHub authorization failed. Check OAuth application settings.")]
-    GitHubAuthorization,
-    #[error("GitHub CLI (gh) was not found. Install it and run `gh auth login`, or sign in here.")]
-    GitHubCliMissing,
-    #[error("Could not run the GitHub CLI (gh).")]
-    GitHubCliProcess(#[source] Box<Error>),
-    #[error(
-        "GitHub rejected the GitHub CLI's token. Run `gh auth login` to renew it, then try again."
-    )]
-    GitHubCliRejected,
-    #[error("GitHub CLI is not signed in to github.com. Run `gh auth login`, then try again.")]
-    GitHubCliSignedOut,
-    #[error("GitHub CLI did not answer within 10 seconds. Check `gh auth status`, then try again.")]
-    GitHubCliTimeout,
-    #[error("GitHub authorization denied.")]
-    GitHubDenied,
-    #[error("Invalid GitHub device authorization response.")]
-    GitHubDevice,
-    #[error("Invalid GitHub credential encoding.")]
-    GitHubEncoding(#[source] std::str::Utf8Error),
-    #[error("GitHub code expired. Sign in again.")]
-    GitHubExpired,
-    #[error("GitHub denied access: check token permissions or SSO authorization.")]
-    GitHubForbidden,
-    #[error("Invalid GitHub authorization header.")]
-    GitHubHeader(#[source] ureq::http::header::InvalidHeaderValue),
-    #[error("Invalid GitHub JSON response.")]
-    GitHubJson(#[source] GitHubJsonError),
-    #[error("GitHub network request failed or timed out ({0}).")]
-    GitHubNetwork(#[source] ureq::Error),
-    #[error("GitHub query failed. Check token repository permissions and rate limits.")]
-    GitHubQuery,
-    /// The account's (or, signed out, this address's) API quota is used up.
-    #[error("GitHub rate limit reached. {}.", crate::updater::retry_hint(*reset))]
-    GitHubRateLimit {
-        reset: Option<chrono::DateTime<chrono::Utc>>,
-    },
-    #[error("GitHub response could not be read within the size/time limit.")]
-    GitHubRead(#[source] io::Error),
-    /// GitHub's own refusal of a requested change, cleaned and bounded.
-    #[error("GitHub refused the request: {0}")]
-    GitHubRejected(String),
-    /// GraphQL answers a repository the credential cannot reach as missing.
-    #[error("GitHub cannot see {repository} with this sign-in. {}", crate::github::hidden_hint(*app_token))]
-    GitHubRepositoryHidden { repository: String, app_token: bool },
+    GitHub(#[from] herdr_github::Error),
     #[error(
         "[github] {0} must not be in the config. Sign in from the app, or use GH_TOKEN / GITHUB_TOKEN."
     )]
     GitHubSecretInConfig(&'static str),
-    #[error("GitHub response exceeded the size limit.")]
-    GitHubSize,
-    #[error("GitHub request failed (HTTP {0}). Check network and repository access.")]
-    GitHubStatus(u16),
-    #[error("Invalid GitHub token. Replace the configured credential.")]
-    GitHubToken,
-    #[error("Unsupported GitHub token type.")]
-    GitHubTokenType,
-    #[error("GitHub {0} worker stopped.")]
-    GitHubWorker(&'static str),
     #[error("Oversized GIF, WebP, and animated PNG images cannot be resized safely.")]
     ImageAnimationResize,
     #[error("Could not decode the oversized image.")]
@@ -201,10 +139,6 @@ pub enum Error {
     InvalidBrowserTabs,
     #[error("Browser tabs open only http and https addresses with a host, of at most 8 KiB.")]
     InvalidBrowserUrl,
-    #[error(
-        "{0} must be 1..256 ASCII letters, digits, '.', '_' or '-' (public client ID, not a secret)"
-    )]
-    InvalidClientId(&'static str),
     #[error("A code tab must name an absolute file path without control characters")]
     InvalidCodeFile,
     #[error("Not an address with a scheme other than http, https, and file, of at most 8 KiB.")]
@@ -304,75 +238,10 @@ pub enum Error {
     PopupOpener,
     #[error(transparent)]
     PortForward(#[from] crate::port_forward::Error),
-    #[error("Daemon did not provide an absolute checkout and repository key.")]
-    PrAbsolutePath,
-    #[error("A pull request action is already running.")]
-    PrActionBusy,
-    #[error("Could not start the pull request worker.")]
-    PrActionProcess {
-        #[source]
-        source: io::Error,
-    },
-    #[error(
-        "This pull request cannot be acted on here: it is not open, or its details are incomplete. Refresh and try again."
-    )]
-    PrActionTarget,
-    #[error("Pull request worker stopped. Check the pull request on GitHub before retrying.")]
-    PrActionWorker,
-    #[error("Multiple PRs match this branch; no PR selected.")]
-    PrAmbiguous,
-    #[error("Multiple local worktrees match the daemon branch.")]
-    PrAmbiguousWorktree,
-    #[error("No supported branch available.")]
-    PrBranch,
-    #[error("Checkout branch changed. Waiting for daemon metadata.")]
-    PrBranchChanged,
-    #[error("PR lookup cancelled.")]
-    PrCancelled,
-    #[error("Local checkout unavailable or not a trusted Git repository.")]
-    PrCheckout,
-    #[error("Enter a comment of at most 4096 characters.")]
-    PrCommentBody,
     #[error("preferences path has no parent")]
     PreferencesPath,
-    #[error("Invalid process text.")]
-    PrEncoding(#[source] std::str::Utf8Error),
-    #[error("PR identity does not match the repository and branch.")]
-    PrIdentity,
-    #[error("The branch changed since this dialog opened. Review the pull request again.")]
-    PrMergeChanged,
-    #[error("The repository does not allow this merge method.")]
-    PrMergeMethod,
-    #[error("No repository metadata.")]
-    PrMetadata,
-    #[error("No local worktree matches the daemon branch.")]
-    PrMissingWorktree,
     #[error(transparent)]
     Processes(#[from] crate::processes::Error),
-    #[error("PR lookup supports GitHub.com origins only.")]
-    PrOrigin,
-    #[error("Could not {operation} for Git PR lookup.")]
-    PrProcess {
-        operation: &'static str,
-        #[source]
-        source: io::Error,
-    },
-    #[error("GitHub repository unavailable. Check repository access and token permissions.")]
-    PrRepository,
-    #[error("Local repository does not match daemon metadata.")]
-    PrRepositoryMismatch,
-    #[error("PR response exceeded the size limit.")]
-    PrSize,
-    #[error("PR lookup timed out (15 seconds).")]
-    PrTimeout,
-    #[error(
-        "PR lookup requires your owned local session socket or a saved SSH device. Other socket locations are unsupported."
-    )]
-    PrUntrustedEndpoint,
-    #[error("Workspace directory is not in a Git repository.")]
-    PrWorkspaceRepository,
-    #[error("Local repository unavailable for worktree lookup.")]
-    PrWorktreeLookup,
     #[error(transparent)]
     Px0(#[from] crate::px0::Error),
     #[error("XDG_CONFIG_HOME must be an absolute path")]

@@ -2,7 +2,8 @@
 //! accounts the GitHub page lists. The table itself lives in `herdr-github`.
 
 use super::{Config, daemon_config_path};
-use crate::{Error, Result, error::GitHubAccountsError};
+use crate::{Error, Result};
+use herdr_github::GitHubAccountsError;
 pub(crate) use herdr_github::config::MAX_ACCOUNTS;
 use herdr_github::config::valid_account_id;
 pub use herdr_github::config::{GitHubAccount, GitHubConfig};

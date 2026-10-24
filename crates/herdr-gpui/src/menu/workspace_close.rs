@@ -167,7 +167,7 @@ impl CloseCheck {
                     }
                     let status = input.map_err(crate::Error::from).and_then(|input| {
                         if !local {
-                            return Err(crate::Error::PrUntrustedEndpoint);
+                            return Err(herdr_github::Error::PrUntrustedEndpoint.into());
                         }
                         Ok(crate::git::close_status(&input, deadline, &|| {
                             cancellation.load(Ordering::Relaxed)

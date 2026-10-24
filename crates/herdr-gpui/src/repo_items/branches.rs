@@ -36,7 +36,7 @@ pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Resul
     let deadline = Instant::now() + TIMEOUT;
     let repo_key = repository_key(input, deadline, cancelled)?;
     if !Path::new(&repo_key).is_absolute() {
-        return Err(Error::PrAbsolutePath);
+        return Err(herdr_github::Error::PrAbsolutePath.into());
     }
     let mut command = herdr_client::new_command("git");
     command
@@ -158,7 +158,7 @@ mod tests {
         };
         assert!(matches!(
             list(&input, &|| false),
-            Err(Error::PrAbsolutePath)
+            Err(Error::GitHub(herdr_github::Error::PrAbsolutePath))
         ));
     }
 }

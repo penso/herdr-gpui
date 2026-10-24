@@ -1,15 +1,13 @@
 use super::*;
-use crate::{
-    config::{GitHubAccount, MAX_ACCOUNTS},
-    error::GitHubAccountsError,
-};
+use crate::config::{GitHubAccount, MAX_ACCOUNTS};
+use herdr_github::GitHubAccountsError;
 
 const ID: &str = "0123456789abcdef0123456789abcdef";
 const OTHER: &str = "fedcba9876543210fedcba9876543210";
 
 fn accounts_error(text: &str) -> Option<GitHubAccountsError> {
     match Config::parse(text) {
-        Err(crate::Error::GitHubAccounts(error)) => Some(error),
+        Err(crate::Error::GitHub(herdr_github::Error::GitHubAccounts(error))) => Some(error),
         _ => None,
     }
 }
@@ -200,11 +198,15 @@ fn an_add_the_app_would_refuse_is_not_written() -> anyhow::Result<()> {
     let (_temp, _path, local, daemon) = files("theme = \"Nord\"\n")?;
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account("bad", &[])),
-        Err(crate::Error::GitHubAccounts(GitHubAccountsError::Id))
+        Err(crate::Error::GitHub(herdr_github::Error::GitHubAccounts(
+            GitHubAccountsError::Id
+        )))
     ));
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account(ID, &["not an owner"])),
-        Err(crate::Error::GitHubAccounts(GitHubAccountsError::Owner(_)))
+        Err(crate::Error::GitHub(herdr_github::Error::GitHubAccounts(
+            GitHubAccountsError::Owner(_)
+        )))
     ));
     assert_eq!(fs::read_to_string(&local)?, "theme = \"Nord\"\n");
     for index in 0..MAX_ACCOUNTS {
@@ -212,8 +214,8 @@ fn an_add_the_app_would_refuse_is_not_written() -> anyhow::Result<()> {
     }
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account(ID, &[])),
-        Err(crate::Error::GitHubAccounts(GitHubAccountsError::TooMany(
-            _
+        Err(crate::Error::GitHub(herdr_github::Error::GitHubAccounts(
+            GitHubAccountsError::TooMany(_)
         )))
     ));
     Ok(())
