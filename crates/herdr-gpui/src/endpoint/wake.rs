@@ -1,6 +1,7 @@
 //! Recovering connections after the machine sleeps. A link that died while
 //! the machine slept is otherwise found only by the routine health check of a
-//! quiet link, many seconds after waking.
+//! quiet link, many seconds after waking, and a dropped one waits out a
+//! backoff earned while no network could have answered.
 //!
 //! Sleep is told from the two clocks: the monotonic clock behind `Instant`
 //! stops while macOS and Linux are suspended, and the wall clock does not. No
@@ -37,19 +38,16 @@ impl WakeClock {
 }
 
 impl HerdrWindow {
-    /// After a sleep, have every live connection prove itself now, and dial
-    /// every dropped endpoint at once rather than at the end of its backoff:
-    /// the network the user woke to may be the one it was waiting for.
+    /// After a sleep, recover every endpoint at once rather than at the end of
+    /// its backoff: the network the user woke to may be the one it was
+    /// waiting for.
     pub(crate) fn recover_after_sleep(&mut self, instant: Instant, wall: SystemTime) -> bool {
         if !self.wake.woke(instant, wall) {
             return false;
         }
         tracing::info!(category = "wake", "machine woke; checking connections");
         for endpoint in &mut self.endpoints {
-            match &endpoint.connection.handle {
-                Some(handle) => handle.check_liveness(),
-                None => endpoint.retry_now(instant),
-            }
+            endpoint.recover(instant);
         }
         true
     }

@@ -390,10 +390,27 @@ impl Endpoint {
         changed
     }
 
-    /// Dial again at once, keeping the backoff earned so far for any later
-    /// failure. Detached and disabled endpoints stay as they are.
-    fn retry_now(&mut self, now: Instant) {
-        self.retry_at = self.retry_at.min(now);
+    /// After a sleep. Failures before it, often from dark
+    /// wakes with no network, say nothing about the network now, so the
+    /// backoff starts over. A live link is asked to prove itself, which a
+    /// healthy one does in a round trip. A remote attempt still dialing was
+    /// started over the old path and may hang until its timeout, so it is
+    /// abandoned and dialed again. A dropped endpoint is dialed at once.
+    /// Detached and disabled endpoints stay as they are.
+    fn recover(&mut self, now: Instant) {
+        self.attempts = 0;
+        let networked = self.connection.target.is_remote()
+            && !matches!(self.connection.target, ConnectTarget::Wsl { .. });
+        if networked
+            && !self.live.status.is_connected()
+            && let Some(handle) = self.connection.handle.take()
+        {
+            handle.disconnect();
+        }
+        match &self.connection.handle {
+            Some(handle) => handle.check_liveness(),
+            None => self.retry_at = self.retry_at.min(now),
+        }
     }
 
     /// When the current connection came up with a snapshot, while it is up.
