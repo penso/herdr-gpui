@@ -11,9 +11,36 @@ use crate::{
     },
 };
 use gpui::{
-    Bounds, Context, KeyDownEvent, KeyUpEvent, Pixels, Point, ScrollWheelEvent, Window, point, px,
-    size,
+    Bounds, ClipboardItem, Context, KeyDownEvent, KeyUpEvent, Keystroke, Pixels, Point,
+    ScrollWheelEvent, Window, point, px, size,
 };
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;
+
+/// Whether a plain Ctrl+V is the app's paste rather than the pane's key.
+/// Only where `ctrl_v_pastes` (Windows, whose Ctrl+Shift+V is often taken
+/// system-wide), and only while the clipboard holds text: an image or an
+/// empty clipboard keeps Ctrl+V's terminal meaning, so a remote endpoint's
+/// image bridge or a local agent still receives it. The clipboard is read
+/// only for that keystroke.
+fn plain_ctrl_v_paste(
+    keystroke: &Keystroke,
+    ctrl_v_pastes: bool,
+    read_clipboard: impl FnOnce() -> Option<ClipboardItem>,
+) -> bool {
+    let modifiers = keystroke.modifiers;
+    let plain_ctrl_v = modifiers.control
+        && !modifiers.shift
+        && !modifiers.alt
+        && !modifiers.platform
+        && !modifiers.function
+        && keystroke.key.eq_ignore_ascii_case("v");
+    ctrl_v_pastes
+        && plain_ctrl_v
+        && read_clipboard().is_some_and(|item| item.text().is_some_and(|text| !text.is_empty()))
+}
 
 impl HerdrWindow {
     pub(crate) fn open_terminal_link(
@@ -251,7 +278,8 @@ impl HerdrWindow {
         }
     }
 
-    /// Cmd-V and Edit > Paste into the focused pane or popup.
+    /// Cmd-V (Ctrl-Shift-V off macOS) and Edit > Paste into the focused pane
+    /// or popup.
     pub(crate) fn paste(&mut self, cx: &mut Context<Self>) {
         if self.copy_mode_active() {
             return;
@@ -360,6 +388,14 @@ impl HerdrWindow {
             || (event.keystroke.modifiers.shift && event.keystroke.key == "insert"))
             && (event.keystroke.key.eq_ignore_ascii_case("v") || event.keystroke.key == "insert")
         {
+            self.paste(cx);
+            cx.stop_propagation();
+            window.prevent_default();
+        } else if plain_ctrl_v_paste(&event.keystroke, cfg!(target_os = "windows"), || {
+            cx.read_from_clipboard()
+        }) {
+            // The same paste as Ctrl+Shift+V: held across a projection gap,
+            // reading the clipboard again when it is delivered.
             self.paste(cx);
             cx.stop_propagation();
             window.prevent_default();

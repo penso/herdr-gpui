@@ -21,6 +21,9 @@ use herdr_client::{
 };
 use std::path::PathBuf;
 
+#[cfg(windows)]
+mod ctrl_v;
+
 const BOOT: &str = "boot-v1";
 const PANE: &str = "w1:p1";
 const STOPPED: &str = "Input not sent: the terminal stopped updating";
