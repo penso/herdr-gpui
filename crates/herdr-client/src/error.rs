@@ -47,18 +47,10 @@ pub enum Error {
     Full,
     #[error("client is disconnected")]
     Disconnected,
-    #[error("a clipboard image upload is already reserved or in progress")]
-    ClipboardImageBusy,
-    #[error("clipboard image upload cancelled")]
-    ClipboardImageCancelled,
-    #[error("clipboard image write timed out; reconnect required")]
-    ClipboardImageWriteTimeout,
+    #[error(transparent)]
+    Clipboard(#[from] crate::clipboard::Error),
     #[error("terminal input write timed out; reconnect required")]
     InputWriteTimeout,
-    #[error("semantic input fallback requires a pane or popup target")]
-    ClipboardImageInputTarget,
-    #[error("clipboard image preparation timed out; reservation skipped")]
-    ClipboardImagePreparationTimeout,
     #[error("invalid client command: snapshot boot ID required")]
     MissingBootId,
     #[error("command does not match a ready snapshot boot")]
@@ -354,10 +346,7 @@ impl Error {
             Self::InvalidSession | Self::DefaultSession | Self::NoLocalSocket => {
                 io::ErrorKind::InvalidInput
             }
-            Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
-            Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
-                io::ErrorKind::TimedOut
-            }
+            Self::Clipboard(error) => error.kind(),
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
             Self::SocketClosed | Self::ClosedBeforeWelcome => io::ErrorKind::UnexpectedEof,
@@ -369,7 +358,7 @@ impl Error {
             Self::HealthTimeout | Self::SessionDeleteTimeout | Self::ForwardTimeout => {
                 io::ErrorKind::TimedOut
             }
-            Self::Full | Self::ClipboardImageBusy => io::ErrorKind::WouldBlock,
+            Self::Full => io::ErrorKind::WouldBlock,
             _ => io::ErrorKind::InvalidData,
         }
     }

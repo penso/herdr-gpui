@@ -130,3 +130,35 @@ fn wsl_errors_keep_kind_and_text() {
     assert_eq!(error.kind(), InvalidData);
     assert_eq!(error.to_string(), "invalid WSL device list schema");
 }
+
+#[test]
+fn clipboard_errors_keep_kind_and_text() {
+    use io::ErrorKind::*;
+    assert_kinds([
+        (
+            clipboard::Error::Busy.into(),
+            WouldBlock,
+            "a clipboard image upload is already reserved or in progress",
+        ),
+        (
+            clipboard::Error::Cancelled.into(),
+            Interrupted,
+            "clipboard image upload cancelled",
+        ),
+        (
+            clipboard::Error::InputTarget.into(),
+            InvalidData,
+            "semantic input fallback requires a pane or popup target",
+        ),
+        (
+            clipboard::Error::PreparationTimeout.into(),
+            TimedOut,
+            "clipboard image preparation timed out; reservation skipped",
+        ),
+        (
+            clipboard::Error::WriteTimeout.into(),
+            TimedOut,
+            "clipboard image write timed out; reconnect required",
+        ),
+    ]);
+}

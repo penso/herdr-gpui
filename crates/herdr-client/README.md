@@ -200,7 +200,7 @@ but does not claim the image lease until `complete(extension, data)`, immediatel
 before encoding. Text/key completion via `complete_input` never claims that lease,
 so text can be reserved and published while an image is active without losing its
 position before subsequent input. A competing image completion returns
-`ClipboardImageBusy` and skips its slot; it does not retry or replay.
+`clipboard::Error::Busy` and skips its slot; it does not retry or replay.
 Both APIs use the same 64-entry command queue (plus one worker-held slot) and
 allocate no payload buffer until completion. Callers must separately bound their
 background acquisition tasks and data (the GUI limits preparation to four tasks).
@@ -217,7 +217,7 @@ ClipboardImageCancellation::is_finished(&self) -> bool
 The upload is an owned, sendable RAII permit, not cloneable. Dropping it skips
 the slot. Only one image lease can be held per connection: the eager image API
 claims it at reservation, the input API only on image completion. Another eager
-image reservation or deferred image completion returns `Error::ClipboardImageBusy`. The atomic
+image reservation or deferred image completion returns `clipboard::Error::Busy`. The atomic
 lease remains held until both preparation and the worker slot are gone, so
 repeated drop/cancel cannot accumulate image slots. The ordinary bounded command
 queue still returns `Full`. A cancellation handle is cloneable and does not
@@ -244,7 +244,7 @@ Completion accepts nonempty opaque bytes up to 16 MiB and case-insensitive
 this is extension/size validation, not image decoding or signature validation.
 Invalid input returns `Error::Protocol` with `ClipboardImageSize`,
 `ClipboardImageExtension`, or `ClipboardImageTarget`. Explicit upload
-cancellation returns `ClipboardImageCancelled`; connection cancellation returns
+cancellation returns `clipboard::Error::Cancelled`; connection cancellation returns
 `Disconnected`. Late completion after a worker rejection fails rather than
 replaying on another connection.
 
@@ -257,14 +257,14 @@ It encodes exactly one event for the captured pane/popup using the ordinary
 2 MiB cap, in the same reserved slot, so
 later input (including Enter) cannot overtake the fallback. It shares completion's
 background-only encoding, GUI identity validation, and cancellation rules.
-`DirectTerminal` returns `ClipboardImageInputTarget`: upstream's legacy `Input`
+`DirectTerminal` returns `clipboard::Error::InputTarget`: upstream's legacy `Input`
 carries raw terminal bytes, and this client cannot infer the direct terminal's
 keyboard or bracketed-paste mode. There is no paste-only completion wrapper.
 
 Preparation has a 60-second deadline from reservation, including encoding.
 `is_cancelled` reflects expiration, and late completion returns
-`ClipboardImageCancelled`. An expired, still-empty slot is cancelled and skipped
-by the worker, with `CommandRejected { reason: ClipboardImagePreparationTimeout,
+`clipboard::Error::Cancelled`. An expired, still-empty slot is cancelled and skipped
+by the worker, with `CommandRejected { reason: clipboard::Error::PreparationTimeout,
 request_id: None }`; ordinary input then resumes without replay. A retained
 expired eager image permit still holds the single-image memory lease until dropped, but no
 longer blocks ordinary commands. Already published data is not subject to the

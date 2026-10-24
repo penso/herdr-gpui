@@ -2,7 +2,7 @@
 //! read would silently corrupt framing, so the prefix and payload are retained.
 
 use crate::{
-    Error, Result,
+    Error, Result, clipboard,
     limits::{COMMAND_TIMEOUT, POLL},
     protocol::*,
 };
@@ -25,7 +25,7 @@ impl ImageWriter {
 
     pub(crate) fn check_timeout(&self) -> Result<()> {
         if self.deadline().is_some_and(|due| Instant::now() >= due) {
-            return Err(Error::ClipboardImageWriteTimeout);
+            return Err(clipboard::Error::WriteTimeout.into());
         }
         Ok(())
     }

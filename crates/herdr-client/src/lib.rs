@@ -6,7 +6,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 mod catalog;
-mod clipboard;
+pub mod clipboard;
 mod compat;
 mod connect;
 mod discovery;
