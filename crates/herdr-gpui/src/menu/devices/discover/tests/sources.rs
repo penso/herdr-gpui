@@ -95,7 +95,9 @@ fn tailscale_status_without_peers_or_with_bad_json() {
     assert!(tailscale::parse(b"{}").unwrap().is_empty());
     assert!(matches!(
         tailscale::parse(b"Warning: not json"),
-        Err(Error::TailscaleJson(_))
+        Err(Error::Devices(crate::menu::devices::Error::TailscaleJson(
+            _
+        )))
     ));
 }
 

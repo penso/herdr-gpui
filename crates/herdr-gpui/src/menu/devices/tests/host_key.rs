@@ -107,7 +107,7 @@ fn cancel_gives_up_the_host_so_it_can_be_tried_again(cx: &mut gpui::TestAppConte
             view.set_device_error(Some("SSH to dev@box: refused".into()));
             view.cancel_device_step(cx);
             assert!(matches!(step(view), Step::Form));
-            // A held claim would refuse the next submit as DeviceAdding.
+            // A held claim would refuse the next submit as `Error::Adding`.
             assert!(view.menu.device_setup.as_ref().unwrap().claim.is_none());
             assert!(view.menu.device_setup.as_ref().unwrap().error.is_none());
         });

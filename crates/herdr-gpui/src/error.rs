@@ -84,37 +84,8 @@ pub enum Error {
     DeletionLookup,
     #[error("HEAD is detached. Check a branch out first.")]
     DetachedHead,
-    #[error(
-        "This host is already being added, in another Add Device dialog or a \u{201c}Set up\u{201d} workspace that is still running. Finish or close it, then try again."
-    )]
-    DeviceAdding,
-    #[error("This host and session are already saved as \u{201c}{0}\u{201d}.")]
-    DeviceExists(String),
-    #[error("Removing the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
-    DeviceRemove {
-        status: std::process::ExitStatus,
-        detail: String,
-    },
-    #[error("Renaming the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
-    DeviceRename {
-        status: std::process::ExitStatus,
-        detail: String,
-    },
-    /// Herdr's `machine add` refused to save the host until its running
-    /// server is restarted, which it only does after a confirmation.
-    #[error(
-        "The Herdr server on this host was started in a way that may not survive a dropped SSH connection, so Herdr has to restart it before saving the device. Restarting stops the panes running there."
-    )]
-    DeviceServerRestart,
-    #[error("Saving the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
-    DeviceSetup {
-        status: std::process::ExitStatus,
-        detail: String,
-    },
-    #[error("{0}")]
-    DeviceSetupInput(&'static str),
-    #[error("Saving the device timed out")]
-    DeviceSetupTimeout,
+    #[error(transparent)]
+    Devices(#[from] crate::menu::devices::Error),
     #[error("Another host is still being set up. Wait for it to finish.")]
     DispatchBusy,
     #[error("{0} cannot be reached by script. Choose another host.")]
@@ -489,10 +460,6 @@ pub enum Error {
     SystemLoad(#[from] crate::system_load::Error),
     #[error(transparent)]
     TabLayout(#[from] crate::config::tab_layout::Error),
-    #[error("Tailscale returned an unreadable status: {0}")]
-    TailscaleJson(#[source] serde_json::Error),
-    #[error("Tailscale did not answer in time")]
-    TailscaleTimeout,
     #[error("{0}")]
     Toml(#[from] toml::de::Error),
     #[error("{0}")]

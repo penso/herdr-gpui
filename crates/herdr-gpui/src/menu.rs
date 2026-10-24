@@ -10,7 +10,7 @@ mod cloud_create;
 #[cfg(feature = "cloud")]
 mod cloud_destroy;
 mod colors;
-mod devices;
+pub(crate) mod devices;
 mod fan_out;
 mod git;
 mod github;
