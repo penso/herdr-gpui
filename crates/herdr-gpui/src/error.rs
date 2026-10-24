@@ -84,10 +84,8 @@ pub enum Error {
     DetachedHead,
     #[error(transparent)]
     Devices(#[from] crate::menu::devices::Error),
-    #[error("Another host is still being set up. Wait for it to finish.")]
-    DispatchBusy,
-    #[error("{0} cannot be reached by script. Choose another host.")]
-    DispatchHostUnavailable(String),
+    #[error(transparent)]
+    Dispatch(#[from] crate::dispatch::Error),
     #[error(transparent)]
     Editor(#[from] crate::editor::Error),
     #[error("Enter a tab name.")]
@@ -209,8 +207,6 @@ pub enum Error {
     InvalidClientId(&'static str),
     #[error("A code tab must name an absolute file path without control characters")]
     InvalidCodeFile,
-    #[error("Invalid saved dispatch history")]
-    InvalidDispatchHistory,
     #[error("Not an address with a scheme other than http, https, and file, of at most 8 KiB.")]
     InvalidExternalUrl,
     #[error("Invalid saved editor groups")]

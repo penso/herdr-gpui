@@ -40,7 +40,7 @@ struct Saved {
 fn parse(bytes: &[u8]) -> crate::Result<Vec<Pick>> {
     let saved: Saved = serde_json::from_slice(bytes)?;
     if saved.picks.len() > MAX_PICKS || !saved.picks.iter().all(Pick::valid) {
-        return Err(crate::Error::InvalidDispatchHistory);
+        return Err(super::Error::InvalidHistory.into());
     }
     Ok(saved.picks)
 }
