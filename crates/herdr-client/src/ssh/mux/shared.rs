@@ -8,8 +8,8 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, ExitStatus, Stdio},
     sync::{
-        Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError,
-        atomic::{AtomicU64, Ordering},
+        Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError, Weak,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -82,6 +82,9 @@ struct Host {
     phase: Phase,
     /// Failed starts in a row, which lengthen the backoff.
     failures: u32,
+    /// Bumped when the host's masters are retired, so a master that was
+    /// starting at the time is not handed out once it is ready.
+    generation: u64,
     /// At most one that is not retired; retired ones only drain.
     masters: Vec<Master>,
 }
@@ -149,6 +152,10 @@ pub(crate) struct Registry {
     /// saved devices.
     bridges: Mutex<HashSet<(String, String)>>,
     changed: Condvar,
+    /// How long a master may sit with no channels before it is stopped.
+    idle: Duration,
+    /// Whether the thread that stops idle masters is running.
+    janitor: AtomicBool,
     next: AtomicU64,
     /// `ssh`, or a stand-in under test.
     program: OsString,
@@ -156,7 +163,7 @@ pub(crate) struct Registry {
 
 pub(super) fn registry() -> &'static Arc<Registry> {
     static REGISTRY: OnceLock<Arc<Registry>> = OnceLock::new();
-    REGISTRY.get_or_init(|| Registry::new("ssh"))
+    REGISTRY.get_or_init(|| Registry::new("ssh", IDLE))
 }
 
 /// One open channel on a master. Keep it until the command's child is
@@ -180,17 +187,19 @@ impl Drop for Channel {
             master.channels = master.channels.saturating_sub(1);
             master.last_used = now;
         }
-        sweep(&mut hosts, now);
+        sweep(&mut hosts, now, self.registry.idle);
         self.registry.changed.notify_all();
     }
 }
 
 impl Registry {
-    pub(crate) fn new(program: impl Into<OsString>) -> Arc<Self> {
+    pub(crate) fn new(program: impl Into<OsString>, idle: Duration) -> Arc<Self> {
         Arc::new(Self {
             hosts: Mutex::default(),
             bridges: Mutex::default(),
             changed: Condvar::new(),
+            idle,
+            janitor: AtomicBool::new(false),
             next: AtomicU64::new(1),
             program: program.into(),
         })
@@ -214,7 +223,7 @@ impl Registry {
         let mut hosts = self.lock();
         loop {
             let now = Instant::now();
-            sweep(&mut hosts, now);
+            sweep(&mut hosts, now, self.idle);
             let host = hosts.entry(key.clone()).or_default();
             if let Some(master) = host.masters.iter_mut().find(|m| !m.retired) {
                 if master.channels >= lane.channels() {
@@ -234,7 +243,7 @@ impl Registry {
                 Phase::Starting => {}
                 Phase::Free | Phase::Direct { .. } => {
                     host.phase = Phase::Starting;
-                    if !self.start(key.clone()) {
+                    if !self.start(key.clone(), host.generation) {
                         host.phase = Phase::Direct {
                             until: now + BACKOFF,
                         };
@@ -266,21 +275,24 @@ impl Registry {
     }
 
     /// Retire `target`'s masters in every lane: no new channels, and each
-    /// stops once its last channel closes.
+    /// stops once its last channel closes. One still starting is stopped as
+    /// soon as it is ready.
     pub(crate) fn retire(&self, target: &str) {
         let mut hosts = self.lock();
         for ((host_target, _), host) in hosts.iter_mut() {
             if host_target == target {
                 host.masters.iter_mut().for_each(|m| m.retired = true);
+                host.generation = host.generation.wrapping_add(1);
             }
         }
-        sweep(&mut hosts, Instant::now());
+        sweep(&mut hosts, Instant::now(), self.idle);
         self.changed.notify_all();
     }
 
     /// Starts `key`'s master on a thread of its own, so a waiting command can
     /// give up at its own deadline. False when no thread could be started.
-    fn start(self: &Arc<Self>, key: Key) -> bool {
+    /// The master is dropped when the host was retired since `generation`.
+    fn start(self: &Arc<Self>, key: Key, generation: u64) -> bool {
         let registry = self.clone();
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         thread::Builder::new()
@@ -290,11 +302,19 @@ impl Registry {
                 let mut hosts = registry.lock();
                 let host = hosts.entry(key.clone()).or_default();
                 match started {
+                    Ok(stale) if host.generation != generation => {
+                        // A waiting command starts another on the host's
+                        // current network path.
+                        tracing::info!(category = "ssh_mux", lane = ?key.1, "SSH master retired while starting");
+                        drop(stale);
+                        host.phase = Phase::Free;
+                    }
                     Ok(master) => {
                         tracing::info!(category = "ssh_mux", lane = ?key.1, "SSH master ready");
                         host.masters.push(master);
                         host.phase = Phase::Free;
                         host.failures = 0;
+                        registry.watch_idle();
                     }
                     Err(error) => {
                         tracing::info!(
@@ -317,18 +337,67 @@ impl Registry {
             })
             .is_ok()
     }
+
+    /// Starts the thread that stops idle masters unless it is running. The
+    /// caller holds the registry lock, which orders this against the thread
+    /// deciding to end.
+    fn watch_idle(self: &Arc<Self>) {
+        if self.janitor.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let registry = Arc::downgrade(self);
+        if let Err(error) = thread::Builder::new()
+            .name("herdr-ssh-mux-idle".into())
+            .spawn(move || stop_idle(&registry))
+        {
+            self.janitor.store(false, Ordering::Release);
+            tracing::warn!(category = "ssh_mux", %error, "Cannot watch SSH masters for idleness");
+        }
+    }
 }
 
-/// Stops masters that exited, and idle or retired ones with no channels.
-/// Forgets hosts with nothing left to remember.
-fn sweep(hosts: &mut HashMap<Key, Host>, now: Instant) {
+/// Sweeps whenever the next master could have been idle long enough, until
+/// none is left. Holds the registry only while sweeping, so dropping it is
+/// never delayed by the wait.
+fn stop_idle(registry: &Weak<Registry>) {
+    loop {
+        let Some(registry) = registry.upgrade() else {
+            return;
+        };
+        let wait = {
+            let mut hosts = registry.lock();
+            let now = Instant::now();
+            sweep(&mut hosts, now, registry.idle);
+            let masters = || hosts.values().flat_map(|host| &host.masters);
+            if masters().next().is_none() {
+                registry.janitor.store(false, Ordering::Release);
+                return;
+            }
+            // A master that goes idle later expires no sooner than `idle`
+            // from now.
+            masters()
+                .filter(|master| master.channels == 0)
+                .map(|master| (master.last_used + registry.idle).saturating_duration_since(now))
+                .min()
+                .unwrap_or(registry.idle)
+                .min(registry.idle)
+                .max(POLL)
+        };
+        drop(registry);
+        thread::sleep(wait);
+    }
+}
+
+/// Stops masters that exited, and ones with no channels that are retired or
+/// have been unused for `idle`. Forgets hosts with nothing left to remember.
+fn sweep(hosts: &mut HashMap<Key, Host>, now: Instant, idle: Duration) {
     for host in hosts.values_mut() {
         host.masters.retain_mut(|master| {
             if master.exited() {
                 tracing::info!(category = "ssh_mux", "SSH master ended");
                 return false;
             }
-            master.channels > 0 || !(master.retired || now.duration_since(master.last_used) >= IDLE)
+            master.channels > 0 || !(master.retired || now.duration_since(master.last_used) >= idle)
         });
     }
     hosts.retain(|_, host| !host.masters.is_empty() || !matches!(host.phase, Phase::Free));
@@ -397,8 +466,12 @@ fn launch(program: &OsString, target: &str, lane: Lane, id: u64) -> Result<Maste
 }
 
 /// The master's own connection policy: noninteractive like the bridge, a
-/// master only for its private socket, and never a background process. The
-/// quick lane compresses; the bulk lane's data is often compressed already.
+/// master only for its private socket, and never a background process: the
+/// watchdog follows the pid it started, so neither `ControlPersist` nor the
+/// user's `ForkAfterAuthentication` may detach it. OpenSSH before 8.7 does
+/// not know that option and refuses to start, before dialing, so such a
+/// client connects directly as before. The quick lane compresses; the bulk
+/// lane's data is often compressed already.
 pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String> {
     let compression = match lane {
         Lane::Quick => "Compression=yes",
@@ -418,6 +491,7 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
         "ExitOnForwardFailure=no",
         "ControlMaster=yes",
         "ControlPersist=no",
+        "ForkAfterAuthentication=no",
         compression,
         &control_path(socket),
     ] {

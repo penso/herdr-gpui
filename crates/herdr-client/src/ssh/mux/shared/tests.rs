@@ -38,12 +38,12 @@ impl Drop for Fixture {
 /// Readiness is the socket path existing, as a real master creates it once
 /// authenticated.
 fn fake(name: &str, then: &str) -> (Arc<Registry>, Fixture) {
-    fake_with(name, "exit 255", then)
+    fake_with(name, "exit 255", then, IDLE)
 }
 
 /// [`fake`] that answers `ssh -O check`, the question whether the user has a
-/// master of their own, with `check`.
-fn fake_with(name: &str, check: &str, then: &str) -> (Arc<Registry>, Fixture) {
+/// master of their own, with `check`, and stops masters after `idle`.
+fn fake_with(name: &str, check: &str, then: &str, idle: Duration) -> (Arc<Registry>, Fixture) {
     let dir = std::env::temp_dir().join(format!("herdr-mux-test-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
@@ -57,7 +57,7 @@ fn fake_with(name: &str, check: &str, then: &str) -> (Arc<Registry>, Fixture) {
     )
     .unwrap();
     fs::set_permissions(&program, fs::Permissions::from_mode(0o700)).unwrap();
-    (Registry::new(program), Fixture { dir })
+    (Registry::new(program, idle), Fixture { dir })
 }
 
 const READY: &str = r#"echo $$ > "$pid"; : > "$socket"; exec sleep 30"#;
@@ -168,6 +168,13 @@ fn a_master_that_ended_is_replaced() {
     let (socket, pid) = (first.socket.clone(), fixture.pid(&first.socket));
     drop(first);
     wait_until(|| !alive(&pid));
+    // Its watchdog cleans up after the master, and the master counts as
+    // live until the watchdog has exited too.
+    wait_until(|| {
+        let mut hosts = registry.lock();
+        sweep(&mut hosts, Instant::now(), IDLE);
+        hosts.values().all(|host| host.masters.is_empty())
+    });
     let second = open(&registry, Lane::Quick).unwrap();
     assert_ne!(second.socket, socket);
     assert_eq!(fixture.starts(), 2);
@@ -193,16 +200,49 @@ fn a_retired_master_finishes_its_commands_then_stops() {
 
 #[test]
 fn an_idle_master_is_stopped() {
-    let (registry, fixture) = fake("idle", READY);
+    // Nothing else happens after the last command: the master still stops.
+    let idle = Duration::from_millis(500);
+    let (registry, fixture) = fake_with("idle", "exit 255", READY, idle);
     let channel = open(&registry, Lane::Quick).unwrap();
     let pid = fixture.pid(&channel.socket);
     drop(channel);
-    // Not yet idle long enough.
-    sweep(&mut registry.lock(), Instant::now());
-    assert!(alive(&pid));
-    sweep(&mut registry.lock(), Instant::now() + IDLE);
+    let dropped = Instant::now();
     wait_until(|| !alive(&pid));
+    assert!(dropped.elapsed() >= idle);
     assert!(registry.lock().is_empty());
+    wait_until(|| !registry.janitor.load(Ordering::Acquire));
+}
+
+#[test]
+fn a_used_master_is_not_stopped_while_busy_or_soon_after() {
+    let idle = Duration::from_millis(500);
+    let (registry, fixture) = fake_with("busy", "exit 255", READY, idle);
+    let channel = open(&registry, Lane::Quick).unwrap();
+    let pid = fixture.pid(&channel.socket);
+    thread::sleep(idle * 2);
+    assert!(alive(&pid));
+    drop(channel);
+    thread::sleep(idle / 2);
+    assert!(alive(&pid));
+    wait_until(|| !alive(&pid));
+}
+
+#[test]
+fn a_master_still_starting_when_the_host_is_retired_is_not_used() {
+    let (registry, fixture) = fake("retired-starting", &format!("sleep 0.5; {READY}"));
+    let waiting = thread::spawn({
+        let registry = registry.clone();
+        move || open(&registry, Lane::Quick).unwrap()
+    });
+    wait_until(|| fixture.starts() == 1);
+    registry.retire("devbox");
+    let channel = waiting.join().unwrap();
+    assert_eq!(fixture.starts(), 2);
+    let key = ("devbox".to_owned(), Lane::Quick);
+    let hosts = registry.lock();
+    let masters = &hosts[&key].masters;
+    assert_eq!(masters.len(), 1);
+    assert_eq!(masters[0].socket, channel.socket);
 }
 
 #[test]
@@ -228,6 +268,7 @@ fn masters_are_private_foreground_children_and_channels_never_become_masters() {
     for option in [
         "ControlMaster=yes",
         "ControlPersist=no",
+        "ForkAfterAuthentication=no",
         "BatchMode=yes",
         "ControlPath=/tmp/herdr-mux-1-1/c",
         "Compression=yes",
@@ -255,7 +296,7 @@ fn masters_are_private_foreground_children_and_channels_never_become_masters() {
 #[ignore = "requires HERDR_MUX_TEST_SSH, a host reachable with noninteractive SSH"]
 fn commands_on_a_real_host_share_one_master() {
     let target = std::env::var("HERDR_MUX_TEST_SSH").unwrap();
-    let registry = Registry::new("ssh");
+    let registry = Registry::new("ssh", IDLE);
     let outputs: Vec<String> = thread::scope(|scope| {
         let handles: Vec<_> = (0..6)
             .map(|_| {
@@ -302,7 +343,7 @@ fn a_master_that_ignores_sigterm_is_still_ended() {
     let channel = open(&registry, Lane::Quick).unwrap();
     let pid = fixture.pid(&channel.socket);
     drop(channel);
-    sweep(&mut registry.lock(), Instant::now() + IDLE);
+    sweep(&mut registry.lock(), Instant::now() + IDLE, IDLE);
     wait_until(|| !alive(&pid));
 }
 
@@ -310,7 +351,7 @@ fn a_master_that_ignores_sigterm_is_still_ended() {
 fn a_host_with_the_users_own_master_gets_none_of_ours() {
     // Commands connecting directly ride the user's master, which may carry
     // an interactive login this one could not make.
-    let (registry, fixture) = fake_with("user-master", "exit 0", READY);
+    let (registry, fixture) = fake_with("user-master", "exit 0", READY, IDLE);
     assert!(open(&registry, Lane::Quick).is_none());
     assert_eq!(fixture.starts(), 0);
 }
