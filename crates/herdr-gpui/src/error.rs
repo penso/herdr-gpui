@@ -198,12 +198,6 @@ pub enum Error {
     FileDropEncoding,
     #[error("File drop exceeds 256 paths or 64 KiB of quoted text.")]
     FileDropSize,
-    #[error("Port {0} is already forwarded from this host.")]
-    ForwardDuplicate(u16),
-    #[error("At most {0} ports can be forwarded at once.")]
-    ForwardLimit(usize),
-    #[error("Enter a port number from 1 to 65535.")]
-    ForwardPort,
     #[error("Could not run git in {}: {source}", path.display())]
     GitCommonDir {
         path: PathBuf,
@@ -522,6 +516,8 @@ pub enum Error {
     #[cfg(target_os = "macos")]
     #[error("The page that opened a popup is no longer in a window")]
     PopupOpener,
+    #[error(transparent)]
+    PortForward(#[from] crate::port_forward::Error),
     #[error("Daemon did not provide an absolute checkout and repository key.")]
     PrAbsolutePath,
     #[error("A pull request action is already running.")]

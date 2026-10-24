@@ -19,7 +19,10 @@ fn ports_are_whole_numbers_from_1_to_65535() {
         "8 0",
     ] {
         assert!(
-            matches!(parse_port(text), Err(Error::ForwardPort)),
+            matches!(
+                parse_port(text),
+                Err(crate::Error::PortForward(Error::Port))
+            ),
             "{text}"
         );
     }
@@ -58,19 +61,19 @@ fn a_running_port_is_not_forwarded_twice_but_an_ended_one_restarts() {
     let never = || -> Result<PortForward> { unreachable!("must not start") };
     assert!(matches!(
         forwards.insert("box", port(3000), never),
-        Err(Error::ForwardDuplicate(3000))
+        Err(crate::Error::PortForward(Error::Duplicate(3000)))
     ));
     // The ended entry is replaced by whatever the restart produced: here,
     // a failure to start, which leaves no entry behind.
     assert!(matches!(
-        forwards.insert("box", port(4000), || Err(Error::ForwardPort)),
-        Err(Error::ForwardPort)
+        forwards.insert("box", port(4000), || Err(Error::Port.into())),
+        Err(crate::Error::PortForward(Error::Port))
     ));
     assert_eq!(forwards.for_host("box").count(), 1);
     // The same port on another host is another forward.
     assert!(
         forwards
-            .insert("other", port(3000), || Err(Error::ForwardPort))
+            .insert("other", port(3000), || Err(Error::Port.into()))
             .is_err()
     );
 }
@@ -83,7 +86,7 @@ fn the_number_of_forwards_is_bounded() {
     }
     assert!(matches!(
         forwards.insert("box", port(9999), || unreachable!()),
-        Err(Error::ForwardLimit(LIMIT))
+        Err(crate::Error::PortForward(Error::Limit(LIMIT)))
     ));
 }
 
