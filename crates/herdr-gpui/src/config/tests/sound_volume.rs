@@ -52,8 +52,8 @@ fn sound_volume_preference_saves_in_place_and_refuses_out_of_range() -> anyhow::
     let error = Config::save_preference_path(Preference::SoundVolume(101), &path)
         .err()
         .context("volume over 100 must be refused")?;
-    assert!(matches!(&error, Error::Path { source, .. }
-        if matches!(**source, Error::InvalidSoundVolume)));
+    assert!(matches!(&error, crate::Error::Path { source, .. }
+        if matches!(**source, crate::Error::Settings(Error::InvalidSoundVolume))));
     assert_eq!(fs::read_to_string(&path)?, saved);
     Ok(())
 }

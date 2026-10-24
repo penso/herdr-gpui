@@ -1,6 +1,5 @@
 //! `pr`, `host`, `cloud`, `ports`, `usage`, `system`, `security`, and
 //! `automation`.
-use crate::control::ControlError;
 mod batch;
 mod cloud;
 mod exec;
@@ -152,10 +151,11 @@ pub(super) fn automation(command: AutomationCommand, context: &Context) -> crate
 /// host's file is not on this machine.
 pub(super) fn script_path(file: &std::path::Path) -> crate::Result<String> {
     let rejected = |message: String| {
-        crate::Error::Control(ControlError::Rejected {
+        crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message,
-        })
+        }
+        .into()
     };
     let path = match file.canonicalize() {
         Ok(path) => path,

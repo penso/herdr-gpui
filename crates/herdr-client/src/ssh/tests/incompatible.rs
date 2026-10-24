@@ -40,7 +40,7 @@ fn an_outdated_remote_install_is_named_instead_of_a_closed_bridge() {
     let error = choose(&[r#"{"version":"0.8.0","endpoint_capabilities":[]}"#]).unwrap_err();
     assert!(matches!(
         &error,
-        Error::BridgeIncompatible { generation: None, version: Some(version) } if version == "0.8.0"
+        crate::Error::BridgeIncompatible { generation: None, version: Some(version) } if version == "0.8.0"
     ));
     assert_eq!(
         error.to_string(),
@@ -81,6 +81,6 @@ fn missing_capabilities_and_newer_generations_point_at_the_right_side() {
 fn a_later_compatible_install_still_wins_and_no_install_stays_closed() {
     choose(&[r#"{"version":"0.8.0","endpoint_capabilities":[]}"#, CURRENT]).unwrap();
     let error = choose(&[]).unwrap_err();
-    assert!(matches!(error, Error::SshClosed));
+    assert!(matches!(error, crate::Error::Ssh(Error::Closed)));
     assert_eq!(error.version_mismatch(), None);
 }

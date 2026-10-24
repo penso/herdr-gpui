@@ -13,29 +13,18 @@
 //! the thread that set it and restores it on drop from that same thread, and
 //! Linux makes blocking D-Bus calls that must stay off the UI thread.
 
-use crate::{Error, Result, config::status_bar::AwakeScope};
+use crate::{Result, config::status_bar::AwakeScope};
 use gpui::{App, Global, WindowId};
 use std::{
     collections::HashSet,
     sync::mpsc::{Receiver, SyncSender},
 };
 
+mod error;
 mod work;
 
+pub(crate) use error::Error;
 pub(crate) use work::Work;
-
-/// Why the machine could not be kept awake.
-#[derive(Debug, thiserror::Error)]
-pub enum Failure {
-    #[error("Could not keep the machine awake: {0}")]
-    Hold(#[source] keepawake::Error),
-    #[error("No agent is working, so there is nothing to stay awake for")]
-    NoWorkingAgents,
-    #[error("Could not start the keep-awake thread")]
-    Thread(#[source] std::io::Error),
-    #[error("The keep-awake thread stopped; the display may sleep")]
-    WorkerStopped,
-}
 
 /// How long a hold lasts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,7 +141,7 @@ pub(crate) fn install(cx: &mut App) {
 /// Starts keeping the machine awake until the cup is clicked again, or stops
 /// any hold, and redraws every window. Failures arrive later through
 /// `report`, never during this call.
-pub(crate) fn toggle(cx: &mut App, report: impl FnOnce(Error, &mut App) + 'static) {
+pub(crate) fn toggle(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
     toggle_with(cx, hold, report);
 }
 
@@ -161,7 +150,7 @@ pub(crate) fn toggle(cx: &mut App, report: impl FnOnce(Error, &mut App) + 'stati
 /// nothing to wait for, which `report` hears about.
 pub(crate) fn toggle_until_agents_finish(
     cx: &mut App,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     toggle_until_agents_finish_with(cx, hold, report);
 }
@@ -184,7 +173,7 @@ pub(crate) fn observe(
     window: WindowId,
     work: Work,
     cx: &mut App,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     let working = &mut cx.default_global::<Caffeine>().working;
     let finished = match work {
@@ -206,7 +195,7 @@ pub(crate) fn observe(
 fn toggle_with<G>(
     cx: &mut App,
     start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     match cup(cx) {
         Cup::Pending => {}
@@ -218,14 +207,14 @@ fn toggle_with<G>(
 fn toggle_until_agents_finish_with<G>(
     cx: &mut App,
     start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     let caffeine = cx.default_global::<Caffeine>();
     let idle = caffeine.working.is_empty();
     match caffeine.cup {
         Cup::Pending => {}
         Cup::On(Mode::UntilAgentsFinish) => release(cx, report),
-        _ if idle => cx.defer(move |cx| report(Failure::NoWorkingAgents.into(), cx)),
+        _ if idle => cx.defer(move |cx| report(Error::NoWorkingAgents.into(), cx)),
         Cup::On(Mode::Indefinite) => {
             caffeine.cup = Cup::On(Mode::UntilAgentsFinish);
             cx.refresh_windows();
@@ -238,7 +227,7 @@ fn hold_with<G>(
     cx: &mut App,
     mode: Mode,
     start: impl FnMut(AwakeScope) -> keepawake::Result<G> + Send + 'static,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     let worker = match cx.default_global::<Caffeine>().worker.take() {
         Some(worker) => Ok(worker),
@@ -247,7 +236,7 @@ fn hold_with<G>(
     send(cx, Change::Hold(mode), worker, report);
 }
 
-fn release(cx: &mut App, report: impl FnOnce(Error, &mut App) + 'static) {
+fn release(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
     let caffeine = cx.default_global::<Caffeine>();
     let Some(worker) = caffeine.worker.take() else {
         // No worker holds nothing.
@@ -259,7 +248,7 @@ fn release(cx: &mut App, report: impl FnOnce(Error, &mut App) + 'static) {
 }
 
 /// Ends an `UntilAgentsFinish` hold when no window has a working agent.
-fn settle(cx: &mut App, report: impl FnOnce(Error, &mut App) + 'static) {
+fn settle(cx: &mut App, report: impl FnOnce(crate::Error, &mut App) + 'static) {
     let caffeine = cx.default_global::<Caffeine>();
     if caffeine.cup == Cup::On(Mode::UntilAgentsFinish) && caffeine.working.is_empty() {
         release(cx, report);
@@ -270,7 +259,7 @@ fn send(
     cx: &mut App,
     change: Change,
     worker: Result<SyncSender<Request>>,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     let (reply, replies) = std::sync::mpsc::sync_channel(1);
     let scope = cx.default_global::<Caffeine>().scope;
@@ -283,7 +272,7 @@ fn send(
                 reply,
             })
             .map(|()| worker)
-            .map_err(|_| Error::from(Failure::WorkerStopped))
+            .map_err(|_| crate::Error::from(Error::WorkerStopped))
     });
     let caffeine = cx.default_global::<Caffeine>();
     match sent {
@@ -304,8 +293,8 @@ fn send(
     cx.spawn(async move |cx| {
         // A dropped reply means the worker died, e.g. a panicking release.
         let result = match wait.await {
-            Ok(result) => result.map_err(|error| Failure::Hold(error).into()),
-            Err(_) => Err(Failure::WorkerStopped.into()),
+            Ok(result) => result.map_err(|error| Error::Hold(error).into()),
+            Err(_) => Err(Error::WorkerStopped.into()),
         };
         cx.update(|cx| finish(cx, change, result, report));
     })
@@ -316,7 +305,7 @@ fn finish(
     cx: &mut App,
     change: Change,
     result: Result<()>,
-    report: impl FnOnce(Error, &mut App) + 'static,
+    report: impl FnOnce(crate::Error, &mut App) + 'static,
 ) {
     let caffeine = cx.default_global::<Caffeine>();
     caffeine.cup = match (change, &result) {
@@ -328,7 +317,7 @@ fn finish(
     {
         caffeine.changes = caffeine.changes.wrapping_add(1);
     }
-    if matches!(result, Err(Error::Caffeine(Failure::WorkerStopped))) {
+    if matches!(result, Err(crate::Error::Caffeine(Error::WorkerStopped))) {
         caffeine.worker = None;
     }
     cx.refresh_windows();
@@ -346,7 +335,7 @@ fn spawn<G>(
     std::thread::Builder::new()
         .name("herdr-keepawake".into())
         .spawn(move || run(&requests, start))
-        .map_err(Failure::Thread)?;
+        .map_err(Error::Thread)?;
     Ok(worker)
 }
 

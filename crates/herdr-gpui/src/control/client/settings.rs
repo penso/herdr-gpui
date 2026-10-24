@@ -1,7 +1,6 @@
 //! `config`, `theme`, `font`, `keybinds`, `caffeine`, `sound`, `bell`,
 //! `update`, and `integrations`. What only reads or writes files is done
 //! here, whether or not Herdr UI runs; the rest asks the app.
-use crate::control::ControlError;
 mod config;
 #[cfg(test)]
 mod tests;
@@ -29,15 +28,16 @@ use serde_json::json;
 fn not_running(error: &crate::Error) -> bool {
     matches!(
         error,
-        crate::Error::Control(ControlError::Unavailable { .. })
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
     )
 }
 
 fn refused(code: ErrorCode, message: impl Into<String>) -> crate::Error {
-    crate::Error::Control(ControlError::Rejected {
+    crate::control::Error::Rejected {
         code,
         message: message.into(),
-    })
+    }
+    .into()
 }
 
 fn settings(context: &Context, op: SettingsOp) -> crate::Result<Reply> {

@@ -1,4 +1,4 @@
-use super::super::{EXECUTABLE, Error as UpdateError, runnable, schedule_relaunch};
+use super::super::{EXECUTABLE, Error, runnable, schedule_relaunch};
 use std::{
     ffi::OsString,
     fs,
@@ -218,14 +218,14 @@ fn relaunch_refuses_a_bundle_without_a_runnable_executable() -> anyhow::Result<(
     fs::create_dir_all(&bundle)?;
     let missing = runnable(&bundle);
     anyhow::ensure!(
-        matches!(&missing, Err(UpdateError::RelaunchMissing(path)) if path == &executable),
+        matches!(&missing, Err(Error::RelaunchMissing(path)) if path == &executable),
         "missing executable was accepted: {missing:?}"
     );
     fs::create_dir_all(bundle.join("Contents/MacOS"))?;
     fs::write(&executable, "")?;
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o644))?;
     anyhow::ensure!(
-        matches!(runnable(&bundle), Err(UpdateError::RelaunchMissing(_))),
+        matches!(runnable(&bundle), Err(Error::RelaunchMissing(_))),
         "non-executable file was accepted"
     );
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;

@@ -3,6 +3,7 @@
 //! shows is its own choice.
 
 mod dividers;
+mod launcher;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
 #[cfg(test)]
@@ -152,7 +153,7 @@ impl HerdrWindow {
         );
         // What the strip lists, measured, so the ones that just opened grow
         // in and the ones that just closed shrink out where they stood.
-        let now = std::time::Instant::now();
+        let now = crate::motion::now();
         let herdr: Vec<((Pick, SharedString), Lead, bool)> = self
             .live
             .snapshot
@@ -374,39 +375,47 @@ impl HerdrWindow {
                 ends.filter(|ends| ends.leading)
                     .and_then(|_| self.strip_leading(window, cx)),
             )
+            .children(self.strip_launcher(slot, launcher::Spot::Leading, cx))
             // Tabs size to their content and shrink when the row is full, so
             // the button sits after the last tab instead of at the far right
             // of the window.
             .child(scroller)
             .child(
-                div()
-                    .id(SharedString::from(slot.selector("new-tab")))
-                    .debug_selector(move || slot.selector("new-tab"))
-                    .role(Role::Button)
-                    .aria_label("New tab")
-                    .map(|control| {
-                        self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
-                    })
-                    .map(|button| {
-                        layout.new_tab(
-                            button,
-                            svg()
-                                .path("icons/plus.svg")
-                                .debug_selector(move || slot.selector("new-tab-icon"))
-                                .size(px(14.))
-                                // Quiet like the unselected tabs beside it.
-                                .text_color(rgb(self.theme.muted)),
-                            &self.theme,
-                        )
-                    })
-                    // A new Herdr tab opens in the group that asked for it;
-                    // other kinds of tab are behind "…".
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.expect_new_tab_in(slot.id);
-                        this.command(Command::Tab, window, cx);
-                    })),
+                self.strip_new_tab(
+                    slot,
+                    div()
+                        .id(SharedString::from(slot.selector("new-tab")))
+                        .debug_selector(move || slot.selector("new-tab"))
+                        .role(Role::Button)
+                        .aria_label("New tab")
+                        .map(|control| {
+                            self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
+                        })
+                        .map(|button| {
+                            layout.new_tab(
+                                button,
+                                svg()
+                                    .path("icons/plus.svg")
+                                    .debug_selector(move || slot.selector("new-tab-icon"))
+                                    .size(px(14.))
+                                    // Quiet like the unselected tabs beside it.
+                                    .text_color(rgb(self.theme.muted))
+                                    .into_any_element(),
+                                &self.theme,
+                            )
+                        })
+                        // A new Herdr tab opens in the group that asked for it;
+                        // other kinds of tab are behind "…".
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.expect_new_tab_in(slot.id);
+                            this.command(Command::Tab, window, cx);
+                        })),
+                    window,
+                    cx,
+                ),
             )
             .child(self.strip_room(ends, window))
+            .children(self.strip_launcher(slot, launcher::Spot::Trailing, cx))
             .child(self.strip_button(
                 slot,
                 ("split-editor", "Split"),

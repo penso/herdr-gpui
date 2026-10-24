@@ -9,6 +9,7 @@ mod catalog;
 pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
+mod error;
 mod host_key;
 mod host_menu;
 mod local_network;
@@ -18,6 +19,7 @@ mod setup;
 mod wsl;
 
 pub(super) use add_device::Setup;
+pub(crate) use error::Error;
 pub(crate) use host_menu::HostMenu;
 pub(super) use wsl::WslSetup;
 

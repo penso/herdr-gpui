@@ -49,17 +49,17 @@ fn malformed_frames_end_the_session() {
     let oversized = [4, 0, 0, 0x40, 1];
     assert!(matches!(
         Frame::read(&mut oversized.as_slice()),
-        Err(Error::SetupRelayFrame)
+        Err(Error::SetupRelay(crate::setup_relay::Error::Frame))
     ));
     let unknown = [9, 0, 0, 0, 0];
     assert!(matches!(
         Frame::read(&mut unknown.as_slice()),
-        Err(Error::SetupRelayFrame)
+        Err(Error::SetupRelay(crate::setup_relay::Error::Frame))
     ));
     let short_resize = [3, 0, 0, 0, 2, 0, 1];
     assert!(matches!(
         Frame::read(&mut short_resize.as_slice()),
-        Err(Error::SetupRelayFrame)
+        Err(Error::SetupRelay(crate::setup_relay::Error::Frame))
     ));
     let truncated = &encoded(&Frame::Output(b"hello".to_vec()))[..7];
     assert!(matches!(
@@ -195,7 +195,10 @@ fn a_relay_that_never_says_hello_is_refused() {
     let (mut pane, app) = UnixStream::pair().unwrap();
     Frame::Input(b"x".to_vec()).write(&mut pane).unwrap();
     let result = host::run(app, Command::new("/usr/bin/false"), Duration::from_secs(5));
-    assert!(matches!(result, Err(Error::SetupRelayFrame)));
+    assert!(matches!(
+        result,
+        Err(Error::SetupRelay(crate::setup_relay::Error::Frame))
+    ));
 }
 
 /// The socket is private, used once, and gone when the dialog gives up on it.

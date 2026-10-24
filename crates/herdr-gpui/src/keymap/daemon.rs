@@ -11,7 +11,11 @@
 //! Herdr's `navigate_pane_*` keys have no GUI command: the workspace picker
 //! is a search field here, with no pane cursor to move.
 
-use crate::{Error, Result, controls::Command};
+mod error;
+
+pub(crate) use error::Error;
+
+use crate::{Result, controls::Command};
 use gpui::{Keystroke, Modifiers};
 
 /// Herdr's own fallback when `prefix` is missing or names no usable key.
@@ -296,17 +300,18 @@ impl DaemonKeys {
     /// profile that is missing or unreadable as a whole is an error, which
     /// leaves the caller on its local keybindings.
     pub(crate) fn from_profile(profile: Option<&str>) -> Result<Self> {
-        let profile = profile.ok_or(Error::ServerKeybindingsMissing)?;
+        let profile = profile.ok_or(Error::Missing)?;
         if profile.len() > MAX_PROFILE_BYTES {
-            return Err(Error::ServerKeybindingsTooLarge {
+            return Err(Error::TooLarge {
                 max: MAX_PROFILE_BYTES,
-            });
+            }
+            .into());
         }
-        let table: toml::Table = profile.parse().map_err(Error::ServerKeybindingsParse)?;
+        let table: toml::Table = profile.parse().map_err(Error::Parse)?;
         let keys = table
             .get("keys")
             .and_then(toml::Value::as_table)
-            .ok_or(Error::ServerKeybindingsNoKeys)?;
+            .ok_or(Error::NoKeys)?;
         Ok(Self::from_table(Some(keys)))
     }
 

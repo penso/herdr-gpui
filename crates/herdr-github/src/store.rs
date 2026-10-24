@@ -103,10 +103,10 @@ pub(super) fn resolve_token(
         Some(token) => Some(token),
         None => saved()?,
     }
-    .ok_or(Error::GitHubAuthentication)?;
+    .ok_or(Error::Authentication)?;
     let trimmed = token.expose_secret().trim();
     if !valid_token(trimmed) {
-        return Err(Error::GitHubToken);
+        return Err(Error::Token);
     }
     if trimmed.len() == token.expose_secret().len() {
         Ok(token)
@@ -120,7 +120,7 @@ pub(super) fn credential_bytes(bytes: Vec<u8>) -> Result<SecretString> {
     // Validate by borrowing so invalid UTF-8 never escapes in FromUtf8Error.
     std::str::from_utf8(&bytes)
         .map(SecretString::from)
-        .map_err(Error::GitHubEncoding)
+        .map_err(Error::Encoding)
 }
 
 pub(super) fn environment_token(name: &str) -> Result<Option<SecretString>> {
@@ -277,7 +277,7 @@ fn load_saved(store: Store, account: &Account, github_cli: bool) -> Result<Resto
         // The local GitHub CLI is this computer's account. A host's own
         // sign-in exists to differ from it, so only the main one uses it.
         Some(Saved::GitHubCli) if *account == Account::Main => Ok(Restored::GitHubCli),
-        Some(Saved::GitHubCli) => Err(Error::GitHubToken),
+        Some(Saved::GitHubCli) => Err(Error::Token),
         Some(Saved::Token(credential)) => credential
             .profile_with(profile, Credential::refresh, |value| {
                 save_unlocked(Some(value), store, account)

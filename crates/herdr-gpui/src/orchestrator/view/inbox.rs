@@ -425,7 +425,7 @@ impl OrchestratorView {
                     .text_color(rgb(look.theme.muted))
                     .with_animation(
                         "orchestrator-refresh-spin",
-                        Animation::new(SPIN).repeat(),
+                        Animation::new(crate::motion::duration(SPIN)).repeat(),
                         |icon, delta| {
                             icon.with_transformation(Transformation::rotate(percentage(delta)))
                         },

@@ -269,7 +269,7 @@ fn without_a_local_checkout_the_search_says_so(cx: &mut TestAppContext) {
     search(&view, cx, |code| {
         assert_eq!(
             code.status,
-            Status::Failed(crate::Error::CodeIndexRoot.to_string())
+            Status::Failed(crate::code_index::Error::Root.to_string())
         );
     });
 }

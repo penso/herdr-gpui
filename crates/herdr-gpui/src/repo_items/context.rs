@@ -49,7 +49,7 @@ fn git_directory(checkout: &Path, deadline: Instant) -> crate::Result<PathBuf> {
         .to_str()
         .filter(|path| Path::new(path).is_absolute())
     else {
-        return Err(Error::PrAbsolutePath);
+        return Err(herdr_github::pull_request::Error::AbsolutePath.into());
     };
     let mut command = herdr_client::new_command("git");
     command
@@ -58,7 +58,7 @@ fn git_directory(checkout: &Path, deadline: Instant) -> crate::Result<PathBuf> {
     let (ok, output) = run(&mut command, deadline, &|| false)?;
     let path = PathBuf::from(output.trim_end_matches(['\r', '\n']));
     if !ok || !path.is_absolute() {
-        return Err(Error::PrCheckout);
+        return Err(herdr_github::pull_request::Error::Checkout.into());
     }
     Ok(path)
 }

@@ -10,7 +10,7 @@ fn px0_settings_validate_the_local_workbench() -> anyhow::Result<()> {
     assert!(config.unknown_keys.is_empty());
     assert!(matches!(
         Config::parse("[px0]\nurl = 'http://example.com/'"),
-        Err(Error::Px0(crate::px0::Error::Address))
+        Err(crate::Error::Px0(crate::px0::Error::Address))
     ));
     assert_eq!(
         Config::parse(DEFAULT_CONFIG)?.px0,

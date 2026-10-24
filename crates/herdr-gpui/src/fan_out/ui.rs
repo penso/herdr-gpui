@@ -2,9 +2,12 @@
 //! then compare the lanes and keep one. Closing the dialog never stops a
 //! launch or removal: stopping halfway would strand checkouts. A launched
 //! fan-out stays on the window so its comparison can be reopened from the
-//! workspace menu.
+//! workspace menu, and one the app stopped partway comes back on the next
+//! launch, to be finished, kept, or forgotten only at the user's request.
 
 use super::{
+    FanOut, Journal,
+    journal::Resume,
     plan::MAX_LANES,
     state::{LaneState, Stage, agent_status, seed},
 };
@@ -13,12 +16,15 @@ use crate::{
     icons::AgentIcon,
     menu::Page,
     progress::{self, Progress as Bar},
-    teleport::Follow,
+    teleport::{Follow, host_for},
     window::Flash,
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::ClientShellSnapshot;
 use std::time::Instant;
+
+/// Why a restored lane was not scripted; see `fan_out_lanes_found`.
+const LANE_NOT_FOUND: &str = "A lane's workspace is not shown on its host on its branch; it may be gone or reused. Wait for the host to connect, or Forget.";
 
 impl HerdrWindow {
     /// The snapshot of the host a fan-out runs on, if it is still connected.
@@ -38,8 +44,63 @@ impl HerdrWindow {
             .filter(|_| live.status.is_connected())
     }
 
+    /// Whether every lane at `indices` still has its own workspace, by ID and
+    /// branch, in its daemon's snapshot. A restored fan-out's IDs may have
+    /// been handed to other workspaces since, by a daemon that restarted, so
+    /// none is scripted until its daemon shows it. Lanes without a checkout
+    /// are never scripted and pass.
+    fn fan_out_lanes_found(&self, indices: impl IntoIterator<Item = usize>) -> bool {
+        let Some(fan_out) = &self.fan_out else {
+            return false;
+        };
+        if !fan_out.restored {
+            return true;
+        }
+        indices.into_iter().all(|index| {
+            let Some(lane) = fan_out.lanes.get(index) else {
+                return false;
+            };
+            let Some(checkout) = &lane.checkout else {
+                return true;
+            };
+            self.fan_out_snapshot(&checkout.endpoint_id)
+                .is_some_and(|snapshot| {
+                    snapshot.workspaces.iter().any(|workspace| {
+                        workspace.workspace_id == checkout.workspace_id
+                            && workspace.branch.as_deref() == Some(lane.lane.branch.as_str())
+                    })
+                })
+        })
+    }
+
+    /// Show a journaled fan-out this window has room for: one the app
+    /// stopped partway, or a comparison never settled.
+    fn restore_fan_out(&mut self, cx: &mut Context<Self>) {
+        let host = |endpoint_id: &str| {
+            self.endpoints
+                .iter()
+                .find(|endpoint| endpoint.id == endpoint_id)
+                .and_then(|endpoint| host_for(&endpoint.connection.target).ok())
+        };
+        let Some(fan_out) = FanOut::reclaim(&Journal::get(cx), host) else {
+            return;
+        };
+        let text = match fan_out.interrupted() {
+            0 => "Fan-out restored. Compare it from the workspace menu.".to_owned(),
+            lanes => format!(
+                "A fan-out was interrupted: {lanes} lane(s) need you. Review it from the workspace menu."
+            ),
+        };
+        self.fan_out = Some(fan_out);
+        self.show_flash(Flash::warning(text), cx);
+        cx.notify();
+    }
+
     pub(crate) fn poll_fan_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let open = self.menu.page == Some(Page::FanOut);
+        if self.fan_out.is_none() {
+            self.restore_fan_out(cx);
+        }
         let Some(fan_out) = &mut self.fan_out else {
             return;
         };
@@ -134,10 +195,23 @@ impl HerdrWindow {
             .into_iter()
             .filter_map(|endpoint| self.dispatch_destination(&endpoint))
             .collect();
+        // A restored fan-out's other worktrees are removed only once each is
+        // confirmed to still be its lane's.
+        let doomed: Vec<usize> = match self.fan_out.as_ref().map(|fan_out| &fan_out.stage) {
+            Some(Stage::Confirm(winner)) => self
+                .fan_out
+                .iter()
+                .flat_map(|fan_out| fan_out.doomed(*winner))
+                .map(|(index, _)| index)
+                .collect(),
+            _ => Vec::new(),
+        };
+        let found = self.fan_out_lanes_found(doomed);
         let Some(fan_out) = &mut self.fan_out else {
             return;
         };
         match fan_out.stage {
+            Stage::Confirm(_) if !found => fan_out.error = Some(LANE_NOT_FOUND.to_owned()),
             Stage::Compose(_) if !current => {
                 fan_out.error = Some(
                     "This workspace has moved to another repository since the fan-out opened"
@@ -162,6 +236,18 @@ impl HerdrWindow {
             _ => return,
         }
         cx.notify();
+    }
+
+    /// Let the comparison go, leaving every worktree as it is.
+    fn forget_fan_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .fan_out
+            .as_mut()
+            .is_some_and(|fan_out| fan_out.forget())
+        {
+            self.fan_out = None;
+            self.dismiss_menu(window, cx);
+        }
     }
 
     fn open_fan_out_lane(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -333,8 +419,10 @@ impl HerdrWindow {
                         rgb(theme.active).into(),
                     ));
                 }
+                let settled = fan_out.lanes.iter().all(|lane| lane.state.settled());
                 for (index, lane) in fan_out.lanes.iter().enumerate() {
-                    let failed = matches!(lane.state, LaneState::Failed(_));
+                    let failed =
+                        matches!(lane.state, LaneState::Failed(_) | LaneState::Interrupted(_));
                     let mut status = match (&lane.state, &lane.checkout) {
                         (LaneState::Running, Some(checkout)) if comparing => agent_status(
                             self.fan_out_snapshot(&checkout.endpoint_id),
@@ -377,6 +465,12 @@ impl HerdrWindow {
                     );
                     let actionable =
                         lane.checkout.is_some() && matches!(fan_out.stage, Stage::Compare);
+                    // No lane is kept while another is still being finished.
+                    let keepable = actionable && settled;
+                    let resume = fan_out.resumable(index).map(|from| match from {
+                        Resume::Start => "Start agent",
+                        Resume::Prompt => "Send prompt",
+                    });
                     body = body.child(
                         div()
                             .id(("fan-out-lane", index))
@@ -427,6 +521,23 @@ impl HerdrWindow {
                                         )
                                     }),
                             )
+                            .when_some(resume, |row, label| {
+                                row.child(small("fan-out-resume", index).child(label).on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        let found = this.fan_out_lanes_found([index]);
+                                        let Some(fan_out) = &mut this.fan_out else {
+                                            return;
+                                        };
+                                        if !found {
+                                            fan_out.error = Some(LANE_NOT_FOUND.to_owned());
+                                            cx.notify();
+                                        } else if fan_out.resume(index) {
+                                            cx.notify();
+                                        }
+                                    }),
+                                ))
+                            })
                             .when(actionable, |row| {
                                 row.child(small("fan-out-open", index).child("Open").on_click(
                                     cx.listener(move |this, _, window, cx| {
@@ -434,18 +545,18 @@ impl HerdrWindow {
                                         this.open_fan_out_lane(index, window, cx);
                                     }),
                                 ))
-                                .child(
-                                    small("fan-out-keep", index).child("Keep").on_click(
-                                        cx.listener(move |this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            if let Some(fan_out) = &mut this.fan_out {
-                                                fan_out.stage = Stage::Confirm(index);
-                                                fan_out.error = None;
-                                                cx.notify();
-                                            }
-                                        }),
-                                    ),
-                                )
+                            })
+                            .when(keepable, |row| {
+                                row.child(small("fan-out-keep", index).child("Keep").on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        if let Some(fan_out) = &mut this.fan_out {
+                                            fan_out.stage = Stage::Confirm(index);
+                                            fan_out.error = None;
+                                            cx.notify();
+                                        }
+                                    }),
+                                ))
                             }),
                     );
                 }
@@ -459,8 +570,11 @@ impl HerdrWindow {
                     }
                     Stage::Compare => {
                         body = body.child(
-                            line("Keep the lane you prefer to remove the others.".into())
-                                .text_color(muted),
+                            line(
+                                "Keep the lane you prefer to remove the others, or forget the fan-out to leave every worktree as it is."
+                                    .into(),
+                            )
+                            .text_color(muted),
                         );
                         ("Keep...".to_owned(), false)
                     }
@@ -504,6 +618,8 @@ impl HerdrWindow {
                 .border_1()
                 .cursor_pointer()
         };
+        let forgettable = matches!(fan_out.stage, Stage::Compare)
+            && fan_out.lanes.iter().all(|lane| lane.state.settled());
         let dismiss = match fan_out.stage {
             Stage::Compose(_) => "Cancel",
             Stage::Confirm(_) => "Back",
@@ -564,6 +680,18 @@ impl HerdrWindow {
                     .py(px(12.))
                     .border_t_1()
                     .border_color(rgb(theme.active))
+                    .when(forgettable, |footer| {
+                        footer.child(
+                            button("fan-out-forget")
+                                .border_color(rgb(theme.active))
+                                .hover(|button| button.bg(rgb(theme.active)))
+                                .child("Forget")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.forget_fan_out(window, cx);
+                                })),
+                        )
+                    })
                     .child(
                         button("fan-out-cancel")
                             .border_color(rgb(theme.active))
@@ -598,3 +726,7 @@ impl HerdrWindow {
             )
     }
 }
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[allow(clippy::unwrap_used)]
+mod tests;

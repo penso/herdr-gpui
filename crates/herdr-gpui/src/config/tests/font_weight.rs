@@ -65,7 +65,7 @@ fn rejects_unknown_names_and_out_of_range_weights() {
         assert!(
             matches!(
                 Config::parse(&format!("[terminal]\nweight = {value}")),
-                Err(Error::InvalidFontWeight("terminal"))
+                Err(crate::Error::Settings(Error::InvalidFontWeight("terminal")))
             ),
             "accepted weight = {value}"
         );

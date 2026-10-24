@@ -233,13 +233,13 @@ fn compact_layout_is_opt_in() -> anyhow::Result<()> {
     ] {
         assert!(matches!(
             LayoutMode::try_from(name),
-            Err(Error::UnknownLayout(unknown)) if unknown == name
+            Err(crate::Error::Settings(Error::UnknownLayout(unknown))) if unknown == name
         ));
     }
     for value in ["'unknown'", "'rounded'", "'normal-square'", "true", "1"] {
         assert!(matches!(
             Config::parse(&format!("layout = {value}")),
-            Err(Error::Toml(_))
+            Err(crate::Error::Toml(_))
         ));
     }
     Ok(())
@@ -271,11 +271,11 @@ fn the_deprecated_sidebar_gap_defaults_to_flush_and_accepts_its_band() -> anyhow
     }
     assert!(matches!(
         Config::parse("[layout]\nsidebar_gap = 64.1"),
-        Err(Error::InvalidSidebarGap)
+        Err(crate::Error::Settings(Error::InvalidSidebarGap))
     ));
     assert!(matches!(
         Config::parse("[layout]\nsidebar_gap = nan"),
-        Err(Error::InvalidSidebarGap)
+        Err(crate::Error::Settings(Error::InvalidSidebarGap))
     ));
     Ok(())
 }
@@ -420,12 +420,12 @@ mod preference_writes {
                 anyhow::bail!("out-of-band value was accepted");
             };
             assert!(std::error::Error::source(&error).is_some());
-            let Error::Path { source: cause, .. } = &error else {
+            let crate::Error::Path { source: cause, .. } = &error else {
                 anyhow::bail!("not path-wrapped: {error:?}");
             };
             let cause = Some(&**cause);
             assert!(
-                matches!(cause, Some(Error::InvalidSidebarMetric { key: k, max: m }) if *k == key && *m == max),
+                matches!(cause, Some(crate::Error::Settings(Error::InvalidSidebarMetric { key: k, max: m })) if *k == key && *m == max),
                 "{cause:?}"
             );
             assert_eq!(fs::read_to_string(&path)?, original);
@@ -449,12 +449,12 @@ mod preference_writes {
             anyhow::bail!("oversized colour was accepted");
         };
         assert!(std::error::Error::source(&error).is_some());
-        let Error::Path { source: cause, .. } = &error else {
+        let crate::Error::Path { source: cause, .. } = &error else {
             anyhow::bail!("not path-wrapped: {error:?}");
         };
         let cause = Some(&**cause);
         assert!(
-            matches!(cause, Some(Error::InvalidHostColor { host, value }) if host == "Work" && value == "#1000000"),
+            matches!(cause, Some(crate::Error::Settings(Error::InvalidHostColor { host, value })) if host == "Work" && value == "#1000000"),
             "{cause:?}"
         );
         assert_eq!(fs::read_to_string(&path)?, original);

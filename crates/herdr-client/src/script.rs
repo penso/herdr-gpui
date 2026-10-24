@@ -4,7 +4,7 @@
 //! This exists for work the endpoint connection cannot express, such as Git
 //! plumbing in a remote checkout or `herdr` CLI queries whose methods are not
 //! advertised to GUI clients. It never touches a daemon connection.
-use crate::{Error, Result, SshLane, catalog::validate_target};
+use crate::{Error, Result, SshLane, catalog::validate_target, wsl};
 use std::{
     io::{Read, Write},
     process::Command,
@@ -59,8 +59,8 @@ pub fn run_script(
         ScriptHost::Local => {}
         ScriptHost::Ssh(target, _) => validate_target(target)?,
         ScriptHost::Wsl(distro) => {
-            if !crate::wsl::valid_distro(distro) {
-                return Err(Error::InvalidWslDistro);
+            if !wsl::valid_distro(distro) {
+                return Err(wsl::Error::InvalidDistro.into());
             }
         }
     }
@@ -80,7 +80,7 @@ pub fn run_script(
                 std::time::Instant::now() + limits.idle,
                 || cancelled.load(std::sync::atomic::Ordering::Acquire),
             ),
-            ScriptHost::Wsl(_) => return Err(Error::WslUnsupported),
+            ScriptHost::Wsl(_) => return Err(wsl::Error::Unsupported.into()),
         };
         run_script_command(command, input, output, limits, cancelled)
     }
@@ -93,7 +93,7 @@ pub fn run_script(
             ScriptHost::Ssh(target, _) => {
                 crate::ssh::command(target, &format!("/bin/sh -c {}", shell_quote(script)))
             }
-            ScriptHost::Wsl(distro) => crate::wsl::command(distro, script),
+            ScriptHost::Wsl(distro) => wsl::command(distro, script),
         };
         if cancelled.load(std::sync::atomic::Ordering::Acquire) {
             return Err(Error::ScriptCancelled);

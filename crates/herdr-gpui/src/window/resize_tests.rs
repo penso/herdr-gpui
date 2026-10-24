@@ -23,7 +23,7 @@ fn resize_tracks_cell_metrics_and_retries_failed_options(cx: &mut gpui::TestAppC
         )
         .unwrap_or_else(|error| panic!("cannot create test client: {error}"));
         client.handle.disconnect();
-        view.endpoints[view.selected_endpoint].connection.handle = Some(client.handle);
+        view.endpoints[view.selected_endpoint].attach_shown(client.handle);
         let queued = view.options;
         view.last_queued_options = Some(queued);
         view.resize();
@@ -80,7 +80,7 @@ fn resize_reasks_when_the_daemon_frame_is_a_different_size(cx: &mut gpui::TestAp
         )
         .unwrap_or_else(|error| panic!("cannot create test client: {error}"));
         client.handle.disconnect();
-        view.endpoints[view.selected_endpoint].connection.handle = Some(client.handle);
+        view.endpoints[view.selected_endpoint].attach_shown(client.handle);
         // The window already asked for its size, and the daemon projects a
         // frame of another size: another client resized the tab.
         let queued = view.options;
@@ -165,7 +165,7 @@ fn a_full_command_queue_is_retried_without_a_status_error(cx: &mut gpui::TestApp
             client.handle.set_focus(&boot, true),
             Err(herdr_client::Error::Full)
         ));
-        view.endpoints[view.selected_endpoint].connection.handle = Some(client.handle.clone());
+        view.endpoints[view.selected_endpoint].attach_shown(client.handle.clone());
         let queued = view.options;
         view.last_queued_options = Some(queued);
         let start = Instant::now();

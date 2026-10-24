@@ -119,7 +119,7 @@ fn a_second_project_of_the_same_name_is_refused() -> anyhow::Result<()> {
     fs::create_dir(&project.path)?;
     assert!(matches!(
         materialise(&project, &|| false),
-        Err(Error::PaletteProjectExists)
+        Err(crate::Error::Palette(Error::ProjectExists))
     ));
     Ok(())
 }
@@ -165,7 +165,7 @@ fn a_failed_clone_leaves_neither_the_project_nor_its_staging_folder() -> anyhow:
     let project = clone_project(root.path(), &missing.to_string_lossy());
     assert!(matches!(
         materialise(&project, &|| false),
-        Err(Error::PaletteProjectClone(_))
+        Err(crate::Error::Palette(Error::ProjectClone(_)))
     ));
     assert!(folder_names(root.path())?.is_empty());
     Ok(())
@@ -195,7 +195,7 @@ fn a_clone_does_not_start_when_the_name_is_taken() -> anyhow::Result<()> {
     let project = clone_project(root.path(), "https://example.invalid/cloned.git");
     assert!(matches!(
         materialise(&project, &|| false),
-        Err(Error::PaletteProjectExists)
+        Err(crate::Error::Palette(Error::ProjectExists))
     ));
     assert_eq!(folder_names(root.path())?, ["cloned"]);
     Ok(())
@@ -214,7 +214,7 @@ fn publishing_never_replaces_an_existing_folder() -> anyhow::Result<()> {
         fs::write(staging.path().join("README"), "clone")?;
         assert!(matches!(
             publish(staging.path(), &destination),
-            Err(Error::PaletteProjectExists)
+            Err(Error::ProjectExists)
         ));
         assert!(!destination.join("README").exists());
         assert_eq!(saved, destination.join("notes.txt").exists());

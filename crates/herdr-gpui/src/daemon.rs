@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-use herdr_client::{ConnectTarget, Stream};
+mod error;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod warning;
+
+use herdr_client::{ConnectTarget, Stream};
 use std::{
     env, io,
     path::{Path, PathBuf},
@@ -13,6 +15,8 @@ use std::{
 };
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) use warning::LocalPeerWarning;
+
+pub(crate) use error::Error;
 
 pub(crate) enum LocalPeer {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -267,18 +271,12 @@ fn connect_or_start(
         Err(error) => return Err(error),
     }
     if stop.load(Ordering::Acquire) {
-        return Err(io::Error::new(
-            io::ErrorKind::Interrupted,
-            crate::Error::DaemonCancelled,
-        ));
+        return Err(io::Error::new(io::ErrorKind::Interrupted, Error::Cancelled));
     }
     let mut command = command();
     // Login-shell initialization can outlast a detach or reconnect.
     if stop.load(Ordering::Acquire) {
-        return Err(io::Error::new(
-            io::ErrorKind::Interrupted,
-            crate::Error::DaemonCancelled,
-        ));
+        return Err(io::Error::new(io::ErrorKind::Interrupted, Error::Cancelled));
     }
     command
         .stdin(Stdio::null())
@@ -289,7 +287,7 @@ fn connect_or_start(
         if error.kind() == io::ErrorKind::NotFound {
             io::Error::new(error.kind(), MissingInstallation(error))
         } else {
-            io::Error::new(error.kind(), crate::Error::DaemonSpawn { source: error })
+            io::Error::new(error.kind(), Error::Spawn { source: error })
         }
     })?;
     // The daemon outlives the window. Reap it if it exits while the GUI is alive.
@@ -302,10 +300,7 @@ fn connect_or_start(
     let deadline = Instant::now() + timeout;
     loop {
         if stop.load(Ordering::Acquire) {
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                crate::Error::DaemonCancelled,
-            ));
+            return Err(io::Error::new(io::ErrorKind::Interrupted, Error::Cancelled));
         }
         match Stream::connect(socket) {
             Ok(stream) => return Ok(stream),
@@ -319,11 +314,11 @@ fn connect_or_start(
         if Instant::now() >= deadline {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
-                crate::Error::DaemonTimeout(socket.to_owned()),
+                Error::Timeout(socket.to_owned()),
             ));
         }
         if let Ok(status) = exit_rx.try_recv() {
-            return Err(io::Error::other(crate::Error::DaemonExited(status?)));
+            return Err(io::Error::other(Error::Exited(status?)));
         }
         thread::sleep(Duration::from_millis(50));
     }

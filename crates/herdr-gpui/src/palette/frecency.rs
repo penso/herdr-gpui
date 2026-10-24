@@ -100,7 +100,7 @@ struct Saved {
 fn parse(bytes: &[u8]) -> crate::Result<Vec<Visit>> {
     let saved: Saved = serde_json::from_slice(bytes)?;
     if saved.visits.len() > MAX_KEYS || !saved.visits.iter().all(Visit::valid) {
-        return Err(crate::Error::InvalidPaletteFrecency);
+        return Err(super::Error::InvalidFrecency.into());
     }
     Ok(saved.visits)
 }

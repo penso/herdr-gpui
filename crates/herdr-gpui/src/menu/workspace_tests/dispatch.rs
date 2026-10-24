@@ -167,7 +167,7 @@ fn a_second_dispatch_waits_for_the_first(cx: &mut gpui::TestAppContext) {
                     &crate::dispatch::Target::Host("ssh:gone".into()),
                     None
                 ),
-                Err(crate::Error::DispatchHostUnavailable(host)) if host == "ssh:gone"
+                Err(crate::Error::Dispatch(crate::dispatch::Error::HostUnavailable(host))) if host == "ssh:gone"
             ));
         })
     });

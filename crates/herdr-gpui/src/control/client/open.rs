@@ -1,7 +1,6 @@
 //! `open DIR`: the folder, checked here, opened by the running app as its
 //! Open Project does, starting the app first when none is running.
 use super::{Context, Output};
-use crate::control::ControlError;
 use crate::control::{
     ErrorCode,
     protocol::{Request, app::AppOp},
@@ -24,7 +23,7 @@ pub(super) fn open(path: &Path, context: &Context) -> crate::Result<Output> {
     match send() {
         // A window ID names a window of a running app, so there is nothing
         // to start for one.
-        Err(crate::Error::Control(ControlError::Unavailable { .. }))
+        Err(crate::Error::Control(crate::control::Error::Unavailable { .. }))
             if context.window.is_none() =>
         {
             start_app()?;
@@ -90,13 +89,14 @@ fn retry(
         match send() {
             Err(error) if starting(&error) && now() < deadline => continue,
             Err(error) if starting(&error) => {
-                return Err(crate::Error::Control(ControlError::Rejected {
+                return Err(crate::control::Error::Rejected {
                     code: ErrorCode::Timeout,
                     message: format!(
                         "Herdr UI did not open the folder within {} seconds of starting: {error}",
                         START_WAIT.as_secs()
                     ),
-                }));
+                }
+                .into());
             }
             result => return result,
         }
@@ -108,8 +108,8 @@ fn retry(
 fn starting(error: &crate::Error) -> bool {
     matches!(
         error,
-        crate::Error::Control(ControlError::Unavailable { .. })
-            | crate::Error::Control(ControlError::Rejected {
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
+            | crate::Error::Control(crate::control::Error::Rejected {
                 code: ErrorCode::Busy,
                 ..
             })
@@ -121,8 +121,7 @@ fn starting(error: &crate::Error) -> bool {
 /// from whoever runs the command, an Explorer verb included, so it is
 /// checked here where the caller's directory is known and again in the app.
 pub(crate) fn directory(path: &Path) -> crate::Result<String> {
-    let refused =
-        |code, message: String| crate::Error::Control(ControlError::Rejected { code, message });
+    let refused = |code, message: String| crate::control::Error::Rejected { code, message }.into();
     let path = &unquoted(path);
     let resolved: PathBuf = crate::palette::canonicalize(path).map_err(|error| {
         refused(

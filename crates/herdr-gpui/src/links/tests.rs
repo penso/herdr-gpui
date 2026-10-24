@@ -218,7 +218,10 @@ fn a_failed_plugin_handler_spends_the_click() {
     let Activation::HandlerFailed(error) = failed else {
         panic!("a failed handler was read as {failed:?}");
     };
-    assert!(matches!(error, crate::Error::DaemonResponse(_)));
+    assert!(matches!(
+        error,
+        crate::Error::Daemon(crate::daemon::Error::Response(_))
+    ));
     assert_eq!(error.to_string(), "handler exited with status 1");
 }
 

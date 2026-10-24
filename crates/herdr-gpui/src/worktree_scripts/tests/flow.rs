@@ -20,7 +20,9 @@ fn a_run_script_is_located_reviewed_trusted_and_typed_into_a_new_tab(
             // One script starts at a time.
             assert!(matches!(
                 view.start_worktree_script(launch(view, ScriptKind::Run, None), cx),
-                Err(crate::Error::WorktreeScriptsBusy)
+                Err(crate::Error::WorktreeScripts(
+                    crate::worktree_scripts::Error::Busy
+                ))
             ));
         })
     });

@@ -2,7 +2,8 @@
 //! one-byte tag is followed by raw text/image bytes or NUL-delimited paths.
 //! No clipboard contents are written to disk or included in diagnostics.
 
-use super::{ClipboardError, Error, IMAGE_LIMIT, TEXT_LIMIT};
+use super::{Error, IMAGE_LIMIT, TEXT_LIMIT};
+use crate::window::clipboard;
 use gpui::{ClipboardEntry, ClipboardItem, ExternalPaths, Image, ImageFormat};
 use std::{
     ffi::OsString,
@@ -44,9 +45,7 @@ pub(super) fn write(item: Option<&ClipboardItem>, output: &mut impl Write) -> cr
                 size.checked_add(path.as_os_str().len())?.checked_add(1)
             });
             if size.is_none_or(|size| size > TEXT_LIMIT) {
-                return Err(crate::Error::Clipboard(ClipboardError::Size {
-                    limit: TEXT_LIMIT,
-                }));
+                return Err(clipboard::Error::Size { limit: TEXT_LIMIT }.into());
             }
             output.write_all(&[FILES]).map_err(Error::Process)?;
             for path in paths {
@@ -75,20 +74,15 @@ pub(super) fn read(mut bytes: Vec<u8>) -> crate::Result<Option<ClipboardItem>> {
         EMPTY if bytes.is_empty() => Ok(None),
         TEXT => {
             if bytes.len() > TEXT_LIMIT {
-                return Err(crate::Error::Clipboard(ClipboardError::Size {
-                    limit: TEXT_LIMIT,
-                }));
+                return Err(clipboard::Error::Size { limit: TEXT_LIMIT }.into());
             }
-            let text = String::from_utf8(bytes).map_err(|error| {
-                crate::Error::Clipboard(ClipboardError::Encoding(error.utf8_error()))
-            })?;
+            let text = String::from_utf8(bytes)
+                .map_err(|error| clipboard::Error::Encoding(error.utf8_error()))?;
             Ok(Some(ClipboardItem::new_string(text)))
         }
         FILES => {
             if bytes.len() > TEXT_LIMIT {
-                return Err(crate::Error::Clipboard(ClipboardError::Size {
-                    limit: TEXT_LIMIT,
-                }));
+                return Err(clipboard::Error::Size { limit: TEXT_LIMIT }.into());
             }
             let Some(bytes) = bytes.strip_suffix(&[0]) else {
                 return Err(Error::Response.into());
@@ -115,9 +109,7 @@ pub(super) fn read(mut bytes: Vec<u8>) -> crate::Result<Option<ClipboardItem>> {
                 return Err(Error::Response.into());
             }
             if bytes.len() > IMAGE_LIMIT {
-                return Err(crate::Error::Clipboard(ClipboardError::Size {
-                    limit: IMAGE_LIMIT,
-                }));
+                return Err(clipboard::Error::Size { limit: IMAGE_LIMIT }.into());
             }
             Ok(Some(Image::from_bytes(format, bytes).into()))
         }

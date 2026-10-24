@@ -166,7 +166,12 @@ fn a_failed_save_drops_its_choice_and_says_why(cx: &mut TestAppContext) {
     let (view, cx) = open(cx);
     set_device_theme(&view, Some("Dracula"), cx);
     settle(cx);
-    save(&view, "Nord", Err(crate::Error::InvalidSidebarGap), cx);
+    save(
+        &view,
+        "Nord",
+        Err(crate::config::Error::InvalidSidebarGap.into()),
+        cx,
+    );
     settle(cx);
     assert_eq!(terminal_theme(&view, cx), builtin("Dracula"));
     assert!(!pinned(&view, cx));

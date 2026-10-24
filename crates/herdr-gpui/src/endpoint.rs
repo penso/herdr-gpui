@@ -16,6 +16,7 @@ use std::{
 };
 
 mod catalog;
+mod config_reload;
 mod history;
 mod order;
 pub(crate) mod origin;
@@ -164,6 +165,10 @@ pub(super) struct Endpoint {
     outage: Option<String>,
     detached: bool,
     initial_surface: bool,
+    /// A `server.reload_config` waiting for this connection's surface; see
+    /// [`Self::reload_config`]. It outlives a reconnection, since a dropped
+    /// link can come back to the same daemon process.
+    config_reload_pending: bool,
     sounds: crate::sound::Policy,
 }
 
@@ -228,6 +233,7 @@ impl Endpoint {
             outage: None,
             detached: false,
             initial_surface: false,
+            config_reload_pending: false,
             sounds: Default::default(),
         }
     }

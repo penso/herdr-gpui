@@ -51,15 +51,15 @@ fn holder(log: &Log) -> impl FnMut(AwakeScope) -> keepawake::Result<Held> + Send
 
 /// Collects what `toggle` reports, for the test to inspect afterwards.
 #[derive(Clone, Default)]
-struct Reports(Rc<RefCell<Vec<Error>>>);
+struct Reports(Rc<RefCell<Vec<crate::Error>>>);
 
 impl Reports {
-    fn sink(&self) -> impl FnOnce(Error, &mut App) + 'static {
+    fn sink(&self) -> impl FnOnce(crate::Error, &mut App) + 'static {
         let reports = self.0.clone();
         move |error, _| reports.borrow_mut().push(error)
     }
 
-    fn take(&self) -> Vec<Error> {
+    fn take(&self) -> Vec<crate::Error> {
         self.0.take()
     }
 }

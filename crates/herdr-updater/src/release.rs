@@ -3,7 +3,7 @@
 
 use super::UpdateChannel;
 mod format;
-use super::error::{Result, UpdateError as Error};
+use super::error::{Error, Result};
 pub(super) use format::Format;
 use std::{
     fs::{File, OpenOptions},

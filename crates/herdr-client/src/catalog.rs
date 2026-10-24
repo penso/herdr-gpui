@@ -1,5 +1,5 @@
 //! Upstream client/endpoint/catalog.rs schema and config/io.rs paths.
-use crate::{Error, Result, StorageOperation, session_socket};
+use crate::{Error, Result, StorageOperation, session_socket, ssh};
 use serde::{Deserialize, Serialize};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
@@ -360,7 +360,7 @@ pub(crate) fn validate_target(target: &str) -> Result<()> {
             .rsplit_once('@')
             .is_some_and(|(user, _)| user.contains(':'))
     {
-        return Err(Error::InvalidSshTarget);
+        return Err(ssh::Error::InvalidTarget.into());
     }
     Ok(())
 }

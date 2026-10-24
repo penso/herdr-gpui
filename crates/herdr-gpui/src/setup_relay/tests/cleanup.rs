@@ -37,7 +37,7 @@ fn a_linked_socket_folder_is_refused() {
     std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
     assert!(matches!(
         host::make_private(&link),
-        Err(Error::SetupRelayDir(path)) if path == link
+        Err(Error::SetupRelay(crate::setup_relay::Error::Dir(path))) if path == link
     ));
     host::make_private(&elsewhere).unwrap();
     assert_eq!(

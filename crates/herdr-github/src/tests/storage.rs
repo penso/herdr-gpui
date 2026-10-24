@@ -205,10 +205,10 @@ fn auth_priority_and_storage_errors_never_fall_back_silently() {
             .contains("authentication required")
     );
     assert_eq!(
-        resolve_token(None, None, || Err(Error::GitHubToken))
+        resolve_token(None, None, || Err(Error::Token))
             .unwrap_err()
             .to_string(),
-        Error::GitHubToken.to_string()
+        Error::Token.to_string()
     );
     assert!(resolve_token(Some("bad\nsecret".into()), None, || panic!()).is_err());
     assert!(resolve_token(None, None, || Ok(Some("  ".into()))).is_err());

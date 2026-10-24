@@ -19,7 +19,7 @@ fn hosts_are_added_once_selected_and_removed_with_their_selection() {
     add(&path, "Debian", "work").unwrap();
     assert!(matches!(
         add(&path, "Ubuntu", "other"),
-        Err(Error::WslHostExists)
+        Err(crate::Error::Wsl(Error::HostExists))
     ));
     select(&path, Some("Ubuntu")).unwrap();
     let hosts = read(&path).unwrap();
@@ -42,7 +42,7 @@ fn hosts_are_added_once_selected_and_removed_with_their_selection() {
     );
     assert!(matches!(
         select(&path, Some("Arch")),
-        Err(Error::WslHostMissing)
+        Err(crate::Error::Wsl(Error::HostMissing))
     ));
     remove(&path, "Ubuntu").unwrap();
     let hosts = read(&path).unwrap();
@@ -50,7 +50,7 @@ fn hosts_are_added_once_selected_and_removed_with_their_selection() {
     assert_eq!(hosts.hosts.len(), 1);
     assert!(matches!(
         remove(&path, "Ubuntu"),
-        Err(Error::WslHostMissing)
+        Err(crate::Error::Wsl(Error::HostMissing))
     ));
     let _ = std::fs::remove_dir_all(path.parent().unwrap().parent().unwrap());
 }
@@ -60,11 +60,11 @@ fn invalid_names_never_reach_the_file() {
     let path = scratch("invalid");
     assert!(matches!(
         add(&path, "-d", "default"),
-        Err(Error::InvalidWslDistro)
+        Err(crate::Error::Wsl(Error::InvalidDistro))
     ));
     assert!(matches!(
         add(&path, "Ubuntu", "../x"),
-        Err(Error::InvalidSession)
+        Err(crate::Error::InvalidSession)
     ));
     assert!(!path.exists());
 }
@@ -77,15 +77,18 @@ fn damaged_files_are_refused_rather_than_trusted() {
         br#"{"hosts":[{"distro":"A","session":"default"},{"distro":"A","session":"w"}]}"#,
         br#"{"hosts":[{"distro":"A","session":"../w"}]}"#,
     ] {
-        assert!(matches!(parse(bytes), Err(Error::WslCatalog)), "{bytes:?}");
+        assert!(
+            matches!(parse(bytes), Err(crate::Error::Wsl(Error::Catalog))),
+            "{bytes:?}"
+        );
     }
     assert!(matches!(
         parse(br#"{"hosts":[],"extra":1}"#),
-        Err(Error::WslCatalogSchema(_))
+        Err(crate::Error::Wsl(Error::CatalogSchema(_)))
     ));
     assert!(matches!(
         parse(&vec![b' '; MAX_BYTES as usize + 1]),
-        Err(Error::WslCatalog)
+        Err(crate::Error::Wsl(Error::Catalog))
     ));
     // A selection naming no saved distribution is kept but never resolved.
     let hosts = parse(br#"{"selected":"Gone","hosts":[]}"#).unwrap();

@@ -198,7 +198,7 @@ fn cache_prefetches_without_menu_and_refreshes_at_ttl_with_stale_data() {
         view.value.is_some(),
         "refresh does not replace cached data with loading"
     );
-    peer.complete(due, Err(Error::PrTimeout), None);
+    peer.complete(due, Err(crate::pull_request::Error::Timeout.into()), None);
     peer.cache.present(&input, &mut view, due);
     assert!(view.value.is_some());
     assert!(view.message.is_some());
@@ -347,7 +347,7 @@ fn a_dropped_connection_keeps_answers_and_the_account_pause() {
     peer.cache.poll(now);
     peer.complete(
         now,
-        Err(Error::GitHubRateLimit { reset: None }),
+        Err(Error::RateLimit { reset: None }),
         Some(Duration::from_secs(600)),
     );
     peer.cache.suspend();
@@ -461,13 +461,14 @@ fn local_failures_do_not_starve_other_repos_but_rate_limits_pause_account() {
     );
     peer.cache.poll(now);
     assert_eq!(
-        peer.complete(now, Err(Error::PrOrigin), None).branch,
+        peer.complete(now, Err(crate::pull_request::Error::Origin.into()), None)
+            .branch,
         "local-error"
     );
     assert_eq!(
         peer.complete(
             now,
-            Err(Error::GitHubRateLimit { reset: None }),
+            Err(Error::RateLimit { reset: None }),
             Some(Duration::from_secs(3600))
         )
         .branch,

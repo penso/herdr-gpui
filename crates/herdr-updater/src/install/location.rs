@@ -3,7 +3,7 @@
 //! keep two updaters off it at once.
 use super::{Installation, Mode, io, output, signing::identity};
 use crate::{
-    error::{Result, UpdateError as Error},
+    error::{Error, Result},
     release,
 };
 use std::{

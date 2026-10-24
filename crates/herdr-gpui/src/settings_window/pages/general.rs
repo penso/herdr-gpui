@@ -5,7 +5,10 @@ use super::{CLIPBOARD_POSITIONS, SettingsWindow, on_off, on_value, ui};
 use crate::settings_window::inputs::DropdownField;
 use crate::{
     agent_skill::{AgentSkill, Choice},
-    config::{ChatLayoutMode, ClipboardToast, Feature, UpdateChannel, preferences::Preference},
+    config::{
+        ChatLauncher, ChatLayoutMode, ClipboardToast, Feature, UpdateChannel,
+        preferences::Preference,
+    },
     herdr_settings::Edit,
 };
 use gpui::{prelude::*, *};
@@ -116,6 +119,27 @@ impl SettingsWindow {
                         !self.quitting && self.closing.is_none(),
                         on_value(cx, |this, mode, _, cx| {
                             this.save_preference(Preference::ChatLayout(mode), cx)
+                        }),
+                    ))
+            }))
+            .children(self.config.features.acp_chats.then(|| {
+                let launchers: Vec<_> = ChatLauncher::ALL
+                    .iter()
+                    .map(|&launcher| (launcher, launcher.label()))
+                    .collect();
+                ui::row(theme, "general-chat-launcher", "Chat launcher")
+                    .description(
+                        "Where tab strips offer a one-click chat with each installed agent. \
+                         \"+\" keeps opening a terminal tab in every placement.",
+                    )
+                    .control(ui::segmented(
+                        theme,
+                        "general-chat-launcher-control",
+                        &launchers,
+                        Some(self.config.chat.launcher),
+                        !self.quitting && self.closing.is_none(),
+                        on_value(cx, |this, launcher, _, cx| {
+                            this.save_preference(Preference::ChatLauncher(launcher), cx)
                         }),
                     ))
             }))

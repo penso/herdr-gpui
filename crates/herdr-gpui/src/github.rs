@@ -6,5 +6,5 @@
 pub(crate) use herdr_github::fake_graphql;
 pub(crate) use herdr_github::{
     Access, Account, Auth, Installation, Note, Profile, Source, Store, Tokens, VERIFY_URL, forget,
-    graphql, hidden_hint, rest, select_store, store_note,
+    graphql, rest, select_store, store_note,
 };

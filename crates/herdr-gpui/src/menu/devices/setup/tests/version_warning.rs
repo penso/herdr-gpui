@@ -54,36 +54,48 @@ fn restart_refusal_only_falls_back_for_a_still_running_host() {
         HostProbe::SshFailed(herdr_client::SshFailure::Auth),
     ] {
         let result = finish_save(
-            Err(Error::DeviceServerRestart),
+            Err(Error::ServerRestart.into()),
             || Ok(probe),
             || panic!("must not save"),
         );
-        assert!(matches!(result, Err(Error::DeviceServerRestart)));
+        assert!(matches!(
+            result,
+            Err(crate::Error::Devices(Error::ServerRestart))
+        ));
     }
     let result = finish_save(
-        Err(Error::DeviceServerRestart),
-        || Err(Error::DeviceSetupTimeout),
+        Err(Error::ServerRestart.into()),
+        || Err(Error::SetupTimeout.into()),
         || panic!("must not save"),
     );
-    assert!(matches!(result, Err(Error::DeviceSetupTimeout)));
+    assert!(matches!(
+        result,
+        Err(crate::Error::Devices(Error::SetupTimeout))
+    ));
 }
 
 #[test]
 fn unrelated_failures_and_failed_catalog_writes_stay_errors() {
     let result = finish_save(
-        Err(Error::DeviceSetupTimeout),
+        Err(Error::SetupTimeout.into()),
         || panic!("unexpected probe"),
         || panic!("must not save"),
     );
-    assert!(matches!(result, Err(Error::DeviceSetupTimeout)));
+    assert!(matches!(
+        result,
+        Err(crate::Error::Devices(Error::SetupTimeout))
+    ));
     let result = finish_save(
-        Err(Error::DeviceServerRestart),
+        Err(Error::ServerRestart.into()),
         || Ok(HostProbe::Running),
-        || Err(Error::DeviceExists("Already saved".into())),
+        || Err(Error::Exists("Already saved".into()).into()),
     );
-    assert!(matches!(result, Err(Error::DeviceExists(_))));
+    assert!(matches!(
+        result,
+        Err(crate::Error::Devices(Error::Exists(_)))
+    ));
     let result = finish_save(
-        Err(Error::DeviceServerRestart),
+        Err(Error::ServerRestart.into()),
         || Ok(HostProbe::Running),
         || Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied).into()),
     );

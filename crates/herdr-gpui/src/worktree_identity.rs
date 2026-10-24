@@ -5,9 +5,10 @@
 //! `worktrees/`), so nothing here reads Git. In the sidebar a linked worktree
 //! hangs from its main checkout on the tree's guide lines, in every layout,
 //! and one standing alone (its main checkout not open) takes the branch glyph
-//! instead, since it has no line to hang from. In the workspace, a hairline
-//! runs where its tab strip meets its terminals, and none while the strip is
-//! hidden, since it would then cover cells. The main checkout keeps the
+//! instead, since it has no line to hang from. In the workspace, when
+//! `apply_to` asks for `"terminal"`, a hairline runs where its tab strip
+//! meets its terminals, and none while the strip is hidden, since it would
+//! then cover cells; it is off by default. The main checkout keeps the
 //! theme as drawn, so the odd one out is the copy, not the original.
 //!
 //! The guides are structure, not identity, so they keep the tree's own muted
@@ -48,6 +49,7 @@ pub enum Surface {
 }
 
 /// `[worktrees]`, resolved: an optional hue and the surfaces that show it.
+/// By default only the sidebar does; the rule along the tab strip is opt-in.
 /// `apply_to = []` turns every mark off, leaving the sidebar as Herdr draws
 /// it without them: the flat layouts keep their tree, the rest none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +66,7 @@ impl Default for Worktrees {
         Self {
             tint: None,
             sidebar: true,
-            terminal: true,
+            terminal: false,
         }
     }
 }

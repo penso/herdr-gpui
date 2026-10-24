@@ -377,7 +377,7 @@ fn notification_settings_defaults_bounds_corners_and_strict_types() -> anyhow::R
         let error = Config::parse(&format!("[notifications]\n{field}"))
             .err()
             .ok_or_else(|| anyhow::anyhow!("accepted {field}"))?;
-        assert!(matches!(error, Error::Toml(_)), "{field}: {error:?}");
+        assert!(matches!(error, crate::Error::Toml(_)), "{field}: {error:?}");
         assert!(error.source().is_some());
     }
     // Delivery is a shared Herdr setting; a native `system` key is unknown.

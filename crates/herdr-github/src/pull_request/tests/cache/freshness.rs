@@ -43,7 +43,11 @@ fn the_less_a_pull_request_can_change_the_less_it_is_asked_about() {
             Ok(Some(with(State::Closed, true))),
             SETTLED_REFRESH,
         ),
-        ("failed", Err(Error::PrOrigin), ERROR_BACKOFF),
+        (
+            "failed",
+            Err(crate::pull_request::Error::Origin.into()),
+            ERROR_BACKOFF,
+        ),
     ] {
         assert_eq!(
             next_ask(&mut peer, &input(branch), now, value),

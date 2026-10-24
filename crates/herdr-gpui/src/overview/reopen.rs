@@ -157,7 +157,9 @@ impl HerdrWindow {
             .map_err(|error| super::Error::ReopenRequest(error).into())
             .and_then(|response| {
                 crate::worktree_scripts::created_tab(&response).map_err(|error| match error {
-                    crate::Error::WorktreeScriptsResponse => super::Error::ReopenResponse.into(),
+                    crate::Error::WorktreeScripts(crate::worktree_scripts::Error::Response) => {
+                        super::Error::ReopenResponse.into()
+                    }
                     error => error,
                 })
             });

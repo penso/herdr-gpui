@@ -3,7 +3,7 @@
 use super::{super::window_for, answer_when_done, socket};
 use crate::{
     Error,
-    config::{Config, ThemeName},
+    config::{self, Config, ThemeName},
     control::protocol::{Caller, ErrorCode, Response, settings::Reply},
 };
 use gpui::App;
@@ -11,10 +11,12 @@ use std::time::Duration;
 
 fn failed(error: &Error) -> Response {
     let code = match error {
-        Error::ThemeNotFound { .. } => ErrorCode::NotFound,
-        Error::EmptyTheme | Error::InvalidThemePair | Error::InvalidThemePath => {
-            ErrorCode::InvalidRequest
-        }
+        Error::Settings(config::Error::ThemeNotFound { .. }) => ErrorCode::NotFound,
+        Error::Settings(
+            config::Error::EmptyTheme
+            | config::Error::InvalidThemePair
+            | config::Error::InvalidThemePath,
+        ) => ErrorCode::InvalidRequest,
         _ => ErrorCode::Failed,
     };
     Response::error(code, error.to_string())

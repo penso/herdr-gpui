@@ -96,7 +96,7 @@ fn early_missing_refresh_preserves_error_and_account_backoff() {
     let missing = input("missing");
     peer.cache.schedule([failed.clone(), missing.clone()], now);
     peer.cache.poll(now);
-    peer.complete(now, Err(Error::PrOrigin), None);
+    peer.complete(now, Err(crate::pull_request::Error::Origin.into()), None);
     peer.complete(now, Ok(None), None);
     let due = now + Duration::from_secs(15);
     peer.cache.expire_viewed(&failed, due);

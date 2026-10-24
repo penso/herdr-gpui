@@ -36,9 +36,11 @@ fn reads_again_after_the_interval_or_when_refreshed() {
 
 #[test]
 fn a_spent_quota_is_told_apart_from_other_refusals() {
-    let limited = Error::Github(Box::new(crate::Error::GitHubRateLimit { reset: None }));
+    let limited = Error::Github(Box::new(
+        herdr_github::Error::RateLimit { reset: None }.into(),
+    ));
     assert!(limited.rate_limited());
-    assert!(!Error::Github(Box::new(crate::Error::GitHubForbidden)).rate_limited());
+    assert!(!Error::Github(Box::new(herdr_github::Error::Forbidden.into())).rate_limited());
     assert!(!Error::Output.rate_limited());
 }
 

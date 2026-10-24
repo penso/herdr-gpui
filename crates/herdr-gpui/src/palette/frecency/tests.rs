@@ -103,7 +103,9 @@ fn saved_history_loads_back_and_damaged_files_are_rejected() {
     }
     assert!(matches!(
         parse(br#"{"visits":[{"key":{"kind":"project","path":"/p"},"score":-1,"at":0}]}"#),
-        Err(crate::Error::InvalidPaletteFrecency)
+        Err(crate::Error::Palette(
+            crate::palette::Error::InvalidFrecency
+        ))
     ));
 }
 

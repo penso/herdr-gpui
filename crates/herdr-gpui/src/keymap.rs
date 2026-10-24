@@ -8,13 +8,15 @@
 //! catalog default's keystroke takes it over, as a daemon `[keys]` entry does.
 
 mod custom;
-mod daemon;
+pub(crate) mod daemon;
+mod error;
 
 pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
+pub(crate) use error::Error;
 
 use crate::{
-    Error, Result,
+    Result,
     controls::{COMMANDS, Command},
 };
 use daemon::Trigger;
@@ -177,7 +179,7 @@ impl Keymap {
             let command = COMMANDS[index].name;
             let keystrokes: Vec<String> = binding.keystrokes().map(str::to_owned).collect();
             if keystrokes.len() > MAX_KEYSTROKES {
-                return Err(Error::TooManyKeystrokes(command));
+                return Err(Error::TooManyKeystrokes(command).into());
             }
             configured[index] = Some(keystrokes);
         }
@@ -192,7 +194,8 @@ impl Keymap {
                         keystroke: keystroke.clone(),
                         first,
                         second: info.name,
-                    });
+                    }
+                    .into());
                 }
             }
         }
@@ -202,7 +205,8 @@ impl Keymap {
                 return Err(Error::PaneKeyBound {
                     keystroke: typed.unparse(),
                     command,
-                });
+                }
+                .into());
             }
         }
         Ok(Self::layer(configured, &claimed, keys, pane_keys))
@@ -438,7 +442,7 @@ fn resolve_pane_keys(
     defaults: impl IntoIterator<Item = (Keystroke, PaneKey)>,
 ) -> Result<Vec<(Keystroke, PaneKey)>> {
     if table.len() > MAX_PANE_KEYS {
-        return Err(Error::TooManyPaneKeys(MAX_PANE_KEYS));
+        return Err(Error::TooManyPaneKeys(MAX_PANE_KEYS).into());
     }
     let parse = |keystroke: &str| {
         Keystroke::parse(keystroke).map_err(|source| Error::InvalidPaneKey {
@@ -453,22 +457,23 @@ fn resolve_pane_keys(
         // A bare character or space is typing, which must reach the pane as text.
         if !has_modifier(&parsed) && (parsed.key.chars().nth(1).is_none() || parsed.key == "space")
         {
-            return Err(Error::PaneKeyWithoutModifier(typed.clone()));
+            return Err(Error::PaneKeyWithoutModifier(typed.clone()).into());
         }
         if !seen.insert(identity(&parsed)) {
-            return Err(Error::DuplicatePaneKey(typed.clone()));
+            return Err(Error::DuplicatePaneKey(typed.clone()).into());
         }
         resolved.retain(|(bound, _)| identity(bound) != identity(&parsed));
         // Text is sent as written, spaces included.
         if let Some(text) = sent.strip_prefix(TEXT_PREFIX) {
             if text.is_empty() {
-                return Err(Error::EmptyPaneKeyText(typed.clone()));
+                return Err(Error::EmptyPaneKeyText(typed.clone()).into());
             }
             if text.len() > MAX_PANE_TEXT {
                 return Err(Error::PaneKeyTextTooLong {
                     keystroke: typed.clone(),
                     limit: MAX_PANE_TEXT,
-                });
+                }
+                .into());
             }
             resolved.push((parsed, PaneKey::Text(text.to_owned())));
             continue;
@@ -482,7 +487,8 @@ fn resolve_pane_keys(
             return Err(Error::UnsendablePaneKey {
                 from: typed.clone(),
                 to: sent.to_owned(),
-            });
+            }
+            .into());
         }
         resolved.push((parsed, PaneKey::Key(sent_parsed)));
     }
@@ -504,7 +510,8 @@ fn parse(command: &'static str, keystroke: &str) -> Result<Keystroke> {
         return Err(Error::KeystrokeWithoutModifier {
             command,
             keystroke: keystroke.to_owned(),
-        });
+        }
+        .into());
     }
     Ok(parsed)
 }

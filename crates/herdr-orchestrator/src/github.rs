@@ -144,7 +144,9 @@ pub fn sync(
             cooldown,
         )
         .map_err(|error| match error {
-            herdr_github::Error::PrCancelled => Error::Cancelled,
+            herdr_github::Error::PullRequest(herdr_github::pull_request::Error::Cancelled) => {
+                Error::Cancelled
+            }
             error => Error::Github(Box::new(error)),
         })
     };

@@ -1,0 +1,32 @@
+name: Close stale PRs with low confidence or failed CI
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: close-low-confidence-prs
+  cancel-in-progress: false
+
+jobs:
+  close:
+    if: github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      # Scheduled runs and manual dispatches are restricted to main. Never load
+      # code from a PR when using the token that can close it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Close PRs below 5/5 or failing CI whose head commit is over 48 hours old
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/close-low-confidence-prs.py --repo "$GITHUB_REPOSITORY" --apply

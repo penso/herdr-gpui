@@ -13,7 +13,7 @@
 //! upgrade lands, and the upgrade itself is never interrupted: killing Homebrew
 //! mid-move can leave no installed app at all.
 
-use super::error::{Result, UpdateError as Error};
+use super::error::{Error, Result};
 use super::release;
 use std::{
     env,

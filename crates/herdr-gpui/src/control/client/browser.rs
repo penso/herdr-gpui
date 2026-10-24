@@ -1,6 +1,5 @@
 //! `browser ...` and `feedback`.
 use super::{Context, Output, caller, notes_daemon, rejected, send, tabs, unexpected};
-use crate::control::ControlError;
 use crate::{
     browser::{LocalFile, WebUrl},
     cli::control::{BrowserCommand, Placement, ZoomChange},
@@ -97,10 +96,11 @@ fn open(
 
 fn reload() -> crate::Result<Output> {
     match send(&Request::Reload(caller(None)?))? {
-        Response::Reloaded { tabs: 0 } => Err(crate::Error::Control(ControlError::Rejected {
+        Response::Reloaded { tabs: 0 } => Err(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: "This pane has no browser tabs open".into(),
-        })),
+        }
+        .into()),
         Response::Reloaded { tabs } => Output::data(
             format!("Reloaded {tabs} browser tab(s)"),
             &serde_json::json!({ "tabs": tabs }),
@@ -112,11 +112,10 @@ fn reload() -> crate::Result<Output> {
 /// The user's notes for this pane: page, review, and terminal notes alike
 /// are kept for it whenever they could not be typed into the pane.
 pub(super) fn feedback(wait: u64, _: &Context) -> crate::Result<Output> {
-    let pane_id =
-        super::env_id("HERDR_PANE_ID").ok_or(crate::Error::Control(ControlError::Rejected {
-            code: ErrorCode::InvalidRequest,
-            message: "feedback runs in the Herdr pane that should receive the notes".into(),
-        }))?;
+    let pane_id = super::env_id("HERDR_PANE_ID").ok_or(crate::control::Error::Rejected {
+        code: ErrorCode::InvalidRequest,
+        message: "feedback runs in the Herdr pane that should receive the notes".into(),
+    })?;
     let request = Request::Feedback(FeedbackRequest {
         pane_id,
         daemon_socket: Some(notes_daemon()?),

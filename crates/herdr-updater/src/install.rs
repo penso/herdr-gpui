@@ -5,7 +5,7 @@
 //! `previous-installation` backup are retained; never blindly overwrite an
 //! existing installation with that backup. No startup health ACK is assumed.
 
-use super::error::{Result, UpdateError as Error};
+use super::error::{Error, Result};
 use super::release;
 use Error::Io as io;
 use serde::{Deserialize, Serialize};

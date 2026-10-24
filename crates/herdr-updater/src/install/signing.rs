@@ -1,7 +1,7 @@
 //! The macOS code signature checks: a bundle must satisfy Herdr's designated
 //! requirement, carry the expected version, and keep its signing identity.
 use super::output;
-use crate::error::{Result, UpdateError as Error};
+use crate::error::{Error, Result};
 use std::{path::Path, sync::atomic::AtomicBool};
 
 // codesign and csreq read a bare `-R` argument as the path of a compiled

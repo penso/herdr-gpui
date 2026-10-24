@@ -2,7 +2,7 @@
 //! accounts the GitHub page adds. An account's token is never here: only the
 //! credential store entry it signs in under and the owners it reads.
 
-use crate::{Error, Result, error::GitHubAccountsError};
+use crate::{Error, Result, error::AccountsError};
 use serde::Deserialize;
 use std::env;
 
@@ -38,7 +38,7 @@ impl GitHubAccount {
     /// A new account with a random ID and no owners of its own yet.
     pub fn generate() -> Result<Self> {
         let mut bytes = [0_u8; ID_BYTES];
-        getrandom::fill(&mut bytes).map_err(GitHubAccountsError::Random)?;
+        getrandom::fill(&mut bytes).map_err(AccountsError::Random)?;
         Ok(Self {
             id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(),
             owners: Vec::new(),
@@ -127,18 +127,16 @@ impl GitHubConfig {
     }
 }
 
-pub fn check_accounts(accounts: &[GitHubAccount]) -> std::result::Result<(), GitHubAccountsError> {
+pub fn check_accounts(accounts: &[GitHubAccount]) -> std::result::Result<(), AccountsError> {
     for (index, account) in accounts.iter().enumerate() {
         if !valid_account_id(&account.id) {
-            return Err(GitHubAccountsError::Id);
+            return Err(AccountsError::Id);
         }
         if accounts[..index].iter().any(|other| other.id == account.id) {
-            return Err(GitHubAccountsError::DuplicateId(account.id.clone()));
+            return Err(AccountsError::DuplicateId(account.id.clone()));
         }
         if let Some(owner) = account.owners.iter().find(|owner| !valid_owner(owner)) {
-            return Err(GitHubAccountsError::Owner(
-                owner.chars().take(100).collect(),
-            ));
+            return Err(AccountsError::Owner(owner.chars().take(100).collect()));
         }
     }
     Ok(())

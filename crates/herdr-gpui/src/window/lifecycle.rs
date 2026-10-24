@@ -56,6 +56,12 @@ impl HerdrWindow {
     }
 
     pub(crate) fn resize_at(&mut self, now: Instant) {
+        // Herdr refuses the tab claim below from a connection whose surface is
+        // inactive, as a newly selected endpoint's is until the poll queues
+        // its activation. That activation sends the window's size itself.
+        if !self.endpoints[self.selected_endpoint].surface_requested() {
+            return;
+        }
         // Another client (a CLI, or another window) can resize the tab the
         // window shows. The window's own options still hold, so the early
         // return below would leave a frame that no longer matches them. An
@@ -101,9 +107,15 @@ impl HerdrWindow {
                     // alone does not claim it back from another client (a
                     // CLI, another window, or a TUI attached to the same
                     // tab), so claim it: select the tab again and re-report
-                    // the window's focus.
+                    // the window's focus. Not while a focus change is in
+                    // flight: the snapshot still names the tab being left,
+                    // and requests go one at a time, so the claim would land
+                    // after the change and undo it. The change claims the
+                    // tab it lands on itself.
                     self.sent_focus = None;
-                    if let Some(tab) = snapshot.focused_tab_id.clone() {
+                    if self.activation_deadline.is_none()
+                        && let Some(tab) = snapshot.focused_tab_id.clone()
+                    {
                         let _ = handle.request(
                             &snapshot.boot_id,
                             Method::TabFocus,

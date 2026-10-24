@@ -145,7 +145,7 @@ impl HerdrWindow {
             let shown = self
                 .browser
                 .annotations
-                .panel_shown(id, std::time::Instant::now());
+                .panel_shown(id, crate::motion::now());
             let panel = (shown > 0.).then(|| {
                 div()
                     .flex_none()

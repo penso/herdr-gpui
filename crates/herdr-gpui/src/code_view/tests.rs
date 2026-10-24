@@ -145,7 +145,7 @@ fn a_code_tab_shows_its_file_at_a_line_and_keeps_one_tab_per_file(cx: &mut TestA
     let refusal = if crate::editor::SUPPORTED {
         crate::Error::NotConnected
     } else {
-        crate::Error::EditorUnsupported
+        crate::Error::Editor(crate::editor::Error::Unsupported)
     };
     view.read_with(cx, |view, _| {
         let (flash, _) = view.flash.as_ref().unwrap();

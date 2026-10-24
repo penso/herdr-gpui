@@ -611,7 +611,7 @@ impl LiveState {
                         rename.result = Some(
                             match response.get("error").filter(|error| !error.is_null()) {
                                 Some(error) => {
-                                    Err(Arc::new(crate::Error::DaemonResponse(error.clone())))
+                                    Err(Arc::new(crate::daemon::Error::Response(error.clone()).into()))
                                 }
                                 None => Ok(()),
                             },
@@ -636,7 +636,7 @@ impl LiveState {
                     && !error.is_null()
                     && !self.has_operation_result(&request_id)
                 {
-                    self.error = Some(crate::Error::DaemonResponse(error.clone()).to_string());
+                    self.error = Some(crate::daemon::Error::Response(error.clone()).to_string());
                 }
                 if self.dismissal_request(&request_id)
                     && response.get("error").is_some_and(|error| !error.is_null())

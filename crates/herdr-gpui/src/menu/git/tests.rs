@@ -267,7 +267,7 @@ fn the_menu_commits_through_a_dialog_and_refuses_an_empty_message(cx: &mut TestA
             view.submit_git_commit(cx);
             assert_eq!(
                 view.menu.error.as_deref(),
-                Some(crate::Error::GitCommitMessage.to_string().as_str())
+                Some(crate::git::Error::CommitMessage.to_string().as_str())
             );
             assert_eq!(
                 view.menu.page,
