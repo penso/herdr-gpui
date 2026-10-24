@@ -88,6 +88,10 @@ jobs:
             BASE="$HEAD_SHA~1"
           fi
           python3 scripts/release/check-commit-messages.py range "$BASE..$HEAD_SHA"
+      - name: Test automatic PR closure policy
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 scripts/test_close_low_confidence_prs.py
       - name: Detect build and test inputs
         id: changes
         env:

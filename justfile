@@ -204,7 +204,10 @@ sort:
 test-mockup-wait:
     python3 .claude/skills/gpui-mockup/scripts/test_wait.py
 
-ci: format-check check-file-size check-sorted lint test test-mockup-wait
+test-pr-closure:
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_close_low_confidence_prs.py
+
+ci: format-check check-file-size check-sorted lint test test-mockup-wait test-pr-closure
 
 # Tools are listed in scripts/setup-ci.sh; Docker for lint-linux is only checked.
 # Install the tools local CI-equivalent runs need, on macOS or Ubuntu.
