@@ -31,7 +31,10 @@ fn theme_names_parse_a_system_pair_in_either_order() -> anyhow::Result<()> {
         "light:Nord,Dracula",
     ] {
         assert!(
-            matches!(ThemeName::parse(value), Err(Error::InvalidThemePair)),
+            matches!(
+                ThemeName::parse(value),
+                Err(crate::Error::Settings(Error::InvalidThemePair))
+            ),
             "{value}"
         );
     }
@@ -70,7 +73,7 @@ fn config_resolves_the_side_for_the_appearance_with_contrast() -> anyhow::Result
     assert_eq!(config.theme(false)?, expected("Catppuccin Mocha")?);
     assert!(matches!(
         Config::parse("theme = 'light:Nord'"),
-        Err(Error::InvalidThemePair)
+        Err(crate::Error::Settings(Error::InvalidThemePair))
     ));
     Ok(())
 }

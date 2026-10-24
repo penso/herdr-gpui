@@ -53,13 +53,16 @@ fn an_unusable_zen_width_fails_with_its_own_error() {
     ] {
         let result = Config::parse(&format!("[zen]\nwidth = {text}\n"));
         assert!(
-            matches!(result, Err(Error::InvalidZenWidth | Error::Toml(_))),
+            matches!(
+                result,
+                Err(crate::Error::Settings(Error::InvalidZenWidth) | crate::Error::Toml(_))
+            ),
             "{text}: {result:?}"
         );
     }
     assert!(matches!(
         Config::parse("[zen]\nwidth = 10\n"),
-        Err(Error::InvalidZenWidth)
+        Err(crate::Error::Settings(Error::InvalidZenWidth))
     ));
 }
 
@@ -73,7 +76,7 @@ fn zen_font_size_stays_in_the_font_range() -> anyhow::Result<()> {
         assert!(
             matches!(
                 Config::parse(&format!("[zen]\nfont_size = {size}\n")),
-                Err(Error::InvalidZenFontSize)
+                Err(crate::Error::Settings(Error::InvalidZenFontSize))
             ),
             "{size}"
         );

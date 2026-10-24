@@ -216,7 +216,10 @@ fn ghostty_errors_have_line_numbers() {
     ] {
         let result = Theme::parse_ghostty(&format!("# comment\n{line}"));
         assert!(
-            matches!(result, Err(Error::ThemeLine { line: 2, .. })),
+            matches!(
+                result,
+                Err(crate::Error::Settings(Error::ThemeLine { line: 2, .. }))
+            ),
             "{result:?}"
         );
     }

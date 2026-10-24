@@ -3,7 +3,6 @@ pub use crate::updater::UpdateError;
 pub use clipboard::ClipboardError;
 pub use github::{GitHubAccountsError, GitHubJsonError};
 use std::{io, path::PathBuf};
-pub use theme::ThemeParseError;
 
 #[cfg(any(target_os = "macos", windows))]
 use wry::raw_window_handle::HandleError as WindowHandleError;
@@ -63,18 +62,14 @@ pub enum Error {
     Code(#[from] crate::code_server::Error),
     #[error("This file is missing, larger than 1 MiB, or not UTF-8 text")]
     CodeFileUnreadable,
-    #[error("{0}")]
-    Config(#[source] config_loader::ConfigError),
     #[error("{source}")]
     ConfigFile {
         uri: Option<String>,
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
-    #[error("{key}: a part of this key holds a value, not a table; unset that part first")]
-    ConfigKeyNotTable { key: String },
-    #[error("Cannot migrate {}: {} already contains different settings. Merge your old settings into the local file, then remove the old config; it will be regenerated.", original.display(), local.display())]
-    ConfigMigrationConflict { original: PathBuf, local: PathBuf },
+    #[error("{0}")]
+    ConfigLoad(#[source] config_loader::ConfigError),
     #[error("Connection is busy. Try again.")]
     ConnectionBusy,
     #[error("The connection is not ready. Try again.")]
@@ -120,13 +115,6 @@ pub enum Error {
     DeviceSetupInput(&'static str),
     #[error("Saving the device timed out")]
     DeviceSetupTimeout,
-    /// A `[devices.<id>]` theme that does not parse, named by its device.
-    #[error("devices.{device}.theme: {source}")]
-    DeviceTheme {
-        device: String,
-        #[source]
-        source: Box<Error>,
-    },
     #[error("Another host is still being set up. Wait for it to finish.")]
     DispatchBusy,
     #[error("{0} cannot be reached by script. Choose another host.")]
@@ -141,16 +129,10 @@ pub enum Error {
     DuplicatePaneKey(String),
     #[error(transparent)]
     Editor(#[from] crate::editor::Error),
-    #[error("{0}.fallback families must not be empty")]
-    EmptyFontFallback(&'static str),
-    #[error("{0}.family must not be empty")]
-    EmptyFontFamily(&'static str),
     #[error("pane_keys.{0:?}: text: needs something to send")]
     EmptyPaneKeyText(String),
     #[error("Enter a tab name.")]
     EmptyTabName,
-    #[error("theme must not be empty")]
-    EmptyTheme,
     #[error("Workspace label must not be empty.")]
     EmptyWorkspaceLabel,
     #[error("Dropped paths must not contain control characters.")]
@@ -274,24 +256,12 @@ pub enum Error {
     InvalidClientId(&'static str),
     #[error("A code tab must name an absolute file path without control characters")]
     InvalidCodeFile,
-    #[error("code must be a TOML table")]
-    InvalidCodeTable,
-    #[error("devices.{0:?} is not a saved device ID")]
-    InvalidDeviceId(String),
-    #[error("devices and each devices.<id> must be tables")]
-    InvalidDevicesTable,
     #[error("Invalid saved dispatch history")]
     InvalidDispatchHistory,
     #[error("Not an address with a scheme other than http, https, and file, of at most 8 KiB.")]
     InvalidExternalUrl,
-    #[error("{0}.size must be finite and between 8 and 48 logical pixels")]
-    InvalidFontSize(&'static str),
-    #[error("{0}.weight must be a weight name such as \"medium\" or a number from 100 to 900")]
-    InvalidFontWeight(&'static str),
     #[error("Invalid saved editor groups")]
     InvalidGroupLayouts,
-    #[error("sidebar.hosts.{host:?} must be a #rgb or #rrggbb colour, not {value:?}")]
-    InvalidHostColor { host: String, value: String },
     #[error("keybindings.{command}: invalid keystroke {keystroke:?}")]
     InvalidKeystroke {
         command: &'static str,
@@ -299,8 +269,6 @@ pub enum Error {
         #[source]
         source: gpui::InvalidKeystrokeError,
     },
-    #[error("{0}.line_height must be a finite number between 1 and 2 times the font size")]
-    InvalidLineHeight(&'static str),
     #[error(
         "Local pages must be a plain file in a folder that is not hidden and does not hold your home directory."
     )]
@@ -313,34 +281,14 @@ pub enum Error {
     },
     #[error("A saved review tab names a checkout that is not a local absolute path.")]
     InvalidReviewCheckout,
-    #[error("layout.sidebar_gap must be finite and between 0 and 64 logical pixels")]
-    InvalidSidebarGap,
-    #[error("sidebar.{key} must be finite and between 0 and {max} logical pixels")]
-    InvalidSidebarMetric { key: &'static str, max: f32 },
     #[error("invalid sidebar width")]
     InvalidSidebarWidth,
-    #[error("sound.volume must be between 0 and 100")]
-    InvalidSoundVolume,
     #[error("sidebar_width_px must be finite and positive, or null")]
     InvalidStoredWidth,
-    #[error(
-        "terminal.{0} must be one number or a pair of numbers, each finite and between 0 and 64 logical pixels"
-    )]
-    InvalidTerminalPadding(&'static str),
-    #[error("a theme that follows the system must name both sides: light:NAME,dark:NAME")]
-    InvalidThemePair,
-    #[error("theme must be a name, absolute path, or ~/ path")]
-    InvalidThemePath,
-    #[error("usage must be a TOML table")]
-    InvalidUsageTable,
     #[error("Invalid saved window geometry or too many saved windows")]
     InvalidWindowState,
     #[error("Invalid saved worktree notes")]
     InvalidWorktreeNotes,
-    #[error("zen.font_size must be finite and between 8 and 48 logical pixels")]
-    InvalidZenFontSize,
-    #[error("zen.width must be 20 to 1000 columns, or a percentage from \"10%\" to \"100%\"")]
-    InvalidZenWidth,
     #[error("{0}")]
     Io(#[from] io::Error),
     #[error("{0}")]
@@ -465,8 +413,6 @@ pub enum Error {
     PrCheckout,
     #[error("Enter a comment of at most 4096 characters.")]
     PrCommentBody,
-    #[error("preferences must be an object")]
-    PreferencesNotObject,
     #[error("preferences path has no parent")]
     PreferencesPath,
     #[error("Invalid process text.")]
@@ -551,6 +497,8 @@ pub enum Error {
     ServerKeybindingsParse(#[source] toml::de::Error),
     #[error("the host's keybindings exceed {max} bytes")]
     ServerKeybindingsTooLarge { max: usize },
+    #[error(transparent)]
+    Settings(#[from] crate::config::Error),
     #[error("Could not finish saving Settings: {0}")]
     SettingsSave(#[source] std::sync::Arc<Error>),
     #[cfg(unix)]
@@ -590,38 +538,18 @@ pub enum Error {
     TailscaleJson(#[source] serde_json::Error),
     #[error("Tailscale did not answer in time")]
     TailscaleTimeout,
-    #[error("line {line}: {key}: {source}")]
-    ThemeLine {
-        line: usize,
-        key: String,
-        #[source]
-        source: ThemeParseError,
-    },
-    #[error("theme {name:?} not found in {directories:?}")]
-    ThemeNotFound {
-        name: String,
-        directories: Vec<PathBuf>,
-    },
     #[error("{0}")]
     Toml(#[from] toml::de::Error),
     #[error("{0}")]
     TomlEdit(#[from] toml_edit::TomlError),
-    #[error("[devices] must list at most {0} devices")]
-    TooManyDevices(usize),
-    #[error("{0}.fallback must list at most 8 families")]
-    TooManyFontFallbacks(&'static str),
     #[error("keybindings.{0} must list at most 8 keystrokes")]
     TooManyKeystrokes(&'static str),
     #[error("pane_keys must list at most {0} keystrokes")]
     TooManyPaneKeys(usize),
     #[error(transparent)]
     Tunnel(#[from] crate::listening_ports::tunnel::Error),
-    #[error("Herdr UI has no setting {}; config-gpui.toml lists every setting", .0.join(", "))]
-    UnknownConfigKeys(Vec<String>),
     #[error("keybindings.{0} is not a command; see the keybindings list in config-gpui.toml")]
     UnknownKeybinding(String),
-    #[error("Unknown sidebar layout {0:?}")]
-    UnknownLayout(String),
     #[error("pane_keys.{from:?}: a pane cannot receive {to:?}")]
     UnsendablePaneKey { from: String, to: String },
     #[error("This command action is not supported by this client.")]
@@ -669,7 +597,6 @@ mod config;
 mod github;
 mod path;
 mod remote;
-mod theme;
 mod vcs;
 
 #[cfg(test)]

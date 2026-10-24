@@ -1,5 +1,6 @@
 //! Blank space between a terminal's cells and the edges of its tab group.
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use gpui::{Styled, px};
 
 /// Padding wider than this stops reading as spacing and starts eating the
@@ -91,7 +92,7 @@ impl Sides {
         };
         sides
             .and_then(|(start, end)| Self::new(start, end))
-            .ok_or(Error::InvalidTerminalPadding(axis.key()))
+            .ok_or(Error::InvalidTerminalPadding(axis.key()).into())
     }
 }
 

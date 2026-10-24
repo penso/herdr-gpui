@@ -79,7 +79,7 @@ fn padding_outside_its_band_or_shape_is_refused_by_key() {
             assert!(
                 matches!(
                     padding(&text),
-                    Err(Error::InvalidTerminalPadding(named)) if named == key
+                    Err(crate::Error::Settings(Error::InvalidTerminalPadding(named))) if named == key
                 ),
                 "{text}"
             );
@@ -151,7 +151,10 @@ fn an_unused_deprecated_gap_is_still_held_to_its_band() {
         for terminal in ["", "[terminal]\npadding_x = 2"] {
             let text = format!("[layout]\nsidebar_gap = {gap}\n{terminal}");
             assert!(
-                matches!(padding(&text), Err(Error::InvalidSidebarGap)),
+                matches!(
+                    padding(&text),
+                    Err(crate::Error::Settings(Error::InvalidSidebarGap))
+                ),
                 "{text}"
             );
         }

@@ -59,7 +59,7 @@ fn rejects_line_heights_outside_the_range() {
         assert!(
             matches!(
                 Config::parse(&format!("[terminal]\nline_height = {value}")),
-                Err(Error::InvalidLineHeight("terminal"))
+                Err(crate::Error::Settings(Error::InvalidLineHeight("terminal")))
             ),
             "accepted line_height = {value}"
         );

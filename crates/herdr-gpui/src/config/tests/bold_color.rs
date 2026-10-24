@@ -17,7 +17,10 @@ fn ghostty_bold_color_rejects_non_hex_values() {
     for line in ["bold-color=white", "bold-color=#fff", "bold-color=0x123456"] {
         let result = Theme::parse_ghostty(&format!("# comment\n{line}"));
         assert!(
-            matches!(result, Err(Error::ThemeLine { line: 2, .. })),
+            matches!(
+                result,
+                Err(crate::Error::Settings(Error::ThemeLine { line: 2, .. }))
+            ),
             "{result:?}"
         );
     }

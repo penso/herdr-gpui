@@ -56,7 +56,7 @@ fn a_tint_is_a_hex_colour_and_anything_else_is_named() -> anyhow::Result<()> {
     }
     for value in ["2a3350", "#2a335", "blue", ""] {
         match Config::parse(&format!("[worktrees]\ntint = \"{value}\"")) {
-            Err(Error::WorktreeIdentity(worktree_identity::Error::InvalidTint(bad))) => {
+            Err(crate::Error::WorktreeIdentity(worktree_identity::Error::InvalidTint(bad))) => {
                 assert_eq!(bad, value);
             }
             other => panic!("{value:?}: {other:?}"),

@@ -9,7 +9,7 @@ const OTHER: &str = "fedcba9876543210fedcba9876543210";
 
 fn accounts_error(text: &str) -> Option<GitHubAccountsError> {
     match Config::parse(text) {
-        Err(Error::GitHubAccounts(error)) => Some(error),
+        Err(crate::Error::GitHubAccounts(error)) => Some(error),
         _ => None,
     }
 }
@@ -66,7 +66,7 @@ fn accounts_the_app_could_not_tell_apart_or_store_are_refused() {
         Config::parse(&format!(
             "[github]\naccounts = [{{ id = \"{ID}\", token = \"ghp_secret\" }}]"
         )),
-        Err(Error::GitHubSecretInConfig("token"))
+        Err(crate::Error::GitHubSecretInConfig("token"))
     ));
 }
 
@@ -200,11 +200,11 @@ fn an_add_the_app_would_refuse_is_not_written() -> anyhow::Result<()> {
     let (_temp, _path, local, daemon) = files("theme = \"Nord\"\n")?;
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account("bad", &[])),
-        Err(Error::GitHubAccounts(GitHubAccountsError::Id))
+        Err(crate::Error::GitHubAccounts(GitHubAccountsError::Id))
     ));
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account(ID, &["not an owner"])),
-        Err(Error::GitHubAccounts(GitHubAccountsError::Owner(_)))
+        Err(crate::Error::GitHubAccounts(GitHubAccountsError::Owner(_)))
     ));
     assert_eq!(fs::read_to_string(&local)?, "theme = \"Nord\"\n");
     for index in 0..MAX_ACCOUNTS {
@@ -212,7 +212,9 @@ fn an_add_the_app_would_refuse_is_not_written() -> anyhow::Result<()> {
     }
     assert!(matches!(
         Config::add_github_account_at(&local, &daemon, &account(ID, &[])),
-        Err(Error::GitHubAccounts(GitHubAccountsError::TooMany(_)))
+        Err(crate::Error::GitHubAccounts(GitHubAccountsError::TooMany(
+            _
+        )))
     ));
     Ok(())
 }

@@ -9,7 +9,7 @@ impl From<config_loader::ConfigError> for Error {
             config_loader::ConfigError::FileParse { uri, cause } => {
                 Self::ConfigFile { uri, source: cause }
             }
-            error => Self::Config(error),
+            error => Self::ConfigLoad(error),
         }
     }
 }

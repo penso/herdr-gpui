@@ -56,7 +56,7 @@ fn a_device_theme_that_cannot_parse_names_its_device() -> anyhow::Result<()> {
         ),
     ] {
         let error = Config::parse(&text).err().context("accepted")?;
-        let Error::DeviceTheme { device, source } = &error else {
+        let crate::Error::Settings(Error::DeviceTheme { device, source }) = &error else {
             anyhow::bail!("{text:?} gave {error:?}");
         };
         assert_eq!(device, ID);
@@ -94,7 +94,7 @@ fn device_themes_resolve_with_the_config_contrast() -> anyhow::Result<()> {
     );
     assert!(matches!(
         config.theme_named("../escape", false),
-        Err(Error::InvalidThemePath)
+        Err(crate::Error::Settings(Error::InvalidThemePath))
     ));
     Ok(())
 }
@@ -136,11 +136,11 @@ fn device_theme_saves_beside_keybindings_and_removes_cleanly() -> anyhow::Result
     // profile, never reaches the file.
     assert!(matches!(
         Config::save_device_theme_path(ID, Some(" "), &path),
-        Err(Error::DeviceTheme { .. })
+        Err(crate::Error::Settings(Error::DeviceTheme { .. }))
     ));
     assert!(matches!(
         Config::save_device_theme_path("../x", Some("Nord"), &path),
-        Err(Error::InvalidDeviceId(_))
+        Err(crate::Error::Settings(Error::InvalidDeviceId(_)))
     ));
     assert_eq!(fs::read_to_string(&path)?, original);
 
@@ -177,7 +177,7 @@ fn the_command_line_sets_and_unsets_a_device_theme() -> anyhow::Result<()> {
     let before = fs::read_to_string(&local)?;
     assert!(matches!(
         Config::edit_key_at(&local, &daemon, &key, Some(parse_value("light:Nord"))),
-        Err(Error::DeviceTheme { .. })
+        Err(crate::Error::Settings(Error::DeviceTheme { .. }))
     ));
     assert_eq!(fs::read_to_string(&local)?, before);
     assert!(Config::edit_key_at(&local, &daemon, &key, None)?);
