@@ -554,20 +554,8 @@ pub enum Error {
     #[error("Could not finish saving Settings: {0}")]
     SettingsSave(#[source] std::sync::Arc<Error>),
     #[cfg(unix)]
-    #[error("Herdr closed the setup before it finished. Start it again from Add Device.")]
-    SetupRelayClosed,
-    #[cfg(unix)]
-    #[error("This setup is no longer waiting. Start it again from Add Device.")]
-    SetupRelayConnect(#[source] io::Error),
-    #[cfg(unix)]
-    #[error("{} is not a private folder of this user, so the setup cannot listen there.", .0.display())]
-    SetupRelayDir(PathBuf),
-    #[cfg(unix)]
-    #[error("The setup terminal sent something unreadable.")]
-    SetupRelayFrame,
-    #[cfg(unix)]
-    #[error("The device setup needs a terminal.")]
-    SetupRelayTerminal,
+    #[error(transparent)]
+    SetupRelay(#[from] crate::setup_relay::Error),
     #[error("Could not install the agent skill at {}: {source}", path.display())]
     SkillInstall {
         path: PathBuf,

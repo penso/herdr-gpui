@@ -1,8 +1,9 @@
 //! The pane's end: run in a daemon workspace, it shows the setup the app
 //! runs on its own terminal. Only bytes cross the socket, so nothing here
 //! touches the network or needs any permission of its own.
+use super::Error;
 use super::frame::{Frame, Size};
-use crate::{Error, Result};
+use crate::Result;
 use rustix::termios::{OptionalActions, Termios};
 use std::{
     io::{self, Read, Write},
@@ -33,9 +34,9 @@ pub(crate) fn run(path: &Path) -> ExitCode {
 fn attach(path: &Path) -> Result<u8> {
     let stdin = io::stdin();
     if !rustix::termios::isatty(&stdin) {
-        return Err(Error::SetupRelayTerminal);
+        return Err(Error::Terminal.into());
     }
-    let mut stream = UnixStream::connect(path).map_err(Error::SetupRelayConnect)?;
+    let mut stream = UnixStream::connect(path).map_err(Error::Connect)?;
     let size = terminal_size();
     let term = std::env::var("TERM").ok();
     Frame::Hello { size, term }.write(&mut stream)?;
@@ -60,8 +61,8 @@ fn attach(path: &Path) -> Result<u8> {
                 stdout.flush()?;
             }
             Some(Frame::Exit(code)) => return Ok(u8::try_from(code.clamp(0, 255)).unwrap_or(1)),
-            Some(_) => return Err(Error::SetupRelayFrame),
-            None => return Err(Error::SetupRelayClosed),
+            Some(_) => return Err(Error::Frame.into()),
+            None => return Err(Error::Closed.into()),
         }
     }
 }
