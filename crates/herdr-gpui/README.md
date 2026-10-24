@@ -1907,10 +1907,11 @@ the app reads no Git of its own for this.
   hang from, so it shows the branch glyph, in the theme's blue (the hue its
   notes use), where a repository row shows its owner's avatar. Screen
   readers hear "linked worktree" after its name.
-- In the workspace, a 2-pixel rule in the same blue lies along the tab
-  strip's edge that meets the terminals. It sits in the chrome, so no
-  terminal cell is covered or recoloured; while the strip is hidden there is
-  no chrome to hold it, and the sidebar alone marks the worktree.
+- In the workspace, when `apply_to` includes `"terminal"`, a 2-pixel rule in
+  the same blue lies along the tab strip's edge that meets the terminals. It
+  is off by default. It sits in the chrome, so no terminal cell is covered or
+  recoloured; while the strip is hidden there is no chrome to hold it, and
+  the sidebar alone marks the worktree.
 
 The glyph and the rule reach 3:1 against the chrome (4.5:1 under
 `contrast = "high"`). The `[worktrees]` table changes their hue or where the
@@ -1923,7 +1924,8 @@ marks show:
 # blue.
 tint = "#7aa2f7"
 # Where the marks show; [] turns them off. Without "sidebar", the flat
-# layouts keep their tree and the others draw no guides, as before.
+# layouts keep their tree and the others draw no guides, as before. The
+# default is ["sidebar"]; add "terminal" for the rule along the tab strip.
 apply_to = ["sidebar", "terminal"]
 ```
 

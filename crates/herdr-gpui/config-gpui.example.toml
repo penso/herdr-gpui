@@ -377,13 +377,14 @@ size = 12
 # which keeps the theme as drawn. In every sidebar layout, worktrees nested
 # under their main checkout hang from it on the tree's thin guide lines; one
 # standing alone, its main checkout not open, shows the branch glyph in place
-# of the owner's avatar. Its workspace gets a thin rule where the tab strip
-# meets the terminals, and none while the strip is hidden; terminal cells are
-# never covered or recoloured. tint picks the glyph's and the rule's hue as
+# of the owner's avatar. With "terminal" in apply_to, its workspace also gets
+# a thin rule where the tab strip meets the terminals, and none while the
+# strip is hidden; terminal cells are never covered or recoloured. tint picks the glyph's and the rule's hue as
 # #rgb or #rrggbb; unset, it is the theme's blue. Either way the hue only gets
 # lighter or darker as far as it must to stand out from the chrome. apply_to
-# lists where the marks show, "sidebar" and "terminal"; [] turns them off,
-# leaving the guides only in the flat layouts, which always drew them.
+# lists where the marks show, "sidebar" and "terminal"; it defaults to
+# ["sidebar"]. [] turns them off, leaving the guides only in the flat
+# layouts, which always drew them.
 # [worktrees]
 # tint = "#7aa2f7"
 # apply_to = ["sidebar", "terminal"]

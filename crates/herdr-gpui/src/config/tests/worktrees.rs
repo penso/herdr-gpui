@@ -2,7 +2,7 @@ use super::*;
 use crate::worktree_identity::{self, Worktrees};
 
 #[test]
-fn worktrees_are_marked_everywhere_in_the_themes_hue_by_default() -> anyhow::Result<()> {
+fn worktrees_are_marked_in_the_sidebar_in_the_themes_hue_by_default() -> anyhow::Result<()> {
     for config in [
         Config::default(),
         Config::parse("")?,
@@ -11,7 +11,8 @@ fn worktrees_are_marked_everywhere_in_the_themes_hue_by_default() -> anyhow::Res
     ] {
         assert_eq!(config.worktrees, Worktrees::default());
         assert_eq!(config.worktrees.tint, None);
-        assert!(config.worktrees.sidebar && config.worktrees.terminal);
+        assert!(config.worktrees.sidebar);
+        assert!(!config.worktrees.terminal);
     }
     Ok(())
 }
@@ -52,7 +53,7 @@ fn a_tint_is_a_hex_colour_and_anything_else_is_named() -> anyhow::Result<()> {
         let config = Config::parse(&format!("[worktrees]\ntint = \"{value}\""))?;
         assert_eq!(config.worktrees.tint, Some(color), "{value}");
         // Setting a hue leaves the surfaces alone.
-        assert!(config.worktrees.sidebar && config.worktrees.terminal);
+        assert!(config.worktrees.sidebar && !config.worktrees.terminal);
     }
     for value in ["2a3350", "#2a335", "blue", ""] {
         match Config::parse(&format!("[worktrees]\ntint = \"{value}\"")) {
