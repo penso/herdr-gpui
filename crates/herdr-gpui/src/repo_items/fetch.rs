@@ -79,8 +79,9 @@ pub(super) fn fetch_branch(
     if ok {
         return Ok(());
     }
-    Err(Error::GitFailed {
+    Err(herdr_vcs::Error::from(crate::git::Error::Failed {
         operation: "fetch the pull request branch",
         details: crate::pull_request::clean(output.trim()),
     })
+    .into())
 }

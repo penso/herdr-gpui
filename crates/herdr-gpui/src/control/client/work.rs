@@ -25,11 +25,14 @@ use std::fmt::Write as _;
 fn rejected(error: impl Into<crate::Error>) -> crate::Error {
     let error = error.into();
     let code = match &error {
-        crate::Error::CheckpointMissing => ErrorCode::NotFound,
+        crate::Error::Vcs(herdr_vcs::Error::Checkpoint(crate::checkpoint::Error::Missing)) => {
+            ErrorCode::NotFound
+        }
         crate::Error::NotInCheckout
         | crate::Error::DetachedHead
-        | crate::Error::CheckpointCheckout
-        | crate::Error::CheckpointUnborn => ErrorCode::InvalidRequest,
+        | crate::Error::Vcs(herdr_vcs::Error::Checkpoint(
+            crate::checkpoint::Error::Checkout | crate::checkpoint::Error::Unborn,
+        )) => ErrorCode::InvalidRequest,
         _ => ErrorCode::Failed,
     };
     crate::Error::Control(ControlError::Rejected {

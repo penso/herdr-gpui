@@ -193,7 +193,9 @@ fn fork_pr_fetch_uses_the_origin_pr_ref_without_moving_local_branches() {
     missing.number = 999;
     assert!(matches!(
         super::fetch::fetch_branch(&input, &missing, &|| false),
-        Err(Error::GitFailed { .. })
+        Err(Error::Vcs(herdr_vcs::Error::Git(
+            crate::git::Error::Failed { .. }
+        )))
     ));
 }
 

@@ -46,10 +46,11 @@ pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Resul
         .arg("refs/heads");
     let (ok, output) = run(&mut command, deadline, cancelled)?;
     if !ok {
-        return Err(Error::GitFailed {
+        return Err(herdr_vcs::Error::from(crate::git::Error::Failed {
             operation: "list branches",
             details: clean(output.trim()),
-        });
+        })
+        .into());
     }
     Ok(parse(&output))
 }

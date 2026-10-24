@@ -70,7 +70,7 @@ fn the_current_checkout_is_named_as_the_daemon_names_it() {
         })
     ));
     assert!(matches!(
-        rejected(crate::Error::CheckpointMissing),
+        rejected(herdr_vcs::Error::from(crate::checkpoint::Error::Missing)),
         crate::Error::Control(ControlError::Rejected {
             code: ErrorCode::NotFound,
             ..

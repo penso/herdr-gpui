@@ -38,24 +38,6 @@ pub enum Error {
     Caffeine(#[from] crate::caffeine::Failure),
     #[error(transparent)]
     Chat(#[from] crate::chat::Error),
-    #[error("That checkpoint was taken on another branch. Check that branch out to restore it.")]
-    CheckpointBranch,
-    #[error("A merge, rebase, cherry-pick, or revert is in progress. Finish or abort it first.")]
-    CheckpointBusy,
-    #[error("No checkout of this branch was found on its host.")]
-    CheckpointCheckout,
-    #[error("That checkpoint no longer exists.")]
-    CheckpointMissing,
-    #[error("Checkpoint output was not understood.")]
-    CheckpointOutput,
-    #[error("Checkpoint Git commands failed")]
-    CheckpointScript(#[source] herdr_client::Error),
-    #[error("Could not start the checkpoint worker")]
-    CheckpointThread(#[source] io::Error),
-    #[error("This checkout has no commit yet, so it has no checkpoints.")]
-    CheckpointUnborn,
-    #[error("The checkpoint worker stopped.")]
-    CheckpointWorker,
     #[error("{source}; removing {}: {cleanup}", path.display())]
     Cleanup {
         #[source]
@@ -85,10 +67,6 @@ pub enum Error {
     Code(#[from] crate::code_server::Error),
     #[error("This file is missing, larger than 1 MiB, or not UTF-8 text")]
     CodeFileUnreadable,
-    #[error("Reading the checkout was cancelled")]
-    CodeIndexCancelled,
-    #[error("Only a local Git checkout can be searched for files and symbols")]
-    CodeIndexRoot,
     #[error("{0}")]
     Config(#[source] config_loader::ConfigError),
     #[error("{source}")]
@@ -226,20 +204,11 @@ pub enum Error {
     ForwardLimit(usize),
     #[error("Enter a port number from 1 to 65535.")]
     ForwardPort,
-    #[error("A Git operation is already running.")]
-    GitBusy,
-    #[error("Enter a commit message of at most 4096 characters.")]
-    GitCommitMessage,
     #[error("Could not run git in {}: {source}", path.display())]
     GitCommonDir {
         path: PathBuf,
         #[source]
         source: io::Error,
-    },
-    #[error("git {operation} failed: {details}")]
-    GitFailed {
-        operation: &'static str,
-        details: String,
     },
     #[error(transparent)]
     GitHubAccounts(#[from] GitHubAccountsError),
@@ -306,22 +275,6 @@ pub enum Error {
     GitHubTokenType,
     #[error("GitHub {0} worker stopped.")]
     GitHubWorker(&'static str),
-    #[error("No local checkout is focused.")]
-    GitNoCheckout,
-    #[error("Nothing to commit: the checkout has no changes.")]
-    GitNothingToCommit,
-    #[error("Could not {operation}.")]
-    GitProcess {
-        operation: &'static str,
-        #[source]
-        source: io::Error,
-    },
-    #[error("This branch is the repository default branch; no pull request can be opened from it.")]
-    GitPullRequestBase,
-    #[error("The branch has no commit to describe. Commit before opening a pull request.")]
-    GitPullRequestTitle,
-    #[error("Git worker stopped. Retry the operation.")]
-    GitWorker,
     #[error("Oversized GIF, WebP, and animated PNG images cannot be resized safely.")]
     ImageAnimationResize,
     #[error("Could not decode the oversized image.")]
@@ -793,6 +746,10 @@ pub enum Error {
     /// A usage read failed; see `error/usage.rs` for what is folded elsewhere.
     #[error(transparent)]
     Usage(herdr_usage::Error),
+    /// A Git, checkpoint, or code index failure; see `error/vcs.rs` for
+    /// what is handled elsewhere.
+    #[error(transparent)]
+    Vcs(herdr_vcs::Error),
     #[cfg(any(target_os = "macos", windows))]
     #[error("Could not create the page: {0}")]
     WebView(#[from] wry::Error),
