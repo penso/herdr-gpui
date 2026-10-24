@@ -4,7 +4,10 @@ use super::*;
 fn a_shell_command_refuses_names_that_are_not_distributions() {
     for name in ["", "-d", "two words", "a;b"] {
         assert!(
-            matches!(wsl_shell_command(name), Err(Error::InvalidWslDistro)),
+            matches!(
+                wsl_shell_command(name),
+                Err(crate::Error::Wsl(Error::InvalidDistro))
+            ),
             "{name}"
         );
     }
@@ -43,6 +46,6 @@ fn a_shell_command_reads_its_script_from_stdin_in_the_distribution() {
 fn a_shell_command_needs_windows() {
     assert!(matches!(
         wsl_shell_command("Ubuntu"),
-        Err(Error::WslUnsupported)
+        Err(crate::Error::Wsl(Error::Unsupported))
     ));
 }

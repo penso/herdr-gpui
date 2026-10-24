@@ -557,7 +557,7 @@ waiting on a first-run prompt makes `wsl.exe` print nothing and never exit.
 `RemoteHost` names either kind of remote host and dispatches session listing
 and deletion to the right one. Distribution names follow `wsl --import`'s rules
 (`valid_distro`) and are validated before anything spawns. Other platforms
-return `Error::WslUnsupported`.
+return `wsl::Error::Unsupported`.
 
 Saved distributions live in `gpui-wsl.json` beside the endpoint catalog, never
 in upstream's `endpoints.json` or `endpoint-selection.json`, whose strict schemas

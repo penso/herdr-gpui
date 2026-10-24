@@ -160,6 +160,8 @@ pub enum Error {
     ServerShutdown(String),
     #[error(transparent)]
     Ssh(#[from] crate::ssh::Error),
+    #[error(transparent)]
+    Wsl(#[from] crate::wsl::Error),
     /// Every Herdr installed on the SSH host or WSL distribution was skipped
     /// as unable to serve this client. Fields describe the first one;
     /// `version` is bounded text.
@@ -172,32 +174,6 @@ pub enum Error {
         generation: Option<u32>,
         version: Option<String>,
     },
-    #[error("invalid WSL distribution name")]
-    InvalidWslDistro,
-    #[error("WSL distributions are only available on Windows")]
-    WslUnsupported,
-    #[error("WSL did not answer in time; the distribution may be stopped or waiting for setup")]
-    WslTimeout,
-    #[error("WSL bridge closed; check that the distribution starts and Herdr is installed in it")]
-    WslClosed,
-    #[error("wsl.exe failed ({0})")]
-    WslCommand(std::process::ExitStatus),
-    #[error("invalid WSL device list schema")]
-    WslCatalogSchema(#[source] serde_json::Error),
-    #[error("unsupported WSL device list version, size, or entries")]
-    WslCatalog,
-    #[error("this WSL distribution is already a device")]
-    WslHostExists,
-    #[error("this WSL distribution is not a saved device")]
-    WslHostMissing,
-    #[error("a WSL distribution takes at most 256 dropped paths at once")]
-    WslPathLimit,
-    #[error("{} is not an absolute Windows path a WSL distribution can map", .0.display())]
-    WslPathInvalid(PathBuf),
-    #[error("{} is not reachable from this WSL distribution; only its own files and mounted drives are", .0.display())]
-    WslPathUnmapped(PathBuf),
-    #[error("invalid answer from wslpath")]
-    WslPathResponse,
     #[error("remote Git directory must be an absolute path")]
     InvalidGitDir,
     #[error("remote command failed ({0})")]
@@ -375,31 +351,24 @@ impl Error {
             } else {
                 io::ErrorKind::InvalidData
             }),
-            Self::InvalidSession
-            | Self::DefaultSession
-            | Self::NoLocalSocket
-            | Self::InvalidWslDistro
-            | Self::WslPathLimit
-            | Self::WslPathInvalid(_) => io::ErrorKind::InvalidInput,
-            Self::WslPathUnmapped(_) => io::ErrorKind::NotFound,
-            Self::WslUnsupported => io::ErrorKind::Unsupported,
+            Self::InvalidSession | Self::DefaultSession | Self::NoLocalSocket => {
+                io::ErrorKind::InvalidInput
+            }
             Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
             Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
                 io::ErrorKind::TimedOut
             }
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
-            Self::SocketClosed | Self::WslClosed | Self::ClosedBeforeWelcome => {
-                io::ErrorKind::UnexpectedEof
-            }
+            Self::SocketClosed | Self::ClosedBeforeWelcome => io::ErrorKind::UnexpectedEof,
             Self::Ssh(error) => error.kind(),
+            Self::Wsl(error) => error.kind(),
             Self::ForwardSpawn(error)
             | Self::ForwardLocalPort(error)
             | Self::ForwardControl(error) => error.kind(),
-            Self::HealthTimeout
-            | Self::WslTimeout
-            | Self::SessionDeleteTimeout
-            | Self::ForwardTimeout => io::ErrorKind::TimedOut,
+            Self::HealthTimeout | Self::SessionDeleteTimeout | Self::ForwardTimeout => {
+                io::ErrorKind::TimedOut
+            }
             Self::Full | Self::ClipboardImageBusy => io::ErrorKind::WouldBlock,
             _ => io::ErrorKind::InvalidData,
         }

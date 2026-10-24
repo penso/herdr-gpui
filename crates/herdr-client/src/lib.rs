@@ -37,7 +37,7 @@ pub mod text;
 mod transport;
 mod upload;
 pub mod workspaces;
-mod wsl;
+pub mod wsl;
 
 #[cfg(all(test, unix))]
 #[path = "../../test-support/executable.rs"]

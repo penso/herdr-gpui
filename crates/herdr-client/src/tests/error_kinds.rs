@@ -63,3 +63,70 @@ fn ssh_errors_keep_kind_and_text() {
         assert_eq!(error.to_string(), format!("SSH bridge closed: {failure}"));
     }
 }
+
+#[test]
+fn wsl_errors_keep_kind_and_text() {
+    use io::ErrorKind::*;
+    let path = || std::path::PathBuf::from("C:/x");
+    assert_kinds([
+        (
+            wsl::Error::Catalog.into(),
+            InvalidData,
+            "unsupported WSL device list version, size, or entries",
+        ),
+        (
+            wsl::Error::Closed.into(),
+            UnexpectedEof,
+            "WSL bridge closed; check that the distribution starts and Herdr is installed in it",
+        ),
+        (
+            wsl::Error::HostExists.into(),
+            InvalidData,
+            "this WSL distribution is already a device",
+        ),
+        (
+            wsl::Error::HostMissing.into(),
+            InvalidData,
+            "this WSL distribution is not a saved device",
+        ),
+        (
+            wsl::Error::InvalidDistro.into(),
+            InvalidInput,
+            "invalid WSL distribution name",
+        ),
+        (
+            wsl::Error::PathInvalid(path()).into(),
+            InvalidInput,
+            "C:/x is not an absolute Windows path a WSL distribution can map",
+        ),
+        (
+            wsl::Error::PathLimit.into(),
+            InvalidInput,
+            "a WSL distribution takes at most 256 dropped paths at once",
+        ),
+        (
+            wsl::Error::PathResponse.into(),
+            InvalidData,
+            "invalid answer from wslpath",
+        ),
+        (
+            wsl::Error::PathUnmapped(path()).into(),
+            NotFound,
+            "C:/x is not reachable from this WSL distribution; only its own files and mounted drives are",
+        ),
+        (
+            wsl::Error::Timeout.into(),
+            TimedOut,
+            "WSL did not answer in time; the distribution may be stopped or waiting for setup",
+        ),
+        (
+            wsl::Error::Unsupported.into(),
+            Unsupported,
+            "WSL distributions are only available on Windows",
+        ),
+    ]);
+    let schema = serde_json::from_str::<u8>("x").unwrap_err();
+    let error = Error::from(wsl::Error::CatalogSchema(schema));
+    assert_eq!(error.kind(), InvalidData);
+    assert_eq!(error.to_string(), "invalid WSL device list schema");
+}

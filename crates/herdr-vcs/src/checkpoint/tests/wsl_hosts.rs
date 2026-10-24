@@ -22,7 +22,9 @@ fn a_name_that_is_not_a_distribution_runs_nothing() {
     assert!(
         matches!(
             &error,
-            Error::CheckpointScript(herdr_client::Error::InvalidWslDistro)
+            Error::CheckpointScript(herdr_client::Error::Wsl(
+                herdr_client::wsl::Error::InvalidDistro
+            ))
         ),
         "{error:?}"
     );
