@@ -98,7 +98,7 @@ fn locates_a_workspace_checkout_and_its_main_checkout() {
     ));
     assert!(matches!(
         locate(&json!({"error":{"code":"x","message":"no"}}), "w2"),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
     // Two entries claiming the workspace identify nothing.
     let ambiguous = json!({"result":{"type":"worktree_list","worktrees":[
@@ -126,6 +126,6 @@ fn created_tabs_name_their_pane() {
     ));
     assert!(matches!(
         created_tab(&json!({"error":{"code":"denied","message":"no"}})),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }

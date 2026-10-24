@@ -57,7 +57,7 @@ fn creation_response_is_typed_and_requires_a_workspace_id() {
     ));
     assert!(matches!(
         created_workspace(&json!({"error": {"code": "refused", "message": "not trusted"}})),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }
 

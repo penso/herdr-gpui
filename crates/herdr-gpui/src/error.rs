@@ -1,7 +1,6 @@
 //! Internal failures retain their categories and sources until presentation.
 pub use crate::updater::UpdateError;
 pub use clipboard::ClipboardError;
-use daemon::daemon_error_message;
 pub use github::{GitHubAccountsError, GitHubJsonError};
 use std::{io, path::PathBuf};
 pub use theme::ThemeParseError;
@@ -84,19 +83,8 @@ pub enum Error {
     Control(#[from] crate::control::ControlError),
     #[error(transparent)]
     Credentials(#[from] herdr_credentials::Error),
-    #[error("daemon startup cancelled")]
-    DaemonCancelled,
-    #[error("herdr server exited before accepting connections: {0}. Check the Herdr server log.")]
-    DaemonExited(std::process::ExitStatus),
-    #[error("{}", daemon_error_message(.0))]
-    DaemonResponse(serde_json::Value),
-    #[error("Could not start herdr server: {source}. Use Terminal > Reconnect to retry.")]
-    DaemonSpawn {
-        #[source]
-        source: io::Error,
-    },
-    #[error("Timed out waiting for herdr server at {}. Check the Herdr server log and use Terminal > Reconnect.", .0.display())]
-    DaemonTimeout(PathBuf),
+    #[error(transparent)]
+    Daemon(#[from] crate::daemon::Error),
     #[error("Checkout lookup failed. Dismiss and reopen the menu.")]
     DeletionLookup,
     #[error("HEAD is detached. Check a branch out first.")]
@@ -690,7 +678,6 @@ pub enum Error {
 
 mod clipboard;
 mod config;
-mod daemon;
 mod github;
 mod path;
 mod remote;

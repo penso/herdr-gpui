@@ -126,7 +126,7 @@ pub(crate) fn created_tab(response: &Value) -> crate::Result<(String, String)> {
 
 fn response_result(response: &Value) -> crate::Result<&Value> {
     match response.get("error").filter(|error| !error.is_null()) {
-        Some(error) => Err(crate::Error::DaemonResponse(error.clone())),
+        Some(error) => Err(crate::daemon::Error::Response(error.clone()).into()),
         None => Ok(&response["result"]),
     }
 }

@@ -177,7 +177,7 @@ fn the_split_response_names_the_new_pane() {
     ));
     assert!(matches!(
         created_pane(&json!({"error": {"message": "no such pane"}})),
-        Err(crate::Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }
 

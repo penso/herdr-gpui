@@ -314,7 +314,7 @@ impl HerdrWindow {
 
 fn created_workspace(response: &Value) -> Result<String> {
     if let Some(error) = response.get("error") {
-        return Err(crate::Error::DaemonResponse(error.clone()));
+        return Err(crate::daemon::Error::Response(error.clone()).into());
     }
     let result = &response["result"];
     (result["type"] == "workspace_created")

@@ -200,7 +200,7 @@ pub(crate) struct Job {
 /// The new pane a `pane.split` response names.
 fn created_pane(response: &Value) -> crate::Result<String> {
     if let Some(error) = response.get("error").filter(|error| !error.is_null()) {
-        return Err(crate::Error::DaemonResponse(error.clone()));
+        return Err(crate::daemon::Error::Response(error.clone()).into());
     }
     response["result"]["pane"]["pane_id"]
         .as_str()
