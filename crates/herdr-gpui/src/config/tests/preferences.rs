@@ -231,7 +231,7 @@ fn palette_defaults_overrides_and_validation() -> anyhow::Result<()> {
             "[palette]\nproject_roots = [{}]",
             vec!["'x'"; 17].join(",")
         )),
-        Err(Error::PaletteProjectRoots)
+        Err(Error::Palette(crate::palette::Error::ProjectRoots))
     ));
     Ok(())
 }

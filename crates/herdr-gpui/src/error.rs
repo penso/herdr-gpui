@@ -317,8 +317,6 @@ pub enum Error {
         "Local pages must be a plain file in a folder that is not hidden and does not hold your home directory."
     )]
     InvalidLocalPage,
-    #[error("Invalid saved palette history")]
-    InvalidPaletteFrecency,
     #[error("pane_keys: invalid keystroke {keystroke:?}")]
     InvalidPaneKey {
         keystroke: String,
@@ -401,8 +399,6 @@ pub enum Error {
     MissingHome,
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
-    #[error("No captured daemon session. Reopen the palette.")]
-    NoPaletteSession,
     #[error("No current daemon snapshot.")]
     NoSnapshot,
     #[error("No tab selected.")]
@@ -420,49 +416,8 @@ pub enum Error {
     #[cfg(target_os = "macos")]
     #[error("The window has no view to place a page beneath")]
     PageStack,
-    #[error("This command changed or was removed. Reopen the palette.")]
-    PaletteCommandChanged,
-    #[error("The selected connection is not ready.")]
-    PaletteConnectionNotReady,
-    #[error("This agent or terminal no longer exists. Reopen the palette.")]
-    PaletteDestinationRemoved,
-    #[error("This host is no longer connected. Reopen the palette.")]
-    PaletteHostUnavailable,
-    #[error("The local connection changed. Reopen the palette.")]
-    PaletteLocalChanged,
-    #[error("The original pane no longer exists in its tab. Reopen the palette.")]
-    PalettePaneRemoved,
-    #[error("git clone failed: {0}")]
-    PaletteProjectClone(String),
-    #[error("Could not create the project folder: {source}")]
-    PaletteProjectCreate {
-        #[source]
-        source: io::Error,
-    },
-    #[error("A folder of that name already exists in the project root")]
-    PaletteProjectExists,
-    #[error("Project discovery reached its directory limit; narrow palette.project_roots")]
-    PaletteProjectLimit,
-    #[error("Project paths must be absolute UTF-8 paths without control characters")]
-    PaletteProjectPath,
-    #[error("Project directory is no longer available")]
-    PaletteProjectRemoved,
-    #[error("Unexpected workspace creation response. Review workspace state before retrying.")]
-    PaletteProjectResponse,
-    #[error("The first configured project root is not available")]
-    PaletteProjectRootMissing,
-    #[error("palette.project_roots must contain at most 16 nonempty paths of at most 8192 bytes")]
-    PaletteProjectRoots,
-    #[error("Workspace directories changed. Select the project again.")]
-    PaletteProjectStateChanged,
-    #[error("Project path references an unset environment variable: {0}")]
-    PaletteProjectVariable(String),
-    #[error("The daemon session changed. Reopen the palette.")]
-    PaletteSessionChanged,
-    #[error("The original tab no longer exists in its workspace. Reopen the palette.")]
-    PaletteTabRemoved,
-    #[error("This workspace no longer exists. Reopen the palette.")]
-    PaletteWorkspaceRemoved,
+    #[error(transparent)]
+    Palette(#[from] crate::palette::Error),
     #[error(transparent)]
     PaneCarry(#[from] crate::pane_menu::carry::Refusal),
     #[error("Could not decode an image a pane placed.")]

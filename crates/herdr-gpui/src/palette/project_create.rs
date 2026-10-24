@@ -6,8 +6,8 @@
 //! `palette.project_roots` entry the user configured, which is the same
 //! convention project discovery already uses.
 
-use super::{Action, Entry, Palette, projects};
-use crate::{Error, pull_request::run};
+use super::{Action, Entry, Error, Palette, projects};
+use crate::pull_request::run;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -80,7 +80,7 @@ pub(super) fn parse_repo(text: &str) -> Option<(String, String)> {
 ///
 /// Returns `Ok(None)` when the input is not something we would create, so the
 /// palette simply offers no row rather than showing an error while typing.
-pub(super) fn plan(roots: &[String], text: &str) -> Result<Option<NewProject>, Error> {
+pub(super) fn plan(roots: &[String], text: &str) -> Result<Option<NewProject>, crate::Error> {
     let Some(root) = roots.first() else {
         return Ok(None);
     };
@@ -104,12 +104,12 @@ pub(super) fn plan(roots: &[String], text: &str) -> Result<Option<NewProject>, E
 pub(super) fn materialise(
     project: &NewProject,
     cancelled: &impl Fn() -> bool,
-) -> Result<projects::Project, Error> {
+) -> Result<projects::Project, crate::Error> {
     let Some(root) = project.path.parent() else {
-        return Err(Error::PaletteProjectRootMissing);
+        return Err(Error::ProjectRootMissing.into());
     };
     if !root.is_dir() {
-        return Err(Error::PaletteProjectRootMissing);
+        return Err(Error::ProjectRootMissing.into());
     }
     match &project.source {
         // Claim the destination atomically: whichever attempt creates it owns
@@ -118,7 +118,7 @@ pub(super) fn materialise(
         Source::Clone { url } => clone(url, root, &project.path, &project.label, cancelled)?,
     }
     let path = super::canonical::canonicalize(&project.path)
-        .map_err(|error| Error::from(error).at_path(&project.path))?;
+        .map_err(|error| crate::Error::from(error).at_path(&project.path))?;
     Ok(projects::Project {
         path,
         label: project.label.clone(),
@@ -137,11 +137,11 @@ fn clone(
     destination: &Path,
     label: &str,
     cancelled: &impl Fn() -> bool,
-) -> Result<(), Error> {
+) -> Result<(), crate::Error> {
     // Not a guarantee (`publish` is), only a way not to download a repository
     // that has nowhere to go.
     if destination.symlink_metadata().is_ok() {
-        return Err(Error::PaletteProjectExists);
+        return Err(Error::ProjectExists.into());
     }
     let staging = staging_dir(root, label)?;
     let deadline = Instant::now() + CLONE_TIMEOUT;
@@ -149,7 +149,7 @@ fn clone(
     let mut command = clone_command(url, staging.path());
     match run(&mut command, deadline, cancelled)? {
         (true, _) => {}
-        (false, output) => return Err(Error::PaletteProjectClone(output.trim().to_owned())),
+        (false, output) => return Err(Error::ProjectClone(output.trim().to_owned()).into()),
     }
     publish(staging.path(), destination)?;
     // Moved into place: there is nothing left for the guard to remove.
@@ -168,7 +168,7 @@ pub(super) fn staging_dir(root: &Path, label: &str) -> Result<tempfile::TempDir,
     builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o777));
     builder
         .tempdir_in(root)
-        .map_err(|source| Error::PaletteProjectCreate { source })
+        .map_err(|source| Error::ProjectCreate { source })
 }
 
 /// Move a finished clone to `destination` without replacing anything there.
@@ -183,7 +183,7 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
     fs::rename(staging, destination).map_err(|source| {
         // Non-recursive, so this removes the claim only while it is still empty.
         let _ = fs::remove_dir(destination);
-        Error::PaletteProjectCreate { source }
+        Error::ProjectCreate { source }
     })
 }
 
@@ -191,7 +191,7 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
 #[cfg(windows)]
 pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
     if destination.symlink_metadata().is_ok() {
-        return Err(Error::PaletteProjectExists);
+        return Err(Error::ProjectExists);
     }
     fs::rename(staging, destination).map_err(claim_error)
 }
@@ -199,9 +199,9 @@ pub(super) fn publish(staging: &Path, destination: &Path) -> Result<(), Error> {
 /// An existing name is the ordinary case; anything else is a real failure.
 fn claim_error(source: std::io::Error) -> Error {
     if source.kind() == std::io::ErrorKind::AlreadyExists {
-        Error::PaletteProjectExists
+        Error::ProjectExists
     } else {
-        Error::PaletteProjectCreate { source }
+        Error::ProjectCreate { source }
     }
 }
 

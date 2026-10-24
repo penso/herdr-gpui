@@ -1,8 +1,8 @@
 //! Running a chosen row: commands, Go To destinations, projects, and the
 //! daemon custom commands a shortcut also reaches.
 
-use super::{Action, Frecency, Palette, Target, destination_exists, frecency};
-use crate::{Error, HerdrWindow, NavigationTarget, Result};
+use super::{Action, Error, Frecency, Palette, Target, destination_exists, frecency};
+use crate::{HerdrWindow, NavigationTarget, Result};
 use gpui::*;
 use herdr_client::{Method, protocol::ClientShellCommandAction};
 
@@ -102,15 +102,19 @@ impl HerdrWindow {
         }
         let result = (|| {
             if !self.input_ready() {
-                return Err(Error::PaletteConnectionNotReady);
+                return Err(Error::ConnectionNotReady.into());
             }
-            let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
+            let snapshot = self
+                .live
+                .snapshot
+                .as_ref()
+                .ok_or(crate::Error::NoSnapshot)?;
             let target = self
                 .menu
                 .palette
                 .as_ref()
                 .and_then(|p| p.target.as_ref())
-                .ok_or(Error::NoPaletteSession)?;
+                .ok_or(Error::NoSession)?;
             match &action {
                 Action::Configured(id, action) => {
                     let mut target = target.clone();
@@ -158,9 +162,13 @@ impl HerdrWindow {
         }
         let result = (|| {
             if !self.input_ready() {
-                return Err(Error::PaletteConnectionNotReady);
+                return Err(Error::ConnectionNotReady.into());
             }
-            let snapshot = self.live.snapshot.as_ref().ok_or(Error::NoSnapshot)?;
+            let snapshot = self
+                .live
+                .snapshot
+                .as_ref()
+                .ok_or(crate::Error::NoSnapshot)?;
             Target::capture(snapshot, self.plugin_selection()).invocation(snapshot, id, action)
         })();
         match result {
@@ -188,20 +196,17 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|e| e.id == endpoint && e.enabled)
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::HostUnavailable)?;
         let selected = index == self.selected_endpoint;
         let live = if selected {
             &self.live
         } else {
             &self.endpoints[index].live
         };
-        let snapshot = live
-            .snapshot
-            .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?;
+        let snapshot = live.snapshot.as_ref().ok_or(Error::HostUnavailable)?;
         destination_exists(snapshot, boot, target)?;
         if selected && !self.input_ready() {
-            return Err(Error::PaletteConnectionNotReady);
+            return Err(Error::ConnectionNotReady.into());
         }
         Ok(selected)
     }
