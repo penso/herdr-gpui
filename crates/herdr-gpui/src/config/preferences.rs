@@ -15,6 +15,8 @@ pub(crate) enum Preference {
     RemoveMergedWorktrees(bool),
     ShowSystemLoad(bool),
     ShowNetworkQuality(bool),
+    ShowGpuLoad(bool),
+    ShowSidebarGpuLoad(bool),
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     ShowAgentsHeader(bool),
@@ -125,6 +127,10 @@ impl Config {
                 Preference::ShowSystemLoad(value) => (None, "show_system_load", Some(value.into())),
                 Preference::ShowNetworkQuality(value) => {
                     (None, "show_network_quality", Some(value.into()))
+                }
+                Preference::ShowGpuLoad(value) => (None, "show_gpu_load", Some(value.into())),
+                Preference::ShowSidebarGpuLoad(value) => {
+                    (None, "show_sidebar_gpu_load", Some(value.into()))
                 }
                 Preference::AgentCheckpoints(value) => {
                     (None, "agent_checkpoints", Some(value.into()))

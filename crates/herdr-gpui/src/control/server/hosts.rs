@@ -282,6 +282,14 @@ pub(super) fn load_info(host: &str, sample: &crate::system_load::Sample) -> Load
         uptime_seconds: sample.uptime,
         disk_available: sample.disk.map(|disk| disk.available),
         disk_total: sample.disk.map(|disk| disk.total),
+        gpu_count: sample.gpu.map(|gpu| gpu.count),
+        gpu_percent: sample.gpu.and_then(|gpu| gpu.busy),
+        gpu_memory_used: sample
+            .gpu
+            .and_then(|gpu| gpu.memory.map(|memory| memory.used)),
+        gpu_memory_total: sample
+            .gpu
+            .and_then(|gpu| gpu.memory.map(|memory| memory.total)),
     }
 }
 

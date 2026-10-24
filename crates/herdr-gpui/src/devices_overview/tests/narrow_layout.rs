@@ -6,7 +6,7 @@ fn bounds(cx: &mut VisualTestContext, selector: String) -> Bounds<Pixels> {
         .unwrap()
 }
 
-fn assert_load_fits(cx: &mut VisualTestContext, prefix: &str) {
+fn assert_load_fits(cx: &mut VisualTestContext, prefix: &str, gpu: bool) {
     let tab = bounds(cx, format!("{prefix}devices-tab"));
     let table = bounds(cx, format!("{prefix}devices-table"));
     for part in ["header", "local"] {
@@ -16,7 +16,9 @@ fn assert_load_fits(cx: &mut VisualTestContext, prefix: &str) {
             "{load:?} inside {table:?}"
         );
         assert!(load.right() <= tab.right(), "{load:?} inside {tab:?}");
-        for column in 0..5 {
+        // Every column but the device's and the agents'.
+        let columns = crate::devices_overview::table::load_columns(gpu);
+        for column in 0..columns {
             let cell = bounds(cx, format!("{prefix}devices-load-{part}-{column}"));
             assert!(
                 cell.left() >= load.left() && cell.right() <= load.right(),
@@ -32,8 +34,11 @@ fn assert_load_fits(cx: &mut VisualTestContext, prefix: &str) {
                 "headers align with values"
             );
         }
+        // The GPU's columns are drawn only while it is shown.
+        let past = format!("{prefix}devices-load-{part}-{columns}");
+        assert!(cx.debug_bounds(Box::leak(past.into_boxed_str())).is_none());
         let first = bounds(cx, format!("{prefix}devices-load-{part}-0"));
-        let last = bounds(cx, format!("{prefix}devices-load-{part}-4"));
+        let last = bounds(cx, format!("{prefix}devices-load-{part}-{}", columns - 1));
         assert!(last.top() > first.top(), "columns wrap within the group");
     }
 }
@@ -43,7 +48,16 @@ fn load_columns_fit_the_minimum_window_width(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
     cx.simulate_resize(size(px(640.), px(900.)));
     open(&view, cx);
-    assert_load_fits(cx, "");
+    assert_load_fits(cx, "", false);
+}
+
+#[gpui::test]
+fn gpu_columns_fit_the_minimum_window_width(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    view.update(cx, |view, _| view.config.show_gpu_load = true);
+    cx.simulate_resize(size(px(640.), px(900.)));
+    open(&view, cx);
+    assert_load_fits(cx, "", true);
 }
 
 #[gpui::test]
@@ -63,5 +77,5 @@ fn load_columns_fit_a_narrow_editor_group(cx: &mut gpui::TestAppContext) {
         })
     });
     draw(cx);
-    assert_load_fits(cx, "g1-");
+    assert_load_fits(cx, "g1-", false);
 }

@@ -8,6 +8,7 @@ use std::sync::{
 
 mod activity_bar_windows;
 mod config_watch;
+mod gpu_settings;
 #[cfg(windows)]
 mod launch_at_login;
 mod layout_drafts;

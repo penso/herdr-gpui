@@ -182,6 +182,12 @@ pub(super) const CATALOG: &[Entry] = &[
     ),
     entry(
         Section::Sidebar,
+        "sidebar-gpu-load",
+        "Show GPU and video memory",
+        "Each host's GPU busy share and VRAM on a line under its CPU and memory, or a GPU gauge after its name in compact layouts. Off by default.",
+    ),
+    entry(
+        Section::Sidebar,
         "sidebar-indent",
         "Indent",
         "Pixels each nesting level steps in.",
@@ -238,6 +244,12 @@ pub(super) const CATALOG: &[Entry] = &[
         "status-system-load",
         "CPU and memory",
         "Hiding CPU and memory also removes them from sidebar host rows.",
+    ),
+    entry(
+        Section::StatusBar,
+        "status-gpu",
+        "GPU and video memory",
+        "The selected host's GPU busy share and VRAM, from nvidia-smi, the amdgpu driver, or ioreg on a Mac. Off by default.",
     ),
     entry(
         Section::StatusBar,

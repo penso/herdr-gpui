@@ -1,12 +1,12 @@
-//! The device table: one row per device with its agents, CPU, memory, home
-//! disk and uptime. Clicking a row opens it on a list of its agents, and
+//! The device table: one row per device with its agents, CPU, memory, GPU,
+//! video memory, home disk and uptime. Clicking a row opens it on a list of its agents, and
 //! clicking an agent shows its pane.
 
 use super::{Device, Link, view::Look};
 use crate::{
     HerdrWindow,
     browser::{Slot, TabId},
-    system_load::{self, CPU_WARN, DISK_WARN, MEMORY_WARN, SystemLoad},
+    system_load::{self, CPU_WARN, DISK_WARN, GPU_WARN, MEMORY_WARN, SystemLoad, VRAM_WARN},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -14,25 +14,45 @@ use std::collections::HashSet;
 
 const DEVICE_MIN: f32 = 180.;
 /// Every column but the device's, which takes the rest.
-const COLUMNS: [(&str, f32); 6] = [
+pub(super) const COLUMNS: &[(&str, f32)] = &[
     ("Agents", 230.),
     ("CPU", 84.),
     ("Memory", 84.),
+    ("GPU", 84.),
+    ("VRAM", 84.),
     ("Disk free", 96.),
     ("Uptime", 76.),
     ("", 12.),
 ];
+/// The columns shown while GPUs are read (`Config::gpu_sampled`).
+const GPU_COLUMNS: [&str; 2] = ["GPU", "VRAM"];
+
+/// Whether a load column is drawn: the GPU's only while `show_gpu_load` is on.
+fn shown(name: &str, gpu: bool) -> bool {
+    gpu || !GPU_COLUMNS.contains(&name)
+}
+
+/// The load columns drawn after the agents'.
+#[cfg(test)]
+pub(super) fn load_columns(gpu: bool) -> usize {
+    COLUMNS[1..]
+        .iter()
+        .filter(|(name, _)| shown(name, gpu))
+        .count()
+}
 const METER_WIDTH: f32 = 64.;
 /// Where an open row's agents start: under the device's name, past its dot.
 const AGENT_INDENT: f32 = 31.;
 
 /// A row's cells: the device, its agents, then the load columns as one
 /// group, so a narrow tab wraps that group onto a line of its own, then wraps
-/// its columns if needed. The header wraps in step with every row.
+/// its columns if needed. The header wraps in step with every row. `load`
+/// holds a cell per column; the GPU's are dropped unless `gpu`.
 fn cells(
     device: impl IntoElement,
     agents: impl IntoElement,
-    load: [AnyElement; 5],
+    load: impl IntoIterator<Item = AnyElement>,
+    gpu: bool,
     selector: String,
 ) -> Div {
     div()
@@ -55,16 +75,20 @@ fn cells(
                 .flex_wrap()
                 .items_center()
                 .gap_3()
-                .children(load.into_iter().zip(&COLUMNS[1..]).enumerate().map(
-                    |(index, (cell, (_, width)))| {
-                        let selector = format!("{selector}-{index}");
-                        div()
-                            .debug_selector(move || selector)
-                            .flex_none()
-                            .w(px(*width))
-                            .child(cell)
-                    },
-                )),
+                .children(
+                    load.into_iter()
+                        .zip(&COLUMNS[1..])
+                        .filter(|(_, (name, _))| shown(name, gpu))
+                        .enumerate()
+                        .map(|(index, (cell, (_, width)))| {
+                            let selector = format!("{selector}-{index}");
+                            div()
+                                .debug_selector(move || selector)
+                                .flex_none()
+                                .w(px(*width))
+                                .child(cell)
+                        }),
+                ),
         )
 }
 
@@ -76,14 +100,17 @@ pub(super) fn devices(
     slot: Slot,
     tab: TabId,
     expanded: &HashSet<String>,
+    gpu_shown: bool,
     cx: &mut Context<HerdrWindow>,
 ) -> Div {
     let theme = look.theme;
-    let label = |index: usize| COLUMNS[index].0.into_any_element();
     let header = cells(
         "Device",
         COLUMNS[0].0,
-        [label(1), label(2), label(3), label(4), label(5)],
+        COLUMNS[1..]
+            .iter()
+            .map(|(label, _)| label.into_any_element()),
+        gpu_shown,
         slot.selector("devices-load-header"),
     )
     .px_3()
@@ -100,6 +127,7 @@ pub(super) fn devices(
             .and_then(|host| load.get(host));
         let sample = reading.and_then(system_load::Reading::latest);
         let disk = sample.and_then(|sample| sample.disk);
+        let gpu = sample.and_then(|sample| sample.gpu);
         let open = expanded.contains(&device.id);
         let id = device.id.clone();
         let row_id = device.id.clone();
@@ -116,6 +144,14 @@ pub(super) fn devices(
                     MEMORY_WARN,
                 )
                 .into_any_element(),
+                meter(look, None, gpu.and_then(|gpu| gpu.busy), GPU_WARN).into_any_element(),
+                meter(
+                    look,
+                    None,
+                    gpu.and_then(|gpu| gpu.memory.map(|memory| memory.percent())),
+                    VRAM_WARN,
+                )
+                .into_any_element(),
                 meter(
                     look,
                     disk.map(|disk| system_load::storage(disk.available)),
@@ -130,7 +166,7 @@ pub(super) fn devices(
                 )
                 .into_any_element(),
                 svg()
-                    .size(px(COLUMNS[5].1))
+                    .size(px(COLUMNS[COLUMNS.len() - 1].1))
                     .path(if open {
                         "icons/chevron-down.svg"
                     } else {
@@ -139,6 +175,7 @@ pub(super) fn devices(
                     .text_color(rgb(theme.muted))
                     .into_any_element(),
             ],
+            gpu_shown,
             slot.selector(&format!("devices-load-{}", device.id)),
         )
         .id(SharedString::from(

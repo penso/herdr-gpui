@@ -346,6 +346,18 @@ impl SettingsWindow {
                         cx,
                     )),
             )
+            .child(
+                ui::row(theme, "sidebar-gpu-load", "Show GPU and video memory")
+                    .description(
+                        "Each host's GPU busy share and VRAM on a line under its CPU and memory, or a GPU gauge after its name in compact layouts. Off by default.",
+                    )
+                    .switch(self.preference_toggle(
+                        "sidebar-gpu-load-toggle",
+                        self.config.show_sidebar_gpu_load,
+                        Preference::ShowSidebarGpuLoad(!self.config.show_sidebar_gpu_load),
+                        cx,
+                    )),
+            )
             .child(ui::section(theme, "Spacing", None));
         for spacing in Spacing::ALL {
             page = page.child(self.spacing_row(spacing, ready, cx));

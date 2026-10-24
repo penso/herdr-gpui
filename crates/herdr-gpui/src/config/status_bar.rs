@@ -1,6 +1,6 @@
 //! What the status bar shows and how much room each item takes. Whether
-//! usage and CPU/memory appear at all stays with `[usage] show` and
-//! `show_system_load`, which also gate their sampling.
+//! usage, CPU/memory and the GPU appear at all stays with `[usage] show`,
+//! `show_system_load` and `show_gpu_load`, which also gate their sampling.
 use serde::Deserialize;
 
 /// How much of a reading an item spells out.
@@ -76,6 +76,8 @@ pub struct StatusBar {
     pub show: bool,
     pub usage: Detail,
     pub system_load: Detail,
+    /// The selected host's GPU and video memory, while `show_gpu_load` is on.
+    pub gpu_detail: Detail,
     pub keep_awake: bool,
     pub keep_awake_scope: AwakeScope,
     pub theme: Button,
@@ -89,6 +91,7 @@ impl Default for StatusBar {
             show: true,
             usage: Detail::default(),
             system_load: Detail::default(),
+            gpu_detail: Detail::default(),
             keep_awake: true,
             keep_awake_scope: AwakeScope::default(),
             theme: Button::default(),
@@ -103,6 +106,7 @@ impl Default for StatusBar {
 pub(crate) enum Edit {
     Usage(Detail),
     SystemLoad(Detail),
+    GpuDetail(Detail),
     KeepAwake(bool),
     KeepAwakeScope(AwakeScope),
     Theme(Button),
@@ -115,6 +119,7 @@ impl Edit {
         match self {
             Self::Usage(detail) => ("usage", detail.name().into()),
             Self::SystemLoad(detail) => ("system_load", detail.name().into()),
+            Self::GpuDetail(detail) => ("gpu_detail", detail.name().into()),
             Self::KeepAwake(shown) => ("keep_awake", shown.into()),
             Self::KeepAwakeScope(scope) => ("keep_awake_scope", scope.name().into()),
             Self::Theme(button) => ("theme", button.name().into()),

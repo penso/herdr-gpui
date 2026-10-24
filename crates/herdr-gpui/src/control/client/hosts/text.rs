@@ -230,6 +230,20 @@ fn load(load: &LoadInfo) -> String {
     if let (Some(used), Some(total)) = (load.memory_used, load.memory_total) {
         lines.push(format!("  Memory  {} of {}", bytes(used), bytes(total)));
     }
+    if let Some(count) = load.gpu_count {
+        let cards = if count > 1 {
+            format!(" across {count} cards")
+        } else {
+            String::new()
+        };
+        let busy = load
+            .gpu_percent
+            .map_or_else(|| "—".to_owned(), |busy| format!("{busy:.0}%"));
+        lines.push(format!("  GPU     {busy}{cards}"));
+    }
+    if let (Some(used), Some(total)) = (load.gpu_memory_used, load.gpu_memory_total) {
+        lines.push(format!("  VRAM    {} of {}", bytes(used), bytes(total)));
+    }
     if let (Some(available), Some(total)) = (load.disk_available, load.disk_total) {
         lines.push(format!(
             "  Disk    {} free of {}",

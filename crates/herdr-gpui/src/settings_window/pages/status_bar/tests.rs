@@ -50,8 +50,22 @@ fn status_bar_controls_save_typed_edits(cx: &mut TestAppContext) {
         click(cx, "status-system-load-toggle"),
         Some(Preference::ShowSystemLoad(false))
     );
+    assert_eq!(
+        click(cx, "status-gpu-toggle"),
+        Some(Preference::ShowGpuLoad(true))
+    );
     // The current choice, and the choices of a hidden item, save nothing.
     assert_eq!(click(cx, "status-usage-detail-0"), None);
+    // The GPU is off by default, so its detail waits until it is shown.
+    assert_eq!(click(cx, "status-gpu-detail-1"), None);
+    view.update(cx, |view, cx| {
+        view.config.show_gpu_load = true;
+        cx.notify();
+    });
+    assert_eq!(
+        click(cx, "status-gpu-detail-1"),
+        Some(Preference::StatusBar(Edit::GpuDetail(Detail::Compact)))
+    );
     view.update(cx, |view, cx| {
         view.config.status_bar.theme = Button::Hidden;
         cx.notify();

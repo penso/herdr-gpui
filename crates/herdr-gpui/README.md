@@ -1114,6 +1114,20 @@ Other remote systems show it as unavailable. Set top-level `show_system_load = f
 and memory** in Settings, to hide it and stop sampling while no
 [Devices overview](#devices-overview) is open.
 
+GPU and video memory are off by default, with a setting each for the status
+bar and the sidebar. Top-level `show_gpu_load = true`, or **GPU and video
+memory** in Settings > Status bar, shows the selected host's in the status bar;
+`show_sidebar_gpu_load = true`, or **Show GPU and video memory** in Settings >
+Sidebar, shows each host's on a sidebar line under its CPU and memory (layouts
+with detail lines; compact ones add a GPU gauge after the host's name). While
+either is on, the Overview and Devices pages show GPU and VRAM too. `[status_bar]
+gpu_detail = "compact"` shows the shares without the graph and meter. NVIDIA
+cards are read with `nvidia-smi`, AMD cards from the `amdgpu` driver's sysfs
+files, and Apple GPUs with `ioreg`, which reports no video memory because it
+is shared; Intel GPUs report no usage without root and are left out. A remote
+host is probed in the same SSH step as its CPU and memory. While the settings
+are both off no GPU tool runs on any host.
+
 The coffee cup in the status bar keeps this machine's display on and stops it
 from sleeping when idle, for as long as the cup is full; click it again to let
 go. It is app-wide, so every window shows the same cup. macOS holds power

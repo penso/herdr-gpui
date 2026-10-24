@@ -1,8 +1,9 @@
-//! One reading of a host's CPU, memory, home disk and uptime, and the text a
+//! One reading of a host's CPU, memory, GPU, home disk and uptime, and the text a
 //! remote shell prints for it. Linux and macOS hosts answer with different tools; both answers
 //! parse into the same [`Sample`], counted the way `sysinfo` counts this
 //! machine so a local and a remote host read alike.
 
+use super::gpu::{self, Gpu};
 use crate::{Error, Result};
 
 /// Bytes of memory in use: total less available on Linux; active, wired,
@@ -52,6 +53,8 @@ pub(crate) struct Sample {
     pub disk: Option<Disk>,
     /// Seconds since the host booted.
     pub uptime: Option<u64>,
+    /// None on a host without a card that reports its usage.
+    pub gpu: Option<Gpu>,
 }
 
 /// Cumulative CPU time from Linux `/proc/stat`, in clock ticks.
@@ -87,20 +90,29 @@ impl Os {
     /// The step the remote shell runs for one sample. macOS has no cumulative
     /// CPU counters a shell can read, so `iostat` measures one second itself;
     /// Linux counters are compared with the previous sample instead. `df -P`
-    /// keeps each filesystem on one line on both.
-    pub fn command(self) -> &'static str {
+    /// keeps each filesystem on one line on both. With `gpu`, the GPU lines
+    /// follow.
+    pub fn command(self, gpu: bool) -> String {
+        let (linux, macos) = if gpu {
+            (gpu::LINUX_COMMAND, gpu::MACOS_COMMAND)
+        } else {
+            (":", ":")
+        };
         match self {
-            Self::Linux => {
+            Self::Linux => format!(
                 "printf 'cores '; getconf _NPROCESSORS_ONLN; printf 'loadavg '; cat /proc/loadavg; \
                  head -n 1 /proc/stat; grep -E '^(MemTotal|MemAvailable):' /proc/meminfo; \
-                 printf 'uptime '; cat /proc/uptime; printf 'disk '; df -Pk \"$HOME\" | tail -n 1"
-            }
-            Self::MacOs => {
+                 printf 'uptime '; cat /proc/uptime; printf 'disk '; df -Pk \"$HOME\" | tail -n 1; \
+                 {}",
+                linux
+            ),
+            Self::MacOs => format!(
                 "printf 'cores '; sysctl -n hw.ncpu; printf 'memsize '; sysctl -n hw.memsize; \
                  vm_stat; printf 'boottime '; sysctl -n kern.boottime; printf 'now '; date +%s; \
                  printf 'disk '; df -Pk \"$HOME\" | tail -n 1; \
-                 printf 'iostat '; iostat -n 0 -c 2 -w 1 | tail -n 1"
-            }
+                 printf 'iostat '; iostat -n 0 -c 2 -w 1 | tail -n 1; {}",
+                macos
+            ),
         }
     }
 }
@@ -127,6 +139,7 @@ struct Fields {
     uptime: Option<u64>,
     boot: Option<u64>,
     now: Option<u64>,
+    cards: Vec<gpu::Card>,
 }
 
 /// The vm_stat counters macOS counts as memory in use.
@@ -183,6 +196,8 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
                 .and_then(|idle| idle.parse::<f32>().ok())
                 .filter(|idle| (0.0..=100.).contains(idle));
             fields.load = load(words.iter().skip(3).copied());
+        } else if let Some(card) = gpu::parse_line(line) {
+            fields.cards.push(card);
         } else if let Some(index) = USED_PAGES.iter().position(|name| line.starts_with(name)) {
             fields.pages[index] = line[USED_PAGES[index].len()..]
                 .trim()
@@ -229,6 +244,7 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
             uptime: fields
                 .uptime
                 .or_else(|| fields.now?.checked_sub(fields.boot?)),
+            gpu: Gpu::combine(fields.cards),
         },
         ticks: fields.ticks,
     })
