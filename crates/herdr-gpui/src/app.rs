@@ -418,6 +418,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::dispatch::History::default()
     };
+    // Nor with the user's fan-outs, which they would restore or forget.
+    let fan_out_journal = if mode == LaunchMode::Normal {
+        crate::fan_out::Journal::load()
+    } else {
+        crate::fan_out::Journal::default()
+    };
     // Whether the launcher is installed is read once here, never while a window opens.
     let taskbar = crate::taskbar::Taskbar::load();
     gpui_platform::application()
@@ -433,6 +439,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             overview_marks.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);
+            fan_out_journal.install(cx);
             agent_skill.install_global(cx);
             keychain_grants.install(cx);
             taskbar.install(cx);

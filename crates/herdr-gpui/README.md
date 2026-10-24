@@ -2160,6 +2160,28 @@ reason. Lanes on another host show it next to their status, and Open, Keep and
 the comparison work across hosts; a host that cannot be read marks only its
 own lanes, keeping the changes read before.
 
+Each fan-out's lanes and the last step each one reached are kept in
+`fan-outs.json` in the state directory, written before and after every step,
+until a lane is kept or the comparison is forgotten. A lane whose next step
+cannot be saved stops before that step runs. If the app quits or
+crashes partway, the next launch shows the fan-out again as a comparison with a
+warning, and each lane says where it stopped: while creating its worktree (the
+branch may exist), before its agent started, while the agent was starting, or
+while the prompt was being sent. Nothing runs by itself. Start agent or Send
+prompt finishes a lane only when clicked, and Send prompt never starts a second
+agent. A lane that fails, finishing included, offers the same button again.
+Keep removes the other worktrees after its usual confirmation; a lane whose
+worktree may exist or sits on a host no longer set up stays saved until Forget,
+which lets the fan-out go and leaves every worktree as it is. Up to four
+fan-outs are kept; a fifth is launched without being saved, and says so, rather
+than dropping one. A damaged fan-out is dropped without the others, and a file
+that cannot be read is moved to `fan-outs.json.unreadable` instead of being
+saved over. A prompt over 32 KiB is not saved, so its lanes cannot be finished
+from the comparison. A fan-out is restored only against the daemon it ran on,
+the same session or SSH host, since workspace and pane IDs repeat across
+daemons, and a restored lane is finished or removed only once its connected
+host shows its workspace on its branch. Only the first running copy of the app saves and restores fan-outs.
+
 Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux
 or macOS client and the local session or a saved SSH host on both ends.

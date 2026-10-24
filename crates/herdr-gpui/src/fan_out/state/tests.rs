@@ -2,6 +2,7 @@ use super::*;
 use crate::fan_out::error::Step;
 
 mod compare;
+mod interrupt;
 mod spread;
 mod wanted;
 
@@ -37,6 +38,9 @@ fn idle() -> FanOut {
         probe: Arc::new(AtomicBool::new(false)),
         probing: false,
         next_refresh: None,
+        journal: Journal::default(),
+        id: 0,
+        restored: false,
         wanted: Vec::new(),
     }
 }
