@@ -18,7 +18,6 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::ConnectOptions;
-use std::time::Instant;
 
 impl HerdrWindow {
     /// Config warnings, then the daemon's announcement, stacked over the
@@ -99,7 +98,10 @@ impl Render for HerdrWindow {
         self.leave_vanished_region(window, cx);
         self.sync_backdrop(window, cx);
         self.tick_chrome(window, cx);
-        if self.chats.glide(Instant::now(), self.config.chat.glide) {
+        if self
+            .chats
+            .glide(crate::motion::now(), self.config.chat.glide)
+        {
             window.request_animation_frame();
         }
         self.sync_device_themes(cx);
@@ -218,7 +220,7 @@ impl Render for HerdrWindow {
         if !self.slides_allowed() {
             self.presentation.scroll.clear();
         }
-        let now = Instant::now();
+        let now = crate::motion::now();
         let slide = self.presentation.scroll.slide(now);
         // A link in a pane drawn mid-row underlines where its text is drawn.
         let link_shift = link_rows.first().and_then(|(row, columns)| {

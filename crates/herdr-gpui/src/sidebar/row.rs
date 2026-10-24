@@ -392,7 +392,8 @@ pub(super) fn removing_dot(selector: &'static str, theme: &Theme) -> Div {
                 .bg(rgb(theme.primary()))
                 .with_animation(
                     SharedString::from(format!("{selector}-pulse")),
-                    Animation::new(std::time::Duration::from_secs(1)).repeat(),
+                    Animation::new(crate::motion::duration(std::time::Duration::from_secs(1)))
+                        .repeat(),
                     |dot, delta| dot.opacity(0.3 + 0.7 * (delta * std::f32::consts::PI).sin()),
                 ),
         )

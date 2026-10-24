@@ -119,7 +119,7 @@ impl HerdrWindow {
         let mut drop_rows = Vec::new();
         let mut drop_requests = Vec::new();
         let mut drop_dragged = 0;
-        let now = std::time::Instant::now();
+        let now = crate::motion::now();
         // A lifted device folds the list to its headers.
         let device_plan = headed.then(|| self.device_plan(devices, &query)).flatten();
         let mut sliding = device_plan.as_ref().is_some_and(|plan| plan.sliding);

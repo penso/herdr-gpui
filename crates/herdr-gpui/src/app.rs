@@ -463,6 +463,12 @@ pub(crate) fn run() -> std::process::ExitCode {
             cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
             cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
             cx.on_action(|_: &ShowLogs, cx| log_window::open(cx));
+            cx.on_action(|_: &crate::actions::ToggleSlowAnimations, cx| {
+                crate::motion::set_slow(!crate::motion::is_slow());
+                // The menu shows the switch checked while it is on.
+                menus::install(cx);
+                cx.refresh_windows();
+            });
             bind_keys(cx);
             menus::install(cx);
             cx.on_window_closed(move |cx, _| {

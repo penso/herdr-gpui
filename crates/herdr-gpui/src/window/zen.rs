@@ -15,7 +15,6 @@ use crate::{
 };
 use chrome::{Chrome, Shown};
 use gpui::{AnyElement, Context, Window, prelude::*, *};
-use std::time::Instant;
 
 /// Whether this window is in zen mode, and what leaving it must undo.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -140,7 +139,7 @@ impl HerdrWindow {
     /// mode's layout once it has slid off.
     pub(super) fn tick_chrome(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.zen.held {
-            self.zen.chrome.tick(Instant::now());
+            self.zen.chrome.tick(crate::motion::now());
         }
         self.settle_zen(window, cx);
     }

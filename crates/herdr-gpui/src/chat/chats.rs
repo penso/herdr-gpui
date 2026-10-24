@@ -277,6 +277,8 @@ pub(crate) struct Chats {
     pub(crate) last_started: Option<herdr_chat_protocol::Agent>,
     /// The strip whose launcher shows its hidden agents under the pointer.
     pub(crate) launcher_open: Option<crate::browser::GroupId>,
+    /// The strip whose "+" deals its agents out, and how far it has.
+    pub(crate) launcher_deck: Option<(crate::browser::GroupId, crate::motion::Toggle)>,
     /// The layout the lists' rows were last measured in.
     measured: crate::config::ChatLayoutMode,
     /// Chat pages opened so far, which numbers the next one.

@@ -13,7 +13,6 @@ use gpui::{prelude::*, *};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    time::Instant,
 };
 
 /// A press on a device's header that may become a reorder.
@@ -198,7 +197,7 @@ impl HerdrWindow {
             .collect();
         let slot = drag.target.as_ref().map_or(dragged, |(slot, _)| *slot);
         let previewed = preview(&heights, dragged, slot);
-        let now = Instant::now();
+        let now = crate::motion::now();
         let mut slides = drag.slides.borrow_mut();
         let mut plan = DevicePlan {
             shifts: HashMap::new(),

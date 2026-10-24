@@ -153,7 +153,7 @@ impl HerdrWindow {
         );
         // What the strip lists, measured, so the ones that just opened grow
         // in and the ones that just closed shrink out where they stood.
-        let now = std::time::Instant::now();
+        let now = crate::motion::now();
         let herdr: Vec<((Pick, SharedString), Lead, bool)> = self
             .live
             .snapshot
@@ -409,6 +409,7 @@ impl HerdrWindow {
                             this.expect_new_tab_in(slot.id);
                             this.command(Command::Tab, window, cx);
                         })),
+                    window,
                     cx,
                 ),
             )

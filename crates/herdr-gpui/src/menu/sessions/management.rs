@@ -289,11 +289,13 @@ impl HerdrWindow {
                         let _ = this.update(cx, |this, cx| {
                             this.sessions.departure = Some(crate::sessions::Departure::new(
                                 connection,
-                                std::time::Instant::now(),
+                                crate::motion::now(),
                             ));
                             cx.notify();
                         });
-                        timer.timer(crate::sessions::DELETION_ANIMATION).await;
+                        timer
+                            .timer(crate::motion::duration(crate::sessions::DELETION_ANIMATION))
+                            .await;
                     }
                     let _ = this.update(cx, |this, cx| {
                         this.finish_session_departure();

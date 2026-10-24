@@ -1,5 +1,12 @@
 use super::*;
-use crate::{chat::Program, config::ChatLauncher, window::MockPeer};
+use crate::{
+    chat::Program,
+    config::ChatLauncher,
+    window::{
+        MockPeer,
+        tab_strip::launcher::{BUTTON, GAP, RULE, card_left, spread},
+    },
+};
 use herdr_chat_protocol::Agent;
 
 const CLAUDE: &str = "chat-launch-claude";
@@ -47,21 +54,77 @@ fn shown(cx: &mut VisualTestContext, selector: &'static str) -> bool {
     cx.debug_bounds(selector).is_some()
 }
 
+/// Whether `view`'s first strip deals its deck out, rather than gathering
+/// it back, or `None` before the pointer ever came.
+fn dealing(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> Option<bool> {
+    view.read_with(cx, |view, _| {
+        view.chats.launcher_deck.map(|(_, deck)| deck.is_open())
+    })
+}
+
 #[gpui::test]
-fn the_default_launcher_shows_the_agents_beside_plus_under_the_pointer(cx: &mut TestAppContext) {
-    let (_view, cx, _peer) = strip(cx, ChatLauncher::default());
+fn the_default_launcher_deals_the_agents_out_of_plus_and_gathers_them_back(
+    cx: &mut TestAppContext,
+) {
+    let (view, cx, _peer) = strip(cx, ChatLauncher::default());
     assert!(shown(cx, "new-tab"));
-    assert!(!shown(cx, CLAUDE), "hidden until the pointer comes");
+    assert!(
+        !shown(cx, CLAUDE),
+        "stacked under + until the pointer comes"
+    );
+    assert_eq!(dealing(&view, cx), None);
     hover(cx, "new-tab");
-    let plus = cx.debug_bounds("new-tab").unwrap();
-    let claude = cx.debug_bounds(CLAUDE).unwrap();
-    let codex = cx.debug_bounds(CODEX).unwrap();
-    assert!(plus.right() <= claude.left(), "{plus:?} then {claude:?}");
-    assert!(claude.right() <= codex.left());
-    // Leaving the strip's controls folds them away again.
+    assert_eq!(dealing(&view, cx), Some(true));
     cx.simulate_mouse_move(point(px(800.), px(400.)), None, Modifiers::none());
     draw(cx);
-    assert!(!shown(cx, CLAUDE));
+    assert_eq!(
+        dealing(&view, cx),
+        Some(false),
+        "gathering back, not gone at once"
+    );
+
+    // Once dealt, each card stands in its place after "+" and the rule.
+    let group = view.read_with(cx, |view, _| view.group_slots()[0].id);
+    view.update(cx, |view, _| {
+        let mut deck = crate::motion::Toggle::default();
+        deck.set(true, crate::motion::now(), true);
+        view.chats.launcher_deck = Some((group, deck));
+    });
+    draw(cx);
+    let plus = cx.debug_bounds("new-tab").unwrap();
+    let deck = cx.debug_bounds("chat-launcher-deck").unwrap();
+    let claude = cx.debug_bounds(CLAUDE).unwrap();
+    let codex = cx.debug_bounds(CODEX).unwrap();
+    assert!(
+        (deck.left() - plus.right()).abs() <= px(0.5),
+        "{deck:?} after {plus:?}"
+    );
+    assert_eq!(deck.size.width, px(RULE + 2. * BUTTON + GAP));
+    assert_eq!(claude.left(), deck.left() + px(RULE));
+    assert_eq!(codex.left(), claude.right() + px(GAP));
+}
+
+#[test]
+fn the_deck_deals_its_cards_one_after_another_from_under_plus() {
+    let count = 3;
+    for index in 0..count {
+        assert_eq!(spread(0., index, count), 0.);
+        assert_eq!(spread(1., index, count), 1.);
+        assert_eq!(card_left(0., index), -BUTTON, "hidden under +");
+        assert_eq!(card_left(1., index), RULE + (BUTTON + GAP) * index as f32);
+    }
+    // Midway the first card has gone further than the last, and none moves
+    // back as the deal goes on.
+    assert!(spread(0.4, 0, count) > spread(0.4, count - 1, count));
+    let mut last = vec![0.; count];
+    for step in 0..=20 {
+        let shown = step as f32 / 20.;
+        for (index, last) in last.iter_mut().enumerate() {
+            let t = spread(shown, index, count);
+            assert!(t >= *last);
+            *last = t;
+        }
+    }
 }
 
 #[gpui::test]

@@ -23,7 +23,8 @@ actions!(
         CheckForUpdates,
         ShowUpdatePreview,
         ShowUpdateDownloadPreview,
-        ShowUpdateHomebrewPreview
+        ShowUpdateHomebrewPreview,
+        ToggleSlowAnimations
     ]
 );
 
