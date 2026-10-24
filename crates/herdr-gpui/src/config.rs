@@ -236,12 +236,18 @@ pub struct Config {
     /// The mark before a device's name in the sidebar, in the layouts that
     /// draw one: where the device runs and how it is reached.
     pub show_device_icons: bool,
+    /// The selected host's GPU and video memory in the status bar. Off by
+    /// default; see [`Self::gpu_sampled`].
+    pub show_gpu_load: bool,
     /// Ports each workspace listens on, in the sidebar and the status bar.
     pub show_listening_ports: bool,
     /// Latency and loss from this machine, by timed TCP connects, in the status bar.
     pub show_network_quality: bool,
     /// The repository owner's avatar, or the GitHub mark, before a space's name.
     pub show_repository_icons: bool,
+    /// Each host's GPU and video memory on a sidebar line under its CPU and
+    /// memory. Off by default; see [`Self::gpu_sampled`].
+    pub show_sidebar_gpu_load: bool,
     /// The search field at the top of the sidebar's spaces list.
     pub show_sidebar_search: bool,
     /// CPU and memory of the selected host in the status bar.
@@ -412,9 +418,11 @@ impl Default for Config {
             show_agents: true,
             show_agents_header: true,
             show_device_icons: true,
+            show_gpu_load: false,
             show_listening_ports: true,
             show_network_quality: false,
             show_repository_icons: true,
+            show_sidebar_gpu_load: false,
             show_sidebar_search: true,
             show_system_load: true,
             show_window_controls: cfg!(target_os = "linux"),
@@ -487,9 +495,11 @@ struct Settings {
     show_agents: Option<bool>,
     show_agents_header: Option<bool>,
     show_device_icons: Option<bool>,
+    show_gpu_load: Option<bool>,
     show_listening_ports: Option<bool>,
     show_network_quality: Option<bool>,
     show_repository_icons: Option<bool>,
+    show_sidebar_gpu_load: Option<bool>,
     show_sidebar_search: Option<bool>,
     show_system_load: Option<bool>,
     show_window_controls: Option<bool>,
@@ -529,6 +539,13 @@ fn config_root() -> Result<PathBuf> {
 }
 
 impl Config {
+    /// Whether hosts' GPUs are read: while the status bar or the sidebar
+    /// shows them. The Overview and Devices pages then show them too; with
+    /// both off no GPU tool runs on any host.
+    pub(crate) fn gpu_sampled(&self) -> bool {
+        self.show_gpu_load || self.show_sidebar_gpu_load
+    }
+
     /// The provider tables `herdr-remote` reads, from a full load.
     pub(crate) fn load_remote()
     -> std::result::Result<herdr_remote::config::Sections, herdr_remote::config::LoadError> {
@@ -820,9 +837,11 @@ impl Config {
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_agents_header = settings.show_agents_header.unwrap_or(true);
         config.show_device_icons = settings.show_device_icons.unwrap_or(true);
+        config.show_gpu_load = settings.show_gpu_load.unwrap_or(false);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);
         config.show_network_quality = settings.show_network_quality.unwrap_or(false);
         config.show_repository_icons = settings.show_repository_icons.unwrap_or(true);
+        config.show_sidebar_gpu_load = settings.show_sidebar_gpu_load.unwrap_or(false);
         config.show_sidebar_search = settings.show_sidebar_search.unwrap_or(true);
         config.show_system_load = settings.show_system_load.unwrap_or(true);
         config.show_window_controls = settings

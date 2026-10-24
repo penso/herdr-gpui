@@ -84,7 +84,7 @@ running another terminal emulator or wrapping the TUI.
     <td width="50%" valign="top">
       <img src="docs/screenshots/system-load.png" alt="A sidebar host card and the status bar, each with a CPU sparkline and a memory meter">
       <br>
-      <sub><b>CPU and memory per host.</b> The status bar follows the selected host, and with several hosts each sidebar host row shows its own, read over SSH for remote machines.</sub>
+      <sub><b>CPU and memory per host.</b> The status bar follows the selected host, and with several hosts each sidebar host row shows its own, read over SSH for remote machines. NVIDIA, AMD, and Apple GPUs and their video memory can be turned on for the status bar and, on a line of their own, the sidebar.</sub>
       <br><br>
       <img src="docs/screenshots/settings-themes.png" alt="Settings window on the Theme page with grouped navigation and a grid of theme cards">
       <br>

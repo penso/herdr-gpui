@@ -105,3 +105,27 @@ fn a_load_sample_maps_to_its_info() {
     assert_eq!(info.uptime_seconds, Some(3600));
     assert_eq!((info.memory_used, info.disk_total), (None, None));
 }
+
+#[test]
+fn a_gpu_sample_maps_to_its_info() {
+    let sample = crate::system_load::Sample {
+        gpu: Some(crate::system_load::Gpu {
+            busy: Some(45.),
+            memory: Some(crate::system_load::Memory {
+                used: 9 << 30,
+                total: 24 << 30,
+            }),
+            count: 1,
+        }),
+        ..Default::default()
+    };
+    let info = load_info("Local", &sample);
+    assert_eq!(info.gpu_count, Some(1));
+    assert_eq!(info.gpu_percent, Some(45.));
+    assert_eq!(
+        (info.gpu_memory_used, info.gpu_memory_total),
+        (Some(9 << 30), Some(24 << 30))
+    );
+    let none = load_info("Local", &crate::system_load::Sample::default());
+    assert_eq!((none.gpu_count, none.gpu_percent), (None, None));
+}

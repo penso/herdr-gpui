@@ -2,6 +2,7 @@
 use super::text;
 
 mod automation;
+mod gpu;
 mod security;
 use crate::control::protocol::{
     app::HostInfo,
@@ -158,6 +159,10 @@ fn usage_and_load_read_in_plain_units() {
             uptime_seconds: Some(3 * 86_400 + 4 * 3600),
             disk_available: None,
             disk_total: None,
+            gpu_count: None,
+            gpu_percent: None,
+            gpu_memory_used: None,
+            gpu_memory_total: None,
         })),
         note: None,
     };

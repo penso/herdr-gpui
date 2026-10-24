@@ -106,7 +106,24 @@ impl HerdrWindow {
             - working_width
             - gauges.as_ref().map_or(0., |(width, _)| width + host_gap))
         .max(0.);
-        let lines = 1. + if load_line.is_some() { 1. } else { 0. };
+        // A host with a GPU adds its own line under CPU and memory, in the
+        // densities that have detail lines.
+        let gpu_line = host
+            .as_ref()
+            .filter(|_| self.config.show_sidebar_gpu_load && layout.workspace_details())
+            .and_then(|host| {
+                let reading = self.system_load.get(host)?;
+                let line = crate::system_load::gpu_line(
+                    reading,
+                    theme,
+                    Some(super::metrics::glyph_width(font)),
+                    crate::config::status_bar::Detail::Detailed,
+                )?;
+                Some((line, reading, host.clone()))
+            });
+        let lines = 1.
+            + if load_line.is_some() { 1. } else { 0. }
+            + if gpu_line.is_some() { 1. } else { 0. };
         // The layout decides whether headers have a mark; the setting turns it off.
         let origin = (self.config.show_device_icons && self.config.layout.mode.device_icons())
             .then(|| crate::endpoint::origin::Origin::of(&endpoint.connection.target));
@@ -314,6 +331,22 @@ impl HerdrWindow {
                             Some(super::metrics::glyph_width(font)),
                             crate::config::status_bar::Detail::Detailed,
                         ))
+                        .tooltip(crate::system_load::tooltip(reading, &host, theme)),
+                )
+            })
+            .when_some(gpu_line, |row, (line, reading, host)| {
+                row.child(
+                    div()
+                        .id(SharedString::from(format!(
+                            "{prefix}host-gpu-{endpoint_id}"
+                        )))
+                        .debug_selector(|| format!("{prefix}host-gpu-{endpoint_id}"))
+                        .h(px(line_height(font)))
+                        .flex()
+                        .items_center()
+                        .pl(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .overflow_hidden()
+                        .child(line)
                         .tooltip(crate::system_load::tooltip(reading, &host, theme)),
                 )
             })

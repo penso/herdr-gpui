@@ -156,6 +156,18 @@ pub struct LoadInfo {
     pub uptime_seconds: Option<u64>,
     pub disk_available: Option<u64>,
     pub disk_total: Option<u64>,
+    /// Graphics cards that report their usage; absent on hosts without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_count: Option<u32>,
+    /// The cards' mean busy share.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_percent: Option<f32>,
+    /// Dedicated video memory, summed across cards; absent on Apple GPUs,
+    /// which share system memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_memory_used: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu_memory_total: Option<u64>,
 }
 
 /// A workspace's listening ports, and its host's forwards. Boxed in

@@ -5,7 +5,7 @@
 use crate::{
     HerdrWindow,
     devices_overview::{Device, Link, Look, Tally},
-    system_load::{self, CPU_WARN, MEMORY_WARN},
+    system_load::{self, CPU_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN},
 };
 use gpui::{prelude::*, *};
 
@@ -140,6 +140,10 @@ impl HerdrWindow {
             .and_then(system_load::Reading::latest);
         let cpu = sample.and_then(|sample| sample.cpu);
         let memory = sample.and_then(|sample| sample.memory.map(|memory| memory.percent()));
+        // Only hosts with a GPU get its meters, while GPUs are read.
+        let gpu = sample
+            .and_then(|sample| sample.gpu)
+            .filter(|_| self.config.gpu_sampled());
         let id = device.id.clone();
         let agents = match device.link {
             Link::Online => agents_line(device.tally),
@@ -221,6 +225,14 @@ impl HerdrWindow {
                         )
                         .child(meter(look, "CPU", cpu, CPU_WARN))
                         .child(meter(look, "MEM", memory, MEMORY_WARN))
+                        .when_some(gpu, |card, gpu| {
+                            card.when(gpu.busy.is_some(), |card| {
+                                card.child(meter(look, "GPU", gpu.busy, GPU_WARN))
+                            })
+                            .when_some(gpu.memory, |card, memory| {
+                                card.child(meter(look, "VRAM", Some(memory.percent()), VRAM_WARN))
+                            })
+                        })
                         .when(!ports.is_empty(), |card| {
                             let more = ports.len().saturating_sub(PORTS);
                             card.child(
