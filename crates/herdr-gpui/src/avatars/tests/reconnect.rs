@@ -2,7 +2,7 @@ use super::*;
 
 const DEVBOX: Checkout<&str> = Checkout::Ssh {
     target: "devbox",
-    git_dir: "/home/user/src/app/.git",
+    dir: "/home/user/src/app/.git",
 };
 
 #[test]

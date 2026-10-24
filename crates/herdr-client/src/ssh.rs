@@ -244,19 +244,21 @@ pub fn remote_origin_url(
 }
 
 /// Read one Git configuration value on a saved host using bounded,
-/// noninteractive SSH. Call only from a background thread.
+/// noninteractive SSH. `dir` is an absolute Git directory or a directory in a
+/// working tree, since a daemon reports a workspace's Git directory only for
+/// some checkouts. Call only from a background thread.
 pub fn remote_config_value(
     target: &str,
-    git_dir: &str,
+    dir: &str,
     key: &str,
     timeout: Duration,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<String>> {
     validate_target(target)?;
-    if !git_dir.starts_with('/') || git_dir.chars().any(char::is_control) {
+    if !dir.starts_with('/') || dir.chars().any(char::is_control) {
         return Err(Error::InvalidGitDir);
     }
-    let (status, output) = run_remote(target, &config_command(git_dir, key), timeout, cancelled)?;
+    let (status, output) = run_remote(target, &config_command(dir, key), timeout, cancelled)?;
     match status.code() {
         Some(0) => {}
         // `git config --get` exits 1 when the key is absent.
@@ -274,10 +276,12 @@ pub fn remote_config_value(
     Ok(Some(value.to_owned()))
 }
 
-fn config_command(git_dir: &str, key: &str) -> String {
+fn config_command(dir: &str, key: &str) -> String {
+    // `-C` rather than `--git-dir`: Git finds the repository from either a
+    // Git directory or a working directory, and exits 1 outside one.
     let script = format!(
-        "exec git -c core.fsmonitor=false --git-dir {} config --get -- {}",
-        quote(git_dir),
+        "exec git -c core.fsmonitor=false -C {} config --get -- {}",
+        quote(dir),
         quote(key)
     );
     format!("/bin/sh -c {}", quote(&script))

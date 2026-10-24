@@ -2,7 +2,7 @@ use super::*;
 
 const DEVBOX: Checkout<&str> = Checkout::Ssh {
     target: "devbox",
-    git_dir: "/home/user/src/app/.git",
+    dir: "/home/user/src/app/.git",
 };
 
 #[test]
@@ -62,11 +62,11 @@ fn an_unreachable_retry_is_not_refused_by_the_request_bound() {
     let dirs = (0..MAX_REQUESTS)
         .map(|index| format!("/repo/{index}/.git"))
         .collect::<Vec<_>>();
-    for git_dir in &dirs {
+    for dir in &dirs {
         avatars.request(
             Checkout::Ssh {
                 target: "devbox",
-                git_dir,
+                dir,
             },
             start,
         );
@@ -74,7 +74,7 @@ fn an_unreachable_retry_is_not_refused_by_the_request_bound() {
     assert_eq!(incoming.try_iter().count(), MAX_REQUESTS);
     let first = Checkout::Ssh {
         target: "devbox",
-        git_dir: &dirs[0],
+        dir: &dirs[0],
     };
     assert!(
         outgoing
