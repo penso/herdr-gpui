@@ -32,16 +32,18 @@ const REMOTE_READERS: usize = 4;
 pub(crate) enum Checkout<S> {
     /// A workspace directory on this machine, read by local Git.
     Local(S),
-    /// The Git directory a saved SSH device's daemon reported, read there.
-    Ssh { target: S, git_dir: S },
+    /// A directory on a saved SSH device, read there: the Git directory its
+    /// daemon reported, else the workspace directory.
+    Ssh { target: S, dir: S },
 }
 
 impl<'a> Checkout<&'a str> {
     /// The checkout behind `workspace` on the device reached by `target`.
     /// Only the local daemon's directories are read by this machine's Git; a
-    /// saved SSH device is read over SSH by the Git directory its daemon
-    /// reported, so it needs worktree metadata. Other devices may be forwarded
-    /// from an unknown machine and get none.
+    /// saved SSH device is read over SSH. Its daemon reports a Git directory,
+    /// shared by a repository's worktrees, for only some checkouts, so one
+    /// with a branch but none is read by its workspace directory. Other
+    /// devices may be forwarded from an unknown machine and get none.
     pub(crate) fn of(
         local: bool,
         target: &'a ConnectTarget,
@@ -49,10 +51,13 @@ impl<'a> Checkout<&'a str> {
     ) -> Option<Self> {
         match target {
             ConnectTarget::Ssh { target, .. } => {
-                workspace.worktree.as_ref().map(|tree| Self::Ssh {
-                    target,
-                    git_dir: &tree.key,
-                })
+                let dir = match (&workspace.worktree, &workspace.branch) {
+                    (Some(tree), _) => &tree.key,
+                    // Without a branch it is no Git checkout: nothing to dial for.
+                    (None, Some(_)) => &workspace.new_workspace_cwd,
+                    (None, None) => return None,
+                };
+                Some(Self::Ssh { target, dir })
             }
             _ if local => Some(Self::Local(&workspace.new_workspace_cwd)),
             _ => None,
@@ -62,9 +67,9 @@ impl<'a> Checkout<&'a str> {
     fn to_owned(self) -> Checkout<String> {
         match self {
             Self::Local(cwd) => Checkout::Local(cwd.to_owned()),
-            Self::Ssh { target, git_dir } => Checkout::Ssh {
+            Self::Ssh { target, dir } => Checkout::Ssh {
                 target: target.to_owned(),
-                git_dir: git_dir.to_owned(),
+                dir: dir.to_owned(),
             },
         }
     }
@@ -74,7 +79,7 @@ impl Checkout<String> {
     fn as_deref(&self) -> Checkout<&str> {
         match self {
             Self::Local(cwd) => Checkout::Local(cwd),
-            Self::Ssh { target, git_dir } => Checkout::Ssh { target, git_dir },
+            Self::Ssh { target, dir } => Checkout::Ssh { target, dir },
         }
     }
 }
@@ -107,7 +112,7 @@ pub struct Avatars {
     results: mpsc::Receiver<(Checkout<String>, Lookup)>,
     // Presence deduplicates pending requests as well as resolved hits and misses.
     local: HashMap<String, Slot>,
-    // Keyed by SSH target, then Git directory, so a row looks up without allocating.
+    // Keyed by SSH target, then directory, so a row looks up without allocating.
     remote: HashMap<String, HashMap<String, Slot>>,
     // Each connected SSH endpoint's host and when its connection came up.
     links: HashMap<String, (String, Instant)>,
@@ -237,7 +242,7 @@ impl Avatars {
     fn slot(&self, checkout: Checkout<&str>) -> Option<&Slot> {
         match checkout {
             Checkout::Local(cwd) => self.local.get(cwd),
-            Checkout::Ssh { target, git_dir } => self.remote.get(target)?.get(git_dir),
+            Checkout::Ssh { target, dir } => self.remote.get(target)?.get(dir),
         }
     }
 
@@ -246,11 +251,8 @@ impl Avatars {
             Checkout::Local(cwd) => {
                 self.local.insert(cwd, image);
             }
-            Checkout::Ssh { target, git_dir } => {
-                self.remote
-                    .entry(target)
-                    .or_default()
-                    .insert(git_dir, image);
+            Checkout::Ssh { target, dir } => {
+                self.remote.entry(target).or_default().insert(dir, image);
             }
         }
     }
@@ -302,9 +304,9 @@ fn repo_owner(
             Checkout::Ssh { target, .. } if links::is_offline(offline, target) => {
                 return Err(herdr_client::Error::SshCancelled);
             }
-            Checkout::Ssh { target, git_dir } => herdr_client::remote_config_value(
+            Checkout::Ssh { target, dir } => herdr_client::remote_config_value(
                 target,
-                git_dir,
+                dir,
                 key,
                 deadline
                     .checked_duration_since(Instant::now())

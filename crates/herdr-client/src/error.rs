@@ -214,7 +214,7 @@ pub enum Error {
     WslPathUnmapped(PathBuf),
     #[error("invalid answer from wslpath")]
     WslPathResponse,
-    #[error("remote Git directory must be an absolute path")]
+    #[error("remote repository directory must be an absolute path")]
     InvalidGitDir,
     #[error("remote command failed ({0})")]
     RemoteCommand(std::process::ExitStatus),

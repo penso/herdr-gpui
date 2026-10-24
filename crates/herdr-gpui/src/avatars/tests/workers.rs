@@ -2,10 +2,10 @@ use super::*;
 
 const LOCAL: Checkout<&str> = Checkout::Local("/home/user/src/app");
 
-fn ssh(git_dir: &str) -> Checkout<&str> {
+fn ssh(dir: &str) -> Checkout<&str> {
     Checkout::Ssh {
         target: "devbox",
-        git_dir,
+        dir,
     }
 }
 
