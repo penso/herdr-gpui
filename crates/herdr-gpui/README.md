@@ -2174,7 +2174,8 @@ Keep removes the other worktrees after its usual confirmation; a lane whose
 worktree may exist or sits on a host no longer set up stays saved until Forget,
 which lets the fan-out go and leaves every worktree as it is. Up to four
 fan-outs are kept; a fifth is launched without being saved, and says so, rather
-than dropping one. A damaged fan-out is dropped without the others, and a file
+than dropping one. Its failed lanes can still be retried while its window is
+open, but it does not come back after a quit. A damaged fan-out is dropped without the others, and a file
 that cannot be read is moved to `fan-outs.json.unreadable` instead of being
 saved over. A prompt over 32 KiB is not saved, so its lanes cannot be finished
 from the comparison. A fan-out is restored only against the daemon it ran on,

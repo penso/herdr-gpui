@@ -40,6 +40,9 @@ const UNREADABLE: &str = "fan-outs.json.unreadable";
 /// Fan-outs kept. None is ever dropped to make room: a launch beyond this is
 /// not journaled, and says so.
 const MAX_RECORDS: usize = 4;
+/// Fan-outs that could not be journaled, followed in memory only so their
+/// windows can still offer retries; the oldest is let go first.
+const MAX_UNSAVED: usize = 16;
 /// Bytes in one identifier, label, branch, or path. A fan-out with a longer
 /// one is not journaled, and a longer checkout or commit is not recorded.
 const MAX_FIELD_BYTES: usize = 1024;
@@ -344,6 +347,25 @@ fn parse(bytes: &[u8]) -> Result<Vec<Record>> {
     Ok(records)
 }
 
+/// Drop the lanes at `indices` of fan-out `id` among `records`, then the
+/// fan-out itself once nothing is left to come back to. Whether it was there.
+fn settle_in(records: &mut Vec<Record>, id: u64, indices: &[usize]) -> bool {
+    let Some(at) = records.iter().position(|record| record.id == id) else {
+        return false;
+    };
+    let record = &mut records[at];
+    let mut index = 0;
+    record.lanes.retain(|_| {
+        let keep = !indices.contains(&index);
+        index += 1;
+        keep
+    });
+    if !record.worth_keeping() {
+        records.remove(at);
+    }
+    true
+}
+
 /// The records saved at `path`, none when there is no file yet.
 fn read(path: &Path) -> Result<Vec<Record>> {
     let bytes = state_file::read(path, MAX_FILE_BYTES)
@@ -356,6 +378,10 @@ struct State {
     records: Vec<Record>,
     /// Records a window of this process shows, which no other may claim.
     claimed: Vec<u64>,
+    /// Fan-outs launched without being journaled. Never written: they only
+    /// keep each lane's step, so a failed lane is retried from where it
+    /// stopped while its window is open.
+    unsaved: Vec<Record>,
     /// Bumped by every change, so an older snapshot never overwrites a newer
     /// one already on disk.
     revision: u64,
@@ -521,29 +547,50 @@ impl Journal {
 
     /// Start journaling a launched fan-out, claimed by its window. One with
     /// a field too long to keep, or beyond [`MAX_RECORDS`], is not
-    /// journaled: no saved fan-out is dropped for it.
+    /// journaled: no saved fan-out is dropped for it, and it is followed in
+    /// memory instead.
     pub(crate) fn begin(&self, record: Record) -> Result<Option<Pending>> {
         if !record.valid() {
+            self.follow(record);
             return Err(Error::JournalFieldTooLong);
         }
-        let mut full = false;
+        let mut refused = None;
         let pending = self.update(|state| {
             state.records.retain(|known| known.id != record.id);
-            full = state.records.len() >= MAX_RECORDS;
-            if full {
+            if state.records.len() >= MAX_RECORDS {
+                refused = Some(record);
                 return false;
             }
             state.claimed.push(record.id);
             state.records.push(record);
             true
         });
-        if full {
+        if let Some(record) = refused {
+            self.follow(record);
             return Err(Error::JournalFull);
         }
         Ok(pending)
     }
 
+    /// Follow a fan-out that cannot be journaled in memory only.
+    fn follow(&self, record: Record) {
+        let Ok(mut state) = self.0.state.lock() else {
+            return;
+        };
+        state.unsaved.retain(|known| known.id != record.id);
+        if state.unsaved.len() >= MAX_UNSAVED {
+            state.unsaved.remove(0);
+        }
+        state.unsaved.push(record);
+    }
+
     pub(crate) fn advance(&self, id: u64, report: &Report) -> Option<Pending> {
+        if let Ok(mut state) = self.0.state.lock()
+            && let Some(record) = state.unsaved.iter_mut().find(|record| record.id == id)
+        {
+            record.advance(report);
+            return None;
+        }
         self.update(|state| {
             state
                 .records
@@ -600,7 +647,11 @@ impl Journal {
     /// The step lane `index` of fan-out `id` last reached.
     pub(crate) fn step(&self, id: u64, index: usize) -> Option<Checkpoint> {
         let state = self.0.state.lock().ok()?;
-        let record = state.records.iter().find(|record| record.id == id)?;
+        let record = state
+            .records
+            .iter()
+            .chain(&state.unsaved)
+            .find(|record| record.id == id)?;
         Some(record.lanes.get(index)?.step)
     }
 
@@ -609,26 +660,15 @@ impl Journal {
     /// worktree.
     pub(crate) fn settle(&self, id: u64, indices: &[usize]) -> Option<Pending> {
         self.update(|state| {
-            let Some(at) = state.records.iter().position(|record| record.id == id) else {
-                return false;
-            };
-            let record = &mut state.records[at];
-            let mut index = 0;
-            record.lanes.retain(|_| {
-                let keep = !indices.contains(&index);
-                index += 1;
-                keep
-            });
-            if !record.worth_keeping() {
-                state.records.remove(at);
-            }
-            true
+            settle_in(&mut state.unsaved, id, indices);
+            settle_in(&mut state.records, id, indices)
         })
     }
 
     /// Stop journaling a fan-out that is finished or that the user let go.
     pub(crate) fn forget(&self, id: u64) -> Option<Pending> {
         self.update(|state| {
+            state.unsaved.retain(|record| record.id != id);
             let before = state.records.len();
             state.records.retain(|record| record.id != id);
             state.records.len() != before

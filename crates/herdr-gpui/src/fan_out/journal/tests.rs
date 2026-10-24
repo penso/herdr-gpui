@@ -420,3 +420,5 @@ fn a_failed_save_is_returned_with_its_cause() {
     assert!(matches!(error, Error::JournalWrite(_)));
     assert!(std::error::Error::source(&error).is_some());
 }
+
+mod unsaved;
