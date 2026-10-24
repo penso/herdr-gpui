@@ -74,10 +74,15 @@ at the same spot, or both bumping one hard-coded count.
   `just check-sorted` (part of `just ci`) enforces the markers and `just sort`
   fixes them. Never mark a list whose order is shown to users or is a wire
   contract, such as menu rows or the vendored bincode types.
-- Give a new feature's failures their own `thiserror` enum in its module and
+- Give a new feature's failures their own `thiserror` enum named `Error` in
+  its module's `error.rs`, with variants not prefixed by the feature name, and
   add one `#[error(transparent)] Feature(#[from] feature::Error)` variant to
-  the crate's root `Error`, as `pane_move` and `backdrop` do,
-  rather than a run of variants in `error.rs`. The root enum stays sorted.
+  the crate's root `Error`, as `pane_move` and `backdrop` do, rather than a
+  run of variants in `error.rs`. The root enum stays sorted. Callers name it
+  `feature::Error`, never through an `as FeatureError` alias.
+- Wrap another crate's error the same way (`GitHub(#[from] herdr_github::Error)`).
+  Do not mirror its variants in the app's root and convert one by one: each
+  failure has one definition, and callers match the nested variant.
 - Shared state structs (`HerdrWindow`, `Config`, `herdr_settings::Settings`)
   and their constructors keep their fields sorted. Run an initializer that has
   an effect or depends on another (registering a subscription, creating an
@@ -139,7 +144,7 @@ agents in Herdr panes can use what only this client shows or keeps
 - Parse strings at boundaries, then match on domain types. Prefer `From`, `TryFrom`, `Into`, and `TryInto` for conversions.
 - Prefer typed request/result structures when shapes are known. Preserve genuinely open-ended protocol envelopes rather than forcing a speculative schema.
 - Derive standard traits such as `Default`, `PartialEq`, and `Eq` where their semantics are valid. Compare complete values when deduplicating operations.
-- Every crate must expose its own root `Error` and `Result<T>` (`pub use error::{Error, Result}`), with errors defined using `thiserror`. Use meaningful typed variants for internal failures and match on variants, never error text.
+- Every crate must expose its own root `Error` and `Result<T, E = Error>` (`pub use error::{Error, Result}`), with errors defined using `thiserror`. Use meaningful typed variants for internal failures and match on variants, never error text.
 - Use `anyhow::Result` and context at application/reporting and test-harness boundaries, not as a replacement for typed internal errors. Keep dependency versions in workspace dependencies.
 - Never use `String` or `&str` as an error type, including `Result<(), String>`, worker-channel results, and intermediate operation state. Strings are allowed as diagnostic payloads, unchanged wire-protocol fields, and final UI display text, not as catch-all internal error wrappers.
 - Propagate errors with `?`; preserve original causes with `#[from]`/`#[source]` and retain structured operation/path context until the display boundary. Do not flatten sources with `to_string()` or `format!()` during propagation. Keep `io::Result` where an actual I/O trait or connector contract requires it, preserving typed sources when adapting errors.
