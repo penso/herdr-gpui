@@ -6,7 +6,7 @@ use super::{OrchestratorView, look::agent_icon};
 use crate::{
     config::{corners, mix},
     orchestrator::{
-        Action, DispatchRequest, Item, Notice, SourceKey,
+        Action, DispatchRequest, Item, Notice, PullHead, SourceKey,
         actions::valid_model,
         prompt::{self, MAX_EXTRA},
     },
@@ -15,6 +15,9 @@ use crate::{
     teleport::AgentKind,
 };
 use gpui::{prelude::*, *};
+
+mod args;
+pub(crate) use args::Used;
 
 #[cfg(test)]
 mod tests;
@@ -29,11 +32,27 @@ pub(crate) struct Dialog {
     extra: Entity<SearchInput>,
     /// The model the agent is started with; its own default when empty.
     model: Entity<SearchInput>,
+    /// What the agent starts with after its executable (and `--model`).
+    args: Entity<SearchInput>,
+    /// The agent whose arguments `args` shows, and what was typed for the
+    /// others picked before it.
+    args_kind: Option<AgentKind>,
+    drafts: Vec<(AgentKind, String)>,
     /// Another host to start on, by endpoint; the tab's own when `None`.
     pub(super) host: Option<String>,
     problem: Option<&'static str>,
     /// A read-only review of a pull request rather than work on an issue.
     review: bool,
+}
+
+/// A request the dialog's choices make, and where it goes.
+pub(super) struct Ready {
+    pub(super) request: DispatchRequest,
+    /// Another host to start on, by endpoint; the tab's own when `None`.
+    pub(super) host: Option<String>,
+    review: bool,
+    /// The Arguments field as typed, which the next dialog opens on.
+    typed_args: String,
 }
 
 /// A destructive action waiting for the user to confirm it.
@@ -137,7 +156,7 @@ impl OrchestratorView {
         }
     }
 
-    pub(super) fn reconcile_agents(&mut self) {
+    pub(super) fn reconcile_agents(&mut self, cx: &mut Context<Self>) {
         let Some(repo) = self.repos.get(self.active) else {
             return;
         };
@@ -147,7 +166,8 @@ impl OrchestratorView {
             && let Some(installed) = &snapshot.installed
             && !dialog.kind.is_some_and(|kind| installed.contains(&kind))
         {
-            dialog.kind = installed.first().copied();
+            let first = installed.first().copied();
+            self.pick_agent(first, cx);
         }
     }
 
@@ -201,6 +221,7 @@ impl OrchestratorView {
         let branch = field("Branch name", &branch_name, cx);
         let extra = field("Extra instructions, appended verbatim (optional)", "", cx);
         let model = field("Agent default", "", cx);
+        let args = field("None", "", cx);
         let kind = self
             .snapshot()
             .installed
@@ -214,10 +235,14 @@ impl OrchestratorView {
             branch,
             extra,
             model,
+            args,
+            args_kind: None,
+            drafts: Vec::new(),
             host: None,
             problem: None,
             review,
         });
+        self.pick_agent(kind, cx);
         self.select_agent_host(cx);
         window.focus(&focus, cx);
         cx.notify();
@@ -233,14 +258,38 @@ impl OrchestratorView {
     }
 
     fn submit_dispatch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ready) = self.dispatch_request(cx) else {
+            cx.notify();
+            return;
+        };
+        let kind = ready.request.kind;
+        match ready.host {
+            // The window knows the other host and sets the request up for it.
+            Some(endpoint) => cx.emit(super::Event::Dispatch {
+                request: Box::new(ready.request),
+                endpoint,
+            }),
+            None => self.act(Action::Dispatch(Box::new(ready.request))),
+        }
+        self.remember_args(kind, ready.review, ready.typed_args);
+        self.dialog = None;
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// The dialog's choices as a request, or `None` with the dialog's
+    /// problem saying what to fix.
+    pub(super) fn dispatch_request(&mut self, cx: &mut Context<Self>) -> Option<Ready> {
         // The dialog's item is in the active repository, which the dialog
         // made active when it opened.
         let (snapshot, workspace_id) = match self.repos.get(self.active) {
             Some(repo) => (&repo.snapshot, repo.request.workspace_id.clone()),
             None => (&self.blank, String::new()),
         };
-        let Some(dialog) = &mut self.dialog else {
-            return;
+        let dialog = self.dialog.as_mut()?;
+        let refuse = |dialog: &mut Dialog, problem| {
+            dialog.problem = Some(problem);
+            None
         };
         let Some(kind) = dialog.kind.filter(|kind| {
             dialog.host == snapshot.installed_endpoint
@@ -249,69 +298,75 @@ impl OrchestratorView {
                     .as_ref()
                     .is_some_and(|agents| agents.contains(kind))
         }) else {
-            dialog.problem = Some("Pick an agent installed on this host.");
-            cx.notify();
-            return;
+            return refuse(dialog, "Pick an agent installed on this host.");
         };
         let branch = dialog.branch.read(cx).text().trim().to_owned();
         if !prompt::valid_branch(&branch) {
-            dialog.problem = Some("That branch name is not one Git accepts.");
-            cx.notify();
-            return;
+            return refuse(dialog, "That branch name is not one Git accepts.");
         }
         let extra = dialog.extra.read(cx).text().to_owned();
         if extra.len() > MAX_EXTRA {
-            dialog.problem = Some("Extra instructions are limited to 16 KiB.");
-            cx.notify();
-            return;
+            return refuse(dialog, "Extra instructions are limited to 16 KiB.");
         }
         let model = dialog.model.read(cx).text().trim().to_owned();
         if !model.is_empty() && !valid_model(&model) {
-            dialog.problem = Some("A model name has no spaces and does not start with a dash.");
-            cx.notify();
-            return;
+            return refuse(
+                dialog,
+                "A model name has no spaces and does not start with a dash.",
+            );
         }
-        let host = dialog.host.clone();
-        let Some(item) = snapshot
+        let typed_args = dialog.args.read(cx).text().to_owned();
+        let args = match args::parse_args(&typed_args) {
+            Ok(args) => args,
+            Err(problem) => return refuse(dialog, problem),
+        };
+        let item = snapshot
             .items
             .iter()
-            .find(|item| item.key.canonical() == dialog.item)
-        else {
-            return;
-        };
+            .find(|item| item.key.canonical() == dialog.item)?;
         let profile = dialog
             .profile
             .and_then(|index| snapshot.profiles.get(index));
-        let remote = snapshot
-            .repo
-            .as_ref()
-            .and_then(|info| info.remote.as_ref())
-            .map(|remote| remote.url.as_str());
-        let text = match (&item.pull_request, dialog.review) {
-            (Some(pr), true) => prompt::compose_review(item, pr, remote, profile, &extra),
-            _ => prompt::compose(item, profile, &extra),
+        let remote = snapshot.repo.as_ref().and_then(|info| info.remote.as_ref());
+        let url = remote.map(|remote| remote.url.as_str());
+        let (text, pull_request) = match (&item.pull_request, dialog.review) {
+            (Some(pr), true) => {
+                // The review's worktree starts at the head its prompt names,
+                // fetched from the remote the pull request was listed from.
+                let Some(remote) = remote else {
+                    return refuse(
+                        dialog,
+                        "This repository has no remote to fetch the pull request from.",
+                    );
+                };
+                let head = PullHead {
+                    number: pr.number,
+                    sha: pr.head_sha.clone(),
+                    remote: remote.name.clone(),
+                };
+                let text = prompt::compose_review(item, pr, url, profile, &extra);
+                (text, Some(head))
+            }
+            _ => (prompt::compose(item, profile, &extra), None),
         };
         let request = DispatchRequest {
             item_key: dialog.item.clone(),
             kind,
             model: (!model.is_empty()).then_some(model),
+            args,
             prompt: text,
             branch,
             workspace_id,
             base: None,
+            pull_request,
             elsewhere: None,
         };
-        match host {
-            // The window knows the other host and sets the request up for it.
-            Some(endpoint) => cx.emit(super::Event::Dispatch {
-                request: Box::new(request),
-                endpoint,
-            }),
-            None => self.act(Action::Dispatch(Box::new(request))),
-        }
-        self.dialog = None;
-        window.focus(&self.focus, cx);
-        cx.notify();
+        Some(Ready {
+            request,
+            host: dialog.host.clone(),
+            review: dialog.review,
+            typed_args,
+        })
     }
 
     /// Hands `action` to the worker, or says why it could not take it.
@@ -580,9 +635,7 @@ impl OrchestratorView {
                         .child(look.icon(agent_icon(kind.name()), 20., theme.foreground))
                         .child(div().text_size(look.small()).child(kind.name()))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(dialog) = &mut this.dialog {
-                                dialog.kind = Some(kind);
-                            }
+                            this.pick_agent(Some(kind), cx);
                             cx.notify();
                         }))
                 }))
@@ -620,7 +673,23 @@ impl OrchestratorView {
             .when_some(self.render_hosts(dialog, cx), |el, hosts| {
                 el.child(section("HOST", hosts))
             })
-            .child(section("MODEL", field(&dialog.model).into_any_element()))
+            // How the agent starts, side by side: a model name is short, and
+            // arguments get the room.
+            .child(
+                div()
+                    .flex()
+                    .gap_3()
+                    .child(
+                        section("MODEL", field(&dialog.model).into_any_element())
+                            .flex_none()
+                            .w(relative(0.36)),
+                    )
+                    .child(
+                        section("ARGUMENTS", field(&dialog.args).into_any_element())
+                            .flex_1()
+                            .min_w_0(),
+                    ),
+            )
             .child(section("BRANCH", field(&dialog.branch).into_any_element()))
             .child(section(
                 "EXTRA INSTRUCTIONS",

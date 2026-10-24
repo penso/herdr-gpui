@@ -29,7 +29,7 @@ pub mod service;
 mod ssh_slots;
 pub mod store;
 
-pub use actions::{Action, DispatchRequest};
+pub use actions::{Action, DispatchRequest, PullHead};
 pub use error::{Error, Result};
 pub use location::{Repository, database_path};
 #[cfg(any(test, feature = "test-support"))]

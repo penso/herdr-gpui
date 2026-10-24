@@ -495,6 +495,8 @@ pub enum Error {
     NotConnected,
     #[error("The current directory is not in a Git checkout.")]
     NotInCheckout,
+    #[error(transparent)]
+    OrchestratorConfig(#[from] crate::config::orchestrator::Error),
     #[error("Could not read the orchestrator's database: {0}")]
     OrchestratorItems(#[source] crate::orchestrator::Error),
     #[error(transparent)]

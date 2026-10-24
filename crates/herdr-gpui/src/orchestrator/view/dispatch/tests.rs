@@ -6,6 +6,36 @@ use crate::{search_input::SearchInput, teleport::AgentKind};
 use gpui::{AppContext, TestAppContext};
 use std::sync::Arc;
 
+mod args;
+mod review_head;
+
+/// A view of one repository in a temporary folder, in a window.
+fn view_in_window(
+    cx: &mut TestAppContext,
+) -> (
+    gpui::Entity<OrchestratorView>,
+    &mut gpui::VisualTestContext,
+    tempfile::TempDir,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let request = Request {
+        target: herdr_client::ConnectTarget::Local,
+        checkout: dir.path().to_string_lossy().into_owned(),
+        workspace_id: "w1".into(),
+        token: None,
+        data_root: Some(dir.path().join("data")),
+        timing: Timing::default(),
+    };
+    let config = crate::config::Config::default();
+    let look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui,
+        mono: config.terminal,
+    };
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    (view, cx, dir)
+}
+
 #[gpui::test]
 fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
@@ -33,7 +63,10 @@ fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut T
                 kind: Some(AgentKind::Claude),
                 branch: field.clone(),
                 extra: field.clone(),
-                model: field,
+                model: field.clone(),
+                args: field,
+                args_kind: None,
+                drafts: Vec::new(),
                 host: Some("remote".into()),
                 problem: None,
                 review: false,
@@ -42,13 +75,13 @@ fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut T
             assert!(view.dialog.as_ref().unwrap().kind.is_none());
             view.repo_mut().snapshot.installed_endpoint = None;
             view.repo_mut().snapshot.installed = Some(Arc::new(vec![AgentKind::Claude]));
-            view.reconcile_agents();
+            view.reconcile_agents(cx);
             assert!(view.dialog.as_ref().unwrap().kind.is_none());
             view.repo_mut().snapshot.installed_endpoint = Some("remote".into());
-            view.reconcile_agents();
+            view.reconcile_agents(cx);
             assert_eq!(view.dialog.as_ref().unwrap().kind, Some(AgentKind::Claude));
             view.repo_mut().snapshot.installed = Some(Arc::new(vec![]));
-            view.reconcile_agents();
+            view.reconcile_agents(cx);
             assert!(view.dialog.as_ref().unwrap().kind.is_none());
         })
     });

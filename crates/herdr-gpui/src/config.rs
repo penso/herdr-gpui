@@ -32,6 +32,7 @@ mod notifications;
 mod omarchy;
 mod opensandbox;
 mod option_as_alt;
+pub(crate) mod orchestrator;
 mod padding;
 pub(crate) mod preferences;
 pub(crate) mod sidebar;
@@ -107,6 +108,7 @@ pub use notifications::{
 };
 use notifications::{ClipboardToastSettings, NotificationSettings};
 pub use option_as_alt::{OptionAsAlt, OptionKeys};
+pub use orchestrator::OrchestratorConfig;
 pub use padding::Padding;
 pub(crate) use padding::{Axis, MAX_PADDING, Side, Sides};
 use serde::Deserialize;
@@ -218,6 +220,8 @@ pub struct Config {
     /// The self-hosted OpenSandbox server whose sandboxes are devices.
     pub opensandbox: OpenSandboxConfig,
     pub option_as_alt: OptionAsAlt,
+    /// The arguments the Issues & PRs tab starts each agent with.
+    pub orchestrator: OrchestratorConfig,
     pub palette: crate::palette::PaletteConfig,
     /// The `[pane_keys]` table `keybindings` was built from, for the same
     /// reason.
@@ -405,6 +409,7 @@ impl Default for Config {
             open_links_in: LinkTarget::default(),
             opensandbox: OpenSandboxConfig::default(),
             option_as_alt: OptionAsAlt::default(),
+            orchestrator: OrchestratorConfig::default(),
             palette: crate::palette::PaletteConfig::default(),
             pane_keys: PaneKeys::new(),
             px0: crate::px0::Config::default(),
@@ -480,6 +485,7 @@ struct Settings {
     open_links_in: LinkTarget,
     opensandbox: OpenSandboxConfig,
     option_as_alt: OptionAsAlt,
+    orchestrator: OrchestratorConfig,
     palette: crate::palette::PaletteConfig,
     pane_keys: PaneKeys,
     px0: crate::px0::Config,
@@ -735,6 +741,7 @@ impl Config {
         // A newer build may keep more accounts or owners than this one.
         unknown_keys.extend(settings.github.limit_accounts());
         unknown_keys.extend(settings.cloud.retain_known());
+        unknown_keys.extend(settings.orchestrator.retain_known());
         unknown_keys.sort();
         unknown_keys.dedup();
         let mut config = Self {
@@ -772,6 +779,8 @@ impl Config {
         settings.sprites.settings_with(|_| None)?;
         config.sprites = settings.sprites;
         config.features = settings.features;
+        settings.orchestrator.check()?;
+        config.orchestrator = settings.orchestrator;
         config.notification_overrides = settings.notifications;
         config.notifications = settings
             .notifications

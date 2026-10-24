@@ -1,12 +1,15 @@
 //! A fake `herdr` CLI for the orchestrator's dispatch tests, compiled with
 //! `rustc` by the test that uses it so it runs on every client platform. It
-//! logs each call's arguments to `$HOME/calls` and answers as Herdr would; its
-//! state is files in `$HOME`:
+//! logs each call's arguments to `$HOME/calls`, and to `$HOME/argv` with each
+//! argument ended by a unit separator (`\x1f`) so one holding a space stays
+//! whole, and answers as Herdr would; its state is files in `$HOME`:
 //! - `fail`: a call whose arguments contain this text exits 1;
 //! - `snapshot-default`, `snapshot`: `api snapshot` prints the second when it
 //!   exists, else the first;
 //! - `pane`: what `pane get` prints instead of pane `p9` on `term9`;
-//! - `busy`: how many `agent start` calls are refused as a busy shell.
+//! - `busy`: how many `agent start` calls are refused as a busy shell;
+//! - `worktree`: the checkout `worktree create` reports instead of
+//!   `/tmp/wt/377-icons`.
 
 use std::{env, fs, io::Write, path::PathBuf, process::exit};
 
@@ -20,6 +23,13 @@ fn main() {
         .open(home.join("calls"))
         .expect("calls");
     writeln!(calls, "{line}").expect("calls");
+    let mut argv = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(home.join("argv"))
+        .expect("argv");
+    let separated: String = args.iter().map(|arg| format!("{arg}\x1f")).collect();
+    writeln!(argv, "{separated}").expect("argv");
     let fail = fs::read_to_string(home.join("fail")).unwrap_or_default();
     if !fail.is_empty() && line.contains(&fail) {
         exit(1);
@@ -31,12 +41,18 @@ fn main() {
             .or_else(|| read("snapshot-default"))
             .unwrap_or_default(),
         ["workspace", "create"] => r#"{"result":{"workspace":{"workspace_id":"w0"}}}"#.into(),
-        ["worktree", "create"] => concat!(
-            r#"{"result":{"workspace":{"workspace_id":"w9"},"tab":{"tab_id":"t9"},"#,
-            r#""root_pane":{"pane_id":"p9","terminal_id":"term9"},"#,
-            r#""worktree":{"path":"/tmp/wt/377-icons"}}}"#
-        )
-        .into(),
+        ["worktree", "create"] => {
+            let path = read("worktree").unwrap_or_else(|| "/tmp/wt/377-icons".into());
+            let path = path.trim().replace('\\', "\\\\").replace('"', "\\\"");
+            format!(
+                concat!(
+                    r#"{{"result":{{"workspace":{{"workspace_id":"w9"}},"tab":{{"tab_id":"t9"}},"#,
+                    r#""root_pane":{{"pane_id":"p9","terminal_id":"term9"}},"#,
+                    r#""worktree":{{"path":"{}"}}}}}}"#
+                ),
+                path
+            )
+        }
         ["pane", "get"] => read("pane").unwrap_or_else(|| {
             r#"{"result":{"pane":{"pane_id":"p9","terminal_id":"term9"}}}"#.into()
         }),

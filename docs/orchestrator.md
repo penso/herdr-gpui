@@ -70,7 +70,11 @@ permanent failures retain the normal failed-run recording and worktree cleanup.
 
 Dispatch names a branch as agent-launcher does: `agent/<identifier>-<title>-<hash>`,
 where `<hash>` is the first eight hex digits of a UUIDv5 (URL namespace) of the
-item's canonical key. A read-only review uses `agent/review-<identifier>-<title>-<hash>`.
+item's canonical key. A read-only review uses
+`agent/review-<identifier>-<title>-<head>-<hash>`, where `<head>` is the first
+seven hex digits of the pull request's head commit, which the review's
+worktree starts at (`actions/pull_head.rs` fetches it and checks the new
+checkout is at it).
 The hash makes the branch the item's own, so work is found without a database:
 
 - a Herdr workspace on a connected host whose branch ends in an item's hash,

@@ -52,6 +52,7 @@ serde.workspace                = true
 serde_ignored.workspace        = true
 serde_json.workspace           = true
 sha2.workspace                 = true
+shlex.workspace                = true
 skrifa.workspace               = true
 sysinfo.workspace              = true
 syntect.workspace              = true

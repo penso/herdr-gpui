@@ -27,6 +27,41 @@ fn branches_are_named_as_agent_launcher_names_them() {
     }
 }
 
+#[test]
+fn a_review_branch_names_the_head_it_starts_at() {
+    let at = |sha: &str| {
+        let mut pr = item(&github(), "pr/369", "Find bar");
+        pr.identifier = "#369".into();
+        pr.pull_request = Some(PullRequest {
+            number: 369,
+            additions: None,
+            deletions: None,
+            base_ref: "main".into(),
+            head_ref: "feat/find".into(),
+            base_sha: "a".repeat(40),
+            head_sha: sha.into(),
+            head_repository: None,
+        });
+        pr
+    };
+    let first = review_branch(&at("8392E157aa1fb0bd41e8a6b5d05c3fd4fc1a0b2c"));
+    assert_eq!(first, "agent/review-369-find-bar-8392e15-3af51766");
+    // A push gets a branch of its own, still found as the item's by its hash.
+    let pushed = review_branch(&at("0c1d2e3f40000000000000000000000000000000"));
+    assert_eq!(pushed, "agent/review-369-find-bar-0c1d2e3-3af51766");
+    for name in [&first, &pushed] {
+        assert!(crate::prompt::valid_branch(name), "{name}");
+        assert!(name.ends_with(&format!("-{}", hash_of(&at("")))), "{name}");
+    }
+    // A head that is not a commit ID names no commit.
+    for sha in ["", "../../x"] {
+        assert_eq!(
+            review_branch(&at(sha)),
+            "agent/review-369-find-bar-3af51766"
+        );
+    }
+}
+
 fn workspace(id: &str, branch: &str) -> LiveBranch {
     LiveBranch {
         host: None,

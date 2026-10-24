@@ -472,6 +472,17 @@ size = 12
 # GH_HOST = "mycompany.ghe.com"
 # ANTHROPIC_BASE_URL = "https://llm.example.com"
 
+# What each agent the Issues & PRs tab dispatches starts with after its
+# executable, by the agent's Herdr name: args for Dispatch agent, review_args
+# for Review with agent (args when unset). One string per argument, passed as
+# written through Herdr, never a shell. The dialog's Arguments field opens on
+# these, and on what you last dispatched the agent with, and can change them
+# for one dispatch.
+# [orchestrator.agents.opencode]
+# args = ["--standalone"]
+# [orchestrator.agents.codex]
+# review_args = ["--sandbox", "read-only"]
+
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.
 # Optionally override with your own Device Flow-enabled app's public client ID.
 # Never put an App ID, client secret, private key, or token here.

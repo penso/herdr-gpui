@@ -29,9 +29,23 @@ pub fn branch(item: &Item) -> String {
 }
 
 /// The branch for a read-only review of pull request `item`: its own
-/// branch with `review-` before the name, so it is found as the PR's too.
+/// branch with `review-` before the name, so it is found as the PR's too,
+/// and the head commit's first seven hex digits before the hash. The review
+/// starts at that commit, so a later head gets a branch of its own rather
+/// than an earlier review's, which Herdr would check out where it stands.
 pub fn review_branch(item: &Item) -> String {
-    branch(item).replacen(PREFIX, &format!("{PREFIX}review-"), 1)
+    let name = workspace_name(&format!("{}-{}", item.identifier, item.title));
+    let head = item
+        .pull_request
+        .as_ref()
+        .and_then(|pr| pr.head_sha.get(..7))
+        .filter(|head| head.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .map(|head| format!("-{}", head.to_ascii_lowercase()))
+        .unwrap_or_default();
+    format!(
+        "{PREFIX}review-{name}{head}-{}",
+        &key_hash(&item.key.canonical())[..HASH]
+    )
 }
 
 /// agent-launcher's `stable_hash`: a UUIDv5 of `key`, as 32 hex digits.

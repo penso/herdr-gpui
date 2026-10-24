@@ -4610,6 +4610,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "sha2 0.11.0",
+ "shlex 2.0.1",
  "skrifa 0.48.0",
  "socket2",
  "syntect",

@@ -96,6 +96,14 @@ pub enum Error {
     Teleport(#[source] herdr_remote::teleport::Error),
     #[error("The pull request changed since you confirmed; look at it again before merging")]
     PullRequestChanged,
+    #[error(
+        "An agent takes at most {} arguments of at most {} bytes each, without control characters",
+        crate::actions::MAX_ARGS,
+        crate::actions::MAX_ARG_BYTES
+    )]
+    AgentArguments,
+    #[error(transparent)]
+    Review(#[from] crate::actions::pull_head::Error),
 }
 
 /// `map_err` adapter naming the host script that failed.

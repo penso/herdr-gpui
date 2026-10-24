@@ -178,6 +178,10 @@ pub(crate) struct OrchestratorView {
     /// The open item's description, parsed once per change of its text.
     description: markdown::Markdown,
     dialog: Option<dispatch::Dialog>,
+    /// The config's arguments for each agent, and the ones this view last
+    /// dispatched each with, which the dialog's Arguments field opens on.
+    agent_config: crate::config::OrchestratorConfig,
+    used_args: dispatch::Used,
     confirm: Option<dispatch::Confirm>,
     /// The newest action's outcome, until dismissed or replaced.
     notice: Option<Notice>,
@@ -254,6 +258,8 @@ impl OrchestratorView {
             holders: HashMap::new(),
             description: markdown::Markdown::default(),
             dialog: None,
+            agent_config: crate::config::OrchestratorConfig::default(),
+            used_args: dispatch::Used::default(),
             confirm: None,
             notice: None,
             message,
@@ -335,7 +341,7 @@ impl OrchestratorView {
         }
         if read {
             self.discard_non_projects();
-            self.reconcile_agents();
+            self.reconcile_agents(cx);
             self.refresh_rows();
             self.follow_pull_request();
             changed = true;

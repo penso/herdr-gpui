@@ -2266,7 +2266,11 @@ repository allows and names the head commit shown, so GitHub refuses it if the
 branch moved.
 
 **Dispatch agent** opens a dialog: a prompt, an agent installed on the
-selected destination host, an optional model (passed as `--model`), a branch
+selected destination host, an optional model (passed as `--model`), arguments
+the agent starts with after it (split as a shell splits words, with quotes
+keeping spaces, but never run through one; they open on what the tab last
+dispatched that agent with, else on `[orchestrator.agents.<agent>]` in the
+config), a branch
 (`agent/<number>-<slug>-<hash>` as agent-launcher names it, editable), and
 extra instructions. The new worktree is
 created from the main checkout's `HEAD` in the workspace's repository, and the
@@ -2274,9 +2278,15 @@ agent starts in it with the prompt. With more than one host connected, the
 dialog also ranks the hosts as [Smart Dispatch](#smart-dispatch) does; picking
 another one sets the repository up there the same way and starts the agent
 there, and its run card then acts on that host. A pull
-request's **Review with agent** does the same on an `agent/review-…` branch with a
-read-only prompt: the agent verifies the pull request, reads its diff, and
-reports findings without writing to GitHub. A run's card sends it messages, stops
+request's **Review with agent** does the same with a read-only prompt, on an
+`agent/review-…` branch that starts at the pull request's head commit, the one
+the prompt names, fetched from the repository's remote
+(`refs/pull/<number>/head`, which also holds a fork's head) when the repository
+lacks it. Its name carries that commit's first seven digits, so a later push
+gets a branch and worktree of its own; a review refuses to start when the
+pull request moved since it was listed, or when an existing branch of that
+name stands at another commit. The agent verifies the pull request, reads its
+diff, and reports findings without writing to GitHub. A run's card sends it messages, stops
 it, or removes its worktree; a bead's details can delete it with `bd`. Each of
 those asks first. Leaving the section leaves an already-started dispatch
 running; it does not remove the new worktree.

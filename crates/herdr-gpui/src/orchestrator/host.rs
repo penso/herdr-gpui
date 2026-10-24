@@ -296,6 +296,7 @@ impl HerdrWindow {
                 view.set_repos(specs.clone(), cx);
                 view.poll(cx);
                 view.set_look(look.clone(), cx);
+                view.set_agent_config(&self.config.orchestrator);
                 view.set_live(live.clone(), branches.clone(), cx);
                 for (target, token, login) in accounts {
                     view.set_github(&target, token, login, cx);
