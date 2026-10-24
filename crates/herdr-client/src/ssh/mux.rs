@@ -19,7 +19,9 @@
 //!
 //! Windows OpenSSH cannot share connections, so there every command connects
 //! directly.
-use std::time::{Duration, Instant};
+#[cfg(unix)]
+use std::time::Duration;
+use std::time::Instant;
 
 /// Which of a host's masters a command shares. Large transfers get their own
 /// connection so their data never queues ahead of a small read in one TCP
@@ -32,6 +34,7 @@ pub enum Lane {
     Bulk,
 }
 
+#[cfg(unix)]
 impl Lane {
     /// Channels open at once on one master. sshd's `MaxSessions` (default
     /// 10) refuses more per connection; a command beyond this connects
@@ -46,15 +49,19 @@ impl Lane {
 
 /// How long the first command waits for a host's master before connecting
 /// directly. SSH gives up connecting after `ConnectTimeout` (10 s).
+#[cfg(unix)]
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 /// After a master fails to start, the host's commands connect directly for
 /// this long before another master is tried. Each further failure in a row
 /// doubles it up to `MAX_BACKOFF`, so a host that always refuses one (say,
 /// it needs a password the master cannot type) sees a failed login only
 /// rarely, while a brief refusal recovers within a minute.
+#[cfg(unix)]
 const BACKOFF: Duration = Duration::from_secs(60);
+#[cfg(unix)]
 const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 /// A master with no channels open for this long is stopped.
+#[cfg(unix)]
 const IDLE: Duration = Duration::from_secs(300);
 
 /// `remote_command` on `target` over the host's `lane` master, with the
