@@ -89,19 +89,37 @@ it has no Stop, Send, or Remove, since no application owns it.
 host, in agent-launcher's GitLab row format: `native_id` is the issue's
 project `iid`. The API is reached over HTTPS, or over HTTP when the remote's
 own URL is `http://`; the shared source key names only the host, so the scheme
-is read from the remote each time. A token is sent only over HTTPS: over HTTP
+is read from the remote each time.
+
+A remote whose host the GitLab CLI names as an instance's `ssh_host` is read
+from that instance instead: requests go to its `api_host` (the instance's own
+name when unset) over its `api_protocol` (HTTPS when unset), and its token is
+the instance's. This is how a self-managed GitLab with a separate SSH host,
+such as `gitlab-ssh.example.com` beside `gitlab.example.com`, is reached; the
+SSH host serves no API. The mapping comes from the `hosts` table of glab's
+`config.yml`, found where glab looks (`GLAB_CONFIG_DIR`, the legacy
+`~/.config/glab-cli`, else `glab-cli` in the platform's config folder or
+`XDG_CONFIG_HOME`), and is read again on every sync. Only the block form glab
+writes is read; glab has no command that lists its hosts. A remote on an
+instance's own host, or on a host glab does not know, keeps its own host and
+the remote's scheme, as before, and the source key always keeps the remote's
+host, as agent-launcher keys it. A failed connection names the address it
+tried.
+
+A token is sent only over HTTPS: over HTTP
 the read is anonymous, and a project that is not public asks for an
 `https://` remote. Pages follow a cursor on creation time
 (`order_by=created_at`, `created_after`), which edits and closes cannot shift. Each sync is a complete listing of at most 2,000 issues, so it
 may replace the cache; a larger project is shown and not written, as GitHub's
 is.
 
-Its token is looked up once per view on the worker, and again on Refresh:
+Its token is looked up once per view on the worker, and again on Refresh or
+when the remote's instance changes:
 
-1. `GITLAB_TOKEN`, then `GITLAB_ACCESS_TOKEN`, only for the host `GITLAB_HOST`
-   names (gitlab.com when unset), so a gitlab.com token never reaches another
-   host;
-2. else `glab config get token --host <host>`, the GitLab CLI's own sign-in,
+1. `GITLAB_TOKEN`, then `GITLAB_ACCESS_TOKEN`, only for the instance
+   `GITLAB_HOST` names (gitlab.com when unset), so a gitlab.com token never
+   reaches another host;
+2. else `glab config get token --host <instance>`, the GitLab CLI's own sign-in,
    with its environment tokens removed and the shared bounded process policy;
 3. else none: public projects still list, and a private one asks for a token.
 

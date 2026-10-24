@@ -1,7 +1,7 @@
 use super::*;
 use crate::gitlab::{
-    self, Credential, IssueNode, MAX_OPEN, Scheme, environment_token, full, issues_url, parse_cli,
-    retry_after, status_error,
+    self, Api, Credential, IssueNode, MAX_OPEN, Scheme, environment_token, full, issues_url,
+    parse_cli, retry_after, status_error,
 };
 use crate::service::retry_wait;
 use chrono::TimeDelta;
@@ -18,6 +18,11 @@ fn gitlab() -> SourceKey {
         host: "gitlab.com".into(),
         repository: "group/sub/app".into(),
     }
+}
+
+/// The API of a remote on `key`'s host, with no GitLab CLI instances.
+fn own_api(key: &SourceKey, scheme: Scheme) -> Api {
+    Api::new(&key.host, scheme, &[])
 }
 
 fn node_at(iid: u64, created: DateTime<Utc>) -> IssueNode {
@@ -122,7 +127,7 @@ fn an_issue_without_optional_fields_still_decodes() {
 
 #[test]
 fn the_project_path_is_one_escaped_segment() {
-    let url = issues_url((&gitlab(), Scheme::Https), None).unwrap();
+    let url = issues_url((&gitlab(), &own_api(&gitlab(), Scheme::Https)), None).unwrap();
     assert_eq!(url.host_str(), Some("gitlab.com"));
     assert_eq!(url.path(), "/api/v4/projects/group%2Fsub%2Fapp/issues");
     let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
@@ -133,7 +138,7 @@ fn the_project_path_is_one_escaped_segment() {
     assert!(!query.contains_key("page") && !query.contains_key("created_after"));
 
     let after = at("2026-10-08T23:23:37.123456+00:00");
-    let url = issues_url((&gitlab(), Scheme::Https), Some(after)).unwrap();
+    let url = issues_url((&gitlab(), &own_api(&gitlab(), Scheme::Https)), Some(after)).unwrap();
     let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
     assert_eq!(query["created_after"], "2026-10-08T23:23:37.123Z");
 
@@ -141,7 +146,7 @@ fn the_project_path_is_one_escaped_segment() {
         host: "gitlab.acme.com:8443".into(),
         ..gitlab()
     };
-    let url = issues_url((&managed, Scheme::Https), None).unwrap();
+    let url = issues_url((&managed, &own_api(&managed, Scheme::Https)), None).unwrap();
     assert_eq!(url.scheme(), "https");
     assert_eq!(url.port(), Some(8443));
 }
@@ -154,7 +159,7 @@ fn an_http_remote_is_read_over_http() {
     let key = crate::repo::parse_remote_url(remote).unwrap();
     assert_eq!(key.host, "gitlab.internal:8080");
     assert_eq!(Scheme::of_remote(remote), Scheme::Http);
-    let url = issues_url((&key, Scheme::of_remote(remote)), None).unwrap();
+    let url = issues_url((&key, &own_api(&key, Scheme::of_remote(remote))), None).unwrap();
     assert!(
         url.as_str()
             .starts_with("http://gitlab.internal:8080/api/v4/projects/group%2Fapp/issues?"),

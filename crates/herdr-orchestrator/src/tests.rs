@@ -10,6 +10,7 @@ mod full_listing;
 mod git;
 mod github;
 mod gitlab;
+mod gitlab_hosts;
 mod incremental;
 mod keys;
 mod location;

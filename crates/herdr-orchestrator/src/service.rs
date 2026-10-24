@@ -299,9 +299,10 @@ struct Worker {
     uncached: HashMap<SourceKey, Vec<Item>>,
     /// Where each GitHub source's next incremental sync continues.
     resume: HashMap<SourceKey, github::Resume>,
-    /// The GitLab token, once looked up; Refresh looks again, so a new
-    /// `glab auth login` is picked up without reopening the view.
-    gitlab_token: Option<Option<SecretString>>,
+    /// The GitLab token, once looked up, and the instance it is for; Refresh
+    /// looks again, so a new `glab auth login` is picked up without
+    /// reopening the view.
+    gitlab_token: Option<(String, Option<SecretString>)>,
     cooldown: Option<Duration>,
 }
 
@@ -863,9 +864,6 @@ impl Worker {
                 })
             }
             Provider::Gitlab => {
-                let token = self
-                    .gitlab_token
-                    .get_or_insert_with(|| gitlab::token(&key.host));
                 let scheme = self
                     .snapshot
                     .repo
@@ -875,11 +873,24 @@ impl Worker {
                     .map_or(gitlab::Scheme::Https, |remote| {
                         gitlab::Scheme::of_remote(&remote.url)
                     });
+                let api = gitlab::Api::resolve(&key.host, scheme);
+                if self
+                    .gitlab_token
+                    .as_ref()
+                    .is_none_or(|(instance, _)| *instance != api.instance)
+                {
+                    let token = gitlab::token(&api.instance);
+                    self.gitlab_token = Some((api.instance.clone(), token));
+                }
+                let token = self
+                    .gitlab_token
+                    .as_ref()
+                    .and_then(|(_, token)| token.as_ref());
                 let previous = store.checkpoint(key)?;
                 let cancelled = &self.cancelled;
                 let listing = gitlab::sync(
-                    (key, scheme),
-                    token.as_ref(),
+                    (key, &api),
+                    token,
                     previous.as_ref(),
                     &|| cancelled.load(Ordering::Relaxed),
                     &mut self.cooldown,
