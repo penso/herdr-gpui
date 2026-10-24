@@ -1,11 +1,23 @@
-//! `herdr-github`'s errors reach the app through `Error::GitHub`; this lets
-//! app code that raises one of its helper errors use `?` and `.into()`.
+//! `herdr-github`'s feature errors reach the app through `Error::GitHub`;
+//! these let app code that raises one of them use `?` and `.into()`.
 
 use super::Error;
-use herdr_github::GitHubAccountsError;
+use herdr_github::{AccountsError, pr_actions, pull_request};
 
-impl From<GitHubAccountsError> for Error {
-    fn from(error: GitHubAccountsError) -> Self {
+impl From<AccountsError> for Error {
+    fn from(error: AccountsError) -> Self {
+        Self::GitHub(error.into())
+    }
+}
+
+impl From<pr_actions::Error> for Error {
+    fn from(error: pr_actions::Error) -> Self {
+        Self::GitHub(error.into())
+    }
+}
+
+impl From<pull_request::Error> for Error {
+    fn from(error: pull_request::Error) -> Self {
         Self::GitHub(error.into())
     }
 }

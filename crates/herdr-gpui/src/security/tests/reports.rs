@@ -98,11 +98,11 @@ fn reporting_switch_and_malformed_answers() {
 
 #[test]
 fn a_refusal_hides_reports_but_a_spent_quota_is_an_error() {
-    assert!(hidden(&herdr_github::Error::GitHubForbidden.into()));
-    assert!(hidden(&herdr_github::Error::GitHubStatus(404).into()));
-    assert!(!hidden(&herdr_github::Error::GitHubStatus(500).into()));
+    assert!(hidden(&herdr_github::Error::Forbidden.into()));
+    assert!(hidden(&herdr_github::Error::Status(404).into()));
+    assert!(!hidden(&herdr_github::Error::Status(500).into()));
     assert!(!hidden(
-        &herdr_github::Error::GitHubRateLimit { reset: None }.into()
+        &herdr_github::Error::RateLimit { reset: None }.into()
     ));
 }
 

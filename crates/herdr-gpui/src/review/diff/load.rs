@@ -223,7 +223,9 @@ fn size(root: &Path, name: &str) -> Option<u64> {
 /// Git's output outgrew what is read: say so in the review's terms.
 fn too_large(error: impl Into<crate::Error>) -> crate::Error {
     match error.into() {
-        crate::Error::GitHub(herdr_github::Error::PrSize) => crate::review::Error::TooLarge.into(),
+        crate::Error::GitHub(herdr_github::Error::PullRequest(
+            herdr_github::pull_request::Error::Size,
+        )) => crate::review::Error::TooLarge.into(),
         error => error,
     }
 }
@@ -468,12 +470,16 @@ fn diff_files(source: &Source, files: &[&Request], asked: bool, read: &mut Vec<(
                 read.push((file.file, body));
             }
         }
-        Err(crate::Error::GitHub(herdr_github::Error::PrSize)) if files.len() > 1 => {
+        Err(crate::Error::GitHub(herdr_github::Error::PullRequest(
+            herdr_github::pull_request::Error::Size,
+        ))) if files.len() > 1 => {
             let (first, second) = files.split_at(files.len() / 2);
             diff_files(source, first, asked, read);
             diff_files(source, second, asked, read);
         }
-        Err(crate::Error::GitHub(herdr_github::Error::PrSize)) => {
+        Err(crate::Error::GitHub(herdr_github::Error::PullRequest(
+            herdr_github::pull_request::Error::Size,
+        ))) => {
             let body = if asked {
                 Body::Failed("Too large to show".into())
             } else {

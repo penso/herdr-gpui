@@ -59,12 +59,12 @@ fn fork_branch_rejects_same_repository_missing_and_mismatched_pulls() {
     );
     assert!(matches!(
         parse_numbered(numbered(fork_pr()), "example", "project", 9),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
     let mut elsewhere = fork_pr();
     elsewhere["url"] = "https://github.com/other/project/pull/8".into();
     assert!(matches!(
         parse_numbered(numbered(elsewhere), "example", "project", 8),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
 }

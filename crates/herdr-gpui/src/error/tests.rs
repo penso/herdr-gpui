@@ -3,7 +3,7 @@ use std::{error::Error as _, path::Path};
 
 #[test]
 fn github_network_message_names_the_transport_failure() {
-    let error = herdr_github::Error::GitHubNetwork(ureq::Error::Io(io::Error::other(
+    let error = herdr_github::Error::Network(ureq::Error::Io(io::Error::other(
         "invalid peer certificate: UnknownIssuer",
     )));
     let message = error.to_string();
@@ -35,11 +35,8 @@ fn github_failures_keep_typed_sources_and_redact_parser_diagnostics() -> anyhow:
     let source = serde_json::from_str::<u64>("\"fixture-private-value\"")
         .err()
         .ok_or_else(|| anyhow::anyhow!("expected JSON type error"))?;
-    let error = Error::from(herdr_github::Error::github_json(source));
-    assert!(matches!(
-        error,
-        Error::GitHub(herdr_github::Error::GitHubJson(_))
-    ));
+    let error = Error::from(herdr_github::Error::json(source));
+    assert!(matches!(error, Error::GitHub(herdr_github::Error::Json(_))));
     assert!(!format!("{error} {error:?}").contains("fixture-private-value"));
     assert!(
         error
@@ -57,9 +54,9 @@ fn github_failures_keep_typed_sources_and_redact_parser_diagnostics() -> anyhow:
             .and_then(|source| source.downcast_ref::<io::Error>())
             .is_some_and(|source| source.kind() == io::ErrorKind::PermissionDenied)
     );
-    let error = herdr_github::Error::GitHubRead(io::Error::from(io::ErrorKind::TimedOut));
+    let error = herdr_github::Error::Read(io::Error::from(io::ErrorKind::TimedOut));
     assert!(
-        matches!(&error, herdr_github::Error::GitHubRead(source) if source.kind() == io::ErrorKind::TimedOut)
+        matches!(&error, herdr_github::Error::Read(source) if source.kind() == io::ErrorKind::TimedOut)
     );
     Ok(())
 }

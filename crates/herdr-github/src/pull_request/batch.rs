@@ -224,7 +224,7 @@ pub(super) fn ask(
                     }
                 }
             }
-            Err(Error::GitHubSize) if group.len() > 1 => {
+            Err(Error::Size) if group.len() > 1 => {
                 let second = group.split_off(group.len() / 2);
                 groups.push(second);
                 groups.push(group);
@@ -313,11 +313,11 @@ fn crowded(
 pub(super) fn matching_number(heads: &Value, head: &Head) -> crate::Result<Option<u64>> {
     let listing = &heads["data"]["repository"]["pullRequests"];
     if listing["pageInfo"]["hasNextPage"] == true {
-        return Err(Error::PrAmbiguous);
+        return Err(super::Error::Ambiguous.into());
     }
     let heads: Vec<&Value> = listing["nodes"]
         .as_array()
-        .ok_or(Error::PrRepository)?
+        .ok_or(super::Error::Repository)?
         .iter()
         .filter(|pr| {
             pr["headRepositoryOwner"]["login"]

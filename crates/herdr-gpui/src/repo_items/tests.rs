@@ -78,11 +78,15 @@ fn a_repository_the_token_cannot_see_is_an_error_not_an_empty_list() {
     for response in [json!({"data": {"repository": null}}), json!({})] {
         assert!(matches!(
             parse(&response, &origin, Kind::PullRequest),
-            Err(Error::GitHub(herdr_github::Error::PrRepository))
+            Err(Error::GitHub(herdr_github::Error::PullRequest(
+                herdr_github::pull_request::Error::Repository
+            )))
         ));
         assert!(matches!(
             parse(&response, &origin, Kind::Issue),
-            Err(Error::GitHub(herdr_github::Error::PrRepository))
+            Err(Error::GitHub(herdr_github::Error::PullRequest(
+                herdr_github::pull_request::Error::Repository
+            )))
         ));
     }
 }
@@ -272,6 +276,8 @@ fn a_checkout_path_must_be_absolute() {
     let items = parse(&response(), &origin, Kind::Issue).unwrap();
     assert!(matches!(
         write_context(std::path::Path::new("relative"), &items[0], &origin),
-        Err(Error::GitHub(herdr_github::Error::PrAbsolutePath))
+        Err(Error::GitHub(herdr_github::Error::PullRequest(
+            herdr_github::pull_request::Error::AbsolutePath
+        )))
     ));
 }

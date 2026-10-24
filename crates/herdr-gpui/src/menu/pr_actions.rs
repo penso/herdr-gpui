@@ -46,7 +46,7 @@ impl HerdrWindow {
         self.menu.error = None;
         let result = self
             .pr_token()
-            .ok_or(herdr_github::Error::GitHubAuthentication)
+            .ok_or(herdr_github::Error::Authentication)
             .and_then(|token| self.pr_actions.load_comments(token));
         if let Err(error) = result {
             self.menu.error = Some(error.to_string());
@@ -87,7 +87,7 @@ impl HerdrWindow {
             .unwrap_or_default();
         let result = self
             .pr_token()
-            .ok_or(herdr_github::Error::GitHubAuthentication)
+            .ok_or(herdr_github::Error::Authentication)
             .and_then(|token| self.pr_actions.start(Action::Comment(body), &[], token));
         match result {
             Ok(()) => {
@@ -107,19 +107,17 @@ impl HerdrWindow {
             let method = self
                 .menu
                 .merge_method
-                .ok_or(herdr_github::Error::PrMergeMethod)?;
+                .ok_or(herdr_github::pr_actions::Error::MergeMethod)?;
             if self.menu.merge_target.is_none()
                 || self.menu.merge_target.as_ref() != self.pr_actions.target()
             {
-                return Err(herdr_github::Error::PrMergeChanged.into());
+                return Err(herdr_github::pr_actions::Error::MergeChanged.into());
             }
             let allowed = self
                 .git_open_pull_request()
                 .map(|pr| pr.merge_methods.clone())
                 .unwrap_or_default();
-            let token = self
-                .pr_token()
-                .ok_or(herdr_github::Error::GitHubAuthentication)?;
+            let token = self.pr_token().ok_or(herdr_github::Error::Authentication)?;
             Ok(self
                 .pr_actions
                 .start(Action::Merge(method), &allowed, token)?)

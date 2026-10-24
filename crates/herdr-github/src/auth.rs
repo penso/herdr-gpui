@@ -395,7 +395,7 @@ impl Auth {
         self.use_token_with(store, move || {
             let token = token.expose_secret().trim();
             if !valid_token(token) {
-                return Err(Error::GitHubToken);
+                return Err(Error::Token);
             }
             let token: SecretString = token.into();
             let profile = profile(Arc::new(token.clone()))?;
@@ -563,7 +563,7 @@ impl Auth {
             let result = match rx.try_recv() {
                 Ok(result) => Some(result),
                 Err(mpsc::TryRecvError::Empty) => None,
-                Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::GitHubWorker("profile"))),
+                Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::Worker("profile"))),
             };
             if let Some(result) = result {
                 self.profile_incoming = None;
@@ -588,13 +588,15 @@ impl Auth {
                             self.credential_cleanup = true;
                             if matches!(
                                 error,
-                                Error::GitHubAuthentication
-                                    | Error::GitHubExpired
-                                    | Error::GitHubDenied
-                                    | Error::GitHubAuthorization
-                                    | Error::GitHubCliMissing
-                                    | Error::GitHubCliSignedOut
-                                    | Error::GitHubCliRejected
+                                Error::Authentication
+                                    | Error::Expired
+                                    | Error::Denied
+                                    | Error::Authorization
+                                    | Error::Cli(
+                                        cli::Error::Missing
+                                            | cli::Error::SignedOut
+                                            | cli::Error::Rejected
+                                    )
                             ) {
                                 self.profile = None;
                             }
@@ -610,9 +612,7 @@ impl Auth {
             let reply = match rx.try_recv() {
                 Ok(reply) => Some(reply),
                 Err(mpsc::TryRecvError::Empty) => None,
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    Some(Err(Error::GitHubWorker("authentication")))
-                }
+                Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::Worker("authentication"))),
             };
             if let Some(reply) = reply {
                 self.incoming = None;

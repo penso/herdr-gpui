@@ -39,7 +39,7 @@ pub(super) fn list(
     let token = tokens.for_owner(&origin.owner).clone();
     let timeout = deadline
         .checked_duration_since(Instant::now())
-        .ok_or(herdr_github::Error::PrTimeout)?;
+        .ok_or(herdr_github::pull_request::Error::Timeout)?;
     let response = crate::github::graphql(
         "repo_items",
         &token,

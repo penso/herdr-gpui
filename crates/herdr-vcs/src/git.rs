@@ -377,7 +377,7 @@ impl Git {
             return Err(Error::CommitMessage.into());
         }
         if matches!(action, Action::CreatePullRequest) && token.is_none() {
-            return Err(herdr_github::Error::GitHubAuthentication.into());
+            return Err(herdr_github::Error::Authentication.into());
         }
         self.error = None;
         self.outcome = None;
@@ -639,7 +639,7 @@ fn perform(
         Action::Commit(message) => commit(&checkout, &message, deadline, cancelled),
         Action::Push => push(&checkout, &input.branch, deadline, cancelled),
         Action::CreatePullRequest => {
-            let token = token.ok_or(herdr_github::Error::GitHubAuthentication)?;
+            let token = token.ok_or(herdr_github::Error::Authentication)?;
             create_pull_request(&checkout, &input.branch, &token, deadline, cancelled)
         }
     }
@@ -745,12 +745,16 @@ fn create_pull_request(
     let id = repository["data"]["repository"]["id"]
         .as_str()
         .filter(|id| !id.is_empty())
-        .ok_or(herdr_github::Error::PrRepository)?
+        .ok_or(herdr_github::Error::from(
+            herdr_github::pull_request::Error::Repository,
+        ))?
         .to_owned();
     let default_branch = repository["data"]["repository"]["defaultBranchRef"]["name"]
         .as_str()
         .filter(|name| !name.is_empty())
-        .ok_or(herdr_github::Error::PrRepository)?
+        .ok_or(herdr_github::Error::from(
+            herdr_github::pull_request::Error::Repository,
+        ))?
         .to_owned();
     if base.is_own_base(branch, &default_branch) {
         return Err(Error::PullRequestBase.into());
@@ -775,7 +779,7 @@ fn parse_created(response: &serde_json::Value, owner: &str, repo: &str) -> crate
     let url = pr["url"].as_str().unwrap_or_default();
     let expected = number.map(|number| format!("https://github.com/{owner}/{repo}/pull/{number}"));
     if expected.as_deref() != Some(url) {
-        return Err(herdr_github::Error::PrIdentity.into());
+        return Err(herdr_github::Error::from(herdr_github::pull_request::Error::Identity).into());
     }
     Ok(Outcome {
         message: format!("Opened pull request #{}", number.unwrap_or_default()),

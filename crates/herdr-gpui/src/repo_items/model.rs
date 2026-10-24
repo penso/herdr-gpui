@@ -131,7 +131,7 @@ pub(crate) fn issue_branch(number: u64, title: &str) -> String {
 pub(super) fn parse(response: &Value, origin: &Origin, kind: Kind) -> crate::Result<Vec<Item>> {
     let nodes = response["data"]["repository"][kind.field()]["nodes"]
         .as_array()
-        .ok_or(herdr_github::Error::PrRepository)?;
+        .ok_or(herdr_github::pull_request::Error::Repository)?;
     Ok(nodes
         .iter()
         .take(LIMIT)
