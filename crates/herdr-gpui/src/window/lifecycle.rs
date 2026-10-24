@@ -101,9 +101,15 @@ impl HerdrWindow {
                     // alone does not claim it back from another client (a
                     // CLI, another window, or a TUI attached to the same
                     // tab), so claim it: select the tab again and re-report
-                    // the window's focus.
+                    // the window's focus. Not while a focus change is in
+                    // flight: the snapshot still names the tab being left,
+                    // and requests go one at a time, so the claim would land
+                    // after the change and undo it. The change claims the
+                    // tab it lands on itself.
                     self.sent_focus = None;
-                    if let Some(tab) = snapshot.focused_tab_id.clone() {
+                    if self.activation_deadline.is_none()
+                        && let Some(tab) = snapshot.focused_tab_id.clone()
+                    {
                         let _ = handle.request(
                             &snapshot.boot_id,
                             Method::TabFocus,

@@ -47,6 +47,7 @@ mod popup_projection;
 mod prompts;
 mod reconnect_backoff;
 mod remote_drop;
+mod resize_claim_fence;
 mod resize_reassert;
 mod scrollbar_drag;
 mod shift_select_hint;
