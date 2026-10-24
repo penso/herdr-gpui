@@ -1440,7 +1440,7 @@ Catalog channels retain typed errors, and rename results share errors with `Arc`
 across cloned UI snapshots. Strings are produced at presentation boundaries, not
 as internal error transport. `anyhow` is reserved for framework boundaries and
 test harnesses, not internal catch-all errors.
-Updater workers and the restart helper use typed `UpdateError` variants, preserving
+Updater workers and the restart helper use typed `herdr_updater::Error` variants, preserving
 sources and recovery context while keeping remote diagnostics out of display text.
 Active regression tests cover typed sources, redaction, and recovery failures;
 the standalone updater harness includes these tests without GPUI dependencies.

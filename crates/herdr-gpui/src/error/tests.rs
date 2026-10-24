@@ -16,7 +16,9 @@ fn github_network_message_names_the_transport_failure() {
 
 #[test]
 fn updater_wrapper_preserves_source_chain() {
-    let error = Error::from(UpdateError::Io(io::Error::from(io::ErrorKind::BrokenPipe)));
+    let error = Error::from(crate::updater::Error::Io(io::Error::from(
+        io::ErrorKind::BrokenPipe,
+    )));
     assert!(matches!(error, Error::Update(_)));
     assert_eq!(
         error
