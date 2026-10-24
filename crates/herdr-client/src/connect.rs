@@ -148,7 +148,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
                     let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
                 }
                 let ssh = match &result {
-                    Err(Error::SshRefused(failure)) => Some(*failure),
+                    Err(Error::Ssh(ssh::Error::Refused(failure))) => Some(*failure),
                     _ => None,
                 };
                 let reason = result

@@ -73,20 +73,20 @@ fn incomplete_unknown_and_oversized_responses_are_rejected() {
     ] {
         assert!(matches!(
             wire::read(bytes),
-            Err(crate::Error::Clipboard(ClipboardError::Native(
+            Err(crate::Error::Clipboard(clipboard::Error::Native(
                 Error::Response
             )))
         ));
     }
     assert!(matches!(
         wire::read(vec![1, 255]),
-        Err(crate::Error::Clipboard(ClipboardError::Encoding(_)))
+        Err(crate::Error::Clipboard(clipboard::Error::Encoding(_)))
     ));
     let mut bytes = vec![b'x'; TEXT_LIMIT + 2];
     bytes[0] = 1;
     assert!(matches!(
         wire::read(bytes),
-        Err(crate::Error::Clipboard(ClipboardError::Size {
+        Err(crate::Error::Clipboard(clipboard::Error::Size {
             limit: TEXT_LIMIT
         }))
     ));
@@ -96,7 +96,7 @@ fn incomplete_unknown_and_oversized_responses_are_rejected() {
     }
     assert!(matches!(
         wire::read(paths),
-        Err(crate::Error::Clipboard(ClipboardError::Native(
+        Err(crate::Error::Clipboard(clipboard::Error::Native(
             Error::Response
         )))
     ));
@@ -125,7 +125,7 @@ fn successful_child_output_is_the_only_data_pasted() -> crate::Result<()> {
     ] {
         assert!(matches!(
             acquire(&mut shell(script), Instant::now() + TIMEOUT, 100),
-            Err(crate::Error::Clipboard(ClipboardError::Native(
+            Err(crate::Error::Clipboard(clipboard::Error::Native(
                 Error::Exited(_)
             )))
         ));
@@ -147,10 +147,10 @@ fn native_failures_keep_changed_encoding_and_size_diagnostics() {
             100,
         );
         match (expected, result) {
-            (0, Err(crate::Error::Clipboard(ClipboardError::Changed)))
-            | (1, Err(crate::Error::Clipboard(ClipboardError::Native(Error::TextEncoding))))
-            | (2, Err(crate::Error::Clipboard(ClipboardError::Size { limit: TEXT_LIMIT })))
-            | (3, Err(crate::Error::Clipboard(ClipboardError::Size { limit: IMAGE_LIMIT }))) => {}
+            (0, Err(crate::Error::Clipboard(clipboard::Error::Changed)))
+            | (1, Err(crate::Error::Clipboard(clipboard::Error::Native(Error::TextEncoding))))
+            | (2, Err(crate::Error::Clipboard(clipboard::Error::Size { limit: TEXT_LIMIT })))
+            | (3, Err(crate::Error::Clipboard(clipboard::Error::Size { limit: IMAGE_LIMIT }))) => {}
             (_, other) => panic!("unexpected clipboard result: {other:?}"),
         }
     }

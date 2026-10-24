@@ -269,7 +269,7 @@ impl HerdrWindow {
                 .bg(rgb(self.theme.ink(self.theme.palette[3])))
                 .with_animation(
                     "daemon-starting-loader",
-                    Animation::new(Duration::from_secs(1)).repeat(),
+                    Animation::new(crate::motion::duration(Duration::from_secs(1))).repeat(),
                     |dot, delta| dot.opacity(0.3 + 0.7 * (delta * std::f32::consts::PI).sin()),
                 )
                 .into_any_element()

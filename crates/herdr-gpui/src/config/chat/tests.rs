@@ -115,3 +115,5 @@ fn chats_jump_to_new_output_unless_glide_is_on() {
         assert_eq!(config.chat.layout, ChatLayoutMode::IMessage);
     }
 }
+
+mod launcher;

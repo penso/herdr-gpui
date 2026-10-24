@@ -27,6 +27,7 @@ use std::{
 };
 
 mod commands;
+mod error_kinds;
 mod errors;
 mod focus_barrier;
 mod framing;

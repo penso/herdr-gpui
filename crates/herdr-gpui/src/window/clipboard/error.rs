@@ -3,7 +3,7 @@
 use std::io;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ClipboardError {
+pub enum Error {
     // keep-sorted start
     #[error("The clipboard changed while reading. Try pasting again.")]
     Changed,
@@ -11,7 +11,7 @@ pub enum ClipboardError {
     Encoding(#[source] std::str::Utf8Error),
     #[cfg(target_os = "macos")]
     #[error(transparent)]
-    Native(#[from] crate::window::ClipboardHelperError),
+    Native(#[from] super::macos::Error),
     #[error("Could not read the clipboard; on Linux, install wl-paste or xclip.")]
     Process(#[source] io::Error),
     #[error("Clipboard content exceeds the {limit}-byte limit.")]

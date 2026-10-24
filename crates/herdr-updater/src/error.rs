@@ -2,7 +2,7 @@
 use chrono::{DateTime, DurationRound as _, Local, TimeDelta, Utc};
 use std::{io, path::PathBuf, process::ExitStatus};
 
-pub(super) type Result<T> = std::result::Result<T, UpdateError>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The first whole minute at or after `reset`, so retrying at the shown minute
 /// is never still early, even by a fraction of a second.
@@ -56,7 +56,7 @@ fn header_number(headers: &ureq::http::HeaderMap, name: &str) -> Option<i64> {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum UpdateError {
+pub enum Error {
     #[error("Update filesystem or pipe I/O failed")]
     Io(#[from] io::Error),
     #[error("Invalid update request JSON")]
@@ -119,21 +119,21 @@ pub enum UpdateError {
     ReplacementCleanup {
         #[source]
         source: io::Error,
-        cleanup: Box<UpdateError>,
+        cleanup: Box<Error>,
         backup: PathBuf,
     },
     #[error("Restart failed; recovery was retained")]
     RestartRecovery {
         #[source]
-        source: Box<UpdateError>,
+        source: Box<Error>,
         recovery: io::Error,
         backup: PathBuf,
     },
     #[error("Update failed; could not record recovery outcome")]
     RecordOutcome {
         #[source]
-        source: Box<UpdateError>,
-        record: Box<UpdateError>,
+        source: Box<Error>,
+        record: Box<Error>,
     },
     #[error("Expected 64 lowercase hexadecimal characters")]
     InvalidHex,
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn stale_homebrew_diagnostic_describes_the_post_refresh_requirement() {
-        let error = UpdateError::BrewStale {
+        let error = Error::BrewStale {
             installed: "20260921.2".into(),
             current: "20260921.1".into(),
             expected: "20260921.3".into(),
@@ -394,13 +394,13 @@ mod tests {
     fn sources_remain_typed_without_displaying_remote_diagnostics() -> anyhow::Result<()> {
         let private =
             "https://release-assets.githubusercontent.com/a?signature=secret\n".repeat(4096);
-        let http = UpdateError::Http(Box::new(ureq::Error::BadUri(private.clone())));
+        let http = Error::Http(Box::new(ureq::Error::BadUri(private.clone())));
         assert_eq!(http.to_string(), "Update HTTPS request failed");
         assert!(
             matches!(http.source().context("expected HTTP source")?.downcast_ref::<Box<ureq::Error>>().map(Box::as_ref), Some(ureq::Error::BadUri(uri)) if uri == &private)
         );
 
-        let io = UpdateError::ReadArchive(io::Error::new(io::ErrorKind::PermissionDenied, private));
+        let io = Error::ReadArchive(io::Error::new(io::ErrorKind::PermissionDenied, private));
         assert_eq!(io.to_string(), "Reading archive failed");
         assert_eq!(
             io.source()
@@ -414,7 +414,7 @@ mod tests {
         let json = serde_json::from_str::<u32>("\"signature=secret\"")
             .err()
             .context("expected JSON type error")?;
-        let error = UpdateError::ManifestJson(json);
+        let error = Error::ManifestJson(json);
         assert_eq!(error.to_string(), "Invalid update manifest");
         assert!(
             error
@@ -427,8 +427,8 @@ mod tests {
 
     #[test]
     fn recovery_retains_both_failures_and_path() -> anyhow::Result<()> {
-        let error = UpdateError::RestartRecovery {
-            source: Box::new(UpdateError::Io(io::Error::from(io::ErrorKind::NotFound))),
+        let error = Error::RestartRecovery {
+            source: Box::new(Error::Io(io::Error::from(io::ErrorKind::NotFound))),
             recovery: io::Error::from(io::ErrorKind::PermissionDenied),
             backup: PathBuf::from("private/previous-installation"),
         };
@@ -444,18 +444,12 @@ mod tests {
             io::ErrorKind::NotFound
         );
         assert!(
-            matches!(error, UpdateError::RestartRecovery { recovery, backup, .. }
+            matches!(error, Error::RestartRecovery { recovery, backup, .. }
             if recovery.kind() == io::ErrorKind::PermissionDenied && backup == std::path::Path::new("private/previous-installation"))
         );
-        assert!(!matches!(
-            UpdateError::HelperTimeout,
-            UpdateError::Cancelled
-        ));
-        assert!(!matches!(
-            UpdateError::ValidationTimeout,
-            UpdateError::Cancelled
-        ));
-        assert!(!matches!(UpdateError::NotCommitted, UpdateError::Cancelled));
+        assert!(!matches!(Error::HelperTimeout, Error::Cancelled));
+        assert!(!matches!(Error::ValidationTimeout, Error::Cancelled));
+        assert!(!matches!(Error::NotCommitted, Error::Cancelled));
         Ok(())
     }
 }

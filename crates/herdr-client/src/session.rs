@@ -7,7 +7,7 @@ mod barrier;
 pub(crate) use barrier::Barrier;
 
 use crate::{
-    Error, Result,
+    Error, Result, clipboard,
     event::{ClientEvent, deliver},
     frame::FrameReader,
     handle::Command,
@@ -379,7 +379,7 @@ pub(crate) fn run_connection(
         if let Some(image) = queued.as_ref().and_then(|c| c.image.as_ref()) {
             image.writer.check_timeout()?;
             if partial_image && image.lease.cancelled.load(Ordering::Acquire) {
-                return Err(Error::ClipboardImageCancelled);
+                return Err(clipboard::Error::Cancelled.into());
             }
         }
         // A probe is a frame too: never insert one into a partial outbound frame.
@@ -466,7 +466,7 @@ pub(crate) fn run_connection(
             if let Some(image) = &mut command.image {
                 if image.lease.cancelled.load(Ordering::Acquire) {
                     if image.writer.offset > 0 {
-                        return Err(Error::ClipboardImageCancelled);
+                        return Err(clipboard::Error::Cancelled.into());
                     }
                     continue;
                 }
@@ -480,7 +480,7 @@ pub(crate) fn run_connection(
                                     tx,
                                     ClientEvent::CommandRejected {
                                         request_id: None,
-                                        reason: Error::ClipboardImagePreparationTimeout,
+                                        reason: clipboard::Error::PreparationTimeout.into(),
                                     },
                                     stop,
                                 )?;

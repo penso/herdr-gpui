@@ -6,7 +6,7 @@
 //! token arrives on a pipe, never an argument, and is never logged or shown.
 
 use super::{Profile, Result, profile_from, valid_token};
-use crate::Error;
+use crate::pull_request;
 use secrecy::SecretString;
 use std::{
     process::Command,
@@ -37,7 +37,7 @@ pub(super) fn profile() -> Result<Profile> {
 /// revoked token, which only `gh` can replace.
 pub(super) fn verify(token: SecretString) -> Result<Profile> {
     profile_from(Arc::new(token), true).map_err(|error| match error {
-        Error::GitHubAuthentication => Error::GitHubCliRejected,
+        crate::Error::Authentication => Error::Rejected.into(),
         error => error,
     })
 }
@@ -48,7 +48,7 @@ pub(super) fn verify(token: SecretString) -> Result<Profile> {
 pub(super) fn run(command: &mut Command) -> Result<SecretString> {
     command.args(["auth", "token", "--hostname", "github.com"]);
     let (ok, output) =
-        crate::pull_request::run_bytes(command, Instant::now() + TIMEOUT, &|| false, OUTPUT_LIMIT)
+        pull_request::run_bytes(command, Instant::now() + TIMEOUT, &|| false, OUTPUT_LIMIT)
             .map_err(process_error)?;
     parse(ok, &Zeroizing::new(output))
 }
@@ -57,7 +57,7 @@ pub(super) fn run(command: &mut Command) -> Result<SecretString> {
 /// stdout and stderr, so the token is the one line shaped like one.
 pub(super) fn parse(ok: bool, output: &[u8]) -> Result<SecretString> {
     if !ok {
-        return Err(Error::GitHubCliSignedOut);
+        return Err(Error::SignedOut.into());
     }
     let mut tokens = output
         .split(|byte| *byte == b'\n')
@@ -66,21 +66,26 @@ pub(super) fn parse(ok: bool, output: &[u8]) -> Result<SecretString> {
         .filter(|line| valid_token(line));
     match (tokens.next(), tokens.next()) {
         (Some(token), None) => Ok(token.into()),
-        (None, _) => Err(Error::GitHubCliSignedOut),
-        (Some(_), Some(_)) => Err(Error::GitHubToken),
+        (None, _) => Err(Error::SignedOut.into()),
+        (Some(_), Some(_)) => Err(crate::Error::Token),
     }
 }
 
 /// Process failures, told in terms of the GitHub CLI rather than Git.
-pub(super) fn process_error(error: Error) -> Error {
+pub(super) fn process_error(error: crate::Error) -> crate::Error {
     match error {
-        Error::PrProcess { source, .. } if source.kind() == std::io::ErrorKind::NotFound => {
-            Error::GitHubCliMissing
+        crate::Error::PullRequest(pull_request::Error::Process { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            Error::Missing.into()
         }
-        Error::PrTimeout => Error::GitHubCliTimeout,
-        error => Error::GitHubCliProcess(Box::new(error)),
+        crate::Error::PullRequest(pull_request::Error::Timeout) => Error::Timeout.into(),
+        error => Error::Process(Box::new(error)).into(),
     }
 }
 
+mod error;
 #[cfg(test)]
 mod tests;
+
+pub use error::Error;

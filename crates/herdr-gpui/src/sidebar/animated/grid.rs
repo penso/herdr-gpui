@@ -30,9 +30,11 @@ pub(super) fn mark(status: AgentStatus, size: f32, color: u32) -> AnyElement {
         AgentStatus::Working => grid("status-wave", cell)
             .with_animation(
                 "status-wave",
-                Animation::new(Duration::from_millis(50 * WAVE_FRAMES as u64))
-                    .repeat_synced()
-                    .with_max_fps(20.),
+                Animation::new(crate::motion::duration(Duration::from_millis(
+                    50 * WAVE_FRAMES as u64,
+                )))
+                .repeat_synced()
+                .with_max_fps(20.),
                 move |grid, delta| {
                     let frame = ((delta * WAVE_FRAMES).floor() + WAVE_FULL_FRAME) % WAVE_FRAMES;
                     grid.children(cells(cell, color, |index| {
@@ -44,9 +46,11 @@ pub(super) fn mark(status: AgentStatus, size: f32, color: u32) -> AnyElement {
         AgentStatus::Blocked => grid("status-chase", cell)
             .with_animation(
                 "status-chase",
-                Animation::new(Duration::from_millis(CHASE_STEP_MS * FRAME.len() as u64))
-                    .repeat_synced()
-                    .with_max_fps(1000. / CHASE_STEP_MS as f32),
+                Animation::new(crate::motion::duration(Duration::from_millis(
+                    CHASE_STEP_MS * FRAME.len() as u64,
+                )))
+                .repeat_synced()
+                .with_max_fps(1000. / CHASE_STEP_MS as f32),
                 move |grid, delta| {
                     let gap = FRAME[super::frame_index(FRAME.len(), delta)];
                     grid.children(cells(cell, color, |index| chase_opacity(gap, index)))

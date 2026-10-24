@@ -3,6 +3,7 @@
 //! ```toml
 //! [chat]
 //! glide = true
+//! launcher = "plus"
 //! layout = "cards"
 //!
 //! [chat.env]
@@ -14,13 +15,18 @@
 //! machine or an SSH host, so an agent reaches a company endpoint that the
 //! pane's shell does not set up. Values sit in the config file as written,
 //! so a token belongs in the shell or the agent's own sign-in instead.
-//! `layout` picks how a chat view draws its entries and composer. `glide`
+//! `launcher` picks where tab strips offer a one-click chat with each
+//! installed agent. `layout` picks how a chat view draws its entries and composer. `glide`
 //! scrolls smoothly to a streaming reply's new text; off, the default, the
 //! view jumps to it as each chunk lands.
+
+mod launcher;
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
+
+pub use launcher::ChatLauncher;
 
 /// Variables kept, and the bytes their names and values take together, so
 /// a `tab.create` request stays small.
@@ -34,6 +40,7 @@ const RESERVED: [&str; 1] = [crate::chat::PROGRAM_ENV];
 pub struct ChatConfig {
     pub env: BTreeMap<String, String>,
     pub glide: bool,
+    pub launcher: ChatLauncher,
     pub layout: ChatLayoutMode,
 }
 

@@ -36,7 +36,7 @@ fn sustained_inbound_progress_survives_a_backpressured_outgoing_image() {
     cancel.cancel();
     assert!(matches!(
         worker.join().unwrap(),
-        Err(Error::ClipboardImageCancelled)
+        Err(Error::Clipboard(clipboard::Error::Cancelled))
     ));
     assert!(cancel.is_finished());
 }
@@ -103,7 +103,7 @@ fn expired_preparation_skips_retained_permit_but_not_published_data() {
                 event(&client),
                 ClientEvent::CommandRejected {
                     request_id: None,
-                    reason: Error::ClipboardImagePreparationTimeout,
+                    reason: Error::Clipboard(clipboard::Error::PreparationTimeout),
                 }
             ));
         }
@@ -116,11 +116,11 @@ fn expired_preparation_skips_retained_permit_but_not_published_data() {
             client
                 .handle
                 .reserve_clipboard_image("boot-v1", ClientClipboardImageTarget::DirectTerminal),
-            Err(Error::ClipboardImageBusy)
+            Err(Error::Clipboard(clipboard::Error::Busy))
         ));
         assert!(matches!(
             upload.complete_input(ClientPaneInputEvent::Paste("late.png".into())),
-            Err(Error::ClipboardImageCancelled)
+            Err(Error::Clipboard(clipboard::Error::Cancelled))
         ));
         drop(reserve(&client));
         client.handle.disconnect();
@@ -242,7 +242,7 @@ fn backpressured_image_reads_events_and_cancellation_or_boot_change_closes_frame
             client
                 .handle
                 .reserve_clipboard_image("boot-v1", ClientClipboardImageTarget::DirectTerminal),
-            Err(Error::ClipboardImageBusy)
+            Err(Error::Clipboard(clipboard::Error::Busy))
         ));
         match mode {
             0 => cancel.cancel(),
@@ -274,7 +274,10 @@ fn backpressured_image_reads_events_and_cancellation_or_boot_change_closes_frame
         }
         let result = worker.join().unwrap();
         match mode {
-            0 => assert!(matches!(result, Err(Error::ClipboardImageCancelled))),
+            0 => assert!(matches!(
+                result,
+                Err(Error::Clipboard(clipboard::Error::Cancelled))
+            )),
             1 => result.unwrap(),
             _ => assert!(matches!(result, Err(Error::SnapshotIdentity))),
         }

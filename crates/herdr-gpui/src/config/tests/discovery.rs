@@ -194,7 +194,7 @@ fn discovery_includes_explicit_selection_and_reports_errors() -> anyhow::Result<
         };
         assert!(
             config
-                .theme_with_directories(false, || Err(Error::MissingHome))
+                .theme_with_directories(false, || Err(crate::Error::MissingHome))
                 .is_ok()
         );
     }

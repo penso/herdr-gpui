@@ -7,7 +7,7 @@ fn function_keys_can_be_configured_without_taking_ordinary_typing() {
     for key in ["f0", "f25", "escape", "space", "shift-t"] {
         assert!(matches!(
             with(&[("new_tab", one(key))]),
-            Err(Error::KeystrokeWithoutModifier { .. })
+            Err(crate::Error::Keymap(Error::KeystrokeWithoutModifier { .. }))
         ));
     }
 }

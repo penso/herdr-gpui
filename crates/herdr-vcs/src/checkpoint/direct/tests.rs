@@ -104,16 +104,16 @@ fn the_command_line_takes_lists_and_diffs_checkpoints_as_the_app_does() {
     assert_eq!(patch_text(&checkout, &second, None).unwrap(), "");
     assert!(matches!(
         patch_text(&checkout, "0000000000000001", None),
-        Err(Error::CheckpointMissing)
+        Err(crate::Error::Checkpoint(Error::Missing))
     ));
     assert!(matches!(
         patch_text(&checkout, "../heads/main", None),
-        Err(Error::CheckpointMissing)
+        Err(crate::Error::Checkpoint(Error::Missing))
     ));
     let other = Checkout::new(Host::Local, key.trim(), Some("elsewhere")).unwrap();
     assert!(matches!(
         list(&other, isolated),
-        Err(Error::CheckpointCheckout)
+        Err(crate::Error::Checkpoint(Error::Checkout))
     ));
 }
 

@@ -86,7 +86,7 @@ fn tokens_color_the_chrome_and_ghostty_colors_the_terminal() -> anyhow::Result<(
     assert_eq!(load(&home.0)?.primary(), 0xad8ee6);
 
     fs::write(directory.join("ghostty.conf"), "background = nope\n")?;
-    assert!(matches!(load(&home.0), Err(Error::Path { .. })));
+    assert!(matches!(load(&home.0), Err(crate::Error::Path { .. })));
     Ok(())
 }
 

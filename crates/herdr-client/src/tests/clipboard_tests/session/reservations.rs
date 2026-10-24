@@ -32,13 +32,13 @@ fn reservation_validation_busy_drop_and_queue_bounds() {
         .unwrap();
     assert!(matches!(
         handle.reserve_clipboard_image("boot", target.clone()),
-        Err(Error::ClipboardImageBusy)
+        Err(Error::Clipboard(clipboard::Error::Busy))
     ));
     drop(upload);
     // A dropped slot still occupies the one lease until the worker skips it.
     assert!(matches!(
         handle.reserve_clipboard_image("boot", target.clone()),
-        Err(Error::ClipboardImageBusy)
+        Err(Error::Clipboard(clipboard::Error::Busy))
     ));
     drop(rx.try_recv().unwrap());
     handle.set_focus("boot", true).unwrap();
@@ -55,7 +55,7 @@ fn reservation_validation_busy_drop_and_queue_bounds() {
     assert!(upload.is_cancelled());
     assert!(matches!(
         upload.complete("png", vec![1]),
-        Err(Error::ClipboardImageCancelled)
+        Err(Error::Clipboard(clipboard::Error::Cancelled))
     ));
     drop(rx.try_recv().unwrap());
     // Retaining the cancellation handle cannot keep the lease busy.
@@ -128,7 +128,7 @@ fn input_reservations_share_queue_bound_without_claiming_or_releasing_image_leas
     // Busy takes precedence even over invalid data: no image encoding occurs.
     assert!(matches!(
         competing.complete("invalid", vec![]),
-        Err(Error::ClipboardImageBusy)
+        Err(Error::Clipboard(clipboard::Error::Busy))
     ));
     drop(rx.try_recv().unwrap());
     assert!(handle.inner.image_busy.load(Ordering::Acquire));
@@ -148,7 +148,7 @@ fn input_reservations_share_queue_bound_without_claiming_or_releasing_image_leas
         .unwrap();
     assert!(matches!(
         competing.complete("png", vec![2]),
-        Err(Error::ClipboardImageBusy)
+        Err(Error::Clipboard(clipboard::Error::Busy))
     ));
     drop(rx.try_recv().unwrap());
     assert!(handle.inner.image_busy.load(Ordering::Acquire));
@@ -191,7 +191,7 @@ fn text_reserved_during_image_stays_before_later_input_and_competing_image_is_bu
         .unwrap();
     assert!(matches!(
         competing.complete("png", vec![2]),
-        Err(Error::ClipboardImageBusy)
+        Err(Error::Clipboard(clipboard::Error::Busy))
     ));
     no_command(&mut server);
     assert!(!first_done.is_finished());
@@ -340,7 +340,7 @@ fn stale_boot_rejects_pending_reservation_without_blocking_fifo() {
     assert!(cancel.is_finished());
     assert!(matches!(
         upload.complete("png", vec![1]),
-        Err(Error::ClipboardImageCancelled)
+        Err(Error::Clipboard(clipboard::Error::Cancelled))
     ));
     client.handle.disconnect();
     worker.join().unwrap().unwrap();

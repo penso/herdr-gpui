@@ -1,7 +1,6 @@
 //! `search`, answered by this process: Go to Symbol and Go to File over the
 //! current directory's checkout, indexed and ranked as the app's picker does.
 use super::Output;
-use crate::control::ControlError;
 use crate::{
     code_index::{self, Index},
     code_search::{Mode, Query, rank},
@@ -87,12 +86,12 @@ pub(super) fn search_in(
     limit: usize,
 ) -> crate::Result<Output> {
     let cancelled = AtomicBool::new(false);
-    let dir = dir.to_str().ok_or_else(|| {
-        crate::Error::Control(ControlError::Rejected {
+    let dir = dir
+        .to_str()
+        .ok_or_else(|| crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: "The current directory's path is not UTF-8".into(),
-        })
-    })?;
+        })?;
     let root = code_index::checkout_root(dir, &cancelled)?;
     let index = Index::build(&root, &cancelled)?;
     let results = Results {

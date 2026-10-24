@@ -64,7 +64,7 @@ const COMMANDS: usize = 8;
 pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
     let floor = match error {
         Error::Github(source) => match **source {
-            herdr_github::Error::GitHubRepositoryHidden { .. } => HIDDEN_BACKOFF,
+            herdr_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
@@ -817,7 +817,9 @@ impl Worker {
                         &mut self.cooldown,
                     )
                     .map_err(|error| match error {
-                        herdr_github::Error::PrCancelled => Error::Cancelled,
+                        herdr_github::Error::PullRequest(
+                            herdr_github::pull_request::Error::Cancelled,
+                        ) => Error::Cancelled,
                         error => Error::Github(Box::new(error)),
                     })
                 });

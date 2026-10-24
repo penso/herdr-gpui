@@ -23,7 +23,8 @@ actions!(
         CheckForUpdates,
         ShowUpdatePreview,
         ShowUpdateDownloadPreview,
-        ShowUpdateHomebrewPreview
+        ShowUpdateHomebrewPreview,
+        ToggleSlowAnimations
     ]
 );
 
@@ -33,7 +34,7 @@ actions!(edit, [Cut, Copy, Paste, SelectAll]);
 
 /// No element sets this context, so these bindings never match a keystroke.
 /// They exist only so the Edit menu shows its standard shortcuts. The focused
-/// element's key handler keeps owning Cmd-X/C/V/A, as it did before the menu.
+/// element's key handler keeps owning the Edit keys, as it did before the menu.
 const EDIT_MENU_LABELS: &str = "EditMenuLabels";
 
 /// The keystroke an Edit menu item stands for. A menu click replays it
@@ -145,8 +146,13 @@ pub(crate) fn bind_keys(cx: &mut App) {
     }
 }
 
-/// The Edit menu's keystrokes: cut, copy, paste, and select all.
-pub(crate) const EDIT_KEYS: [&str; 4] = if CTRL_SHORTCUTS {
+/// The Edit menu's keystrokes: cut, copy, paste, and select all. Windows
+/// labels paste with plain Ctrl-V, which a pane takes as the app's paste
+/// while the clipboard holds text, because Ctrl-Shift-V is often taken
+/// system-wide there.
+pub(crate) const EDIT_KEYS: [&str; 4] = if cfg!(target_os = "windows") {
+    ["ctrl-shift-x", "ctrl-shift-c", "ctrl-v", "ctrl-shift-a"]
+} else if CTRL_SHORTCUTS {
     [
         "ctrl-shift-x",
         "ctrl-shift-c",

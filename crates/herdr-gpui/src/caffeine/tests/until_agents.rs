@@ -23,7 +23,7 @@ fn nothing_to_wait_for_holds_nothing(cx: &mut gpui::TestAppContext) {
     assert!(log.entries().is_empty());
     assert!(matches!(
         reports.take().as_slice(),
-        [Error::Caffeine(Failure::NoWorkingAgents)]
+        [crate::Error::Caffeine(Error::NoWorkingAgents)]
     ));
 }
 

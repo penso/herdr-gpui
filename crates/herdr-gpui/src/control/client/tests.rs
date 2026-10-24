@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::control::ControlError;
 
 mod chat_lines;
 
@@ -29,10 +28,11 @@ fn a_plain_launch_asks_for_the_frontmost_window_as_app_focus_does() {
 #[test]
 fn every_error_code_has_one_exit_status() {
     let rejected = |code| {
-        crate::Error::Control(ControlError::Rejected {
+        crate::control::Error::Rejected {
             code,
             message: String::new(),
-        })
+        }
+        .into()
     };
     for (code, expected) in [
         (ErrorCode::InvalidUrl, exit::USAGE),

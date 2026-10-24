@@ -12,7 +12,7 @@ fn deletion_rejects_default_and_invalid_names_before_spawning() {
     let missing = Path::new("/no-such-session-test-executable");
     assert!(matches!(
         delete_local_session(missing, "default"),
-        Err(Error::DefaultSession)
+        Err(crate::Error::Sessions(Error::DeleteDefault))
     ));
     for name in [
         "",
@@ -26,17 +26,17 @@ fn deletion_rejects_default_and_invalid_names_before_spawning() {
         assert!(
             matches!(
                 delete_local_session(missing, name),
-                Err(Error::InvalidSession)
+                Err(crate::Error::InvalidSession)
             ),
             "{name}"
         );
     }
     let error = delete_local_session(missing, "work").unwrap_err();
-    assert!(matches!(error, Error::Io(_)));
+    assert!(matches!(error, crate::Error::Io(_)));
     assert!(std::error::Error::source(&error).is_some());
     assert!(matches!(
         delete_remote_session("-oProxyCommand=bad", "work"),
-        Err(Error::InvalidSshTarget)
+        Err(crate::Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }
 
@@ -51,12 +51,12 @@ fn deletion_reports_exit_status_and_times_out_without_a_daemon() {
     assert!(delete_command(command("exit 0"), Duration::from_secs(1)).is_ok());
     assert!(
         matches!(delete_command(command("exit 17"), Duration::from_secs(1)),
-        Err(Error::SessionDeleteFailed(status)) if status.code() == Some(17))
+        Err(crate::Error::Sessions(Error::DeleteFailed(status))) if status.code() == Some(17))
     );
     // exec keeps the sleeping process the exact child the runner owns.
     assert!(matches!(
         delete_command(command("exec sleep 30"), Duration::ZERO),
-        Err(Error::SessionDeleteTimeout)
+        Err(crate::Error::Sessions(Error::DeleteTimeout))
     ));
 }
 
@@ -77,13 +77,17 @@ fn confirmed_deletion_orders_stop_before_delete_and_aborts_uncertain_stops() {
     assert_eq!(*calls.borrow(), ["stop", "delete"]);
     assert!(matches!(
         stop_then_delete(
-            || Err(Error::SessionDeleteTimeout),
+            || Err(crate::Error::Sessions(Error::DeleteTimeout)),
             || panic!("a timed-out stop must not continue"),
         ),
-        Err(Error::SessionDeleteTimeout)
+        Err(crate::Error::Sessions(Error::DeleteTimeout))
     ));
     let error = stop_then_delete(
-        || Err(Error::Io(io::Error::from(io::ErrorKind::PermissionDenied))),
+        || {
+            Err(crate::Error::Io(io::Error::from(
+                io::ErrorKind::PermissionDenied,
+            )))
+        },
         || panic!("a failed spawn must not continue"),
     )
     .unwrap_err();
@@ -95,11 +99,12 @@ fn confirmed_deletion_orders_stop_before_delete_and_aborts_uncertain_stops() {
 #[test]
 fn an_already_stopped_session_can_be_deleted_but_a_live_one_is_still_refused() {
     use std::os::unix::process::ExitStatusExt;
-    let refused = || Error::SessionDeleteFailed(std::process::ExitStatus::from_raw(256));
+    let refused =
+        || crate::Error::Sessions(Error::DeleteFailed(std::process::ExitStatus::from_raw(256)));
     assert!(stop_then_delete(|| Err(refused()), || Ok(())).is_ok());
     assert!(matches!(
         stop_then_delete(|| Err(refused()), || Err(refused())),
-        Err(Error::SessionDeleteFailed(_))
+        Err(crate::Error::Sessions(Error::DeleteFailed(_)))
     ));
 }
 
@@ -207,7 +212,7 @@ fn excessive_session_counts_are_refused_rather_than_truncated() {
     fs::create_dir(root.join("sessions").join("one-too-many")).unwrap();
     assert!(matches!(
         list_with(&root, |_| false),
-        Err(Error::SessionLimit)
+        Err(crate::Error::Sessions(Error::Limit))
     ));
     fs::remove_dir_all(root).unwrap();
 }
@@ -220,7 +225,7 @@ fn unreadable_session_roots_report_the_path_they_failed_on() {
     let error = list_with(&root, |_| false).unwrap_err();
     assert!(matches!(
         error,
-        Error::Storage {
+        crate::Error::Storage {
             operation: crate::StorageOperation::Read,
             ref path,
             ..
@@ -348,11 +353,11 @@ fn a_banner_before_the_listing_is_tolerated_and_the_last_line_wins() {
 fn output_that_is_not_a_listing_is_a_failure_not_an_empty_listing() {
     assert!(matches!(
         parse_session_list(b"not json\n"),
-        Err(Error::Json(_))
+        Err(crate::Error::Json(_))
     ));
     assert!(matches!(
         parse_session_list(r#"{"sessions":"unexpected"}"#.as_bytes()),
-        Err(Error::Json(_))
+        Err(crate::Error::Json(_))
     ));
 }
 
@@ -417,7 +422,7 @@ fn a_channel_that_never_prints_a_listing_still_times_out() {
     let mut stream = Answered(std::collections::VecDeque::new());
     assert!(matches!(
         read_listing(&mut stream, Duration::from_millis(20), || false),
-        Err(Error::SshTimeout)
+        Err(crate::Error::Ssh(ssh::Error::Timeout))
     ));
 }
 
@@ -440,7 +445,10 @@ fn a_complete_listing_ends_the_read_before_any_eof() {
 #[cfg(unix)]
 #[test]
 fn a_host_that_prints_nothing_is_a_closed_bridge() {
-    assert!(matches!(parse_session_list(b""), Err(Error::SshClosed)));
+    assert!(matches!(
+        parse_session_list(b""),
+        Err(crate::Error::Ssh(ssh::Error::Closed))
+    ));
 }
 
 #[cfg(unix)]
@@ -452,7 +460,7 @@ fn an_excessive_remote_listing_is_refused_rather_than_truncated() {
     );
     assert!(matches!(
         parse_session_list(listed(LIMIT + 1).as_bytes()),
-        Err(Error::SessionLimit)
+        Err(crate::Error::Sessions(Error::Limit))
     ));
 }
 
@@ -475,12 +483,12 @@ fn the_remote_listing_walks_the_shared_candidate_roots() {
         .get_args()
         .map(|arg| arg.to_str().unwrap())
         .collect();
-    let wrapped = format!("/bin/sh -c {}", crate::ssh::quote(&script));
+    let wrapped = format!("/bin/sh -c {}", ssh::quote(&script));
     assert_eq!(args.last(), Some(&wrapped.as_str()));
     assert!(args.contains(&"BatchMode=yes"));
     // A malformed target is rejected before anything is built or spawned.
     assert!(matches!(
         list_remote_sessions("-oProxyCommand=bad"),
-        Err(Error::InvalidSshTarget)
+        Err(crate::Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }

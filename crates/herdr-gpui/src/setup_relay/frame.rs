@@ -1,7 +1,8 @@
 //! The relay's wire format: a tag byte, a big-endian `u32` length, then at
 //! most `MAX_PAYLOAD` bytes. Both ends are this executable, so there is no
 //! version negotiation; anything malformed ends the session.
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 use std::io::{self, Read, Write};
 
 /// The most bytes one frame carries; larger terminal I/O is split.
@@ -74,7 +75,7 @@ impl Frame {
         reader.read_exact(&mut header[1..])?;
         let length = u32::from_be_bytes([header[1], header[2], header[3], header[4]]) as usize;
         if length > MAX_PAYLOAD {
-            return Err(Error::SetupRelayFrame);
+            return Err(Error::Frame.into());
         }
         let mut payload = vec![0u8; length];
         reader.read_exact(&mut payload)?;
@@ -97,7 +98,7 @@ impl Frame {
             EXIT if payload.len() == 4 => Self::Exit(i32::from_be_bytes([
                 payload[0], payload[1], payload[2], payload[3],
             ])),
-            _ => return Err(Error::SetupRelayFrame),
+            _ => return Err(Error::Frame.into()),
         };
         Ok(Some(frame))
     }
@@ -115,6 +116,6 @@ fn size_from(bytes: Option<&[u8]>) -> Result<Size> {
             rows: u16::from_be_bytes([*r0, *r1]),
             cols: u16::from_be_bytes([*c0, *c1]),
         }),
-        _ => Err(Error::SetupRelayFrame),
+        _ => Err(Error::Frame.into()),
     }
 }

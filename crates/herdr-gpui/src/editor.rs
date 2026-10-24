@@ -14,7 +14,10 @@
 //! When the editor is Neovim it listens on a private socket, and later
 //! files for the same tab open in that pane (see [`nvim`]).
 
+mod error;
 mod nvim;
+
+pub(crate) use error::Error;
 
 use crate::{HerdrWindow, NavigationTarget};
 use gpui::Context;
@@ -60,7 +63,7 @@ impl TryFrom<String> for EditorCommand {
         let command = command.trim();
         // The template is typed inside single quotes too.
         if command.len() > MAX_COMMAND_BYTES || !quotable(command) {
-            return Err(crate::Error::EditorCommand);
+            return Err(Error::Command.into());
         }
         Ok(Self(command.to_owned()))
     }
@@ -149,13 +152,13 @@ pub(crate) fn command_line(
     socket: Option<&Path>,
 ) -> crate::Result<String> {
     if !SUPPORTED {
-        return Err(crate::Error::EditorUnsupported);
+        return Err(Error::Unsupported.into());
     }
     let path = target
         .path
         .to_str()
         .filter(|path| quotable(path) && target.path.is_absolute())
-        .ok_or(crate::Error::EditorPath)?;
+        .ok_or(Error::Path)?;
     let line = target.line.unwrap_or(1).max(1);
     let script = command.map_or_else(|| DEFAULT_SCRIPT.to_owned(), EditorCommand::script);
     let Some(socket) = socket
@@ -197,13 +200,13 @@ pub(crate) struct Job {
 /// The new pane a `pane.split` response names.
 fn created_pane(response: &Value) -> crate::Result<String> {
     if let Some(error) = response.get("error").filter(|error| !error.is_null()) {
-        return Err(crate::Error::DaemonResponse(error.clone()));
+        return Err(crate::daemon::Error::Response(error.clone()).into());
     }
     response["result"]["pane"]["pane_id"]
         .as_str()
         .filter(|id| !id.is_empty())
         .map(str::to_owned)
-        .ok_or(crate::Error::EditorResponse)
+        .ok_or(Error::Response.into())
 }
 
 impl HerdrWindow {
@@ -227,7 +230,7 @@ impl HerdrWindow {
 
     /// Reports why `target` did not open in the editor. A path no shell
     /// line can carry opens in the system's default app instead, as
-    /// [`crate::Error::EditorPath`] says, under the rule a clicked path
+    /// [`Error::Path`] says, under the rule a clicked path
     /// follows, so a listed file is never run.
     fn editor_failed(
         &mut self,
@@ -235,7 +238,7 @@ impl HerdrWindow {
         error: crate::Error,
         cx: &mut Context<Self>,
     ) {
-        if matches!(error, crate::Error::EditorPath) {
+        if matches!(error, crate::Error::Editor(Error::Path)) {
             self.open_in_system_app(target.path.clone(), cx);
         }
         self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
@@ -298,7 +301,10 @@ impl HerdrWindow {
             let _ = this.update(cx, |this, cx| {
                 let gone = match opened {
                     Ok(()) => false,
-                    Err(crate::Error::EditorRemote | crate::Error::EditorRemoteLaunch(_)) => true,
+                    Err(
+                        crate::Error::Editor(Error::Remote)
+                        | crate::Error::Editor(Error::RemoteLaunch(_)),
+                    ) => true,
                     Err(error) => {
                         this.editor_failed(&target, error, cx);
                         false
@@ -324,7 +330,7 @@ impl HerdrWindow {
 
     fn start_editor(&mut self, target: &EditorTarget, beside: Option<&str>) -> crate::Result<()> {
         if self.editor_open.is_some() && self.editor_current() {
-            return Err(crate::Error::EditorBusy);
+            return Err(Error::Busy.into());
         }
         let socket = nvim::new_socket();
         let line = command_line(
@@ -333,7 +339,7 @@ impl HerdrWindow {
             socket.as_deref(),
         )?;
         if self.selected_is_remote() {
-            return Err(crate::Error::EditorNoPane);
+            return Err(Error::NoPane.into());
         }
         let snapshot = self
             .live
@@ -344,7 +350,7 @@ impl HerdrWindow {
         let pane = beside
             .or(snapshot.focused_pane_id.as_deref())
             .and_then(|id| snapshot.panes.iter().find(|pane| pane.pane_id == id))
-            .ok_or(crate::Error::EditorNoPane)?;
+            .ok_or(Error::NoPane)?;
         let cwd = pane
             .foreground_cwd
             .clone()
@@ -429,7 +435,7 @@ impl HerdrWindow {
             return;
         };
         let typed = result
-            .map_err(crate::Error::EditorRequest)
+            .map_err(|error| crate::Error::from(Error::Request(error)))
             .and_then(|response| created_pane(&response))
             .and_then(|pane| {
                 let handle = self.endpoints[self.selected_endpoint]

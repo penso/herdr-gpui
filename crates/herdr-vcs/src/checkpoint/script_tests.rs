@@ -29,7 +29,7 @@ fn listings_parse_newest_first_with_their_branch_and_diff() {
     ] {
         assert!(matches!(
             parse_list(malformed),
-            Err(Error::CheckpointOutput)
+            Err(crate::Error::Checkpoint(Error::Output))
         ));
     }
 }
@@ -46,7 +46,7 @@ fn captures_report_what_they_created() {
     for malformed in ["", "created ../../heads/main", "created "] {
         assert!(matches!(
             parse_capture(malformed),
-            Err(Error::CheckpointOutput)
+            Err(crate::Error::Checkpoint(Error::Output))
         ));
     }
 }
@@ -60,7 +60,7 @@ fn labels_are_one_bounded_line() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod live {
-    use crate::Error;
+    use crate::checkpoint::Error;
     use crate::checkpoint::{Checkout, KEEP, script};
     use herdr_client::{ScriptHost, ScriptLimits, run_script};
     use herdr_usage::Host;
@@ -338,7 +338,7 @@ mod live {
         let id = repo.capture("before", "0000000000000001").unwrap();
         assert!(matches!(
             repo.restore("0000000000000099", "0000000000000002"),
-            Err(Error::CheckpointMissing)
+            Err(crate::Error::Checkpoint(Error::Missing))
         ));
 
         let git_dir = git(&repo.checkout, &["rev-parse", "--git-dir"]);
@@ -346,7 +346,7 @@ mod live {
         fs::write(&merge_head, git(&repo.checkout, &["rev-parse", "HEAD"])).unwrap();
         assert!(matches!(
             repo.restore(&id, "0000000000000002"),
-            Err(Error::CheckpointBusy)
+            Err(crate::Error::Checkpoint(Error::Busy))
         ));
         fs::remove_file(&merge_head).unwrap();
 
@@ -365,7 +365,7 @@ mod live {
         );
         assert!(matches!(
             sh(&script::restore(&other, &id, "x", "0000000000000002", KEEP)),
-            Err(Error::CheckpointMissing)
+            Err(crate::Error::Checkpoint(Error::Missing))
         ));
         let bucket = sh("printf other | git hash-object --stdin\n").unwrap();
         let feature = git(
@@ -382,12 +382,12 @@ mod live {
         );
         assert!(matches!(
             sh(&script::restore(&other, &id, "x", "0000000000000002", KEEP)),
-            Err(Error::CheckpointBranch)
+            Err(crate::Error::Checkpoint(Error::Branch))
         ));
         // Nobody has `feature` checked out any more.
         assert!(matches!(
             sh(&script::list(&repo.target)),
-            Err(Error::CheckpointCheckout)
+            Err(crate::Error::Checkpoint(Error::Checkout))
         ));
 
         let empty = tempfile::tempdir().unwrap();
@@ -396,7 +396,7 @@ mod live {
         let unborn = Checkout::new(Host::Local, key.trim(), Some("main")).unwrap();
         assert!(matches!(
             sh(&script::capture(&unborn, "x", "0000000000000001", KEEP)),
-            Err(Error::CheckpointUnborn)
+            Err(crate::Error::Checkpoint(Error::Unborn))
         ));
     }
 }

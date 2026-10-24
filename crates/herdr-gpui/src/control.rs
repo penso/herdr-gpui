@@ -18,7 +18,7 @@ pub(crate) use client::send_focus;
 pub(crate) use client::send_notes;
 pub(crate) use client::{run, send_link, status as exit_status};
 use gpui::App;
-pub(crate) use herdr_control_protocol::Error as ControlError;
+pub(crate) use herdr_control_protocol::Error;
 use herdr_control_protocol::{protocol, socket};
 use protocol::Caller;
 pub use protocol::ErrorCode;

@@ -164,9 +164,11 @@ fn braille(
     let rows = rows(frames);
     braille_cell(selector, size).with_animation(
         selector,
-        Animation::new(Duration::from_millis(frame_ms * frames.len() as u64))
-            .repeat_synced()
-            .with_max_fps(1000. / frame_ms as f32),
+        Animation::new(crate::motion::duration(Duration::from_millis(
+            frame_ms * frames.len() as u64,
+        )))
+        .repeat_synced()
+        .with_max_fps(1000. / frame_ms as f32),
         move |cell, delta| {
             let glyph = frames[frame_index(frames.len(), delta)];
             cell.child(dots(glyph, rows, size, color))

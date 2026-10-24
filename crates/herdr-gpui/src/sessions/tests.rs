@@ -81,8 +81,10 @@ fn a_failed_scan_keeps_the_last_list_and_reports_why() {
     };
     let (tx, rx) = mpsc::sync_channel(1);
     sessions.pending = Some(rx);
-    tx.send(Err(Error::Client(herdr_client::Error::SessionLimit)))
-        .unwrap();
+    tx.send(Err(Error::Client(herdr_client::Error::Sessions(
+        herdr_client::sessions::Error::Limit,
+    ))))
+    .unwrap();
     assert!(sessions.poll_with(false, now(), || unreachable!("closed")));
     assert_eq!(sessions.entries.len(), 1);
     assert_eq!(sessions.error.as_deref(), Some("too many sessions to list"));
@@ -329,7 +331,7 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     let mut devices = Devices::default();
     let asked_at = now();
     assert!(devices.poll_with(&targets, true, asked_at, |_| {
-        Err(herdr_client::Error::SshTimeout)
+        Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
     }));
     settle(&mut devices, &targets);
     assert!(matches!(
@@ -344,7 +346,7 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     );
     assert!(
         devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH, |_| {
-            Err(herdr_client::Error::SshTimeout)
+            Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
         })
     );
 }

@@ -442,9 +442,11 @@ fn working_orbit(size: f32, color: u32) -> impl IntoElement {
 fn spin(mark: Svg, id: &'static str, period_ms: u64) -> impl IntoElement {
     mark.with_animation(
         id,
-        Animation::new(std::time::Duration::from_millis(period_ms))
-            .repeat_synced()
-            .with_max_fps(30.),
+        Animation::new(crate::motion::duration(std::time::Duration::from_millis(
+            period_ms,
+        )))
+        .repeat_synced()
+        .with_max_fps(30.),
         |mark, delta| mark.with_transformation(Transformation::rotate(percentage(delta))),
     )
 }

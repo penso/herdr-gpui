@@ -410,7 +410,7 @@ impl Cache {
                 }
                 Err(error) => {
                     let message = error.to_string();
-                    if let crate::Error::GitHubRepositoryHidden { repository, .. } = error
+                    if let crate::Error::RepositoryHidden { repository, .. } = error
                         && let Some(repo_key) = input.repo_key.clone()
                     {
                         let until = now + HIDDEN_BACKOFF;

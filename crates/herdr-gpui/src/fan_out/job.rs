@@ -3,6 +3,7 @@
 
 use super::{
     error::{Error, Result, Step, script},
+    journal::Resume,
     plan::{DiffStat, Lane, parse_stats, stats_script},
 };
 use crate::teleport::{
@@ -86,7 +87,7 @@ struct SetUp {
 fn sites(
     request: &Request,
     commit: &str,
-    report: &impl Fn(Report),
+    report: &impl Fn(Report) -> Result<()>,
     cancelled: &AtomicBool,
 ) -> (Vec<Option<Site>>, Vec<SetUp>) {
     let origin = &request.origin;
@@ -107,7 +108,7 @@ fn sites(
         if let Some(known) = set_up.iter().find(|known| &known.endpoint_id == endpoint) {
             let site = known.result.as_ref().map(|(site, _)| site.clone());
             if site.is_none() {
-                report(Report::Lane(
+                let _ = report(Report::Lane(
                     index,
                     Progress::Failed(Error::HostUnavailable {
                         host: destination.place.label.clone(),
@@ -117,11 +118,11 @@ fn sites(
             sites.push(site);
             continue;
         }
-        report(Report::Lane(index, Progress::SettingUp));
+        let _ = report(Report::Lane(index, Progress::SettingUp));
         let result = match set_up_host(origin, destination, commit, cancelled) {
             Ok(result) => Some(result),
             Err(error) => {
-                report(Report::Lane(index, Progress::Failed(error)));
+                let _ = report(Report::Lane(index, Progress::Failed(error)));
                 None
             }
         };
@@ -159,18 +160,22 @@ fn set_up_host(
 /// Resolve the base commit, set up every host, then create every lane's
 /// worktree one at a time, since concurrent `git worktree add` runs contend
 /// for a repository's ref locks, and start the agents side by side.
-pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cancelled: &AtomicBool) {
+pub(crate) fn launch(
+    request: &Request,
+    report: &(impl Fn(Report) -> Result<()> + Sync),
+    cancelled: &AtomicBool,
+) {
     let commit = match teleport::base_commit(&request.origin, &request.base, cancelled) {
         Ok(commit) => commit,
         Err(error) => {
-            report(Report::Lane(0, Progress::Failed(Error::Dispatch(error))));
+            let _ = report(Report::Lane(0, Progress::Failed(Error::Dispatch(error))));
             for index in 1..request.lanes.len() {
-                report(Report::Lane(index, Progress::Failed(Error::NoBase)));
+                let _ = report(Report::Lane(index, Progress::Failed(Error::NoBase)));
             }
             return;
         }
     };
-    report(Report::Base(commit.clone()));
+    let _ = report(Report::Base(commit.clone()));
     let (sites, set_up) = sites(request, &commit, report, cancelled);
     let mut created = Vec::new();
     for (index, (lane, site)) in request.lanes.iter().zip(&sites).enumerate() {
@@ -178,7 +183,7 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
             continue;
         };
         if cancelled.load(Ordering::Acquire) {
-            report(Report::Lane(index, Progress::Failed(Error::Cancelled)));
+            let _ = report(Report::Lane(index, Progress::Failed(Error::Cancelled)));
             continue;
         }
         if site
@@ -186,7 +191,7 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
             .as_ref()
             .is_some_and(|agents| !agents.contains(&lane.kind))
         {
-            report(Report::Lane(
+            let _ = report(Report::Lane(
                 index,
                 Progress::Failed(Error::AgentMissing {
                     agent: lane.kind.name(),
@@ -195,13 +200,20 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
             ));
             continue;
         }
-        report(Report::Lane(index, Progress::CreatingWorktree));
+        // A step not saved could be offered again after a crash, so its
+        // script does not run.
+        if let Err(error) = report(Report::Lane(index, Progress::CreatingWorktree)) {
+            let _ = report(Report::Lane(index, Progress::Failed(error)));
+            continue;
+        }
         match create(site, lane, &commit, cancelled) {
             Ok(checkout) => {
-                report(Report::Lane(index, Progress::Created(checkout.clone())));
+                let _ = report(Report::Lane(index, Progress::Created(checkout.clone())));
                 created.push((index, lane, checkout));
             }
-            Err(error) => report(Report::Lane(index, Progress::Failed(error))),
+            Err(error) => {
+                let _ = report(Report::Lane(index, Progress::Failed(error)));
+            }
         }
     }
     // The new branches keep the shipped commit; its references can go.
@@ -211,18 +223,19 @@ pub(crate) fn launch(request: &Request, report: &(impl Fn(Report) + Sync), cance
     std::thread::scope(|scope| {
         for (index, lane, checkout) in &created {
             let run = move || {
-                let progress = match start(request, *index, lane, checkout, report, cancelled) {
+                let started = start(*index, lane, checkout, &request.prompt, report, cancelled);
+                let progress = match started {
                     Ok(()) => Progress::Running,
                     Err(error) => Progress::Failed(error),
                 };
-                report(Report::Lane(*index, progress));
+                let _ = report(Report::Lane(*index, progress));
             };
             let spawned = std::thread::Builder::new()
                 .name("herdr-fan-out-lane".into())
                 .spawn_scoped(scope, run);
             if let Err(error) = spawned {
                 tracing::warn!(%error, "could not start a fan-out lane worker");
-                report(Report::Lane(
+                let _ = report(Report::Lane(
                     *index,
                     Progress::Failed(Error::Script {
                         step: Step::StartAgent,
@@ -268,14 +281,15 @@ fn create(site: &Site, lane: &Lane, commit: &str, cancelled: &AtomicBool) -> Res
 /// Start the lane's agent in its first pane and, once it is ready, send it
 /// the prompt.
 fn start(
-    request: &Request,
     index: usize,
     lane: &Lane,
     checkout: &Checkout,
-    report: &impl Fn(Report),
+    prompt: &str,
+    report: &impl Fn(Report) -> Result<()>,
     cancelled: &AtomicBool,
 ) -> Result<()> {
-    report(Report::Lane(index, Progress::StartingAgent));
+    // Unsaved, a crash after the agent starts would offer to start it again.
+    report(Report::Lane(index, Progress::StartingAgent))?;
     let start = Host::herdr_line(&[
         "agent",
         "start",
@@ -291,14 +305,46 @@ fn start(
         .host
         .capture(&start, cancelled)
         .map_err(script(Step::StartAgent))?;
-    report(Report::Lane(index, Progress::Prompting));
+    send_prompt(index, checkout, prompt, report, cancelled)
+}
+
+fn send_prompt(
+    index: usize,
+    checkout: &Checkout,
+    prompt: &str,
+    report: &impl Fn(Report) -> Result<()>,
+    cancelled: &AtomicBool,
+) -> Result<()> {
+    report(Report::Lane(index, Progress::Prompting))?;
     // The pane is the target: an agent name could match one started elsewhere.
-    let prompt = Host::herdr_line(&["agent", "prompt", &checkout.pane_id, &request.prompt]);
+    let prompt = Host::herdr_line(&["agent", "prompt", &checkout.pane_id, prompt]);
     checkout
         .host
         .capture(&prompt, cancelled)
         .map_err(script(Step::Prompt))?;
     Ok(())
+}
+
+/// Finish lane `index` of an interrupted fan-out, which the user asked for:
+/// start its agent first when `from` says so, then send the prompt.
+pub(crate) fn resume(
+    from: Resume,
+    index: usize,
+    lane: &Lane,
+    checkout: &Checkout,
+    prompt: &str,
+    report: &impl Fn(Report) -> Result<()>,
+    cancelled: &AtomicBool,
+) {
+    let result = match from {
+        Resume::Start => start(index, lane, checkout, prompt, report, cancelled),
+        Resume::Prompt => send_prompt(index, checkout, prompt, report, cancelled),
+    };
+    let progress = match result {
+        Ok(()) => Progress::Running,
+        Err(error) => Progress::Failed(error),
+    };
+    let _ = report(Report::Lane(index, progress));
 }
 
 /// The agent kinds installed on `host`, in [`AgentKind::ALL`] order.

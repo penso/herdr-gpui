@@ -15,7 +15,10 @@ fn a_reconnected_device_is_asked_again_at_once() {
     assert_eq!(incoming.try_iter().count(), 1);
     assert!(
         outgoing
-            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));
@@ -47,7 +50,9 @@ fn a_disconnected_host_stops_its_reads_until_one_device_is_back() {
     assert!(links::is_offline(&avatars.offline, "devbox"));
     assert!(matches!(
         repo_owner(DEVBOX, &avatars.offline),
-        Err(herdr_client::Error::SshCancelled)
+        Err(herdr_client::Error::Ssh(
+            herdr_client::ssh::Error::Cancelled
+        ))
     ));
 
     avatars.follow("a", "devbox", Some(now));
@@ -72,7 +77,12 @@ fn a_read_stopped_by_a_disconnect_is_due_on_the_next_request() {
     assert_eq!(incoming.try_iter().count(), 1);
     assert!(
         outgoing
-            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshCancelled)))
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(
+                    herdr_client::ssh::Error::Cancelled
+                ))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(now));
@@ -98,8 +108,8 @@ fn a_read_failing_after_its_device_reconnected_is_asked_again_at_once() {
     assert!(incoming.try_recv().is_err());
 
     for error in [
-        herdr_client::Error::SshCancelled,
-        herdr_client::Error::SshTimeout,
+        herdr_client::Error::Ssh(herdr_client::ssh::Error::Cancelled),
+        herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout),
     ] {
         assert!(outgoing.send((DEVBOX.to_owned(), Err(error))).is_ok());
         assert!(avatars.poll(back + Duration::from_secs(1)));
@@ -120,7 +130,10 @@ fn a_read_failing_on_the_same_connection_waits_for_its_retry() {
     assert_eq!(incoming.try_iter().count(), 1);
     assert!(
         outgoing
-            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));

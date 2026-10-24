@@ -1,7 +1,6 @@
 //! What "Send to agent" hands back: the user's picks and notes as Markdown.
 //! They go to the agent's pane through the running Herdr UI, as page notes
 //! do, or else to a file written whole so a waiting agent never reads half.
-use crate::control::ControlError;
 use crate::control::NotesTo;
 use std::{
     io::Write,
@@ -126,9 +125,9 @@ pub(super) fn deliver(
         Err(error) => error,
     };
     let rejected = match &unreached {
-        crate::Error::Control(ControlError::Unavailable { .. })
+        crate::Error::Control(crate::control::Error::Unavailable { .. })
         | crate::Error::MissingStateRoot => true,
-        crate::Error::Control(ControlError::Rejected { code, .. }) => {
+        crate::Error::Control(crate::control::Error::Rejected { code, .. }) => {
             *code != crate::control::ErrorCode::Timeout
         }
         _ => false,

@@ -3,6 +3,7 @@
 
 mod batch;
 mod cache;
+mod error;
 mod fetch;
 mod lookup;
 mod model;
@@ -15,6 +16,7 @@ mod tests;
 
 pub use {
     cache::Cache,
+    error::Error,
     fetch::{local_checkout, run, run_bytes},
     lookup::Lookup,
     model::{

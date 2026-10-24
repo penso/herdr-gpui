@@ -138,6 +138,7 @@ fn valid_directory(dir: &str) -> bool {
 #[cfg(test)]
 mod validation_tests {
     use super::*;
+    use crate::ssh;
 
     #[test]
     fn cleanup_rejects_entire_invalid_batches_before_ssh() {
@@ -191,7 +192,7 @@ mod validation_tests {
         ));
         assert!(matches!(
             remove_uploaded_files("-bad", &[]),
-            Err(Error::InvalidSshTarget)
+            Err(Error::Ssh(ssh::Error::InvalidTarget))
         ));
     }
 

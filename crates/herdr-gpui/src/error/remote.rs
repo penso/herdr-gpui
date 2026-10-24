@@ -1,60 +1,50 @@
-//! Errors from `herdr-remote`, folded into the app's own variants so callers
-//! match `Error::Provider`, `Error::Cloud`, and the rest wherever they come
-//! from, and a config failure comes back as the app's own error.
+//! Errors from `herdr-remote`, wrapped once as `Error::Remote`. A cloud,
+//! provider, sandbox image, or teleport failure raised here reaches the root
+//! through `herdr_remote::Error` too, so each has one place to be matched.
 
 use super::Error;
-use herdr_remote::Error as Remote;
 
-impl From<Remote> for Error {
-    fn from(error: Remote) -> Self {
+/// Not `#[from]`: `herdr-remote` loads the app's config through a loader the
+/// app installs, and boxes what it returns. That boxed failure is the app's
+/// own error coming back, so it is unboxed rather than wrapped; any other
+/// boxed failure, and every other variant, stays a `herdr-remote` error.
+impl From<herdr_remote::Error> for Error {
+    fn from(error: herdr_remote::Error) -> Self {
         match error {
-            Remote::Client(error) => Self::Client(error),
-            #[cfg(feature = "cloud")]
-            Remote::Cloud(error) => Self::Cloud(error),
-            // The app's loader boxed its own error; anything else stays boxed.
-            Remote::Config(error) => match error.downcast::<Error>() {
+            herdr_remote::Error::Config(error) => match error.downcast::<Error>() {
                 Ok(error) => *error,
-                Err(error) => Self::Remote(Remote::Config(error)),
+                Err(error) => Self::Remote(herdr_remote::Error::Config(error)),
             },
-            Remote::Credentials(error) => Self::Credentials(error),
-            Remote::Io(error) => Self::Io(error),
-            Remote::Json(error) => Self::Json(error),
-            Remote::Path(herdr_client::local_path::PathError::MissingHome) => Self::MissingHome,
-            Remote::Path(herdr_client::local_path::PathError::RelativeConfigRoot) => {
-                Self::RelativeConfigRoot
-            }
-            Remote::PreferencesPath => Self::PreferencesPath,
-            #[cfg(feature = "cloud")]
-            Remote::Provider(error) => Self::Provider(error),
-            #[cfg(feature = "cloud")]
-            Remote::SandboxImage(error) => Self::SandboxImage(error),
-            Remote::Teleport(error) => Self::Teleport(error),
-            error @ Remote::NoConfig => Self::Remote(error),
+            error => Self::Remote(error),
         }
     }
 }
 
-/// A provider's own error, as `herdr_remote` itself converts it.
-macro_rules! provider_errors {
-    ($($feature:literal $module:ident),* $(,)?) => {
-        $(#[cfg(feature = $feature)]
-        impl From<herdr_remote::$module::Error> for Error {
-            fn from(error: herdr_remote::$module::Error) -> Self {
-                Remote::from(error).into()
+/// A part of `herdr-remote`'s own error, wrapped as that crate wraps it.
+macro_rules! remote_errors {
+    ($($(#[$meta:meta])* $error:path),* $(,)?) => {
+        $($(#[$meta])*
+        impl From<$error> for Error {
+            fn from(error: $error) -> Self {
+                herdr_remote::Error::from(error).into()
             }
         })*
     };
 }
 
-provider_errors! {
+remote_errors! {
     // keep-sorted start
-    "azure" azure,
-    "boat" boat,
-    "coder" coder,
-    "container" container,
-    "daytona" daytona,
-    "opensandbox" opensandbox,
-    "railway" railway,
-    "sprites" sprites,
+    #[cfg(feature = "azure")] herdr_remote::azure::Error,
+    #[cfg(feature = "boat")] herdr_remote::boat::Error,
+    #[cfg(feature = "cloud")] herdr_remote::cloud::Error,
+    #[cfg(feature = "cloud")] herdr_remote::cloud::ProviderError,
+    #[cfg(feature = "cloud")] herdr_remote::cloud::image::Error,
+    #[cfg(feature = "coder")] herdr_remote::coder::Error,
+    #[cfg(feature = "container")] herdr_remote::container::Error,
+    #[cfg(feature = "daytona")] herdr_remote::daytona::Error,
+    #[cfg(feature = "opensandbox")] herdr_remote::opensandbox::Error,
+    #[cfg(feature = "railway")] herdr_remote::railway::Error,
+    #[cfg(feature = "sprites")] herdr_remote::sprites::Error,
+    herdr_remote::teleport::Error,
     // keep-sorted end
 }

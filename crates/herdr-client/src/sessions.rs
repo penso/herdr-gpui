@@ -1,9 +1,9 @@
 //! The named local sessions one machine's Herdr installation owns, and which of
 //! them is running. A session socket outlives the daemon that created it, so a
 //! session's state can only come from a connect attempt, never the file itself.
-use crate::ssh::{CANDIDATES, script_command};
+use crate::ssh::{self, CANDIDATES, script_command};
 use crate::{
-    Error, Result, Stream,
+    Result, Stream,
     catalog::validate_target,
     discovery::{config_dir, valid_session_name},
     session_socket,
@@ -57,7 +57,7 @@ fn stop_then_delete(
     delete: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
     match stop() {
-        Ok(()) | Err(Error::SessionDeleteFailed(_)) => {
+        Ok(()) | Err(crate::Error::Sessions(Error::DeleteFailed(_))) => {
             // `session stop` refuses an already-stopped/missing session. The
             // delete command is authoritative: it refuses any still-live daemon,
             // including one restarted concurrently by another client.
@@ -70,10 +70,10 @@ fn stop_then_delete(
 
 pub(crate) fn validate_delete(name: &str) -> Result<()> {
     if !valid_session_name(name) {
-        return Err(Error::InvalidSession);
+        return Err(crate::Error::InvalidSession);
     }
     if name == DEFAULT {
-        return Err(Error::DefaultSession);
+        return Err(Error::DeleteDefault.into());
     }
     Ok(())
 }
@@ -111,11 +111,11 @@ pub(crate) fn delete_command(mut command: std::process::Command, timeout: Durati
                 break if status.success() {
                     Ok(())
                 } else {
-                    Err(Error::SessionDeleteFailed(status))
+                    Err(Error::DeleteFailed(status).into())
                 };
             }
-            Err(error) => break Err(Error::Io(error)),
-            Ok(None) if started.elapsed() >= timeout => break Err(Error::SessionDeleteTimeout),
+            Err(error) => break Err(crate::Error::Io(error)),
+            Ok(None) if started.elapsed() >= timeout => break Err(Error::DeleteTimeout.into()),
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
         }
     };
@@ -170,10 +170,10 @@ pub fn list_local_sessions(development: bool) -> Result<Vec<LocalSession>> {
 
 fn list_with(dir: &Path, running: impl Fn(&Path) -> bool) -> Result<Vec<LocalSession>> {
     let names = names(dir).map_err(|error| {
-        Error::storage(crate::StorageOperation::Read, &session_root(dir), error)
+        crate::Error::storage(crate::StorageOperation::Read, &session_root(dir), error)
     })?;
     if names.len() > LIMIT {
-        return Err(Error::SessionLimit);
+        return Err(Error::Limit.into());
     }
     names
         .into_iter()
@@ -299,7 +299,7 @@ fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
 /// listing is everything printed before the exit, bounded as on Unix.
 #[cfg(windows)]
 fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
-    let (_, output) = crate::ssh::run(&mut script_command(target, script)?, DEADLINE, || false)?;
+    let (_, output) = ssh::run(&mut script_command(target, script)?, DEADLINE, || false)?;
     Ok(output)
 }
 
@@ -320,7 +320,7 @@ fn read_listing(
     let mut gone = gone;
     loop {
         if started.elapsed() >= timeout {
-            return Err(Error::SshTimeout);
+            return Err(ssh::Error::Timeout.into());
         }
         match stream.read(&mut buffer) {
             // The child closed its end: the listing is whatever came before, which
@@ -329,7 +329,7 @@ fn read_listing(
             Ok(read) => {
                 output.extend_from_slice(&buffer[..read]);
                 if output.len() > MAX_OUTPUT {
-                    return Err(Error::SshOutputLimit);
+                    return Err(ssh::Error::OutputLimit.into());
                 }
                 if listed_sessions(&output) {
                     return Ok(output);
@@ -370,7 +370,7 @@ pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
     // An empty response is the child closing stdout without printing anything:
     // SSH failed, or no candidate ran. It is not a host that has no sessions.
     if output.is_empty() {
-        return Err(Error::SshClosed);
+        return Err(ssh::Error::Closed.into());
     }
     let mut listed = None;
     let mut invalid = None;
@@ -383,12 +383,12 @@ pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
     let sessions = match (listed, invalid) {
         (Some(list), _) => list.sessions,
         // Report the last failure: the banner is noise, the JSON was the answer.
-        (None, Some(error)) => return Err(Error::Json(error)),
+        (None, Some(error)) => return Err(crate::Error::Json(error)),
         // Unreachable after the empty check: a non-empty output has a line to fail.
-        (None, None) => return Err(Error::SshClosed),
+        (None, None) => return Err(ssh::Error::Closed.into()),
     };
     if sessions.len() > LIMIT {
-        return Err(Error::SessionLimit);
+        return Err(Error::Limit.into());
     }
     let mut sessions: Vec<RemoteSession> = sessions
         .into_iter()
@@ -399,6 +399,9 @@ pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
     });
     Ok(sessions)
 }
+
+mod error;
+pub use error::Error;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

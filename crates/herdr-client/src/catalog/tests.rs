@@ -114,7 +114,7 @@ fn schema_errors_keep_sources_but_redact_display() {
     ));
     assert!(matches!(
         validate_target("-oSecret"),
-        Err(Error::InvalidSshTarget)
+        Err(Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }
 

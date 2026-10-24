@@ -1,7 +1,7 @@
 //! Native Linux packages are installed by their owning package manager. All
 //! queries, downloads, authentication prompts and process waits run on the worker.
 use super::{
-    error::{Result, UpdateError as Error},
+    error::{Error, Result},
     install,
     release::{self, Format},
 };

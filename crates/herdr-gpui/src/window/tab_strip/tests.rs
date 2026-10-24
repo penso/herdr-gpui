@@ -656,3 +656,6 @@ mod divider;
 
 /// Every tab layout draws its tabs as wide as the strip measures them.
 mod layouts;
+
+/// Where the agent buttons draw, and what a click on one starts.
+mod launcher;

@@ -477,7 +477,7 @@ impl HerdrWindow {
                 .saved_ssh()
                 .is_some_and(|(target, session)| request.same_host(target, session))
         }) {
-            Some(endpoint) => Err(crate::Error::DeviceExists(endpoint.label.clone())),
+            Some(endpoint) => Err(super::Error::Exists(endpoint.label.clone()).into()),
             None => Ok(()),
         }
     }
@@ -534,7 +534,7 @@ impl HerdrWindow {
     fn refuse_duplicate(&mut self, error: &crate::Error, cx: &mut Context<Self>) -> bool {
         if !matches!(
             error,
-            crate::Error::DeviceExists(_) | crate::Error::DeviceAdding
+            crate::Error::Devices(super::Error::Exists(_) | super::Error::Adding)
         ) {
             return false;
         }
@@ -678,7 +678,7 @@ impl HerdrWindow {
                 }
                 this.set_device_error(Some(error.to_string()));
                 let offer = match error {
-                    crate::Error::DeviceServerRestart => Offer::Restart,
+                    crate::Error::Devices(super::Error::ServerRestart) => Offer::Restart,
                     _ => Offer::Terminal,
                 };
                 if let Some(form) = &mut this.menu.device_setup {

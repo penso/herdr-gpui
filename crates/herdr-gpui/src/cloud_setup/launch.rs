@@ -92,7 +92,7 @@ impl HerdrWindow {
             return;
         };
         let typed = result
-            .map_err(crate::Error::WorktreeScriptsRequest)
+            .map_err(|error| crate::Error::from(worktree_scripts::Error::Request(error)))
             .and_then(|response| worktree_scripts::created_tab(&response))
             .and_then(|(tab, pane)| {
                 let line =

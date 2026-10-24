@@ -19,10 +19,7 @@
 //! separate winget-managed layout to defer to.
 mod authenticode;
 
-use super::{
-    error::{Result, UpdateError},
-    release,
-};
+use super::{error::Result, release};
 use std::{
     env,
     ffi::OsString,
@@ -127,7 +124,7 @@ pub(crate) fn prepare(
     let stage = tempfile::Builder::new()
         .prefix(STAGE_PREFIX)
         .tempdir()
-        .map_err(UpdateError::Io)?;
+        .map_err(crate::Error::Io)?;
     // The name is one the signed manifest allowed: `Herdr-VERSION-TARGET-setup.exe`.
     let installer = stage.path().join(&offer.asset.name);
     release::download(offer, &installer, cancel, progress)?;
@@ -149,7 +146,7 @@ fn hold(path: &Path) -> Result<File> {
         .read(true)
         .share_mode(FILE_SHARE_READ)
         .open(path)
-        .map_err(UpdateError::Io)
+        .map_err(crate::Error::Io)
 }
 
 impl Prepared {
@@ -157,7 +154,7 @@ impl Prepared {
     /// signature and `publisher` made it.
     fn verify(&self, publisher: &str, cancel: &AtomicBool) -> Result<()> {
         let mut file = &self.file;
-        file.seek(SeekFrom::Start(0)).map_err(UpdateError::Io)?;
+        file.seek(SeekFrom::Start(0)).map_err(crate::Error::Io)?;
         release::copy_archive(file, io::sink(), &self.asset, cancel, |_, _| {})?;
         authenticode::verify(&self.file, &self.installer, publisher)?;
         Ok(())
@@ -239,7 +236,7 @@ fn installer_args(log: &Path) -> Vec<OsString> {
 /// Rechecks the held installer right before the UI may commit.
 pub(crate) fn install_and_restart(prepared: Prepared, cancel: &AtomicBool) -> Result<RestartGuard> {
     if cancel.load(Ordering::Relaxed) {
-        return Err(UpdateError::Cancelled);
+        return Err(crate::Error::Cancelled);
     }
     if let Some(error) = unsupported() {
         return Err(error.into());
@@ -252,11 +249,11 @@ pub(crate) fn install_and_restart(prepared: Prepared, cancel: &AtomicBool) -> Re
 
 /// Homebrew bundles are macOS-only; the cask lookup never gets this far.
 pub(crate) fn effective_uid() -> Result<u32> {
-    Err(UpdateError::UnsupportedTarget)
+    Err(crate::Error::UnsupportedTarget)
 }
 
 pub(crate) fn mac_bundle(_executable: &Path) -> Result<PathBuf> {
-    Err(UpdateError::NotHerdrBundle)
+    Err(crate::Error::NotHerdrBundle)
 }
 
 /// Setup itself replaces the files, so no helper mode exists here.

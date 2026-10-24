@@ -158,9 +158,15 @@ fn fallback_respects_cancellation_direct_target_and_ordinary_limit() {
             .complete_input(ClientPaneInputEvent::Paste(text))
             .unwrap_err();
         match mode {
-            0 => assert!(matches!(error, Error::ClipboardImageInputTarget)),
+            0 => assert!(matches!(
+                error,
+                Error::Clipboard(clipboard::Error::InputTarget)
+            )),
             1 => assert!(matches!(error, Error::Protocol(protocol::Error::Encode(_)))),
-            2 => assert!(matches!(error, Error::ClipboardImageCancelled)),
+            2 => assert!(matches!(
+                error,
+                Error::Clipboard(clipboard::Error::Cancelled)
+            )),
             _ => assert!(matches!(error, Error::Disconnected)),
         }
         if mode != 3 {

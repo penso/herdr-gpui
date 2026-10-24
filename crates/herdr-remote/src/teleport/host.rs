@@ -55,6 +55,25 @@ impl Host {
     /// Most a query may print.
     pub const QUERY_OUTPUT: u64 = QUERY_OUTPUT;
 
+    /// Names the daemon this host scripts: its route, session, and
+    /// installation, so a saved reference is never applied to another
+    /// daemon behind the same endpoint ID.
+    pub fn identity(&self) -> String {
+        let route = match &self.route {
+            Route::Local => "local".to_owned(),
+            Route::Ssh(target) => format!("ssh:{target}"),
+            #[cfg(feature = "cloud")]
+            Route::Cloud {
+                provider,
+                account,
+                id,
+            } => format!("cloud:{provider:?}:{account}:{id}"),
+        };
+        let session = self.session.as_deref().unwrap_or_default();
+        let installation = if self.development { "dev" } else { "release" };
+        format!("{route}|{session}|{installation}")
+    }
+
     /// A host for `target`. Custom sockets are refused: the CLI could not be
     /// pointed at them without also trusting that socket's daemon identity.
     pub fn new(target: &ConnectTarget) -> Result<Self> {

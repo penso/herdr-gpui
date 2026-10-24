@@ -68,7 +68,7 @@ fn installer_that_differs_from_the_signed_manifest_is_refused_before_its_signatu
     let error = prepared
         .verify("CN=Herdr UI", &AtomicBool::new(false))
         .unwrap_err();
-    assert!(matches!(error, UpdateError::ArchiveDigest), "{error:?}");
+    assert!(matches!(error, crate::Error::ArchiveDigest), "{error:?}");
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn unsigned_installer_is_refused_even_when_its_digest_matches() {
         .verify("CN=Herdr UI", &AtomicBool::new(false))
         .unwrap_err();
     assert!(
-        matches!(error, UpdateError::Windows(Error::Untrusted(_))),
+        matches!(error, crate::Error::Windows(Error::Untrusted(_))),
         "{error:?}"
     );
 }
@@ -91,7 +91,7 @@ fn cancelled_install_never_returns_a_guard() {
     let stage = prepared.stage.path().to_owned();
     assert!(matches!(
         install_and_restart(prepared, &AtomicBool::new(true)),
-        Err(UpdateError::Cancelled)
+        Err(crate::Error::Cancelled)
     ));
     // Dropping the uncommitted download deletes it.
     assert!(!stage.exists());

@@ -2,7 +2,8 @@
 //! accounts the GitHub page lists. The table itself lives in `herdr-github`.
 
 use super::{Config, daemon_config_path};
-use crate::{Error, Result, error::GitHubAccountsError};
+use crate::{Error, Result};
+use herdr_github::AccountsError;
 pub(crate) use herdr_github::config::MAX_ACCOUNTS;
 use herdr_github::config::valid_account_id;
 pub use herdr_github::config::{GitHubAccount, GitHubConfig};
@@ -32,11 +33,11 @@ impl Config {
         account: &GitHubAccount,
     ) -> Result<()> {
         if !valid_account_id(&account.id) {
-            return Err(GitHubAccountsError::Id.into());
+            return Err(AccountsError::Id.into());
         }
         let mut accounts = written_accounts(local)?;
         if accounts.len() >= MAX_ACCOUNTS {
-            return Err(GitHubAccountsError::TooMany(MAX_ACCOUNTS).into());
+            return Err(AccountsError::TooMany(MAX_ACCOUNTS).into());
         }
         let mut entry = toml_edit::InlineTable::new();
         entry.insert("id", account.id.as_str().into());
@@ -90,7 +91,7 @@ fn written_accounts(local: &Path) -> Result<toml_edit::Array> {
                 array.push(table.clone().into_inline_table());
             }
         }
-        Some(_) => return Err(GitHubAccountsError::NotAList.into()),
+        Some(_) => return Err(AccountsError::NotAList.into()),
     }
     array.set_trailing_comma(false);
     Ok(array)

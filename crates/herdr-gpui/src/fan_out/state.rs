@@ -5,10 +5,15 @@
 //! a channel drained on the window's tick. A launch or removal is cancelled
 //! only when the fan-out is dropped with its window; the agent lookup and
 //! change reads stop when the dialog closes.
+//!
+//! Every launched fan-out is journaled until a lane is kept or the user
+//! forgets it, so one cut short comes back on the next launch; see
+//! [`resume`] and [`super::journal`].
 
 use super::{
-    error::Error,
+    error::{Error, Result},
     job::{self, Checkout, HostStats, Progress, Report, Request},
+    journal::{Checkpoint, Journal, Pending, Record},
     plan::{self, DiffStat, Lane, Picks},
 };
 use crate::{
@@ -76,6 +81,9 @@ pub(super) enum LaneState {
     Running,
     /// Display text of the failure; the typed error was logged.
     Failed(String),
+    /// Restored from the journal: the app stopped while the lane was at
+    /// this step, which never [`Checkpoint::Prompted`].
+    Interrupted(Checkpoint),
 }
 
 impl LaneState {
@@ -88,11 +96,22 @@ impl LaneState {
             Self::Prompting => "Sending prompt",
             Self::Running => "Prompted",
             Self::Failed(error) => error,
+            Self::Interrupted(step) => match step {
+                Checkpoint::Planned => "Never started",
+                Checkpoint::CreatingWorktree => {
+                    "Interrupted creating its worktree; the branch may exist"
+                }
+                Checkpoint::Created => "Interrupted before its agent started",
+                Checkpoint::StartingAgent => "Interrupted starting its agent; it may be running",
+                Checkpoint::Prompting | Checkpoint::Prompted => {
+                    "Interrupted sending the prompt; it may not have arrived"
+                }
+            },
         }
     }
 
     pub(super) fn settled(&self) -> bool {
-        matches!(self, Self::Running | Self::Failed(_))
+        matches!(self, Self::Running | Self::Failed(_) | Self::Interrupted(_))
     }
 }
 
@@ -140,6 +159,12 @@ pub(crate) struct FanOut {
     probe: Arc<AtomicBool>,
     probing: bool,
     next_refresh: Option<Instant>,
+    journal: Journal,
+    /// The fan-out's journal record, once launched.
+    id: u64,
+    /// Restored from the journal: its checkouts are scripted only once the
+    /// daemon shows each one still there; see `fan_out_lanes_found`.
+    pub(super) restored: bool,
     /// Agents asked for before the host's agents were known, as
     /// `herdr-gpui fan-out --agent` does; picked once the lookup lands.
     wanted: Vec<(AgentKind, usize)>,
@@ -162,13 +187,38 @@ fn spawn(work: impl FnOnce() + Send + 'static) {
     }
 }
 
+/// Save a journal change made on the UI thread from a worker.
+fn write_later(pending: Option<Pending>) {
+    if let Some(pending) = pending {
+        // A failure is logged; nothing waits on this write.
+        spawn(move || {
+            let _ = pending.write();
+        });
+    }
+}
+
+/// Journal what host work reports before passing it to the window. Runs on
+/// the worker, so a step is on disk before the script it announces starts;
+/// an error says it is not, and the script must not run.
+fn reporter(
+    journal: Journal,
+    id: u64,
+    sender: mpsc::Sender<Event>,
+) -> impl Fn(Report) -> Result<()> + Send + Sync + 'static {
+    move |report| {
+        let saved = journal.record(id, &report);
+        let _ = sender.send(Event::Report(report));
+        saved
+    }
+}
+
 impl FanOut {
     pub(crate) fn origin(&self) -> &Origin {
         &self.origin
     }
 
     /// Opens on the prompt at once, looking up the host's agents meanwhile.
-    pub(crate) fn start(origin: Origin) -> Self {
+    pub(crate) fn start(origin: Origin, journal: Journal) -> Self {
         let (sender, events) = mpsc::channel();
         let hosts = Picker::new(&origin.endpoint_id, Instant::now());
         let mut fan_out = Self {
@@ -188,6 +238,9 @@ impl FanOut {
             probe: Arc::new(AtomicBool::new(false)),
             probing: false,
             next_refresh: None,
+            journal,
+            id: 0,
+            restored: false,
             wanted: Vec::new(),
         };
         let host = fan_out.origin.host.clone();
@@ -413,6 +466,15 @@ impl FanOut {
                 unread: None,
             })
             .collect();
+        self.id = seed;
+        let begun = self
+            .journal
+            .begin(Record::new(seed, &self.origin, &self.prompt, &lanes))
+            .unwrap_or_else(|error| {
+                tracing::warn!(%error, "fan-out not journaled");
+                self.error = Some(error.to_string());
+                None
+            });
         let request = Request {
             origin: self.origin.fresh(),
             base: self.origin.base.clone(),
@@ -421,10 +483,14 @@ impl FanOut {
             hosts,
         };
         let (sender, cancelled) = (self.sender.clone(), self.work.clone());
+        let report = reporter(self.journal.clone(), seed, sender.clone());
         spawn(move || {
-            let report = |report| {
-                let _ = sender.send(Event::Report(report));
-            };
+            // The fan-out is on disk before anything is created.
+            if let Some(begun) = begun {
+                // The first step's own write saves the record again, and
+                // stops the lane should that fail too.
+                let _ = begun.write();
+            }
             job::launch(&request, &report, &cancelled);
             let _ = sender.send(Event::Launched);
         });
@@ -465,7 +531,8 @@ impl FanOut {
         let Stage::Confirm(confirmed) = self.stage else {
             return false;
         };
-        if confirmed != winner {
+        // A lane being resumed must not lose its worktree midway.
+        if confirmed != winner || !self.lanes.iter().all(|lane| lane.state.settled()) {
             return false;
         }
         self.stop_probe();
@@ -478,11 +545,26 @@ impl FanOut {
             })
             .collect();
         let (sender, cancelled) = (self.sender.clone(), self.work.clone());
+        let (journal, id) = (self.journal.clone(), self.id);
         spawn(move || {
-            let removed = doomed
+            let removed: Vec<_> = doomed
                 .into_iter()
                 .map(|(index, host, workspace)| (index, job::remove(&host, &workspace, &cancelled)))
                 .collect();
+            // The journal follows the removals. Once all are gone the kept
+            // lane is an ordinary workspace too, but a lane whose worktree
+            // could not be scripted or may exist stays for the user.
+            let mut gone: Vec<usize> = removed
+                .iter()
+                .filter(|(_, result)| result.is_ok())
+                .map(|(index, _)| *index)
+                .collect();
+            if gone.len() == removed.len() {
+                gone.push(winner);
+            }
+            if let Some(pending) = journal.settle(id, &gone) {
+                let _ = pending.write();
+            }
             let _ = sender.send(Event::Removed(removed));
         });
         self.error = None;
@@ -544,6 +626,12 @@ impl FanOut {
                         if !lane.state.settled() {
                             lane.state = LaneState::Failed("Stopped".to_owned());
                         }
+                    }
+                    // Lanes that all failed before creating anything leave
+                    // nothing to come back to. One whose creation was cut
+                    // off may have a worktree, so the journal decides.
+                    if self.lanes.iter().all(|lane| lane.checkout.is_none()) {
+                        write_later(self.journal.settle(self.id, &[]));
                     }
                     self.stage = Stage::Compare;
                     self.next_refresh = None;
@@ -652,6 +740,8 @@ pub(super) fn seed() -> u64 {
         .map(|elapsed| elapsed.as_micros().min(u128::from(u64::MAX)) as u64)
         .unwrap_or(0)
 }
+
+mod resume;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]

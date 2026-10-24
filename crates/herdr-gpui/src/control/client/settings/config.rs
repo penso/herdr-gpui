@@ -2,7 +2,6 @@
 //! watcher applies a saved change on its own, so only `reload` asks it, and
 //! `check` asks it about fonts when it runs.
 use super::{Context, Output, not_running, refused, settings};
-use crate::control::ControlError;
 use crate::{
     cli::control::ConfigCommand,
     config::{Config, Layer, daemon_config_path, parse_value},
@@ -107,7 +106,7 @@ fn check(context: &Context) -> crate::Result<Output> {
             if not_running(&error)
                 || matches!(
                     error,
-                    crate::Error::Control(ControlError::Rejected {
+                    crate::Error::Control(crate::control::Error::Rejected {
                         code: ErrorCode::NoWindow,
                         ..
                     })

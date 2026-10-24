@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::control::ControlError;
 use crate::processes::{Entry, Identity, Row};
 
 fn row(pid: u32, parent: Option<u32>, depth: usize, cpu: Option<f32>) -> Row {
@@ -79,7 +78,7 @@ fn sampling_waits_for_measured_cpu_or_returns_the_latest() {
     let (watch, _sender, _commands) = Watch::fake();
     assert!(matches!(
         sample(&watch, Duration::ZERO),
-        Err(crate::Error::Control(ControlError::Rejected {
+        Err(crate::Error::Control(crate::control::Error::Rejected {
             code: ErrorCode::Timeout,
             ..
         }))

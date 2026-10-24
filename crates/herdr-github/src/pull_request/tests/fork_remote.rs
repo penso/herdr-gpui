@@ -143,7 +143,10 @@ fn a_new_pull_request_head_is_qualified_only_across_a_fork() {
         fork_owner: None,
         ..fork
     };
-    assert!(matches!(unknown_fork.head("feature"), Err(Error::PrOrigin)));
+    assert!(matches!(
+        unknown_fork.head("feature"),
+        Err(Error::PullRequest(crate::pull_request::Error::Origin))
+    ));
 }
 
 #[test]

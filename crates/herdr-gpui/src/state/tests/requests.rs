@@ -133,7 +133,9 @@ fn rename_failures_stay_typed_and_shared_across_mailbox_clones() {
         .as_ref()
         .unwrap_err();
     assert!(Arc::ptr_eq(error, shared));
-    assert!(matches!(error.as_ref(), crate::Error::DaemonResponse(value) if value == &payload));
+    assert!(
+        matches!(error.as_ref(), crate::Error::Daemon(crate::daemon::Error::Response(value)) if value == &payload)
+    );
     assert_eq!(error.to_string(), "Invalid label");
     state.apply(ClientEvent::CommandRejected {
         request_id: Some("rename".into()),

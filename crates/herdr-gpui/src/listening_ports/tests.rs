@@ -129,7 +129,10 @@ fn malformed_and_untrusted_lines_are_dropped() {
 
 #[test]
 fn a_host_without_tools_says_so() {
-    assert!(matches!(parse("N\n"), Err(Error::ListeningPortsTool)));
+    assert!(matches!(
+        parse("N\n"),
+        Err(Error::ListeningPorts(super::Error::Tool))
+    ));
     // An idle host answers with nothing at all, which is no ports, not an error.
     assert_eq!(parse("\n").unwrap(), Ports::new());
 }
@@ -184,11 +187,9 @@ fn only_a_different_scan_changes_what_is_shown() {
     assert!(reading.apply(Ok(found.clone())));
     assert!(!reading.apply(Ok(found.clone())));
     // A failed scan keeps the last ports and is not a change.
-    assert!(
-        !reading.apply(Err(Error::ListeningPorts(Box::new(Error::Usage(
-            herdr_usage::Error::Unreachable
-        )))))
-    );
+    assert!(!reading.apply(Err(
+        super::Error::Scan(Box::new(herdr_usage::Error::Unreachable.into())).into()
+    )));
     assert_eq!(reading.ports, found);
     let error = reading.error.clone().unwrap();
     assert!(
@@ -249,7 +250,7 @@ fn this_machine_lists_a_socket_this_process_holds() {
         // Neither ss nor lsof here; parse must say so rather than show nothing.
         assert!(matches!(
             parse(&output.stdout),
-            Err(Error::ListeningPortsTool)
+            Err(Error::ListeningPorts(super::Error::Tool))
         ));
         return;
     }

@@ -96,12 +96,12 @@ fn invalid_values_and_unknown_keys_leave_the_file_unchanged() -> anyhow::Result<
     }
     assert!(matches!(
         Config::edit_key_at(&local, &daemon, "terminal.sise", Some(parse_value("14"))),
-        Err(Error::UnknownConfigKeys(keys)) if keys == ["terminal.sise"]
+        Err(crate::Error::Settings(Error::UnknownKeys(keys))) if keys == ["terminal.sise"]
     ));
     // A part of the key that holds a value cannot hold a key.
     assert!(matches!(
         Config::edit_key_at(&local, &daemon, "theme.name", Some(parse_value("x"))),
-        Err(Error::ConfigKeyNotTable { .. })
+        Err(crate::Error::Settings(Error::KeyNotTable { .. }))
     ));
     assert_eq!(fs::read_to_string(&local)?, before);
     Ok(())

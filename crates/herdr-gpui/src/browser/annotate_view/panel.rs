@@ -6,7 +6,7 @@ use crate::{
     browser::annotate::{Anchor, Note},
 };
 use gpui::{prelude::*, *};
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 impl HerdrWindow {
     /// The notes panel beside the page.
@@ -37,7 +37,7 @@ impl HerdrWindow {
         let send_label = crate::agent_notes::send_label(list.len(), unsent);
         let any_sent = unsent < list.len();
         let queued = self.queued_notes(id, cx);
-        let now = Instant::now();
+        let now = crate::motion::now();
         self.browser.annotations.observe_notes(id, list.len(), now);
         let origin = tab.origin.is_some();
         let tab_for_send = tab.clone();

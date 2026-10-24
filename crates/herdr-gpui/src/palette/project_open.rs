@@ -1,8 +1,8 @@
 //! Project opening retains the local connection and palette identities through
 //! background validation and the correlated daemon response.
 
-use super::{LocalTarget, ProjectOperation, project_create, projects};
-use crate::{Error, HerdrWindow, NavigationTarget, Result};
+use super::{Error, LocalTarget, ProjectOperation, project_create, projects};
+use crate::{HerdrWindow, NavigationTarget, Result};
 use gpui::{Context, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
@@ -25,11 +25,11 @@ impl HerdrWindow {
             .menu
             .palette
             .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?
+            .ok_or(Error::HostUnavailable)?
             .local_target
             .clone();
         if let Err(error) = target
-            .ok_or(Error::PaletteConnectionNotReady)
+            .ok_or(Error::ConnectionNotReady.into())
             .and_then(|target| self.local_project_connection(&target))
         {
             self.dismiss_menu(window, cx);
@@ -89,11 +89,11 @@ impl HerdrWindow {
             .endpoints
             .iter()
             .position(|endpoint| endpoint.id == crate::endpoint::LOCAL && endpoint.enabled)
-            .ok_or(Error::PaletteHostUnavailable)?;
+            .ok_or(Error::HostUnavailable)?;
         let endpoint = &self.endpoints[index];
         // An explicitly supplied SSH launch target may occupy endpoint zero.
         if endpoint.connection.target.is_remote() {
-            return Err(Error::PaletteHostUnavailable);
+            return Err(Error::HostUnavailable.into());
         }
         let live = if index == self.selected_endpoint {
             &self.live
@@ -101,22 +101,19 @@ impl HerdrWindow {
             &endpoint.live
         };
         if endpoint.generation != target.generation {
-            return Err(Error::PaletteLocalChanged);
+            return Err(Error::LocalChanged.into());
         }
-        let snapshot = live
-            .snapshot
-            .as_ref()
-            .ok_or(Error::PaletteHostUnavailable)?;
+        let snapshot = live.snapshot.as_ref().ok_or(Error::HostUnavailable)?;
         if snapshot.boot_id != target.boot {
-            return Err(Error::PaletteLocalChanged);
+            return Err(Error::LocalChanged.into());
         }
         if !live.status.is_connected() || endpoint.connection.handle.is_none() {
-            return Err(Error::PaletteConnectionNotReady);
+            return Err(Error::ConnectionNotReady.into());
         }
         Ok((index, snapshot.clone()))
     }
 
-    fn palette_project_error(&mut self, error: Error, cx: &mut Context<Self>) {
+    fn palette_project_error(&mut self, error: crate::Error, cx: &mut Context<Self>) {
         if let Some(palette) = &mut self.menu.palette {
             palette.project_operation = ProjectOperation::Idle;
             palette.error = Some(error.to_string());
@@ -134,7 +131,7 @@ impl HerdrWindow {
             return;
         };
         let Some(target) = palette.local_target.clone() else {
-            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            self.palette_project_error(Error::HostUnavailable.into(), cx);
             return;
         };
         let snapshot = match self.local_project_connection(&target) {
@@ -147,7 +144,7 @@ impl HerdrWindow {
         let validation = cx.background_executor().spawn(async move {
             projects::validate(&project)?;
             let existing = projects::workspace_for_path(&snapshot, &project.path);
-            Ok::<_, Error>((project, existing, roots))
+            Ok::<_, crate::Error>((project, existing, roots))
         });
         if let Some(palette) = &mut self.menu.palette {
             palette.error = None;
@@ -158,7 +155,7 @@ impl HerdrWindow {
                 if this.menu.palette.as_ref().is_none_or(|palette| palette.search != token)
                     || this.config.palette != config { return; }
                 if !this.menu_target_current() {
-                    this.palette_project_error(Error::PaletteSessionChanged, cx);
+                    this.palette_project_error(Error::SessionChanged.into(), cx);
                     return;
                 }
                 let (index, current) = match this.local_project_connection(&target) {
@@ -172,7 +169,7 @@ impl HerdrWindow {
                 // Metadata can change while disk I/O is running. Compare only
                 // launch roots, not agent status or transient focus flags.
                 if roots != projects::workspace_roots(&current) {
-                    this.palette_project_error(Error::PaletteProjectStateChanged, cx);
+                    this.palette_project_error(Error::ProjectStateChanged.into(), cx);
                     return;
                 }
                 if let Some(workspace) = existing {
@@ -217,7 +214,7 @@ impl HerdrWindow {
             return;
         };
         let Some(target) = palette.local_target.clone() else {
-            self.palette_project_error(Error::PaletteHostUnavailable, cx);
+            self.palette_project_error(Error::HostUnavailable.into(), cx);
             return;
         };
         if let Err(error) = self.local_project_connection(&target) {
@@ -268,7 +265,7 @@ impl HerdrWindow {
         let (index, _) = match self.local_project_connection(target) {
             Ok(current) if self.menu_target_current() => current,
             Ok(_) => {
-                return self.palette_project_error(Error::PaletteSessionChanged, cx);
+                return self.palette_project_error(Error::SessionChanged.into(), cx);
             }
             Err(error) => {
                 return self.palette_project_error(error, cx);
@@ -317,7 +314,7 @@ impl HerdrWindow {
 
 fn created_workspace(response: &Value) -> Result<String> {
     if let Some(error) = response.get("error") {
-        return Err(Error::DaemonResponse(error.clone()));
+        return Err(crate::daemon::Error::Response(error.clone()).into());
     }
     let result = &response["result"];
     (result["type"] == "workspace_created")
@@ -325,7 +322,7 @@ fn created_workspace(response: &Value) -> Result<String> {
         .flatten()
         .filter(|id| !id.is_empty() && id.len() <= 8192 && !id.chars().any(char::is_control))
         .map(str::to_owned)
-        .ok_or(Error::PaletteProjectResponse)
+        .ok_or(Error::ProjectResponse.into())
 }
 
 #[cfg(test)]

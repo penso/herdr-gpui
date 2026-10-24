@@ -49,17 +49,23 @@ fn errors_preserve_sources_and_retry_categories() {
 
     for (error, kind) in [
         (Error::Cancelled, io::ErrorKind::Interrupted),
-        (Error::SshCancelled, io::ErrorKind::Interrupted),
+        (
+            Error::Ssh(ssh::Error::Cancelled),
+            io::ErrorKind::Interrupted,
+        ),
         (Error::EventReceiverDropped, io::ErrorKind::BrokenPipe),
         (Error::SocketClosed, io::ErrorKind::UnexpectedEof),
-        (Error::SshClosed, io::ErrorKind::UnexpectedEof),
+        (Error::Ssh(ssh::Error::Closed), io::ErrorKind::UnexpectedEof),
         (Error::HealthTimeout, io::ErrorKind::TimedOut),
-        (Error::SshTimeout, io::ErrorKind::TimedOut),
+        (Error::Ssh(ssh::Error::Timeout), io::ErrorKind::TimedOut),
         (Error::PartialFrameTimeout, io::ErrorKind::InvalidData),
         (Error::HandshakeTimeout, io::ErrorKind::InvalidData),
         (Error::RequestTimeout, io::ErrorKind::InvalidData),
         (Error::InvalidSession, io::ErrorKind::InvalidInput),
-        (Error::SshUnsupported, io::ErrorKind::Unsupported),
+        (
+            Error::Ssh(ssh::Error::Unsupported),
+            io::ErrorKind::Unsupported,
+        ),
     ] {
         assert_eq!(error.kind(), kind, "{error}");
     }
