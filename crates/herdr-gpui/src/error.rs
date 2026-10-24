@@ -151,30 +151,8 @@ pub enum Error {
     },
     #[error("pane_keys: {0:?} is listed twice")]
     DuplicatePaneKey(String),
-    #[error("Another file is still opening in the editor")]
-    EditorBusy,
-    #[error(
-        "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
-    )]
-    EditorCommand,
-    #[error("No local pane to open the editor beside")]
-    EditorNoPane,
-    #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
-    EditorPath,
-    #[error("The Neovim in the editor pane did not answer")]
-    EditorRemote,
-    #[error("The Neovim in the editor pane is busy: answer it, then try again")]
-    EditorRemoteBusy,
-    #[error("The Neovim in the editor pane could not open the file")]
-    EditorRemoteFailed,
-    #[error("Could not run nvim to reach the editor pane")]
-    EditorRemoteLaunch(#[source] io::Error),
     #[error(transparent)]
-    EditorRequest(std::sync::Arc<Error>),
-    #[error("Unexpected daemon response while opening the editor pane")]
-    EditorResponse,
-    #[error("Opening a terminal editor needs a Unix shell in the pane")]
-    EditorUnsupported,
+    Editor(#[from] crate::editor::Error),
     #[error("{0}.fallback families must not be empty")]
     EmptyFontFallback(&'static str),
     #[error("{0}.family must not be empty")]
