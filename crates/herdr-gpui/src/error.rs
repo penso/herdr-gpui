@@ -743,9 +743,9 @@ pub enum Error {
     UnsupportedCommand,
     #[error("{0}")]
     Update(#[from] UpdateError),
-    /// A usage read failed; see `error/usage.rs` for what is folded elsewhere.
+    /// A usage read failed, or the usage shell the port and load scans share.
     #[error(transparent)]
-    Usage(herdr_usage::Error),
+    Usage(#[from] herdr_usage::Error),
     /// A Git, checkpoint, or code index failure; see `error/vcs.rs` for
     /// what is handled elsewhere.
     #[error(transparent)]
@@ -794,9 +794,6 @@ pub enum Error {
     WorktreeScriptsUnsupportedHost,
     #[error("Select a checkout from the daemon's worktree list.")]
     WorktreeSelection,
-    /// WSL shells start through `wsl.exe`, which only a Windows client has.
-    #[error("WSL distributions can only be reached from Windows.")]
-    WslHostUnsupported,
     #[error("Another drop's paths are still being mapped in WSL. Try again in a moment.")]
     WslPasteBusy,
     #[error("The pane the files were dropped on changed before their paths were ready.")]
@@ -811,7 +808,6 @@ mod github;
 mod path;
 mod remote;
 mod theme;
-mod usage;
 mod vcs;
 
 #[cfg(test)]

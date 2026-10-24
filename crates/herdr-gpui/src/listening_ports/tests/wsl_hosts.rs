@@ -15,9 +15,9 @@ fn a_name_that_is_not_a_distribution_starts_no_shell() {
     assert!(
         matches!(
             error,
-            Error::Client(herdr_client::Error::Wsl(
+            Error::Usage(herdr_usage::Error::Client(herdr_client::Error::Wsl(
                 herdr_client::wsl::Error::InvalidDistro
-            ))
+            )))
         ),
         "{error:?}"
     );
@@ -27,7 +27,10 @@ fn a_name_that_is_not_a_distribution_starts_no_shell() {
 #[test]
 fn a_distribution_is_only_scanned_from_windows() {
     let error = cause(&Host::Wsl("Ubuntu".into()));
-    assert!(matches!(error, Error::WslHostUnsupported), "{error:?}");
+    assert!(
+        matches!(error, Error::Usage(herdr_usage::Error::WslHostUnsupported)),
+        "{error:?}"
+    );
 }
 
 /// Scans a real distribution through `wsl.exe` and prints what it found:
