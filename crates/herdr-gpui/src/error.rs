@@ -53,9 +53,6 @@ pub enum Error {
     Clipboard(#[from] ClipboardError),
     #[cfg(feature = "cloud")]
     #[error(transparent)]
-    Cloud(#[from] crate::cloud::Error),
-    #[cfg(feature = "cloud")]
-    #[error(transparent)]
     CloudBatch(#[from] crate::cloud::batch::Error),
     /// Only CPU and memory are sampled on an Azure machine so far.
     #[cfg(feature = "azure")]
@@ -567,10 +564,6 @@ pub enum Error {
     Processes(#[from] crate::processes::Error),
     #[error("PR lookup supports GitHub.com origins only.")]
     PrOrigin,
-    /// A cloud provider's own failure; see `cloud::ProviderError`.
-    #[cfg(feature = "cloud")]
-    #[error(transparent)]
-    Provider(#[from] crate::cloud::ProviderError),
     #[error("Could not {operation} for Git PR lookup.")]
     PrProcess {
         operation: &'static str,
@@ -597,7 +590,8 @@ pub enum Error {
     Px0(#[from] crate::px0::Error),
     #[error("XDG_CONFIG_HOME must be an absolute path")]
     RelativeConfigRoot,
-    /// What `herdr-remote` reports that the app has no variant of its own for.
+    /// A cloud machine, provider, sandbox image, or teleport failure from
+    /// `herdr-remote`; see `error/remote.rs` for why it is not `#[from]`.
     #[error(transparent)]
     Remote(herdr_remote::Error),
     #[error("Could not install the agent tools on the SSH host: {0}")]
@@ -614,9 +608,6 @@ pub enum Error {
     ReviewNoBase,
     #[error("These changes are too large to review here, even leaving out the largest files.")]
     ReviewTooLarge,
-    #[cfg(feature = "cloud")]
-    #[error(transparent)]
-    SandboxImage(#[from] crate::cloud::image::Error),
     #[error("The page's picture could not be turned into a PNG")]
     ScreenshotImage,
     #[error("Could not write the screenshot to {}: {source}", path.display())]
@@ -690,8 +681,6 @@ pub enum Error {
     TailscaleJson(#[source] serde_json::Error),
     #[error("Tailscale did not answer in time")]
     TailscaleTimeout,
-    #[error(transparent)]
-    Teleport(#[from] crate::teleport::Error),
     #[error("line {line}: {key}: {source}")]
     ThemeLine {
         line: usize,

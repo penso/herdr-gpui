@@ -76,7 +76,7 @@ at the same spot, or both bumping one hard-coded count.
   contract, such as menu rows or the vendored bincode types.
 - Give a new feature's failures their own `thiserror` enum in its module and
   add one `#[error(transparent)] Feature(#[from] feature::Error)` variant to
-  the crate's root `Error`, as `teleport`, `pane_move`, and `backdrop` do,
+  the crate's root `Error`, as `pane_move` and `backdrop` do,
   rather than a run of variants in `error.rs`. The root enum stays sorted.
 - Shared state structs (`HerdrWindow`, `Config`, `herdr_settings::Settings`)
   and their constructors keep their fields sorted. Run an initializer that has
