@@ -5,7 +5,7 @@
 //! port some other local process took first. Nothing reconnects; a forward
 //! that ends stays ended until someone starts it again. Callers name the
 //! remote port, so this knows nothing of how that port was found.
-use crate::{Error, Result, catalog::validate_target};
+use crate::{Error, Result, catalog::validate_target, ssh};
 use std::num::NonZeroU16;
 #[cfg(unix)]
 use std::{
@@ -153,7 +153,7 @@ impl Drop for PortForward {
 impl PortForward {
     pub fn start(target: &str, _remote_port: NonZeroU16) -> Result<Self> {
         validate_target(target)?;
-        Err(Error::SshUnsupported)
+        Err(ssh::Error::Unsupported.into())
     }
 
     pub fn try_event(&self) -> Option<ForwardEvent> {
@@ -313,7 +313,7 @@ fn supervise(
                 Err(error) => return Some(error),
             }
         };
-        let request = crate::ssh::run(
+        let request = ssh::run(
             &mut forward_command(socket, local_port),
             FORWARD_TIMEOUT,
             || lock(slot).stopped,
@@ -325,7 +325,7 @@ fn supervise(
                 break;
             }
             Ok((status, _)) => refused = Some(Error::ForwardRefused(status)),
-            Err(Error::SshCancelled) => return None,
+            Err(Error::Ssh(ssh::Error::Cancelled)) => return None,
             Err(error) => return Some(error),
         }
         match master(slot) {

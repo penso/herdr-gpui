@@ -31,7 +31,7 @@ mod script;
 pub mod scrollback;
 mod session;
 mod sessions;
-mod ssh;
+pub mod ssh;
 mod surface_images;
 pub mod text;
 mod transport;

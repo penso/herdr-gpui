@@ -36,7 +36,7 @@ fn deletion_rejects_default_and_invalid_names_before_spawning() {
     assert!(std::error::Error::source(&error).is_some());
     assert!(matches!(
         delete_remote_session("-oProxyCommand=bad", "work"),
-        Err(Error::InvalidSshTarget)
+        Err(Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }
 
@@ -417,7 +417,7 @@ fn a_channel_that_never_prints_a_listing_still_times_out() {
     let mut stream = Answered(std::collections::VecDeque::new());
     assert!(matches!(
         read_listing(&mut stream, Duration::from_millis(20), || false),
-        Err(Error::SshTimeout)
+        Err(Error::Ssh(ssh::Error::Timeout))
     ));
 }
 
@@ -440,7 +440,10 @@ fn a_complete_listing_ends_the_read_before_any_eof() {
 #[cfg(unix)]
 #[test]
 fn a_host_that_prints_nothing_is_a_closed_bridge() {
-    assert!(matches!(parse_session_list(b""), Err(Error::SshClosed)));
+    assert!(matches!(
+        parse_session_list(b""),
+        Err(Error::Ssh(ssh::Error::Closed))
+    ));
 }
 
 #[cfg(unix)]
@@ -475,12 +478,12 @@ fn the_remote_listing_walks_the_shared_candidate_roots() {
         .get_args()
         .map(|arg| arg.to_str().unwrap())
         .collect();
-    let wrapped = format!("/bin/sh -c {}", crate::ssh::quote(&script));
+    let wrapped = format!("/bin/sh -c {}", ssh::quote(&script));
     assert_eq!(args.last(), Some(&wrapped.as_str()));
     assert!(args.contains(&"BatchMode=yes"));
     // A malformed target is rejected before anything is built or spawned.
     assert!(matches!(
         list_remote_sessions("-oProxyCommand=bad"),
-        Err(Error::InvalidSshTarget)
+        Err(Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }

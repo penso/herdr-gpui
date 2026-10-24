@@ -10,9 +10,7 @@
 //! with WSL distributions, which run the same scripts through `wsl.exe`. A host
 //! that cannot run `/bin/sh`, such as Windows OpenSSH, is retried through
 //! PowerShell; see `powershell`.
-use crate::{
-    Error, Result, catalog::validate_target, limits::POLL, session_socket, transport::Stream,
-};
+use crate::{Result, catalog::validate_target, limits::POLL, session_socket, transport::Stream};
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
 use std::{
@@ -23,8 +21,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod error;
 mod failure;
 mod host_key;
+pub use error::Error;
 pub use failure::SshFailure;
 pub use host_key::{HostKeyFingerprint, HostKeyScan, NewHostKey, scan_host_key, trust_host_key};
 mod powershell;
@@ -211,7 +211,7 @@ pub fn probe_host(target: &str, session: &str) -> Result<HostProbe> {
         elapsed_ms,
         "probe finished"
     );
-    probe.ok_or(Error::SshClosed)
+    probe.ok_or(Error::Closed.into())
 }
 
 /// [`probe_host`] for a host whose shell is `cmd.exe` or PowerShell.
@@ -227,7 +227,7 @@ fn probe_powershell_host(target: &str, session: &str) -> Result<HostProbe> {
     }
     let probe = classify_probe_with(&output, powershell::compatible);
     tracing::info!(category = "probe", %status, ?probe, "PowerShell probe finished");
-    probe.ok_or(Error::SshClosed)
+    probe.ok_or(Error::Closed.into())
 }
 
 /// The `remote.origin.url` of a repository on a saved host, read without a
@@ -254,22 +254,22 @@ pub fn remote_config_value(
 ) -> Result<Option<String>> {
     validate_target(target)?;
     if !git_dir.starts_with('/') || git_dir.chars().any(char::is_control) {
-        return Err(Error::InvalidGitDir);
+        return Err(crate::Error::InvalidGitDir);
     }
     let (status, output) = run_remote(target, &config_command(git_dir, key), timeout, cancelled)?;
     match status.code() {
         Some(0) => {}
         // `git config --get` exits 1 when the key is absent.
         Some(1) => return Ok(None),
-        _ => return Err(Error::RemoteCommand(status)),
+        _ => return Err(crate::Error::RemoteCommand(status)),
     }
-    let value = String::from_utf8(output).map_err(|_| Error::RemoteOutput)?;
+    let value = String::from_utf8(output).map_err(|_| crate::Error::RemoteOutput)?;
     let value = value.trim_end_matches(['\r', '\n']);
     if value.is_empty() {
         return Ok(None);
     }
     if value.len() > 2048 || value.chars().any(char::is_control) {
-        return Err(Error::RemoteOutput);
+        return Err(crate::Error::RemoteOutput);
     }
     Ok(Some(value.to_owned()))
 }
@@ -302,7 +302,7 @@ pub fn resolve_destination(target: &str) -> Result<Destination> {
     let (status, output) = run(&mut command, RESOLVE_TIMEOUT, || false)?;
     if !status.success() {
         tracing::warn!(category = "resolve", %status, "ssh -G failed");
-        return Err(Error::RemoteCommand(status));
+        return Err(crate::Error::RemoteCommand(status));
     }
     let destination = parse_destination(&output);
     tracing::info!(
@@ -310,7 +310,7 @@ pub fn resolve_destination(target: &str) -> Result<Destination> {
         resolved = destination.is_some(),
         "resolved SSH target"
     );
-    destination.ok_or(Error::RemoteOutput)
+    destination.ok_or(crate::Error::RemoteOutput)
 }
 
 fn parse_destination(output: &[u8]) -> Option<Destination> {
@@ -365,7 +365,7 @@ fn run_with_stderr(
             .stdout(Stdio::piped())
             .spawn()?,
     );
-    let stdout = child.0.stdout.take().ok_or(Error::SshClosed)?;
+    let stdout = child.0.stdout.take().ok_or(Error::Closed)?;
     let stderr = match child.0.stderr.take() {
         Some(stderr) => Some(failure::drain(stderr)?),
         None => None,
@@ -386,16 +386,16 @@ fn run_with_stderr(
             break status;
         }
         if cancelled() {
-            return Err(Error::SshCancelled);
+            return Err(Error::Cancelled.into());
         }
         if Instant::now() >= deadline {
-            return Err(Error::SshTimeout);
+            return Err(Error::Timeout.into());
         }
         std::thread::sleep(Duration::from_millis(25));
     };
-    let output = reader.join().map_err(|_| Error::SshClosed)??;
+    let output = reader.join().map_err(|_| Error::Closed)??;
     if output.len() as u64 > PROBE_OUTPUT_LIMIT {
-        return Err(Error::SshOutputLimit);
+        return Err(Error::OutputLimit.into());
     }
     // The pipe closes once the child exits, so this waits only for the drain.
     let stderr = stderr
@@ -530,7 +530,7 @@ pub(crate) fn connect(
             tracing::info!(code = ?closed.code, "host cannot run /bin/sh; trying PowerShell");
             connect_powershell(target, session, stop, closed.failure)
         }
-        Err(closed) => Err(Error::SshRefused(closed.failure)),
+        Err(closed) => Err(Error::Refused(closed.failure).into()),
     }
 }
 
@@ -549,20 +549,17 @@ fn connect_powershell(
     let (status, output, stderr) =
         run_with_stderr(&mut probe, PROBE_TIMEOUT, || stop.load(Ordering::Acquire))?;
     if status.code() == Some(255) {
-        return Err(Error::SshRefused(SshFailure::classify(
-            status.code(),
-            &stderr,
-        )));
+        return Err(Error::Refused(SshFailure::classify(status.code(), &stderr)).into());
     }
     if !lines(&output).any(|line| line == PROBE_DONE.as_bytes()) {
-        return Err(Error::SshRefused(posix));
+        return Err(Error::Refused(posix).into());
     }
     let candidates = powershell::candidates(&output);
     let Some((path, idle_timeout)) = candidates.iter().find_map(|candidate| {
         powershell::compatible(&candidate.status).map(|idle| (candidate.path.as_str(), idle))
     }) else {
         return Err(match candidates.first() {
-            None => Error::SshRefused(SshFailure::HerdrMissing),
+            None => crate::Error::from(Error::Refused(SshFailure::HerdrMissing)),
             Some(candidate) => incompatible(&candidate.status),
         });
     };
@@ -573,7 +570,7 @@ fn connect_powershell(
     start_bridge(bridge, stop, |stream, stop| {
         await_ready(stream, stop, Instant::now()).map(drop)
     })?
-    .map_err(|closed| Error::SshRefused(closed.failure))
+    .map_err(|closed| Error::Refused(closed.failure).into())
 }
 
 /// The stdio bridge through an application-built remote command, such as
@@ -595,7 +592,7 @@ pub struct Bridge {
 }
 
 fn bridge(command: Command, stop: &AtomicBool) -> Result<(Stream, ChildGuard)> {
-    start_bridge(command, stop, handshake)?.map_err(|closed| Error::SshRefused(closed.failure))
+    start_bridge(command, stop, handshake)?.map_err(|closed| Error::Refused(closed.failure).into())
 }
 
 /// A bridge whose child closed its stdout before answering, with the exit
@@ -617,12 +614,12 @@ fn start_bridge(
     stream.set_write_timeout(Some(Duration::from_secs(1)))?;
     let stderr = match child.0.stderr.take() {
         Some(stderr) => failure::drain(stderr)?,
-        None => return Err(Error::SshClosed),
+        None => return Err(Error::Closed.into()),
     };
     match answer(&mut stream, stop) {
         // Every other way the bridge can close already says why; this one is
         // read from what `ssh` reported.
-        Err(Error::SshClosed) => {
+        Err(crate::Error::Ssh(Error::Closed)) => {
             let (code, failure) = failure::diagnose(&mut child.0, &stderr, stop);
             Ok(Err(Closed { code, failure }))
         }
@@ -670,7 +667,9 @@ pub(crate) fn handshake(stream: &mut (impl Read + Write), stop: &AtomicBool) -> 
     let mut refused = None;
     loop {
         let status = match await_ready(stream, stop, started) {
-            Err(Error::SshClosed) => return Err(refused.unwrap_or(Error::SshClosed)),
+            Err(crate::Error::Ssh(Error::Closed)) => {
+                return Err(refused.unwrap_or(Error::Closed.into()));
+            }
             result => result?,
         };
         if let Some(idle_timeout) = compatible_status(&status) {
@@ -687,7 +686,7 @@ pub(crate) fn handshake(stream: &mut (impl Read + Write), stop: &AtomicBool) -> 
 }
 
 /// Why a candidate's `status client --json` was skipped, if it reported one.
-fn incompatible_status(output: &[u8]) -> Option<Error> {
+fn incompatible_status(output: &[u8]) -> Option<crate::Error> {
     let status = output
         .split(|b| *b == b'\n')
         .find_map(|line| serde_json::from_slice::<serde_json::Value>(line).ok())?;
@@ -695,8 +694,8 @@ fn incompatible_status(output: &[u8]) -> Option<Error> {
 }
 
 /// The refusal for one `status client --json` object that cannot serve.
-fn incompatible(status: &serde_json::Value) -> Error {
-    Error::BridgeIncompatible {
+fn incompatible(status: &serde_json::Value) -> crate::Error {
+    crate::Error::BridgeIncompatible {
         generation: status["endpoint_protocol_generation"]
             .as_u64()
             .and_then(|generation| u32::try_from(generation).ok()),
@@ -748,20 +747,20 @@ fn await_ready(
     let mut total = 0;
     loop {
         if stop.load(Ordering::Acquire) {
-            return Err(Error::SshCancelled);
+            return Err(Error::Cancelled.into());
         }
         if started.elapsed() >= Duration::from_secs(15) {
-            return Err(Error::SshTimeout);
+            return Err(Error::Timeout.into());
         }
         let mut byte = [0];
         match stream.read(&mut byte) {
             Ok(0) => {
-                return Err(Error::SshClosed);
+                return Err(Error::Closed.into());
             }
             Ok(_) => {
                 total += 1;
                 if total > 16384 {
-                    return Err(Error::SshOutputLimit);
+                    return Err(Error::OutputLimit.into());
                 }
                 line.push(byte[0]);
                 if byte[0] == b'\n' {

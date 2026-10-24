@@ -329,7 +329,7 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     let mut devices = Devices::default();
     let asked_at = now();
     assert!(devices.poll_with(&targets, true, asked_at, |_| {
-        Err(herdr_client::Error::SshTimeout)
+        Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
     }));
     settle(&mut devices, &targets);
     assert!(matches!(
@@ -344,7 +344,7 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     );
     assert!(
         devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH, |_| {
-            Err(herdr_client::Error::SshTimeout)
+            Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
         })
     );
 }

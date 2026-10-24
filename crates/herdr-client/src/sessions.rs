@@ -1,7 +1,7 @@
 //! The named local sessions one machine's Herdr installation owns, and which of
 //! them is running. A session socket outlives the daemon that created it, so a
 //! session's state can only come from a connect attempt, never the file itself.
-use crate::ssh::{CANDIDATES, script_command};
+use crate::ssh::{self, CANDIDATES, script_command};
 use crate::{
     Error, Result, Stream,
     catalog::validate_target,
@@ -299,7 +299,7 @@ fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
 /// listing is everything printed before the exit, bounded as on Unix.
 #[cfg(windows)]
 fn remote_stdout(target: &str, script: &str) -> Result<Vec<u8>> {
-    let (_, output) = crate::ssh::run(&mut script_command(target, script)?, DEADLINE, || false)?;
+    let (_, output) = ssh::run(&mut script_command(target, script)?, DEADLINE, || false)?;
     Ok(output)
 }
 
@@ -320,7 +320,7 @@ fn read_listing(
     let mut gone = gone;
     loop {
         if started.elapsed() >= timeout {
-            return Err(Error::SshTimeout);
+            return Err(ssh::Error::Timeout.into());
         }
         match stream.read(&mut buffer) {
             // The child closed its end: the listing is whatever came before, which
@@ -329,7 +329,7 @@ fn read_listing(
             Ok(read) => {
                 output.extend_from_slice(&buffer[..read]);
                 if output.len() > MAX_OUTPUT {
-                    return Err(Error::SshOutputLimit);
+                    return Err(ssh::Error::OutputLimit.into());
                 }
                 if listed_sessions(&output) {
                     return Ok(output);
@@ -370,7 +370,7 @@ pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
     // An empty response is the child closing stdout without printing anything:
     // SSH failed, or no candidate ran. It is not a host that has no sessions.
     if output.is_empty() {
-        return Err(Error::SshClosed);
+        return Err(ssh::Error::Closed.into());
     }
     let mut listed = None;
     let mut invalid = None;
@@ -385,7 +385,7 @@ pub(crate) fn parse_session_list(output: &[u8]) -> Result<Vec<RemoteSession>> {
         // Report the last failure: the banner is noise, the JSON was the answer.
         (None, Some(error)) => return Err(Error::Json(error)),
         // Unreachable after the empty check: a non-empty output has a line to fail.
-        (None, None) => return Err(Error::SshClosed),
+        (None, None) => return Err(ssh::Error::Closed.into()),
     };
     if sessions.len() > LIMIT {
         return Err(Error::SessionLimit);

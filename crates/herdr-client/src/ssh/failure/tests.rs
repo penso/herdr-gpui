@@ -243,7 +243,7 @@ fn a_child_that_will_not_exit_is_not_waited_on_past_cancellation() {
 
 #[test]
 fn a_refused_bridge_reports_its_class_through_the_error() {
-    let error = crate::Error::SshRefused(SshFailure::Auth);
+    let error = crate::Error::from(crate::ssh::Error::Refused(SshFailure::Auth));
     assert_eq!(error.kind(), ErrorKind::PermissionDenied);
     assert!(
         error

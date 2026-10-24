@@ -474,7 +474,7 @@ closes before it is ready without naming an incompatible candidate (that is
 when no Herdr was found) are reduced to an `SshFailure`: `HostKey`, `Auth`,
 `Unreachable`, `HerdrMissing`, or `Other`. The text itself is never retained,
 logged, or exposed, as it may name users, keys, and paths. The class is the
-source of `Error::SshRefused` and travels on `ClientEvent::Disconnected { ssh }`;
+source of `ssh::Error::Refused` and travels on `ClientEvent::Disconnected { ssh }`;
 `SshFailure::needs_user` marks the ones retrying cannot fix. Disconnect reasons
 are sanitized and capped at 1024 characters.
 
@@ -500,7 +500,7 @@ every port is refused, or the master does not connect within 30 seconds.
 `stop`, or dropping the handle, kills the master without waiting; the worker
 reaps it and removes its directory. Nothing reconnects. Callers name the remote
 port, so discovery stays elsewhere. Windows OpenSSH has no control master, so
-there `PortForward::start` returns `Error::SshUnsupported`; `forward_command`,
+there `PortForward::start` returns `ssh::Error::Unsupported`; `forward_command`,
 which holds its forward in its own child, works on Windows too.
 
 On Unix the bridge hands the `ssh` child one end of a socket pair as its

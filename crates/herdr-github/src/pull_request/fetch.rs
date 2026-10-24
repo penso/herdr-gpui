@@ -739,7 +739,9 @@ mod origin_tests {
         // Another repository on the same host is not a hit.
         assert!(matches!(
             resolve("/other/.git", now),
-            Err(Error::Client(herdr_client::Error::InvalidSshTarget))
+            Err(Error::Client(herdr_client::Error::Ssh(
+                herdr_client::ssh::Error::InvalidTarget
+            )))
         ));
         assert!(resolve("/repo/.git", now + ORIGIN_TTL).is_err());
         assert!(origins.0.is_empty());

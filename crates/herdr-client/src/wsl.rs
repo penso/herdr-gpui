@@ -269,8 +269,8 @@ pub(crate) fn connect(
 #[cfg(windows)]
 fn wsl_error(error: Error) -> Error {
     match error {
-        Error::SshClosed => Error::WslClosed,
-        Error::SshTimeout => Error::WslTimeout,
+        Error::Ssh(ssh::Error::Closed) => Error::WslClosed,
+        Error::Ssh(ssh::Error::Timeout) => Error::WslTimeout,
         other => other,
     }
 }

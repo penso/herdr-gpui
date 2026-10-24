@@ -83,8 +83,6 @@ pub enum Error {
     SessionDeleteFailed(std::process::ExitStatus),
     #[error("remote endpoints have no local socket path")]
     NoLocalSocket,
-    #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
-    InvalidSshTarget,
     #[error("client stopped")]
     Cancelled,
     #[error("event receiver dropped")]
@@ -160,17 +158,8 @@ pub enum Error {
     ResponseId,
     #[error("{0}")]
     ServerShutdown(String),
-    #[error("SSH port forwarding is not supported on this platform")]
-    SshUnsupported,
-    #[error("SSH connection cancelled")]
-    SshCancelled,
-    #[error("SSH discovery timed out")]
-    SshTimeout,
-    #[error("SSH bridge closed; check host trust, authentication, and remote Herdr installation")]
-    SshClosed,
-    /// `ssh` closed the bridge before it was ready, for the reason classified.
-    #[error("SSH bridge closed: {0}")]
-    SshRefused(#[source] crate::SshFailure),
+    #[error(transparent)]
+    Ssh(#[from] crate::ssh::Error),
     /// Every Herdr installed on the SSH host or WSL distribution was skipped
     /// as unable to serve this client. Fields describe the first one;
     /// `version` is bounded text.
@@ -183,11 +172,6 @@ pub enum Error {
         generation: Option<u32>,
         version: Option<String>,
     },
-    /// `ssh -G` named no user known hosts file a host key could be saved to.
-    #[error("SSH has no user known hosts file to save the host key to")]
-    KnownHostsUnavailable,
-    #[error("SSH startup output exceeds limit")]
-    SshOutputLimit,
     #[error("invalid WSL distribution name")]
     InvalidWslDistro,
     #[error("WSL distributions are only available on Windows")]
@@ -394,36 +378,25 @@ impl Error {
             Self::InvalidSession
             | Self::DefaultSession
             | Self::NoLocalSocket
-            | Self::InvalidSshTarget
             | Self::InvalidWslDistro
             | Self::WslPathLimit
             | Self::WslPathInvalid(_) => io::ErrorKind::InvalidInput,
             Self::WslPathUnmapped(_) => io::ErrorKind::NotFound,
-            Self::SshUnsupported | Self::WslUnsupported => io::ErrorKind::Unsupported,
+            Self::WslUnsupported => io::ErrorKind::Unsupported,
             Self::ClipboardImageCancelled => io::ErrorKind::Interrupted,
             Self::ClipboardImageWriteTimeout | Self::ClipboardImagePreparationTimeout => {
                 io::ErrorKind::TimedOut
             }
-            Self::Cancelled | Self::SshCancelled => io::ErrorKind::Interrupted,
+            Self::Cancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
-            Self::SocketClosed | Self::SshClosed | Self::WslClosed | Self::ClosedBeforeWelcome => {
+            Self::SocketClosed | Self::WslClosed | Self::ClosedBeforeWelcome => {
                 io::ErrorKind::UnexpectedEof
             }
-            Self::SshRefused(failure) => match failure {
-                crate::SshFailure::HostKey | crate::SshFailure::Auth => {
-                    io::ErrorKind::PermissionDenied
-                }
-                crate::SshFailure::Unreachable
-                | crate::SshFailure::NoRoute
-                | crate::SshFailure::LocalNetworkDenied => io::ErrorKind::NotConnected,
-                crate::SshFailure::HerdrMissing => io::ErrorKind::NotFound,
-                crate::SshFailure::Other => io::ErrorKind::UnexpectedEof,
-            },
+            Self::Ssh(error) => error.kind(),
             Self::ForwardSpawn(error)
             | Self::ForwardLocalPort(error)
             | Self::ForwardControl(error) => error.kind(),
             Self::HealthTimeout
-            | Self::SshTimeout
             | Self::WslTimeout
             | Self::SessionDeleteTimeout
             | Self::ForwardTimeout => io::ErrorKind::TimedOut,
