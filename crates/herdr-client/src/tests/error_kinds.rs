@@ -162,3 +162,38 @@ fn clipboard_errors_keep_kind_and_text() {
         ),
     ]);
 }
+
+#[test]
+fn sessions_errors_keep_kind_and_text() {
+    use io::ErrorKind::*;
+    assert_kinds([
+        (
+            sessions::Error::DeleteDefault.into(),
+            InvalidInput,
+            "The default session cannot be deleted",
+        ),
+        (
+            sessions::Error::DeleteTimeout.into(),
+            TimedOut,
+            "Session deletion timed out; refresh the list before trying again",
+        ),
+        (
+            sessions::Error::Limit.into(),
+            InvalidData,
+            "too many sessions to list",
+        ),
+    ]);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        let status = std::process::ExitStatus::from_raw(256);
+        let error = Error::from(sessions::Error::DeleteFailed(status));
+        assert_eq!(error.kind(), InvalidData);
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "Herdr refused session deletion ({status}); the session may be running, inaccessible, or unsupported by the installed CLI"
+            )
+        );
+    }
+}

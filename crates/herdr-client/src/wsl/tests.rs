@@ -76,7 +76,9 @@ fn invalid_distros_and_sessions_are_rejected_before_anything_spawns() {
     ));
     assert!(matches!(
         delete_distro_session("Ubuntu", "default"),
-        Err(crate::Error::DefaultSession)
+        Err(crate::Error::Sessions(
+            crate::sessions::Error::DeleteDefault
+        ))
     ));
 }
 

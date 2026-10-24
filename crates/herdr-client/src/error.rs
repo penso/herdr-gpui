@@ -65,14 +65,6 @@ pub enum Error {
     GeometryLimit,
     #[error("invalid session name")]
     InvalidSession,
-    #[error("The default session cannot be deleted")]
-    DefaultSession,
-    #[error("Session deletion timed out; refresh the list before trying again")]
-    SessionDeleteTimeout,
-    #[error(
-        "Herdr refused session deletion ({0}); the session may be running, inaccessible, or unsupported by the installed CLI"
-    )]
-    SessionDeleteFailed(std::process::ExitStatus),
     #[error("remote endpoints have no local socket path")]
     NoLocalSocket,
     #[error("client stopped")]
@@ -150,6 +142,8 @@ pub enum Error {
     ResponseId,
     #[error("{0}")]
     ServerShutdown(String),
+    #[error(transparent)]
+    Sessions(#[from] crate::sessions::Error),
     #[error(transparent)]
     Ssh(#[from] crate::ssh::Error),
     #[error(transparent)]
@@ -263,8 +257,6 @@ pub enum Error {
     ProfileId,
     #[error("invalid endpoint label")]
     ProfileLabel,
-    #[error("too many sessions to list")]
-    SessionLimit,
     /// An endpoint answered a request with an error. The message is the
     /// daemon's own display text; act on `code`, never on the message.
     #[error("{message}")]
@@ -343,21 +335,18 @@ impl Error {
             } else {
                 io::ErrorKind::InvalidData
             }),
-            Self::InvalidSession | Self::DefaultSession | Self::NoLocalSocket => {
-                io::ErrorKind::InvalidInput
-            }
+            Self::InvalidSession | Self::NoLocalSocket => io::ErrorKind::InvalidInput,
             Self::Clipboard(error) => error.kind(),
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::EventReceiverDropped | Self::Disconnected => io::ErrorKind::BrokenPipe,
             Self::SocketClosed | Self::ClosedBeforeWelcome => io::ErrorKind::UnexpectedEof,
+            Self::Sessions(error) => error.kind(),
             Self::Ssh(error) => error.kind(),
             Self::Wsl(error) => error.kind(),
             Self::ForwardSpawn(error)
             | Self::ForwardLocalPort(error)
             | Self::ForwardControl(error) => error.kind(),
-            Self::HealthTimeout | Self::SessionDeleteTimeout | Self::ForwardTimeout => {
-                io::ErrorKind::TimedOut
-            }
+            Self::HealthTimeout | Self::ForwardTimeout => io::ErrorKind::TimedOut,
             Self::Full => io::ErrorKind::WouldBlock,
             _ => io::ErrorKind::InvalidData,
         }

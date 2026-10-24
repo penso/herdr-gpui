@@ -30,7 +30,7 @@ mod remote_host;
 mod script;
 pub mod scrollback;
 mod session;
-mod sessions;
+pub mod sessions;
 pub mod ssh;
 mod surface_images;
 pub mod text;
