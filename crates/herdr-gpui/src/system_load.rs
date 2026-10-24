@@ -6,14 +6,17 @@
 //! workers and takes their samples on later ticks, so a slow or unreachable
 //! host never blocks rendering or delays another host.
 
+mod error;
 mod render;
 mod sample;
 
 #[cfg(test)]
 mod tests;
 
+pub(crate) use error::Error;
+
 use crate::{
-    Error, Result,
+    Result,
     usage::{Host, Shell},
 };
 pub(crate) use render::{
@@ -63,23 +66,24 @@ impl Source {
                 primed: false,
                 disk: HomeDisk::open(),
             }),
-            Host::Ssh(target) => Self::remote(Shell::connect(target).map_err(Error::from)),
+            Host::Ssh(target) => Self::remote(Shell::connect(target).map_err(crate::Error::from)),
             // A distribution is sampled as a Linux host, through `wsl.exe`.
-            Host::Wsl(distro) => Self::remote(Shell::connect_wsl(distro).map_err(Error::from)),
+            Host::Wsl(distro) => {
+                Self::remote(Shell::connect_wsl(distro).map_err(crate::Error::from))
+            }
             #[cfg(all(feature = "azure", unix))]
             Host::Azure { account, id } => Self::remote(azure_shell(account, id)),
             // A remote shell needs a Unix client, as an SSH host's does.
             #[cfg(all(feature = "azure", not(unix)))]
-            Host::Azure { .. } => Err(Error::CloudHostUnsupported),
+            Host::Azure { .. } => Err(crate::Error::CloudHostUnsupported),
         }
     }
 
     fn remote(shell: Result<Shell>) -> Result<Self> {
         let mut shell = shell.map_err(remote)?;
         let uname = shell.run("uname -s", STEP_TIMEOUT).map_err(remote)?;
-        let os = Os::from_uname(&uname.stdout).ok_or_else(|| {
-            Error::SystemLoadUnsupported(uname.stdout.trim().chars().take(32).collect())
-        })?;
+        let os = Os::from_uname(&uname.stdout)
+            .ok_or_else(|| Error::Unsupported(uname.stdout.trim().chars().take(32).collect()))?;
         Ok(Self::Remote {
             shell,
             os,
@@ -184,8 +188,8 @@ fn azure_shell(account: &str, id: &str) -> Result<Shell> {
     Ok(Shell::start(command)?)
 }
 
-fn remote(error: impl Into<Error>) -> Error {
-    Error::SystemLoadRemote(Box::new(error.into()))
+fn remote(error: impl Into<crate::Error>) -> crate::Error {
+    Error::Remote(Box::new(error.into())).into()
 }
 
 /// Tells a worker to stop, waking it from its wait between samples. The

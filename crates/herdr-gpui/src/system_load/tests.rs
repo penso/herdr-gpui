@@ -1,11 +1,11 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::{
-    HISTORY, Reading, Source, Stop, SystemLoad,
+    Error, HISTORY, Reading, Source, Stop, SystemLoad,
     render::gigabytes,
     sample::{Memory, Os, Sample, parse},
 };
-use crate::{Error, usage::Host};
+use crate::usage::Host;
 use std::{
     sync::Arc,
     thread,
@@ -99,7 +99,10 @@ fn unexpected_output_is_a_typed_error() {
         "cpu  x y z\nMemTotal: 10 kB\n",
     ] {
         assert!(
-            matches!(parse(text, None), Err(Error::SystemLoadOutput)),
+            matches!(
+                parse(text, None),
+                Err(crate::Error::SystemLoad(Error::Output))
+            ),
             "{text:?}"
         );
     }
@@ -157,9 +160,10 @@ fn history_is_bounded_and_a_failure_keeps_the_last_sample() {
     assert_eq!(reading.history().len(), HISTORY);
     assert_eq!(reading.history().next(), Some(3.));
     let shown = reading.latest().copied();
-    reading.apply(Err(Error::SystemLoadRemote(Box::new(Error::Usage(
-        herdr_usage::Error::Unreachable,
-    )))));
+    reading.apply(Err(Error::Remote(Box::new(
+        herdr_usage::Error::Unreachable.into(),
+    ))
+    .into()));
     assert_eq!(
         reading.latest().copied(),
         shown,

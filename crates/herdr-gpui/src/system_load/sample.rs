@@ -3,7 +3,8 @@
 //! parse into the same [`Sample`], counted the way `sysinfo` counts this
 //! machine so a local and a remote host read alike.
 
-use crate::{Error, Result};
+use super::Error;
+use crate::Result;
 
 /// Bytes of memory in use: total less available on Linux; active, wired,
 /// compressed and speculative pages on macOS.
@@ -217,7 +218,7 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
         _ => None,
     };
     if memory.is_none() && cpu.is_none() && fields.ticks.is_none() {
-        return Err(Error::SystemLoadOutput);
+        return Err(Error::Output.into());
     }
     Ok(Answer {
         sample: Sample {

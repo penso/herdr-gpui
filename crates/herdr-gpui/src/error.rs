@@ -690,13 +690,8 @@ pub enum Error {
     StaleWorkspace,
     #[error("{} exceeds {limit} bytes", path.display())]
     StateFileSize { path: PathBuf, limit: u64 },
-    #[error("CPU and memory output was not understood.")]
-    SystemLoadOutput,
-    #[error("Could not read CPU and memory on this host.")]
-    SystemLoadRemote(#[source] Box<Error>),
-    /// The host's `uname -s`, bounded, so the message names what it is.
-    #[error("CPU and memory cannot be read on {0:?} hosts.")]
-    SystemLoadUnsupported(String),
+    #[error(transparent)]
+    SystemLoad(#[from] crate::system_load::Error),
     #[error(transparent)]
     TabLayout(#[from] crate::config::tab_layout::Error),
     #[error("Tailscale returned an unreadable status: {0}")]
