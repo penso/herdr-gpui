@@ -96,6 +96,7 @@ pub(crate) use shared::Channel;
 
 /// No master exists on this platform, so no channel is ever handed out.
 #[cfg(not(unix))]
+#[derive(Debug)]
 pub(crate) enum Channel {}
 
 #[cfg(unix)]
