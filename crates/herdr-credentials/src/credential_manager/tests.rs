@@ -1,11 +1,19 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
+/// Held by each test for its whole run, cleanup included. Credential Manager
+/// keeps one store per user, and a write that races another thread's write or
+/// delete there can be lost: the next read then finds nothing.
+static CREDENTIAL_MANAGER: Mutex<()> = Mutex::new(());
 
 /// A service name of this test run's own, removed again when dropped, so the
 /// user's real sign-ins are never touched and a failed test leaves nothing.
 struct Scratch {
     service: String,
     accounts: [&'static str; 2],
+    // Dropped after `Drop::drop` has removed the entries.
+    _serial: MutexGuard<'static, ()>,
 }
 
 impl Scratch {
@@ -16,6 +24,9 @@ impl Scratch {
                 "github.com",
                 "github.com/host/0123456789abcdef0123456789abcdef",
             ],
+            _serial: CREDENTIAL_MANAGER
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
         }
     }
 
