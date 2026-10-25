@@ -11,8 +11,12 @@
 //!
 //! The network after a wake is often not up yet: Wi-Fi joins seconds later,
 //! and a dial made before then hangs until its timeout. On macOS the system's
-//! network path monitor says when a usable path appears or changes, and that
-//! recovers connections again. Elsewhere only the clocks are watched.
+//! network path monitor says when a usable path comes back, which recovers
+//! connections as a wake does, and when a usable path changes, such as a VPN
+//! coming up or the primary interface moving, which only has live links
+//! prove themselves: such reports also arrive for changes that matter to no
+//! connection, so they must not abandon dials or start backoffs over.
+//! Elsewhere only the clocks are watched.
 use crate::HerdrWindow;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -27,31 +31,42 @@ const SLEEP_GAP: Duration = Duration::from_secs(5);
 /// and the rest wait out this gap and recover once more for the final path.
 const NETWORK_SETTLE: Duration = Duration::from_secs(1);
 
-/// What made connections suspect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// What made connections suspect, weakest first: a stronger trigger does
+/// everything a weaker one does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Trigger {
+    /// A usable path changed into another usable one.
+    PathChanged,
+    /// A usable path came back after there was none.
+    NetworkRestored,
     Sleep,
-    Network,
+}
+
+/// How many network changes the monitor has reported, by kind.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct NetworkChanges {
+    pub(crate) restored: u64,
+    pub(crate) changed: u64,
 }
 
 pub(crate) struct WakeClock {
     instant: Instant,
     wall: SystemTime,
-    /// How many network changes had been reported at the last reading.
-    network: u64,
-    /// A network change seen but not yet recovered from, held back by
-    /// `NETWORK_SETTLE`.
-    pending: bool,
+    /// The network changes reported at the last reading.
+    network: NetworkChanges,
+    /// The strongest network change seen but not yet recovered from, held
+    /// back by `NETWORK_SETTLE`.
+    pending: Option<Trigger>,
     recovered: Option<Instant>,
 }
 
 impl WakeClock {
-    pub(crate) fn new(instant: Instant, wall: SystemTime, network: u64) -> Self {
+    pub(crate) fn new(instant: Instant, wall: SystemTime, network: NetworkChanges) -> Self {
         Self {
             instant,
             wall,
             network,
-            pending: false,
+            pending: None,
             recovered: None,
         }
     }
@@ -71,69 +86,97 @@ impl WakeClock {
     }
 
     /// Whether connections should be recovered now, and why. `network` is the
-    /// count of network changes reported so far. A sleep always recovers: the
+    /// network changes reported so far. A sleep always recovers: the
     /// monotonic clock barely moved across it, so no settling gap can be
     /// measured against it.
     pub(crate) fn due(
         &mut self,
         instant: Instant,
         wall: SystemTime,
-        network: u64,
+        network: NetworkChanges,
     ) -> Option<Trigger> {
         let slept = self.woke(instant, wall);
-        self.pending |= network != self.network;
+        let seen = if network.restored != self.network.restored {
+            Some(Trigger::NetworkRestored)
+        } else if network.changed != self.network.changed {
+            Some(Trigger::PathChanged)
+        } else {
+            None
+        };
+        self.pending = self.pending.max(seen);
         self.network = network;
         let trigger = if slept {
             Trigger::Sleep
-        } else if self.pending
+        } else if let Some(pending) = self.pending
             && self
                 .recovered
                 .is_none_or(|at| instant.saturating_duration_since(at) >= NETWORK_SETTLE)
         {
-            Trigger::Network
+            pending
         } else {
             return None;
         };
-        self.pending = false;
+        self.pending = None;
         self.recovered = Some(instant);
         Some(trigger)
     }
 }
 
-/// How many times a usable network path has appeared or changed since the
-/// monitor started; always zero where none is watched.
-fn network_changes() -> u64 {
+/// Starts watching the network, once for the app rather than per window, so
+/// test windows never start the system's monitor. Does nothing where no
+/// monitor is available.
+pub(crate) fn watch_network() {
+    #[cfg(target_os = "macos")]
+    network::watch();
+}
+
+/// The network changes reported since [`watch_network`]; always none before
+/// it or where none is watched.
+pub(crate) fn network_changes() -> NetworkChanges {
     #[cfg(target_os = "macos")]
     {
         network::changes()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        0
+        NetworkChanges::default()
     }
 }
 
 impl HerdrWindow {
-    /// After a sleep or a network change, recover every endpoint at once
-    /// rather than at the end of its backoff: the network the user woke to,
-    /// or just joined, may be the one it was waiting for.
-    pub(crate) fn recover_connections(&mut self, instant: Instant, wall: SystemTime) -> bool {
-        let Some(trigger) = self.wake.due(instant, wall, network_changes()) else {
+    /// After a sleep or a network change, have every endpoint recover rather
+    /// than wait out its backoff: the network the user woke to, or just
+    /// joined, may be the one it was waiting for. Each endpoint recovers in
+    /// its own poll, once it has taken what its worker reported, so a
+    /// recovery never acts on a status one update old.
+    pub(crate) fn recover_connections(
+        &mut self,
+        instant: Instant,
+        wall: SystemTime,
+        network: NetworkChanges,
+    ) -> bool {
+        let Some(trigger) = self.wake.due(instant, wall, network) else {
             return false;
         };
         match trigger {
             Trigger::Sleep => {
                 tracing::info!(category = "wake", "machine woke; checking connections");
             }
-            Trigger::Network => {
+            Trigger::NetworkRestored => {
                 tracing::info!(
                     category = "network",
-                    "network changed; checking connections"
+                    "network came back; checking connections"
+                );
+            }
+            Trigger::PathChanged => {
+                tracing::info!(
+                    category = "network",
+                    "network path changed; checking live connections"
                 );
             }
         }
         for endpoint in &mut self.endpoints {
-            endpoint.recover(instant);
+            endpoint.recovery = endpoint.recovery.max(Some(trigger));
         }
         true
     }

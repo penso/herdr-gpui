@@ -122,8 +122,6 @@ impl HerdrWindow {
         });
         let window_closed = Self::give_back_torn_tabs(cx);
         let terminal_focus = Self::leave_region_with_terminal(&focus, window, cx);
-        // Starts watching the network on macOS.
-        let wake = endpoint::WakeClock::now();
         let mut this = Self {
             // keep-sorted start
             _activation: activation,
@@ -302,7 +300,7 @@ impl HerdrWindow {
             usage: Default::default(),
             version_notice_shown: false,
             viewport_width: 0.,
-            wake,
+            wake: endpoint::WakeClock::now(),
             wheel: WheelAccumulator::default(),
             workspace_drag: None,
             worktree_script: None,

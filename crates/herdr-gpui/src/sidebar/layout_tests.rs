@@ -695,7 +695,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         wake: crate::endpoint::WakeClock::new(
             std::time::Instant::now(),
             std::time::SystemTime::now(),
-            0,
+            Default::default(),
         ),
         painter: Default::default(),
         backdrop: Default::default(),

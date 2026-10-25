@@ -293,12 +293,13 @@ impl ConnectionBridge {
     }
 
     /// Whether the worker has reported this link up, which the window learns
-    /// only when it next takes an update. Never blocks: a busy inbox reads as
-    /// not up, leaving the window's own view to decide.
-    pub fn reports_connected(&self) -> bool {
+    /// only when it next takes an update. Never blocks: `None` while the event
+    /// reader holds the inbox, when the answer is not yet known.
+    pub fn reports_connected(&self) -> Option<bool> {
         self.inbox
             .try_lock()
-            .is_ok_and(|state| state.status.is_connected())
+            .ok()
+            .map(|state| state.status.is_connected())
     }
 
     pub fn take_update(&self) -> Option<LiveState> {

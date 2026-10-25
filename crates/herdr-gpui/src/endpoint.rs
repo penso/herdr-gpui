@@ -26,6 +26,7 @@ mod wake;
 pub(super) use catalog::Catalog;
 pub(crate) use history::Step;
 pub(super) use wake::WakeClock;
+pub(crate) use wake::watch_network;
 
 pub(super) const LOCAL: &str = "local";
 /// Saved SSH endpoints are keyed `ssh:<profile-id>`, so no catalog ID can
@@ -159,6 +160,9 @@ pub(super) struct Endpoint {
     pub(crate) version_mismatch: Option<VersionMismatch>,
     retry_at: Instant,
     attempts: u32,
+    /// A sleep or network change this endpoint has not yet recovered from;
+    /// see [`Self::recover`].
+    recovery: Option<wake::Trigger>,
     online_since: Option<Instant>,
     /// Why the last connection ended, from the drop until a replacement has a
     /// snapshot. Each retry replaces `live`, so the outage outlives it here.
@@ -229,6 +233,7 @@ impl Endpoint {
             version_mismatch: None,
             retry_at: Instant::now(),
             attempts: 0,
+            recovery: None,
             online_since: None,
             outage: None,
             detached: false,
@@ -375,6 +380,11 @@ impl Endpoint {
             );
             changed = Redraw::Window;
         }
+        if let Some(trigger) = self.recovery
+            && self.recover(trigger, now)
+        {
+            self.recovery = None;
+        }
         if self.connection.handle.is_some()
             && self.live.status.is_connected()
             && self.live.snapshot.is_some()
@@ -390,30 +400,52 @@ impl Endpoint {
         changed
     }
 
-    /// After a sleep or a network change. Failures before it, often from dark
-    /// wakes with no network, say nothing about the network now, so the
-    /// backoff starts over. A live link is asked to prove itself, which a
-    /// healthy one does in a round trip. A remote attempt still dialing was
-    /// started over the old path and may hang until its timeout, so it is
-    /// abandoned and dialed again. A dropped endpoint is dialed at once.
-    /// Detached and disabled endpoints stay as they are. An attempt whose
-    /// connection the worker has reported but this poll has not yet taken is
-    /// already a live link, and is pinged like one.
-    fn recover(&mut self, now: Instant) {
-        self.attempts = 0;
+    /// After a sleep or a network change, once this poll has taken what the
+    /// worker reported. A live link is asked to prove itself, which a healthy
+    /// one does in a round trip; a changed path does nothing more, since such
+    /// reports also come for changes no connection minds.
+    ///
+    /// After a sleep or a network coming back, failures before it, often from
+    /// dark wakes with no network, say nothing about the network now, so the
+    /// backoff starts over. A remote attempt still dialing was started with
+    /// no usable path and may hang until its timeout, so it is abandoned and
+    /// dialed again, unless the worker has reported it up since the update
+    /// was taken. A dropped endpoint is dialed at once, except one refused
+    /// for a reason only the user can fix. Detached and disabled endpoints
+    /// stay as they are.
+    ///
+    /// Returns false, to be called again next poll, when the worker's report
+    /// cannot be read without blocking.
+    fn recover(&mut self, trigger: wake::Trigger, now: Instant) -> bool {
+        let thorough = trigger >= wake::Trigger::NetworkRestored;
         let networked = self.connection.target.is_remote()
             && !matches!(self.connection.target, ConnectTarget::Wsl { .. });
-        if networked
+        if thorough
+            && networked
+            && self.connection.handle.is_some()
             && !self.live.status.is_connected()
-            && !self.connection.reports_connected()
-            && let Some(handle) = self.connection.handle.take()
         {
-            handle.disconnect();
+            match self.connection.reports_connected() {
+                None => return false,
+                Some(true) => {}
+                Some(false) => {
+                    if let Some(handle) = self.connection.handle.take() {
+                        handle.disconnect();
+                    }
+                }
+            }
+        }
+        if thorough {
+            self.attempts = 0;
         }
         match &self.connection.handle {
             Some(handle) => handle.check_liveness(),
-            None => self.retry_at = self.retry_at.min(now),
+            None if thorough && !self.live.ssh_failure.is_some_and(SshFailure::needs_user) => {
+                self.retry_at = self.retry_at.min(now);
+            }
+            None => {}
         }
+        true
     }
 
     /// When the current connection came up with a snapshot, while it is up.
