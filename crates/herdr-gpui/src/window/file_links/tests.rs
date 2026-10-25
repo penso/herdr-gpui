@@ -226,7 +226,11 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
         assert!(view.hovered_local_link().is_none());
         assert!(!view.terminal_link_hovered(found, Modifiers::default()));
         assert!(!view.terminal_link_hovered(found, Modifiers::secondary_key()));
-        assert!(!view.link_modifier_held(found, Modifiers::secondary_key()));
+        assert!(!view.link_modifier_held(
+            found,
+            gpui::MouseButton::Left,
+            Modifiers::secondary_key()
+        ));
     });
     cx.simulate_click(found, Modifiers::default());
     cx.run_until_parked();
@@ -240,7 +244,11 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
         let link = view.hovered_local_link().unwrap();
         assert_eq!((link.row, link.columns.clone()), (0, 4..20));
         assert!(view.terminal_link_hovered(found, Modifiers::secondary_key()));
-        assert!(view.link_modifier_held(found, Modifiers::secondary_key()));
+        assert!(view.link_modifier_held(
+            found,
+            gpui::MouseButton::Left,
+            Modifiers::secondary_key()
+        ));
     });
 
     // A path that is not there stays plain text.
@@ -249,7 +257,11 @@ fn a_link_modifier_click_opens_a_printed_file_that_exists(cx: &mut gpui::TestApp
     view.read_with(cx, |view, _| {
         assert!(view.hovered_local_link().is_none());
         assert!(!view.terminal_link_hovered(missing, Modifiers::secondary_key()));
-        assert!(!view.link_modifier_held(missing, Modifiers::secondary_key()));
+        assert!(!view.link_modifier_held(
+            missing,
+            gpui::MouseButton::Left,
+            Modifiers::secondary_key()
+        ));
     });
 
     cx.simulate_click(missing, Modifiers::secondary_key());

@@ -2,6 +2,7 @@
 use super::*;
 
 mod crashes;
+mod link_click_modifier;
 
 fn redactor() -> Redactor {
     Redactor::new(Some(Path::new("/Users/someone")))

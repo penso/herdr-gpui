@@ -185,7 +185,11 @@ fn a_wrapped_link_is_resolved_underlined_and_activated_by_the_daemon(
             vec![(0, 0..20), (1, 0..12)]
         );
         assert!(view.terminal_link_hovered(continuation, Modifiers::secondary_key()));
-        assert!(view.link_modifier_held(continuation, Modifiers::secondary_key()));
+        assert!(view.link_modifier_held(
+            continuation,
+            gpui::MouseButton::Left,
+            Modifiers::secondary_key()
+        ));
     });
 
     // Moving along the link asks nothing new. A click goes to the daemon;
