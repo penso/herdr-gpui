@@ -18,12 +18,12 @@ fn run(script: &str, home: &Path, input: &str) {
         .stdin(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
+    // A script that keeps the user's own file exits without reading its
+    // input, as run_script allows; the write then races that exit.
+    match child.stdin.take().unwrap().write_all(input.as_bytes()) {
+        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {}
+        written => written.unwrap(),
+    }
     assert!(child.wait().unwrap().success());
 }
 
