@@ -292,6 +292,15 @@ impl ConnectionBridge {
         self.inbox.try_lock().is_ok_and(|state| state.dirty)
     }
 
+    /// Whether the worker has reported this link up, which the window learns
+    /// only when it next takes an update. Never blocks: a busy inbox reads as
+    /// not up, leaving the window's own view to decide.
+    pub fn reports_connected(&self) -> bool {
+        self.inbox
+            .try_lock()
+            .is_ok_and(|state| state.status.is_connected())
+    }
+
     pub fn take_update(&self) -> Option<LiveState> {
         let mut state = self.inbox.try_lock().ok()?;
         if !state.dirty {

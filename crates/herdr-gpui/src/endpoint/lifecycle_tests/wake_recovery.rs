@@ -81,3 +81,27 @@ fn recovering_dials_a_dropped_endpoint_at_once() {
     assert_eq!(endpoint.retry_at, now);
     assert_eq!(endpoint.attempts, 0);
 }
+
+/// The worker can report a link up just before a recovery, in the same poll
+/// that has not yet taken the update: that link is live, so it is pinged and
+/// kept, not abandoned and redialed.
+#[test]
+fn recovering_keeps_a_link_whose_connection_is_not_yet_polled() {
+    let (mut endpoint, _server) = connected_endpoint("ssh:test");
+    endpoint.connection.target = ssh();
+    // As before the poll that takes the worker's Connected update.
+    endpoint.live.status = ConnectionStatus::Connecting;
+    endpoint.connection.inbox.lock().unwrap().dirty = true;
+    assert!(endpoint.connection.reports_connected());
+    let handle = endpoint.connection.handle.clone().unwrap();
+    let later = Instant::now() + Duration::from_secs(30);
+    endpoint.retry_at = later;
+
+    endpoint.recover(Instant::now());
+
+    assert!(!handle.is_disconnected());
+    assert!(endpoint.connection.handle.is_some());
+    assert_eq!(endpoint.retry_at, later);
+    endpoint.poll(Instant::now());
+    assert!(endpoint.live.status.is_connected());
+}

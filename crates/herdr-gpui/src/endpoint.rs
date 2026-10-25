@@ -396,13 +396,16 @@ impl Endpoint {
     /// healthy one does in a round trip. A remote attempt still dialing was
     /// started over the old path and may hang until its timeout, so it is
     /// abandoned and dialed again. A dropped endpoint is dialed at once.
-    /// Detached and disabled endpoints stay as they are.
+    /// Detached and disabled endpoints stay as they are. An attempt whose
+    /// connection the worker has reported but this poll has not yet taken is
+    /// already a live link, and is pinged like one.
     fn recover(&mut self, now: Instant) {
         self.attempts = 0;
         let networked = self.connection.target.is_remote()
             && !matches!(self.connection.target, ConnectTarget::Wsl { .. });
         if networked
             && !self.live.status.is_connected()
+            && !self.connection.reports_connected()
             && let Some(handle) = self.connection.handle.take()
         {
             handle.disconnect();
