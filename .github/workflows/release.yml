@@ -176,6 +176,12 @@ jobs:
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
       - run: cargo build --locked --release -p herdr-gpui --target "$TARGET"
+      # Rosetta translates an x86_64 executable on its first launch, which can
+      # outlast the smoke test's 10 second limit. Launch it once untimed, as
+      # CI does, so the smoke test finds it translated.
+      - name: Translate the x86_64 executable once
+        if: matrix.arch == 'x86_64'
+        run: '"target/$TARGET/release/herdr-gpui" --build-info'
       - run: python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"
       - name: Install the notice generator
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
