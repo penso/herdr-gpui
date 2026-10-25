@@ -145,3 +145,14 @@ fn work_is_found_from_branches_without_a_database() {
             .any(|run| run.item_key == recorded.key.canonical())
     );
 }
+
+#[test]
+fn a_branch_read_that_fails_says_so() {
+    // Not an empty list: the SSH slots retry a dropped connection only when
+    // they see its error, and the worker keeps the branches it last read.
+    let dir = tempfile::tempdir().unwrap();
+    let host = herdr_remote::teleport::Host::new(&herdr_client::ConnectTarget::Local).unwrap();
+    let missing = dir.path().join("missing").to_string_lossy().into_owned();
+    let never = std::sync::atomic::AtomicBool::new(false);
+    assert!(crate::naming::local_branches(&host, &missing, &never).is_err());
+}

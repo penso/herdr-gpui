@@ -94,17 +94,31 @@ impl HerdrWindow {
             }
             // Remote cwd strings must never be resolved against this machine's
             // Git repos; `Checkout::of` reads a saved SSH device's over SSH.
-            if updated == Redraw::Window
-                && endpoint.online_since().is_some()
+            // A failed read is asked again once due, even on an idle host that
+            // sends no new snapshot.
+            let now = Instant::now();
+            if endpoint.online_since().is_some()
                 && let (Some(avatars), Some(snapshot)) =
                     (&mut self.avatars, &endpoint.live.snapshot)
+                && (updated == Redraw::Window
+                    || matches!(&endpoint.connection.target,
+                        ConnectTarget::Ssh { target, .. } if avatars.retry_due(target, now)))
             {
                 let target = &endpoint.connection.target;
-                let now = Instant::now();
                 for workspace in &snapshot.workspaces {
                     if let Some(checkout) = Checkout::of(index == 0, target, workspace) {
                         avatars.request(checkout, now);
                     }
+                }
+                if let ConnectTarget::Ssh { target: host, .. } = target {
+                    avatars.forget_unlisted(host, |dir| {
+                        snapshot.workspaces.iter().any(|workspace| {
+                            matches!(
+                                Checkout::of(index == 0, target, workspace),
+                                Some(Checkout::Ssh { dir: listed, .. }) if listed == dir
+                            )
+                        })
+                    });
                 }
             }
             if endpoint.enabled
@@ -116,6 +130,13 @@ impl HerdrWindow {
                 endpoint.connect(self.options, index == 0 && self.selected_endpoint == 0);
                 selected_changed |= index == self.selected_endpoint;
                 changed = Redraw::Window;
+            }
+            // Only a requested surface flushes, which in practice is the
+            // selected endpoint's, so its error is the one the window shows.
+            if let Err(error) = endpoint.flush_config_reload()
+                && index == self.selected_endpoint
+            {
+                self.local_error = Some(format!("Reload config: {error}"));
             }
         }
         crate::palette::LastSeen::trim(

@@ -150,7 +150,7 @@ pub(super) fn network(context: &'static str) -> impl FnOnce(ureq::Error) -> Erro
             transport = %error,
             "GitHub request did not complete"
         );
-        Error::GitHubNetwork(error)
+        Error::Network(error)
     }
 }
 
@@ -158,26 +158,26 @@ pub(super) fn network(context: &'static str) -> impl FnOnce(ureq::Error) -> Erro
 /// without matching on user-facing sentences.
 pub(super) fn kind(error: &Error) -> &'static str {
     match error {
-        Error::GitHubAuthentication => "authentication",
-        Error::GitHubForbidden => "forbidden",
-        Error::GitHubRateLimit { .. } => "rate_limit",
-        Error::GitHubRepositoryHidden { .. } => "repository_hidden",
-        Error::GitHubStatus(_) => "status",
-        Error::GitHubRead(_) => "read",
-        Error::GitHubSize => "size",
-        Error::GitHubJson(_) => "json",
-        Error::GitHubToken => "token",
-        Error::GitHubTokenType => "token_type",
-        Error::GitHubEncoding(_) => "encoding",
-        Error::GitHubNetwork(_) => "network",
-        Error::GitHubHeader(_) => "header",
-        Error::GitHubDevice => "device",
-        Error::GitHubExpired => "expired",
-        Error::GitHubDenied => "denied",
-        Error::GitHubAuthorization => "authorization",
-        Error::GitHubQuery => "query",
-        Error::GitHubRejected(_) => "rejected",
-        Error::GitHubWorker(_) => "worker",
+        Error::Authentication => "authentication",
+        Error::Forbidden => "forbidden",
+        Error::RateLimit { .. } => "rate_limit",
+        Error::RepositoryHidden { .. } => "repository_hidden",
+        Error::Status(_) => "status",
+        Error::Read(_) => "read",
+        Error::Size => "size",
+        Error::Json(_) => "json",
+        Error::Token => "token",
+        Error::TokenType => "token_type",
+        Error::Encoding(_) => "encoding",
+        Error::Network(_) => "network",
+        Error::Header(_) => "header",
+        Error::Device => "device",
+        Error::Expired => "expired",
+        Error::Denied => "denied",
+        Error::Authorization => "authorization",
+        Error::Query => "query",
+        Error::Rejected(_) => "rejected",
+        Error::Worker(_) => "worker",
         Error::Credentials(error) => match error {
             #[cfg(target_os = "macos")]
             CredentialError::KeychainRead(_) => "keychain_read",
@@ -210,7 +210,7 @@ pub(super) fn kind(error: &Error) -> &'static str {
 /// Records the failed step next to the message the menu shows.
 pub(super) fn failure(context: &'static str, error: &Error) {
     let transport = match error {
-        Error::GitHubNetwork(source) => source.to_string(),
+        Error::Network(source) => source.to_string(),
         _ => String::new(),
     };
     tracing::warn!(

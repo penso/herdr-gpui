@@ -2,7 +2,7 @@ use super::*;
 
 const DEVBOX: Checkout<&str> = Checkout::Ssh {
     target: "devbox",
-    git_dir: "/home/user/src/app/.git",
+    dir: "/home/user/src/app/.git",
 };
 
 #[test]
@@ -13,7 +13,10 @@ fn an_unreachable_host_is_asked_again_only_after_the_retry_interval() {
     assert_eq!(incoming.try_iter().count(), 1);
     assert!(
         outgoing
-            .send((DEVBOX.to_owned(), Err(herdr_client::Error::SshTimeout)))
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));
@@ -62,11 +65,11 @@ fn an_unreachable_retry_is_not_refused_by_the_request_bound() {
     let dirs = (0..MAX_REQUESTS)
         .map(|index| format!("/repo/{index}/.git"))
         .collect::<Vec<_>>();
-    for git_dir in &dirs {
+    for dir in &dirs {
         avatars.request(
             Checkout::Ssh {
                 target: "devbox",
-                git_dir,
+                dir,
             },
             start,
         );
@@ -74,11 +77,14 @@ fn an_unreachable_retry_is_not_refused_by_the_request_bound() {
     assert_eq!(incoming.try_iter().count(), MAX_REQUESTS);
     let first = Checkout::Ssh {
         target: "devbox",
-        git_dir: &dirs[0],
+        dir: &dirs[0],
     };
     assert!(
         outgoing
-            .send((first.to_owned(), Err(herdr_client::Error::SshClosed)))
+            .send((
+                first.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Closed))
+            ))
             .is_ok()
     );
     assert!(avatars.poll(start));
@@ -96,4 +102,60 @@ fn local_checkouts_never_fail_the_lookup() {
         repo_owner(Checkout::Local(cwd), &Default::default()),
         Ok(None)
     ));
+}
+
+#[test]
+fn a_failed_read_is_due_for_its_host_only_after_the_retry_interval() {
+    let (mut avatars, _incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert!(
+        outgoing
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
+            .is_ok()
+    );
+    assert!(avatars.poll(now));
+    // An idle host sends no snapshot, so the poll loop asks when this holds.
+    assert!(!avatars.retry_due("devbox", now));
+    assert!(!avatars.retry_due("other", now + RETRY_AFTER));
+    assert!(avatars.retry_due("devbox", now + RETRY_AFTER));
+}
+
+#[test]
+fn a_closed_workspace_does_not_keep_its_host_due() {
+    let (mut avatars, _incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert!(
+        outgoing
+            .send((
+                DEVBOX.to_owned(),
+                Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
+            ))
+            .is_ok()
+    );
+    assert!(avatars.poll(now));
+    // Still listed: it stays due.
+    avatars.forget_unlisted("devbox", |dir| dir == "/home/user/src/app/.git");
+    assert!(avatars.retry_due("devbox", now + RETRY_AFTER));
+    // Its workspace closed: forgotten, so the host is no longer due.
+    avatars.forget_unlisted("devbox", |_| false);
+    assert!(!avatars.retry_due("devbox", now + RETRY_AFTER));
+}
+
+#[test]
+fn forgetting_keeps_reads_that_worked() {
+    let (mut avatars, incoming, outgoing) = detached();
+    let now = Instant::now();
+    avatars.request(DEVBOX, now);
+    assert_eq!(incoming.try_iter().count(), 1);
+    assert!(outgoing.send((DEVBOX.to_owned(), Ok(None))).is_ok());
+    assert!(avatars.poll(now));
+    avatars.forget_unlisted("devbox", |_| false);
+    // Resolved, so it is not asked again.
+    avatars.request(DEVBOX, now);
+    assert!(incoming.try_recv().is_err());
 }

@@ -12,7 +12,7 @@ fn renewed() -> Credential {
 
 fn profile(token: Arc<SecretString>) -> Result<Profile> {
     if token.expose_secret() == "old-access" {
-        return Err(Error::GitHubAuthentication);
+        return Err(Error::Authentication);
     }
     Ok(Profile {
         login: "fixture".into(),
@@ -139,7 +139,7 @@ fn legacy_and_nonexpiring_tokens_survive_without_rotation() {
         Credential::decode(&"old-access".into())
             .unwrap()
             .profile_with(profile, |_| panic!(), |_| panic!()),
-        Err(Error::GitHubAuthentication)
+        Err(Error::Authentication)
     ));
 }
 
@@ -190,9 +190,9 @@ fn refresh_can_replace_an_expiring_pair_with_a_nonexpiring_access_only_token() {
 #[test]
 fn transient_failure_never_refreshes_or_deletes_saved_credentials() {
     for error in [
-        Error::GitHubRateLimit { reset: None },
-        Error::GitHubStatus(500),
-        Error::GitHubForbidden,
+        Error::RateLimit { reset: None },
+        Error::Status(500),
+        Error::Forbidden,
     ] {
         let mut error = Some(error);
         assert!(
@@ -212,16 +212,16 @@ fn refresh_and_persistence_failures_are_reported_without_profile_retry() {
     assert!(matches!(
         credential().profile_with(
             profile,
-            |_| Err(Error::GitHubDenied),
+            |_| Err(Error::Denied),
             |_| panic!("failed rotation must not write")
         ),
-        Err(Error::GitHubDenied)
+        Err(Error::Denied)
     ));
     assert!(matches!(
         credential().profile_with(
             |token| {
                 assert_eq!(token.expose_secret(), "old-access");
-                Err(Error::GitHubAuthentication)
+                Err(Error::Authentication)
             },
             |_| Ok(renewed()),
             |_| Err(Error::Credentials(herdr_credentials::Error::Policy))
@@ -233,10 +233,10 @@ fn refresh_and_persistence_failures_are_reported_without_profile_retry() {
         credential().profile_with(
             |token| {
                 if token.expose_secret() == "old-access" {
-                    Err(Error::GitHubAuthentication)
+                    Err(Error::Authentication)
                 } else {
                     assert!(wrote.get());
-                    Err(Error::GitHubStatus(503))
+                    Err(Error::Status(503))
                 }
             },
             |_| Ok(renewed()),
@@ -245,7 +245,7 @@ fn refresh_and_persistence_failures_are_reported_without_profile_retry() {
                 Ok(())
             }
         ),
-        Err(Error::GitHubStatus(503))
+        Err(Error::Status(503))
     ));
     assert!(wrote.get());
 }

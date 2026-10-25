@@ -108,7 +108,7 @@ fn the_base_falls_back_from_a_missing_or_unsafe_hint() {
     let directory = repository("trunk");
     assert!(matches!(
         read(&directory, Scope::Branch, None),
-        Err(crate::Error::ReviewNoBase)
+        Err(crate::Error::Review(crate::review::Error::NoBase))
     ));
     let branch = read(&directory, Scope::Branch, Some("trunk")).unwrap();
     assert_eq!(branch.base.as_deref(), Some("trunk"));

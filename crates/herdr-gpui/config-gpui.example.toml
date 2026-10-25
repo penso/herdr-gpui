@@ -87,6 +87,15 @@ show_device_icons = true
 # on its sidebar row. Connected remote hosts are read over SSH every couple of
 # seconds; false stops all sampling. Also under Settings > Status bar.
 show_system_load = true
+# GPU and video memory, from nvidia-smi, the amdgpu driver, or ioreg on a Mac.
+# show_gpu_load shows the selected host's in the status bar (Settings > Status
+# bar); show_sidebar_gpu_load shows each host's on a sidebar line under its
+# CPU and memory, or as a gauge after its name in compact densities (Settings
+# > Sidebar). While
+# either is on, the Overview and Devices pages show GPUs too; with both off no
+# GPU tool runs on any host.
+show_gpu_load = false
+show_sidebar_gpu_load = false
 # Checkpoint a worktree each time one of its agents starts or finishes a turn,
 # locally or over SSH, so its files can be rolled back from the workspace
 # menu's Checkpoints. Snapshots include untracked (not ignored) files, live in
@@ -157,9 +166,10 @@ keep_selection_after_copy = true
 layout = "normal"
 # How tab strips draw their tabs: "classic" (even cells divided by a rule),
 # "pills" (rounded pills led by the agent's logo, the status after the title),
-# "underline" (flat titles, a bar under the chosen one), "cards" (browser-like,
-# the chosen tab joined to its terminal), or "compact" (icons only, the chosen
-# tab named). View > Tab Layout lists them all.
+# "outline" (bare titles, the chosen one in an outlined pill with its close
+# button), "underline" (flat titles, a bar under the chosen one), "cards"
+# (browser-like, the chosen tab joined to its terminal), or "compact" (icons
+# only, the chosen tab named). View > Tab Layout lists them all.
 tab_layout = "classic"
 
 [palette]
@@ -376,13 +386,14 @@ size = 12
 # which keeps the theme as drawn. In every sidebar layout, worktrees nested
 # under their main checkout hang from it on the tree's thin guide lines; one
 # standing alone, its main checkout not open, shows the branch glyph in place
-# of the owner's avatar. Its workspace gets a thin rule where the tab strip
-# meets the terminals, and none while the strip is hidden; terminal cells are
-# never covered or recoloured. tint picks the glyph's and the rule's hue as
+# of the owner's avatar. With "terminal" in apply_to, its workspace also gets
+# a thin rule where the tab strip meets the terminals, and none while the
+# strip is hidden; terminal cells are never covered or recoloured. tint picks the glyph's and the rule's hue as
 # #rgb or #rrggbb; unset, it is the theme's blue. Either way the hue only gets
 # lighter or darker as far as it must to stand out from the chrome. apply_to
-# lists where the marks show, "sidebar" and "terminal"; [] turns them off,
-# leaving the guides only in the flat layouts, which always drew them.
+# lists where the marks show, "sidebar" and "terminal"; it defaults to
+# ["sidebar"]. [] turns them off, leaving the guides only in the flat
+# layouts, which always drew them.
 # [worktrees]
 # tint = "#7aa2f7"
 # apply_to = ["sidebar", "terminal"]
@@ -452,10 +463,23 @@ size = 12
 # How chat views draw: "timeline" (entries on a line with avatars), "bubbles"
 # (your messages in bubbles on the right, like Claude's app), "terminal"
 # (Claude Code's own screen, in the terminal font), "document" (each prompt
-# a heading, the reply prose under it), or "cards" (each turn in one card).
+# a heading, the reply prose under it), "cards" (each turn in one card), or
+# "imessage" (blue and gray bubbles with tails, like Apple's Messages).
 # The button in a chat's header steps through them.
 # [chat]
 # layout = "timeline"
+#
+# Scroll smoothly to a streaming reply's new text, rather than jumping to it
+# as each chunk lands. Settings > General edits this while ACP chats are on.
+# glide = false
+#
+# Where tab strips offer a one-click chat with each installed agent; "+" keeps
+# opening a terminal tab in every placement. "plus" (the agents slide out
+# beside "+" under the pointer), "beside" (right after "+"), "leading" (before
+# the tabs), "trailing" (at the strip's right end), "button" (one button for
+# the agent last started, the others sliding out beside it), or "off".
+# Settings > General edits this while ACP chats are on.
+# launcher = "plus"
 
 # Variables every chat's tab starts with, on this machine or an SSH host, so
 # an agent reaches a company endpoint the pane's shell does not set up: GitHub
@@ -641,8 +665,9 @@ size = 12
 # over it; lower opacity shows more of it.
 # image = "~/Pictures/wallpaper.jpg"
 
-# What the status bar shows, also under Settings > Status bar. Whether usage
-# and CPU/memory show at all is [usage] show and show_system_load.
+# What the status bar shows, also under Settings > Status bar. Whether usage,
+# CPU/memory, and the GPU show at all is [usage] show, show_system_load, and
+# show_gpu_load.
 # [status_bar]
 # The bar itself. false opens windows without it; Terminal > Toggle Status Bar,
 # or a `toggle_status_bar` binding, hides or shows it for the session. While
@@ -653,6 +678,8 @@ size = 12
 # usage = "detailed"
 # "detailed" draws a CPU graph and a memory meter; "compact" shows the shares.
 # system_load = "detailed"
+# "detailed" draws a GPU graph and a video memory meter; "compact" the shares.
+# gpu_detail = "detailed"
 # The cup that keeps the machine awake; it stays while holding, so it can stop.
 # keep_awake = true
 # What the cup keeps awake: "display" holds the display and the system, so the

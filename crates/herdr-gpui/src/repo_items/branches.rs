@@ -3,10 +3,7 @@
 //! off the UI thread.
 
 use super::model::branch_name;
-use crate::{
-    Error,
-    pull_request::{Input, clean, repository_key, run},
-};
+use crate::pull_request::{Input, clean, repository_key, run};
 use std::{
     collections::HashSet,
     path::Path,
@@ -36,7 +33,7 @@ pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Resul
     let deadline = Instant::now() + TIMEOUT;
     let repo_key = repository_key(input, deadline, cancelled)?;
     if !Path::new(&repo_key).is_absolute() {
-        return Err(Error::PrAbsolutePath);
+        return Err(herdr_github::pull_request::Error::AbsolutePath.into());
     }
     let mut command = herdr_client::new_command("git");
     command
@@ -46,10 +43,11 @@ pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Resul
         .arg("refs/heads");
     let (ok, output) = run(&mut command, deadline, cancelled)?;
     if !ok {
-        return Err(Error::GitFailed {
+        return Err(herdr_vcs::Error::from(crate::git::Error::Failed {
             operation: "list branches",
             details: clean(output.trim()),
-        });
+        })
+        .into());
     }
     Ok(parse(&output))
 }
@@ -157,7 +155,9 @@ mod tests {
         };
         assert!(matches!(
             list(&input, &|| false),
-            Err(Error::PrAbsolutePath)
+            Err(crate::Error::GitHub(herdr_github::Error::PullRequest(
+                herdr_github::pull_request::Error::AbsolutePath
+            )))
         ));
     }
 }

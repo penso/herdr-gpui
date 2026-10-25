@@ -28,7 +28,7 @@ pub use {
         Created, Naming, NewCheckout, Origin as FreshOrigin, Prepared, base_commit,
         dispatch_workspace, dispatch_worktree, prepare,
     },
-    host::Host,
+    host::{Host, installed_programs_script},
     job::{HostRepositories, Place, Retired, Source, open_repositories},
     launch::AgentKind,
     marks::{Mark, Marks},

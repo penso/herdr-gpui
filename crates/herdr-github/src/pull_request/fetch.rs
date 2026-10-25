@@ -65,7 +65,7 @@ impl Origins {
         cancelled: &impl Fn() -> bool,
     ) -> crate::Result<(String, String)> {
         // A remote workspace without daemon metadata never gets this far.
-        let key = input.repo_key.as_deref().ok_or(Error::PrMetadata)?;
+        let key = input.repo_key.as_deref().ok_or(super::Error::Metadata)?;
         self.0
             .retain(|(_, _, resolved, _)| now.duration_since(*resolved) < ORIGIN_TTL);
         if let Some((.., repository)) = self
@@ -77,7 +77,7 @@ impl Origins {
         }
         let timeout = deadline
             .checked_duration_since(now)
-            .ok_or(Error::PrTimeout)?;
+            .ok_or(super::Error::Timeout)?;
         // The daemon's branch is trusted as reported: this client cannot run
         // local Git against the host's checkout to re-verify it.
         let repository = if let Ok(Some(upstream)) = herdr_client::remote_config_value(
@@ -94,10 +94,10 @@ impl Origins {
             // fallback gets only what is left, never a fresh timeout.
             let timeout = deadline
                 .checked_duration_since(Instant::now())
-                .ok_or(Error::PrTimeout)?;
+                .ok_or(super::Error::Timeout)?;
             let remote = herdr_client::remote_origin_url(target, key, timeout, cancelled)?
-                .ok_or(Error::PrOrigin)?;
-            crate::github_repo(&remote).ok_or(Error::PrOrigin)?
+                .ok_or(super::Error::Origin)?;
+            crate::github_repo(&remote).ok_or(super::Error::Origin)?
         };
         if self.0.len() == ORIGIN_LIMIT {
             self.0.remove(0);
@@ -126,7 +126,7 @@ pub(super) fn fetch(
     match (batch.found.pop(), batch.failed.pop()) {
         (Some((_, result)), _) => result,
         (None, Some((_, error))) => Err(error),
-        (None, None) => Err(Error::PrCancelled),
+        (None, None) => Err(super::Error::Cancelled.into()),
     }
 }
 
@@ -194,11 +194,11 @@ pub(super) fn target(
         }
         Origin::Ssh(target) => {
             let repository = origins.resolve(target, input, Instant::now(), deadline, cancelled)?;
-            let key = input.repo_key.as_deref().ok_or(Error::PrMetadata)?;
+            let key = input.repo_key.as_deref().ok_or(super::Error::Metadata)?;
             let head = upstream_head(&input.branch, |name| {
                 let timeout = deadline
                     .checked_duration_since(Instant::now())
-                    .ok_or(Error::PrTimeout)?;
+                    .ok_or(super::Error::Timeout)?;
                 Ok(herdr_client::remote_config_value(
                     target, key, name, timeout, cancelled,
                 )?)
@@ -208,7 +208,7 @@ pub(super) fn target(
             {
                 let timeout = deadline
                     .checked_duration_since(Instant::now())
-                    .ok_or(Error::PrTimeout)?;
+                    .ok_or(super::Error::Timeout)?;
                 herdr_client::remote_origin_url(target, key, timeout, cancelled)
                     .ok()
                     .flatten()
@@ -286,9 +286,9 @@ pub(super) fn upstream_head(
     let branch = merge
         .strip_prefix("refs/heads/")
         .filter(|branch| !branch.is_empty())
-        .ok_or(Error::PrBranch)?;
-    let url = config(&format!("remote.{remote}.url"))?.ok_or(Error::PrOrigin)?;
-    let (owner, repo) = crate::github_repo(&url).ok_or(Error::PrOrigin)?;
+        .ok_or(super::Error::Branch)?;
+    let url = config(&format!("remote.{remote}.url"))?.ok_or(super::Error::Origin)?;
+    let (owner, repo) = crate::github_repo(&url).ok_or(super::Error::Origin)?;
     Ok(Some(Head {
         owner,
         repo,
@@ -325,7 +325,7 @@ pub(super) fn origin_repository(
             host = remote_host(&remote),
             "Origin remote is not a GitHub.com repository"
         );
-        Error::PrOrigin
+        super::Error::Origin.into()
     })
 }
 
@@ -351,10 +351,10 @@ pub fn repository_key(
     let directory = match (&input.repo_key, &input.checkout) {
         (Some(key), _) => return Ok(key.clone()),
         (None, Some(directory)) => directory,
-        (None, None) => return Err(Error::PrMetadata),
+        (None, None) => return Err(super::Error::Metadata.into()),
     };
     if !Path::new(directory).is_absolute() {
-        return Err(Error::PrAbsolutePath);
+        return Err(super::Error::AbsolutePath.into());
     }
     git(
         directory,
@@ -363,7 +363,7 @@ pub fn repository_key(
         cancelled,
     )
     .map_err(|error| match error {
-        Error::PrCheckout => Error::PrWorkspaceRepository,
+        Error::PullRequest(super::Error::Checkout) => super::Error::WorkspaceRepository.into(),
         error => error,
     })
 }
@@ -385,13 +385,13 @@ pub fn local_checkout(
             .as_ref()
             .is_some_and(|key| !Path::new(key).is_absolute())
     {
-        return Err(Error::PrAbsolutePath);
+        return Err(super::Error::AbsolutePath.into());
     }
     if input.branch.is_empty()
         || input.branch.len() > 1024
         || input.branch.chars().any(char::is_control)
     {
-        return Err(Error::PrBranch);
+        return Err(super::Error::Branch.into());
     }
     let repo_key = repository_key(input, deadline, cancelled)?;
     let checkout = match (&input.checkout, &input.repo_key) {
@@ -423,7 +423,7 @@ pub fn local_checkout(
             ]);
             let (ok, output) = run(&mut command, deadline, cancelled)?;
             if !ok {
-                return Err(Error::PrWorktreeLookup);
+                return Err(super::Error::WorktreeLookup.into());
             }
             worktree_checkout(&output, &input.branch)?
         }
@@ -442,7 +442,7 @@ pub fn local_checkout(
         .zip(Path::new(&repo_key).canonicalize().ok())
         .is_none_or(|(actual, expected)| actual != expected)
     {
-        return Err(Error::PrRepositoryMismatch);
+        return Err(super::Error::RepositoryMismatch.into());
     }
     if git(
         &checkout,
@@ -451,7 +451,7 @@ pub fn local_checkout(
         cancelled,
     )? != input.branch
     {
-        return Err(Error::PrBranchChanged);
+        return Err(super::Error::BranchChanged.into());
     }
     Ok(checkout)
 }
@@ -471,7 +471,7 @@ pub(super) fn git(
         if ok {
             Ok(output.trim_end_matches(['\r', '\n']).to_owned())
         } else {
-            Err(Error::PrCheckout)
+            Err(super::Error::Checkout.into())
         }
     })
 }
@@ -483,9 +483,9 @@ pub(super) fn worktree_checkout(output: &str, branch: &str) -> crate::Result<Str
         let path = fields.next()?.strip_prefix("worktree ")?;
         (Path::new(path).is_absolute() && fields.any(|field| field == branch)).then_some(path)
     });
-    let path = paths.next().ok_or(Error::PrMissingWorktree)?;
+    let path = paths.next().ok_or(super::Error::MissingWorktree)?;
     if paths.next().is_some() {
-        return Err(Error::PrAmbiguousWorktree);
+        return Err(super::Error::AmbiguousWorktree.into());
     }
     Ok(path.into())
 }
@@ -498,7 +498,7 @@ pub fn run(
     let (ok, output) = run_bytes(command, deadline, cancelled, OUTPUT_LIMIT)?;
     String::from_utf8(output)
         .map(|text| (ok, text))
-        .map_err(|error| Error::PrEncoding(error.utf8_error()))
+        .map_err(|error| super::Error::Encoding(error.utf8_error()).into())
 }
 
 /// [`run`], keeping up to `limit` bytes of output as they came: for output
@@ -510,7 +510,7 @@ pub fn run_bytes(
     limit: usize,
 ) -> crate::Result<(bool, Vec<u8>)> {
     if cancelled() {
-        return Err(Error::PrCancelled);
+        return Err(super::Error::Cancelled.into());
     }
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("GIT_") {
@@ -540,33 +540,35 @@ pub fn run_bytes(
 }
 
 fn spawned(source: std::io::Error) -> Error {
-    Error::PrProcess {
+    super::Error::Process {
         operation: "launch Git (install git on PATH)",
         source,
     }
+    .into()
 }
 
 fn unreadable(source: std::io::Error) -> Error {
-    Error::PrProcess {
+    super::Error::Process {
         operation: "read process output",
         source,
     }
+    .into()
 }
 
 /// Merges the child's stdout and stderr into one stream this process can poll.
 #[cfg(unix)]
 fn capture(command: &mut Command) -> crate::Result<(UnixStream, Child)> {
-    let (reader, writer) = UnixStream::pair().map_err(|source| Error::PrProcess {
+    let (reader, writer) = UnixStream::pair().map_err(|source| super::Error::Process {
         operation: "create process output channel",
         source,
     })?;
     reader
         .set_nonblocking(true)
-        .map_err(|source| Error::PrProcess {
+        .map_err(|source| super::Error::Process {
             operation: "configure process output",
             source,
         })?;
-    let error_writer = writer.try_clone().map_err(|source| Error::PrProcess {
+    let error_writer = writer.try_clone().map_err(|source| super::Error::Process {
         operation: "configure process errors",
         source,
     })?;
@@ -581,11 +583,11 @@ fn capture(command: &mut Command) -> crate::Result<(UnixStream, Child)> {
 /// halves of the output join in an anonymous pipe instead.
 #[cfg(windows)]
 fn capture(command: &mut Command) -> crate::Result<(std::io::PipeReader, Child)> {
-    let (reader, writer) = std::io::pipe().map_err(|source| Error::PrProcess {
+    let (reader, writer) = std::io::pipe().map_err(|source| super::Error::Process {
         operation: "create process output channel",
         source,
     })?;
-    let error_writer = writer.try_clone().map_err(|source| Error::PrProcess {
+    let error_writer = writer.try_clone().map_err(|source| super::Error::Process {
         operation: "configure process errors",
         source,
     })?;
@@ -611,16 +613,16 @@ fn collect(
     let mut eof = false;
     loop {
         if cancelled() {
-            return Err(Error::PrCancelled);
+            return Err(super::Error::Cancelled.into());
         }
         if Instant::now() >= deadline {
-            return Err(Error::PrTimeout);
+            return Err(super::Error::Timeout.into());
         }
         match reader.read(&mut buffer) {
             Ok(0) => eof = true,
             Ok(n) => {
                 if output.len() + n > limit {
-                    return Err(Error::PrSize);
+                    return Err(super::Error::Size.into());
                 }
                 output.extend_from_slice(&buffer[..n]);
                 continue;
@@ -629,7 +631,7 @@ fn collect(
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(source) => return Err(unreadable(source)),
         }
-        if let Some(status) = child.try_wait().map_err(|source| Error::PrProcess {
+        if let Some(status) = child.try_wait().map_err(|source| super::Error::Process {
             operation: "wait for process",
             source,
         })? && eof
@@ -662,7 +664,7 @@ fn collect(
                     Ok(0) => break Ok(output),
                     Ok(n) => {
                         if output.len() + n > limit {
-                            break Err(Error::PrSize);
+                            break Err(super::Error::Size.into());
                         }
                         output.extend_from_slice(&buffer[..n]);
                     }
@@ -676,10 +678,10 @@ fn collect(
     let mut ended: Option<Vec<u8>> = None;
     loop {
         if cancelled() {
-            return Err(Error::PrCancelled);
+            return Err(super::Error::Cancelled.into());
         }
         if Instant::now() >= deadline {
-            return Err(Error::PrTimeout);
+            return Err(super::Error::Timeout.into());
         }
         if ended.is_none() {
             match reads.try_recv() {
@@ -690,7 +692,7 @@ fn collect(
                 }
             }
         }
-        if let Some(status) = child.try_wait().map_err(|source| Error::PrProcess {
+        if let Some(status) = child.try_wait().map_err(|source| super::Error::Process {
             operation: "wait for process",
             source,
         })? && let Some(output) = ended.take()
@@ -739,7 +741,9 @@ mod origin_tests {
         // Another repository on the same host is not a hit.
         assert!(matches!(
             resolve("/other/.git", now),
-            Err(Error::Client(herdr_client::Error::InvalidSshTarget))
+            Err(Error::Client(herdr_client::Error::Ssh(
+                herdr_client::ssh::Error::InvalidTarget
+            )))
         ));
         assert!(resolve("/repo/.git", now + ORIGIN_TTL).is_err());
         assert!(origins.0.is_empty());

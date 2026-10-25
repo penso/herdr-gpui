@@ -13,6 +13,7 @@
 mod cards;
 mod classic;
 mod compact;
+mod outline;
 mod pills;
 mod underline;
 
@@ -226,9 +227,9 @@ pub(crate) trait TabLayout {
     /// The strip's "+" button, built onto `base`, which already carries its
     /// identity, role, and listener, around `icon`: by default a cell like
     /// a classic tab, ruled off from what follows.
-    fn new_tab(&self, base: Stateful<Div>, icon: Svg, theme: &Theme) -> Stateful<Div> {
+    fn new_tab(&self, base: Stateful<Div>, icon: AnyElement, theme: &Theme) -> Stateful<Div> {
         let hover = theme.active;
-        base.w(px(34.))
+        base.w(px(self.new_tab_width()))
             .min_h(px(crate::TAB_HEIGHT))
             .border_r_1()
             .border_color(rgb(theme.active))
@@ -241,6 +242,11 @@ pub(crate) trait TabLayout {
             .child(icon)
     }
 
+    /// How wide [`Self::new_tab`] draws, rule included.
+    fn new_tab_width(&self) -> f32 {
+        34.
+    }
+
     /// The narrowest a tab draws, which a growing tab starts from.
     fn min_width(&self) -> f32 {
         crate::TAB_WIDTH
@@ -250,14 +256,21 @@ pub(crate) trait TabLayout {
 /// The space floating layouts leave at each end of their tabs.
 const FLOATING_PADDING: f32 = 6.;
 
+/// The rounded part of a floating layout's "+", and the room either side.
+const FLOATING_NEW_TAB: f32 = 22.;
+const FLOATING_NEW_TAB_MARGIN: f32 = 2.;
+/// How wide a floating layout's "+" draws.
+const FLOATING_NEW_TAB_WIDTH: f32 = FLOATING_NEW_TAB + 2. * FLOATING_NEW_TAB_MARGIN;
+
 /// A floating layout's "+": a small rounded button standing on the strip
 /// as its tabs do, with no rule beside it.
-fn floating_new_tab(base: Stateful<Div>, icon: Svg, theme: &Theme) -> Stateful<Div> {
-    const SIZE: f32 = 22.;
+fn floating_new_tab(base: Stateful<Div>, icon: AnyElement, theme: &Theme) -> Stateful<Div> {
+    const SIZE: f32 = FLOATING_NEW_TAB;
     let hover = theme.active;
     base.flex_none()
+        .w(px(FLOATING_NEW_TAB_WIDTH))
         .min_h(px(crate::TAB_HEIGHT))
-        .px(px(2.))
+        .px(px(FLOATING_NEW_TAB_MARGIN))
         .flex()
         .items_center()
         .justify_center()
@@ -280,6 +293,7 @@ pub(crate) fn layout_for(mode: TabLayoutMode) -> &'static dyn TabLayout {
         TabLayoutMode::Cards => &cards::Cards,
         TabLayoutMode::Classic => &classic::Classic,
         TabLayoutMode::Compact => &compact::Compact,
+        TabLayoutMode::Outline => &outline::Outline,
         TabLayoutMode::Pills => &pills::Pills,
         TabLayoutMode::Underline => &underline::Underline,
     }

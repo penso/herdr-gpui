@@ -60,9 +60,9 @@ impl HerdrWindow {
             if target.branch.as_deref().is_none_or(str::is_empty)
                 || (target.worktree.is_none() && origin != Some(Origin::Local))
             {
-                return Err(crate::Error::PrMetadata);
+                return Err(herdr_github::pull_request::Error::Metadata.into());
             }
-            let origin = origin.ok_or(crate::Error::PrUntrustedEndpoint)?;
+            let origin = origin.ok_or(herdr_github::pull_request::Error::UntrustedEndpoint)?;
             if !self.workspace_pr_target_current() {
                 return Err(crate::Error::StaleWorkspace);
             }

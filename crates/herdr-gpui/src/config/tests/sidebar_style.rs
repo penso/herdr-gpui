@@ -48,7 +48,7 @@ fn sidebar_spacing_keys_accept_their_bands() -> anyhow::Result<()> {
             assert!(
                 matches!(
                     Config::parse(&format!("[sidebar]\n{text}")),
-                    Err(Error::InvalidSidebarMetric { key: bad, .. }) if bad == key
+                    Err(crate::Error::Settings(Error::InvalidSidebarMetric { key: bad, .. })) if bad == key
                 ),
                 "{text}"
             );
@@ -90,7 +90,7 @@ fn host_colours_parse_hex_and_keep_unknown_hosts() -> anyhow::Result<()> {
         assert!(
             matches!(
                 Config::parse(&format!("[sidebar.hosts]\nPersonal = \"{bad}\"")),
-                Err(Error::InvalidHostColor { host, .. }) if host == "Personal"
+                Err(crate::Error::Settings(Error::InvalidHostColor { host, .. })) if host == "Personal"
             ),
             "{bad}"
         );

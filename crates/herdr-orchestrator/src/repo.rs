@@ -3,7 +3,7 @@
 //! issues and pull requests the orchestrator lists.
 
 use super::{Error, Provider, Repository, Result, SourceKey, error::script};
-use herdr_client::{ConnectTarget, shell_quote};
+use herdr_client::{ConnectTarget, ScriptLimits, shell_quote};
 use herdr_remote::teleport::Host;
 use std::{
     path::{Path, PathBuf},
@@ -64,11 +64,123 @@ pub fn detect(
 
 /// The SSH probe is also exercised under a local shell in regression tests.
 pub fn detection_script(checkout: &str) -> String {
+    script_with(checkout, "after() { :; }\n")
+}
+
+fn script_with(checkout: &str, after: &str) -> String {
     format!(
-        "checkout={}\n{}",
+        "checkout={}\n{after}{}",
         shell_quote(checkout),
         include_str!("repo/discover.sh")
     )
+}
+
+/// What opening a project reads beside its repository, in the same SSH
+/// connection: the `programs` the host has, and the branches named here.
+/// Each is `None` when it was not read, on this machine or when its step
+/// failed, and is then read on its own.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Extras {
+    pub programs: Option<Vec<String>>,
+    pub branches: Option<Vec<String>>,
+}
+
+/// [`detect`], reading [`Extras`] in the same connection on an SSH host, so
+/// opening a project there takes one connection rather than three.
+pub fn detect_opening(
+    target: &ConnectTarget,
+    host: &Host,
+    checkout: &str,
+    programs: &[&str],
+    cancelled: &AtomicBool,
+) -> Result<(RepoInfo, Extras)> {
+    if host.is_local() {
+        return Ok((detect_local(target, checkout)?, Extras::default()));
+    }
+    let limits = ScriptLimits {
+        output: Host::QUERY_OUTPUT,
+        idle: Host::QUERY_IDLE,
+    };
+    let mut output = Vec::new();
+    let ran = host.stream(
+        &opening_script(checkout, programs),
+        &[][..],
+        &mut output,
+        limits,
+        cancelled,
+    );
+    opened(target, ran.map(drop), &output, programs)
+}
+
+/// What [`opening_script`] printed in `output` before it ended as `ran`.
+pub fn opened(
+    target: &ConnectTarget,
+    ran: herdr_client::Result<()>,
+    output: &[u8],
+    programs: &[&str],
+) -> Result<(RepoInfo, Extras)> {
+    let output = std::str::from_utf8(output).map_err(|_| Error::Output {
+        operation: "Reading the repository",
+    })?;
+    match ran {
+        Ok(_) => {}
+        // The repository was read before an optional step stalled: keep it,
+        // and leave what that step reads to be read on its own.
+        Err(herdr_client::Error::ScriptTimeout) if output.lines().any(|line| line == "found") => {
+            tracing::debug!(
+                category = "orchestrator",
+                "A step after reading the repository stalled; reading it on its own"
+            );
+        }
+        Err(error) => return Err(script("Reading the repository")(error)),
+    }
+    Ok((parse(target, output)?, extras(output, programs)))
+}
+
+/// [`detection_script`] that prints a `found` line once the repository is
+/// printed, then which `programs` the host has, followed by a `programs`
+/// line, and the branches named here, each on a `branch` line, followed by
+/// a `branches` line. Each marker follows a step that worked, so a step cut
+/// short reads as not read, and neither step can fail the detection.
+pub fn opening_script(checkout: &str, programs: &[&str]) -> String {
+    let query = super::naming::branch_query()
+        .iter()
+        .map(|arg| shell_quote(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let probe = herdr_remote::teleport::installed_programs_script(programs);
+    script_with(
+        checkout,
+        &format!(
+            r#"after() {{
+    printf 'found\n'
+    if ( {probe} ); then printf 'programs\n'; fi
+    if [ -n "$1" ] && refs=$(git -C "$1" {query}); then
+        printf '%s\n' "$refs" | while IFS= read -r ref; do
+            [ -z "$ref" ] || printf 'branch\t%s\n' "$ref"
+        done
+        printf 'branches\n'
+    fi
+}}
+"#
+        ),
+    )
+}
+
+/// The [`Extras`] in [`opening_script`]'s `output`.
+pub fn extras(output: &str, programs: &[&str]) -> Extras {
+    let lines = || output.lines();
+    let has = |marker| lines().any(|line| line == marker);
+    Extras {
+        programs: has("programs").then(|| {
+            lines()
+                .filter(|line| programs.contains(line))
+                .map(str::to_owned)
+                .collect()
+        }),
+        branches: has("branches")
+            .then(|| super::naming::ours(lines().filter_map(|line| line.strip_prefix("branch\t")))),
+    }
 }
 
 /// The GitHub.com repository, as `owner/name`, whose issues the orchestrator

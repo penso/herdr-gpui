@@ -1,6 +1,7 @@
 //! `[zen]`: what Toggle Zen Mode does beyond clearing the window's chrome.
+use super::Error;
 use super::FONT_SIZE_RANGE;
-use crate::{Error, Result};
+use crate::Result;
 use serde::Deserialize;
 
 /// The narrowest column zen mode centres; narrower reads as a typo.
@@ -37,7 +38,7 @@ enum RawWidth {
 }
 
 impl TryFrom<RawWidth> for ZenWidth {
-    type Error = Error;
+    type Error = crate::Error;
 
     fn try_from(raw: RawWidth) -> Result<Self> {
         let width = match raw {
@@ -52,7 +53,7 @@ impl TryFrom<RawWidth> for ZenWidth {
                 .filter(|share| (10..=100).contains(share))
                 .map(Self::Percent),
         };
-        width.ok_or(Error::InvalidZenWidth)
+        width.ok_or(Error::InvalidZenWidth.into())
     }
 }
 
@@ -65,13 +66,13 @@ pub(super) struct ZenSettings {
 }
 
 impl TryFrom<ZenSettings> for Zen {
-    type Error = Error;
+    type Error = crate::Error;
 
     fn try_from(settings: ZenSettings) -> Result<Self> {
         if let Some(size) = settings.font_size
             && !(size.is_finite() && FONT_SIZE_RANGE.contains(&size))
         {
-            return Err(Error::InvalidZenFontSize);
+            return Err(Error::InvalidZenFontSize.into());
         }
         Ok(Self {
             fullscreen: settings.fullscreen,

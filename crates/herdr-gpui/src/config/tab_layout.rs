@@ -50,6 +50,9 @@ tab_layouts! {
     /// Rounded pills on the strip, led by what runs in them, the status
     /// after the title giving way to the close button under the pointer.
     Pills => "pills", "Pills";
+    /// Bare titles; the chosen tab stands in an outlined pill with its
+    /// close button.
+    Outline => "outline", "Outline";
     /// Flat titles without fills; the chosen tab carries a bar along its foot.
     Underline => "underline", "Underline";
     /// Browser-like: the chosen tab is a raised card joined to what it shows.

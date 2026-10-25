@@ -32,7 +32,7 @@ fn overridden_window(
         )
         .unwrap_or_else(|error| panic!("cannot create test client: {error}"));
         client.handle.disconnect();
-        view.endpoints[view.selected_endpoint].connection.handle = Some(client.handle);
+        view.endpoints[view.selected_endpoint].attach_shown(client.handle);
         let queued = view.options;
         view.last_queued_options = Some(queued);
         view.live.surface = Some(Arc::new(PaneSurfaceFrame {

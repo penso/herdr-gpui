@@ -5,7 +5,7 @@
 
 use super::{Checkpoint, Error, Item, ItemKey, Result, SourceKey, error::script};
 use chrono::{DateTime, Utc};
-use herdr_client::shell_quote;
+use herdr_client::{ScriptLimits, shell_quote};
 use herdr_remote::teleport::Host;
 use serde::Deserialize;
 use std::{collections::HashMap, sync::atomic::AtomicBool};
@@ -19,21 +19,24 @@ pub fn sync(
     source: &SourceKey,
     cancelled: &AtomicBool,
 ) -> Result<(Vec<Item>, Checkpoint)> {
-    let flags = safety_flags(host, &source.repository, cancelled)?;
-    let list = run(
-        host,
-        &source.repository,
-        &flags,
-        &["list", "--json", "--all", "--limit", "0"],
-        cancelled,
-    )?;
-    let blocked = run(
-        host,
-        &source.repository,
-        &flags,
-        &["blocked", "--json"],
-        cancelled,
-    )?;
+    let (list, blocked) = if host.is_local() {
+        let flags = safety_flags(host, &source.repository, cancelled)?;
+        let list = run(host, &source.repository, &flags, &LIST, cancelled)?;
+        let blocked = run(host, &source.repository, &flags, &BLOCKED, cancelled)?;
+        (list, blocked)
+    } else {
+        // One connection rather than three: sshd may drop a burst of them.
+        let separator = super::prompt::nonce();
+        let body = sync_script(&source.repository, &separator);
+        let mut output = Vec::new();
+        let limits = ScriptLimits {
+            output: SYNC_OUTPUT,
+            idle: Host::QUERY_IDLE,
+        };
+        host.stream(&body, &[][..], &mut output, limits, cancelled)
+            .map_err(failed("Reading Beads"))?;
+        split(&output, &separator)?
+    };
     let items = parse(source, &list, &blocked)?;
     let checkpoint = Checkpoint {
         updated_at: items.iter().filter_map(|item| item.updated_at).max(),
@@ -41,6 +44,66 @@ pub fn sync(
         ..Checkpoint::default()
     };
     Ok((items, checkpoint))
+}
+
+/// Most [`sync_script`] may print: room for the list and the blocked beads
+/// at the limit each had as its own script, and the lines around them.
+pub const SYNC_OUTPUT: u64 = 2 * Host::QUERY_OUTPUT + 4096;
+
+const LIST: [&str; 5] = ["list", "--json", "--all", "--limit", "0"];
+const BLOCKED: [&str; 2] = ["blocked", "--json"];
+
+/// What [`sync`] runs on an SSH host in one connection: `bd`'s options read
+/// as [`flags_from_help`] reads them, printed on a `flags` line, then the
+/// list and the blocked beads as `bd` prints them, with a `separator` line
+/// between them. Each step prints as soon as it ends, so each has the idle
+/// limit to itself, as in its own script. Any step's failure ends the
+/// script with its status, as its own script would.
+pub fn sync_script(root: &str, separator: &str) -> String {
+    let words = |args: &[&str]| {
+        args.iter()
+            .map(|arg| shell_quote(arg))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let flags = FLAGS.join(" ");
+    let (list, blocked) = (words(&LIST), words(&BLOCKED));
+    let separator = shell_quote(separator);
+    format!(
+        r#"{prefix}help=$(bd --help 2>&1) || exit $?
+words=" $(printf '%s' "$help" | tr '\n\t\r' '   ') "
+flags=
+for flag in {flags}; do
+    case $words in *" $flag "*) flags="$flags $flag" ;; esac
+done
+printf 'flags%s\n' "$flags"
+bd $flags {list} || exit $?
+printf '\n%s\n' {separator}
+bd $flags {blocked} || exit $?
+"#,
+        prefix = prefix(root)
+    )
+}
+
+/// The list and the blocked beads in [`sync_script`]'s `output`.
+pub fn split(output: &[u8], separator: &str) -> Result<(Vec<u8>, Vec<u8>)> {
+    let unexpected = || Error::Output {
+        operation: "Reading Beads",
+    };
+    let output = output
+        .strip_prefix(b"flags")
+        .and_then(|rest| {
+            rest.iter()
+                .position(|&byte| byte == b'\n')
+                .map(|end| &rest[end..])
+        })
+        .ok_or_else(unexpected)?;
+    let line = format!("\n{separator}\n");
+    let at = output
+        .windows(line.len())
+        .position(|window| window == line.as_bytes())
+        .ok_or_else(unexpected)?;
+    Ok((output[..at].to_vec(), output[at + line.len()..].to_vec()))
 }
 
 /// Deletes one bead for good, which `bd` cannot do read-only.
@@ -77,6 +140,9 @@ fn prefix(root: &str) -> String {
     )
 }
 
+/// The safety flags `bd` is run with when its help names them.
+const FLAGS: [&str; 2] = ["--readonly", "--sandbox"];
+
 fn safety_flags(host: &Host, root: &str, cancelled: &AtomicBool) -> Result<Vec<&'static str>> {
     const READING: &str = "Reading bd's options";
     // `bd`'s help goes to stdout, which is all a local run reads.
@@ -91,7 +157,7 @@ fn safety_flags(host: &Host, root: &str, cancelled: &AtomicBool) -> Result<Vec<&
 
 pub fn flags_from_help(help: &str) -> Vec<&'static str> {
     let words: Vec<_> = help.split_whitespace().collect();
-    ["--readonly", "--sandbox"]
+    FLAGS
         .into_iter()
         .filter(|flag| words.contains(flag))
         .collect()
@@ -145,12 +211,17 @@ fn capture(
     operation: &'static str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>> {
-    host.capture(body, cancelled).map_err(|error| match error {
+    host.capture(body, cancelled).map_err(failed(operation))
+}
+
+/// `map_err` adapter for a Beads script: `bd` missing, or `operation` failed.
+fn failed(operation: &'static str) -> impl FnOnce(herdr_client::Error) -> Error {
+    move |error| match error {
         herdr_client::Error::ScriptExit { status, .. } if status.code() == Some(MISSING) => {
             Error::BeadsMissing
         }
         error => script(operation)(error),
-    })
+    }
 }
 
 pub fn parse(source: &SourceKey, list: &[u8], blocked: &[u8]) -> Result<Vec<Item>> {

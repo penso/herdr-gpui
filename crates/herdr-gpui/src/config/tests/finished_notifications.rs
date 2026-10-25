@@ -30,7 +30,7 @@ fn finished_notifications_default_on_and_a_local_key_mutes_them() -> anyhow::Res
         assert!(
             matches!(
                 Config::parse(&format!("[notifications]\n{field}")),
-                Err(Error::Toml(_))
+                Err(crate::Error::Toml(_))
             ),
             "{field}"
         );

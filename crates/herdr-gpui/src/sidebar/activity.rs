@@ -480,7 +480,7 @@ impl HerdrWindow {
         let icon = if busy {
             icon.with_animation(
                 SharedString::from(format!("{id}-busy")),
-                Animation::new(BUSY_PULSE).repeat(),
+                Animation::new(crate::motion::duration(BUSY_PULSE)).repeat(),
                 |icon, delta| icon.opacity(0.35 + 0.65 * (delta * std::f32::consts::PI).sin()),
             )
             .into_any_element()

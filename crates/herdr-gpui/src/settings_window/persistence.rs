@@ -473,19 +473,14 @@ impl SettingsWindow {
                     // The source's guarded file watcher owns applying changes.
                     // Direct loads here can overwrite its active picker preview.
                     if shared && saved.is_ok() {
-                        // Use the existing connection, without stealing its response lane.
+                        // Use the existing connection, without stealing its response
+                        // lane. While another device is shown the reload waits for
+                        // this computer's to be shown again.
                         if let Some(endpoint) = source
                             .endpoints
-                            .iter()
+                            .iter_mut()
                             .find(|endpoint| !endpoint.connection.target.is_remote())
-                            && let (Some(handle), Some(snapshot)) =
-                                (&endpoint.connection.handle, &endpoint.live.snapshot)
-                            && endpoint.live.status.is_connected()
-                            && let Err(error) = handle.request(
-                                &snapshot.boot_id,
-                                herdr_client::Method::ServerReloadConfig,
-                                serde_json::json!({}),
-                            )
+                            && let Err(error) = endpoint.reload_config()
                             && !this.saving
                         {
                             this.status = Some(format!("Saved; daemon reload not queued: {error}"));

@@ -14,7 +14,7 @@ impl Config {
     fn save_keybinding_path(name: &str, binding: Option<Binding>, path: &Path) -> Result<()> {
         let result = (|| {
             if !COMMANDS.iter().any(|info| info.name == name) {
-                return Err(Error::UnknownKeybinding(name.into()));
+                return Err(crate::keymap::Error::UnknownKeybinding(name.into()).into());
             }
             let text = match fs::read_to_string(path) {
                 Ok(text) => text,

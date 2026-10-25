@@ -73,21 +73,32 @@ impl HerdrWindow {
         let connected = endpoint.live.status.is_connected();
         // Of cloud machines, only Azure's load is read so far.
         let host = crate::usage::Host::load_of(&endpoint.connection.target);
-        let load = host
-            .as_ref()
-            .filter(|_| self.config.show_system_load)
-            .and_then(|host| self.system_load.get(host));
+        let reading = host.as_ref().and_then(|host| self.system_load.get(host));
+        let load = reading.filter(|_| self.config.show_system_load);
         // Densities with detail lines give the load its own line;
-        // compact ones fit gauges between the name and the status.
+        // compact ones fit gauges between the name and the status, the
+        // GPU's among them when the sidebar shows it.
         let load_line = load.filter(|_| layout.workspace_details());
-        let gauges = load.filter(|_| load_line.is_none()).map(|reading| {
-            crate::system_load::gauges(
-                reading,
-                theme,
-                super::metrics::glyph_width(font),
-                (font.size * 0.8).round(),
-            )
-        });
+        let gpu_gauge = self.config.show_sidebar_gpu_load
+            && reading.is_some_and(|reading| {
+                reading
+                    .latest()
+                    .is_some_and(|sample| sample.gpu.is_some_and(|gpu| gpu.busy.is_some()))
+            });
+        let gauges = reading
+            .filter(|_| !layout.workspace_details())
+            .filter(|_| self.config.show_system_load || gpu_gauge)
+            .map(|reading| {
+                let (width, gauges) = crate::system_load::gauges(
+                    reading,
+                    theme,
+                    super::metrics::glyph_width(font),
+                    (font.size * 0.8).round(),
+                    self.config.show_system_load,
+                    self.config.show_sidebar_gpu_load,
+                );
+                (width, gauges, reading)
+            });
         // The Devices layout counts the agents listed under the header.
         let working = (!self.config.layout.mode.lists_workspaces())
             .then(|| self.working_summary(endpoint))
@@ -104,9 +115,26 @@ impl HerdrWindow {
                 0.
             }
             - working_width
-            - gauges.as_ref().map_or(0., |(width, _)| width + host_gap))
+            - gauges.as_ref().map_or(0., |(width, ..)| width + host_gap))
         .max(0.);
-        let lines = 1. + if load_line.is_some() { 1. } else { 0. };
+        // A host with a GPU adds its own line under CPU and memory, in the
+        // densities that have detail lines.
+        let gpu_line = host
+            .as_ref()
+            .filter(|_| self.config.show_sidebar_gpu_load && layout.workspace_details())
+            .and_then(|host| {
+                let reading = self.system_load.get(host)?;
+                let line = crate::system_load::gpu_line(
+                    reading,
+                    theme,
+                    Some(super::metrics::glyph_width(font)),
+                    crate::config::status_bar::Detail::Detailed,
+                )?;
+                Some((line, reading, host.clone()))
+            });
+        let lines = 1.
+            + if load_line.is_some() { 1. } else { 0. }
+            + if gpu_line.is_some() { 1. } else { 0. };
         // The layout decides whether headers have a mark; the setting turns it off.
         let origin = (self.config.show_device_icons && self.config.layout.mode.device_icons())
             .then(|| crate::endpoint::origin::Origin::of(&endpoint.connection.target));
@@ -271,8 +299,8 @@ impl HerdrWindow {
                         )
                     })
                     .when_some(
-                        gauges.zip(load).zip(host.clone()),
-                        |row, (((_, gauges), reading), host)| {
+                        gauges.zip(host.clone()),
+                        |row, ((_, gauges, reading), host)| {
                             row.child(
                                 div()
                                     .id(SharedString::from(format!(
@@ -314,6 +342,22 @@ impl HerdrWindow {
                             Some(super::metrics::glyph_width(font)),
                             crate::config::status_bar::Detail::Detailed,
                         ))
+                        .tooltip(crate::system_load::tooltip(reading, &host, theme)),
+                )
+            })
+            .when_some(gpu_line, |row, (line, reading, host)| {
+                row.child(
+                    div()
+                        .id(SharedString::from(format!(
+                            "{prefix}host-gpu-{endpoint_id}"
+                        )))
+                        .debug_selector(|| format!("{prefix}host-gpu-{endpoint_id}"))
+                        .h(px(line_height(font)))
+                        .flex()
+                        .items_center()
+                        .pl(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .overflow_hidden()
+                        .child(line)
                         .tooltip(crate::system_load::tooltip(reading, &host, theme)),
                 )
             })

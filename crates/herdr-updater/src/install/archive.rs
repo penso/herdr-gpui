@@ -1,7 +1,7 @@
 //! Bounded, path-checked extraction of a verified release archive into a
 //! private tree. Nothing is written outside the extraction root.
 use super::{LIMIT, Mode, check, io};
-use crate::error::{Result, UpdateError as Error};
+use crate::error::{Error, Result};
 use std::{
     collections::HashSet,
     fs::{self, File, OpenOptions},

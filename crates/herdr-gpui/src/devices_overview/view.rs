@@ -213,6 +213,7 @@ impl HerdrWindow {
                                         slot,
                                         id,
                                         &page.expanded,
+                                        self.config.gpu_sampled(),
                                         cx,
                                     )),
                             ),

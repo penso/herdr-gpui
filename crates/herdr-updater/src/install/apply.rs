@@ -6,7 +6,7 @@ use super::{
     location::{detect, lock_file, no_links, owned},
     read_request,
 };
-use crate::error::{Result, UpdateError as Error};
+use crate::error::{Error, Result};
 use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},

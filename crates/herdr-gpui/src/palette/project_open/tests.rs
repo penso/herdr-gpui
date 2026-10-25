@@ -47,17 +47,17 @@ fn creation_response_is_typed_and_requires_a_workspace_id() {
         created_workspace(
             &json!({"result": {"type": "tab_created", "workspace": {"workspace_id": "w2"}}})
         ),
-        Err(Error::PaletteProjectResponse)
+        Err(crate::Error::Palette(Error::ProjectResponse))
     ));
     assert!(matches!(
         created_workspace(
             &json!({"result": {"type": "workspace_created", "workspace": {"workspace_id": ""}}})
         ),
-        Err(Error::PaletteProjectResponse)
+        Err(crate::Error::Palette(Error::ProjectResponse))
     ));
     assert!(matches!(
         created_workspace(&json!({"error": {"code": "refused", "message": "not trusted"}})),
-        Err(Error::DaemonResponse(_))
+        Err(crate::Error::Daemon(crate::daemon::Error::Response(_)))
     ));
 }
 

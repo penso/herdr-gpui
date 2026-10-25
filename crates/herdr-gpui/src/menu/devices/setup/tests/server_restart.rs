@@ -16,7 +16,7 @@ fn a_server_that_needs_a_restart_is_named_as_such() -> Result<()> {
     let claim = Claim::acquire(destination("restart.test"), "default")?;
     let error = save_with(&binary, &request, &claim, || Ok(Vec::new()), |_| None).err();
     assert!(
-        matches!(error, Some(Error::DeviceServerRestart)),
+        matches!(error, Some(crate::Error::Devices(Error::ServerRestart))),
         "{error:?}"
     );
     Ok(())

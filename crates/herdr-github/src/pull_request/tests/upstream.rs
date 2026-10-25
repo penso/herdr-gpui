@@ -46,14 +46,14 @@ fn upstream_matches_renamed_fork_branch_and_rejects_unrelated_heads() {
     assert!(parse(serde_json::json!([wrong_branch])).unwrap().is_none());
     assert!(matches!(
         parse(serde_json::json!([pr, pr])),
-        Err(Error::PrAmbiguous)
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
     ));
     let mut truncated = graphql(serde_json::json!([pr]));
     truncated["data"]["repository"]["pullRequests"]["pageInfo"] =
         serde_json::json!({"hasNextPage":true});
     assert!(matches!(
         parse_graphql(truncated, "example", "project", &head.branch, Some(&head)),
-        Err(Error::PrAmbiguous)
+        Err(Error::PullRequest(crate::pull_request::Error::Ambiguous))
     ));
 }
 
@@ -78,11 +78,11 @@ fn no_upstream_preserves_origin_owner_and_local_branch_matching() {
     fork[0]["headRepositoryOwner"] = serde_json::json!({"login":"stranger"});
     assert!(matches!(
         parse_graphql(graphql(fork), "example", "project", "feature", None),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
     assert!(matches!(
         parse_graphql(graphql(response()), "example", "project", "pr/138", None),
-        Err(Error::PrIdentity)
+        Err(Error::PullRequest(crate::pull_request::Error::Identity))
     ));
 }
 
@@ -103,7 +103,9 @@ fn unsupported_upstream_and_config_errors_do_not_fall_back() {
         );
     }
     assert!(matches!(
-        super::super::fetch::upstream_head("feature", |_| Err(Error::PrCancelled)),
-        Err(Error::PrCancelled)
+        super::super::fetch::upstream_head("feature", |_| Err(
+            crate::pull_request::Error::Cancelled.into()
+        )),
+        Err(Error::PullRequest(crate::pull_request::Error::Cancelled))
     ));
 }

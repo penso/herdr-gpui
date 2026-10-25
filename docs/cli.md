@@ -145,7 +145,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `ports [list]` | Ports your workspace listens on, and forwards |
 | `ports forward\|unforward PORT` | Forward a port of the SSH host to this machine |
 | `ports open PORT` | `localhost:PORT` in a tab, forwarded first when remote |
-| `usage`, `system` | Plan usage and load of the selected host |
+| `usage`, `system` | Plan usage and load of the selected host: CPU, memory, disk, uptime, and its GPU and video memory when it has one and `show_gpu_load` or `show_sidebar_gpu_load` is on |
 | `security` | Private vulnerability reports in triage (titles and metadata only, never their descriptions) and open Dependabot alerts of the github.com repositories the window's workspaces hold, most severe first, as the Security section last read them. Exits 4 when there are none |
 | `security open REPOSITORY ALERT\|GHSA` | Show alert `ALERT` (its number) or private report `GHSA` (its GHSA ID) of `REPOSITORY` (`owner/name`) in the Security section, beside its list: the fix, the advisory, and the dependency for an alert; the report, its advisory draft, and its conversation for a report. Only items the section lists open; nothing on GitHub changes |
 | `automation approve FILE [--host ID]` | Open the approval of the automation script `FILE` in the app: its plan, caps, and content hash, for the user to approve or cancel. The command approves nothing. `FILE` is the script's path on the host as `herdr-automate status` lists it, resolved here when it exists; `--host` names the host by ID or label (default: your workspace's host). Exits 5 when the host does not list the script, 6 while a dialog is open or the host was not read yet |

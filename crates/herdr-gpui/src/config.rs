@@ -3,7 +3,7 @@
 //! to change daemon behavior. Managed defaults are refreshed from the binary;
 //! `config-gpui.local.toml` holds persistent user overrides.
 use crate::{
-    Error, Result,
+    Result,
     contrast::Contrast,
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
@@ -21,6 +21,7 @@ mod daemon;
 mod daytona;
 mod devices;
 mod edit;
+mod error;
 mod features;
 mod files;
 mod font_weight;
@@ -61,7 +62,7 @@ mod zen;
 pub use accent::Accent;
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
-pub use chat::ChatLayoutMode;
+pub use chat::{ChatLauncher, ChatLayoutMode};
 pub use cloud::CloudConfig;
 #[cfg(test)]
 use daemon::MAX_DAEMON_CONFIG_BYTES;
@@ -70,6 +71,7 @@ use daemon::{Daemon, daemon_settings};
 use devices::MAX_DEVICES;
 pub(crate) use devices::{DeviceSettings, KeybindingSource};
 pub(crate) use edit::{Layer, parse_value};
+pub(crate) use error::{Error, ThemeParseError};
 pub use features::{Feature, Features};
 use files::write_config;
 pub use font_weight::bold as bold_font_weight;
@@ -240,12 +242,18 @@ pub struct Config {
     /// The mark before a device's name in the sidebar, in the layouts that
     /// draw one: where the device runs and how it is reached.
     pub show_device_icons: bool,
+    /// The selected host's GPU and video memory in the status bar. Off by
+    /// default; see [`Self::gpu_sampled`].
+    pub show_gpu_load: bool,
     /// Ports each workspace listens on, in the sidebar and the status bar.
     pub show_listening_ports: bool,
     /// Latency and loss from this machine, by timed TCP connects, in the status bar.
     pub show_network_quality: bool,
     /// The repository owner's avatar, or the GitHub mark, before a space's name.
     pub show_repository_icons: bool,
+    /// Each host's GPU and video memory on a sidebar line under its CPU and
+    /// memory. Off by default; see [`Self::gpu_sampled`].
+    pub show_sidebar_gpu_load: bool,
     /// The search field at the top of the sidebar's spaces list.
     pub show_sidebar_search: bool,
     /// CPU and memory of the selected host in the status bar.
@@ -417,9 +425,11 @@ impl Default for Config {
             show_agents: true,
             show_agents_header: true,
             show_device_icons: true,
+            show_gpu_load: false,
             show_listening_ports: true,
             show_network_quality: false,
             show_repository_icons: true,
+            show_sidebar_gpu_load: false,
             show_sidebar_search: true,
             show_system_load: true,
             show_window_controls: cfg!(target_os = "linux"),
@@ -493,9 +503,11 @@ struct Settings {
     show_agents: Option<bool>,
     show_agents_header: Option<bool>,
     show_device_icons: Option<bool>,
+    show_gpu_load: Option<bool>,
     show_listening_ports: Option<bool>,
     show_network_quality: Option<bool>,
     show_repository_icons: Option<bool>,
+    show_sidebar_gpu_load: Option<bool>,
     show_sidebar_search: Option<bool>,
     show_system_load: Option<bool>,
     show_window_controls: Option<bool>,
@@ -519,7 +531,7 @@ struct Settings {
 
 /// Windows sets `USERPROFILE` rather than `HOME`, and upstream Herdr reads both.
 pub(crate) fn home() -> Result<PathBuf> {
-    herdr_client::local_path::home_dir().ok_or(Error::MissingHome)
+    herdr_client::local_path::home_dir().ok_or(crate::Error::MissingHome)
 }
 
 /// The directory holding this app's `herdr` configuration directory. Upstream
@@ -529,12 +541,19 @@ pub(crate) fn home() -> Result<PathBuf> {
 fn config_root() -> Result<PathBuf> {
     use herdr_client::local_path::PathError;
     herdr_client::local_path::config_root().map_err(|error| match error {
-        PathError::MissingHome => Error::MissingHome,
-        PathError::RelativeConfigRoot => Error::RelativeConfigRoot,
+        PathError::MissingHome => crate::Error::MissingHome,
+        PathError::RelativeConfigRoot => crate::Error::RelativeConfigRoot,
     })
 }
 
 impl Config {
+    /// Whether hosts' GPUs are read: while the status bar or the sidebar
+    /// shows them. The Overview and Devices pages then show them too; with
+    /// both off no GPU tool runs on any host.
+    pub(crate) fn gpu_sampled(&self) -> bool {
+        self.show_gpu_load || self.show_sidebar_gpu_load
+    }
+
     /// The provider tables `herdr-remote` reads, from a full load.
     pub(crate) fn load_remote()
     -> std::result::Result<herdr_remote::config::Sections, herdr_remote::config::LoadError> {
@@ -629,9 +648,9 @@ impl Config {
                 Ok(text) if text.lines().next() != Some(MANAGED_HEADER) => (text, path.to_owned()),
                 Ok(_) => (LOCAL_CONFIG.into(), local),
                 Err(error) if error.kind() == ErrorKind::NotFound => (LOCAL_CONFIG.into(), local),
-                Err(error) => return Err(Error::from(error).at_path(path)),
+                Err(error) => return Err(crate::Error::from(error).at_path(path)),
             },
-            Err(error) => return Err(Error::from(error).at_path(&local)),
+            Err(error) => return Err(crate::Error::from(error).at_path(&local)),
         })
     }
 
@@ -640,8 +659,8 @@ impl Config {
     fn load_path(path: &Path, daemon: &Path) -> Result<Self> {
         let base = daemon_settings(daemon);
         let (_lock, local) = Self::prepare_files(path)?;
-        let text =
-            fs::read_to_string(&local).map_err(|error| Error::from(error).at_path(&local))?;
+        let text = fs::read_to_string(&local)
+            .map_err(|error| crate::Error::from(error).at_path(&local))?;
         // Validate the override independently so bad types/unknown keys cannot
         // disappear inside the merge. Empty arrays explicitly replace defaults.
         Self::parse_over(&text, &base).map_err(|error| error.at_path(&local))?;
@@ -736,7 +755,7 @@ impl Config {
                 })
             })
         {
-            return Err(Error::GitHubSecretInConfig(name));
+            return Err(crate::Error::GitHubSecretInConfig(name));
         }
         // A newer build may keep more accounts or owners than this one.
         unknown_keys.extend(settings.github.limit_accounts());
@@ -801,7 +820,7 @@ impl Config {
         config.keybinding_overrides = settings.keybindings;
         config.pane_keys = settings.pane_keys;
         if settings.devices.len() > MAX_DEVICES {
-            return Err(Error::TooManyDevices(MAX_DEVICES));
+            return Err(Error::TooManyDevices(MAX_DEVICES).into());
         }
         for (id, device) in &settings.devices {
             device.validate(id)?;
@@ -811,7 +830,7 @@ impl Config {
         config.palette = settings.palette;
         if let Some(theme) = settings.theme {
             if theme.trim().is_empty() {
-                return Err(Error::EmptyTheme);
+                return Err(Error::EmptyTheme.into());
             }
             ThemeName::parse(&theme)?;
             config.theme = theme;
@@ -826,9 +845,11 @@ impl Config {
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_agents_header = settings.show_agents_header.unwrap_or(true);
         config.show_device_icons = settings.show_device_icons.unwrap_or(true);
+        config.show_gpu_load = settings.show_gpu_load.unwrap_or(false);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);
         config.show_network_quality = settings.show_network_quality.unwrap_or(false);
         config.show_repository_icons = settings.show_repository_icons.unwrap_or(true);
+        config.show_sidebar_gpu_load = settings.show_sidebar_gpu_load.unwrap_or(false);
         config.show_sidebar_search = settings.show_sidebar_search.unwrap_or(true);
         config.show_system_load = settings.show_system_load.unwrap_or(true);
         config.show_window_controls = settings

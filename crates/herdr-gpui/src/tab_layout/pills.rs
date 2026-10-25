@@ -4,8 +4,8 @@
 //! pointer.
 
 use super::{
-    DOT_GAP, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape, TabState, ZOOM_ICON,
-    close_button, floating_new_tab, kind_icon, status_mark, zoom_mark,
+    DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape,
+    TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, corners, mix},
@@ -144,7 +144,11 @@ impl TabLayout for Pills {
         FLOATING_PADDING
     }
 
-    fn new_tab(&self, base: Stateful<Div>, icon: Svg, theme: &Theme) -> Stateful<Div> {
+    fn new_tab(&self, base: Stateful<Div>, icon: AnyElement, theme: &Theme) -> Stateful<Div> {
         floating_new_tab(base, icon, theme)
+    }
+
+    fn new_tab_width(&self) -> f32 {
+        FLOATING_NEW_TAB_WIDTH
     }
 }

@@ -22,6 +22,8 @@ mod controls;
 mod discovery;
 mod embeds;
 mod feature;
+mod glide;
+mod imessage;
 mod layouts;
 mod link;
 mod list;

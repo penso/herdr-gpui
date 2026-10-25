@@ -9,7 +9,7 @@
 
 mod auth;
 pub mod checkout;
-mod cli;
+pub mod cli;
 pub mod config;
 mod credentials;
 mod device;
@@ -32,7 +32,7 @@ mod test_executable;
 #[cfg(test)]
 mod tests;
 
-pub use error::{Error, GitHubAccountsError, GitHubJsonError, Result};
+pub use error::{AccountsError, Error, JsonError, Result};
 pub use repository::github_repo;
 pub use {
     auth::Auth,

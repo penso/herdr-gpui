@@ -96,3 +96,24 @@ fn the_layout_is_read_and_saved_by_name() {
         assert_eq!(config.chat.env.get("GH_HOST").unwrap(), "ghe.example");
     }
 }
+
+#[test]
+fn chats_jump_to_new_output_unless_glide_is_on() {
+    assert!(!crate::config::Config::parse("").unwrap().chat.glide);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config-gpui.local.toml");
+    std::fs::write(&path, "[chat]\nlayout = \"imessage\"\n").unwrap();
+    for glide in [true, false] {
+        crate::config::Config::save_preference_path(
+            crate::config::preferences::Preference::ChatGlide(glide),
+            &path,
+        )
+        .unwrap();
+        let config =
+            crate::config::Config::parse(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(config.chat.glide, glide);
+        assert_eq!(config.chat.layout, ChatLayoutMode::IMessage);
+    }
+}
+
+mod launcher;

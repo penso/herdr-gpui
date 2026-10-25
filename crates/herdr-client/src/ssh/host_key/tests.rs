@@ -238,7 +238,7 @@ fn entries_with_controls_are_refused() {
     );
     assert!(matches!(
         valid_entries("host ssh-ed25519 AAAA\u{1b}]52;c;x\u{7}"),
-        Err(Error::RemoteOutput)
+        Err(crate::Error::RemoteOutput)
     ));
 }
 
@@ -262,7 +262,7 @@ fn a_key_trusted_meanwhile_is_never_replaced() {
     std::fs::write(&path, BOX_KEY).unwrap();
     assert!(matches!(
         trust_host_key(&key(path.clone())),
-        Err(Error::SshRefused(SshFailure::HostKey))
+        Err(crate::Error::Ssh(Error::Refused(SshFailure::HostKey)))
     ));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), BOX_KEY);
 }
@@ -275,7 +275,7 @@ fn an_unreadable_known_hosts_file_fails_the_check() {
     std::fs::create_dir(&directory).unwrap();
     assert!(matches!(
         lists_host("box", [&directory]),
-        Err(Error::Storage {
+        Err(crate::Error::Storage {
             operation: StorageOperation::Metadata,
             ..
         })
@@ -325,7 +325,7 @@ fn a_failed_append_names_the_operation() {
     let error = trust_host_key(&key).unwrap_err();
     assert!(matches!(
         &error,
-        Error::Storage { operation: StorageOperation::Open, path: failed, .. } if failed == &path
+        crate::Error::Storage { operation: StorageOperation::Open, path: failed, .. } if failed == &path
     ));
     assert!(std::error::Error::source(&error).is_some());
 }
@@ -334,6 +334,6 @@ fn a_failed_append_names_the_operation() {
 fn invalid_targets_are_refused_before_ssh_runs() {
     assert!(matches!(
         scan_host_key("-oProxyCommand=x"),
-        Err(Error::InvalidSshTarget)
+        Err(crate::Error::Ssh(Error::InvalidTarget))
     ));
 }

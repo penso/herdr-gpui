@@ -150,12 +150,10 @@ pub(super) fn images() -> crate::Result<Output> {
 
 #[cfg(not(feature = "cloud"))]
 pub(super) fn list() -> crate::Result<Output> {
-    Err(crate::Error::Control(
-        crate::control::ControlError::Rejected {
-            code: crate::control::ErrorCode::Unsupported,
-            message: "This build has no cloud providers".into(),
-        },
-    ))
+    Err(crate::Error::Control(crate::control::Error::Rejected {
+        code: crate::control::ErrorCode::Unsupported,
+        message: "This build has no cloud providers".into(),
+    }))
 }
 
 #[cfg(all(test, feature = "cloud"))]

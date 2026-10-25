@@ -26,6 +26,7 @@ pub mod prompt;
 pub mod repo;
 pub mod review;
 pub mod service;
+mod ssh_slots;
 pub mod store;
 
 pub use actions::{Action, DispatchRequest};

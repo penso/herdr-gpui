@@ -16,6 +16,7 @@
 
 mod chats;
 mod discovery;
+mod glide;
 mod harnesses;
 mod link;
 mod list;
@@ -28,7 +29,7 @@ mod view;
 mod visual;
 mod window;
 
-pub(crate) use chats::Chats;
+pub(crate) use chats::{Chats, LauncherDeck, Toward};
 
 /// The wall clock in milliseconds since the Unix epoch, which the program
 /// on this machine stamps a running turn with.

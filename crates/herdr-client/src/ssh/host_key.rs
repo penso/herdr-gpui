@@ -7,8 +7,8 @@
 //! `ssh` applies the user's `HostKeyAlias`, port, and hashing rules to the
 //! entry. Nothing reaches the user's files until [`trust_host_key`] appends
 //! those exact entries, so the approved fingerprint is the one saved.
-use super::SshFailure;
-use crate::{Error, Result};
+use super::{Error, SshFailure};
+use crate::Result;
 use crate::{StorageOperation, catalog::validate_target};
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -92,9 +92,9 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
     std::fs::File::open(&recorded)?
         .take(ENTRIES_LIMIT + 1)
         .read_to_string(&mut entries)
-        .map_err(|_| Error::RemoteOutput)?;
+        .map_err(|_| crate::Error::RemoteOutput)?;
     if entries.len() as u64 > ENTRIES_LIMIT {
-        return Err(Error::SshOutputLimit);
+        return Err(Error::OutputLimit.into());
     }
     if !entries.trim().is_empty() {
         // `accept-new` treats a host with a known key of another type as
@@ -198,12 +198,18 @@ fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> R
     for file in files {
         match std::fs::metadata(file) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(Error::storage(StorageOperation::Metadata, file, error)),
-            Ok(metadata) if !metadata.is_file() => {
-                return Err(Error::storage(
+            Err(error) => {
+                return Err(crate::Error::storage(
                     StorageOperation::Metadata,
                     file,
-                    Error::StorageDestinationNotFile,
+                    error,
+                ));
+            }
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(crate::Error::storage(
+                    StorageOperation::Metadata,
+                    file,
+                    crate::Error::StorageDestinationNotFile,
                 ));
             }
             Ok(_) => {}
@@ -214,7 +220,7 @@ fn lists_host<'a>(name: &str, files: impl IntoIterator<Item = &'a PathBuf>) -> R
         match status.code() {
             Some(0) => return Ok(true),
             Some(1) => {}
-            _ => return Err(Error::RemoteCommand(status)),
+            _ => return Err(crate::Error::RemoteCommand(status)),
         }
     }
     Ok(false)
@@ -225,9 +231,9 @@ fn known_hosts(target: &str) -> Result<KnownHosts> {
     command.args(["-G", "--", target]);
     let (status, output) = super::run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
-        return Err(Error::RemoteCommand(status));
+        return Err(crate::Error::RemoteCommand(status));
     }
-    parse_known_hosts(&output).ok_or(Error::KnownHostsUnavailable)
+    parse_known_hosts(&output).ok_or(Error::KnownHostsUnavailable.into())
 }
 
 /// `None` unless every user file is an absolute path without quotes, and any
@@ -335,15 +341,15 @@ fn fingerprints(file: &Path) -> Result<Vec<HostKeyFingerprint>> {
     command.args(["-l", "-E", "sha256", "-f"]).arg(file);
     let (status, output) = super::run(&mut command, Duration::from_secs(5), || false)?;
     if !status.success() {
-        return Err(Error::RemoteCommand(status));
+        return Err(crate::Error::RemoteCommand(status));
     }
     let mut keys: Vec<HostKeyFingerprint> = Vec::new();
     for key in std::str::from_utf8(&output)
-        .map_err(|_| Error::RemoteOutput)?
+        .map_err(|_| crate::Error::RemoteOutput)?
         .lines()
         .map(parse_fingerprint)
     {
-        let key = key.ok_or(Error::RemoteOutput)?;
+        let key = key.ok_or(crate::Error::RemoteOutput)?;
         if !keys
             .iter()
             .any(|known| known.fingerprint == key.fingerprint)
@@ -352,7 +358,7 @@ fn fingerprints(file: &Path) -> Result<Vec<HostKeyFingerprint>> {
         }
     }
     if keys.is_empty() {
-        return Err(Error::RemoteOutput);
+        return Err(crate::Error::RemoteOutput);
     }
     Ok(keys)
 }
@@ -387,7 +393,7 @@ fn valid_entries(entries: &str) -> Result<String> {
     let mut valid = String::with_capacity(entries.len());
     for line in entries.lines().filter(|line| !line.trim().is_empty()) {
         if line.chars().any(char::is_control) {
-            return Err(Error::RemoteOutput);
+            return Err(crate::Error::RemoteOutput);
         }
         valid.push_str(line);
         valid.push('\n');
@@ -406,7 +412,7 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
             category = "host_key",
             "host gained a trusted key before approval"
         );
-        return Err(Error::SshRefused(SshFailure::HostKey));
+        return Err(Error::Refused(SshFailure::HostKey).into());
     }
     let path = key.known_hosts.as_path();
     if let Some(parent) = path.parent() {
@@ -414,9 +420,9 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
         builder.recursive(true);
         #[cfg(unix)]
         builder.mode(0o700);
-        builder
-            .create(parent)
-            .map_err(|error| Error::storage(StorageOperation::CreateDirectory, parent, error))?;
+        builder.create(parent).map_err(|error| {
+            crate::Error::storage(StorageOperation::CreateDirectory, parent, error)
+        })?;
     }
     // Windows has no mode bits: the file inherits its directory's ACL, as
     // one `ssh` itself creates there does.
@@ -426,8 +432,8 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
     options.mode(0o600);
     let mut file = options
         .open(path)
-        .map_err(|error| Error::storage(StorageOperation::Open, path, error))?;
-    let write = |error| Error::storage(StorageOperation::Write, path, error);
+        .map_err(|error| crate::Error::storage(StorageOperation::Open, path, error))?;
+    let write = |error| crate::Error::storage(StorageOperation::Write, path, error);
     // A last line without a newline would otherwise swallow the first entry.
     let mut last = [0];
     let unterminated = file.seek(SeekFrom::End(0)).map_err(write)? > 0
@@ -441,7 +447,7 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
     text.push_str(&key.entries);
     file.write_all(text.as_bytes()).map_err(write)?;
     file.sync_all()
-        .map_err(|error| Error::storage(StorageOperation::Sync, path, error))?;
+        .map_err(|error| crate::Error::storage(StorageOperation::Sync, path, error))?;
     tracing::info!(category = "host_key", "trusted a new host key");
     Ok(())
 }

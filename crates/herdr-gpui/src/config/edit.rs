@@ -2,8 +2,9 @@
 //! effective value, or change the local overrides file. A change is checked
 //! the way loading checks the file before it is written, so a value the app
 //! would refuse never reaches the disk.
+use super::Error;
 use super::{Config, DEFAULT_CONFIG, daemon_config_path, daemon_settings, files::write_config};
-use crate::{Error, Result};
+use crate::Result;
 use std::path::Path;
 use toml_edit::{Item, TableLike};
 
@@ -46,7 +47,7 @@ impl Config {
         let local: toml::Value = text
             .parse::<toml::Table>()
             .map(toml::Value::Table)
-            .map_err(|error| Error::from(error).at_path(&source))?;
+            .map_err(|error| crate::Error::from(error).at_path(&source))?;
         let merged =
             Self::merged([DEFAULT_CONFIG, &text]).map_err(|error| error.at_path(&source))?;
         let layer = if lookup(&local, key).is_some() {
@@ -95,11 +96,11 @@ impl Config {
         value: Option<toml_edit::Value>,
     ) -> Result<bool> {
         let parts: Vec<&str> = key.split('.').collect();
-        let text =
-            std::fs::read_to_string(local).map_err(|error| Error::from(error).at_path(local))?;
+        let text = std::fs::read_to_string(local)
+            .map_err(|error| crate::Error::from(error).at_path(local))?;
         let mut document = text
             .parse::<toml_edit::DocumentMut>()
-            .map_err(|error| Error::from(error).at_path(local))?;
+            .map_err(|error| crate::Error::from(error).at_path(local))?;
         let changed = match value {
             Some(value) => {
                 insert(document.as_table_mut(), &parts, value, key)?;
@@ -123,7 +124,7 @@ impl Config {
             .filter(|key| !before.contains(key))
             .collect();
         if !unknown.is_empty() {
-            return Err(Error::UnknownConfigKeys(unknown));
+            return Err(Error::UnknownKeys(unknown).into());
         }
         write_config(local, &edited)?;
         Ok(true)
@@ -154,7 +155,7 @@ fn insert(
             let child = table
                 .get_mut(first)
                 .and_then(Item::as_table_like_mut)
-                .ok_or_else(|| Error::ConfigKeyNotTable {
+                .ok_or_else(|| Error::KeyNotTable {
                     key: key.to_owned(),
                 })?;
             insert(child, rest, value, key)

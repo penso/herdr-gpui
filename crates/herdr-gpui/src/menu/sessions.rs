@@ -344,7 +344,7 @@ impl HerdrWindow {
             .departure
             .as_ref()
             .filter(|departure| matches_target(&departure.target))
-            .map(|departure| departure.remaining(std::time::Instant::now()));
+            .map(|departure| departure.remaining(crate::motion::now()));
         let height = font.line_height() * 2. + 16.;
         let removal = choice.clone();
         let removal_target = self.management_target(&choice);

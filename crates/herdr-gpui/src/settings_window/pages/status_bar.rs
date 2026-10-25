@@ -33,6 +33,7 @@ impl SettingsWindow {
         let usage = self.config.usage.show;
         let system_load = self.config.show_system_load;
         let network_quality = self.config.show_network_quality;
+        let gpu = self.config.show_gpu_load;
         let keep_awake = items.keep_awake;
         let buttons = [
             ButtonRow {
@@ -100,6 +101,27 @@ impl SettingsWindow {
                         "status-system-load-toggle",
                         system_load,
                         Preference::ShowSystemLoad(!system_load),
+                        cx,
+                    )),
+            )
+            .child(
+                ui::row(theme, "status-gpu", "GPU and video memory")
+                    .description(
+                        "Off by default. The selected host's GPU, read from nvidia-smi, the \
+                         amdgpu driver, or ioreg on a Mac. Sidebar rows have their own GPU \
+                         setting.",
+                    )
+                    .control(self.detail_control(
+                        "status-gpu-detail",
+                        items.gpu_detail,
+                        gpu,
+                        Edit::GpuDetail,
+                        cx,
+                    ))
+                    .switch(self.preference_toggle(
+                        "status-gpu-toggle",
+                        gpu,
+                        Preference::ShowGpuLoad(!gpu),
                         cx,
                     )),
             )

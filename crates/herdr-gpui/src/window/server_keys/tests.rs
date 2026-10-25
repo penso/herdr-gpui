@@ -130,9 +130,11 @@ fn an_unusable_profile_falls_back_to_local_and_says_why(cx: &mut TestAppContext)
             assert!(error.starts_with(expected), "{error}");
             assert!(matches!(
                 view.server_keys.as_ref().unwrap().keymap,
-                Err(Error::ServerKeybindingsMissing
-                    | Error::ServerKeybindingsParse(_)
-                    | Error::ServerKeybindingsNoKeys)
+                Err(Error::ServerKeybindings(
+                    crate::keymap::daemon::Error::Missing
+                        | crate::keymap::daemon::Error::Parse(_)
+                        | crate::keymap::daemon::Error::NoKeys
+                ))
             ));
         }
         // A later valid profile replaces the fallback.

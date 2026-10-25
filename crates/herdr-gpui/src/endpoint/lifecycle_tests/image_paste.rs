@@ -374,7 +374,7 @@ fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui::Tes
                 Some(
                     format!(
                         "Image not sent: {}",
-                        herdr_client::Error::ClipboardImageBusy
+                        herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
                     )
                     .as_str()
                 )

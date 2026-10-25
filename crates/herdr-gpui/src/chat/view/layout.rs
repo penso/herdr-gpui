@@ -10,6 +10,7 @@
 mod bubbles;
 mod cards;
 mod document;
+mod imessage;
 mod terminal;
 mod timeline;
 
@@ -47,6 +48,8 @@ pub(super) struct Row<'a> {
     pub(super) next: Option<Side>,
     /// The agent's display name, as the program reports it.
     pub(super) agent: &'a str,
+    /// The entry is the last while a turn runs, so it may still grow.
+    pub(super) live: bool,
     pub(super) content: Div,
 }
 
@@ -76,6 +79,14 @@ impl Look<'_> {
     /// a page in a message shows from beneath the window's drawing.
     pub(super) fn ground(&self, content: Div, color: u32) -> AnyElement {
         self.window.with_ground(content, rgb(color))
+    }
+
+    /// For a background painted by hand: where it must paint around pages
+    /// in a message, or `None` while none lies under it.
+    pub(super) fn pages_under(
+        &self,
+    ) -> impl Fn(Bounds<Pixels>) -> Option<Vec<Bounds<Pixels>>> + 'static {
+        self.window.pages_under()
     }
 }
 
@@ -112,6 +123,20 @@ pub(super) trait ChatLayout {
     /// The composer's card, from its parts.
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div;
 
+    /// Where an agent message's copy button sits: by default in a row
+    /// under the message.
+    fn copy(&self, button: Stateful<Div>, _look: &Look<'_>) -> Div {
+        div().h(px(18.)).flex().child(button)
+    }
+
+    /// What shows under the conversation for whether the agent is working
+    /// on a turn: by default nothing, as the header already says so. A row
+    /// it draws keeps its height either way, so the list above it does not
+    /// change size as turns start and end.
+    fn working(&self, _working: bool, _look: &Look<'_>) -> Option<Div> {
+        None
+    }
+
     /// How a turn ended, from its description: by default a quiet rule
     /// across the list.
     fn turn(&self, text: &str, look: &Look<'_>) -> Div {
@@ -136,6 +161,7 @@ pub(super) fn layout_for(mode: ChatLayoutMode) -> &'static dyn ChatLayout {
         ChatLayoutMode::Terminal => &terminal::Terminal,
         ChatLayoutMode::Document => &document::Document,
         ChatLayoutMode::Cards => &cards::Cards,
+        ChatLayoutMode::IMessage => &imessage::IMessage,
     }
 }
 

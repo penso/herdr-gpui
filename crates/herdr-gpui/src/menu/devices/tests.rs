@@ -112,7 +112,7 @@ fn a_device_on_another_session_is_still_matched_by_its_saved_entry(cx: &mut gpui
             let saved = setup::Request::new("penso@box", "Again", "").unwrap();
             assert!(matches!(
                 view.ensure_new_device(&saved),
-                Err(crate::Error::DeviceExists(label)) if label == "m5max-ms"
+                Err(crate::Error::Devices(super::Error::Exists(label))) if label == "m5max-ms"
             ));
             let work = setup::Request::new("penso@box", "Work", "work").unwrap();
             assert!(view.ensure_new_device(&work).is_ok());
@@ -138,7 +138,7 @@ fn a_host_already_saved_or_being_added_returns_to_the_form(cx: &mut gpui::TestAp
             let again = setup::Request::new("penso@box", "Again", "").unwrap();
             assert!(matches!(
                 view.ensure_new_device(&again),
-                Err(crate::Error::DeviceExists(label)) if label == "m5max-ms"
+                Err(crate::Error::Devices(super::Error::Exists(label))) if label == "m5max-ms"
             ));
             let other = setup::Request::new("penso@box", "Work", "work").unwrap();
             assert!(view.ensure_new_device(&other).is_ok());
@@ -147,11 +147,11 @@ fn a_host_already_saved_or_being_added_returns_to_the_form(cx: &mut gpui::TestAp
             // Neither may fall through to offering a terminal.
             for (error, message) in [
                 (
-                    crate::Error::DeviceExists("m5max-ms".into()),
+                    crate::Error::from(super::Error::Exists("m5max-ms".into())),
                     "This host and session are already saved as \u{201c}m5max-ms\u{201d}.",
                 ),
                 (
-                    crate::Error::DeviceAdding,
+                    crate::Error::from(super::Error::Adding),
                     "This host is already being added, in another Add Device dialog or a \u{201c}Set up\u{201d} workspace that is still running. Finish or close it, then try again.",
                 ),
             ] {
@@ -164,7 +164,7 @@ fn a_host_already_saved_or_being_added_returns_to_the_form(cx: &mut gpui::TestAp
                 );
             }
             open_form(view, Step::Verifying(again.clone(), Offer::Install), cx);
-            view.setup_space_verified(Err(crate::Error::DeviceExists("m5max-ms".into())), cx);
+            view.setup_space_verified(Err(super::Error::Exists("m5max-ms".into()).into()), cx);
             assert!(matches!(step(view), Step::Form));
         });
     });

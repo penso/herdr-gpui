@@ -2,9 +2,9 @@
 //! last selected. Upstream's endpoint catalog and selection refuse unknown
 //! fields and profile IDs, so these live in a file of their own beside them,
 //! which upstream never reads.
-use super::valid_distro;
+use super::{Error, valid_distro};
 use crate::{
-    Error, Result, StorageOperation,
+    Result, StorageOperation,
     catalog::{catalog_path, write_private},
     session_socket,
 };
@@ -63,7 +63,7 @@ impl Default for WslHosts {
 impl WslHosts {
     fn validate(&self) -> Result<()> {
         if self.version != 1 || self.hosts.len() > MAX_HOSTS {
-            return Err(Error::WslCatalog);
+            return Err(Error::Catalog.into());
         }
         for (index, host) in self.hosts.iter().enumerate() {
             if !valid_distro(&host.distro)
@@ -72,7 +72,7 @@ impl WslHosts {
                     .iter()
                     .any(|other| other.distro == host.distro)
             {
-                return Err(Error::WslCatalog);
+                return Err(Error::Catalog.into());
             }
         }
         Ok(())
@@ -105,7 +105,7 @@ fn add(path: &Path, distro: &str, session: &str) -> Result<()> {
     super::validate(distro, session)?;
     update(path, |hosts| {
         if hosts.hosts.iter().any(|host| host.distro == distro) {
-            return Err(Error::WslHostExists);
+            return Err(Error::HostExists.into());
         }
         hosts.hosts.push(WslHost {
             distro: distro.to_owned(),
@@ -126,7 +126,7 @@ fn remove(path: &Path, distro: &str) -> Result<()> {
         let before = hosts.hosts.len();
         hosts.hosts.retain(|host| host.distro != distro);
         if hosts.hosts.len() == before {
-            return Err(Error::WslHostMissing);
+            return Err(Error::HostMissing.into());
         }
         if hosts.selected.as_deref() == Some(distro) {
             hosts.selected = None;
@@ -143,7 +143,7 @@ pub fn store_wsl_selection(development: bool, selected: Option<&str>) -> Result<
 fn select(path: &Path, selected: Option<&str>) -> Result<()> {
     update(path, |hosts| {
         if selected.is_some_and(|distro| !hosts.hosts.iter().any(|host| host.distro == distro)) {
-            return Err(Error::WslHostMissing);
+            return Err(Error::HostMissing.into());
         }
         hosts.selected = selected.map(str::to_owned);
         Ok(())
@@ -159,11 +159,7 @@ fn update(path: &Path, change: impl FnOnce(&mut WslHosts) -> Result<()>) -> Resu
         return Ok(());
     }
     let content = serde_json::to_vec_pretty(&hosts).map_err(|error| {
-        Error::storage(
-            StorageOperation::Encode,
-            path,
-            Error::WslCatalogSchema(error),
-        )
+        crate::Error::storage(StorageOperation::Encode, path, Error::CatalogSchema(error))
     })?;
     write_private(path, &content)
 }
@@ -172,20 +168,20 @@ fn read(path: &Path) -> Result<WslHosts> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(WslHosts::default()),
-        Err(error) => return Err(Error::storage(StorageOperation::Open, path, error)),
+        Err(error) => return Err(crate::Error::storage(StorageOperation::Open, path, error)),
     };
     let mut bytes = Vec::new();
     file.take(MAX_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| Error::storage(StorageOperation::Read, path, error))?;
-    parse(&bytes).map_err(|error| Error::storage(StorageOperation::Decode, path, error))
+        .map_err(|error| crate::Error::storage(StorageOperation::Read, path, error))?;
+    parse(&bytes).map_err(|error| crate::Error::storage(StorageOperation::Decode, path, error))
 }
 
 fn parse(bytes: &[u8]) -> Result<WslHosts> {
     if bytes.len() as u64 > MAX_BYTES {
-        return Err(Error::WslCatalog);
+        return Err(Error::Catalog.into());
     }
-    let hosts: WslHosts = serde_json::from_slice(bytes).map_err(Error::WslCatalogSchema)?;
+    let hosts: WslHosts = serde_json::from_slice(bytes).map_err(Error::CatalogSchema)?;
     hosts.validate()?;
     Ok(hosts)
 }

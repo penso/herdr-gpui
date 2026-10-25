@@ -17,6 +17,7 @@ use crate::{
     PlaySound, ShowHerdrNotDetected, ShowUpdatePreview,
     actions::{
         RingBellPreview, ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview,
+        ToggleSlowAnimations,
     },
 };
 use gpui::{App, Menu, MenuItem, OsAction};
@@ -408,6 +409,8 @@ pub(crate) fn menus(layout: Layout, tabs: TabLayoutMode) -> Vec<Menu> {
                 MenuItem::action("Show Homebrew update progress", ShowUpdateHomebrewPreview),
                 MenuItem::action("Play Sound", PlaySound),
                 MenuItem::action("Ring Bell in 3 Seconds", RingBellPreview),
+                MenuItem::action("Slow Animations", ToggleSlowAnimations)
+                    .checked(crate::motion::is_slow()),
                 #[cfg(any(target_os = "macos", windows))]
                 MenuItem::action(
                     "Enable badge",

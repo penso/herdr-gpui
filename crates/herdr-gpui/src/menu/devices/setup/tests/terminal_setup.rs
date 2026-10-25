@@ -119,7 +119,7 @@ fn a_failed_setup_releases_its_host_for_another_try() -> Result<()> {
     // The dialog is gone, but the setup still runs: the host stays claimed.
     assert!(matches!(
         Claim::acquire(destination("failed-setup.test"), "default"),
-        Err(Error::DeviceAdding)
+        Err(crate::Error::Devices(Error::Adding))
     ));
     let mut pane = std::os::unix::net::UnixStream::connect(relay.path())?;
     drop(relay);
@@ -130,7 +130,7 @@ fn a_failed_setup_releases_its_host_for_another_try() -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(5);
     let retry = loop {
         match Claim::acquire(destination("failed-setup.test"), "default") {
-            Err(Error::DeviceAdding) if Instant::now() < deadline => {
+            Err(crate::Error::Devices(Error::Adding)) if Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(20));
             }
             result => break result,

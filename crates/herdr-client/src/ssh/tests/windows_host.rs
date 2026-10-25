@@ -110,7 +110,7 @@ fn powershell_ends_its_ready_banner_with_crlf() {
     let mut stray = scripted(bytes(b"herdr-remote-output-ready:1\r\r\n"));
     assert!(matches!(
         await_ready(&mut stray, &AtomicBool::new(false), Instant::now()),
-        Err(Error::SshClosed)
+        Err(crate::Error::Ssh(Error::Closed))
     ));
 }
 

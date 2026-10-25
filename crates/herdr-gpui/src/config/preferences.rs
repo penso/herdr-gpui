@@ -5,6 +5,10 @@ use herdr_client::protocol::ToastHerdrPosition;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Preference {
     AgentsPlacement(AgentsPlacement),
+    /// `[chat] glide`: whether chats scroll smoothly to new output.
+    ChatGlide(bool),
+    /// `[chat] launcher`: where tab strips offer one-click chats.
+    ChatLauncher(ChatLauncher),
     /// `[chat] layout`: how chat views draw.
     ChatLayout(ChatLayoutMode),
     ConfirmCloseTab(bool),
@@ -13,6 +17,8 @@ pub(crate) enum Preference {
     RemoveMergedWorktrees(bool),
     ShowSystemLoad(bool),
     ShowNetworkQuality(bool),
+    ShowGpuLoad(bool),
+    ShowSidebarGpuLoad(bool),
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     ShowAgentsHeader(bool),
@@ -80,7 +86,7 @@ fn sidebar_metric(
             .find_map(|(name, max)| (*name == key).then_some(*max))
             .unwrap_or(0.);
         if !value.is_finite() || !(0.0..=max).contains(&value) {
-            return Err(Error::InvalidSidebarMetric { key, max });
+            return Err(Error::InvalidSidebarMetric { key, max }.into());
         }
     }
     Ok((
@@ -108,6 +114,10 @@ impl Config {
                 Preference::AgentsPlacement(placement) => {
                     (None, "agents_placement", Some(placement.as_str().into()))
                 }
+                Preference::ChatGlide(value) => (Some("chat"), "glide", Some(value.into())),
+                Preference::ChatLauncher(launcher) => {
+                    (Some("chat"), "launcher", Some(launcher.name().into()))
+                }
                 Preference::ChatLayout(mode) => (Some("chat"), "layout", Some(mode.name().into())),
                 Preference::ConfirmCloseTab(value) => {
                     (None, "confirm_close_tab", Some(value.into()))
@@ -124,6 +134,10 @@ impl Config {
                 Preference::ShowSystemLoad(value) => (None, "show_system_load", Some(value.into())),
                 Preference::ShowNetworkQuality(value) => {
                     (None, "show_network_quality", Some(value.into()))
+                }
+                Preference::ShowGpuLoad(value) => (None, "show_gpu_load", Some(value.into())),
+                Preference::ShowSidebarGpuLoad(value) => {
+                    (None, "show_sidebar_gpu_load", Some(value.into()))
                 }
                 Preference::AgentCheckpoints(value) => {
                     (None, "agent_checkpoints", Some(value.into()))
@@ -234,7 +248,8 @@ impl Config {
                         return Err(Error::InvalidHostColor {
                             host,
                             value: format!("#{color:x}"),
-                        });
+                        }
+                        .into());
                     }
                     let sidebar = document
                         .entry("sidebar")
@@ -273,7 +288,7 @@ impl Config {
                 }
                 Preference::SoundVolume(value) => {
                     if value > SoundConfig::MAX_VOLUME {
-                        return Err(Error::InvalidSoundVolume);
+                        return Err(Error::InvalidSoundVolume.into());
                     }
                     (Some("sound"), "volume", Some(i64::from(value).into()))
                 }
@@ -451,7 +466,7 @@ mod tests {
         fs::write(&path, original)?;
         let edit = Preference::NotificationDelay(Some(u64::MAX));
         let error = Config::save_preference_path(edit, &path).expect_err("invalid preference");
-        assert!(matches!(error, Error::Path { .. }));
+        assert!(matches!(error, crate::Error::Path { .. }));
         assert!(std::error::Error::source(&error).is_some());
         assert_eq!(fs::read_to_string(&path)?, original);
         let sides = Sides::new(64., 0.).expect("padding in band");

@@ -5,7 +5,7 @@
 //! branch, with or without an agent, or the branch in the repository, even
 //! when no database recorded the run, as on a machine that never had one.
 
-use super::{Backend, Item, Owner, Run, RunState, model::Workspace};
+use super::{Backend, Item, Owner, Result, Run, RunState, error::script, model::Workspace};
 use crate::model::LiveAgent;
 use chrono::{DateTime, Utc};
 use herdr_client::protocol::AgentStatus;
@@ -201,40 +201,42 @@ fn run(item: &Item, id: String, workspace: Workspace, agent: Option<AgentStatus>
 }
 
 /// The repository's branches named here, read on its host.
-pub fn local_branches(host: &Host, main_root: &str, cancelled: &AtomicBool) -> Option<Vec<String>> {
+pub fn local_branches(host: &Host, main_root: &str, cancelled: &AtomicBool) -> Result<Vec<String>> {
     if host.is_local() {
-        let branches = super::git::branches(std::path::Path::new(main_root), PREFIX, MAX_BRANCHES);
-        return Some(
-            branches
-                .ok()?
-                .into_iter()
-                .filter(|branch| branch_hash(branch).is_some())
-                .collect(),
-        );
-    }
-    let output = host
-        .exec(
-            "git",
-            &[
-                "-C",
-                main_root,
-                "for-each-ref",
-                &format!("--count={MAX_BRANCHES}"),
-                "--format=%(refname:short)",
-                &format!("refs/heads/{PREFIX}"),
-            ],
-            Host::QUERY_IDLE,
-            cancelled,
-        )
-        .ok()?;
-    Some(
-        String::from_utf8_lossy(&output)
-            .lines()
-            .map(str::trim)
+        let branches = super::git::branches(std::path::Path::new(main_root), PREFIX, MAX_BRANCHES)?;
+        return Ok(branches
+            .into_iter()
             .filter(|branch| branch_hash(branch).is_some())
-            .map(str::to_owned)
-            .collect(),
-    )
+            .collect());
+    }
+    let query = branch_query();
+    let mut args = vec!["-C", main_root];
+    args.extend(query.iter().map(String::as_str));
+    let output = host
+        .exec("git", &args, Host::QUERY_IDLE, cancelled)
+        .map_err(script("Reading the branches"))?;
+    Ok(ours(String::from_utf8_lossy(&output).lines()))
+}
+
+/// The `git` arguments, after `-C` and the main checkout, that list the
+/// branches named here, one per line.
+pub(crate) fn branch_query() -> [String; 4] {
+    [
+        "for-each-ref".into(),
+        format!("--count={MAX_BRANCHES}"),
+        "--format=%(refname:short)".into(),
+        format!("refs/heads/{PREFIX}"),
+    ]
+}
+
+/// The branches named here among the names `git` listed.
+pub(crate) fn ours<'a>(listed: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    listed
+        .into_iter()
+        .map(str::trim)
+        .filter(|branch| branch_hash(branch).is_some())
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]

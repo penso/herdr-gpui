@@ -84,7 +84,7 @@ running another terminal emulator or wrapping the TUI.
     <td width="50%" valign="top">
       <img src="docs/screenshots/system-load.png" alt="A sidebar host card and the status bar, each with a CPU sparkline and a memory meter">
       <br>
-      <sub><b>CPU and memory per host.</b> The status bar follows the selected host, and with several hosts each sidebar host row shows its own, read over SSH for remote machines.</sub>
+      <sub><b>CPU and memory per host.</b> The status bar follows the selected host, and with several hosts each sidebar host row shows its own, read over SSH for remote machines. NVIDIA, AMD, and Apple GPUs and their video memory can be turned on for the status bar and, on a line of their own, the sidebar.</sub>
       <br><br>
       <img src="docs/screenshots/settings-themes.png" alt="Settings window on the Theme page with grouped navigation and a grid of theme cards">
       <br>
@@ -440,6 +440,34 @@ remain opt-in rather than imposing machine-dependent timings on hosted CI.
 
 See [PERFORMANCE.md](crates/herdr-gpui/PERFORMANCE.md) for the before/after results,
 reference mode, workload, deterministic checks, and remaining limitations.
+
+## Pull request reviews
+
+An hourly [workflow](.github/workflows/close-low-confidence-prs.yml) closes open
+PRs, including drafts, when their head commit's **committer timestamp is more
+than 48 hours old** and either:
+
+- Greptile's latest summary scores that exact commit below **5/5**.
+- The latest pull-request run of the repository's **CI** workflow (`ci.yml`) for
+  that commit has completed with `failure`, `timed_out`, or `startup_failure`.
+
+Comments and label changes do not reset the clock. A missing, malformed, or
+outdated review does not count as a low score. CI failure can close a PR even
+with a 5/5 score or no Greptile review. Missing, pending, cancelled, skipped, and
+successful CI runs do not count as failures; newer runs supersede older failures.
+
+The workflow posts an explanation and keeps the branch. Address the feedback or
+CI failures, push changes, and reopen the PR for another review. Scheduled checks
+start once the workflow is on `main`; GitHub may delay scheduled runs. Maintainers
+can also run it manually from Actions on `main`.
+
+Preview the policy locally without changing any PRs using an authenticated
+GitHub CLI:
+
+```sh
+python3 scripts/close-low-confidence-prs.py --repo penso/herdr-gpui
+just test-pr-closure
+```
 
 ## License
 

@@ -6,7 +6,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 mod catalog;
-mod clipboard;
+pub mod clipboard;
 mod compat;
 mod connect;
 mod discovery;
@@ -30,14 +30,14 @@ mod remote_host;
 mod script;
 pub mod scrollback;
 mod session;
-mod sessions;
-mod ssh;
+pub mod sessions;
+pub mod ssh;
 mod surface_images;
 pub mod text;
 mod transport;
 mod upload;
 pub mod workspaces;
-mod wsl;
+pub mod wsl;
 
 #[cfg(all(test, unix))]
 #[path = "../../test-support/executable.rs"]

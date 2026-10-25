@@ -1,11 +1,11 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::{
-    HISTORY, Reading, Source, Stop, SystemLoad,
+    Error, HISTORY, Reading, Source, Stop, SystemLoad,
     render::gigabytes,
     sample::{Memory, Os, Sample, parse},
 };
-use crate::{Error, usage::Host};
+use crate::usage::Host;
 use std::{
     sync::Arc,
     thread,
@@ -99,7 +99,10 @@ fn unexpected_output_is_a_typed_error() {
         "cpu  x y z\nMemTotal: 10 kB\n",
     ] {
         assert!(
-            matches!(parse(text, None), Err(Error::SystemLoadOutput)),
+            matches!(
+                parse(text, None),
+                Err(crate::Error::SystemLoad(Error::Output))
+            ),
             "{text:?}"
         );
     }
@@ -128,8 +131,8 @@ fn uname_selects_the_command() {
     assert_eq!(Os::from_uname("Linux\n"), Some(Os::Linux));
     assert_eq!(Os::from_uname("Darwin"), Some(Os::MacOs));
     assert_eq!(Os::from_uname("FreeBSD"), None);
-    assert!(Os::Linux.command().contains("/proc/stat"));
-    assert!(Os::MacOs.command().contains("vm_stat"));
+    assert!(Os::Linux.command(false).contains("/proc/stat"));
+    assert!(Os::MacOs.command(false).contains("vm_stat"));
 }
 
 #[test]
@@ -157,9 +160,10 @@ fn history_is_bounded_and_a_failure_keeps_the_last_sample() {
     assert_eq!(reading.history().len(), HISTORY);
     assert_eq!(reading.history().next(), Some(3.));
     let shown = reading.latest().copied();
-    reading.apply(Err(Error::SystemLoadRemote(Box::new(Error::Usage(
-        herdr_usage::Error::Unreachable,
-    )))));
+    reading.apply(Err(Error::Remote(Box::new(
+        herdr_usage::Error::Unreachable.into(),
+    ))
+    .into()));
     assert_eq!(
         reading.latest().copied(),
         shown,
@@ -182,7 +186,7 @@ fn a_wanted_host_is_sampled_and_a_dropped_one_forgotten() {
     let local = Host::Local;
     // Starting a worker shows nothing new by itself, but a fast machine can
     // answer before this same poll drains it, which is a change.
-    let changed = load.poll([local.clone()]);
+    let changed = load.poll([local.clone()], false);
     let reading = load.get(&local).unwrap();
     assert_eq!(
         changed,
@@ -191,26 +195,26 @@ fn a_wanted_host_is_sampled_and_a_dropped_one_forgotten() {
     let deadline = Instant::now() + Duration::from_secs(10);
     while load.get(&local).and_then(Reading::latest).is_none() {
         assert!(Instant::now() < deadline, "this machine never answered");
-        load.poll([local.clone()]);
+        load.poll([local.clone()], false);
         thread::sleep(Duration::from_millis(10));
     }
     assert!(
-        load.poll(std::iter::empty()),
+        load.poll(std::iter::empty(), false),
         "dropping a host changes what is shown"
     );
     assert!(load.get(&local).is_none());
-    assert!(!load.poll(std::iter::empty()));
+    assert!(!load.poll(std::iter::empty(), false));
 }
 
 #[test]
 fn this_machine_answers_with_memory_then_cpu() {
     let mut source = Source::open(&Host::Local).unwrap();
-    let first = source.sample().unwrap();
+    let first = source.sample(false).unwrap();
     assert_eq!(first.cpu, None);
     let memory = first.memory.expect("this machine reports memory");
     assert!(memory.used <= memory.total);
     thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-    let second = source.sample().unwrap();
+    let second = source.sample(false).unwrap();
     assert!(second.cpu.is_some_and(|cpu| (0.0..=100.).contains(&cpu)));
 }
 
@@ -234,9 +238,12 @@ fn a_remote_shell_is_sampled_with_the_host_command() {
         },
         ticks: None,
     };
-    let sample = source.sample().unwrap();
+    let sample = source.sample(true).unwrap();
     assert!(sample.memory.is_some_and(|memory| memory.total > 0));
     assert!(sample.cores.is_some());
 }
 
 mod disk_uptime;
+mod gpu;
+#[cfg(unix)]
+mod gpu_tool;

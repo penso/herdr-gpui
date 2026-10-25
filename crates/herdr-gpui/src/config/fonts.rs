@@ -1,9 +1,10 @@
 //! Font faces, their configured overrides and sizes, and the icon-font cascade.
+use super::Error;
 use super::{
     Config,
     font_weight::{self, MissingWeight},
 };
-use crate::{Error, Result};
+use crate::Result;
 use gpui::{Font, FontFallbacks, FontWeight};
 use serde::Deserialize;
 use std::{collections::BTreeSet, ops::RangeInclusive};
@@ -99,10 +100,10 @@ impl FontSettings {
         }
         if let Some(fallback) = self.fallback {
             if fallback.len() > MAX_FONT_FALLBACKS {
-                return Err(Error::TooManyFontFallbacks(name));
+                return Err(Error::TooManyFontFallbacks(name).into());
             }
             if fallback.iter().any(|family| family.trim().is_empty()) {
-                return Err(Error::EmptyFontFallback(name));
+                return Err(Error::EmptyFontFallback(name).into());
             }
             font.fallbacks = Some(fallback);
         }
@@ -110,10 +111,10 @@ impl FontSettings {
             let line_height = match line_height {
                 toml::Value::Float(value) => value as f32,
                 toml::Value::Integer(value) => value as f32,
-                _ => return Err(Error::InvalidLineHeight(name)),
+                _ => return Err(Error::InvalidLineHeight(name).into()),
             };
             if !line_height.is_finite() || !LINE_HEIGHT_RANGE.contains(&line_height) {
-                return Err(Error::InvalidLineHeight(name));
+                return Err(Error::InvalidLineHeight(name).into());
             }
             font.line_height_multiple = Some(line_height);
         }
@@ -121,10 +122,10 @@ impl FontSettings {
             font.weight = font_weight::parse(weight, name)?;
         }
         if font.family.trim().is_empty() {
-            return Err(Error::EmptyFontFamily(name));
+            return Err(Error::EmptyFontFamily(name).into());
         }
         if !font.size.is_finite() || !FONT_SIZE_RANGE.contains(&font.size) {
-            return Err(Error::InvalidFontSize(name));
+            return Err(Error::InvalidFontSize(name).into());
         }
         Ok(())
     }

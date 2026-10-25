@@ -112,8 +112,9 @@ fn a_saved_entry_that_is_not_utf8_is_an_encoding_error() {
     #[allow(unsafe_code)]
     let written = unsafe { CredWriteW(&credential, 0) };
     assert_ne!(written, 0, "{}", io::Error::last_os_error());
-    assert!(matches!(
-        read(&scratch.service, main),
-        Err(crate::Error::Encoding(_))
-    ));
+    let result = read(&scratch.service, main);
+    assert!(
+        matches!(result, Err(crate::Error::Encoding(_))),
+        "{result:?}"
+    );
 }

@@ -4,8 +4,8 @@
 //! file inside that distribution (`\\wsl$\NAME\…` or `\\wsl.localhost\NAME\…`)
 //! to its own path. Nothing is copied, so a file of any size is ready at once
 //! and nothing is left behind to clean up.
-use super::valid_distro;
-use crate::{Error, Result, ScriptHost, ScriptLimits, run_script};
+use super::{Error, valid_distro};
+use crate::{Result, ScriptHost, ScriptLimits, run_script};
 use std::{path::Path, sync::atomic::AtomicBool, time::Duration};
 
 /// Paths in one drop, as for an SSH file transfer.
@@ -39,7 +39,7 @@ pub fn wsl_paths(
     cancelled: &AtomicBool,
 ) -> Result<Vec<String>> {
     if !valid_distro(distro) {
-        return Err(Error::InvalidWslDistro);
+        return Err(Error::InvalidDistro.into());
     }
     let input = input(paths)?;
     let mut output = Vec::new();
@@ -63,7 +63,7 @@ pub fn wsl_paths(
 /// so no line can split or join another.
 fn input(paths: &[impl AsRef<Path>]) -> Result<String> {
     if paths.len() > PATH_LIMIT {
-        return Err(Error::WslPathLimit);
+        return Err(Error::PathLimit.into());
     }
     let mut input = String::new();
     for path in paths {
@@ -75,7 +75,7 @@ fn input(paths: &[impl AsRef<Path>]) -> Result<String> {
                     && !text.chars().any(char::is_control)
                     && windows_absolute(text)
             })
-            .ok_or_else(|| Error::WslPathInvalid(path.to_path_buf()))?;
+            .ok_or_else(|| Error::PathInvalid(path.to_path_buf()))?;
         input.push_str(text);
         input.push('\n');
     }
@@ -96,20 +96,20 @@ fn windows_absolute(text: &str) -> bool {
 /// One answer per path: an absolute path inside the distribution, or `-` for
 /// one it cannot reach.
 fn parse(output: &[u8], paths: &[impl AsRef<Path>]) -> Result<Vec<String>> {
-    let text = std::str::from_utf8(output).map_err(|_| Error::WslPathResponse)?;
+    let text = std::str::from_utf8(output).map_err(|_| Error::PathResponse)?;
     let lines: Vec<&str> = text.lines().collect();
     if lines.len() != paths.len() {
-        return Err(Error::WslPathResponse);
+        return Err(Error::PathResponse.into());
     }
     lines
         .into_iter()
         .zip(paths)
         .map(|(line, path)| match line {
-            "-" => Err(Error::WslPathUnmapped(path.as_ref().to_path_buf())),
+            "-" => Err(Error::PathUnmapped(path.as_ref().to_path_buf()).into()),
             _ if line.starts_with('/') && !line.chars().any(char::is_control) => {
                 Ok(line.to_owned())
             }
-            _ => Err(Error::WslPathResponse),
+            _ => Err(Error::PathResponse.into()),
         })
         .collect()
 }

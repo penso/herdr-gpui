@@ -42,7 +42,7 @@ impl HerdrWindow {
             Target::Sandbox(sandbox) => return self.submit_sandboxed(action, *sandbox, name),
         };
         if self.dispatch_job.is_some() {
-            return Err(crate::Error::DispatchBusy);
+            return Err(crate::dispatch::Error::Busy.into());
         }
         let target = self
             .menu
@@ -61,7 +61,7 @@ impl HerdrWindow {
                 .iter()
                 .find(|endpoint| endpoint.id == endpoint_id)
                 .map_or_else(|| endpoint_id.to_owned(), |e| e.label.clone());
-            return Err(crate::Error::DispatchHostUnavailable(label));
+            return Err(crate::dispatch::Error::HostUnavailable(label).into());
         };
         let job = match self.dispatch_then(action, name)? {
             crate::dispatch::Then::Worktree { base, naming } => {
@@ -119,7 +119,7 @@ impl HerdrWindow {
         name: Option<String>,
     ) -> crate::Result<()> {
         if self.dispatch_job.is_some() {
-            return Err(crate::Error::DispatchBusy);
+            return Err(crate::dispatch::Error::Busy.into());
         }
         let target = self
             .menu
@@ -133,7 +133,7 @@ impl HerdrWindow {
         let origin = self
             .dispatch_origin(&target.id, &tree.key, &tree.label)
             .ok_or_else(|| {
-                crate::Error::DispatchHostUnavailable(
+                crate::dispatch::Error::HostUnavailable(
                     self.endpoints[self.selected_endpoint].label.clone(),
                 )
             })?;

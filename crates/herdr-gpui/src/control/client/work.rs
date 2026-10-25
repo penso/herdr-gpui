@@ -1,5 +1,4 @@
 //! `notes`, `checkpoint`, `scripts`, `teleport`, and `fan-out`.
-use crate::control::ControlError;
 mod checkpoint;
 mod here;
 mod scripts;
@@ -25,17 +24,21 @@ use std::fmt::Write as _;
 fn rejected(error: impl Into<crate::Error>) -> crate::Error {
     let error = error.into();
     let code = match &error {
-        crate::Error::CheckpointMissing => ErrorCode::NotFound,
+        crate::Error::Vcs(herdr_vcs::Error::Checkpoint(crate::checkpoint::Error::Missing)) => {
+            ErrorCode::NotFound
+        }
         crate::Error::NotInCheckout
         | crate::Error::DetachedHead
-        | crate::Error::CheckpointCheckout
-        | crate::Error::CheckpointUnborn => ErrorCode::InvalidRequest,
+        | crate::Error::Vcs(herdr_vcs::Error::Checkpoint(
+            crate::checkpoint::Error::Checkout | crate::checkpoint::Error::Unborn,
+        )) => ErrorCode::InvalidRequest,
         _ => ErrorCode::Failed,
     };
-    crate::Error::Control(ControlError::Rejected {
+    crate::control::Error::Rejected {
         code,
         message: crate::checkpoint::describe(&error),
-    })
+    }
+    .into()
 }
 
 /// A repository's name from its Git common directory: the directory the
@@ -113,12 +116,13 @@ pub(super) fn teleport(
     context: &Context,
 ) -> crate::Result<Output> {
     if let Some(worktree) = worktree {
-        return Err(crate::Error::Control(ControlError::Rejected {
+        return Err(crate::control::Error::Rejected {
             code: ErrorCode::InvalidRequest,
             message: format!(
                 "teleport moves the caller's own worktree, not {worktree}; run it from a pane there"
             ),
-        }));
+        }
+        .into());
     }
     context.act(Request::Work, WorkOp::Teleport { host })
 }

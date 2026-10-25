@@ -5,7 +5,7 @@ fn validates_setup_fields_before_launch() -> Result<()> {
     for target in ["", "-oProxyCommand=bad", "two hosts", "host\ncommand"] {
         assert!(matches!(
             Request::new(target, "Label", ""),
-            Err(Error::DeviceSetupInput(_))
+            Err(crate::Error::Devices(Error::SetupInput(_)))
         ));
     }
     // An empty label is not an error: the target names the device.
@@ -53,7 +53,7 @@ fn a_claim_blocks_a_second_add_until_released() -> Result<()> {
     let first = Claim::acquire(destination("claim.test"), "default")?;
     assert!(matches!(
         Claim::acquire(destination("claim.test"), "default"),
-        Err(Error::DeviceAdding)
+        Err(crate::Error::Devices(Error::Adding))
     ));
     // Another session on the same host is a different device.
     drop(Claim::acquire(destination("claim.test"), "work")?);
@@ -132,7 +132,7 @@ fn save_reports_the_cli_failure_without_waiting_for_input() -> Result<()> {
     std::fs::remove_dir_all(binary.parent().unwrap_or(&binary))?;
     assert!(!log.exists());
     match error {
-        Some(Error::DeviceSetup { status, detail }) => {
+        Some(crate::Error::Devices(Error::Setup { status, detail })) => {
             assert_eq!(status.code(), Some(3));
             assert_eq!(detail, "error: approval required");
         }
@@ -177,7 +177,9 @@ fn a_host_saved_by_another_client_meanwhile_keeps_only_the_first_profile() -> Re
     assert_eq!(calls, "add\n");
     // Another client saved it first: ours is removed, theirs stays.
     let (result, calls) = run(vec![theirs.clone(), ours.clone()]);
-    assert!(matches!(result, Err(Error::DeviceExists(label)) if label == "Theirs"));
+    assert!(
+        matches!(result, Err(crate::Error::Devices(Error::Exists(label))) if label == "Theirs")
+    );
     assert_eq!(calls, format!("add\nremove {}\n", "a".repeat(32)));
     // Ours came first: the other client removes its own, not us.
     let (result, calls) = run(vec![ours, theirs.clone()]);
@@ -192,7 +194,10 @@ fn a_host_saved_by_another_client_meanwhile_keeps_only_the_first_profile() -> Re
         || Ok(vec![theirs.clone()]),
         resolve,
     );
-    assert!(matches!(before, Err(Error::DeviceExists(_))));
+    assert!(matches!(
+        before,
+        Err(crate::Error::Devices(Error::Exists(_)))
+    ));
     assert!(!log.exists());
     std::fs::remove_dir_all(binary.parent().unwrap_or(&binary))?;
     Ok(())
@@ -238,7 +243,7 @@ fn rename_passes_the_label_as_one_value_even_when_it_looks_like_a_flag() -> Resu
     );
     assert!(matches!(
         rename_with(binary.as_os_str(), "../x", "x"),
-        Err(Error::DeviceSetupInput(_))
+        Err(crate::Error::Devices(Error::SetupInput(_)))
     ));
     std::fs::remove_dir_all(&root)?;
     Ok(())

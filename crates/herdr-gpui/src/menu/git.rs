@@ -490,7 +490,10 @@ impl HerdrWindow {
                                 .text_color(rgb(theme.muted))
                                 .with_animation(
                                     "git-menu-pr-loading",
-                                    Animation::new(std::time::Duration::from_secs(1)).repeat(),
+                                    Animation::new(crate::motion::duration(
+                                        std::time::Duration::from_secs(1),
+                                    ))
+                                    .repeat(),
                                     |icon, delta| {
                                         icon.with_transformation(Transformation::rotate(
                                             percentage(delta),

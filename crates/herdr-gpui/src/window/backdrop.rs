@@ -141,4 +141,22 @@ impl HerdrWindow {
         #[cfg(not(target_os = "macos"))]
         content.bg(color.into()).into_any_element()
     }
+
+    /// For a background painted by hand: where it must paint around pages
+    /// to leave them showing, or `None` while no page lies under `bounds`,
+    /// so it may paint its own shape. Call it while painting.
+    pub(crate) fn pages_under(
+        &self,
+    ) -> impl Fn(Bounds<Pixels>) -> Option<Vec<Bounds<Pixels>>> + 'static {
+        #[cfg(target_os = "macos")]
+        {
+            let pages = self.browser.drawn_pages();
+            move |bounds| {
+                let pieces = crate::browser::around_pages(bounds, pages.borrow().values().copied());
+                (pieces != [bounds]).then_some(pieces)
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        |_| None
+    }
 }

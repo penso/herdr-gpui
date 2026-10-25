@@ -1,30 +1,43 @@
-//! CPU and memory of each host the window lists, for the status bar and the
-//! sidebar's host rows. Every host has its own worker thread sampling it every
+//! CPU, memory and GPU of each host the window lists, for the status bar and
+//! the sidebar's host rows. Every host has its own worker thread sampling it every
 //! couple of seconds: this machine through `sysinfo`, a remote host over one
 //! SSH shell, and a WSL distribution over one `wsl.exe` shell, kept open
 //! between samples. The UI thread only starts and stops
 //! workers and takes their samples on later ticks, so a slow or unreachable
 //! host never blocks rendering or delays another host.
 
+mod error;
+mod gpu;
 mod render;
 mod sample;
 
 #[cfg(test)]
 mod tests;
 
+pub(crate) use error::Error;
+
 use crate::{
-    Error, Result,
+    Result,
     usage::{Host, Shell},
 };
 pub(crate) use render::{
-    CPU_WARN, DISK_WARN, MEMORY_WARN, gauges, line, severity, storage, tooltip, uptime,
+    CPU_WARN, DISK_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN, gauges, gpu_line, line, severity,
+    storage, tooltip, uptime,
 };
 // The control socket reads samples too.
 pub(crate) use sample::Sample;
-use sample::{Disk, Memory, Os, Ticks};
+// Tests elsewhere build samples with a GPU.
+#[cfg(test)]
+pub(crate) use gpu::Gpu;
+pub(crate) use sample::Memory;
+use sample::{Disk, Os, Ticks};
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, Condvar, Mutex, PoisonError, mpsc},
+    sync::{
+        Arc, Condvar, Mutex, PoisonError,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -47,6 +60,7 @@ enum Source {
         /// CPU usage is measured between two refreshes, so the first has none.
         primed: bool,
         disk: HomeDisk,
+        gpu: gpu::Local,
     },
     Remote {
         shell: Shell,
@@ -62,24 +76,26 @@ impl Source {
                 system: Box::new(sysinfo::System::new()),
                 primed: false,
                 disk: HomeDisk::open(),
+                gpu: gpu::Local::open(),
             }),
-            Host::Ssh(target) => Self::remote(Shell::connect(target).map_err(Error::from)),
+            Host::Ssh(target) => Self::remote(Shell::connect(target).map_err(crate::Error::from)),
             // A distribution is sampled as a Linux host, through `wsl.exe`.
-            Host::Wsl(distro) => Self::remote(Shell::connect_wsl(distro).map_err(Error::from)),
+            Host::Wsl(distro) => {
+                Self::remote(Shell::connect_wsl(distro).map_err(crate::Error::from))
+            }
             #[cfg(all(feature = "azure", unix))]
             Host::Azure { account, id } => Self::remote(azure_shell(account, id)),
             // A remote shell needs a Unix client, as an SSH host's does.
             #[cfg(all(feature = "azure", not(unix)))]
-            Host::Azure { .. } => Err(Error::CloudHostUnsupported),
+            Host::Azure { .. } => Err(crate::Error::CloudHostUnsupported),
         }
     }
 
     fn remote(shell: Result<Shell>) -> Result<Self> {
         let mut shell = shell.map_err(remote)?;
         let uname = shell.run("uname -s", STEP_TIMEOUT).map_err(remote)?;
-        let os = Os::from_uname(&uname.stdout).ok_or_else(|| {
-            Error::SystemLoadUnsupported(uname.stdout.trim().chars().take(32).collect())
-        })?;
+        let os = Os::from_uname(&uname.stdout)
+            .ok_or_else(|| Error::Unsupported(uname.stdout.trim().chars().take(32).collect()))?;
         Ok(Self::Remote {
             shell,
             os,
@@ -87,12 +103,14 @@ impl Source {
         })
     }
 
-    fn sample(&mut self) -> Result<Sample> {
+    /// `gpu` probes the host's cards too; without it no GPU tool runs.
+    fn sample(&mut self, gpu: bool) -> Result<Sample> {
         match self {
             Self::Local {
                 system,
                 primed,
                 disk,
+                gpu: cards,
             } => {
                 system.refresh_cpu_usage();
                 system.refresh_memory();
@@ -117,10 +135,11 @@ impl Source {
                     ]),
                     disk: disk.sample(),
                     uptime: Some(sysinfo::System::uptime()).filter(|seconds| *seconds > 0),
+                    gpu: if gpu { cards.sample() } else { None },
                 })
             }
             Self::Remote { shell, os, ticks } => {
-                let output = shell.run(os.command(), STEP_TIMEOUT).map_err(remote)?;
+                let output = shell.run(&os.command(gpu), STEP_TIMEOUT).map_err(remote)?;
                 let answer = sample::parse(&output.stdout, *ticks)?;
                 *ticks = answer.ticks;
                 Ok(answer.sample)
@@ -184,8 +203,8 @@ fn azure_shell(account: &str, id: &str) -> Result<Shell> {
     Ok(Shell::start(command)?)
 }
 
-fn remote(error: impl Into<Error>) -> Error {
-    Error::SystemLoadRemote(Box::new(error.into()))
+fn remote(error: impl Into<crate::Error>) -> crate::Error {
+    Error::Remote(Box::new(error.into())).into()
 }
 
 /// Tells a worker to stop, waking it from its wait between samples. The
@@ -234,13 +253,13 @@ impl Drop for Worker {
     }
 }
 
-fn spawn(host: Host) -> Option<Worker> {
+fn spawn(host: Host, gpu: Arc<AtomicBool>) -> Option<Worker> {
     let stop = Arc::new(Stop::default());
     let (sender, results) = mpsc::sync_channel(4);
     let shared = stop.clone();
     let spawned = thread::Builder::new()
         .name("herdr-system-load".into())
-        .spawn(move || run(&host, &shared, &sender));
+        .spawn(move || run(&host, &gpu, &shared, &sender));
     match spawned {
         Ok(_) => Some(Worker { stop, results }),
         Err(error) => {
@@ -250,7 +269,7 @@ fn spawn(host: Host) -> Option<Worker> {
     }
 }
 
-fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Sample>>) {
+fn run(host: &Host, gpu: &AtomicBool, stop: &Stop, results: &mpsc::SyncSender<Result<Sample>>) {
     let mut source: Option<Source> = None;
     loop {
         let opened = match source.take() {
@@ -258,7 +277,7 @@ fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Sample>>) {
             None => Source::open(host),
         };
         let result = opened.and_then(|mut opened| {
-            let sample = opened.sample();
+            let sample = opened.sample(gpu.load(Ordering::Relaxed));
             // A failed remote step leaves the shell unusable; reconnect.
             if sample.is_ok() || matches!(opened, Source::Local { .. }) {
                 source = Some(opened);
@@ -277,12 +296,15 @@ fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Sample>>) {
     }
 }
 
-/// One host's samples: the latest, and recent CPU usage for a sparkline.
+/// One host's samples: the latest, and recent CPU and GPU usage for
+/// sparklines.
 #[derive(Default)]
 pub(crate) struct Reading {
     latest: Option<Sample>,
     /// Recent CPU usage, oldest first.
     history: VecDeque<f32>,
+    /// Recent GPU usage, oldest first; empty on a host without one.
+    gpu_history: VecDeque<f32>,
     /// Why the latest sample failed; the last good one stays shown.
     error: Option<String>,
 }
@@ -296,6 +318,10 @@ impl Reading {
         self.history.iter().copied()
     }
 
+    pub fn gpu_history(&self) -> impl ExactSizeIterator<Item = f32> + '_ {
+        self.gpu_history.iter().copied()
+    }
+
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
     }
@@ -303,11 +329,11 @@ impl Reading {
     fn apply(&mut self, result: Result<Sample>) {
         match result {
             Ok(sample) => {
-                if let Some(cpu) = sample.cpu {
-                    if self.history.len() == HISTORY {
-                        self.history.pop_front();
-                    }
-                    self.history.push_back(cpu);
+                push(&mut self.history, sample.cpu);
+                match sample.gpu {
+                    Some(gpu) => push(&mut self.gpu_history, gpu.busy),
+                    // A card that stops answering takes its graph with it.
+                    None => self.gpu_history.clear(),
                 }
                 self.latest = Some(sample);
                 self.error = None;
@@ -327,6 +353,17 @@ impl Reading {
     }
 }
 
+/// Keeps the last [`HISTORY`] values.
+fn push(history: &mut VecDeque<f32>, value: Option<f32>) {
+    let Some(value) = value else {
+        return;
+    };
+    if history.len() == HISTORY {
+        history.pop_front();
+    }
+    history.push_back(value);
+}
+
 #[derive(Default)]
 struct Monitor {
     /// None once its thread could not start or has ended.
@@ -338,6 +375,9 @@ struct Monitor {
 #[derive(Default)]
 pub(crate) struct SystemLoad {
     monitors: HashMap<Host, Monitor>,
+    /// Whether workers probe GPUs, read before each sample, so turning
+    /// `show_gpu_load` on or off needs no new worker.
+    gpu: Arc<AtomicBool>,
 }
 
 impl SystemLoad {
@@ -345,10 +385,23 @@ impl SystemLoad {
         self.monitors.get(host).map(|monitor| &monitor.reading)
     }
 
+    /// Records `sample` for `host` as if its worker had answered; no worker
+    /// is started for it.
+    #[cfg(test)]
+    pub fn record(&mut self, host: Host, sample: Sample) {
+        self.monitors
+            .entry(host)
+            .or_default()
+            .reading
+            .apply(Ok(sample));
+    }
+
     /// Samples exactly `hosts` (at most [`HOST_LIMIT`]): starts workers for
     /// new ones, stops and forgets the rest, and takes finished samples.
-    /// Returns whether anything shown changed.
-    pub fn poll(&mut self, hosts: impl IntoIterator<Item = Host>) -> bool {
+    /// `gpu` has them probe GPUs from their next sample on. Returns whether
+    /// anything shown changed.
+    pub fn poll(&mut self, hosts: impl IntoIterator<Item = Host>, gpu: bool) -> bool {
+        self.gpu.store(gpu, Ordering::Relaxed);
         let wanted: Vec<Host> = hosts.into_iter().take(HOST_LIMIT).collect();
         let before = self.monitors.len();
         self.monitors.retain(|host, _| wanted.contains(host));
@@ -357,7 +410,7 @@ impl SystemLoad {
             self.monitors
                 .entry(host)
                 .or_insert_with_key(|host| Monitor {
-                    worker: spawn(host.clone()),
+                    worker: spawn(host.clone(), self.gpu.clone()),
                     reading: Reading::default(),
                 });
         }

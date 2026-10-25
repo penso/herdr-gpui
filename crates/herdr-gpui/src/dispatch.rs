@@ -5,6 +5,7 @@
 //! pure; the window gathers the candidates from its endpoints, and the work
 //! on another host runs through Teleport's scripts.
 
+mod error;
 mod history;
 mod hosts;
 mod job;
@@ -16,6 +17,7 @@ mod setup;
 #[allow(clippy::unwrap_used)]
 mod tests;
 
+pub(crate) use error::Error;
 pub(crate) use {
     history::History,
     job::{Job, Then},

@@ -4,7 +4,7 @@
 //! The file is repository content, so it is untrusted data: reading and
 //! parsing it never runs anything. Its digest is what the user trusts.
 
-use super::ScriptKind;
+use super::{Error, ScriptKind};
 use herdr_client::{ConnectTarget, ScriptHost, ScriptLimits, run_script, shell_quote};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -64,17 +64,17 @@ pub(crate) struct Config {
 impl Config {
     pub(crate) fn parse(bytes: &[u8]) -> crate::Result<Self> {
         if bytes.len() as u64 > MAX_BYTES {
-            return Err(crate::Error::WorktreeScriptsSize { limit: MAX_BYTES });
+            return Err(Error::Size { limit: MAX_BYTES }.into());
         }
-        let text = std::str::from_utf8(bytes).map_err(crate::Error::WorktreeScriptsEncoding)?;
-        let file: File = toml::from_str(text).map_err(crate::Error::WorktreeScriptsParse)?;
+        let text = std::str::from_utf8(bytes).map_err(Error::Encoding)?;
+        let file: File = toml::from_str(text).map_err(Error::Parse)?;
         // Scripts travel to the pane as environment values, which cannot hold NUL.
         if [ScriptKind::Setup, ScriptKind::Run, ScriptKind::Archive]
             .into_iter()
             .filter_map(|kind| file.scripts.get(kind))
             .any(|script| script.contains('\0'))
         {
-            return Err(crate::Error::WorktreeScriptsNul);
+            return Err(Error::Nul.into());
         }
         let digest = Sha256::digest(bytes)
             .iter()
@@ -104,9 +104,9 @@ pub(crate) fn read(
         ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
             read_local(&Path::new(checkout).join(PATH))?
         }
-        ConnectTarget::Wsl { .. } => return Err(crate::Error::WorktreeScriptsUnsupportedHost),
+        ConnectTarget::Wsl { .. } => return Err(Error::UnsupportedHost.into()),
         #[cfg(feature = "cloud")]
-        ConnectTarget::Cloud { .. } => return Err(crate::Error::WorktreeScriptsUnsupportedHost),
+        ConnectTarget::Cloud { .. } => return Err(Error::UnsupportedHost.into()),
     };
     bytes.as_deref().map(Config::parse).transpose()
 }
@@ -115,12 +115,12 @@ fn read_local(path: &Path) -> crate::Result<Option<Vec<u8>>> {
     let file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(crate::Error::WorktreeScriptsRead(error)),
+        Err(error) => return Err(Error::Read(error).into()),
     };
     let mut bytes = Vec::new();
     file.take(MAX_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(crate::Error::WorktreeScriptsRead)?;
+        .map_err(Error::Read)?;
     Ok(Some(bytes))
 }
 
@@ -147,7 +147,7 @@ fn read_remote(
         },
         cancelled,
     )
-    .map_err(crate::Error::WorktreeScriptsRemote)?;
+    .map_err(Error::Remote)?;
     Ok(remote_bytes(output))
 }
 

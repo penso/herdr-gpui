@@ -7,7 +7,6 @@ mod keys;
 use super::{MENU_MARGIN, Page, WorkspaceAction, devices::rail};
 use crate::{HerdrWindow, actions, fonts::StyledFont};
 use gpui::{prelude::*, *};
-use herdr_client::Method;
 
 /// How far past its panel a popover counts as covering, for the Windows
 /// pages that hide under it.
@@ -82,19 +81,10 @@ impl HerdrWindow {
 
     /// Asks the selected daemon to reread its config file.
     pub(crate) fn reload_daemon_config(&mut self) {
-        if let (Some(handle), Some(snapshot)) = (
-            &self.endpoints[self.selected_endpoint].connection.handle,
-            &self.live.snapshot,
-        ) {
-            self.local_error = handle
-                .request(
-                    &snapshot.boot_id,
-                    Method::ServerReloadConfig,
-                    serde_json::json!({}),
-                )
-                .err()
-                .map(|error| format!("Reload config: {error}"));
-        }
+        self.local_error = self.endpoints[self.selected_endpoint]
+            .reload_config()
+            .err()
+            .map(|error| format!("Reload config: {error}"));
     }
 
     pub(super) fn menu_items(&self) -> Vec<&'static str> {
