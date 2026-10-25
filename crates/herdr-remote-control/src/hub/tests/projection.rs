@@ -1,5 +1,6 @@
 use super::*;
 use crate::hub::layout::{MAX_CHATS, project};
+use herdr_client::protocol::AgentStatus;
 
 const ENDPOINT: &str = "0123456789abcdef0123456789abcdef";
 
@@ -74,4 +75,33 @@ fn a_chat_is_found_with_its_workspace() {
     assert_eq!(workspace.id, "w1");
     assert_eq!(chat.tab, "t1");
     assert!(layout.chat("p9").is_none());
+}
+
+#[test]
+fn a_terminal_tab_shows_the_agent_herdr_detects_in_it() {
+    let mut idle = agent("p2", "t2", json!([]));
+    idle["agent_status"] = json!("idle");
+    let mut blocked = agent("p9", "t2", json!([]));
+    blocked["agent_status"] = json!("blocked");
+    let layout = project(&snapshot(json!([idle, blocked])));
+    let (_, terminal) = layout.terminal("p2").unwrap();
+    // Several agents in one tab: the most pressing one shows.
+    assert_eq!(
+        terminal.agent,
+        Some((Some("claude".to_owned()), AgentStatus::Blocked))
+    );
+    let plain = project(&snapshot(json!([])));
+    assert_eq!(plain.terminal("p2").unwrap().1.agent, None);
+}
+
+#[test]
+fn an_acp_chat_shows_the_agent_it_runs_not_acp() {
+    let mut chat = agent("p1", "t1", json!([["acp", ENDPOINT]]));
+    chat["agent"] = json!("acp");
+    chat["display_agent"] = json!("Claude");
+    let layout = project(&snapshot(json!([chat])));
+    assert_eq!(
+        layout.workspaces[0].chats[0].agent.as_deref(),
+        Some("Claude")
+    );
 }

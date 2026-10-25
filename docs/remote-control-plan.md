@@ -230,22 +230,34 @@ committed; Alpine's CSP build is vendored; everything is embedded with
   chats across every computer grouped by state, "Needs you" first (with
   inline Allow once / Deny for a simple permission), then "Working" with
   progress, then "Idle"; the computer and workspace are labels on each card.
-- **New workspace**: the project is a native `<select>` (grouped: recent
-  workspace roots, then folders under the project roots), an optional new
-  branch as a worktree, and the agent as a grid.
+- **Status marks**: every tab row with an agent, a chat or a terminal
+  where Herdr detects one, shows its status from the daemon's snapshot in
+  the set picked in Herdr UI (`status_icons`), which Herdr UI sends over
+  the control socket and the daemon keeps in its state directory. Dots,
+  solid, outline, and tiles draw as on the desktop; the animated sets
+  drawn in code (wave, braille, Orca) show as dots. Rows show no path.
+- **New workspace**: the project is a field that opens a full-screen list
+  with a search field (grouped: recent workspace roots, then folders under
+  the project roots; one line each, the folder's name over where it sits),
+  an optional new branch as a worktree, and the agent as a grid.
 - **Chat, focus layout** (mockup 2C): full screen, showing the latest turn:
   its prompt, the plan or tool calls as a step timeline, and the agent's
   answer. Earlier turns fold into one-line summaries (duration, cost) that
   expand into the full transcript with markdown, tool calls, and diffs that
   scroll horizontally inside their block. Queued prompts with unqueue.
-  Header with agent, model and mode pickers, context ring, cost, and
-  auto-accept (with a confirmation).
+  Header with the title, status, and context ring; the line under the
+  title sums up the session ("Opus 5.5 · High · Bypass Permissions"), and
+  tapping the title (its chevron says so) drops the session sheet from the top: the model
+  and other choices as lists, short plain ones (effort) as a segmented
+  control, toggles, the mode with its descriptions, and auto-accept (with
+  a confirmation). The sheet stays open while the stream redraws it.
 - **Questions, bottom sheet** (mockup 3A): within thumb reach, full-width
   option buttons, "always" options set apart, opening by itself when a
   question arrives.
 - **Composer**: pinned above the keyboard (`visualViewport`), safe-area
-  insets, send and stop sharing one button, slash command chips from the
-  shared `assist` logic, photo attachment.
+  insets, send and stop sharing one button, photo attachment. Typing `/`
+  lists the first commands whose names start with what follows, with
+  their descriptions; tapping one fills it in.
 - System light or dark, colors exported from the desktop theme as CSS
   variables, 44 px touch targets, Dynamic Type sizes, a thin "Reconnecting"
   banner. Nothing but the app shell is cached at rest.

@@ -21,8 +21,9 @@ use std::{
 const TICK: Duration = Duration::from_millis(500);
 /// How often the daemon is asked while something shows its details.
 const WATCHED: Duration = Duration::from_secs(2);
-/// How often it is asked for the status bar's indicator alone.
-const UNWATCHED: Duration = Duration::from_secs(15);
+/// How often it is asked for the title bar's indicator alone: often
+/// enough that a phone connecting or leaving shows without a click.
+const UNWATCHED: Duration = Duration::from_secs(3);
 
 /// Sends one control request and waits for the answer. Blocking.
 pub(crate) type Send = fn(&Path, &Request) -> Result<Response, control::Error>;
@@ -85,6 +86,11 @@ pub(crate) struct Supervisor {
     /// Why the last service change failed, until the next one.
     failure: Option<Arc<crate::Error>>,
     health: Health,
+    /// The status marks set in Herdr UI (`status_icons`), by config name,
+    /// which the phone's lists draw too.
+    indicators: Option<&'static str>,
+    /// The set the running daemon last took.
+    indicators_sent: Option<&'static str>,
     last_poll: Option<Instant>,
     /// Whether the settings were loaded once, before which nothing changes.
     loaded: bool,
@@ -111,6 +117,8 @@ impl Default for Supervisor {
             devices: None,
             failure: None,
             health: Health::Off,
+            indicators: None,
+            indicators_sent: None,
             last_poll: None,
             loaded: false,
             poke: false,
@@ -160,6 +168,13 @@ impl Supervisor {
     fn start(cx: &mut App) {
         crate::config::watch::follow(cx, "remote", |config| config.remote, Self::apply_config)
             .detach();
+        crate::config::watch::follow(
+            cx,
+            "status icons",
+            |config| config.status_icons.as_str(),
+            Self::apply_indicators,
+        )
+        .detach();
         cx.on_app_quit(|cx| {
             let supervisor = cx.global_mut::<Self>();
             supervisor.quitting = true;
@@ -192,6 +207,15 @@ impl Supervisor {
         supervisor.config = config;
         Self::tick(cx);
         cx.refresh_windows();
+    }
+
+    /// Takes the status marks set in Herdr UI, for the next poll to send.
+    pub(super) fn apply_indicators(cx: &mut App, name: &'static str) {
+        let supervisor = cx.global_mut::<Self>();
+        if supervisor.indicators != Some(name) {
+            supervisor.indicators = Some(name);
+            supervisor.poke = true;
+        }
     }
 
     /// Starts what is due: a service change for new settings, then a poll.
@@ -250,16 +274,37 @@ impl Supervisor {
         supervisor.poke = false;
         supervisor.last_poll = Some(Instant::now());
         let send = supervisor.send;
+        let indicators = supervisor
+            .indicators
+            .filter(|name| supervisor.indicators_sent != Some(*name));
         let task = executor.spawn(async move {
             let status = send(&address, &Request::Status);
             // Every poll: the title bar shows whether any phone is paired.
             let devices = status.is_ok().then(|| send(&address, &Request::Devices));
-            (status, devices)
+            // The daemon keeps the set across restarts; it is sent again
+            // only when it changes or a poll found the daemon down.
+            let sent = indicators.filter(|name| {
+                status.is_ok()
+                    && send(
+                        &address,
+                        &Request::Indicators {
+                            set: (*name).to_owned(),
+                        },
+                    )
+                    .is_ok()
+            });
+            (status, devices, sent)
         });
         cx.spawn(async move |cx| {
-            let (status, devices) = task.await;
+            let (status, devices, sent) = task.await;
             cx.update(|cx| {
-                if cx.global_mut::<Self>().polled(status, devices) {
+                let supervisor = cx.global_mut::<Self>();
+                if status.is_err() {
+                    supervisor.indicators_sent = None;
+                } else if sent.is_some() {
+                    supervisor.indicators_sent = sent;
+                }
+                if supervisor.polled(status, devices) {
                     cx.refresh_windows();
                 }
             });

@@ -13,6 +13,7 @@ fn rows_carry_the_words_a_search_matches() {
         layout: &layout,
         summaries: &summaries,
         now_ms: 0,
+        indicators: Indicators::Dots,
     };
     let home = home(&lists).into_string();
     assert!(

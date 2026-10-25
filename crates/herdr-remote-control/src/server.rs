@@ -100,6 +100,7 @@ pub async fn run(options: Options) -> Result<()> {
         connected: Mutex::new(HashMap::new()),
         fingerprint,
         hub,
+        look: web::Look::load(&options.state_dir),
         names: RwLock::new(names),
         port: options.port,
         privacy: options.privacy,

@@ -11,6 +11,7 @@ fn lists_html(summaries: HashMap<String, Summary>, board_view: bool) -> String {
         layout: &layout,
         summaries: &summaries,
         now_ms: 10_000,
+        indicators: Indicators::Dots,
     };
     if board_view {
         board(&lists)
@@ -69,7 +70,68 @@ fn a_title_from_daemon_data_is_escaped() {
         layout: &layout,
         summaries: &summaries,
         now_ms: 0,
+        indicators: Indicators::Dots,
     })
     .into_string();
     assert!(!html.contains("<img src=x"));
+}
+
+#[test]
+fn rows_show_the_daemons_status_dot_and_no_path() {
+    let mut terminal = crate::hub::layout_terminal("t2", "zsh");
+    terminal.cwd = Some("/srv/code/app/src".into());
+    terminal.agent = Some((Some("codex".into()), AgentStatus::Blocked));
+    let mut shell = crate::hub::layout_terminal("t3", "bash");
+    shell.cwd = Some("/srv/code/app".into());
+    let mut workspace = workspace(vec![row("p1")]);
+    workspace.terminals = vec![terminal, shell];
+    let layout = Layout {
+        connected: true,
+        boot: "b".into(),
+        workspaces: vec![workspace],
+    };
+    let summaries = HashMap::new();
+    let lists = Lists {
+        computer: "MacBook Pro",
+        layout: &layout,
+        summaries: &summaries,
+        now_ms: 0,
+        indicators: Indicators::Dots,
+    };
+    let page = home(&lists).into_string();
+    // The chat's dot is the daemon's status, not the chat's own.
+    assert!(page.contains(r#"class="status-dot st-working""#), "{page}");
+    assert!(page.contains(r#"class="status-dot st-blocked""#), "{page}");
+    // One dot per agent; the plain shell has none.
+    assert_eq!(page.matches("status-dot").count(), 2, "{page}");
+    assert!(!page.contains(">/srv/code/app"), "{page}");
+    // The old working ellipsis is gone (the header's menu keeps its own).
+    assert!(!page.contains(r#"aria-label="Working">•••"#), "{page}");
+}
+
+#[test]
+fn marks_follow_the_set_picked_in_herdr_ui() {
+    use crate::web::render::status_mark;
+    let dots = status_mark(AgentStatus::Working, Indicators::Dots).into_string();
+    assert!(
+        dots.contains("status-dot st-working") && !dots.contains("<svg"),
+        "{dots}"
+    );
+    for set in [Indicators::Solid, Indicators::Outline, Indicators::Tiles] {
+        let mark = status_mark(AgentStatus::Blocked, set).into_string();
+        assert!(
+            mark.contains("status-mark") && mark.contains("<svg"),
+            "{mark}"
+        );
+        assert!(mark.contains(r#"aria-label="Blocked""#), "{mark}");
+    }
+    assert!(
+        status_mark(AgentStatus::Done, Indicators::Tiles)
+            .into_string()
+            .contains("status-tile")
+    );
+    assert_eq!(Indicators::from_config("tiles"), Indicators::Tiles);
+    assert_eq!(Indicators::from_config("rail"), Indicators::Outline);
+    // Herdr UI's animated sets have no files to share.
+    assert_eq!(Indicators::from_config("braille"), Indicators::Dots);
 }

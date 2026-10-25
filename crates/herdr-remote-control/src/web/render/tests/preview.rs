@@ -4,8 +4,9 @@
 
 use super::*;
 use herdr_chat_protocol::{
-    Mode, Modes, PlanEntry, PlanStatus, Status, Tool, ToolContent, ToolKind, ToolStatus, Turn,
-    TurnEnd, TurnSummary, Usage,
+    Choice, ConfigOption, Mode, Modes, OptionCategory, OptionKind, PlanEntry, PlanStatus,
+    SlashCommand, Status, Tool, ToolContent, ToolKind, ToolStatus, Turn, TurnEnd, TurnSummary,
+    Usage,
 };
 
 fn page(dir: &std::path::Path, name: &str, body: Markup) {
@@ -40,6 +41,50 @@ fn demo_transcript() -> Transcript {
         ],
         current: "default".into(),
     });
+    let choice = |name: &str, description: Option<&str>| Choice {
+        description: description.map(Into::into),
+        group: None,
+        id: name.into(),
+        name: name.into(),
+    };
+    transcript.options = vec![
+        ConfigOption {
+            category: OptionCategory::Model,
+            description: None,
+            id: "model".into(),
+            kind: OptionKind::Select {
+                choices: vec![
+                    choice("Opus 5.5", Some("Most capable for complex work")),
+                    choice("Sonnet 5.5", Some("Fast and capable")),
+                    choice("Haiku 5.5", Some("Fastest for quick answers")),
+                ],
+                current: "Opus 5.5".into(),
+            },
+            name: "Model".into(),
+        },
+        ConfigOption {
+            category: OptionCategory::ThoughtLevel,
+            description: None,
+            id: "effort".into(),
+            kind: OptionKind::Select {
+                choices: vec![
+                    choice("Low", None),
+                    choice("Medium", None),
+                    choice("High", None),
+                ],
+                current: "High".into(),
+            },
+            name: "Effort".into(),
+        },
+    ];
+    transcript.commands = ["release", "review", "gpui-mockup", "herdr-gpui-browser"]
+        .into_iter()
+        .map(|name| SlashCommand {
+            description: format!("Runs the {name} skill"),
+            hint: None,
+            name: name.into(),
+        })
+        .collect();
     transcript.entries = vec![
         entry(1, EntryKind::User { text: "Add the remote control plan".into() }),
         entry(2, EntryKind::Agent { text: "Done.".into() }),
@@ -99,6 +144,12 @@ fn write_preview_pages() {
     let mut second = row("p2");
     second.title = "Split equalize tests".into();
     second.agent = Some("codex".into());
+    let mut first = workspace(vec![row("p1"), second]);
+    let mut agent_tab = crate::hub::layout_terminal("t7", "Review PR 775");
+    agent_tab.agent = Some((Some("codex".into()), AgentStatus::Blocked));
+    let mut shell = crate::hub::layout_terminal("t8", "cargo watch");
+    shell.cwd = Some("/code/herdr-gpui".into());
+    first.terminals = vec![agent_tab, shell];
     let mut other = workspace(vec![row("p3")]);
     other.id = "w2".into();
     other.label = "moltis".into();
@@ -106,7 +157,7 @@ fn write_preview_pages() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
-        workspaces: vec![workspace(vec![row("p1"), second]), other],
+        workspaces: vec![first, other],
     };
     let summaries = HashMap::from([
         (
@@ -138,6 +189,7 @@ fn write_preview_pages() {
         layout: &layout,
         summaries: &summaries,
         now_ms: 190_000,
+        indicators: Indicators::Dots,
     };
     page(&dir, "home.html", home(&lists));
     page(&dir, "board.html", board(&lists));

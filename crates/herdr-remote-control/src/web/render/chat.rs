@@ -3,13 +3,16 @@
 //! history, the pending question as a bottom sheet, and the composer.
 //! Each region has an id the stream replaces as the chat changes.
 
-use super::{icons, markdown, ring, status_word};
+use super::{icons, markdown, ring, session, status_word};
 use crate::hub::{ChatRow, View, Workspace};
 use herdr_chat_protocol::{
-    Author, Entry, EntryKind, NoticeLevel, OptionCategory, OptionKind, Permission, PermissionKind,
-    PlanStatus, Status, Tool, ToolContent, ToolStatus, Transcript, display,
+    Author, Entry, EntryKind, NoticeLevel, Permission, PermissionKind, PlanStatus, Status, Tool,
+    ToolContent, ToolStatus, Transcript, display,
 };
 use maud::{Markup, html};
+
+/// The most commands the composer offers after "/".
+const MAX_COMMANDS: usize = 64;
 
 /// Where the latest turn starts: its user prompt, else the beginning.
 fn latest_turn(transcript: &Transcript) -> usize {
@@ -27,6 +30,7 @@ pub(crate) fn chat(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u6
             (head(workspace, row, view, now_ms))
             (turn(row, view))
             (sheet(row, &view.transcript))
+            (session::sheet(workspace, row, &view.transcript))
             (composer(row, view))
         }
     }
@@ -43,6 +47,10 @@ pub(crate) fn chat_patches(
         ("chat-head", head(workspace, row, view, now_ms)),
         ("chat-turn", turn(row, view)),
         ("chat-sheet", sheet(row, &view.transcript)),
+        (
+            "chat-settings",
+            session::sheet(workspace, row, &view.transcript),
+        ),
         ("chat-composer", composer(row, view)),
     ]
 }
@@ -50,58 +58,39 @@ pub(crate) fn chat_patches(
 fn head(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u64) -> Markup {
     let transcript = &view.transcript;
     let (word, tone) = status_word(&transcript.status, transcript.permissions.len());
-    let model = transcript.option(OptionCategory::Model);
+    let summary = session::summary(transcript);
+    let status = html! {
+        small class="text-muted truncate" {
+            span class={ "inline-block w-2 h-2 rounded-full mr-1 align-middle " (tone) } {}
+            (word)
+            @if let Some(turn) = transcript.turn { " · " (display::duration(now_ms.saturating_sub(turn.started_ms))) }
+            " · " @if summary.is_empty() { (workspace.label) } @else { (summary) }
+            @if !view.connected { " · reconnecting" }
+        }
+    };
     html! {
         header id="chat-head" class="sticky top-0 z-10 bg-bg/90 backdrop-blur border-b border-line" {
             div class="flex items-center gap-2.5 px-3.5 pt-1.5 pb-2" {
                 a href="/" data-nav class="grid place-items-center text-accent w-8 h-9 -ml-1.5 shrink-0" aria-label="Back" { (icons::chevron_left(28)) }
-                span class="flex flex-col min-w-0 flex-1" {
-                    b class="truncate" { (row.title) }
-                    small class="text-muted truncate" {
-                        span class={ "inline-block w-2 h-2 rounded-full mr-1 align-middle " (tone) } {}
-                        (word)
-                        @if let Some(turn) = transcript.turn { " · " (display::duration(now_ms.saturating_sub(turn.started_ms))) }
-                        " · " (workspace.label)
-                        @if !view.connected { " · reconnecting" }
+                @if session::has_settings(transcript) {
+                    // The title opens the session's settings; the chevron
+                    // says so.
+                    button type="button" class="flex flex-col min-w-0 flex-1 text-left" data-open-settings
+                        aria-haspopup="dialog" aria-label={ (row.title) ", session settings" } {
+                        span class="flex items-center gap-1 min-w-0" {
+                            b class="truncate" { (row.title) }
+                            span class="grid place-items-center w-5 h-5 rounded-full bg-raised text-muted shrink-0" { (icons::chevron_down(14)) }
+                        }
+                        (status)
+                    }
+                } @else {
+                    span class="flex flex-col min-w-0 flex-1" {
+                        b class="truncate" { (row.title) }
+                        (status)
                     }
                 }
                 @if let Some(usage) = &transcript.usage {
-                    span class="flex items-center gap-1.5 text-muted text-xs" {
-                        @if let Some(cost) = &usage.cost { (display::cost(cost)) }
-                        (ring(usage.percent(), &format!("{}% of the context window", usage.percent())))
-                    }
-                }
-            }
-            @if model.is_some() || transcript.modes.is_some() {
-                div class="flex gap-2 px-3.5 pb-2 overflow-x-auto text-xs" {
-                    @for option in transcript.options.iter().filter(|option| matches!(option.kind, OptionKind::Select { .. })) {
-                        @if let OptionKind::Select { choices, current } = &option.kind {
-                            label class="picker" {
-                                span class="sr-only" { (option.name) }
-                                select data-option=(option.id) data-pane=(row.pane) {
-                                    @for choice in choices {
-                                        option value=(choice.id) selected[&choice.id == current] { (choice.name) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    @if let Some(modes) = &transcript.modes {
-                        @if transcript.option(OptionCategory::Mode).is_none() {
-                            label class="picker" {
-                                span class="sr-only" { "Mode" }
-                                select data-mode data-pane=(row.pane) {
-                                    @for mode in &modes.available {
-                                        option value=(mode.id) selected[mode.id == modes.current] { (mode.name) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    label class="picker gap-1.5" {
-                        input type="checkbox" data-auto-accept data-pane=(row.pane) checked[transcript.auto_accept];
-                        "Auto-accept"
-                    }
+                    (ring(usage.percent(), &format!("{}% of the context window", usage.percent())))
                 }
             }
         }
@@ -292,33 +281,34 @@ fn answer_json(permission: &Permission, option: &str) -> String {
 fn composer(row: &ChatRow, view: &View) -> Markup {
     let transcript = &view.transcript;
     let working = transcript.status == Status::Working;
-    let commands: Vec<&str> = transcript
-        .commands
-        .iter()
-        .take(8)
-        .map(|command| command.name.as_str())
-        .collect();
     html! {
         form id="chat-composer" class="composer" x-data="composer" data-pane=(row.pane) x-on:submit="send" {
-            @if !commands.is_empty() {
-                div class="flex gap-1.5 overflow-x-auto pb-1.5" {
-                    @for name in commands {
-                        button type="button" class="chip font-mono" data-slash=(name) x-on:click="slash" { "/" (name) }
+            // Typing "/" lists the commands whose names start with what
+            // follows; app.js shows the first few.
+            @if !transcript.commands.is_empty() {
+                div x-ref="slash" class="slash-list" hidden {
+                    @for command in transcript.commands.iter().take(MAX_COMMANDS) {
+                        button type="button" data-slash=(command.name) x-on:click="slash" {
+                            b class="font-mono" { "/" (command.name) }
+                            @if !command.description.is_empty() {
+                                small class="text-muted truncate" { (command.description) }
+                            }
+                        }
                     }
                 }
             }
             div x-ref="chips" class="flex gap-1.5 flex-wrap pb-1.5 empty:hidden" {}
-            div class="flex items-end gap-2 bg-raised rounded-3xl pl-2 pr-1.5 py-1.5" {
+            div class="flex items-end gap-2 bg-raised rounded-3xl pl-1.5 pr-1.5 py-1.5" {
                 input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple x-ref="file" x-on:change="attach" class="hidden";
-                button type="button" class="w-8 h-8 grid place-items-center text-muted text-xl shrink-0" x-on:click="pick" aria-label="Attach a picture" { "＋" }
+                button type="button" class="w-9 h-9 grid place-items-center text-muted shrink-0" x-on:click="pick" aria-label="Attach a picture" { (icons::plus(22)) }
                 textarea name="text" rows="1" x-ref="text" x-on:input="grow" x-on:keydown="key"
                     class="flex-1 bg-transparent resize-none outline-none py-1.5 max-h-40 placeholder:text-faint"
                     placeholder=(if working { "Queue a prompt…" } else { "Message the agent…" })
                     disabled[!transcript.status.accepts_prompts() || !view.connected] {}
                 @if working {
-                    button type="button" class="round-btn bg-red" data-pane=(row.pane) data-command=r#"{"command":"cancel"}"# aria-label="Stop" { "■" }
+                    button type="button" class="round-btn bg-red" data-pane=(row.pane) data-command=r#"{"command":"cancel"}"# aria-label="Stop" { (icons::stop(16)) }
                 }
-                button type="submit" class="round-btn bg-accent" aria-label="Send" { "↑" }
+                button type="submit" class="round-btn bg-accent" aria-label="Send" { (icons::arrow_up(20)) }
             }
         }
     }

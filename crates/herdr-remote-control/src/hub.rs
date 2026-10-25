@@ -366,6 +366,7 @@ pub(crate) fn layout_terminal(tab: &str, label: &str) -> Terminal {
             focused: true,
         }],
         zoomed: false,
+        agent: None,
     }
 }
 

@@ -211,4 +211,5 @@ fn a_failed_change_waits_for_retry(cx: &mut TestAppContext) {
     cx.update(|cx| assert!(Supervisor::failure(cx).is_none()));
 }
 
+mod indicators;
 mod restart;

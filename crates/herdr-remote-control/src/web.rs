@@ -9,6 +9,7 @@
 mod api;
 mod assets;
 mod fragments;
+mod indicators;
 mod log;
 mod origins;
 mod render;
@@ -16,6 +17,7 @@ mod stream;
 mod terminal;
 mod uploads;
 
+pub(crate) use indicators::{Indicators, Look};
 pub(crate) use log::report_limit;
 pub(crate) use origins::Origins;
 pub(crate) use render::now_ms;
@@ -58,6 +60,8 @@ pub(crate) struct State {
     pub(crate) connected: Mutex<HashMap<DeviceId, usize>>,
     pub(crate) fingerprint: String,
     pub(crate) hub: Arc<Hub>,
+    /// The status marks the lists draw, as Herdr UI last sent them.
+    pub(crate) look: Look,
     pub(crate) names: RwLock<Names>,
     pub(crate) port: u16,
     pub(crate) privacy: Privacy,

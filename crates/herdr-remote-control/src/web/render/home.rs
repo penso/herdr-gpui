@@ -3,8 +3,9 @@
 //! board is the same chats grouped by state, behind the toolbar's eye. Both
 //! open under a search field that filters their rows in place.
 
-use super::{agent_icon, display_folder, elapsed, icons, nav, status_word};
+use super::{agent_icon, elapsed, icons, nav, status_mark};
 use crate::hub::{ChatRow, Layout, Summary, Workspace};
+use crate::web::Indicators;
 use herdr_chat_protocol::Status;
 use maud::{Markup, html};
 use std::collections::HashMap;
@@ -15,6 +16,8 @@ pub(crate) struct Lists<'a> {
     pub(crate) layout: &'a Layout,
     pub(crate) summaries: &'a HashMap<String, Summary>,
     pub(crate) now_ms: u64,
+    /// The status marks the user picked in Herdr UI.
+    pub(crate) indicators: Indicators,
 }
 
 impl Lists<'_> {
@@ -70,9 +73,8 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                                     span class="flex-1 min-w-0 truncate" { (chat.title) }
                                     @if summary.questions > 0 {
                                         span class="pill-amber" { "Answer" }
-                                    } @else if summary.status == Status::Working {
-                                        span class="text-muted tracking-widest" aria-label="Working" { "•••" }
                                     }
+                                    (status_mark(chat.status, lists.indicators))
                                     span class="text-faint" { (icons::chevron_right(18)) }
                                 }))
                             }
@@ -81,15 +83,17 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                             @if let Some(pane) = terminal.first_pane() {
                                 li data-find=(find(workspace, &[&terminal.label, terminal.cwd.as_deref().unwrap_or_default()])) {
                                     (nav(&format!("/term/{}", urlencode(&pane.pane)), "row", html! {
-                                        span class="grid place-items-center w-[30px] h-[30px] rounded-lg bg-raised text-green font-mono text-[11px] font-bold shrink-0" { "›_" }
-                                        span class="flex-1 min-w-0 truncate" {
-                                            (terminal.label)
-                                            @if let Some(cwd) = &terminal.cwd {
-                                                small class="text-muted ml-1" { (display_folder(cwd)) }
-                                            }
+                                        @if let Some((agent, _)) = &terminal.agent {
+                                            (agent_icon(agent.as_deref(), "w-[30px] h-[30px] text-base"))
+                                        } @else {
+                                            span class="grid place-items-center w-[30px] h-[30px] rounded-lg bg-raised text-green font-mono text-[11px] font-bold shrink-0" { "›_" }
                                         }
+                                        span class="flex-1 min-w-0 truncate" { (terminal.label) }
                                         @if terminal.panes.len() > 1 {
                                             span class="text-muted text-xs" { (terminal.panes.len()) " panes" }
+                                        }
+                                        @if let Some((_, status)) = terminal.agent {
+                                            (status_mark(status, lists.indicators))
                                         }
                                         span class="text-faint" { (icons::chevron_right(18)) }
                                     }))
@@ -182,8 +186,7 @@ pub(crate) fn board(lists: &Lists<'_>) -> Markup {
                                         }
                                     }
                                 }
-                                @let (word, _) = status_word(&summary.status, summary.questions);
-                                span class="sr-only" { (word) }
+                                (status_mark(chat.status, lists.indicators))
                                 span class="text-faint" { (icons::chevron_right(18)) }
                             }))
                         }

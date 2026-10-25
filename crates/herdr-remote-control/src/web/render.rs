@@ -9,12 +9,16 @@ mod chat;
 mod home;
 mod icons;
 mod pages;
+mod picker;
+mod session;
+mod status;
 mod terminal;
 
 pub(crate) use ansi::screen;
 pub(crate) use chat::{chat, chat_history, chat_patches};
 pub(crate) use home::{Lists, board, home, no_match, search, urlencode};
 pub(crate) use pages::{Folders, devices, new_chat, new_workspace};
+pub(crate) use status::status_mark;
 pub(crate) use terminal::{terminal, terminal_screen};
 
 use herdr_chat_protocol::{Status, display};
@@ -75,20 +79,22 @@ fn neutralize_links(html: &str) -> String {
     )
 }
 
-/// The square icon for an agent: its mark on its colour.
+/// The square icon for an agent: its logo, the one Herdr UI draws, on
+/// its colour.
 pub(crate) fn agent_icon(agent: Option<&str>, size: &str) -> Markup {
     let name = agent.unwrap_or_default().to_ascii_lowercase();
+    // Copilot before Pi: "copilot" holds "pi".
     let (mark, class) = match name.as_str() {
-        n if n.contains("claude") => ("✳", "bg-claude text-white"),
-        n if n.contains("codex") => ("◎", "bg-codex text-white ring-1 ring-line"),
-        n if n.contains("gemini") => ("✦", "bg-gemini text-white"),
-        n if n.contains("copilot") => ("⌘", "bg-copilot text-white"),
-        n if n.contains("opencode") => ("◇", "bg-raised text-text"),
-        n if n.contains("pi") => ("π", "bg-raised text-text"),
-        _ => ("•", "bg-raised text-text"),
+        n if n.contains("claude") => (icons::Agent::Claude, "bg-claude text-white"),
+        n if n.contains("codex") => (icons::Agent::Codex, "bg-codex text-white ring-1 ring-line"),
+        n if n.contains("gemini") => (icons::Agent::Gemini, "bg-gemini text-white"),
+        n if n.contains("copilot") => (icons::Agent::Copilot, "bg-copilot text-white"),
+        n if n.contains("opencode") => (icons::Agent::OpenCode, "bg-raised text-text"),
+        n if n.contains("pi") => (icons::Agent::Pi, "bg-raised text-text"),
+        _ => (icons::Agent::Generic, "bg-raised text-text"),
     };
     html! {
-        span class={ "relative grid place-items-center rounded-lg font-bold shrink-0 " (size) " " (class) } aria-hidden="true" { (mark) }
+        span class={ "agent-mark relative grid place-items-center rounded-lg shrink-0 " (size) " " (class) } aria-hidden="true" { (mark.svg()) }
     }
 }
 

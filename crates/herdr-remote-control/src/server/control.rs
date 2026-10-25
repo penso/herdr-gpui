@@ -107,6 +107,15 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             }
             Err(error) => Err(error),
         },
+        Request::Indicators { set } => {
+            return match state.look.set(crate::web::Indicators::from_config(&set)) {
+                Ok(()) => Response::Done,
+                Err(error) => Response::Error {
+                    code: ErrorCode::Other,
+                    message: error.to_string(),
+                },
+            };
+        }
         Request::Shutdown => {
             stop.send_replace(true);
             return Response::Done;

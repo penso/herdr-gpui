@@ -114,6 +114,12 @@ pub enum Request {
     },
     /// Stops the daemon. The service manager does not restart it.
     Shutdown,
+    /// The status marks the user picked in Herdr UI, by its config name
+    /// (`ui.status_icons`), for the phone's lists to draw the same. A set
+    /// the phone cannot draw shows as dots.
+    Indicators {
+        set: String,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

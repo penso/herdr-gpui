@@ -1,5 +1,6 @@
 use super::*;
 use crate::hub::{ChatRow, Layout, Summary, View, Workspace};
+use crate::web::Indicators;
 use herdr_chat_protocol::{
     Entry, EntryId, EntryKind, Permission, PermissionId, PermissionKind, PermissionOption,
     Transcript,
@@ -12,8 +13,10 @@ mod chat_view;
 mod icons;
 mod lists;
 mod markup;
+mod picker;
 mod preview;
 mod search;
+mod settings;
 mod terminal_view;
 
 pub(super) fn row(pane: &str) -> ChatRow {

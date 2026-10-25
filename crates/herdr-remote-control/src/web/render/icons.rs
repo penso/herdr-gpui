@@ -15,6 +15,37 @@ fn icon(size: u16, body: &str) -> Markup {
     }
 }
 
+/// The agents' logos, the files Herdr UI draws (`assets/icons`). Each is
+/// one shape in `currentColor`; `.agent-mark svg` sizes it to its tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Agent {
+    Claude,
+    Codex,
+    Copilot,
+    Gemini,
+    Generic,
+    OpenCode,
+    Pi,
+}
+
+impl Agent {
+    pub(crate) fn svg(self) -> Markup {
+        PreEscaped(
+            match self {
+                Self::Claude => include_str!("../../../../../assets/icons/agent-claude.svg"),
+                Self::Codex => include_str!("../../../../../assets/icons/agent-codex.svg"),
+                Self::Copilot => include_str!("../../../../../assets/icons/agent-copilot.svg"),
+                Self::Gemini => include_str!("../../../../../assets/icons/agent-gemini.svg"),
+                Self::Generic => include_str!("../../../../../assets/icons/agent-generic.svg"),
+                Self::OpenCode => include_str!("../../../../../assets/icons/agent-opencode.svg"),
+                Self::Pi => include_str!("../../../../../assets/icons/agent-pi.svg"),
+            }
+            .trim()
+            .to_owned(),
+        )
+    }
+}
+
 pub(crate) fn settings(size: u16) -> Markup {
     icon(
         size,
@@ -24,6 +55,21 @@ pub(crate) fn settings(size: u16) -> Markup {
 
 pub(crate) fn plus(size: u16) -> Markup {
     icon(size, r#"<path d="M12 5v14M5 12h14"/>"#)
+}
+
+pub(crate) fn arrow_up(size: u16) -> Markup {
+    icon(size, r#"<path d="M12 19V5M5 12l7-7 7 7"/>"#)
+}
+
+pub(crate) fn check(size: u16) -> Markup {
+    icon(size, r#"<path d="M5 12.5l4.5 4.5L19 7.5"/>"#)
+}
+
+pub(crate) fn stop(size: u16) -> Markup {
+    icon(
+        size,
+        r#"<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>"#,
+    )
 }
 
 pub(crate) fn plus_circle(size: u16) -> Markup {

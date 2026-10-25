@@ -10,6 +10,10 @@ const MAX_ORIGINS = 16;
 const TOKEN = "herdr.session"; // { token, expires, origin }
 const SIGN_PREFIX = "herdr-remote-session\0";
 const INSTALL_CLOSED = "herdr.install-closed"; // true once the footer is closed
+/// How long the row a list was left for stays marked; `.came-from` in input.css.
+const MARK_MS = 1600;
+/// How many commands the composer lists under a typed "/".
+const SLASH_SHOWN = 5;
 const HANDOFF = "herdr.handoff"; // { token, expires_ms } a tab offers its Home Screen app
 const RELOADED = "herdr.pair-reloaded"; // set once a failed pairing reloaded without the cache
 
@@ -20,6 +24,13 @@ const app = {
   stream: null,
   // The navigation in progress; a newer one aborts it.
   routing: null,
+  // The path shown last, and the chat or terminal the list was left for:
+  // coming back to the list scrolls to that row and marks it.
+  path: null,
+  cameFrom: null,
+  // The row being marked and when the mark started, so a patch that
+  // replaces the list marks the new row where the fade had reached.
+  mark: null,
   retry: 0,
   // Android's install prompt, kept until the footer's Install uses it.
   install: null,
@@ -233,8 +244,34 @@ function routeOf(path, search) {
   return routes[path] || routes["/"];
 }
 
-async function route() {
+/// How deep a path sits in the navigation stack: the lists are the root,
+/// and everything opened from them one level in.
+function depth(path) {
+  return path === "/" || path === "/board" ? 0 : 1;
+}
+
+/// Swaps the view with `update`, sliding like an iOS navigation stack: in
+/// from the right when going deeper, back to the left when leaving.
+/// Safari's own swipe-back gesture already animates, so it is not doubled.
+function slide(from, to, event, update) {
+  const direction = depth(to) > depth(from) ? "push" : depth(to) < depth(from) ? "pop" : null;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!from || !direction || still || event?.hasUAVisualTransition || !document.startViewTransition) {
+    return update();
+  }
+  document.documentElement.dataset.slide = direction;
+  const transition = document.startViewTransition(update);
+  transition.finished.finally(() => delete document.documentElement.dataset.slide);
+  return transition.updateCallbackDone;
+}
+
+async function route(event) {
   const target = routeOf(location.pathname, location.search);
+  const from = app.path;
+  app.mark = null;
+  if (/^\/(chat|term)\//.test(from || "")) app.cameFrom = from;
+  app.path = location.pathname;
+  delete document.documentElement.dataset.sheet;
   stopStream();
   // Only the newest navigation may fill the view or open a stream: an
   // older page answering late must not replace the one the URL names.
@@ -244,9 +281,15 @@ async function route() {
   try {
     const html = await (await api(target.fragment, { signal: routing.signal })).text();
     if (app.routing !== routing) return;
-    view().innerHTML = html;
-    applySearch();
-    window.scrollTo(0, location.pathname.startsWith("/chat/") ? document.body.scrollHeight : 0);
+    await slide(from, location.pathname, event, async () => {
+      view().innerHTML = html;
+      // Alpine sets up the new fragment from a mutation observer; let it
+      // show or hide groups before measuring rows.
+      await Promise.resolve();
+      applySearch();
+      window.scrollTo(0, location.pathname.startsWith("/chat/") ? document.body.scrollHeight : 0);
+      revealCameFrom();
+    });
     fitTerminal();
     showInstallHint();
     offerHandoff();
@@ -257,6 +300,36 @@ async function route() {
     if (error.status === 403) return forget();
     flash(error.message);
   }
+}
+
+/// Scrolls the list to the row of the chat or terminal just left, and
+/// marks it briefly.
+function revealCameFrom() {
+  const path = app.cameFrom;
+  app.cameFrom = null;
+  if (!path || /^\/(chat|term)\//.test(location.pathname)) return;
+  app.mark = { path, at: performance.now() };
+  markRow()?.scrollIntoView({ block: "center" });
+}
+
+/// Marks the row `app.mark` names, resuming its fade where it was, and
+/// returns it. The list's own row wins over a chat card in the strip.
+function markRow() {
+  if (!app.mark) return null;
+  const elapsed = performance.now() - app.mark.at;
+  if (elapsed > MARK_MS) {
+    app.mark = null;
+    return null;
+  }
+  const links = [...view().querySelectorAll("a[data-nav]")].filter(
+    (link) => link.pathname === app.mark.path && link.getClientRects().length > 0,
+  );
+  const row = links.find((link) => link.classList.contains("row")) || links[0];
+  if (row && !row.classList.contains("came-from")) {
+    row.style.animationDelay = `-${Math.round(elapsed)}ms`;
+    row.classList.add("came-from");
+  }
+  return row;
 }
 
 function navigate(path) {
@@ -328,6 +401,7 @@ function handleEvent(block) {
     if (id === "term-screen") fitTerminal();
   }
   applySearch();
+  markRow();
 }
 
 /// Hides the rows of home or the board that lack a searched word, and
@@ -457,6 +531,16 @@ document.addEventListener("click", async (event) => {
     await prompt.prompt();
     return showInstallHint();
   }
+  // The session sheet: kept open on <html> so a patch redrawing it does
+  // not close it.
+  if (event.target.closest("[data-open-settings]")) {
+    document.documentElement.dataset.sheet = "settings";
+    return;
+  }
+  if (event.target.closest("[data-close-settings]")) {
+    delete document.documentElement.dataset.sheet;
+    return;
+  }
   const link = event.target.closest("a[data-nav]");
   if (link && link.origin === location.origin) {
     event.preventDefault();
@@ -477,6 +561,8 @@ document.addEventListener("change", (event) => {
   const pane = target.dataset.pane;
   if (target.dataset.option !== undefined) {
     command(pane, { command: "set_option", id: target.dataset.option, value: { type: "choice", id: target.value } });
+  } else if (target.dataset.toggle !== undefined) {
+    command(pane, { command: "set_option", id: target.dataset.toggle, value: { type: "toggle", value: target.checked } });
   } else if (target.dataset.mode !== undefined) {
     command(pane, { command: "set_mode", id: target.value });
   } else if (target.dataset.autoAccept !== undefined) {
@@ -821,7 +907,7 @@ async function forget() {
 
 async function pushSubscription() {
   const registration = await navigator.serviceWorker?.ready;
-  return registration?.pushManager.getSubscription();
+  return registration?.pushManager?.getSubscription();
 }
 
 async function subscribePush() {
@@ -916,6 +1002,21 @@ document.addEventListener("alpine:init", () => {
       const text = this.$refs.text;
       text.style.height = "auto";
       text.style.height = `${text.scrollHeight}px`;
+      this.suggest();
+    },
+    // While the draft is "/" and a word, lists the first commands that
+    // start with it.
+    suggest() {
+      const list = this.$refs.slash;
+      if (!list) return;
+      const typed = /^\/(\S*)$/.exec(this.$refs.text.value)?.[1]?.toLowerCase();
+      let shown = 0;
+      for (const button of list.children) {
+        const match = typed !== undefined && shown < SLASH_SHOWN && button.dataset.slash.toLowerCase().startsWith(typed);
+        button.hidden = !match;
+        if (match) shown += 1;
+      }
+      list.hidden = shown === 0;
     },
     key(event) {
       // A hardware keyboard sends with Enter; on touch Enter is a newline.
@@ -926,6 +1027,7 @@ document.addEventListener("alpine:init", () => {
     slash(event) {
       this.$refs.text.value = `/${event.currentTarget.dataset.slash} `;
       this.$refs.text.focus();
+      this.suggest();
     },
     // The draft stays until the chat takes it, so a dropped connection
     // loses nothing; the user sends again.
@@ -957,16 +1059,65 @@ document.addEventListener("alpine:init", () => {
       this.sheet = false;
     },
   }));
+  // The project picker: a full-screen list with a search field; the
+  // chosen path goes into the hidden input the form sends.
+  Alpine.data("picker", () => ({
+    open() {
+      this.$refs.page.hidden = false;
+      this.$refs.search.value = "";
+      this.filter();
+      // Focus within the tap, so iOS raises the keyboard.
+      this.$refs.search.focus();
+    },
+    close() {
+      this.$refs.search.blur();
+      this.$refs.page.hidden = true;
+    },
+    filter() {
+      const words = this.$refs.search.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let any = false;
+      for (const group of this.$refs.page.querySelectorAll("[data-group]")) {
+        let shown = 0;
+        for (const row of group.querySelectorAll("[data-value]")) {
+          row.hidden = !words.every((word) => row.dataset.find.includes(word));
+          if (!row.hidden) shown += 1;
+        }
+        group.hidden = shown === 0;
+        any ||= shown > 0;
+      }
+      this.$refs.empty.hidden = any;
+    },
+    choose(event) {
+      const row = event.currentTarget;
+      const path = row.dataset.value;
+      this.$refs.value.value = path;
+      for (const other of this.$refs.page.querySelectorAll("[data-value]")) {
+        other.setAttribute("aria-pressed", String(other.dataset.value === path));
+      }
+      const [name, parent] = row.querySelectorAll(".truncate");
+      this.$refs.name.textContent = name.textContent;
+      this.$refs.parent.textContent = parent.textContent;
+      this.close();
+    },
+  }));
   Alpine.data("settings", () => ({
     push: false,
     pushHint: "",
+    // Whether this browser can subscribe at all; the switch is off and
+    // disabled otherwise, with a hint saying how to get notifications.
+    pushOff: true,
     async init() {
-      if (!("PushManager" in window)) {
-        this.pushHint = /iPhone|iPad/.test(navigator.userAgent)
+      // iOS Safari has PushManager, but only a Home Screen app's service
+      // worker can subscribe: in a tab, `pushManager` is missing.
+      const registration = await navigator.serviceWorker?.ready;
+      const ios = /iPhone|iPad/.test(navigator.userAgent);
+      if (!registration?.pushManager || (ios && !installed())) {
+        this.pushHint = ios
           ? "Add Herdr to your Home Screen and open it from there to get notifications."
           : "This browser cannot receive notifications.";
         return;
       }
+      this.pushOff = false;
       this.push = Boolean(await pushSubscription());
       this.pushHint = this.push ? "Questions and finished turns arrive here." : "";
     },
@@ -1019,8 +1170,16 @@ async function start() {
 }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+// A hidden page closes its stream, so the computer shows the phone as
+// gone at once rather than when a keep-alive finally fails; iOS suspends
+// it soon anyway. Coming back reopens only the stream, whose first patch
+// catches the view up without touching a composer holding a draft.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && app.device && !app.stream) start();
+  if (document.visibilityState === "hidden") return stopStream();
+  if (!app.device || app.stream) return;
+  const target = app.path === location.pathname && routeOf(location.pathname, location.search);
+  if (target?.stream && app.session?.expires > Date.now() + 60_000) startStream(target.stream);
+  else start();
 });
 navigator.serviceWorker?.addEventListener("message", (event) => {
   if (event.data?.navigate) navigate(event.data.navigate);

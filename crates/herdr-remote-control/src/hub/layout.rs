@@ -3,7 +3,7 @@
 //! a daemon.
 
 use herdr_chat_protocol::{EndpointId, TOKEN};
-use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
+use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
 use std::collections::HashSet;
 
 /// The most chats one daemon may list; the rest are left out.
@@ -50,6 +50,9 @@ pub(crate) struct Terminal {
     /// Its panes in the snapshot's order; never empty for a listed tab.
     pub(crate) panes: Vec<TerminalPane>,
     pub(crate) zoomed: bool,
+    /// The agent Herdr detects in it, such as `claude` run in a shell, and
+    /// its status: the most pressing when several panes hold one.
+    pub(crate) agent: Option<(Option<String>, AgentStatus)>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -109,12 +112,34 @@ impl Layout {
     }
 }
 
+/// How much a status asks for attention, so a tab shows its most pressing
+/// agent: a question first, then work in progress, then finished work.
+fn urgency(status: AgentStatus) -> u8 {
+    match status {
+        AgentStatus::Unknown => 0,
+        AgentStatus::Idle => 1,
+        AgentStatus::Done => 2,
+        AgentStatus::Working => 3,
+        AgentStatus::Blocked => 4,
+    }
+}
+
 /// The program a pane's metadata names, when its token holds a valid id.
 fn endpoint(tokens: &[(String, String)]) -> Option<EndpointId> {
     tokens
         .iter()
         .find(|(name, _)| name == TOKEN)
         .and_then(|(_, value)| value.parse().ok())
+}
+
+/// Which agent `agent` is, for its logo: the name Herdr shows first, as an
+/// ACP chat reports its agent as `acp` and the real one (`Claude`) there.
+fn agent_kind(agent: &ClientShellAgent) -> Option<String> {
+    [&agent.display_agent, &agent.agent]
+        .into_iter()
+        .flatten()
+        .find(|name| !name.trim().is_empty())
+        .cloned()
 }
 
 /// The workspaces of `snapshot` in its order, each with its chat panes (one
@@ -139,7 +164,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                         pane: agent.pane_id.clone(),
                         tab: agent.tab_id.clone(),
                         endpoint,
-                        agent: agent.agent.clone().or_else(|| agent.display_agent.clone()),
+                        agent: agent_kind(agent),
                         title,
                         status: agent.agent_status,
                     },
@@ -175,12 +200,19 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                             focused: pane.focused,
                         })
                         .collect();
+                    let agent = snapshot
+                        .agents
+                        .iter()
+                        .filter(|agent| agent.tab_id == tab.tab_id)
+                        .max_by_key(|agent| urgency(agent.agent_status))
+                        .map(|agent| (agent_kind(agent), agent.agent_status));
                     let terminal = Terminal {
                         tab: tab.tab_id.clone(),
                         label: tab.label.clone(),
                         cwd: None,
                         zoomed: tab.zoomed,
                         panes,
+                        agent,
                     };
                     let cwd = terminal.first_pane()?.cwd.clone();
                     Some(Terminal { cwd, ..terminal })

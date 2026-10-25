@@ -6,7 +6,7 @@ use crate::hub::Workspace;
 use herdr_chat_protocol::Agent;
 use maud::{Markup, html};
 
-/// The folders a new workspace may start in, grouped for a select.
+/// The folders a new workspace may start in, grouped for the picker.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Folders {
     /// Folders workspaces already use.
@@ -61,18 +61,7 @@ pub(crate) fn new_workspace(folders: &Folders) -> Markup {
             (header("New workspace", "Create"))
             div class="px-4" {
                 (label("Project"))
-                select name="cwd" class="field w-full" required {
-                    @if !folders.recent.is_empty() {
-                        optgroup label="Recent" {
-                            @for folder in &folders.recent { option value=(folder) { (display_folder(folder)) } }
-                        }
-                    }
-                    @for (root, children) in &folders.roots {
-                        optgroup label=(display_folder(root)) {
-                            @for folder in children { option value=(folder) { (display_folder(folder)) } }
-                        }
-                    }
-                }
+                (super::picker::folder_picker("cwd", folders))
                 (label("New branch as a worktree (optional)"))
                 input name="branch" class="field w-full" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="feat/remote-push" maxlength="200";
                 (label("Agent"))
@@ -110,7 +99,7 @@ pub(crate) fn devices(computer: &str, origins: &[String], fingerprint: &str) -> 
                 label class="row justify-between" {
                     span { "Push notifications" }
                     // The CSP build cannot write through x-model; the handler reads the box.
-                    input type="checkbox" x-bind:checked="push" x-on:change="togglePush" class="switch";
+                    input type="checkbox" x-bind:checked="push" x-bind:disabled="pushOff" x-on:change="togglePush" class="switch";
                 }
                 p class="px-3 pb-3 text-xs text-muted" x-text="pushHint" {}
             }

@@ -41,6 +41,7 @@ pub(super) fn lists(state: &Shared, board: bool) -> (Markup, usize) {
         layout: &layout,
         summaries: &summaries,
         now_ms: now_ms(),
+        indicators: state.look.indicators(),
     };
     let markup = if board {
         render::board(&lists)

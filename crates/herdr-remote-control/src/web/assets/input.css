@@ -19,6 +19,9 @@
   --amber: #f2b33d;
   --green: #4fd18b;
   --red: #ff6b6b;
+  /* Agent status, Herdr's own palette (Catppuccin Mocha), as Herdr UI and
+     the terminal client draw it. */
+  --st-working: #f9e2af; --st-blocked: #f38ba8; --st-done: #94e2d5; --st-idle: #a6e3a1; --st-unknown: #6c7086;
   --term-bg: #0b0d10; --term-fg: #d6dae3;
   --t0: #1c1f24; --t1: #ff6b6b; --t2: #4fd18b; --t3: #f2b33d; --t4: #7c9cff; --t5: #c792ea; --t6: #5fd7d7; --t7: #d6dae3;
   --t8: #5b6273; --t9: #ff8787; --t10: #7ee2a8; --t11: #ffd27a; --t12: #a3b8ff; --t13: #dcb0f5; --t14: #8ae6e6; --t15: #ffffff;
@@ -38,6 +41,8 @@
     --amber: #c98a0b;
     --green: #1f9d5c;
     --red: #d64545;
+    /* The same hues darkened for light chrome, as Herdr UI's Theme::ink. */
+    --st-working: #b07d12; --st-blocked: #d0345e; --st-done: #1b9a87; --st-idle: #2e9b45; --st-unknown: #8c8fa1;
     --term-bg: #fbfbfc; --term-fg: #1d222b;
     --t0: #1d222b; --t1: #c62828; --t2: #1f8a4c; --t3: #9a6b00; --t4: #2f54c8; --t5: #8e3fb5; --t6: #127e86; --t7: #5d6576;
     --t8: #8b93a5; --t9: #e04848; --t10: #2aa865; --t11: #b98500; --t12: #4a6fe0; --t13: #a95ccd; --t14: #1a9aa3; --t15: #1d222b;
@@ -92,6 +97,22 @@
   .badge { @apply text-[10.5px] text-muted border border-line rounded-md px-1.5; }
   .pill-amber { @apply text-[11px] font-bold text-black bg-amber rounded-full px-2 py-0.5; }
   .count { @apply min-w-5 h-5 rounded-full text-[11px] font-bold grid place-items-center text-black px-1.5; }
+  /* Agent status in the user's Herdr UI set (render/status.rs). */
+  .st-working { --st: var(--st-working); }
+  .st-blocked { --st: var(--st-blocked); }
+  .st-done { --st: var(--st-done); }
+  .st-idle { --st: var(--st-idle); }
+  .st-unknown { --st: var(--st-unknown); }
+  .status-dot { @apply w-2.5 h-2.5 rounded-full shrink-0; background: var(--st); }
+  .status-dot.st-working { animation: working 1.4s ease-in-out infinite; }
+  .status-dot.st-idle { background: transparent; box-shadow: inset 0 0 0 2px var(--st); }
+  .status-dot.st-unknown { @apply w-1.5 h-1.5; }
+  .status-mark { @apply grid place-items-center w-4 h-4 shrink-0; color: var(--st); }
+  .status-mark svg { @apply w-full h-full; }
+  /* Working turns, as in Herdr UI. */
+  .status-mark.st-working svg { animation: spin 1.4s linear infinite; }
+  .status-tile { @apply w-5 h-5 rounded-md; background: color-mix(in srgb, var(--st) 22%, transparent); }
+  .status-tile svg { @apply w-3.5 h-3.5; }
   .dot-corner { @apply absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-surface; }
   .strip-card {
     @apply flex shrink-0 basis-[82%] gap-2.5 items-center px-3 py-2.5 rounded-2xl border;
@@ -119,8 +140,6 @@
     mask: radial-gradient(circle, transparent 7px, #000 8px);
     -webkit-mask: radial-gradient(circle, transparent 7px, #000 8px);
   }
-  .picker { @apply flex items-center shrink-0 bg-raised rounded-lg px-2 py-1; }
-  .picker select { @apply bg-transparent outline-none; }
   .card { @apply bg-surface rounded-xl px-3 py-2.5 border border-transparent; }
   .fold { @apply text-sm text-muted px-3 py-2 rounded-xl bg-surface; }
   .tool { @apply bg-surface rounded-xl px-3 py-2 text-[13px]; }
@@ -153,6 +172,7 @@
   .switch { @apply w-11 h-6 appearance-none rounded-full bg-raised relative transition checked:bg-green; }
   .switch::after { content: ""; @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition; }
   .switch:checked::after { transform: translateX(20px); }
+  .switch:disabled { @apply opacity-40; }
   .prose { @apply leading-relaxed break-words; }
   .prose p { @apply my-2; }
   .prose pre { @apply my-2 p-2 rounded-lg bg-surface text-xs overflow-x-auto; }
@@ -204,6 +224,42 @@
   }
   .tsheet .grab { @apply w-9 h-1 rounded-full bg-line mx-auto mb-2; }
   .tsheet h4 { @apply text-xs uppercase tracking-wider text-muted font-semibold mb-2 px-0.5; }
+  /* The session sheet the chat title opens (render/session.rs). */
+  .settings-sheet {
+    @apply overflow-y-auto top-0 bottom-auto rounded-t-none rounded-b-3xl pb-2;
+    max-height: 85dvh;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    animation: drop .24s ease-out;
+  }
+  .settings-label { @apply text-xs uppercase tracking-wider text-muted font-semibold mt-4 mb-1.5 px-0.5; }
+  .settings-sheet .tsheet-list { @apply mt-0; }
+  .settings-sheet .tsheet-list + .tsheet-list, .settings-sheet .segmented + .tsheet-list { @apply mt-4; }
+  .settings-choice { @apply gap-3 min-h-12 cursor-pointer; }
+  .settings-check { @apply text-accent shrink-0 invisible; }
+  .settings-choice:has(input:checked) .settings-check { @apply visible; }
+  .segmented { @apply flex bg-raised rounded-xl p-0.5; }
+  .segmented label { @apply flex-1; }
+  .segmented span { @apply block text-center py-2.5 text-[15px] rounded-[10px]; }
+  .segmented input:checked + span { @apply bg-surface font-semibold shadow-sm; }
+  /* Commands under a typed "/" in the composer. */
+  .slash-list { @apply mb-2 rounded-2xl border border-line bg-surface overflow-hidden; }
+  .slash-list > button { @apply flex flex-col items-start w-full min-h-12 px-3.5 py-2 text-left; }
+  .slash-list > button + button { @apply border-t border-line; }
+  .slash-list > button[hidden] { display: none; }
+  .agent-mark svg { width: 62%; height: 62%; }
+  /* The project picker of a new workspace (render/picker.rs). */
+  .picker-page {
+    @apply fixed inset-0 z-50 bg-bg flex flex-col;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    animation: rise .22s ease-out;
+  }
+  .picker-page[hidden] { display: none; }
+  /* 16px keeps Safari from zooming in when the field takes focus. */
+  .picker-search { @apply text-[16px] py-2; }
+  .picker-list { @apply flex-1 overflow-y-auto pb-10; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .picker-row { @apply gap-3 min-h-14; }
+  .picker-row[hidden], .picker-list section[hidden] { display: none; }
+  .picker-row[aria-pressed="true"] .settings-check { @apply visible; }
   .tiles { @apply grid grid-cols-4 gap-2; }
   .tile { @apply flex flex-col items-center gap-1.5 bg-raised rounded-2xl py-3.5 text-[13.5px] font-medium; }
   .tile.danger { @apply text-red; }
@@ -225,4 +281,38 @@
   .banner { @apply fixed top-0 left-0 right-0 z-40 text-center text-xs py-1 bg-amber text-black; padding-top: calc(4px + env(safe-area-inset-top)); }
 }
 
+/* Navigation slides like an iOS stack (app.js `slide`): a pushed screen
+   comes in from the right over the list, which drifts left and dims; going
+   back plays it in reverse. */
+::view-transition-group(root) { animation-duration: 0.38s; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: inherit;
+  animation-timing-function: inherit;
+  mix-blend-mode: normal;
+}
+html[data-slide="push"]::view-transition-old(root) { animation-name: slide-under-left; }
+html[data-slide="push"]::view-transition-new(root) { animation-name: slide-in-right; box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
+html[data-slide="pop"]::view-transition-old(root) { animation-name: slide-out-right; z-index: 1; box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
+html[data-slide="pop"]::view-transition-new(root) { animation-name: slide-from-under-left; }
+@keyframes slide-in-right { from { transform: translateX(100%); } }
+@keyframes slide-out-right { to { transform: translateX(100%); } }
+@keyframes slide-under-left { to { transform: translateX(-30%); filter: brightness(0.85); } }
+@keyframes slide-from-under-left { from { transform: translateX(-30%); filter: brightness(0.85); } }
+
+/* The session sheet shows only while <html data-sheet="settings">. */
+html:not([data-sheet="settings"]) .settings-only { display: none; }
+/* The title's chevron turns up while the sheet hangs from it. */
+html[data-sheet="settings"] [data-open-settings] .icon { transform: rotate(180deg); }
+[data-open-settings] .icon { transition: transform .2s; }
+
+/* The row of the chat or terminal the list was just left for. */
+.came-from { animation: came-from 1.6s ease-out; }
+@keyframes came-from {
+  0%, 35% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background: transparent; }
+}
+@keyframes working { 50% { opacity: 0.35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status-dot.st-working, .status-mark.st-working svg { animation: none; } }
+@keyframes drop { from { transform: translateY(-100%); } to { transform: none; } }
 @keyframes rise { from { transform: translateY(100%); } to { transform: none; } }

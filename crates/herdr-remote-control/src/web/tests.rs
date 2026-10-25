@@ -13,6 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
 mod handoff;
+mod indicators;
 mod origins;
 mod pairing;
 mod routes;
@@ -39,6 +40,7 @@ pub(crate) fn state(dir: &std::path::Path) -> Shared {
             boot: "b".into(),
             workspaces: Vec::new(),
         }),
+        look: Look::load(dir),
         names: RwLock::new(names),
         port: 7443,
         privacy: Privacy::Generic,
