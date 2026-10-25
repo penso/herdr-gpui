@@ -27,6 +27,10 @@ impl HerdrWindow {
             (true, count) => format!("Remote control phones, {count} connected").into(),
         };
         let background = rgb(theme.surface).blend(rgba(0xffffff1a));
+        // Where the button painted, so its list hangs under it wherever the
+        // title bar sits: lower on Linux, under the window's own frame.
+        let bounds = std::rc::Rc::new(std::cell::Cell::new(Bounds::<Pixels>::default()));
+        let painted = bounds.clone();
         let button = div()
             .id("titlebar-remote")
             .debug_selector(|| "titlebar-remote".into())
@@ -34,6 +38,7 @@ impl HerdrWindow {
             .role(Role::Button)
             .aria_label(label)
             .flex()
+            .relative()
             .flex_none()
             .items_center()
             .gap(px(4.))
@@ -48,12 +53,19 @@ impl HerdrWindow {
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
                 if paired {
-                    let anchor = point(window.mouse_position().x + px(16.), px(0.));
+                    let bounds = bounds.get();
+                    let anchor = point(bounds.right(), bounds.bottom() + px(6.));
                     this.open_remote_menu(anchor, window, cx);
                 } else if !this.open_remote_pairing(window, cx) {
                     this.dismiss_menu(window, cx);
                 }
-            }));
+            }))
+            .child(
+                canvas(|_, _, _| (), move |bounds, _, _, _| painted.set(bounds))
+                    .absolute()
+                    .inset_0()
+                    .size_full(),
+            );
         let phone = svg()
             .path("icons/phone.svg")
             .size(px(14.))

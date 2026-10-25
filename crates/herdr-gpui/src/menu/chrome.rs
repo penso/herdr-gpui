@@ -812,7 +812,7 @@ impl HerdrWindow {
             )
             .on_key_down(cx.listener(Self::menu_key_down))
             .child(if pointer_anchored {
-                let position = if matches!(page, Page::Git | Page::RemoteDevices) {
+                let position = if page == Page::Git {
                     point(self.menu.anchor.x, px(crate::titlebar::HEIGHT + 6.))
                 } else {
                     self.menu.anchor
