@@ -41,6 +41,8 @@ mod gpu_line;
 #[cfg(test)]
 mod host_agents;
 #[cfg(test)]
+mod host_cpu;
+#[cfg(test)]
 mod host_groups;
 #[cfg(test)]
 mod host_nesting;

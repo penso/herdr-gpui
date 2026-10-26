@@ -14,6 +14,8 @@ use super::{
 use crate::{HerdrWindow, endpoint::Endpoint};
 use gpui::{prelude::*, *};
 
+const CPU_BAR_SLOT: f32 = 6.;
+
 /// Where the device runs and how it is reached, named again by its tooltip.
 fn origin_mark(
     origin: crate::endpoint::origin::Origin,
@@ -141,6 +143,16 @@ impl HerdrWindow {
         let icon_size = (font.size * 0.9).round();
         let icon_room = origin.map_or(0., |_| icon_size + host_gap);
         let label_width = (label_width - icon_room).max(0.);
+        let name_inset = HOST_ARROW_WIDTH
+            + host_gap
+            + icon_room
+            + if removing {
+                STATUS_WIDTH + host_gap
+            } else {
+                0.
+            };
+        let cpu_bar_width =
+            (look.content_width(width) - name_inset - host_gap - STATUS_WIDTH).max(0.);
         div()
             .id(SharedString::from(format!("{prefix}host-{endpoint_id}")))
             .debug_selector(|| format!("{prefix}host-{endpoint_id}"))
@@ -167,7 +179,8 @@ impl HerdrWindow {
             })
             .h(px(lines * line_height(font)
                 + 2. * layout.host_padding()
-                + look.chrome_height()))
+                + look.chrome_height()
+                + if load.is_some() { CPU_BAR_SLOT } else { 0. }))
             .flex_none()
             .relative()
             .flex()
@@ -325,6 +338,20 @@ impl HerdrWindow {
                             })),
                     ),
             )
+            .when_some(load, |row, reading| {
+                row.child(
+                    div()
+                        .h(px(CPU_BAR_SLOT))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .pl(px(name_inset))
+                        .child(
+                            crate::system_load::cpu_bar(reading, theme, cpu_bar_width, !pinned)
+                                .debug_selector(|| format!("{prefix}host-cpu-{endpoint_id}")),
+                        ),
+                )
+            })
             .when_some(load_line.zip(host), |row, (reading, host)| {
                 row.child(
                     div()

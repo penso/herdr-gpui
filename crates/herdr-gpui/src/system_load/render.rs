@@ -11,6 +11,10 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+#[cfg(test)]
+#[path = "tests/cpu_bar.rs"]
+mod tests;
+
 const BAR_WIDTH: f32 = 2.;
 const BAR_GAP: f32 = 1.;
 const GRAPH_HEIGHT: f32 = 11.;
@@ -276,6 +280,65 @@ pub(crate) fn gauges(
     (width, row)
 }
 
+/// A host's latest CPU share. An empty track means measured zero use.
+pub(crate) fn cpu_bar(reading: &Reading, theme: &Theme, width: f32, accessible: bool) -> Div {
+    let fill = cpu_bar_fill(reading, theme, width);
+    div()
+        .w(px(width))
+        .h(px(3.))
+        .flex_none()
+        .relative()
+        .rounded_full()
+        .overflow_hidden()
+        .when(fill.is_some(), |bar| bar.bg(rgb(theme.active)))
+        .when_some(fill, |bar, (width, color)| {
+            bar.child(div().w(px(width)).h_full().bg(rgb(color)))
+        })
+        .when(accessible, |bar| {
+            bar.child(
+                div()
+                    .id("cpu-bar-label")
+                    .absolute()
+                    .inset_0()
+                    .role(Role::Label)
+                    .aria_value(cpu_bar_text(reading)),
+            )
+        })
+}
+
+fn cpu_bar_fill(reading: &Reading, theme: &Theme, width: f32) -> Option<(f32, u32)> {
+    let value = cpu_bar_value(reading)?;
+    let color = if reading.error().is_some() {
+        theme.muted
+    } else {
+        severity_with_warning(
+            value,
+            CPU_WARN,
+            theme,
+            theme.ink(theme.palette[2]),
+            0xf59e0b,
+        )
+    };
+    Some((width * value / 100., color))
+}
+
+fn cpu_bar_value(reading: &Reading) -> Option<f32> {
+    reading
+        .latest()?
+        .cpu
+        .filter(|value| value.is_finite())
+        .map(|value| value.clamp(0., 100.))
+}
+
+fn cpu_bar_text(reading: &Reading) -> String {
+    match (cpu_bar_value(reading), reading.error()) {
+        (Some(value), None) => format!("CPU {value:.0}%"),
+        (Some(value), Some(_)) => format!("CPU {value:.0}%, stale"),
+        (None, Some(_)) => "CPU unavailable".into(),
+        (None, None) => "CPU measuring".into(),
+    }
+}
+
 fn share(value: f32, warn: f32, stale: bool, theme: &Theme, glyph: Option<f32>) -> Div {
     div()
         .flex_none()
@@ -293,10 +356,14 @@ fn share(value: f32, warn: f32, stale: bool, theme: &Theme, glyph: Option<f32>) 
 
 /// `normal` below `warn`, yellow from it, red once critical.
 pub(crate) fn severity(value: f32, warn: f32, theme: &Theme, normal: u32) -> u32 {
+    severity_with_warning(value, warn, theme, normal, theme.palette[3])
+}
+
+fn severity_with_warning(value: f32, warn: f32, theme: &Theme, normal: u32, warning: u32) -> u32 {
     if value >= CRITICAL {
         theme.ink(theme.palette[1])
     } else if value >= warn {
-        theme.ink(theme.palette[3])
+        theme.ink(warning)
     } else {
         normal
     }

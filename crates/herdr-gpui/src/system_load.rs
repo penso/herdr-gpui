@@ -21,8 +21,8 @@ use crate::{
     usage::{Host, Shell},
 };
 pub(crate) use render::{
-    CPU_WARN, DISK_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN, gauges, gpu_line, line, severity,
-    storage, tooltip, uptime,
+    CPU_WARN, DISK_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN, cpu_bar, gauges, gpu_line, line,
+    severity, storage, tooltip, uptime,
 };
 // The control socket reads samples too.
 pub(crate) use sample::Sample;
