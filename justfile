@@ -10,9 +10,9 @@ run *args:
         # daemon, and starts Remote control with the herdr-remote-control, all beside
         # its own executable.
         cargo build --locked --release -p herdr-acp -p herdr-automate -p herdr-remote-control
-        exec cargo run --locked --release -p herdr-gpui --features qa-menu -- {{args}}
+        exec cargo run --locked --release -p herdr-gpui -- {{args}}
     fi
-    {{just_executable()}} bundle release qa-menu
+    {{just_executable()}} bundle release
     # Open the bundle instead of executing its binary: macOS asks for Local
     # Network access (Bonjour, SSH hosts on the LAN) only for an app it
     # launched, and denies a binary started from a shell without asking.

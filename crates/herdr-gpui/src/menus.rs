@@ -5,23 +5,18 @@
 pub(crate) mod in_window;
 
 use crate::{
-    CheckForUpdates, Quit, RunCommand, ShowLogs,
-    actions::{Copy, Cut, Paste, SelectAll, SetLayout, SetTabLayout},
-    config::{Layout, LayoutMode, TabLayoutMode},
+    CheckForUpdates, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
+    ShowUpdatePreview,
+    actions::{
+        Copy, Cut, Paste, RingBellPreview, SelectAll, SetLayout, SetTabLayout, ShowToastPreview,
+        ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, ToggleSlowAnimations,
+    },
+    config::{Config, LayoutMode, TabLayoutMode},
     controls::Command,
 };
 #[cfg(target_os = "macos")]
 use crate::{Hide, HideOthers, Minimize, ShowAll};
-#[cfg(feature = "qa-menu")]
-use crate::{
-    PlaySound, ShowHerdrNotDetected, ShowUpdatePreview,
-    actions::{
-        RingBellPreview, ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview,
-        ToggleSlowAnimations,
-    },
-};
 use gpui::{App, Menu, MenuItem, OsAction};
-#[cfg(feature = "qa-menu")]
 use herdr_client::protocol::SemanticNotificationKind;
 
 /// Linux and Windows have no global menu bar, so each window draws its own.
@@ -33,12 +28,12 @@ impl gpui::Global for Headings {}
 
 /// Installs the menu bar, checking the layout the latest config picked.
 pub(crate) fn install(cx: &mut App) {
-    let (layout, tabs) = cx
+    let menus = cx
         .try_global::<crate::app::InitialAppearance>()
-        .map_or_else(Default::default, |appearance| {
-            (appearance.config.layout, appearance.config.tab_layout)
-        });
-    let menus = menus(layout, tabs);
+        .map_or_else(
+            || menus(&Config::default()),
+            |appearance| menus(&appearance.config),
+        );
     cx.set_global(Headings(
         menus
             .iter()
@@ -72,10 +67,19 @@ fn tab_layout_menu(current: TabLayoutMode) -> MenuItem {
     MenuItem::submenu(Menu::new("Tab Layout").items(items))
 }
 
-/// The menu bar, with `layout`'s mode checked under View > Layout and
-/// `tabs` under View > Tab Layout.
-pub(crate) fn menus(layout: Layout, tabs: TabLayoutMode) -> Vec<Menu> {
-    vec![
+/// Whether the menu bar built from `new` differs from the one built from
+/// `old`, so a config reload knows to install it again.
+pub(crate) fn changed(old: &Config, new: &Config) -> bool {
+    old.layout.mode != new.layout.mode
+        || old.tab_layout != new.tab_layout
+        || old.features.qa_menu != new.features.qa_menu
+}
+
+/// The menu bar, with the config's layout checked under View > Layout and
+/// its tab layout under View > Tab Layout, and QA last when
+/// `features.qa_menu` is on.
+pub(crate) fn menus(config: &Config) -> Vec<Menu> {
+    let mut menus = vec![
         Menu {
             name: "Herdr".into(),
             disabled: false,
@@ -218,8 +222,8 @@ pub(crate) fn menus(layout: Layout, tabs: TabLayoutMode) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::separator(),
-                layout_menu(layout.mode),
-                tab_layout_menu(tabs),
+                layout_menu(config.layout.mode),
+                tab_layout_menu(config.tab_layout),
                 MenuItem::action(
                     "Devices Overview",
                     RunCommand {
@@ -395,65 +399,72 @@ pub(crate) fn menus(layout: Layout, tabs: TabLayoutMode) -> Vec<Menu> {
                 MenuItem::action("Logs", ShowLogs),
             ],
         },
-        #[cfg(feature = "qa-menu")]
-        Menu {
-            name: "QA".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action("Show herdr non-detected modal", ShowHerdrNotDetected),
-                MenuItem::action("Show app update available", ShowUpdatePreview),
-                MenuItem::action(
-                    "Show update download progress (50%)",
-                    ShowUpdateDownloadPreview,
-                ),
-                MenuItem::action("Show Homebrew update progress", ShowUpdateHomebrewPreview),
-                MenuItem::action("Play Sound", PlaySound),
-                MenuItem::action("Ring Bell in 3 Seconds", RingBellPreview),
-                MenuItem::action("Slow Animations", ToggleSlowAnimations)
-                    .checked(crate::motion::is_slow()),
-                #[cfg(any(target_os = "macos", windows))]
-                MenuItem::action(
-                    "Enable badge",
-                    crate::actions::SetBadgePreview { enabled: true },
-                ),
-                #[cfg(any(target_os = "macos", windows))]
-                MenuItem::action(
-                    "Disable badge preview",
-                    crate::actions::SetBadgePreview { enabled: false },
-                ),
-                MenuItem::separator(),
-                MenuItem::action(
-                    "Show NeedsAttention toast",
-                    ShowToastPreview {
-                        kind: SemanticNotificationKind::NeedsAttention,
-                    },
-                ),
-                MenuItem::action(
-                    "Show Finished toast",
-                    ShowToastPreview {
-                        kind: SemanticNotificationKind::Finished,
-                    },
-                ),
-                MenuItem::action(
-                    "Show UpdateInstalled toast",
-                    ShowToastPreview {
-                        kind: SemanticNotificationKind::UpdateInstalled,
-                    },
-                ),
-                MenuItem::action(
-                    "Show Custom toast",
-                    ShowToastPreview {
-                        kind: SemanticNotificationKind::Custom,
-                    },
-                ),
-                MenuItem::separator(),
-                MenuItem::action(
-                    "Send notification in 3 seconds",
-                    crate::actions::ShowSystemNotificationPreview,
-                ),
-            ],
-        },
-    ]
+    ];
+    if config.features.qa_menu {
+        menus.push(qa_menu());
+    }
+    menus
+}
+
+/// Previews and test actions for checking the app's surfaces by hand.
+fn qa_menu() -> Menu {
+    Menu {
+        name: "QA".into(),
+        disabled: false,
+        items: vec![
+            MenuItem::action("Show herdr non-detected modal", ShowHerdrNotDetected),
+            MenuItem::action("Show app update available", ShowUpdatePreview),
+            MenuItem::action(
+                "Show update download progress (50%)",
+                ShowUpdateDownloadPreview,
+            ),
+            MenuItem::action("Show Homebrew update progress", ShowUpdateHomebrewPreview),
+            MenuItem::action("Play Sound", PlaySound),
+            MenuItem::action("Ring Bell in 3 Seconds", RingBellPreview),
+            MenuItem::action("Slow Animations", ToggleSlowAnimations)
+                .checked(crate::motion::is_slow()),
+            #[cfg(any(target_os = "macos", windows))]
+            MenuItem::action(
+                "Enable badge",
+                crate::actions::SetBadgePreview { enabled: true },
+            ),
+            #[cfg(any(target_os = "macos", windows))]
+            MenuItem::action(
+                "Disable badge preview",
+                crate::actions::SetBadgePreview { enabled: false },
+            ),
+            MenuItem::separator(),
+            MenuItem::action(
+                "Show NeedsAttention toast",
+                ShowToastPreview {
+                    kind: SemanticNotificationKind::NeedsAttention,
+                },
+            ),
+            MenuItem::action(
+                "Show Finished toast",
+                ShowToastPreview {
+                    kind: SemanticNotificationKind::Finished,
+                },
+            ),
+            MenuItem::action(
+                "Show UpdateInstalled toast",
+                ShowToastPreview {
+                    kind: SemanticNotificationKind::UpdateInstalled,
+                },
+            ),
+            MenuItem::action(
+                "Show Custom toast",
+                ShowToastPreview {
+                    kind: SemanticNotificationKind::Custom,
+                },
+            ),
+            MenuItem::separator(),
+            MenuItem::action(
+                "Send notification in 3 seconds",
+                crate::actions::ShowSystemNotificationPreview,
+            ),
+        ],
+    }
 }
 
 #[cfg(test)]

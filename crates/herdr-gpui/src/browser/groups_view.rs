@@ -175,6 +175,7 @@ impl HerdrWindow {
                 .any(|layout| layout.slots().any(|slot| slot.id == group))
         };
         self.browser.appear.retain(live);
+        self.browser.tab_body.retain(live);
         self.browser
             .group_bounds
             .borrow_mut()

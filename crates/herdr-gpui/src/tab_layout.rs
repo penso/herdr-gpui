@@ -13,6 +13,7 @@
 mod cards;
 mod classic;
 mod compact;
+mod curved;
 mod outline;
 mod pills;
 mod underline;
@@ -251,6 +252,29 @@ pub(crate) trait TabLayout {
     fn min_width(&self) -> f32 {
         crate::TAB_WIDTH
     }
+
+    /// The surface joining the chosen tab to what its group shows, for a
+    /// layout whose tabs leave that to the strip. The strip then paints one
+    /// body behind its tabs, so it can slide between them, and sits the
+    /// group's content in a card.
+    fn connected(&self) -> Option<Connected> {
+        None
+    }
+}
+
+/// The shape of a connected tab body and the card it flows into.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Connected {
+    /// How far the body stands below the strip's edge away from the content.
+    pub(crate) top: f32,
+    /// The body's corners away from the content.
+    pub(crate) radius: f32,
+    /// How far each concave shoulder flares past the tab at its foot.
+    pub(crate) shoulder: f32,
+    /// The chrome kept around the content card.
+    pub(crate) inset: f32,
+    /// The content card's corners.
+    pub(crate) card_radius: f32,
 }
 
 /// The space floating layouts leave at each end of their tabs.
@@ -293,6 +317,7 @@ pub(crate) fn layout_for(mode: TabLayoutMode) -> &'static dyn TabLayout {
         TabLayoutMode::Cards => &cards::Cards,
         TabLayoutMode::Classic => &classic::Classic,
         TabLayoutMode::Compact => &compact::Compact,
+        TabLayoutMode::Curved => &curved::Curved,
         TabLayoutMode::Outline => &outline::Outline,
         TabLayoutMode::Pills => &pills::Pills,
         TabLayoutMode::Underline => &underline::Underline,
