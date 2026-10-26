@@ -67,9 +67,13 @@
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
+          # herdr-remote-control is the remote control daemon the app runs as a
+          # user service from beside its executable, so both land in $out/bin.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
+            "-p"
+            "herdr-remote-control"
           ];
           # The optimized CLI suite CI's main-branch build runs; the rest of
           # the workspace suite needs a desktop or a live daemon.

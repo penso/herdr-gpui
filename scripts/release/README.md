@@ -72,14 +72,16 @@ without one. For documentation-only commits, start a full run with
 ```sh
 cargo install cargo-about --version 0.9.2 --locked --features cli
 python3 scripts/release/generate-notices.py OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
-bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
+bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY ARM64_REMOTE_CONTROL X86_64_REMOTE_CONTROL OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/sign-macos.sh VERSION OUTPUT_DIR/Herdr.app OUTPUT_DIR
-bash scripts/release/package-linux.sh VERSION TARGET BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
+bash scripts/release/package-linux.sh VERSION TARGET BINARY REMOTE_CONTROL OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/render-cask.sh VERSION SHA256 > /path/to/rendered/herdr-gpui.rb
 ```
 
 macOS assembly requires Apple command-line tools. It produces unsigned
-`Herdr.app`, containing the universal GUI, plist, icon, root `LICENSE` and `NOTICE`,
+`Herdr.app`, containing the universal GUI, the universal `herdr-remote-control`
+remote control daemon beside it in `Contents/MacOS` (signed on its own, with the
+hardened runtime and none of the app's entitlements, before the bundle), plist, icon, root `LICENSE` and `NOTICE`,
 protocol license/attribution, Octicons license, and third-party notices.
 Both plist versions are set to the supplied version.
 The package floor is macOS 14.2 (`LSMinimumSystemVersion`; Homebrew can only
@@ -168,7 +170,10 @@ the package again. When packaged dependencies change, update `DEPENDS` in
 The workflow separately packages `herdr-gpui-VERSION-TARGET-update.tar.gz` with
 `scripts/update-manifest.py package-linux`. This bounded USTAR contains exactly
 one regular executable named `herdr-gpui-VERSION-TARGET`, mode 0755; it does not
-replace or alter the manual archive's desktop/icon/license tree. Both native
+replace or alter the manual archive's desktop/icon/license tree. It also does
+not carry `herdr-remote-control`, which the manual archive and the distribution
+packages install beside `herdr-gpui` in `bin/`, so an in-app update of a
+manual archive leaves that daemon at the version it was installed with. Both native
 Linux builds and both macOS builds embed `HERDR_UPDATE_PUBLIC_KEY` and the
 validated `HERDR_RELEASE_VERSION` before packaging.
 
@@ -176,10 +181,11 @@ The Windows targets are `x86_64-pc-windows-msvc` and
 `aarch64-pc-windows-msvc`, built natively on `windows-2025` and
 `windows-11-arm` after clippy, the protocol/client suites and the CLI tests pass
 there. `scripts/release/package-windows.py VERSION TARGET BINARY LAUNCHER
-OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
+REMOTE_CONTROL OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
 zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named root
 containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
-installer's Start menu shortcut opens, and `licenses/` holding the same license
+installer's Start menu shortcut opens, the `herdr-remote-control.exe` remote
+control daemon, and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
 `scripts/release/windows-installer.py` then installs the pinned Inno Setup
@@ -223,8 +229,8 @@ fails instead of falling back to unsigned. When signing is on:
 
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
-   `azure/artifact-signing-action` signs `herdr-gpui.exe` and
-   `herdr-gpui-launcher.exe` with SHA-256 and an RFC 3161 timestamp from
+   `azure/artifact-signing-action` signs `herdr-gpui.exe`,
+   `herdr-gpui-launcher.exe`, and `herdr-remote-control.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended

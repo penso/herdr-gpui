@@ -23,7 +23,7 @@ build_env=(env
 # Public configuration must be supplied before loading any local signing helper.
 "${build_env[@]}" python3 scripts/update-manifest.py validate-public-key
 for target in aarch64-apple-darwin x86_64-apple-darwin; do
-    "${build_env[@]}" cargo build --locked --release --target-dir target -p herdr-gpui --target "$target"
+    "${build_env[@]}" cargo build --locked --release --target-dir target -p herdr-gpui -p herdr-remote-control --target "$target"
 done
 
 # Publish only a complete assembly; failures leave the version available for retry.
@@ -35,7 +35,9 @@ trap 'exit 143' TERM
 "${build_env[@]}" python3 scripts/release/generate-notices.py "$stage/THIRD-PARTY-NOTICES.txt"
 bash scripts/release/package-macos.sh "$version" \
     target/aarch64-apple-darwin/release/herdr-gpui \
-    target/x86_64-apple-darwin/release/herdr-gpui "$stage" "$stage/THIRD-PARTY-NOTICES.txt" >&2
+    target/x86_64-apple-darwin/release/herdr-gpui \
+    target/aarch64-apple-darwin/release/herdr-remote-control \
+    target/x86_64-apple-darwin/release/herdr-remote-control "$stage" "$stage/THIRD-PARTY-NOTICES.txt" >&2
 set +x
 (
     source ./.envrc
