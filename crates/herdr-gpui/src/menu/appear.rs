@@ -121,6 +121,14 @@ impl Appear {
         motion::progress(since, now, LEAVE).map(|k| (page, 1. - k))
     }
 
+    /// Lets go of a closed page once it has gone, with what it read.
+    fn settle(&mut self, now: Instant) {
+        if self.leaving.is_some() && self.leaving(now).is_none() {
+            self.leaving = None;
+            self.kept = None;
+        }
+    }
+
     fn moving(&self, now: Instant) -> bool {
         self.panel(now) < 1. || self.backdrop.moving(now) || self.leaving(now).is_some()
     }
@@ -141,6 +149,7 @@ impl HerdrWindow {
                 false => Shown::Popover(self.menu.anchor),
             });
         self.menu.appear.observe(shown, self.menu.page, now);
+        self.menu.appear.settle(now);
         if self.menu.appear.moving(now) {
             window.request_animation_frame();
         }

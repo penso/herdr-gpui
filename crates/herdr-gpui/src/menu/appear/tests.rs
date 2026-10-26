@@ -109,6 +109,21 @@ fn all_devices_sinks_away_after_it_closes() {
 }
 
 #[test]
+fn a_closed_page_lets_go_of_what_it_read_once_it_has_gone() {
+    let start = Instant::now();
+    let mut appear = live();
+    let anchor = Shown::Popover(point(px(200.), px(40.)));
+    appear.observe(Some(anchor), Some(Page::Git), start);
+    appear.keep(Page::Git, Kept::default());
+    appear.observe(None, None, start);
+    appear.settle(start);
+    assert!(appear.kept.is_some(), "kept while it goes");
+    appear.settle(start + LEAVE);
+    assert!(appear.leaving.is_none());
+    assert!(appear.kept.is_none(), "dropped once it has gone");
+}
+
+#[test]
 fn other_menus_do_not_linger_after_closing() {
     let start = Instant::now();
     let mut appear = live();
