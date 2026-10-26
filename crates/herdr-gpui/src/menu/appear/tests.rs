@@ -114,3 +114,37 @@ fn other_menus_do_not_linger_after_closing() {
     appear.observe(None, None, start + ENTER);
     assert!(appear.leaving(start + ENTER).is_none());
 }
+
+#[gpui::test]
+fn all_devices_draws_lower_while_it_rises(cx: &mut gpui::TestAppContext) {
+    use crate::sidebar::layout_tests::fixture_window;
+    let (view, cx) = cx.add_window_view(fixture_window);
+    let draw = |cx: &mut gpui::VisualTestContext| {
+        cx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx);
+        });
+    };
+    // The footer sits at the window's foot, so the menu opens above it.
+    let foot = cx.update(|window, _| window.viewport_size().height) - px(40.);
+    let open = |cx: &mut gpui::VisualTestContext| {
+        view.update(cx, |view, _| {
+            view.menu.anchor = point(px(20.), foot);
+            view.menu.page = Some(Page::Devices);
+        });
+    };
+    open(cx);
+    draw(cx);
+    let settled = cx.debug_bounds("menu-panel").expect("All Devices draws");
+    view.update(cx, |view, _| view.menu.page = None);
+    draw(cx);
+    view.update(cx, |view, _| view.menu.appear.live = true);
+    open(cx);
+    draw(cx);
+    draw(cx);
+    let rising = cx.debug_bounds("menu-panel").expect("All Devices draws");
+    assert!(
+        rising.origin.y > settled.origin.y + px(1.),
+        "{rising:?} rises to {settled:?}"
+    );
+}

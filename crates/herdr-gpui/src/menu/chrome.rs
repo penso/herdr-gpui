@@ -356,10 +356,25 @@ impl HerdrWindow {
             .when(rises, |panel| {
                 let (room, above) = self.footer_room(viewport);
                 let below = 1. - leaving.unwrap_or_else(|| self.menu.appear.panel(now));
+                // Its own height, as the last frame laid it out; the box it
+                // rises in takes its height from it, so a share of that box
+                // would be a share of nothing. Until a frame has measured it,
+                // the room it may take keeps it out of sight.
+                let height = self.menu.appear.rise_height.get().unwrap_or(room);
+                let offset = height * below;
+                let measured = self.menu.appear.rise_height.clone();
                 panel
                     .w_full()
                     .max_h(room)
-                    .top(relative(if above { below } else { -below }))
+                    .top(if above { offset } else { -offset })
+                    .child(
+                        canvas(
+                            move |bounds, _, _| measured.set(Some(bounds.size.height)),
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .inset_0(),
+                    )
             })
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside

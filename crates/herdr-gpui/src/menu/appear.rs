@@ -50,6 +50,8 @@ pub(crate) struct Appear {
     since: Option<Instant>,
     /// A page sinking away after it closed, from when it did.
     leaving: Option<(Page, Instant)>,
+    /// All Devices' height as last laid out, which its rise travels.
+    pub(super) rise_height: std::rc::Rc<std::cell::Cell<Option<Pixels>>>,
     backdrop: Toggle,
     /// Unit tests lay menus out where they settle unless one asks to see
     /// them move, so geometry checks need not wait out the motion.
