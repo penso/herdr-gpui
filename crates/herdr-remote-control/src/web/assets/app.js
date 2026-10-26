@@ -321,6 +321,14 @@ function show(template) {
   stopStream();
   stopScan();
   view().replaceChildren(document.getElementById(template).content.cloneNode(true));
+  view().dataset.local = "";
+}
+
+/// Whether `element` sits in a view this app drew from its own templates,
+/// not in a fragment a computer sent. Any paired computer's markup runs in
+/// this page, so controls over the paired computers answer only here.
+function local(element) {
+  return "local" in view().dataset && view().contains(element);
 }
 
 function banner(text) {
@@ -394,6 +402,7 @@ async function route(event) {
     const html = await (await api(target.fragment, { signal: routing.signal })).text();
     if (app.routing !== routing) return;
     await slide(from, location.pathname, event, async () => {
+      delete view().dataset.local;
       view().innerHTML = html;
       for (const link of view().querySelectorAll("a[data-computer]")) {
         link.href = app.origin + link.getAttribute("href");
@@ -505,7 +514,8 @@ function handleEvent(block) {
   if (patch.badge !== undefined) navigator.setAppBadge?.(patch.badge).catch(() => {});
   for (const [id, html] of Object.entries(patch.regions || {})) {
     const element = document.getElementById(id);
-    if (!element) continue;
+    // A computer patches only what it drew: never this app's own chrome.
+    if (!element || element === view() || !view().contains(element) || "local" in view().dataset) continue;
     // Never replace a composer holding a draft, pictures, or a send.
     const draft = element.querySelector?.("textarea");
     const busy = element.matches?.("[data-busy]") || element.querySelector?.("[data-busy]");
@@ -616,7 +626,14 @@ async function redeemHandoff(token) {
 
 /// Keeps the key and device an approval or a handoff granted, and shows
 /// that computer. Pairing a computer again replaces its older pairing.
-async function adopt(pairKey, answer) {
+async function adopt(pairKey, answer, fingerprint) {
+  // The code scanned off the desktop names the computer; one answering with
+  // another fingerprint must not take, or replace, a pairing as that one.
+  // The code carries it bare; the computer reports it colon-separated.
+  const bare = (text) => String(text || "").replace(/:/g, "").toUpperCase();
+  if (!fingerprint || bare(answer.fingerprint) !== bare(fingerprint)) {
+    throw new Error("This code belongs to another computer.");
+  }
   const host = { id: answer.device, origins: answer.origins, fingerprint: answer.fingerprint, computer: answer.computer };
   const older = hosts().find((other) => other.fingerprint === host.fingerprint && other.id !== host.id);
   await saveKey(host, pairKey);
@@ -678,11 +695,15 @@ document.addEventListener("click", async (event) => {
     button.disabled = true;
     command(button.dataset.pane, JSON.parse(button.dataset.command)).finally(() => (button.disabled = false));
   }
-  if (event.target.closest("[data-retry]")) start(true);
-  const host = event.target.closest("[data-host]");
+  const own = (selector) => {
+    const element = event.target.closest(selector);
+    return element && local(element) ? element : null;
+  };
+  if (own("[data-retry]")) start(true);
+  const host = own("[data-host]");
   if (host) switchHost(host.dataset.host);
-  if (event.target.closest("[data-add-computer]")) startScan();
-  if (event.target.closest("[data-scan-cancel]")) navigate("/computers");
+  if (own("[data-add-computer]")) startScan();
+  if (own("[data-scan-cancel]")) navigate("/computers");
   terminalClick(event);
 });
 
@@ -1158,7 +1179,7 @@ async function pair(link, scanned = false) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       const answer = await (await call(`/api/pair/claim/${claim.claim}`, { auth: false, origin })).json();
       if (answer.state === "approved") {
-        await adopt(pairKey, answer);
+        await adopt(pairKey, answer, params.get("fp"));
         // Straight home: its footer offers Add to Home Screen.
         history.replaceState(null, "", "/");
         return start();

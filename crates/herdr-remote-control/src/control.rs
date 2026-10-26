@@ -196,6 +196,11 @@ pub enum PairingState {
     Claimed {
         device_name: String,
         code: String,
+        /// The origin of the Home Screen app that claimed it, when that app
+        /// was installed from another computer: approving admits it to this
+        /// computer's API, so the dialog names it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        app: Option<String>,
     },
     Approved {
         device: DeviceId,

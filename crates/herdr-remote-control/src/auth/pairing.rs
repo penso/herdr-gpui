@@ -95,6 +95,7 @@ impl Open {
             Phase::Claimed { device, code, .. } => PairingState::Claimed {
                 device_name: device.name.clone(),
                 code: code.clone(),
+                app: device.app.clone(),
             },
             Phase::Finished { state, .. } => state.clone(),
         }

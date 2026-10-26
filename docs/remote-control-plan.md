@@ -321,7 +321,17 @@ phone never disturbs the desktop's layout.
   the claim (which takes the one-minute token from the desktop's code),
   and the desktop's approval stores that app's origin on the device
   (`app` in `devices.json`), admitted until the device is revoked or
-  expires.
+  expires. The desktop dialog names that app's origin before the user
+  allows the claim. Only `/api/pair/claim` and `/api/pair/claim/ID` are
+  open to any origin.
+- The app adopts a pairing only when the computer that approved it reports
+  the fingerprint in the scanned code, so a code cannot take or replace
+  another computer's pairing. Its certificate links say to compare that
+  fingerprint with the one the desktop shows before installing.
+- A computer's fragments run in the app's page. The controls over the
+  paired computers (switch, add, retry) answer only in views the app drew
+  from its own templates, and a computer's patches replace only elements
+  inside the fragment view.
 - Push: a push subscription is bound to one sender key (VAPID), so each
   computer gets its own subscription, through one service worker
   registration per computer under its own scope (`/m/COMPUTER/`). Phase 0

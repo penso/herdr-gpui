@@ -3,7 +3,7 @@
 //! claim made from it, and only while that device stays paired.
 
 use super::*;
-use crate::control::{Request, Response};
+use crate::control::{PairingState, Request, Response};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::SigningKey;
 use serde_json::{Value, json};
@@ -224,4 +224,41 @@ fn only_https_origins_are_app_origins() {
         assert!(api::app_origin(bad).is_none(), "{bad}");
     }
     assert!(api::app_origin(&format!("https://{}", "a".repeat(260))).is_none());
+}
+
+#[tokio::test]
+async fn the_desktop_sees_which_app_claimed() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state(dir.path());
+    let (offer, _, _) = claim(&state, APP).await;
+    let Response::Pairing(PairingState::Claimed { app, .. }) =
+        control(&state, Request::Pairing { id: offer.id })
+    else {
+        panic!("expected a claimed pairing");
+    };
+    assert_eq!(app.as_deref(), Some(APP));
+
+    let (offer, _, _) = claim(&state, ORIGIN).await;
+    let Response::Pairing(PairingState::Claimed { app, .. }) =
+        control(&state, Request::Pairing { id: offer.id })
+    else {
+        panic!("expected a claimed pairing");
+    };
+    assert_eq!(app, None);
+}
+
+#[tokio::test]
+async fn only_the_claim_paths_are_open_to_any_origin() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state(dir.path());
+    for path in [
+        "/api/pair/claimx",
+        "/api/pair/claim/a/b",
+        "/api/pair/claim/",
+    ] {
+        let (status, _, _) = send(&state, from(APP, get(path))).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{path}");
+    }
+    assert!(is_pair_claim("/api/pair/claim"));
+    assert!(is_pair_claim("/api/pair/claim/abc"));
 }

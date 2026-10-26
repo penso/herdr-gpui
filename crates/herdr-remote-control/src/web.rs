@@ -223,6 +223,19 @@ async fn security_headers(request: Request, next: Next) -> Response {
     response
 }
 
+/// Whether `path` claims a pairing or asks how a claim stands: exactly
+/// `PAIR_CLAIM` or one segment under it, never a path that only starts with
+/// the same letters.
+fn is_pair_claim(path: &str) -> bool {
+    match path.strip_prefix(PAIR_CLAIM) {
+        Some("") => true,
+        Some(rest) => rest
+            .strip_prefix('/')
+            .is_some_and(|claim| !claim.is_empty() && !claim.contains('/')),
+        None => false,
+    }
+}
+
 /// Admits this computer's own origins across addresses, and apps its paired
 /// devices use. Any other origin may only claim a pairing, which takes the
 /// token from a code the desktop shows, and ask how the claim stands;
@@ -237,7 +250,7 @@ async fn cors(Extract(state): Extract<Shared>, request: Request, next: Next) -> 
     let Some(origin) = origin else {
         return next.run(request).await;
     };
-    let pairing = request.uri().path().starts_with(PAIR_CLAIM);
+    let pairing = is_pair_claim(request.uri().path());
     if !pairing && !state.admits(&origin) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }

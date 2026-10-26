@@ -16,10 +16,30 @@ fn requests_and_responses_keep_their_wire_names() {
         serde_json::to_value(Response::Pairing(PairingState::Claimed {
             device_name: "iPhone".into(),
             code: "428913".into(),
+            app: None,
         }))
         .unwrap(),
         json!({"response": "pairing", "state": "claimed", "device_name": "iPhone", "code": "428913"})
     );
+    // A claim from another computer's app names it; an older daemon's
+    // answer, without the field, reads as a claim from this computer.
+    let from_app: Response = serde_json::from_value(json!({
+        "response": "pairing", "state": "claimed", "device_name": "iPhone", "code": "428913",
+        "app": "https://100.64.0.9:7443",
+    }))
+    .unwrap();
+    assert!(matches!(
+        from_app,
+        Response::Pairing(PairingState::Claimed { app: Some(app), .. }) if app == "https://100.64.0.9:7443"
+    ));
+    let older: Response = serde_json::from_value(
+        json!({"response": "pairing", "state": "claimed", "device_name": "iPhone", "code": "428913"}),
+    )
+    .unwrap();
+    assert!(matches!(
+        older,
+        Response::Pairing(PairingState::Claimed { app: None, .. })
+    ));
 }
 
 #[test]

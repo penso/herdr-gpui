@@ -132,6 +132,7 @@ fn the_matching_code_is_six_digits_and_the_same_when_recomputed() {
     let expected = PairingState::Claimed {
         device_name: "iPhone".into(),
         code: claimed.code.clone(),
+        app: None,
     };
     assert_eq!(pairings.state(&offer.id, T0).unwrap(), expected);
     assert_eq!(pairings.claim_status(&claimed.id, T0).unwrap(), expected);
