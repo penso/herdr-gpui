@@ -201,16 +201,18 @@ async fn expire(state: Arc<State>, idle: Option<Duration>) {
     loop {
         ticker.tick().await;
         let state = state.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            let now = web::now_ms();
-            // Pictures expire on their own schedule, whether or not another
-            // upload comes to sweep them.
-            state.uploads.prune(now);
-            if let Some(idle_ms) = idle_ms {
-                let _ = state.auth().expire_idle(now, idle_ms);
-            }
-        })
-        .await;
+        let _ = tokio::task::spawn_blocking(move || sweep(&state, web::now_ms(), idle_ms)).await;
+    }
+}
+
+/// One tick of [`expire`]: drops old pictures, and devices away for
+/// `idle_ms`; with no limit, devices stay until revoked. Blocking.
+fn sweep(state: &State, now_ms: u64, idle_ms: Option<u64>) {
+    // Pictures expire on their own schedule, whether or not another
+    // upload comes to sweep them.
+    state.uploads.prune(now_ms);
+    if let Some(idle_ms) = idle_ms {
+        let _ = state.auth().expire_idle(now_ms, idle_ms);
     }
 }
 

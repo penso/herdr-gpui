@@ -5,6 +5,7 @@ use super::{
 use std::{ffi::OsString, net::IpAddr, path::PathBuf};
 
 mod control_socket;
+mod idle;
 mod shutdown;
 
 fn args(list: &[&str]) -> Vec<OsString> {

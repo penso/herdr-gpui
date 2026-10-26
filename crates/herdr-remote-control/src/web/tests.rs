@@ -73,7 +73,7 @@ pub(super) async fn send(
 
 /// Pairs a phone whose key comes from `seed` straight through `Auth` and
 /// signs it in: its device and bearer token.
-pub(super) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
+pub(crate) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use p256::ecdsa::{Signature, SigningKey, signature::Signer};
     let key = SigningKey::from_slice(&[seed; 32]).unwrap();
