@@ -347,7 +347,8 @@ as `~/.local/bin/herdr-gpui`, with safe ancestor permissions. Root, system locat
 symlinked paths, hard-linked binaries, and known package-container environments
 are refused. Supported archive targets are x86_64 GNU and aarch64 GNU Linux.
 The update replaces that executable only: the `herdr-acp` beside it, which chats
-run, stays as installed until the next manual archive install.
+run, and `herdr-remote-control`, which Remote control runs, stay as installed
+until the next manual archive install.
 On macOS the app must be user-owned and its parent writable without elevation;
 the usual root/admin-owned `/Applications` parent is allowed. The installed and
 candidate bundles must have matching Developer ID teams, Herdr's bundle identifier,
