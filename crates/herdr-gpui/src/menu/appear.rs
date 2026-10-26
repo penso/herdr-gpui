@@ -3,13 +3,18 @@
 //! window dims behind it, and closing it lifts the dimming back off. Moving
 //! between pages of one popup, such as Add Device's sources or a menu's
 //! rename field, keeps it still: only a popup that is new to the eye moves.
+//!
+//! All Devices instead rises out of the sidebar footer that opened it and
+//! sinks back into it when it closes. It is the one page drawn again after
+//! closing: closing resets the menu's state in the same frame, and its list
+//! draws from what outlives that, the devices and the anchor.
 
 use super::Page;
 use crate::{
     HerdrWindow,
-    motion::{self, ENTER, Toggle},
+    motion::{self, ENTER, LEAVE, Toggle},
 };
-use gpui::{AnyElement, Pixels, Point, Rgba, Window, div, prelude::*, px, rgba};
+use gpui::{AnyElement, Context, Pixels, Point, Rgba, Window, div, prelude::*, px, rgba};
 use std::time::Instant;
 
 /// How far a popover slides toward its place as it appears.
@@ -39,8 +44,12 @@ enum Shown {
 pub(crate) struct Appear {
     /// What the last frame drew, `None` while no popup was open.
     shown: Option<Shown>,
+    /// The page the last frame drew.
+    page: Option<Page>,
     /// When the popup showing now began to appear.
     since: Option<Instant>,
+    /// A page sinking away after it closed, from when it did.
+    leaving: Option<(Page, Instant)>,
     backdrop: Toggle,
     /// Unit tests lay menus out where they settle unless one asks to see
     /// them move, so geometry checks need not wait out the motion.
@@ -49,7 +58,8 @@ pub(crate) struct Appear {
 }
 
 impl Appear {
-    fn observe(&mut self, shown: Option<Shown>, now: Instant) {
+    fn observe(&mut self, shown: Option<Shown>, page: Option<Page>, now: Instant) {
+        let last = std::mem::replace(&mut self.page, page);
         if shown == self.shown {
             return;
         }
@@ -57,6 +67,10 @@ impl Appear {
         let still = !self.live;
         #[cfg(not(test))]
         let still = false;
+        self.leaving = match (shown, last) {
+            (None, Some(Page::Devices)) if !still => Some((Page::Devices, now)),
+            _ => None,
+        };
         self.since = shown.is_some().then_some(now).filter(|_| !still);
         self.backdrop.set(shown == Some(Shown::Dialog), now, still);
         self.shown = shown;
@@ -82,8 +96,14 @@ impl Appear {
         self.backdrop.shown(now)
     }
 
+    /// The page sinking away after it closed, and how much of it is left.
+    pub(super) fn leaving(&self, now: Instant) -> Option<(Page, f32)> {
+        let (page, since) = self.leaving?;
+        motion::progress(since, now, LEAVE).map(|k| (page, 1. - k))
+    }
+
     fn moving(&self, now: Instant) -> bool {
-        self.panel(now) < 1. || self.backdrop.moving(now)
+        self.panel(now) < 1. || self.backdrop.moving(now) || self.leaving(now).is_some()
     }
 }
 
@@ -101,7 +121,7 @@ impl HerdrWindow {
                 true => Shown::Dialog,
                 false => Shown::Popover(self.menu.anchor),
             });
-        self.menu.appear.observe(shown, now);
+        self.menu.appear.observe(shown, self.menu.page, now);
         if self.menu.appear.moving(now) {
             window.request_animation_frame();
         }
@@ -109,14 +129,20 @@ impl HerdrWindow {
 }
 
 impl HerdrWindow {
-    /// The dimming a dialog that just closed leaves while it lifts. It takes
-    /// no input: the window beneath is already the one being used.
-    pub(crate) fn render_menu_fade(&self) -> Option<AnyElement> {
+    /// What a popup that just closed leaves while it goes: a dialog's
+    /// dimming lifting, or All Devices sinking into the footer. Neither takes
+    /// input: the window beneath is already the one being used.
+    pub(crate) fn render_menu_leaving(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         if self.menu.page.is_some() {
-            return None;
+            return Vec::new();
         }
-        let shown = self.menu.appear.backdrop(motion::now());
-        (shown > 0.).then(|| {
+        let now = motion::now();
+        let shown = self.menu.appear.backdrop(now);
+        let fade = (shown > 0.).then(|| {
             div()
                 .id("menu-fade")
                 .debug_selector(|| "menu-fade".into())
@@ -124,7 +150,12 @@ impl HerdrWindow {
                 .inset_0()
                 .bg(backdrop(self.theme.background, shown))
                 .into_any_element()
-        })
+        });
+        let page = self.menu.appear.leaving(now).map(|(page, left)| {
+            self.render_menu_layer(page, Some(left), window, cx)
+                .into_any_element()
+        });
+        fade.into_iter().chain(page).collect()
     }
 }
 

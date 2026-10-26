@@ -201,9 +201,14 @@ impl HerdrWindow {
                 .absolute()
                 .inset_0()
                 .child(picker)
-                .child(self.render_menu_layer(window, cx));
+                .child(self.render_menu_layer(
+                    self.menu.page.unwrap_or(Page::Menu),
+                    None,
+                    window,
+                    cx,
+                ));
         }
-        self.render_menu_layer(window, cx)
+        self.render_menu_layer(self.menu.page.unwrap_or(Page::Menu), None, window, cx)
     }
 
     /// Places a footer menu beside its anchor, `lift` short of it while it
@@ -215,11 +220,7 @@ impl HerdrWindow {
         page: Page,
         lift: Pixels,
     ) -> Stateful<Div> {
-        let chrome = px(crate::titlebar::HEIGHT);
-        let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
-        let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
-        let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
-        let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
+        let (room, above) = self.footer_room(viewport);
         let list = matches!(page, Page::Devices | Page::Sessions);
         let width = if list {
             super::devices::MENU_WIDTH
@@ -239,7 +240,7 @@ impl HerdrWindow {
             .absolute()
             .left(left)
             .w(px(width).min((viewport.width - px(16.)).max(px(0.))));
-        if above >= below {
+        if above {
             panel
                 .bottom(
                     (viewport.height - self.menu.anchor.y
@@ -247,9 +248,24 @@ impl HerdrWindow {
                     .max(px(MENU_MARGIN))
                         - lift,
                 )
-                .max_h(above)
+                .max_h(room)
         } else {
-            panel.top(self.menu.anchor.y + px(12.) - lift).max_h(below)
+            panel.top(self.menu.anchor.y + px(12.) - lift).max_h(room)
+        }
+    }
+
+    /// The room a footer menu has, and whether it opens above its anchor,
+    /// as it does from the sidebar footer at the window's foot.
+    fn footer_room(&self, viewport: Size<Pixels>) -> (Pixels, bool) {
+        let chrome = px(crate::titlebar::HEIGHT);
+        let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
+        let room = |side: Pixels| side.clamp(px(0.), band).max(px(60.)).min(band);
+        let above = room(self.menu.anchor.y - px(12. + MENU_MARGIN) - chrome);
+        let below = room(viewport.height - self.menu.anchor.y - px(12. + MENU_MARGIN));
+        if above >= below {
+            (above, true)
+        } else {
+            (below, false)
         }
     }
 
@@ -267,8 +283,15 @@ impl HerdrWindow {
             && !page.pointer_anchored()
     }
 
-    fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
-        let page = self.menu.page.unwrap_or(Page::Menu);
+    /// Draws `page`: the open menu, or with `leaving` the one that just
+    /// closed, still showing that much of itself as it goes.
+    pub(super) fn render_menu_layer(
+        &self,
+        page: Page,
+        leaving: Option<f32>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let font = &self.config.ui;
         let theme = &self.theme;
         let viewport = window.viewport_size();
@@ -292,6 +315,7 @@ impl HerdrWindow {
         let dims = self.menu_dims();
         let now = crate::motion::now();
         let lift = self.menu.appear.offset(dims, now);
+        let rises = page == Page::Devices;
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
@@ -324,8 +348,18 @@ impl HerdrWindow {
                     // Lift the popup off the terminal behind it, as the pickers do.
                     .shadow_lg()
             })
-            .when(footer_anchored, |panel| {
+            // All Devices rises out of the footer that opened it, so a box in
+            // its place clips it on the way; see the end of this function.
+            .when(footer_anchored && !rises, |panel| {
                 self.anchor_footer_panel(panel, viewport, page, lift)
+            })
+            .when(rises, |panel| {
+                let (room, above) = self.footer_room(viewport);
+                let below = 1. - leaving.unwrap_or_else(|| self.menu.appear.panel(now));
+                panel
+                    .w_full()
+                    .max_h(room)
+                    .top(relative(if above { below } else { -below }))
             })
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside
@@ -548,7 +582,7 @@ impl HerdrWindow {
             .text_font(font)
             .text_size(px(font.size))
             .line_height(px(font.line_height()))
-            .opacity(self.menu.appear.panel(now))
+            .when(!rises, |panel| panel.opacity(self.menu.appear.panel(now)))
             // A popover drops from the pointer that opened it; a dialog rises.
             // Footer and usage panels have slid already, by their own edge.
             .when(
@@ -753,7 +787,8 @@ impl HerdrWindow {
             if dims {
                 cover.set(super::state::Cover::All);
             }
-            panel.when(!dims, |panel| {
+            // A menu on its way out no longer covers anything.
+            panel.when(!dims && leaving.is_none(), |panel| {
                 panel.child(
                     canvas(
                         // Laid out inside the panel's border; the margin takes
@@ -768,6 +803,42 @@ impl HerdrWindow {
                 )
             })
         };
+        let placed = if pointer_anchored {
+            let position = if page == Page::Git {
+                point(self.menu.anchor.x, px(crate::titlebar::HEIGHT + 6.))
+            } else {
+                self.menu.anchor
+            };
+            anchored()
+                .position(position)
+                // The "…" button sits at a strip's right end, so its menu
+                // hangs leftward from it, as an editor's does.
+                .when(matches!(page, Page::Group | Page::RemoteDevices), |menu| {
+                    menu.anchor(Anchor::TopRight)
+                })
+                .snap_to_window_with_margin(Edges::all(px(12.)))
+                .child(panel)
+                .into_any_element()
+        } else if rises {
+            self.anchor_footer_panel(
+                div().id("menu-rise").overflow_hidden(),
+                viewport,
+                page,
+                px(0.),
+            )
+            .child(panel)
+            // On its way out it takes no clicks: what they would act on
+            // has already closed.
+            .when(leaving.is_some(), |rise| {
+                rise.child(div().id("menu-rise-shield").absolute().inset_0().occlude())
+            })
+            .into_any_element()
+        } else {
+            panel.into_any_element()
+        };
+        if leaving.is_some() {
+            return div().id("menu-leaving").absolute().inset_0().child(placed);
+        }
         div()
             .id("menu-overlay")
             .debug_selector(|| "menu-overlay".into())
@@ -828,24 +899,6 @@ impl HerdrWindow {
                 }),
             )
             .on_key_down(cx.listener(Self::menu_key_down))
-            .child(if pointer_anchored {
-                let position = if page == Page::Git {
-                    point(self.menu.anchor.x, px(crate::titlebar::HEIGHT + 6.))
-                } else {
-                    self.menu.anchor
-                };
-                anchored()
-                    .position(position)
-                    // The "…" button sits at a strip's right end, so its menu
-                    // hangs leftward from it, as an editor's does.
-                    .when(matches!(page, Page::Group | Page::RemoteDevices), |menu| {
-                        menu.anchor(Anchor::TopRight)
-                    })
-                    .snap_to_window_with_margin(Edges::all(px(12.)))
-                    .child(panel)
-                    .into_any_element()
-            } else {
-                panel.into_any_element()
-            })
+            .child(placed)
     }
 }
