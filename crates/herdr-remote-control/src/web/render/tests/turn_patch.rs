@@ -19,7 +19,13 @@ fn turn_of(entries: Vec<Entry>, edit: impl FnOnce(&mut Transcript)) -> Turn {
 }
 
 fn user(id: u64, text: &str) -> Entry {
-    entry(id, EntryKind::User { text: text.into() })
+    entry(
+        id,
+        EntryKind::User {
+            text: text.into(),
+            files: 0,
+        },
+    )
 }
 
 fn agent(id: u64, text: &str) -> Entry {
