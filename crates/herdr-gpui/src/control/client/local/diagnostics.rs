@@ -173,7 +173,7 @@ fn overrides(path: &Path) -> String {
 }
 
 /// Settings whose text values name a choice, never a secret, and are kept.
-const PLAIN_TEXT_KEYS: [&str; 10] = [
+const PLAIN_TEXT_KEYS: [&str; 11] = [
     "theme",
     "family",
     "mode",
@@ -182,12 +182,14 @@ const PLAIN_TEXT_KEYS: [&str; 10] = [
     "placement",
     "channel",
     "open_links_in",
+    "link_click_modifier",
     "style",
     "sort",
 ];
 
 /// The overrides as `key = value` lines, never the file itself: numbers,
-/// booleans, and the text of plain choices are kept, and any other text is
+/// booleans, and the text of plain choices are kept, a list of them included
+/// (`link_click_modifier = ["none", "cmd"]`), and any other text is
 /// replaced by its length, so a secret under any key name, in any TOML form,
 /// stays out of the bundle. A file that does not parse is not quoted, as a
 /// parser error would echo its text.
@@ -205,6 +207,9 @@ fn summary(contents: &str) -> String {
 
 fn flatten(key: &str, value: &toml::Value, lines: &mut Vec<String>) {
     let name = key.rsplit('.').next().unwrap_or_default();
+    let plain =
+        PLAIN_TEXT_KEYS.iter().any(|plain| name.ends_with(plain)) && !redact::secret_name(name);
+    let kept = |text: &str| toml::Value::String(text.chars().take(200).collect());
     let shown = match value {
         toml::Value::Table(table) => {
             for (child, value) in table {
@@ -220,13 +225,18 @@ fn flatten(key: &str, value: &toml::Value, lines: &mut Vec<String>) {
         toml::Value::Boolean(_) | toml::Value::Integer(_) | toml::Value::Float(_) => {
             value.to_string()
         }
-        toml::Value::String(text)
-            if PLAIN_TEXT_KEYS.iter().any(|plain| name.ends_with(plain))
-                && !redact::secret_name(name) =>
-        {
-            toml::Value::String(text.chars().take(200).collect()).to_string()
-        }
+        toml::Value::String(text) if plain => kept(text).to_string(),
         toml::Value::String(text) => format!("<text, {} characters>", text.chars().count()),
+        toml::Value::Array(items) if plain && items.iter().all(toml::Value::is_str) => {
+            toml::Value::Array(
+                items
+                    .iter()
+                    .filter_map(toml::Value::as_str)
+                    .map(kept)
+                    .collect(),
+            )
+            .to_string()
+        }
         toml::Value::Array(items) => format!("<list of {}>", items.len()),
         toml::Value::Datetime(_) => "<date>".into(),
     };

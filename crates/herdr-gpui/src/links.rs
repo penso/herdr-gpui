@@ -191,6 +191,12 @@ impl LinkCell {
             && self.offset_from_bottom == other.offset_from_bottom
     }
 
+    /// Whether both cells are the same place in the same viewport, whatever
+    /// content it showed when each was read.
+    pub(crate) fn same_place(&self, other: &Self) -> bool {
+        self.same_viewport(other) && self.row == other.row && self.col == other.col
+    }
+
     /// Whether both cells read the same pane content, wherever in it they are.
     pub(crate) fn same_content(&self, other: &Self) -> bool {
         self.same_viewport(other) && self.content_revision == other.content_revision

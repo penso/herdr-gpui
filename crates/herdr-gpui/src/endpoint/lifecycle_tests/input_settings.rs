@@ -224,7 +224,7 @@ fn right_click_passthrough_wins_over_a_link_under_the_pointer(cx: &mut gpui::Tes
                 })
                 .collect();
             let position = mouse_position(view, 3.5, 4.5);
-            assert!(view.link_modifier_held(position, link_modifier));
+            assert!(view.link_modifier_held(position, MouseButton::Left, link_modifier));
             let right = MouseDownEvent {
                 position,
                 button: MouseButton::Right,

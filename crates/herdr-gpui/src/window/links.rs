@@ -1,10 +1,13 @@
 //! Links under the pointer. A pointer that only passes over text asks
-//! nothing and draws nothing. While the link modifier is held over a pane,
-//! the text there is verified and, once it is, underlined: a well-formed
-//! address at once, a file path when a check off the UI thread finds it on
-//! disk, and a web address through the daemon, which is asked which cells
-//! the link covers so that one wrapping onto the next row is underlined and
-//! opened whole.
+//! nothing and draws nothing, unless `highlight_links_on_hover` is set.
+//! While the link modifier (`link_click_modifier`) is held over a pane, or
+//! with that setting on, the text there is verified and, once it is,
+//! underlined: a well-formed address at once, a file path when a check off
+//! the UI thread finds it on disk, and a web address through the daemon,
+//! which is asked which cells the link covers so that one wrapping onto the
+//! next row is underlined and opened whole. Plain hover asks the daemon once
+//! per cell the pointer reaches, never again for a still pointer whose pane
+//! redraws.
 //!
 //! Only a click with the link modifier held opens a link. It goes to the
 //! daemon first when it offers activation, which lets a plugin link handler
@@ -262,10 +265,10 @@ impl HerdrWindow {
         })
     }
 
-    /// Follows the pointer and the link modifier. Without the modifier
-    /// nothing is read, asked, or shown; with it, the text under the pointer
-    /// is verified, and the daemon is asked about a cell no earlier answer
-    /// covers.
+    /// Follows the pointer and the link modifier. Without the modifier, and
+    /// without `highlight_links_on_hover`, nothing is read, asked, or shown;
+    /// otherwise the text under the pointer is verified, and the daemon is
+    /// asked about a cell no earlier answer covers.
     pub(crate) fn hover_link(
         &mut self,
         position: Point<Pixels>,
@@ -273,9 +276,10 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         self.links.pointer = Some((position, modifiers));
+        let looking = self.config.link_click_modifier.matches(modifiers)
+            || self.config.highlight_links_on_hover;
         let mut examined = false;
-        let local = modifiers
-            .secondary()
+        let local = looking
             .then(|| self.local_link_at(position))
             .flatten()
             .and_then(|link| {
@@ -302,10 +306,20 @@ impl HerdrWindow {
             self.links.local = local;
             cx.notify();
         }
-        let cell = (modifiers.secondary() && self.live.supports_link_resolve)
+        let cell = (looking && self.live.supports_link_resolve)
             .then(|| self.link_cell_at(position))
             .flatten();
         if cell == self.links.hover {
+            return;
+        }
+        // Without a key held, a pane redrawing under a still pointer is not
+        // a new look at its text: the old cell stays, so nothing is asked
+        // until the pointer reaches another cell. Its underline drops once
+        // the content it was read from is gone.
+        if !modifiers.modified()
+            && let (Some(cell), Some(hover)) = (&cell, &self.links.hover)
+            && cell.same_place(hover)
+        {
             return;
         }
         let shown = self.hovered_daemon_link().cloned();
@@ -425,14 +439,16 @@ impl HerdrWindow {
     }
 
     /// The link a press at `position` is on, by either reading. Only a press
-    /// with the link modifier held is one: a plain click selects, focuses, or
-    /// goes to the application, and never opens anything.
+    /// with the link modifier held is one: any other click selects, focuses,
+    /// or goes to the application, and never opens anything. When the
+    /// modifier is none or Shift, the press is also the start of a selection,
+    /// which a drag keeps; only a release that never left it opens the link.
     pub(crate) fn terminal_link_press(
         &self,
         position: Point<Pixels>,
         modifiers: Modifiers,
     ) -> Option<PressedLink> {
-        if !modifiers.secondary() {
+        if !self.config.link_click_modifier.matches(modifiers) {
             return None;
         }
         let url = self.terminal_link_at(position);

@@ -256,8 +256,9 @@ impl HerdrWindow {
                 // The configured passthrough is decided before links, as in
                 // Herdr's TUI: a right-click opens no link, so its modifier
                 // may be the link modifier. It never includes Shift.
-                (strip.modified() || !self.link_modifier_held(event.position, event.modifiers))
-                    .then_some((hit, strip))
+                (strip.modified()
+                    || !self.link_modifier_held(event.position, event.button, event.modifiers))
+                .then_some((hit, strip))
             })
         else {
             return false;

@@ -2489,6 +2489,19 @@ tests remain useful for cancellation and ordering, but do not exercise NSPastebo
 Cmd-click (Ctrl-click elsewhere) a link in a pane to open it. A click without
 the modifier opens nothing: it selects, focuses, or goes to the application.
 
+`link_click_modifier` changes the modifier: `"cmd"`, `"ctrl"`, `"shift"`, or a
+combination such as `"ctrl+shift"`, held exactly, or `"none"` for a plain click.
+Unset, it is Cmd (Ctrl elsewhere) with other keys such as Shift allowed as well.
+`"cmd"` is the Super key on Linux and the Windows key on Windows. A list such as
+`["none", "cmd"]` opens a link with any of its entries, here a plain click or
+Cmd-click, each still held exactly. Alt (Option on macOS) cannot be part of any
+entry, because holding Alt as well opens a link in the other target (see
+`open_links_in` and `open_files_in` below). Whatever the modifier, a drag that starts on a link selects text, and only a click that
+does not move opens it; with `"none"`, a plain click on a link opens it and a
+click anywhere else still goes to the application. The first click of a
+double-click is such a click, so with `"none"` double-clicking a link to
+select a word of it also opens it.
+
 Each visual element has one meaning:
 
 - **A dashed underline** marks text that may be a link and is not verified.
@@ -2510,6 +2523,10 @@ the text verified:
   `file://` address. Relative paths resolve against the pane's working
   directory. A backslash-escaped path, as a file drop pastes, names the
   unescaped file.
+
+With `highlight_links_on_hover = true`, text under the pointer is verified
+and underlined without the modifier too. Opening it still takes the modifier,
+and the hand cursor shows only while it is held.
 
 Verified text gets the solid underline and the hand cursor, and the modifier
 click opens it. In a mouse-aware application, the modifier click on a link
@@ -2624,8 +2641,9 @@ the daemon exposes to clients:
 Herdr UI is not an editor, but it can get you to the right line quickly,
 next to the agent that is changing the code.
 
-- **Open in your editor.** Cmd-click (Ctrl-click elsewhere) a printed path
-  such as `src/main.rs:42` to open it at that line in your terminal editor, in
+- **Open in your editor.** Cmd-click (Ctrl-click elsewhere, or the
+  `link_click_modifier` you set) a printed path such as `src/main.rs:42` to
+  open it at that line in your terminal editor, in
   a new pane split to the right of the pane that printed it. In a
   [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
   diff the same way. Quitting the editor closes its pane. When the editor is

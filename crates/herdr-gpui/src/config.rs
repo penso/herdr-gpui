@@ -29,6 +29,7 @@ mod fonts;
 mod github;
 mod keybindings;
 mod layout;
+mod link_click;
 mod notifications;
 mod omarchy;
 mod opensandbox;
@@ -104,6 +105,7 @@ pub use herdr_remote::config::SpritesConfig;
 #[cfg(feature = "sprites")]
 pub(crate) use herdr_remote::config::SpritesFields;
 pub use layout::{Density, Layout, LayoutMode, Style};
+pub use link_click::LinkClickModifier;
 pub(crate) use notifications::NotificationDelivery;
 pub use notifications::{
     BellConfig, ClipboardToast, ClipboardToastPosition, NotificationConfig, SoundConfig,
@@ -197,6 +199,9 @@ pub struct Config {
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
     pub github: GitHubConfig,
+    /// Underline a verified terminal link on plain hover, without the link
+    /// modifier. Opening it still takes `link_click_modifier`.
+    pub highlight_links_on_hover: bool,
     /// Font resolution searched for an icon font for the terminal and found
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
@@ -209,6 +214,8 @@ pub struct Config {
     pub(crate) keybinding_overrides: BTreeMap<String, Binding>,
     pub keybindings: Keymap,
     pub layout: Layout,
+    /// What is held to show and open a terminal link.
+    pub link_click_modifier: LinkClickModifier,
     /// Configured families, sorted, that font resolution found no installed
     /// family for; `diagnostic` reports them.
     pub(crate) missing_fonts: Vec<String>,
@@ -404,11 +411,13 @@ impl Default for Config {
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
+            highlight_links_on_hover: false,
             icon_font_missing: false,
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
             keybindings: Keymap::default(),
             layout: Layout::default(),
+            link_click_modifier: LinkClickModifier::default(),
             missing_fonts: Vec::new(),
             missing_weight: None,
             notification_overrides: NotificationSettings::default(),
@@ -487,9 +496,11 @@ struct Settings {
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
+    highlight_links_on_hover: Option<bool>,
     keep_selection_after_copy: Option<bool>,
     keybindings: BTreeMap<String, Binding>,
     layout: Layout,
+    link_click_modifier: LinkClickModifier,
     notifications: NotificationSettings,
     open_files_in: FileTarget,
     open_links_in: LinkTarget,
@@ -841,6 +852,7 @@ impl Config {
         config.confirm_close_tab = settings.confirm_close_tab.unwrap_or(true);
         config.confirm_close_workspace = settings.confirm_close_workspace.unwrap_or(true);
         config.focus_follows_mouse = settings.focus_follows_mouse.unwrap_or(true);
+        config.highlight_links_on_hover = settings.highlight_links_on_hover.unwrap_or(false);
         config.remove_merged_worktrees = settings.remove_merged_worktrees.unwrap_or(false);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_agents_header = settings.show_agents_header.unwrap_or(true);
@@ -872,6 +884,7 @@ impl Config {
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;
+        config.link_click_modifier = settings.link_click_modifier;
         config.code = settings.code;
         settings.px0.check()?;
         config.px0 = settings.px0;

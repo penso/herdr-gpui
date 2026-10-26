@@ -208,7 +208,11 @@ fn link_modifier_click_bypasses_mouse_reporting_only_on_links(cx: &mut gpui::Tes
         assert!(!view.terminal_link_hovered(link, Modifiers::default()));
         assert!(view.terminal_link_hovered(link, Modifiers::secondary_key()));
         assert!(!view.terminal_link_hovered(plain, Modifiers::secondary_key()));
-        assert!(!view.link_modifier_held(plain, Modifiers::secondary_key()));
+        assert!(!view.link_modifier_held(
+            plain,
+            gpui::MouseButton::Left,
+            Modifiers::secondary_key()
+        ));
     });
     cx.simulate_click(link, Modifiers::secondary_key());
     assert_eq!(cx.opened_url().as_deref(), Some("https://example.com/app"));
