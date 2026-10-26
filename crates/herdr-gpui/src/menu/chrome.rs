@@ -181,6 +181,7 @@ impl HerdrWindow {
                         .debug_selector(|| "session-picker-underlay".into()),
                     window.viewport_size(),
                     Page::Sessions,
+                    px(0.),
                 )
                 .overflow_y_scroll()
                 .p(px(6.))
@@ -205,11 +206,14 @@ impl HerdrWindow {
         self.render_menu_layer(window, cx)
     }
 
+    /// Places a footer menu beside its anchor, `lift` short of it while it
+    /// slides into place.
     fn anchor_footer_panel(
         &self,
         panel: Stateful<Div>,
         viewport: Size<Pixels>,
         page: Page,
+        lift: Pixels,
     ) -> Stateful<Div> {
         let chrome = px(crate::titlebar::HEIGHT);
         let band = (viewport.height - chrome - px(2. * MENU_MARGIN)).max(px(60.));
@@ -240,11 +244,12 @@ impl HerdrWindow {
                 .bottom(
                     (viewport.height - self.menu.anchor.y
                         + px(if list { super::devices::MENU_GAP } else { 12. }))
-                    .max(px(MENU_MARGIN)),
+                    .max(px(MENU_MARGIN))
+                        - lift,
                 )
                 .max_h(above)
         } else {
-            panel.top(self.menu.anchor.y + px(12.)).max_h(below)
+            panel.top(self.menu.anchor.y + px(12.) - lift).max_h(below)
         }
     }
 
@@ -284,6 +289,9 @@ impl HerdrWindow {
         // modal decision, not a continuation of the row it came from, so it
         // centres over a dimmed window the way the Herdr TUI's dialogs do.
         let pointer_anchored = page.pointer_anchored();
+        let dims = self.menu_dims();
+        let now = crate::motion::now();
+        let lift = self.menu.appear.offset(dims, now);
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
@@ -317,7 +325,7 @@ impl HerdrWindow {
                     .shadow_lg()
             })
             .when(footer_anchored, |panel| {
-                self.anchor_footer_panel(panel, viewport, page)
+                self.anchor_footer_panel(panel, viewport, page, lift)
             })
             .when(matches!(page, Page::Usage(_)), |panel| {
                 // Rises from the status bar segment that opened it, kept inside
@@ -334,7 +342,7 @@ impl HerdrWindow {
                             .min(viewport.width - width - px(MENU_MARGIN))
                             .max(px(MENU_MARGIN)),
                     )
-                    .bottom((viewport.height - self.menu.anchor.y).max(px(MENU_MARGIN)))
+                    .bottom((viewport.height - self.menu.anchor.y).max(px(MENU_MARGIN)) - lift)
                     .w(width)
                     .max_h((self.menu.anchor.y - chrome - px(MENU_MARGIN)).max(px(60.)))
                     .flex()
@@ -540,6 +548,13 @@ impl HerdrWindow {
             .text_font(font)
             .text_size(px(font.size))
             .line_height(px(font.line_height()))
+            .opacity(self.menu.appear.panel(now))
+            // A popover drops from the pointer that opened it; a dialog rises.
+            // Footer and usage panels have slid already, by their own edge.
+            .when(
+                !footer_anchored && !matches!(page, Page::Usage(_)),
+                |panel| panel.top(if dims { lift } else { -lift }),
+            )
             .occlude()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
@@ -729,7 +744,6 @@ impl HerdrWindow {
         } else {
             panel = panel.child(self.render_release_notes(cx));
         }
-        let dims = self.menu_dims();
         // On Windows pages sit above everything GPUI draws, so the menu says
         // what it covers: a dimmed dialog covers the window, a popover its
         // panel. Tests and native checks read it to find the menu.
@@ -771,7 +785,10 @@ impl HerdrWindow {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(rgba((theme.background << 8) | 0xb0))
+                    .bg(super::appear::backdrop(
+                        theme.background,
+                        self.menu.appear.backdrop(now),
+                    ))
             })
             .occlude()
             .track_focus(&self.menu.focus)

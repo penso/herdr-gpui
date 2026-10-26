@@ -98,6 +98,7 @@ impl Render for HerdrWindow {
         self.leave_vanished_region(window, cx);
         self.sync_backdrop(window, cx);
         self.tick_chrome(window, cx);
+        self.tick_menu_appear(window);
         if self
             .chats
             .glide(crate::motion::now(), self.config.chat.glide)
@@ -968,6 +969,7 @@ impl Render for HerdrWindow {
             .children(self.render_tab_ghost(cx))
             .children(self.render_toasts(window, cx))
             .children(self.render_file_transfer(window, cx))
+            .children(self.render_menu_fade())
             .when(self.menu.page.is_some(), |root| {
                 root.child(self.render_menu(window, cx))
             });
