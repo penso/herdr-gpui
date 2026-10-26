@@ -686,12 +686,13 @@ pub(super) enum SourceState {
 }
 
 /// A backend's state and count from each repository's `(state, held)`,
-/// where `held` is how many of its items that repository shows now. A sync
-/// keeps the count the chip showed, with a spinner for the dot; a failure or
-/// missing sign-in says so instead. When it synced is left to the log.
+/// where `held` is how many of its items that repository shows now, counted
+/// for a first sync that has no count of its own yet. A sync keeps the count
+/// the chip showed, with a spinner for the dot; a failure or missing sign-in
+/// says so instead. When it synced is left to the log.
 pub(super) fn source_summary(states: &[(&SyncState, usize)]) -> (SourceState, String) {
     let any = |wanted: fn(&SyncState) -> bool| states.iter().any(|(state, _)| wanted(state));
-    let syncing = any(|state| matches!(state, SyncState::Syncing));
+    let syncing = any(|state| matches!(state, SyncState::Syncing { .. }));
     if !syncing {
         if any(|state| matches!(state, SyncState::Failed(_))) {
             return (SourceState::Failed, "failed".to_owned());
@@ -700,13 +701,12 @@ pub(super) fn source_summary(states: &[(&SyncState, usize)]) -> (SourceState, St
             return (SourceState::SignIn, "sign in".to_owned());
         }
     }
-    let counted = any(|state| matches!(state, SyncState::Synced { .. } | SyncState::Capped { .. }));
+    let counted = any(|state| state.count().is_some());
     let count: usize = states
         .iter()
         .map(|(state, held)| match state {
-            SyncState::Synced { count, .. } | SyncState::Capped { count } => *count,
-            SyncState::Syncing => *held,
-            _ => 0,
+            SyncState::Syncing { count: None } => *held,
+            state => state.count().unwrap_or(0),
         })
         .sum();
     // A first sync has no count until it holds something.

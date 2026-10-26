@@ -1,7 +1,30 @@
 //! Which sources a repository has, which this build reads, and the GitLab
 //! CLI's say in whether a remote is a GitLab project.
 
-use super::{Provider, RepoInfo, SourceKey, SourceStatus, SyncState, gitlab};
+use super::{Provider, RepoInfo, SourceKey, SourceStatus, SyncState, Worker, gitlab};
+
+impl SyncState {
+    /// How many items the source's last sync reported, kept while it syncs
+    /// again; `None` before one has, or after one failed.
+    pub fn count(&self) -> Option<usize> {
+        match self {
+            Self::Synced { count, .. } | Self::Capped { count } => Some(*count),
+            Self::Syncing { count } => *count,
+            Self::SignIn | Self::Unsupported | Self::Failed(_) => None,
+        }
+    }
+}
+
+impl Worker {
+    /// Marks `key` syncing, keeping the count its last sync reported.
+    pub(super) fn set_syncing(&mut self, key: &SourceKey) {
+        if let Some(status) = self.snapshot.sources.iter_mut().find(|s| s.key == *key) {
+            status.state = SyncState::Syncing {
+                count: status.state.count(),
+            };
+        }
+    }
+}
 
 /// Makes `info`'s remote a GitLab source when glab knows its host; returns
 /// whether it changed. `cli` reads glab's config, only when needed.
@@ -21,7 +44,7 @@ pub(super) fn statuses(info: &RepoInfo) -> Vec<SourceStatus> {
         .map(|(key, supported)| SourceStatus {
             key,
             state: if supported {
-                SyncState::Syncing
+                SyncState::Syncing { count: None }
             } else {
                 SyncState::Unsupported
             },

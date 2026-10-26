@@ -57,7 +57,7 @@ fn refresh_spins_until_the_sync_it_asked_for_ends(cx: &mut TestAppContext) {
     cx.simulate_click(at, Modifiers::none());
     assert_eq!(cx.update(|_, cx| view.read(cx).refresh_asked), asked);
     // The worker's sync keeps it spinning; its end stops it.
-    set(cx, SyncState::Syncing);
+    set(cx, SyncState::Syncing { count: None });
     assert!(busy(cx));
     set(cx, SyncState::Capped { count: 3 });
     assert!(!busy(cx));

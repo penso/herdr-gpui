@@ -12,17 +12,26 @@ fn a_sync_keeps_the_count_the_chip_showed() {
     };
     // One repository syncing again, another done: both counts stay.
     assert_eq!(
-        source_summary(&[(&SyncState::Syncing, 3), (&synced, 5)]),
+        source_summary(&[(&SyncState::Syncing { count: None }, 3), (&synced, 5)]),
         (SourceState::Syncing, "8".to_owned())
     );
     // Syncing alone counts the items it already shows.
     assert_eq!(
-        source_summary(&[(&SyncState::Syncing, 335)]),
+        source_summary(&[(&SyncState::Syncing { count: None }, 335)]),
         (SourceState::Syncing, "335".to_owned())
+    );
+    // A later sync keeps the count its last one reported, even nothing.
+    assert_eq!(
+        source_summary(&[(&SyncState::Syncing { count: Some(0) }, 0)]),
+        (SourceState::Syncing, "0".to_owned())
+    );
+    assert_eq!(
+        source_summary(&[(&SyncState::Syncing { count: Some(7) }, 4)]),
+        (SourceState::Syncing, "7".to_owned())
     );
     // A first sync has nothing to count yet.
     assert_eq!(
-        source_summary(&[(&SyncState::Syncing, 0)]),
+        source_summary(&[(&SyncState::Syncing { count: None }, 0)]),
         (SourceState::Syncing, String::new())
     );
     assert_eq!(
@@ -38,7 +47,10 @@ fn a_failure_or_sign_in_shows_once_nothing_syncs() {
         SourceState::SignIn
     );
     assert_eq!(
-        source_summary(&[(&SyncState::SignIn, 0), (&SyncState::Syncing, 2)]),
+        source_summary(&[
+            (&SyncState::SignIn, 0),
+            (&SyncState::Syncing { count: None }, 2)
+        ]),
         (SourceState::Syncing, "2".to_owned())
     );
     assert_eq!(

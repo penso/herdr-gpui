@@ -21,7 +21,7 @@ fn a_mapping_added_after_opening_makes_the_remote_a_gitlab_source() {
         repository: "group/app".into(),
     };
     assert_eq!(status.key, expected, "the host and path keep their key");
-    assert!(matches!(status.state, SyncState::Syncing));
+    assert!(matches!(status.state, SyncState::Syncing { .. }));
     let remote = worker.snapshot.repo.as_ref().unwrap().remote.as_ref();
     assert_eq!(remote.map(|remote| &remote.source), Some(&expected));
 

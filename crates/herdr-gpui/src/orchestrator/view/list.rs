@@ -171,7 +171,7 @@ impl OrchestratorView {
                     || snapshot
                         .sources
                         .iter()
-                        .any(|status| matches!(status.state, SyncState::Syncing)))
+                        .any(|status| matches!(status.state, SyncState::Syncing { .. })))
         });
         let searching = !self.query.trim().is_empty();
         // The pills narrow both tabs; each tab also has its own filters.

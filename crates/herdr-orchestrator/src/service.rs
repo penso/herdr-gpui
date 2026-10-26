@@ -133,7 +133,10 @@ pub struct Notice {
 /// How one source is doing.
 #[derive(Clone, Debug)]
 pub enum SyncState {
-    Syncing,
+    /// With the count its last sync reported, shown until this one ends.
+    Syncing {
+        count: Option<usize>,
+    },
     Synced {
         at: DateTime<Utc>,
         count: usize,
@@ -706,7 +709,7 @@ impl Worker {
             if !supported || self.retry.iter().any(|(waiting, _)| *waiting == key) {
                 continue;
             }
-            self.set_state(&key, SyncState::Syncing);
+            self.set_syncing(&key);
             self.publish();
             // Only this source's own GitHub reply may set its pause: a delay
             // left by a pull request lookup or another source must not apply.
