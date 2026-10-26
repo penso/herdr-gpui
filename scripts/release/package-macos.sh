@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "$0")/common.sh"
-[[ $# == 7 ]] || fail 'Usage: bash package-macos.sh VERSION ARM64_BINARY X86_64_BINARY ARM64_REMOTE_CONTROL X86_64_REMOTE_CONTROL OUTPUT_DIR THIRD_PARTY_NOTICES'
+[[ $# == 5 ]] || fail 'Usage: bash package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR THIRD_PARTY_NOTICES'
 version_check "$1"
 [[ $(uname -s) == Darwin ]] || fail 'macOS required'
-[[ -f $2 && -f $3 && -d $6 ]] || fail 'Two binary files and an existing output directory required'
-# The remote control daemon the app runs as a user service (remote.rs).
-[[ -f $4 && -f $5 ]] || fail 'Two herdr-remote-control binary files required'
-[[ -f $7 && -s $7 ]] || fail 'Nonempty third-party notices file required'
-out=$(cd -- "$6" && pwd)/Herdr.app
+[[ -f $2 && -f $3 && -d $4 ]] || fail 'Two binary files and an existing output directory required'
+[[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
+# The app starts chats with the herdr-acp beside its executable and runs the
+# herdr-remote-control beside it as a user service; each build leaves both
+# beside its herdr-gpui.
+companions=(herdr-acp herdr-remote-control)
+for companion in "${companions[@]}"; do
+    [[ -f $(dirname -- "$2")/$companion && -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside each binary required"
+done
+out=$(cd -- "$4" && pwd)/Herdr.app
 new_output "$out"
 icons=$(python3 "$release_root/scripts/release/build-icon.py" macos "$2" "$3")
 icns=${icons%$'\n'*}
@@ -16,8 +21,10 @@ catalog=${icons##*$'\n'}
 [[ -f $icns && -f $catalog ]] || fail 'Could not select the macOS icons'
 [[ $(lipo -archs "$2") == arm64 ]] || fail 'First binary must be arm64 only'
 [[ $(lipo -archs "$3") == x86_64 ]] || fail 'Second binary must be x86_64 only'
-[[ $(lipo -archs "$4") == arm64 ]] || fail 'First herdr-remote-control must be arm64 only'
-[[ $(lipo -archs "$5") == x86_64 ]] || fail 'Second herdr-remote-control must be x86_64 only'
+for companion in "${companions[@]}"; do
+    [[ $(lipo -archs "$(dirname -- "$2")/$companion") == arm64 ]] || fail "First $companion must be arm64 only"
+    [[ $(lipo -archs "$(dirname -- "$3")/$companion") == x86_64 ]] || fail "Second $companion must be x86_64 only"
+done
 tmp=$(mktemp -d "${out%/*}/.herdr-assembly.XXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 trap 'exit 130' INT
@@ -25,8 +32,10 @@ trap 'exit 143' TERM
 app=$tmp/Herdr.app
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create "$2" "$3" -output "$app/Contents/MacOS/Herdr"
-lipo -create "$4" "$5" -output "$app/Contents/MacOS/herdr-remote-control"
-for executable in Herdr herdr-remote-control; do
+for companion in "${companions[@]}"; do
+    lipo -create "$(dirname -- "$2")/$companion" "$(dirname -- "$3")/$companion" -output "$app/Contents/MacOS/$companion"
+done
+for executable in Herdr "${companions[@]}"; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
@@ -46,7 +55,7 @@ cp "$catalog" "$app/Contents/Resources/Assets.car"
 cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$app/Contents/Resources/"
 cp "$release_root/crates/herdr-protocol/NOTICE.md" "$app/Contents/Resources/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$app/Contents/Resources/"
-cp "$7" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
+cp "$5" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$app/Contents/Resources/"
 mv "$app" "$out"
 printf '%s\n' "$out"

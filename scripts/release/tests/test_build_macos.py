@@ -27,7 +27,7 @@ class BuildMacosTests(unittest.TestCase):
             shutil.copyfile(SCRIPTS / name, scripts / name)
         shutil.copyfile(SCRIPTS.parent / "update-manifest.py", scripts.parent / "update-manifest.py")
         (scripts / "package-macos.sh").write_text(
-            'set -eu\n[[ ! -e sourced && $# == 7 && -s $7 ]]\nprintf "package\\n" >> calls\nmkdir "$6/Herdr.app"\n'
+            'set -eu\n[[ ! -e sourced && $# == 5 && -s $5 ]]\nprintf "package\\n" >> calls\nmkdir "$4/Herdr.app"\n'
             '[[ ${FAIL_PACKAGE:-0} == 0 ]]\n'
         )
         (scripts / "generate-notices.py").write_text(
@@ -114,8 +114,8 @@ class BuildMacosTests(unittest.TestCase):
         self.run_build(success=True)
         calls = (self.root / "calls").read_text().splitlines()
         self.assertEqual(calls[-4:], [
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-remote-control --target aarch64-apple-darwin",
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-remote-control --target x86_64-apple-darwin",
+            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control --target aarch64-apple-darwin",
+            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control --target x86_64-apple-darwin",
             "package", "sign",
         ])
         self.assertIn("Output already exists", self.run_build())

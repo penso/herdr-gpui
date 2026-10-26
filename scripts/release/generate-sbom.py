@@ -19,6 +19,7 @@ TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin",
 # so the shipped application's entry replaces the library's.
 # keep-sorted start
 SHIPPED = (
+    "herdr-acp",
     "herdr-remote-control",
 )
 # keep-sorted end

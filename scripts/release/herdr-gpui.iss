@@ -2,7 +2,11 @@
 ; `windows-installer.py build`, which passes the defines below. It installs the
 ; release zip's tree unchanged: herdr-gpui.exe, a console program because it is
 ; also the command line terminals and agents run, herdr-gpui-launcher.exe,
-; which starts it without a console window, and the licenses. It never installs, starts, or stops
+; which starts it without a console window, herdr-acp.exe, which the app starts
+; chats with, herdr-remote-control.exe, the remote control daemon the app runs as
+; a scheduled task, and the licenses. Closing applications before replacing files
+; also ends running chats, whose agents' sessions can be resumed, and Remote
+; control, which the app starts again. It never installs, starts, or stops
 ; the Herdr daemon, and uninstalling keeps settings and Herdr sessions.
 ; The directory and shortcut match site/install.ps1, so either replaces the other.
 
@@ -28,8 +32,6 @@
 #define AppName "Herdr UI"
 #define AppExe "herdr-gpui.exe"
 #define Launcher "herdr-gpui-launcher.exe"
-; The remote control daemon the app runs as a user service.
-#define RemoteControl "herdr-remote-control.exe"
 ; The app's AppUserModelID (herdr_updater::APP_ID), which each window carries with
 ; relaunch properties naming the launcher (src/taskbar.rs). Shortcuts carry it
 ; too, so a pinned shortcut and the window share one taskbar button.
@@ -84,7 +86,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#SourceDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceDir}\{#RemoteControl}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\herdr-acp.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\herdr-remote-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 ; Uninstall removes only directories Setup created. Over an install.ps1 copy

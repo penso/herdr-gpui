@@ -104,7 +104,8 @@ def build(version, target, archive, output_dir, iscc, sign=False):
                 raise ValueError("Release zip has entries outside its root")
             release.extractall(temp)
         source = Path(temp) / root
-        for required in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-remote-control.exe"):
+        for required in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
+                         "herdr-remote-control.exe"):
             if not (source / required).is_file():
                 raise ValueError(f"Release zip has no {required}")
         arguments = iscc_arguments(version, target, source, output_dir, sign)
@@ -276,8 +277,9 @@ def smoke(installer, signed=False):
 def check_installation(app, signed_installer):
     """`signed_installer` is the installer whose signatures to require along
     with the installed files', or None to skip signature checks."""
-    exe, launcher, remote_control = app / "herdr-gpui.exe", app / "herdr-gpui-launcher.exe", app / "herdr-remote-control.exe"
-    for path in (exe, launcher, remote_control, app / "licenses" / "THIRD-PARTY-NOTICES.txt"):
+    exe, launcher, acp = app / "herdr-gpui.exe", app / "herdr-gpui-launcher.exe", app / "herdr-acp.exe"
+    remote_control = app / "herdr-remote-control.exe"
+    for path in (exe, launcher, acp, remote_control, app / "licenses" / "THIRD-PARTY-NOTICES.txt"):
         if not path.is_file():
             raise ValueError(f"Installer did not install {path}")
     # herdr-gpui.exe is the command line, a console program (3); the launcher
@@ -294,7 +296,8 @@ def check_installation(app, signed_installer):
     if identity != ("Herdr UI", app_user_model_id(), str(launcher)):
         raise ValueError(f"Installed app or shortcut has the wrong identity: {identity}")
     if signed_installer is not None:
-        check_signed([signed_installer.resolve(), exe, launcher, remote_control, app / "unins000.exe"])
+        check_signed([signed_installer.resolve(), exe, launcher, acp, remote_control,
+                      app / "unins000.exe"])
     if str(app).lower() not in user_path_entries():
         raise ValueError("Installer did not add the app directory to the user PATH")
     check_uninstall_entry(app)

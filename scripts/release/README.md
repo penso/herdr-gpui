@@ -72,16 +72,14 @@ without one. For documentation-only commits, start a full run with
 ```sh
 cargo install cargo-about --version 0.9.2 --locked --features cli
 python3 scripts/release/generate-notices.py OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
-bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY ARM64_REMOTE_CONTROL X86_64_REMOTE_CONTROL OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
+bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/sign-macos.sh VERSION OUTPUT_DIR/Herdr.app OUTPUT_DIR
-bash scripts/release/package-linux.sh VERSION TARGET BINARY REMOTE_CONTROL OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
+bash scripts/release/package-linux.sh VERSION TARGET BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/render-cask.sh VERSION SHA256 > /path/to/rendered/herdr-gpui.rb
 ```
 
 macOS assembly requires Apple command-line tools. It produces unsigned
-`Herdr.app`, containing the universal GUI, the universal `herdr-remote-control`
-remote control daemon beside it in `Contents/MacOS` (signed on its own, with the
-hardened runtime and none of the app's entitlements, before the bundle), plist, icon, root `LICENSE` and `NOTICE`,
+`Herdr.app`, containing the universal GUI, plist, icon, root `LICENSE` and `NOTICE`,
 protocol license/attribution, Octicons license, and third-party notices.
 Both plist versions are set to the supplied version.
 The package floor is macOS 14.2 (`LSMinimumSystemVersion`; Homebrew can only
@@ -123,7 +121,11 @@ SIGKILL/power loss cannot be cleaned up. Apple security tools receive passwords
 as arguments, so the runner must not have untrusted local users. No GUI executable
 is run, including for version probing. Signing works on a copy of the input app.
 
-Both executable and bundle are explicitly signed with hardened runtime and secure
+The bundle holds three universal executables: `Contents/MacOS/Herdr`, the
+`herdr-acp` the app starts chats with, and `herdr-remote-control`, the remote
+control daemon it runs as a user service; `package-macos.sh` takes both from
+beside each architecture's `herdr-gpui`. Those two are signed first, without the
+app's entitlements, then `Herdr`, then the bundle, all with hardened runtime and secure
 timestamps. The zipped app must receive JSON status `Accepted`, then the app is
 stapled and validated. The DMG contains `Herdr.app` and an `/Applications` symlink;
 it is signed, separately notarized, stapled, and checked with codesign and
@@ -140,10 +142,12 @@ The release workflow builds both natively on Ubuntu 24.04 architecture runners,
 using the same `scripts/install-linux-deps.sh` library setup as CI. Both archives
 are mandatory in the single immutable asset manifest; signing, provenance and
 consumer verification cover both. The SBOM unions both Linux, both macOS, and
-the Windows target graphs. No separate per-platform manifest or publication job is used.
+the Windows target graphs, each the app's joined with those of the programs shipped beside it (`SHIPPED` in
+`generate-sbom.py`). No separate per-platform manifest or publication job is used.
 The caller must supply the matching release binary; packaging does not cross-build
 or resolve shared libraries. Output is `Herdr-VERSION-TARGET.tar.gz`, with a
-same-named root containing `bin/herdr-gpui`, a scalable SVG icon, desktop entry, license and
+same-named root containing `bin/herdr-gpui`, `bin/herdr-acp`, and
+`bin/herdr-remote-control` (both taken from beside the binary), a scalable SVG icon, desktop entry, license and
 notice under `share/`. Install that tree into a chosen prefix with its `bin` on
 PATH. Archives are not promised to be bit-for-bit reproducible.
 
@@ -170,10 +174,7 @@ the package again. When packaged dependencies change, update `DEPENDS` in
 The workflow separately packages `herdr-gpui-VERSION-TARGET-update.tar.gz` with
 `scripts/update-manifest.py package-linux`. This bounded USTAR contains exactly
 one regular executable named `herdr-gpui-VERSION-TARGET`, mode 0755; it does not
-replace or alter the manual archive's desktop/icon/license tree. It also does
-not carry `herdr-remote-control`, which the manual archive and the distribution
-packages install beside `herdr-gpui` in `bin/`, so an in-app update of a
-manual archive leaves that daemon at the version it was installed with. Both native
+replace or alter the manual archive's desktop/icon/license tree. Both native
 Linux builds and both macOS builds embed `HERDR_UPDATE_PUBLIC_KEY` and the
 validated `HERDR_RELEASE_VERSION` before packaging.
 
@@ -181,11 +182,12 @@ The Windows targets are `x86_64-pc-windows-msvc` and
 `aarch64-pc-windows-msvc`, built natively on `windows-2025` and
 `windows-11-arm` after clippy, the protocol/client suites and the CLI tests pass
 there. `scripts/release/package-windows.py VERSION TARGET BINARY LAUNCHER
-REMOTE_CONTROL OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
+OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
 zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named root
 containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
-installer's Start menu shortcut opens, the `herdr-remote-control.exe` remote
-control daemon, and `licenses/` holding the same license
+installer's Start menu shortcut opens, `herdr-acp.exe`, which the app starts
+chats with, `herdr-remote-control.exe`, the remote control daemon it runs as a
+scheduled task (both taken from beside `BINARY`), and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
 `scripts/release/windows-installer.py` then installs the pinned Inno Setup
@@ -230,7 +232,7 @@ fails instead of falling back to unsigned. When signing is on:
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
    `azure/artifact-signing-action` signs `herdr-gpui.exe`,
-   `herdr-gpui-launcher.exe`, and `herdr-remote-control.exe` with SHA-256 and an RFC 3161 timestamp from
+   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, and `herdr-remote-control.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended

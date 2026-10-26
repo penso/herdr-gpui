@@ -67,11 +67,13 @@
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
-          # herdr-remote-control is the remote control daemon the app runs as a
-          # user service from beside its executable, so both land in $out/bin.
+          # The app starts chats with the herdr-acp beside its executable, and
+          # runs the herdr-remote-control beside it as a user service.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
+            "-p"
+            "herdr-acp"
             "-p"
             "herdr-remote-control"
           ];

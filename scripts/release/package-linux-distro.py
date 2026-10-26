@@ -19,10 +19,9 @@ MAINTAINER = "Fabien Penso <fabienpenso@gmail.com>"
 ARCHES = {"x86_64-unknown-linux-gnu": "amd64", "aarch64-unknown-linux-gnu": "arm64"}
 # (nfpm packager, published extension)
 FORMATS = (("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst"))
-# herdr-remote-control is the remote control daemon the app runs as a user service.
-EXECUTABLES = ("bin/herdr-gpui", "bin/herdr-remote-control")
 TREE = {
-    *EXECUTABLES, "share/applications/so.pen.herdr-gpui.desktop",
+    "bin/herdr-acp", "bin/herdr-gpui", "bin/herdr-remote-control",
+    "share/applications/so.pen.herdr-gpui.desktop",
     "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
     *(f"share/licenses/herdr-gpui/{name}" for name in (
         "LICENSE", "NOTICE", "LICENSE-octicons", "LICENSE-APACHE", "NOTICE.md",
@@ -81,7 +80,7 @@ def config(version, target, root, mtime):
         "src": str(root / relative),
         "dst": f"/usr/{relative}",
         "type": "file",
-        "file_info": {"mode": 0o755 if relative in EXECUTABLES else 0o644, "mtime": mtime},
+        "file_info": {"mode": 0o755 if relative.startswith("bin/") else 0o644, "mtime": mtime},
     } for relative in sorted(TREE)]
     return {
         "name": "herdr-gpui",
