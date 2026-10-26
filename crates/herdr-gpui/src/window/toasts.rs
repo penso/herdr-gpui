@@ -286,7 +286,13 @@ impl HerdrWindow {
                     let shown = self.toast_motion.shown(&drawn.key, now);
                     let heights = self.toast_motion.heights.clone();
                     let key = drawn.key.clone();
-                    self.toast_card(drawn, look(shown, true, *navigable), cx)
+                    // Measured around the card, so the height counts its
+                    // border too.
+                    div()
+                        .relative()
+                        .w_full()
+                        .flex_none()
+                        .child(self.toast_card(drawn, look(shown, true, *navigable), cx))
                         .child(
                             canvas(
                                 move |bounds, _, _| {
@@ -307,7 +313,11 @@ impl HerdrWindow {
                 .leaving(now)
                 .filter(|(gone, _)| gone.drawn.corner == position)
                 .collect();
-            leaving.sort_by_key(|(gone, _)| gone.place);
+            let bottom = matches!(
+                position,
+                ToastHerdrPosition::BottomLeft | ToastHerdrPosition::BottomRight
+            );
+            leaving.sort_by_key(|(gone, _)| if bottom { gone.after } else { gone.before });
             for (gone, left) in leaving {
                 let card = self.toast_card(&gone.drawn, look(left, false, false), cx);
                 let room = div()
@@ -318,7 +328,11 @@ impl HerdrWindow {
                         room.h(height * left).mb(px(-GAP * (1. - left)))
                     })
                     .child(card);
-                cards.insert(gone.place.min(cards.len()), room.into_any_element());
+                let place = match bottom {
+                    true => cards.len().saturating_sub(gone.after),
+                    false => gone.before.min(cards.len()),
+                };
+                cards.insert(place, room.into_any_element());
             }
             if !cards.is_empty() {
                 corners.push(

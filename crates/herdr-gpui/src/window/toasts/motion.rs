@@ -44,8 +44,12 @@ pub(super) struct Drawn {
 pub(super) struct Leaving {
     pub(super) drawn: Drawn,
     since: Instant,
-    /// Where it sat among its corner's toasts, from the column's start.
-    pub(super) place: usize,
+    /// How many of its corner's toasts sat before it in the column, and
+    /// how many after. A top corner's stack grows from its first card, a
+    /// bottom corner's from its last, so each keeps its place from its own
+    /// anchored end.
+    pub(super) before: usize,
+    pub(super) after: usize,
     /// Its height as last laid out, the room that closes as it goes.
     pub(super) height: Option<Pixels>,
 }
@@ -85,14 +89,19 @@ impl ToastMotion {
             let heights = self.heights.borrow();
             for old in last {
                 if !drawn.iter().any(|toast| toast.key == old.key) {
+                    let stack: Vec<_> = last
+                        .iter()
+                        .filter(|toast| toast.corner == old.corner)
+                        .collect();
+                    let before = stack
+                        .iter()
+                        .position(|toast| toast.key == old.key)
+                        .unwrap_or_default();
                     self.leaving.push(Leaving {
                         drawn: old.clone(),
                         since: now,
-                        place: last
-                            .iter()
-                            .filter(|toast| toast.corner == old.corner)
-                            .position(|toast| toast.key == old.key)
-                            .unwrap_or_default(),
+                        before,
+                        after: stack.len().saturating_sub(before + 1),
                         height: heights.get(&old.key).copied(),
                     });
                 }
