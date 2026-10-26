@@ -80,9 +80,14 @@ ditto "$2" "$app"
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App version mismatch'
 [[ $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App build version mismatch'
 [[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 14.2 ]] || fail 'App minimum OS mismatch'
-for arch in arm64 x86_64; do
-    lipo "$app/Contents/MacOS/Herdr" -verify_arch "$arch"
+for executable in Herdr herdr-acp; do
+    for arch in arm64 x86_64; do
+        lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
+    done
 done
+# Nested code is signed before the app that seals it. herdr-acp is a command
+# line program and needs none of the app's entitlements.
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/herdr-acp"
 codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app/Contents/MacOS/Herdr"
 codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app"
 codesign --verify --deep --strict --verbose=2 "$app"

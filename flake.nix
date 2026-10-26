@@ -67,9 +67,12 @@
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
+          # The app starts chats with the herdr-acp beside its executable.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
+            "-p"
+            "herdr-acp"
           ];
           # The optimized CLI suite CI's main-branch build runs; the rest of
           # the workspace suite needs a desktop or a live daemon.

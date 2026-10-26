@@ -40,7 +40,9 @@ elif tool == "plutil" and args[0] == "-extract":
     print("14.2" if args[1] == "LSMinimumSystemVersion" else "20260920.3")
 elif tool == "lipo":
     if args[0] == "-archs":
-        print(Path(args[1]).name)
+        # A fixture is named for its architecture, or sits in a folder that is.
+        path = Path(args[1])
+        print(path.name if path.name in ("arm64", "x86_64") else path.parent.name)
     elif args[0] == "-create":
         Path(args[-1]).write_text("never execute this fixture")
     else:

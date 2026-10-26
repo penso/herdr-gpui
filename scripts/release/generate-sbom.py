@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate a CycloneDX union of default-feature release platform graphs."""
+"""Generate a CycloneDX union of default-feature release platform graphs: the
+app's, and that of the herdr-acp it ships."""
 
 import json
 import os
@@ -11,6 +12,15 @@ import sys
 TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin",
            "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
            "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
+
+
+def read(package):
+    document = json.loads(pathlib.Path(f"crates/{package}/sbom.json").read_text())
+    if document["bomFormat"] != "CycloneDX" or document["specVersion"] != "1.5":
+        raise ValueError("Unexpected SBOM format")
+    if not document.get("components") or not document.get("dependencies"):
+        raise ValueError("Empty SBOM graph")
+    return document
 
 
 def main():
@@ -25,16 +35,15 @@ def main():
         subprocess.run([shutil.which("cargo-cyclonedx"), "cyclonedx", "--format", "json",
                         "--spec-version", "1.5", "--all", "--target", target,
                         "--override-filename", "sbom"], env=env, check=True)
-        document = json.loads(pathlib.Path("crates/herdr-gpui/sbom.json").read_text())
-        if document["bomFormat"] != "CycloneDX" or document["specVersion"] != "1.5":
-            raise ValueError("Unexpected SBOM format")
-        if not document.get("components") or not document.get("dependencies"):
-            raise ValueError("Empty SBOM graph")
+        document = read("herdr-gpui")
         if bom is None:
             bom = document
         elif bom["metadata"]["component"] != document["metadata"]["component"]:
             raise ValueError("Platform SBOM roots differ")
-        for component in document["components"]:
+        # herdr-acp ships beside the app, so its graph joins the app's, with
+        # its root as one more component.
+        acp = read("herdr-acp")
+        for component in [*document["components"], acp["metadata"]["component"], *acp["components"]]:
             ref = component["bom-ref"]
             # A build-only dependency on one platform may be runtime on another.
             # Absent scope defaults conservatively to required; all other fields
@@ -51,7 +60,7 @@ def main():
                 scope = max(scope, previous_scope, key=scopes.index)
             component["scope"] = scope
             components[ref] = component
-        for dependency in document["dependencies"]:
+        for dependency in [*document["dependencies"], *acp["dependencies"]]:
             dependencies.setdefault(dependency["ref"], set()).update(dependency.get("dependsOn", []))
     bom["components"] = [components[ref] for ref in sorted(components)]
     bom["dependencies"] = [{"ref": ref, "dependsOn": sorted(edges)}
