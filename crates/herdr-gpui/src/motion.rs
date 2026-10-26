@@ -27,6 +27,7 @@ const DROP: f32 = 4.;
 /// A dropdown or small popover appearing: it fades in while dropping a few
 /// pixels into place, on the same curve as [`progress`]. `id` names it; GPUI
 /// plays the motion again each time an element of that id appears anew.
+/// Unit tests see it in place, so geometry checks need not wait it out.
 pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
     element: E,
     id: impl Into<ElementId>,
@@ -34,7 +35,10 @@ pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
     element.with_animation(
         id,
         gpui::Animation::new(duration(ENTER)).with_easing(|k| 1. - (1. - k).powi(3)),
-        |element, k| element.opacity(k).mt(px(-(1. - k) * DROP)),
+        |element, k| {
+            let k = if cfg!(test) { 1. } else { k };
+            element.opacity(k).mt(px(-(1. - k) * DROP))
+        },
     )
 }
 
