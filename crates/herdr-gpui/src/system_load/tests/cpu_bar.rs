@@ -57,7 +57,9 @@ fn cpu_bar_unknown_has_no_fill_and_stale_keeps_its_share() {
     assert_eq!(cpu_bar_text(&reading), "CPU measuring");
     reading.apply(Ok(Sample::default()));
     assert_eq!(cpu_bar_fill(&reading, &theme, 120.), None);
-    reading.apply(Err(crate::Error::SystemLoadOutput));
+    reading.apply(Err(crate::Error::SystemLoad(
+        crate::system_load::Error::Output,
+    )));
     assert_eq!(cpu_bar_fill(&reading, &theme, 120.), None);
     assert_eq!(cpu_bar_text(&reading), "CPU unavailable");
 
@@ -66,7 +68,9 @@ fn cpu_bar_unknown_has_no_fill_and_stale_keeps_its_share() {
         ..Sample::default()
     }));
     assert_eq!(cpu_bar_text(&reading), "CPU 90%");
-    reading.apply(Err(crate::Error::SystemLoadOutput));
+    reading.apply(Err(crate::Error::SystemLoad(
+        crate::system_load::Error::Output,
+    )));
     assert_eq!(
         cpu_bar_fill(&reading, &theme, 120.),
         Some((108., theme.muted))
