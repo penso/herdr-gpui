@@ -110,7 +110,7 @@ pub(super) struct ComposerParts {
     pub(super) attach: Stateful<Div>,
     /// The session's settings and the auto-accept switch.
     pub(super) settings: Vec<AnyElement>,
-    /// Context use and cost, once the agent reports them.
+    /// Context use, once the agent reports them.
     pub(super) usage: Option<Div>,
     pub(super) send: Stateful<Div>,
 }

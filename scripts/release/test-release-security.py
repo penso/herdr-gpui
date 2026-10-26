@@ -114,7 +114,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("secrets.", package)
         # Bash, so "$TARGET" and friends expand on the Windows runner.
         self.assertIn("    defaults:\n      run:\n        shell: bash\n", package)
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp --target "$TARGET"',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
                         'python scripts/release/windows-installer.py install-iscc',
                         'python scripts/release/windows-installer.py build "$VERSION" "$TARGET"',
@@ -155,8 +155,9 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", linux), [
             ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
             ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")])
-        for command in ('cargo build --locked --release -p herdr-gpui --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-acp --target "$TARGET"',
                         'python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"',
+                        '"target/$TARGET/release/herdr-acp" --help',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'name: linux-package-${{ matrix.target }}',
                         'bash scripts/release/package-linux.sh "$VERSION" "$TARGET"',
@@ -172,7 +173,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", windows), [
             ("windows-2025", "x86_64-pc-windows-msvc"),
             ("windows-11-arm", "aarch64-pc-windows-msvc")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp --target "$TARGET"',
                         'python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'python scripts/release/generate-notices.py',
@@ -363,7 +364,7 @@ class WindowsTrust(unittest.TestCase):
         for setting in ("timestamp-rfc3161: http://timestamp.acs.microsoft.com", "timestamp-digest: SHA256",
                         "file-digest: SHA256", "exclude-environment-credential: true",
                         "cache-dependencies: false", "name: windows-package-${{ matrix.target }}",
-                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n",
+                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n",
                         "name: windows-signed-${{ matrix.target }}"):
             self.assertIn(setting, sign)
         # Unpack, sign, check and repack, then sign the installer, then verify.
@@ -431,14 +432,24 @@ class WindowsTrust(unittest.TestCase):
 
 
 class SbomMerge(unittest.TestCase):
+    # The shipped herdr-acp's root, which joins the app's graph.
+    ACP = {"bom-ref": "herdr-acp", "name": "herdr-acp", "type": "application"}
+
     def generate(self, components):
-        documents = [{
+        # Per target, the app's document and then herdr-acp's.
+        documents = [document for component in components for document in ({
             "bomFormat": "CycloneDX", "specVersion": "1.5",
             "metadata": {"component": {"bom-ref": "herdr", "name": "herdr-gpui"}},
             "components": [component],
             "dependencies": [{"ref": "herdr", "dependsOn": ["libloading"]},
                              {"ref": "libloading", "dependsOn": []}],
-        } for component in components]
+        }, {
+            "bomFormat": "CycloneDX", "specVersion": "1.5",
+            "metadata": {"component": dict(self.ACP)},
+            "components": [dict(component)],
+            "dependencies": [{"ref": "herdr-acp", "dependsOn": ["libloading"]},
+                             {"ref": "libloading", "dependsOn": []}],
+        })]
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "union.json"
             with mock.patch.object(SBOM.sys, "argv", ["generate-sbom.py", str(output)]), \
@@ -460,9 +471,12 @@ class SbomMerge(unittest.TestCase):
                 bom = self.generate(components)
                 expected = ("required" if "required" in scopes or None in scopes else
                             "optional" if "optional" in scopes else "excluded")
-                self.assertEqual(bom["components"], [dict(components[0], scope=expected)])
+                self.assertEqual(bom["components"], [dict(self.ACP, scope="required"),
+                                                     dict(components[0], scope=expected)])
+                self.assertEqual(bom["metadata"]["component"]["bom-ref"], "herdr")
                 self.assertEqual(bom["dependencies"], [
                     {"ref": "herdr", "dependsOn": ["libloading"]},
+                    {"ref": "herdr-acp", "dependsOn": ["libloading"]},
                     {"ref": "libloading", "dependsOn": []}])
                 self.assertEqual(bom["metadata"]["properties"], [
                     {"name": "herdr:release:targets", "value": ",".join(SBOM.TARGETS)}])

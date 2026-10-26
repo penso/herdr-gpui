@@ -9,7 +9,8 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{
-    Choice, Command, ConfigOption, OptionCategory, OptionKind, OptionValue, Transcript, display,
+    Choice, Command, ConfigOption, OptionCategory, OptionKind, OptionValue, Transcript, Usage,
+    display,
 };
 
 /// The settings the header shows a button for, in order.
@@ -406,7 +407,7 @@ impl HerdrWindow {
         buttons
     }
 
-    /// How full the context window is, with what the session has cost.
+    /// How full the context window is.
     pub(super) fn render_chat_usage(&self, chat: &ChatPane) -> Option<Div> {
         let theme = &self.theme;
         let hues = Hues::of(theme);
@@ -423,14 +424,6 @@ impl HerdrWindow {
             _ => hues.green,
         };
         let filled = METER * f32::from(percent) / 100.;
-        let mut text = format!(
-            "{} / {}",
-            display::tokens(usage.used),
-            display::tokens(usage.size)
-        );
-        if let Some(cost) = usage.cost.as_ref().filter(|cost| cost.micros > 0) {
-            text.push_str(&format!(" \u{b7} {}", display::cost(cost)));
-        }
         Some(
             div()
                 .debug_selector(|| "chat-usage".into())
@@ -447,7 +440,7 @@ impl HerdrWindow {
                         .bg(rgb(theme.active))
                         .child(div().w(px(filled)).h_full().rounded_full().bg(rgb(color))),
                 )
-                .child(text),
+                .child(usage_label(usage)),
         )
     }
 
@@ -669,6 +662,16 @@ impl HerdrWindow {
             )
             .into_any_element()
     }
+}
+
+/// The context meter's label: tokens used of the window. What the session
+/// has cost stays out of the composer.
+fn usage_label(usage: &Usage) -> String {
+    format!(
+        "{} / {}",
+        display::tokens(usage.used),
+        display::tokens(usage.size)
+    )
 }
 
 #[cfg(test)]

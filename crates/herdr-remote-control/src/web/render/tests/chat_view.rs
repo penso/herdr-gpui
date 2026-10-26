@@ -15,6 +15,7 @@ fn the_latest_turn_is_in_focus_and_earlier_ones_fold() {
             1,
             EntryKind::User {
                 text: "first".into(),
+                files: 0,
             },
         ),
         entry(
@@ -27,6 +28,7 @@ fn the_latest_turn_is_in_focus_and_earlier_ones_fold() {
             3,
             EntryKind::User {
                 text: "second prompt".into(),
+                files: 0,
             },
         ),
         entry(
@@ -70,13 +72,7 @@ fn patches_cover_every_region_the_stream_replaces() {
         0,
     );
     let ids: Vec<_> = patches.iter().map(|(id, _)| *id).collect();
-    for id in [
-        "chat-head",
-        "chat-turn",
-        "chat-sheet",
-        "chat-settings",
-        "chat-composer",
-    ] {
+    for id in ["chat-head", "chat-sheet", "chat-settings", "chat-composer"] {
         assert!(ids.contains(&id));
         let (_, markup) = patches
             .iter()

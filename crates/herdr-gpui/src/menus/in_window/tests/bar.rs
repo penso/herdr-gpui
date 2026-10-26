@@ -53,8 +53,6 @@ fn bar_uses_every_shared_heading_and_stays_with_sidebar_hidden(cx: &mut TestAppC
         "application-menu-View",
         "application-menu-Terminal",
         "application-menu-Window",
-        #[cfg(feature = "qa-menu")]
-        "application-menu-QA",
     ] {
         assert!(cx.debug_bounds(selector).is_some());
     }

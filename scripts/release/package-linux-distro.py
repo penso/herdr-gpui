@@ -20,7 +20,7 @@ ARCHES = {"x86_64-unknown-linux-gnu": "amd64", "aarch64-unknown-linux-gnu": "arm
 # (nfpm packager, published extension)
 FORMATS = (("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst"))
 TREE = {
-    "bin/herdr-gpui", "share/applications/so.pen.herdr-gpui.desktop",
+    "bin/herdr-acp", "bin/herdr-gpui", "share/applications/so.pen.herdr-gpui.desktop",
     "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
     *(f"share/licenses/herdr-gpui/{name}" for name in (
         "LICENSE", "NOTICE", "LICENSE-octicons", "LICENSE-APACHE", "NOTICE.md",
@@ -79,7 +79,7 @@ def config(version, target, root, mtime):
         "src": str(root / relative),
         "dst": f"/usr/{relative}",
         "type": "file",
-        "file_info": {"mode": 0o755 if relative == "bin/herdr-gpui" else 0o644, "mtime": mtime},
+        "file_info": {"mode": 0o755 if relative.startswith("bin/") else 0o644, "mtime": mtime},
     } for relative in sorted(TREE)]
     return {
         "name": "herdr-gpui",

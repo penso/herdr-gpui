@@ -37,3 +37,25 @@ fn only_settings_without_a_button_go_behind_the_more_button() {
         .collect();
     assert_eq!(ids, ["variant", "second-model", "allow_all"]);
 }
+
+#[test]
+fn the_context_meter_leaves_out_the_cost() {
+    let usage = Usage {
+        cost: Some(herdr_chat_protocol::Cost {
+            currency: "USD".into(),
+            micros: 1_890_000,
+        }),
+        size: 1_000_000,
+        used: 109_100,
+    };
+    let label = usage_label(&usage);
+    assert!(!label.contains('$'), "{label}");
+    assert_eq!(
+        label,
+        format!(
+            "{} / {}",
+            display::tokens(109_100),
+            display::tokens(1_000_000)
+        )
+    );
+}

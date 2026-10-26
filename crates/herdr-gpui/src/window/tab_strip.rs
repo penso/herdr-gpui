@@ -2,6 +2,7 @@
 //! group lists the same tabs, as an editor's groups do; which one a group
 //! shows is its own choice.
 
+mod curved;
 mod dividers;
 mod launcher;
 
@@ -208,6 +209,9 @@ impl HerdrWindow {
         self.observe_strip(slot.id, listed, now);
         let scroll = self.strip_scroll(slot.id);
         let layout = self.tab_layout();
+        let (body, body_placer) = self
+            .tab_body(slot, pick.as_ref(), self.strip_side(), window)
+            .unzip();
         let faces = self.tab_context(slot, indicators);
         let mut built: Vec<(Pick, Stateful<Div>)> = Vec::new();
         let mut tabs = div()
@@ -222,7 +226,6 @@ impl HerdrWindow {
             .overflow_x_scroll()
             .track_scroll(&scroll)
             .px(px(layout.padding()))
-            .bg(self.fill().over(self.theme.surface, self.theme.surface))
             .text_color(rgb(self.theme.foreground));
         if let Some(snapshot) = &self.live.snapshot {
             for tab in snapshot.tabs.iter().filter(|t| {
@@ -301,6 +304,10 @@ impl HerdrWindow {
             .into_iter()
             .map(|(tab_pick, tab)| {
                 let selected = pick.as_ref() == Some(&tab_pick);
+                let tab = match &body_placer {
+                    Some(placer) if selected => tab.child(placer.target()),
+                    _ => tab,
+                };
                 self.draggable_tab(slot, tab_pick, tab, selected, drag.as_ref(), cx)
             })
             .collect();
@@ -331,6 +338,9 @@ impl HerdrWindow {
             .flex()
             .flex_shrink_1()
             .min_w_0()
+            // The list's fill, here rather than on the list so the body,
+            // laid over the list, draws above it.
+            .bg(self.fill().over(self.theme.surface, self.theme.surface))
             .on_drag_move(
                 cx.listener(move |this, event: &DragMoveEvent<ThumbDrag>, _, cx| {
                     let ThumbDrag(group) = *event.drag(cx);
@@ -339,6 +349,10 @@ impl HerdrWindow {
                     }
                 }),
             )
+            // Beside the tab list rather than in it, so the body neither
+            // counts toward what the list scrolls nor shifts its tabs'
+            // indices; first, so every tab draws over it.
+            .children(body)
             .child(tabs.flex_shrink_1().min_w_0())
             .children(self.strip_thumb(slot.id).map(|thumb| {
                 div()
@@ -698,6 +712,14 @@ impl HerdrWindow {
             .into_any_element()
     }
 
+    /// Which side of a group's content its strip sits on.
+    fn strip_side(&self) -> curved::Side {
+        match self.tab_bar_position() {
+            TabBarPosition::Bottom => curved::Side::Below,
+            TabBarPosition::Top => curved::Side::Above,
+        }
+    }
+
     /// Where Herdr's shared config puts the tab row.
     pub(crate) fn tab_bar_position(&self) -> TabBarPosition {
         self.settings
@@ -739,6 +761,7 @@ impl HerdrWindow {
     ) -> AnyElement {
         let strip = (!self.strip_hidden(slot.id, cx))
             .then(|| self.render_tab_strip(slot, ends, window, cx));
+        let strip_side = strip.is_some().then(|| self.strip_side());
         let bottom = self.tab_bar_position() == TabBarPosition::Bottom;
         let linked = self
             .live
@@ -766,6 +789,7 @@ impl HerdrWindow {
                 .child(body),
             self.fill().ground(),
         );
+        let body = self.content_card(slot, body, strip_side);
         let column = div()
             .id(SharedString::from(slot.selector("group")))
             .debug_selector(move || slot.selector("group"))

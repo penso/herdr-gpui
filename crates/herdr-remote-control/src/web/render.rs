@@ -15,7 +15,7 @@ mod status;
 mod terminal;
 
 pub(crate) use ansi::screen;
-pub(crate) use chat::{chat, chat_history, chat_patches};
+pub(crate) use chat::{Turn, TurnPatch, chat, chat_history, chat_patches};
 pub(crate) use home::{Lists, board, home, no_match, search, urlencode};
 pub(crate) use pages::{Folders, devices, new_chat, new_workspace};
 pub(crate) use status::status_mark;

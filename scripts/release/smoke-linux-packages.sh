@@ -26,10 +26,13 @@ arch=archlinux:latest@sha256:f3691b4dde62ba4c4b6f0ae2c1fbf28e8c0c8c4b9a35c7e06dc
 check='
 set -euo pipefail
 /usr/bin/herdr-gpui --help >/dev/null
+/usr/bin/herdr-acp --help >/dev/null
 # Capture before matching: with pipefail, grep -q exiting early would fail the
 # writer with SIGPIPE and turn a present library into a false failure.
-linked=$(ldd /usr/bin/herdr-gpui)
-if grep "not found" <<<"$linked"; then exit 1; fi
+for program in herdr-gpui herdr-acp; do
+    linked=$(ldd "/usr/bin/$program")
+    if grep "not found" <<<"$linked"; then exit 1; fi
+done
 cache=$(ldconfig -p)
 for library in libvulkan.so.1 libwayland-client.so.0; do
     grep -q "^[[:space:]]*$library " <<<"$cache" || { echo "missing dlopen target $library" >&2; exit 1; }

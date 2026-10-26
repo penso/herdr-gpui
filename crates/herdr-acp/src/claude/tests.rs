@@ -74,7 +74,7 @@ impl FakeClaude {
 }
 
 /// Feeds what the bridge delivers to the session until `done` holds.
-fn pump<R: FnMut(crate::session::Activity)>(
+fn pump<R: FnMut(crate::session::Update)>(
     session: &mut Session<R>,
     delivered: &Receiver<Inbound>,
     done: impl Fn(&Session<R>) -> bool,
@@ -166,7 +166,7 @@ fn a_whole_turn_reaches_the_transcript_through_the_bridge() {
         .iter()
         .map(|entry| &entry.kind)
         .collect();
-    assert!(matches!(kinds[0], EntryKind::User { text } if text == "Say hello"));
+    assert!(matches!(kinds[0], EntryKind::User { text, .. } if text == "Say hello"));
     assert!(matches!(kinds[1], EntryKind::Agent { text } if text == "Hello"));
     assert!(
         matches!(kinds[2], EntryKind::Turn(summary) if summary.tokens.is_some_and(|tokens| tokens.output == 2))

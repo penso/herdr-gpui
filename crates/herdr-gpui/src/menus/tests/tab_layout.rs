@@ -3,7 +3,10 @@ use super::*;
 #[test]
 fn view_menu_lists_every_tab_layout_and_checks_the_current_one() {
     for &current in TabLayoutMode::ALL {
-        let menus = menus(Layout::default(), current);
+        let menus = menus(&Config {
+            tab_layout: current,
+            ..Config::default()
+        });
         let view = menus
             .iter()
             .find(|menu| menu.name.as_ref() == "View")

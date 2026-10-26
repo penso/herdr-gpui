@@ -3,7 +3,8 @@
 //! session's settings (model, thinking level, mode).
 
 use crate::{
-    Command, ConfigOption, OptionCategory, OptionKind, OptionValue, SlashCommand, Transcript,
+    ATTACHED, Command, CommandId, ConfigOption, EntryId, EntryKind, OptionCategory, OptionKind,
+    OptionValue, SlashCommand, Transcript,
 };
 
 /// Commands offered for completion at most.
@@ -28,24 +29,55 @@ pub fn completions<'a>(transcript: &'a Transcript, text: &str) -> Vec<&'a SlashC
         .collect()
 }
 
-/// Prompts sent from this view, newest last, and where recall stands.
+/// Recalling earlier prompts: the session's own, sent from any client or
+/// replayed from its history, then those still queued, newest last.
 #[derive(Default)]
 pub struct History {
+    /// The prompts being stepped through, taken when recall starts so the
+    /// transcript growing meanwhile does not shift them.
     prompts: Vec<String>,
     /// The index being shown, while the user steps through.
     at: Option<usize>,
+    /// The prompt this view sent last, until the transcript shows it, so it
+    /// recalls before the program echoes it, or when it refused it.
+    sent: Option<Sent>,
+}
+
+/// A prompt this view sent, and what the session already held then: only
+/// an entry or queued prompt newer than those can be its echo, not an
+/// earlier prompt with its text. Ids stay put when the transcript trims.
+struct Sent {
+    prompt: String,
+    after: Option<EntryId>,
+    queued: Vec<CommandId>,
+}
+
+impl Sent {
+    fn shown(&self, transcript: &Transcript) -> bool {
+        let entries = transcript
+            .entries
+            .iter()
+            .filter(|entry| self.after.is_none_or(|after| entry.id > after))
+            .filter_map(|entry| typed_entry(&entry.kind));
+        let queued = transcript
+            .queued
+            .iter()
+            .filter(|queued| !self.queued.contains(&queued.id))
+            .map(|queued| queued.text.as_str());
+        entries.chain(queued).any(|prompt| prompt == self.prompt)
+    }
 }
 
 impl History {
-    pub fn push(&mut self, prompt: &str) {
+    /// Notes a prompt this view sent to the session `transcript` mirrors,
+    /// and ends recall.
+    pub fn push(&mut self, prompt: &str, transcript: &Transcript) {
         self.at = None;
-        if self.prompts.last().map(String::as_str) == Some(prompt) {
-            return;
-        }
-        if self.prompts.len() == HISTORY {
-            self.prompts.remove(0);
-        }
-        self.prompts.push(prompt.to_owned());
+        self.sent = Some(Sent {
+            prompt: prompt.to_owned(),
+            after: transcript.last_entry_id(),
+            queued: transcript.queued.iter().map(|queued| queued.id).collect(),
+        });
     }
 
     pub fn recalling(&self) -> bool {
@@ -57,11 +89,14 @@ impl History {
     }
 
     /// The prompt before the one shown, or the newest.
-    pub fn older(&mut self) -> Option<&str> {
+    pub fn older(&mut self, transcript: &Transcript) -> Option<&str> {
         let at = match self.at {
             Some(0) => 0,
             Some(at) => at - 1,
-            None => self.prompts.len().checked_sub(1)?,
+            None => {
+                self.collect(transcript);
+                self.prompts.len().checked_sub(1)?
+            }
         };
         self.at = Some(at);
         self.prompts.get(at).map(String::as_str)
@@ -77,6 +112,58 @@ impl History {
         self.at = Some(at);
         self.prompts.get(at).map(String::as_str)
     }
+
+    fn collect(&mut self, transcript: &Transcript) {
+        if self
+            .sent
+            .as_ref()
+            .is_some_and(|sent| sent.shown(transcript))
+        {
+            self.sent = None;
+        }
+        let mut recalled: Vec<String> = Vec::new();
+        let sent = self.sent.as_ref().map(|sent| sent.prompt.as_str());
+        for prompt in prompts(transcript).chain(sent) {
+            if prompt.trim().is_empty() || recalled.last().is_some_and(|last| last == prompt) {
+                continue;
+            }
+            recalled.push(prompt.to_owned());
+        }
+        let skip = recalled.len().saturating_sub(HISTORY);
+        recalled.drain(..skip);
+        self.prompts = recalled;
+    }
+}
+
+/// Every prompt in the session, as the user typed it, oldest first: those
+/// the transcript shows, then those still queued.
+fn prompts(transcript: &Transcript) -> impl Iterator<Item = &str> {
+    let shown = transcript
+        .entries
+        .iter()
+        .filter_map(|entry| typed_entry(&entry.kind));
+    shown.chain(transcript.queued.iter().map(|queued| queued.text.as_str()))
+}
+
+fn typed_entry(kind: &EntryKind) -> Option<&str> {
+    match kind {
+        EntryKind::User { text, files } => Some(typed(text, *files)),
+        _ => None,
+    }
+}
+
+/// A prompt's text without the `files` lines the transcript added after it,
+/// one per file it carried.
+fn typed(shown: &str, files: usize) -> &str {
+    let mut text = shown;
+    for _ in 0..files {
+        match text.rsplit_once('\n') {
+            Some((before, line)) if line.starts_with(ATTACHED) => text = before,
+            None if text.starts_with(ATTACHED) => return "",
+            _ => break,
+        }
+    }
+    text
 }
 
 /// The command that moves `option` one choice along (`step` of 1 or -1),

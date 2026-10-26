@@ -6,14 +6,14 @@ use herdr_chat_protocol::{
     PermissionId, Queued, Rejection, Status, Turn,
 };
 
-use super::{Activity, ConnId, Pending, Session};
+use super::{ConnId, Pending, Session, Update};
 
 /// Prompts waiting behind a turn, and their text in bytes: the queue is
 /// copied into every change and snapshot, so it stays well inside a frame.
 const MAX_QUEUED: usize = 32;
 const MAX_QUEUED_TEXT: usize = 1024 * 1024;
 
-impl<R: FnMut(Activity)> Session<R> {
+impl<R: FnMut(Update)> Session<R> {
     pub(super) fn command(&mut self, conn: ConnId, id: CommandId, command: Command) {
         if let Some((_, rejected)) = self.handled.iter().find(|(handled, _)| *handled == id) {
             let rejected = *rejected;
@@ -93,10 +93,10 @@ impl<R: FnMut(Activity)> Session<R> {
             if !shown.is_empty() {
                 shown.push('\n');
             }
-            shown.push_str("\u{1f4ce} ");
+            shown.push_str(herdr_chat_protocol::ATTACHED);
             shown.push_str(attachment.name());
         }
-        let prompt = self.projector.prompt(&shown);
+        let prompt = self.projector.prompt(&shown, attachments.len());
         self.emit(prompt);
         let mut blocks = Vec::with_capacity(prepared.len() + 1);
         if !text.trim().is_empty() {
@@ -111,6 +111,8 @@ impl<R: FnMut(Activity)> Session<R> {
         }
         let request = wire::PromptRequest::new(session, blocks);
         if self.request("session/prompt", &request, Pending::Prompt) {
+            // Only a prompt the agent received names the chat.
+            (self.report)(Update::Prompt(shown));
             self.turn = Some(self.next_request);
             self.emit(Change::Turn {
                 turn: Some(Turn {
