@@ -185,7 +185,11 @@ pub(in crate::settings_window) fn number(
         _ => theme.active,
     };
     let shown = match editing {
-        Some(edit) => div().w(width).child(edit.input.clone()).into_any_element(),
+        Some(edit) => div()
+            .w(width)
+            .px(px(6.))
+            .child(edit.input.clone())
+            .into_any_element(),
         None => div()
             .id((ElementId::from(id), "value"))
             .w(width)

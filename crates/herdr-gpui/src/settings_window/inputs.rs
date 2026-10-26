@@ -171,6 +171,8 @@ impl SettingsWindow {
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_text_selected(&format!("{}", value as i64), cx);
+            // The number's field already draws the frame.
+            input.set_frameless(cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let focus = input.read(cx).focus.clone();
