@@ -62,7 +62,10 @@ pub(super) async fn claim(
     let app = headers
         .get(header::ORIGIN)
         .and_then(|origin| origin.to_str().ok())
-        .filter(|origin| !state.admits(origin))
+        // Every device paired from another computer's app records that
+        // origin, even one already admitted for another device, so revoking
+        // one leaves the others working.
+        .filter(|origin| !state.serves(origin))
         .map(|origin| app_origin(origin).ok_or(ApiError::Invalid("the app's origin is not valid")))
         .transpose()?;
     let claim = with_auth(&state, move |auth| {

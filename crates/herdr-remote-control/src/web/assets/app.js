@@ -67,7 +67,10 @@ function writeJson(storage, key, value) {
 
 function hosts() {
   const list = readJson(localStorage, HOSTS);
-  return Array.isArray(list) ? list.filter((host) => host?.id && host.fingerprint) : [];
+  if (Array.isArray(list)) return list.filter((host) => host?.id && host.fingerprint);
+  // Not moved yet (`migrate`): the one computer an older version paired.
+  const legacy = readJson(localStorage, DEVICE);
+  return legacy?.id && legacy.fingerprint ? [legacy] : [];
 }
 
 function saveHosts(list) {
@@ -78,6 +81,8 @@ function saveHosts(list) {
 /// Shows `host` from now on: it moves first, replacing an older pairing
 /// with the same computer.
 function useHost(host) {
+  // Keys and pastes still queued were typed into the other computer's panes.
+  if (app.device && app.device.fingerprint !== host.fingerprint) term.queue = [];
   saveHosts([host, ...hosts().filter((other) => other.fingerprint !== host.fingerprint)]);
   if (app.session?.device !== host.id) app.session = null;
 }
@@ -92,19 +97,31 @@ function keepHost(host) {
 }
 
 /// Moves the one computer an older version paired, and its key, into the
-/// list. Its key stays where it was until the move is saved.
+/// list. Nothing old is deleted until the new copies are saved: a storage
+/// failure leaves the pairing where it was (`hosts` and `loadKey` read it
+/// there) and the next launch tries again.
 async function migrate() {
   const legacy = readJson(localStorage, DEVICE);
   if (!legacy) return;
-  if (legacy.id && legacy.fingerprint && !hosts().some((host) => host.fingerprint === legacy.fingerprint)) {
-    const pair = await keyStore("readonly", (store) => store.get("device")).catch(() => null);
-    if (pair) await saveKey(legacy, pair);
-    saveHosts([...hosts(), legacy]);
-    // Any push subscription was that computer's, the only one there was.
-    if (!readJson(localStorage, PUSH_HOST)) writeJson(localStorage, PUSH_HOST, legacy.fingerprint);
+  try {
+    if (legacy.id && legacy.fingerprint) {
+      const pair = await keyStore("readonly", (store) => store.get("device"));
+      if (pair) await saveKey(legacy, pair);
+      const list = readJson(localStorage, HOSTS);
+      const known = Array.isArray(list) ? list : [];
+      if (!known.some((host) => host.fingerprint === legacy.fingerprint)) {
+        writeJson(localStorage, HOSTS, [...known, legacy].slice(0, MAX_HOSTS));
+      }
+      const saved = readJson(localStorage, HOSTS);
+      if (!Array.isArray(saved) || !saved.some((host) => host.fingerprint === legacy.fingerprint)) return;
+      // Any push subscription was that computer's, the only one there was.
+      if (!readJson(localStorage, PUSH_HOST)) writeJson(localStorage, PUSH_HOST, legacy.fingerprint);
+    }
+    writeJson(localStorage, DEVICE, null);
+    await keyStore("readwrite", (store) => store.delete("device"));
+  } catch {
+    // Storage is unavailable now; the next launch tries again.
   }
-  writeJson(localStorage, DEVICE, null);
-  await keyStore("readwrite", (store) => store.delete("device")).catch(() => {});
 }
 
 // ---- bytes ----
@@ -137,7 +154,13 @@ function keyStore(mode, action) {
 }
 
 const keyName = (host) => `device:${host.id}`;
-const loadKey = (host) => keyStore("readonly", (store) => store.get(keyName(host)));
+/// `host`'s key, or the one an older version kept for its only computer
+/// while `migrate` has not moved it.
+async function loadKey(host) {
+  const key = await keyStore("readonly", (store) => store.get(keyName(host)));
+  if (key || readJson(localStorage, DEVICE)?.id !== host.id) return key;
+  return keyStore("readonly", (store) => store.get("device"));
+}
 const saveKey = (host, pair) => keyStore("readwrite", (store) => store.put(pair, keyName(host)));
 const dropKey = (host) => keyStore("readwrite", (store) => store.delete(keyName(host)));
 
@@ -1013,7 +1036,9 @@ function switchHost(fingerprint) {
   start();
 }
 
-const scan = { stream: null, timer: 0 };
+// `attempt` counts scans started and stopped, so one cancelled while the
+// camera starts stops the stream it gets.
+const scan = { stream: null, timer: 0, attempt: 0 };
 
 /// Loads the QR decoder the first time a code is scanned.
 function loadDecoder() {
@@ -1030,14 +1055,18 @@ function loadDecoder() {
 /// Scans a pairing code with the camera and pairs with its computer.
 async function startScan() {
   show("t-scan");
+  const attempt = scan.attempt;
   const state = view().querySelector("[data-scan-state]");
   const video = view().querySelector("video");
   try {
     await loadDecoder();
-    scan.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    video.srcObject = scan.stream;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    if (attempt !== scan.attempt) return stream.getTracks().forEach((track) => track.stop());
+    scan.stream = stream;
+    video.srcObject = stream;
     await video.play();
   } catch (error) {
+    if (attempt !== scan.attempt) return;
     stopScan();
     state.textContent =
       error.name === "NotAllowedError"
@@ -1071,6 +1100,7 @@ async function startScan() {
 }
 
 function stopScan() {
+  scan.attempt += 1;
   clearTimeout(scan.timer);
   scan.stream?.getTracks().forEach((track) => track.stop());
   scan.stream = null;
@@ -1196,6 +1226,11 @@ async function forget() {
     writeJson(localStorage, PUSH_HOST, null);
   }
   if (host) await dropKey(host).catch(() => {});
+  // A pairing `migrate` has not moved yet would come back on the next launch.
+  if (host && readJson(localStorage, DEVICE)?.id === host.id) {
+    writeJson(localStorage, DEVICE, null);
+    await keyStore("readwrite", (store) => store.delete("device")).catch(() => {});
+  }
   saveHosts(hosts().filter((other) => other.fingerprint !== host?.fingerprint));
   app.session = null;
   app.origin = null;

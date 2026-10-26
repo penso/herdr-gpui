@@ -122,6 +122,49 @@ async fn the_computers_list_is_served_as_the_shell() {
 }
 
 #[tokio::test]
+async fn revoking_one_phone_leaves_another_from_the_same_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state(dir.path());
+    let mut devices = Vec::new();
+    for _ in 0..2 {
+        let (offer, _, claim) = claim(&state, APP).await;
+        control(
+            &state,
+            Request::Approve {
+                id: offer.id,
+                allow: true,
+                code: claim["code"].as_str().unwrap().to_owned(),
+            },
+        );
+        devices.push(
+            state
+                .auth()
+                .devices()
+                .list(|_| false)
+                .last()
+                .unwrap()
+                .id
+                .clone(),
+        );
+    }
+    let apps: Vec<_> = devices
+        .iter()
+        .map(|id| state.auth().devices().get(id).unwrap().app.clone())
+        .collect();
+    assert_eq!(apps, vec![Some(APP.to_owned()), Some(APP.to_owned())]);
+    control(
+        &state,
+        Request::Revoke {
+            device: devices[0].clone(),
+        },
+    );
+    assert_eq!(
+        send(&state, from(APP, get("/api/ping"))).await.0,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
 async fn a_denied_claim_admits_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let state = state(dir.path());

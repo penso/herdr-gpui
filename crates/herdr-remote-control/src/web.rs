@@ -96,11 +96,16 @@ impl State {
     /// Whether `origin` may call the API: one served now or before, or an
     /// app a paired device uses.
     pub(crate) fn admits(&self, origin: &str) -> bool {
-        allowed_origin(&self.origins(), origin)
+        self.serves(origin)
             || allowed_origin(
                 &self.apps.read().unwrap_or_else(PoisonError::into_inner),
                 origin,
             )
+    }
+
+    /// Whether `origin` is this computer's own: served now or before.
+    pub(crate) fn serves(&self, origin: &str) -> bool {
+        allowed_origin(&self.origins(), origin)
             || self
                 .seen
                 .lock()
