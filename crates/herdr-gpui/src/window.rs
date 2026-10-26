@@ -22,6 +22,7 @@ mod find;
 mod flash;
 pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
+pub(crate) use zen::slide_left;
 mod function_keys;
 mod image_source;
 mod images;
@@ -334,6 +335,7 @@ pub(crate) struct HerdrWindow {
     /// Spaces and agents lists, in that order.
     pub(crate) sidebar_scroll: [ScrollHandle; 2],
     pub(crate) sidebar_search: sidebar::SidebarSearch,
+    pub(crate) sidebar_slide: sidebar::slide::SidebarSlide,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
     /// Herdr's `ui.sidebar_start_collapsed` still applies: no shared settings

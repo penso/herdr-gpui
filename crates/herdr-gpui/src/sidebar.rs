@@ -19,6 +19,7 @@ mod render;
 mod reorder;
 mod row;
 mod search;
+pub(crate) mod slide;
 mod sticky;
 mod tokens;
 mod view;

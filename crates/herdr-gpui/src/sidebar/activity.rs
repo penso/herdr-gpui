@@ -375,15 +375,20 @@ impl HerdrWindow {
             }
             SidebarMode::Rail | SidebarMode::Hidden => return column,
         };
-        column.child(
-            div()
-                .flex()
-                .flex_col()
-                .h_full()
-                .min_h_0()
-                .child(self.panel_title(ActivityPanel::Workspaces, cx))
-                .child(div().flex().flex_1().min_h_0().child(sidebar)),
-        )
+        let panel = div()
+            .flex()
+            .flex_col()
+            .h_full()
+            .min_h_0()
+            .child(self.panel_title(ActivityPanel::Workspaces, cx))
+            .child(div().flex().flex_1().min_h_0().child(sidebar));
+        let width = self
+            .sidebar_mode()
+            .width(self.sidebar_width, f32::from(window.viewport_size().width));
+        match self.sidebar_slide_shown().zip(width) {
+            Some((shown, width)) => column.child(crate::window::slide_left(panel, width, shown)),
+            None => column.child(panel),
+        }
     }
 
     fn render_activity_bar(&self, cx: &mut Context<Self>) -> Stateful<Div> {

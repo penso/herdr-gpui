@@ -77,7 +77,7 @@ impl ZenState {
 
 /// `element`, `width` wide, in a box its own size that clips it, drawn
 /// further left as `shown` falls from 1 to 0.
-fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> Div {
+pub(crate) fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> Div {
     div()
         .relative()
         .flex_none()
@@ -153,8 +153,12 @@ impl HerdrWindow {
     /// way in and back on the way out, always within its own room: the
     /// terminal beside it keeps its size while it moves.
     pub(super) fn sliding_sidebar(&self, column: AnyElement, width: f32) -> AnyElement {
-        match self.chrome_slide() {
-            Some(shown) => slide_left(column, width, shown.sidebar).into_any_element(),
+        // With the activity bar, a toggle slides only the panel beside it.
+        let toggled = self
+            .sidebar_slide_shown()
+            .filter(|_| !self.activity_bar_leads());
+        match self.chrome_slide().map(|shown| shown.sidebar).or(toggled) {
+            Some(shown) => slide_left(column, width, shown).into_any_element(),
             None => column,
         }
     }

@@ -272,6 +272,7 @@ impl HerdrWindow {
             sidebar_revealed: Default::default(),
             sidebar_scroll: Default::default(),
             sidebar_search,
+            sidebar_slide: Default::default(),
             sidebar_split: None,
             sidebar_split_modified: false,
             sidebar_start_pending: true,

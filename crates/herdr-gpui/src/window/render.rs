@@ -99,6 +99,7 @@ impl Render for HerdrWindow {
         self.sync_backdrop(window, cx);
         self.tick_chrome(window, cx);
         self.tick_menu_appear(window);
+        self.tick_sidebar_slide(window, cx);
         if self
             .chats
             .glide(crate::motion::now(), self.config.chat.glide)
