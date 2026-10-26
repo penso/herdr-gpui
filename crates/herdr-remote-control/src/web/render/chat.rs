@@ -9,7 +9,7 @@ use herdr_chat_protocol::{
     Author, Entry, EntryKind, NoticeLevel, Permission, PermissionKind, PlanStatus, Status, Tool,
     ToolContent, ToolStatus, Transcript, display,
 };
-use maud::{Markup, html};
+use maud::{Markup, PreEscaped, html};
 
 /// The most commands the composer offers after "/".
 const MAX_COMMANDS: usize = 64;
@@ -28,7 +28,7 @@ pub(crate) fn chat(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u6
     html! {
         div id="chat" class="flex flex-col min-h-full" data-pane=(row.pane) {
             (head(workspace, row, view, now_ms))
-            (turn(row, view))
+            (PreEscaped(Turn::new(row, view).whole()))
             (sheet(row, &view.transcript))
             (session::sheet(workspace, row, &view.transcript))
             (composer(row, view))
@@ -36,7 +36,8 @@ pub(crate) fn chat(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u6
     }
 }
 
-/// The regions the stream replaces after a change, by id.
+/// The regions the stream replaces after a change, by id, apart from the
+/// turn, which [`Turn::patch`] sends in pieces.
 pub(crate) fn chat_patches(
     workspace: &Workspace,
     row: &ChatRow,
@@ -45,7 +46,6 @@ pub(crate) fn chat_patches(
 ) -> Vec<(&'static str, Markup)> {
     vec![
         ("chat-head", head(workspace, row, view, now_ms)),
-        ("chat-turn", turn(row, view)),
         ("chat-sheet", sheet(row, &view.transcript)),
         (
             "chat-settings",
@@ -97,18 +97,48 @@ fn head(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u64) -> Marku
     }
 }
 
-fn turn(row: &ChatRow, view: &View) -> Markup {
-    let transcript = &view.transcript;
-    let start = latest_turn(transcript);
-    let earlier = &transcript.entries[..start];
-    let latest = &transcript.entries[start..];
-    let folded_turns = earlier
-        .iter()
-        .filter(|entry| matches!(entry.kind, EntryKind::Turn(_)))
-        .count();
-    html! {
-        main id="chat-turn" class="flex-1 flex flex-col gap-3 px-3.5 pt-3 pb-40" {
-            @if !earlier.is_empty() {
+/// The latest turn in the pieces the stream compares, so that a change to
+/// one entry, such as streamed text, sends that entry alone rather than
+/// the whole turn again: a long turn of tool calls is far larger than the
+/// few words each change adds.
+#[derive(Debug)]
+pub(crate) struct Turn {
+    /// The fold over earlier turns, empty when there are none.
+    history: String,
+    /// Each entry of the latest turn in order: its region id and markup.
+    entries: Vec<(String, String)>,
+    /// The plan, queued prompts, and the empty or stopped notice.
+    extras: String,
+}
+
+/// What the phone applies to bring its turn up to date.
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum TurnPatch {
+    /// The whole `chat-turn` region, when the turn is not the one the phone
+    /// holds plus additions: a new prompt, or dropped entries.
+    Whole(String),
+    Parts {
+        /// Entries and `chat-extras` that changed, by region id.
+        regions: Vec<(String, String)>,
+        /// New entries, added at the end of `chat-entries`.
+        appended: Option<String>,
+    },
+}
+
+impl Turn {
+    pub(crate) fn new(row: &ChatRow, view: &View) -> Self {
+        let transcript = &view.transcript;
+        let start = latest_turn(transcript);
+        let earlier = &transcript.entries[..start];
+        let latest = &transcript.entries[start..];
+        let folded_turns = earlier
+            .iter()
+            .filter(|entry| matches!(entry.kind, EntryKind::Turn(_)))
+            .count();
+        let history = if earlier.is_empty() {
+            String::new()
+        } else {
+            html! {
                 div x-data="history" data-pane=(row.pane) {
                     button type="button" class="fold w-full text-left" x-on:click="load" x-show="folded" {
                         "▸ " (folded_turns.max(1)) " earlier turn" @if folded_turns != 1 { "s" }
@@ -117,7 +147,75 @@ fn turn(row: &ChatRow, view: &View) -> Markup {
                     div x-ref="body" {}
                 }
             }
-            @for entry in latest { (entry_view(entry, true)) }
+            .into_string()
+        };
+        let entries = latest
+            .iter()
+            .map(|entry| {
+                let id = format!("entry-{}", entry.id.0);
+                let markup = html! { div id=(id) class="contents" { (entry_view(entry, true)) } };
+                (id, markup.into_string())
+            })
+            .collect();
+        Self {
+            history,
+            entries,
+            extras: extras(row, transcript).into_string(),
+        }
+    }
+
+    /// The `chat-turn` region.
+    pub(crate) fn whole(&self) -> String {
+        html! {
+            main id="chat-turn" class="flex-1 flex flex-col gap-3 px-3.5 pt-3 pb-40" {
+                (PreEscaped(&self.history))
+                div id="chat-entries" class="contents" {
+                    @for (_, entry) in &self.entries { (PreEscaped(entry)) }
+                }
+                (PreEscaped(&self.extras))
+            }
+        }
+        .into_string()
+    }
+
+    /// What turns `before`, the turn the phone was last sent, into this one.
+    pub(crate) fn patch(&self, before: Option<&Self>) -> TurnPatch {
+        let Some(before) = before.filter(|before| {
+            before.history == self.history
+                && before.entries.len() <= self.entries.len()
+                && before
+                    .entries
+                    .iter()
+                    .zip(&self.entries)
+                    .all(|((was, _), (is, _))| was == is)
+        }) else {
+            return TurnPatch::Whole(self.whole());
+        };
+        let mut regions: Vec<(String, String)> = before
+            .entries
+            .iter()
+            .zip(&self.entries)
+            .filter(|((_, was), (_, is))| was != is)
+            .map(|(_, (id, is))| (id.clone(), is.clone()))
+            .collect();
+        if before.extras != self.extras {
+            regions.push(("chat-extras".into(), self.extras.clone()));
+        }
+        let added = &self.entries[before.entries.len()..];
+        let appended = (!added.is_empty()).then(|| {
+            added
+                .iter()
+                .map(|(_, entry)| entry.as_str())
+                .collect::<String>()
+        });
+        TurnPatch::Parts { regions, appended }
+    }
+}
+
+/// What follows the entries: the plan, queued prompts, and notices.
+fn extras(row: &ChatRow, transcript: &Transcript) -> Markup {
+    html! {
+        div id="chat-extras" class="contents" {
             @if transcript.entries.is_empty() {
                 p class="text-muted text-center py-10" {
                     @match &transcript.status {
@@ -163,10 +261,10 @@ fn turn(row: &ChatRow, view: &View) -> Markup {
 /// calls are steps; in the history everything is a plain line.
 fn entry_view(entry: &Entry, focus: bool) -> Markup {
     match &entry.kind {
-        EntryKind::User { text } if focus => html! {
+        EntryKind::User { text, .. } if focus => html! {
             p class="text-[17px] font-semibold leading-snug whitespace-pre-wrap" { "“" (text) "”" }
         },
-        EntryKind::User { text } => html! {
+        EntryKind::User { text, .. } => html! {
             div class="self-end max-w-[85%] bg-accent text-white px-3 py-2 rounded-2xl rounded-br-md whitespace-pre-wrap" { (text) }
         },
         EntryKind::Agent { text } => html! {

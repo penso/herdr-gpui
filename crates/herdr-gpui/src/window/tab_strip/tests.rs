@@ -657,5 +657,8 @@ mod divider;
 /// Every tab layout draws its tabs as wide as the strip measures them.
 mod layouts;
 
+/// The curved layout's sliding body and the card it flows into.
+mod curved;
+
 /// Where the agent buttons draw, and what a click on one starts.
 mod launcher;

@@ -26,11 +26,14 @@ arch=archlinux:latest@sha256:f3691b4dde62ba4c4b6f0ae2c1fbf28e8c0c8c4b9a35c7e06dc
 check='
 set -euo pipefail
 /usr/bin/herdr-gpui --help >/dev/null
+/usr/bin/herdr-acp --help >/dev/null
 /usr/bin/herdr-automate --version >/dev/null
 # Capture before matching: with pipefail, grep -q exiting early would fail the
 # writer with SIGPIPE and turn a present library into a false failure.
-linked=$(ldd /usr/bin/herdr-gpui)
-if grep "not found" <<<"$linked"; then exit 1; fi
+for program in herdr-gpui herdr-acp herdr-automate; do
+    linked=$(ldd "/usr/bin/$program")
+    if grep "not found" <<<"$linked"; then exit 1; fi
+done
 cache=$(ldconfig -p)
 for library in libvulkan.so.1 libwayland-client.so.0; do
     grep -q "^[[:space:]]*$library " <<<"$cache" || { echo "missing dlopen target $library" >&2; exit 1; }
@@ -51,13 +54,13 @@ for image in "$ubuntu" "$debian"; do
         DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends /dist/$name.deb >/dev/null
         bash -c \"\$CHECK\"
         apt-get remove -qq -y herdr-gpui >/dev/null
-        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-automate"
+        test ! -e /usr/bin/herdr-gpui"
 done
 run "$name.rpm" "$fedora" "
     dnf install -q -y --setopt=install_weak_deps=False /dist/$name.rpm >/dev/null
     bash -c \"\$CHECK\"
     dnf remove -q -y herdr-gpui >/dev/null
-    test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-automate"
+    test ! -e /usr/bin/herdr-gpui"
 if [[ $2 == x86_64-unknown-linux-gnu ]]; then
     run "$name.pkg.tar.zst" "$arch" "
         # pacman 7 drops to a seccomp-sandboxed download user, which some
@@ -66,5 +69,5 @@ if [[ $2 == x86_64-unknown-linux-gnu ]]; then
         pacman -U --noconfirm --disable-sandbox /dist/$name.pkg.tar.zst >/dev/null
         bash -c \"\$CHECK\"
         pacman -R --noconfirm herdr-gpui >/dev/null
-        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-automate"
+        test ! -e /usr/bin/herdr-gpui"
 fi

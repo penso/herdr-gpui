@@ -388,6 +388,8 @@ function handleEvent(block) {
   if (event !== "patch" || !data) return;
   const patch = JSON.parse(data);
   if (patch.badge !== undefined) navigator.setAppBadge?.(patch.badge).catch(() => {});
+  // A chat read at its end keeps following what the agent writes.
+  const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
   for (const [id, html] of Object.entries(patch.regions || {})) {
     const element = document.getElementById(id);
     if (!element) continue;
@@ -395,11 +397,15 @@ function handleEvent(block) {
     const draft = element.querySelector?.("textarea");
     if (draft && (draft.value || document.activeElement === draft)) continue;
     if (element.matches?.("[data-busy]") || element.querySelector?.("[data-busy]")) continue;
-    const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
     element.outerHTML = html;
-    if (atBottom && id === "chat-turn") window.scrollTo(0, document.body.scrollHeight);
     if (id === "term-screen") fitTerminal();
   }
+  // New chat entries: the server sends only what changed after the
+  // stream's first patch, so these follow the entries already shown.
+  for (const [id, html] of Object.entries(patch.append || {})) {
+    document.getElementById(id)?.insertAdjacentHTML("beforeend", html);
+  }
+  if (atBottom && document.getElementById("chat-turn")) window.scrollTo(0, document.body.scrollHeight);
   applySearch();
   markRow();
 }

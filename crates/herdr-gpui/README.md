@@ -128,10 +128,9 @@ include desktop integration and notices; updater-only
 `herdr-gpui-VERSION-TARGET-update.tar.gz` archives contain one executable.
 Native two-version update/restart QA remains pending.
 
-The macOS **QA** menu requires the opt-in `qa-menu` Cargo feature and is excluded
-from default Cargo builds and published releases. `just run` enables it
-automatically, or use
-`cargo run --locked --release -p herdr-gpui --features qa-menu`.
+The **QA** menu is off by default in every build, including published
+releases; turn on **Settings > General > QA menu** (`qa_menu = true` under `[features]`) to show it. The menu bar
+gains or loses it as soon as the setting changes.
 The menu offers **Show NeedsAttention toast**, **Show Finished
 toast**, **Show UpdateInstalled toast**, and **Show Custom toast**. Each adds a
 synthetic in-app toast for the selected endpoint, even when disconnected. Each
@@ -1421,7 +1420,7 @@ effects from inactive endpoints. A burst rings at most once per 500 ms. On
 platforms where GPUI does not implement attention requests or the system bell,
 those settings do nothing.
 
-**QA > Ring Bell in 3 Seconds** (QA builds) previews both reactions after a
+**QA > Ring Bell in 3 Seconds** previews both reactions after a
 delay, so there is time to switch to another app and watch the Dock: it plays the
 system alert and, if the window is then inactive, requests attention. It
 bypasses `[bell]` and the rate limit, and needs no daemon.
@@ -4839,7 +4838,7 @@ verified in Ubuntu 24.04, not native desktop rendering or input. Linux uses
 [Ctrl+Shift application shortcuts](#keyboard-shortcuts); explicitly configured
 `cmd` bindings still mean Super. Linux shows an **in-window menu
 bar** using the same Herdr, File, Edit, View, Terminal, and Window definitions as
-macOS (plus QA in `qa-menu` builds). It remains visible with the sidebar hidden
+macOS (plus QA when `features.qa_menu` is on). It remains visible with the sidebar hidden
 and collapses to **Menu** in narrow windows. In client-decorated windows, the
 minimize, maximize, and close buttons share its right edge. Drag the empty
 menu-bar background to move the window; it also supports the title bar's

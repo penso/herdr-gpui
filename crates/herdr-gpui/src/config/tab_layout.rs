@@ -57,6 +57,9 @@ tab_layouts! {
     Underline => "underline", "Underline";
     /// Browser-like: the chosen tab is a raised card joined to what it shows.
     Cards => "cards", "Cards";
+    /// The chosen tab's body flares into the content below through curved
+    /// shoulders and slides between tabs; the content sits in an inset card.
+    Curved => "curved", "Curved";
     /// Icons only, with the status on each icon's corner; the chosen tab
     /// names itself.
     Compact => "compact", "Compact";

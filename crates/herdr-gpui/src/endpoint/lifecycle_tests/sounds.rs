@@ -1,7 +1,6 @@
 use super::*;
 
 #[gpui::test]
-#[cfg(feature = "qa-menu")]
 fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     let (sound, played) = crate::sound::Service::recording();
@@ -15,7 +14,9 @@ fn qa_play_sound_dispatches_without_daemon_or_pane(cx: &mut gpui::TestAppContext
     cx.update(|window, cx| {
         view.read(cx).focus.clone().focus(window, cx);
         window.draw(cx).clear(cx);
-        let menus = crate::menus(Default::default(), Default::default());
+        let mut config = crate::config::Config::default();
+        config.features.qa_menu = true;
+        let menus = crate::menus(&config);
         let qa = menus
             .iter()
             .find(|menu| menu.name.as_ref() == "QA")

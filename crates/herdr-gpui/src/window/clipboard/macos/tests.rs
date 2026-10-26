@@ -1,4 +1,5 @@
 mod cleanup;
+mod large_output;
 
 use super::*;
 use gpui::{ClipboardEntry, ExternalPaths, Image, ImageFormat};

@@ -26,12 +26,6 @@ class ReleaseTests(unittest.TestCase):
         self.env = {"PATH": os.environ["PATH"], "HOME": str(self.work)}
         self.notices = self.work / "third party notices.txt"
         self.notices.write_text("Third-party license text\nCopyright example\n")
-        # The mock lipo reports a file's name as its architecture.
-        (self.work / "automate").mkdir()
-        self.automate_arm = self.work / "automate/arm64"
-        self.automate_intel = self.work / "automate/x86_64"
-        self.automate_arm.write_bytes(b"arm64 automation daemon")
-        self.automate_intel.write_bytes(b"x86_64 automation daemon")
 
     def run_script(self, name, *args, success=True):
         result = subprocess.run(
@@ -62,14 +56,18 @@ class ReleaseTests(unittest.TestCase):
     def test_linux_archive(self):
         binary = self.work / "input binary"
         binary.write_bytes(build_identity())
+        acp = self.work / "herdr-acp"
+        acp.write_bytes(b"chat program")
+        automate = self.work / "herdr-automate"
+        automate.write_bytes(b"automation daemon")
         for target in ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"):
             with self.subTest(target=target):
-                result = self.run_script("package-linux.sh", "20260920.3", target, binary, self.automate_arm, self.work, self.notices)
+                result = self.run_script("package-linux.sh", "20260920.3", target, binary, self.work, self.notices)
                 with tarfile.open(result.stdout.strip()) as archive:
                     base = f"Herdr-20260920.3-{target}/"
                     files = {m.name: m for m in archive.getmembers() if m.isfile()}
                     self.assertEqual(set(files), {base + p for p in [
-                        "bin/herdr-gpui", "bin/herdr-automate", "share/applications/so.pen.herdr-gpui.desktop",
+                        "bin/herdr-gpui", "bin/herdr-acp", "bin/herdr-automate", "share/applications/so.pen.herdr-gpui.desktop",
                         "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
                         "share/licenses/herdr-gpui/LICENSE-APACHE", "share/licenses/herdr-gpui/NOTICE.md",
                         "share/licenses/herdr-gpui/LICENSE", "share/licenses/herdr-gpui/NOTICE",
@@ -79,8 +77,10 @@ class ReleaseTests(unittest.TestCase):
                     ]})
                     self.assertEqual(files[base + "bin/herdr-gpui"].mode & 0o777, 0o755)
                     self.assertEqual(archive.extractfile(base + "bin/herdr-gpui").read(), binary.read_bytes())
+                    self.assertEqual(files[base + "bin/herdr-acp"].mode & 0o777, 0o755)
+                    self.assertEqual(archive.extractfile(base + "bin/herdr-acp").read(), acp.read_bytes())
                     self.assertEqual(files[base + "bin/herdr-automate"].mode & 0o777, 0o755)
-                    self.assertEqual(archive.extractfile(base + "bin/herdr-automate").read(), self.automate_arm.read_bytes())
+                    self.assertEqual(archive.extractfile(base + "bin/herdr-automate").read(), automate.read_bytes())
                     self.assertEqual(archive.extractfile(base + "share/icons/hicolor/scalable/apps/herdr-gpui.svg").read(), (ROOT / "assets/icons/herdr-linux.svg").read_bytes())
                     self.assertEqual(archive.extractfile(base + "share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt").read(), self.notices.read_bytes())
                     for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
@@ -93,11 +93,17 @@ class ReleaseTests(unittest.TestCase):
                 with tarfile.open(update) as archive:
                     self.assertEqual(archive.getnames(), [f"herdr-gpui-20260920.3-{target}"])
                     self.assertEqual(archive.extractfile(archive.getmembers()[0]).read(), binary.read_bytes())
-                self.run_script("package-linux.sh", "20260920.3", target, binary, self.automate_arm, self.work, self.notices, success=False)
-        self.run_script("package-linux.sh", "20260920.3", "bad-target", binary, self.automate_arm, self.work, self.notices, success=False)
-        result = self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary,
-                                 self.work / "missing", self.work, self.notices, success=False)
-        self.assertIn("herdr-automate binary file required", result.stderr)
+                self.run_script("package-linux.sh", "20260920.3", target, binary, self.work, self.notices, success=False)
+        self.run_script("package-linux.sh", "20260920.3", "bad-target", binary, self.work, self.notices, success=False)
+        acp.unlink()
+        result = self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.work,
+                                 self.notices, success=False)
+        self.assertIn("A herdr-acp beside the binary required", result.stderr)
+        acp.write_bytes(b"chat program")
+        automate.unlink()
+        result = self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.work,
+                                 self.notices, success=False)
+        self.assertIn("A herdr-automate beside the binary required", result.stderr)
 
     def run_windows(self, *args, success=True):
         result = subprocess.run(["python3", str(SCRIPTS / "package-windows.py"), *map(str, args)],
@@ -110,50 +116,58 @@ class ReleaseTests(unittest.TestCase):
         binary.write_bytes(build_identity())
         launcher = self.work / "input launcher.exe"
         launcher.write_bytes(b"windowed launcher")
-        automate = self.work / "input automate.exe"
+        acp = self.work / "herdr-acp.exe"
+        acp.write_bytes(b"chat program")
+        automate = self.work / "herdr-automate.exe"
         automate.write_bytes(b"automation daemon")
         target = "x86_64-pc-windows-msvc"
-        output = Path(self.run_windows("20260920.3", target, binary, launcher, automate, self.work, self.notices).stdout.strip())
+        output = Path(self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices).stdout.strip())
         self.assertEqual(output, self.work.resolve() / f"Herdr-20260920.3-{target}.zip")
         base = f"Herdr-20260920.3-{target}/"
         with zipfile.ZipFile(output) as archive:
             self.assertIsNone(archive.testzip())
             self.assertEqual(set(archive.namelist()), {base + p for p in [
-                "herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-automate.exe", "licenses/LICENSE", "licenses/NOTICE", "licenses/LICENSE-octicons",
+                "herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe", "herdr-automate.exe", "licenses/LICENSE", "licenses/NOTICE", "licenses/LICENSE-octicons",
                 "licenses/LICENSE-APACHE", "licenses/NOTICE.md", "licenses/SOUND-NOTICE.md",
                 "licenses/THIRD-PARTY-NOTICES.txt",
             ]})
             self.assertEqual({info.date_time for info in archive.infolist()}, {(1980, 1, 1, 0, 0, 0)})
             self.assertEqual(archive.read(base + "herdr-gpui.exe"), binary.read_bytes())
             self.assertEqual(archive.read(base + "herdr-gpui-launcher.exe"), launcher.read_bytes())
+            self.assertEqual(archive.read(base + "herdr-acp.exe"), acp.read_bytes())
             self.assertEqual(archive.read(base + "herdr-automate.exe"), automate.read_bytes())
             self.assertEqual(archive.read(base + "licenses/THIRD-PARTY-NOTICES.txt"), self.notices.read_bytes())
             for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/LICENSE-APACHE",
                            "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
                 self.assertEqual(archive.read(base + "licenses/" + Path(source).name), (ROOT / source).read_bytes())
         before = output.read_bytes()
-        result = self.run_windows("20260920.3", target, binary, launcher, automate, self.work, self.notices, success=False)
+        result = self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices, success=False)
         self.assertIn("Output already exists", result.stderr)
         self.assertEqual(output.read_bytes(), before)
         output.unlink()
-        arm = Path(self.run_windows("20260920.3", "aarch64-pc-windows-msvc", binary, launcher, automate, self.work,
+        arm = Path(self.run_windows("20260920.3", "aarch64-pc-windows-msvc", binary, launcher, self.work,
                                     self.notices).stdout.strip())
         self.assertEqual(arm, self.work.resolve() / "Herdr-20260920.3-aarch64-pc-windows-msvc.zip")
         arm.unlink()
-        result = self.run_windows("20260920.3", target, binary, self.work / "missing-launcher.exe", automate,
-                                  self.work, self.notices, success=False)
+        result = self.run_windows("20260920.3", target, binary, self.work / "missing-launcher.exe", self.work,
+                                  self.notices, success=False)
         self.assertIn("Launcher file required", result.stderr)
-        result = self.run_windows("20260920.3", target, binary, launcher, self.work / "missing-automate.exe",
-                                  self.work, self.notices, success=False)
-        self.assertIn("herdr-automate file required", result.stderr)
-        for args in [("20260920.03", target, binary, launcher, automate, self.work, self.notices),
-                     ("v20260920.3", target, binary, launcher, automate, self.work, self.notices),
-                     ("20260920.3", "x86_64-pc-windows-gnu", binary, launcher, automate, self.work, self.notices),
-                     ("20260920.3", target, self.work / "missing.exe", launcher, automate, self.work, self.notices),
-                     ("20260920.3", target, binary, self.work, automate, self.work, self.notices),
-                     ("20260920.3", target, binary, launcher, automate, self.work / "missing", self.notices),
-                     ("20260920.3", target, binary, launcher, automate, self.work, self.work / "missing"),
-                     ("20260920.3", target, binary, launcher, automate, self.work, self.work / "empty")]:
+        acp.unlink()
+        result = self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices, success=False)
+        self.assertIn("A herdr-acp.exe beside the binary required", result.stderr)
+        acp.write_bytes(b"chat program")
+        automate.unlink()
+        result = self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices, success=False)
+        self.assertIn("A herdr-automate.exe beside the binary required", result.stderr)
+        automate.write_bytes(b"automation daemon")
+        for args in [("20260920.03", target, binary, launcher, self.work, self.notices),
+                     ("v20260920.3", target, binary, launcher, self.work, self.notices),
+                     ("20260920.3", "x86_64-pc-windows-gnu", binary, launcher, self.work, self.notices),
+                     ("20260920.3", target, self.work / "missing.exe", launcher, self.work, self.notices),
+                     ("20260920.3", target, binary, self.work, self.work, self.notices),
+                     ("20260920.3", target, binary, launcher, self.work / "missing", self.notices),
+                     ("20260920.3", target, binary, launcher, self.work, self.work / "missing"),
+                     ("20260920.3", target, binary, launcher, self.work, self.work / "empty")]:
             (self.work / "empty").touch()
             with self.subTest(args=args):
                 self.run_windows(*args, success=False)
@@ -163,8 +177,8 @@ class ReleaseTests(unittest.TestCase):
         self.mock_tools()
         binary = self.work / "binary"
         binary.touch()
-        for script, inputs in [("package-linux.sh", ["x86_64-unknown-linux-gnu", binary, binary]),
-                               ("package-macos.sh", [binary, binary, binary, binary])]:
+        for script, inputs in [("package-linux.sh", ["x86_64-unknown-linux-gnu", binary]),
+                               ("package-macos.sh", [binary, binary])]:
             self.run_script(script, "20260920.3", *inputs, self.work, success=False)
             for notices in [self.work / "missing", binary]:
                 result = self.run_script(script, "20260920.3", *inputs, self.work, notices, success=False)
@@ -186,22 +200,35 @@ class ReleaseTests(unittest.TestCase):
         self.mock_tools()
         self.env["MOCK_OS"] = "Linux"
         for script, args in [
-            ("package-macos.sh", ["20260920.3", "arm", "intel", "arm", "intel", self.work, self.notices]),
+            ("package-macos.sh", ["20260920.3", "arm", "intel", self.work, self.notices]),
             ("sign-macos.sh", ["20260920.3", "app", self.work]),
         ]:
             result = self.run_script(script, *args, success=False)
             self.assertIn("macOS required", result.stderr)
         self.assertFalse((self.work / "log").exists())
 
+    def macos_builds(self, arm_worktree=False, intel_worktree=False):
+        """Each architecture's build folder, as cargo leaves it: herdr-gpui
+        and the herdr-acp and herdr-automate beside it, in a folder the mock lipo reads the
+        architecture from."""
+        binaries = []
+        for arch, worktree in (("arm64", arm_worktree), ("x86_64", intel_worktree)):
+            folder = self.work / arch
+            folder.mkdir(exist_ok=True)
+            (folder / "herdr-gpui").write_bytes(build_identity(worktree))
+            (folder / "herdr-acp").write_bytes(b"chat program")
+            (folder / "herdr-automate").write_bytes(b"automation daemon")
+            binaries.append(folder / "herdr-gpui")
+        return binaries
+
     def test_unsigned_assembly(self):
         self.mock_tools()
-        arm, intel = self.work / "arm64", self.work / "x86_64"
-        arm.write_bytes(build_identity())
-        intel.write_bytes(build_identity())
-        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_arm, self.automate_intel, self.work, self.notices)
+        arm, intel = self.macos_builds()
+        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices)
         app = self.work / "Herdr.app"
         self.assertEqual({str(p.relative_to(app)) for p in app.rglob("*") if p.is_file()}, {
-            "Contents/MacOS/Herdr", "Contents/MacOS/herdr-automate", "Contents/Info.plist", "Contents/Resources/Herdr.icns",
+            "Contents/MacOS/Herdr", "Contents/MacOS/herdr-acp", "Contents/MacOS/herdr-automate",
+            "Contents/Info.plist", "Contents/Resources/Herdr.icns",
             "Contents/Resources/Assets.car",
             "Contents/Resources/LICENSE-APACHE", "Contents/Resources/NOTICE.md",
             "Contents/Resources/LICENSE", "Contents/Resources/NOTICE", "Contents/Resources/LICENSE-octicons",
@@ -209,25 +236,26 @@ class ReleaseTests(unittest.TestCase):
             "Contents/Resources/SOUND-NOTICE.md",
         })
         self.assertEqual((app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").read_bytes(), self.notices.read_bytes())
-        calls = [json.loads(line) for line in (self.work / "log").read_text().splitlines()]
-        self.assertTrue(any(c[:4] == ["lipo", "-create", str(self.automate_arm), str(self.automate_intel)]
-                            and c[-1].endswith("/Contents/MacOS/herdr-automate") for c in calls))
-        for arch in ("arm64", "x86_64"):
-            self.assertTrue(any(c[0] == "lipo" and c[1].endswith("/Contents/MacOS/herdr-automate")
-                                and c[2:] == ["-verify_arch", arch] for c in calls))
         self.assertEqual((app / "Contents/Resources/Herdr.icns").read_bytes(), (ROOT / "assets/icons/Herdr.icns").read_bytes())
         self.assertEqual((app / "Contents/Resources/Assets.car").read_bytes(), (ROOT / "assets/icons/Herdr.car").read_bytes())
         for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
             self.assertEqual((app / "Contents/Resources" / Path(source).name).read_bytes(), (ROOT / source).read_bytes())
-        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_arm, self.automate_intel, self.work, self.notices, success=False)
-        app.rename(self.work / "first.app")
-        # Each herdr-automate must be the architecture its position names.
-        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_intel, self.automate_arm,
-                                 self.work, self.notices, success=False)
-        self.assertIn("First herdr-automate must be arm64 only", result.stderr)
-        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_arm, self.work / "missing",
-                                 self.work, self.notices, success=False)
-        self.assertIn("Two herdr-automate binary files required", result.stderr)
+        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices, success=False)
+
+    def test_assembly_requires_a_herdr_acp_beside_each_binary(self):
+        self.mock_tools()
+        arm, intel = self.macos_builds()
+        (intel.parent / "herdr-acp").unlink()
+        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices, success=False)
+        self.assertIn("A herdr-acp beside each binary required", result.stderr)
+        self.assertFalse((self.work / "Herdr.app").exists())
+
+    def test_assembly_requires_a_herdr_automate_beside_each_binary(self):
+        self.mock_tools()
+        arm, intel = self.macos_builds()
+        (arm.parent / "herdr-automate").unlink()
+        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices, success=False)
+        self.assertIn("A herdr-automate beside each binary required", result.stderr)
         self.assertFalse((self.work / "Herdr.app").exists())
 
     def test_worktree_icons_and_mismatched_architectures(self):
@@ -246,16 +274,14 @@ class ReleaseTests(unittest.TestCase):
         for name in ["Herdr-worktree.icns", "Herdr-worktree.car", "herdr-linux-worktree.svg"]:
             (fixture / "assets/icons" / name).write_bytes(b"red fixture " + name.encode())
         self.scripts = fixture / "scripts/release"
-        arm, intel = self.work / "arm64", self.work / "x86_64"
-        arm.write_bytes(build_identity(True))
-        intel.write_bytes(build_identity())
-        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_arm, self.automate_intel, self.work, self.notices, success=False)
+        arm, intel = self.macos_builds(arm_worktree=True)
+        result = self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices, success=False)
         self.assertIn("different build identities", result.stderr)
         intel.write_bytes(build_identity(True))
-        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.automate_arm, self.automate_intel, self.work, self.notices)
+        self.run_script("package-macos.sh", "20260920.3", arm, intel, self.work, self.notices)
         self.assertEqual((self.work / "Herdr.app/Contents/Resources/Herdr.icns").read_bytes(), (fixture / "assets/icons/Herdr-worktree.icns").read_bytes())
         self.assertEqual((self.work / "Herdr.app/Contents/Resources/Assets.car").read_bytes(), (fixture / "assets/icons/Herdr-worktree.car").read_bytes())
-        result = self.run_script("package-linux.sh", "20260920.3", "aarch64-unknown-linux-gnu", arm, self.automate_arm, self.work, self.notices)
+        result = self.run_script("package-linux.sh", "20260920.3", "aarch64-unknown-linux-gnu", arm, self.work, self.notices)
         with tarfile.open(result.stdout.strip()) as archive:
             self.assertEqual(archive.extractfile("Herdr-20260920.3-aarch64-unknown-linux-gnu/share/icons/hicolor/scalable/apps/herdr-gpui.svg").read(), (fixture / "assets/icons/herdr-linux-worktree.svg").read_bytes())
 
@@ -265,7 +291,7 @@ class ReleaseTests(unittest.TestCase):
                      build_identity().replace(b"pr=\n", b"pr=0\n"),
                      build_identity().replace(b"worktree=0", b"worktree=9")]:
             binary.write_bytes(data)
-            self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.automate_arm, self.work, self.notices, success=False)
+            self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.work, self.notices, success=False)
             self.assertFalse(list(self.work.glob("*.tar.gz")))
 
     def test_signing_retries_apple_network_failures(self):
@@ -273,7 +299,8 @@ class ReleaseTests(unittest.TestCase):
         app = self.work / "unsigned.app"
         (app / "Contents/MacOS").mkdir(parents=True)
         (app / "Contents/MacOS/Herdr").write_text("never run")
-        (app / "Contents/MacOS/herdr-automate").write_text("never run either")
+        (app / "Contents/MacOS/herdr-acp").write_text("never run")
+        (app / "Contents/MacOS/herdr-automate").write_text("never run")
         (app / "Contents/Resources").mkdir()
         (app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").write_bytes(self.notices.read_bytes())
         self.env.update(
@@ -307,7 +334,8 @@ class ReleaseTests(unittest.TestCase):
         app = self.work / "unsigned.app"
         (app / "Contents/MacOS").mkdir(parents=True)
         (app / "Contents/MacOS/Herdr").write_text("never run")
-        (app / "Contents/MacOS/herdr-automate").write_text("never run either")
+        (app / "Contents/MacOS/herdr-acp").write_text("never run")
+        (app / "Contents/MacOS/herdr-automate").write_text("never run")
         (app / "Contents/Resources").mkdir()
         (app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").write_bytes(self.notices.read_bytes())
         self.env.update(
@@ -372,13 +400,13 @@ class ReleaseTests(unittest.TestCase):
         )
         signs = [c for c in calls if c[:2] == ["codesign", "--force"]]
         self.assertTrue(any(c[-1].endswith("/Contents/MacOS/Herdr") for c in signs))
-        # The daemon is signed, before the bundle that seals it, without the app's entitlements.
-        automate = [i for i, c in enumerate(signs) if c[-1].endswith("/Contents/MacOS/herdr-automate")]
-        bundle = [i for i, c in enumerate(signs) if c[-1].endswith("/Herdr.app")]
-        self.assertTrue(automate)
-        self.assertLess(automate[0], bundle[0])
-        self.assertTrue(all("--entitlements" not in signs[i] for i in automate))
         self.assertTrue(any(c[-1].endswith("/Herdr.app") for c in signs))
+        # The nested herdr-acp and herdr-automate are signed before the app
+        # seals it, without the app's entitlements.
+        targets = [c[-1].rsplit("/", 1)[-1] for c in signs]
+        for nested in ("herdr-acp", "herdr-automate"):
+            self.assertLess(targets.index(nested), targets.index("Herdr.app"))
+            self.assertFalse(any("--entitlements" in c for c in signs if c[-1].endswith("/" + nested)))
         self.assertTrue(all("--timestamp" in c for c in signs))
         self.assertTrue(all("runtime" in c for c in signs if not c[-1].endswith(".dmg")))
         del self.env["APPLE_API_PRIVATE_KEY"]

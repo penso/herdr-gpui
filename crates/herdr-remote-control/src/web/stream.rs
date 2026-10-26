@@ -115,16 +115,39 @@ fn reload() -> Sse {
     Sse::default().event("reload").data("{}")
 }
 
-fn patch(regions: Vec<(&str, String)>, badge: Option<usize>) -> Sse {
-    let regions: serde_json::Map<String, serde_json::Value> = regions
-        .into_iter()
-        .map(|(id, html)| (id.to_owned(), json!(html)))
-        .collect();
-    let mut body = json!({ "regions": regions });
-    if let Some(badge) = badge {
-        body["badge"] = json!(badge);
+/// One `patch` event: markup the phone puts in place of the elements of
+/// these ids, markup it adds at the end of others, and the app badge.
+#[derive(Default)]
+struct Patch {
+    regions: Vec<(String, String)>,
+    appended: Vec<(String, String)>,
+    badge: Option<usize>,
+}
+
+impl Patch {
+    fn region(id: &str, markup: String) -> Self {
+        Self {
+            regions: vec![(id.to_owned(), markup)],
+            ..Self::default()
+        }
     }
-    Sse::default().event("patch").data(body.to_string())
+
+    fn event(self) -> Sse {
+        let map = |pairs: Vec<(String, String)>| {
+            pairs
+                .into_iter()
+                .map(|(id, html)| (id, json!(html)))
+                .collect::<serde_json::Map<_, _>>()
+        };
+        let mut body = json!({ "regions": map(self.regions) });
+        if !self.appended.is_empty() {
+            body["append"] = json!(map(self.appended));
+        }
+        if let Some(badge) = self.badge {
+            body["badge"] = json!(badge);
+        }
+        Sse::default().event("patch").data(body.to_string())
+    }
 }
 
 /// Sends the chat's regions now and after every burst of changes, until
@@ -136,19 +159,36 @@ async fn follow_chat(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>) {
     };
     let (_, mut events) = link.subscribe();
     let mut layout = state.hub.watch_layout();
+    // The turn as this phone holds it, which the next patch builds on.
+    let mut sent: Option<render::Turn> = None;
     loop {
         let current = state.hub.layout();
         let Some((workspace, row)) = current.chat(pane) else {
             let _ = sender.send(reload()).await;
             return;
         };
-        let regions = render::chat_patches(workspace, row, &link.view(), render::now_ms())
-            .into_iter()
-            .map(|(id, markup)| (id, markup.into_string()))
-            .collect();
-        if sender.send(patch(regions, None)).await.is_err() {
+        let view = link.view();
+        let mut patch = Patch {
+            regions: render::chat_patches(workspace, row, &view, render::now_ms())
+                .into_iter()
+                .map(|(id, markup)| (id.to_owned(), markup.into_string()))
+                .collect(),
+            ..Patch::default()
+        };
+        let turn = render::Turn::new(row, &view);
+        match turn.patch(sent.as_ref()) {
+            render::TurnPatch::Whole(markup) => patch.regions.push(("chat-turn".into(), markup)),
+            render::TurnPatch::Parts { regions, appended } => {
+                patch.regions.extend(regions);
+                patch
+                    .appended
+                    .extend(appended.map(|markup| ("chat-entries".to_owned(), markup)));
+            }
+        }
+        if sender.send(patch.event()).await.is_err() {
             return;
         }
+        sent = Some(turn);
         tokio::select! {
             event = events.recv() => match event {
                 Ok(_) => {}
@@ -185,7 +225,7 @@ async fn follow_terminal(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>)
                     let screen = render::screen(&text);
                     let markup = render::terminal_screen(&screen).into_string();
                     if sender
-                        .send(patch(vec![("term-screen", markup)], None))
+                        .send(Patch::region("term-screen", markup).event())
                         .await
                         .is_err()
                     {
@@ -217,11 +257,11 @@ async fn follow_lists(state: &Shared, board: bool, sender: &mpsc::Sender<Sse>) {
     let mut layout = state.hub.watch_layout();
     loop {
         let (markup, waiting) = lists(state, board);
-        if sender
-            .send(patch(vec![("lists", markup.into_string())], Some(waiting)))
-            .await
-            .is_err()
-        {
+        let patch = Patch {
+            badge: Some(waiting),
+            ..Patch::region("lists", markup.into_string())
+        };
+        if sender.send(patch.event()).await.is_err() {
             return;
         }
         loop {

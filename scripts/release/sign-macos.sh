@@ -80,14 +80,17 @@ ditto "$2" "$app"
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App version mismatch'
 [[ $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App build version mismatch'
 [[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 14.2 ]] || fail 'App minimum OS mismatch'
-for executable in Herdr herdr-automate; do
+for executable in Herdr herdr-acp herdr-automate; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
 done
-# Nested code is signed before the bundle that seals it. The automation daemon
-# needs none of the app's entitlements, so it gets the hardened runtime alone.
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/herdr-automate"
+# Nested code is signed before the app that seals it. herdr-acp and
+# herdr-automate are command line programs and need none of the app's
+# entitlements.
+for executable in herdr-acp herdr-automate; do
+    codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/$executable"
+done
 codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app/Contents/MacOS/Herdr"
 codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app"
 codesign --verify --deep --strict --verbose=2 "$app"

@@ -67,11 +67,13 @@
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
-          # herdr-automate is the automation daemon the app finds beside its
-          # executable, so both land in $out/bin.
+          # The app starts chats with the herdr-acp beside its executable,
+          # and automations with the herdr-automate there.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
+            "-p"
+            "herdr-acp"
             "-p"
             "herdr-automate"
           ];

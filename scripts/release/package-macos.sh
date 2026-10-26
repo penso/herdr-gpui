@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname -- "$0")/common.sh"
-[[ $# == 7 ]] || fail 'Usage: bash package-macos.sh VERSION ARM64_BINARY X86_64_BINARY ARM64_AUTOMATE X86_64_AUTOMATE OUTPUT_DIR THIRD_PARTY_NOTICES'
+[[ $# == 5 ]] || fail 'Usage: bash package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR THIRD_PARTY_NOTICES'
 version_check "$1"
 [[ $(uname -s) == Darwin ]] || fail 'macOS required'
-[[ -f $2 && -f $3 && -d $6 ]] || fail 'Two binary files and an existing output directory required'
-# The automation daemon the app finds beside its executable (automations/fetch.rs).
-[[ -f $4 && -f $5 ]] || fail 'Two herdr-automate binary files required'
-[[ -f $7 && -s $7 ]] || fail 'Nonempty third-party notices file required'
-out=$(cd -- "$6" && pwd)/Herdr.app
+[[ -f $2 && -f $3 && -d $4 ]] || fail 'Two binary files and an existing output directory required'
+[[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
+# The app starts chats with the herdr-acp beside its executable, and
+# automations with the herdr-automate there; each build leaves both beside
+# its herdr-gpui.
+acp_arm64=$(dirname -- "$2")/herdr-acp
+acp_x86_64=$(dirname -- "$3")/herdr-acp
+[[ -f $acp_arm64 && -f $acp_x86_64 ]] || fail 'A herdr-acp beside each binary required'
+automate_arm64=$(dirname -- "$2")/herdr-automate
+automate_x86_64=$(dirname -- "$3")/herdr-automate
+[[ -f $automate_arm64 && -f $automate_x86_64 ]] || fail 'A herdr-automate beside each binary required'
+out=$(cd -- "$4" && pwd)/Herdr.app
 new_output "$out"
 icons=$(python3 "$release_root/scripts/release/build-icon.py" macos "$2" "$3")
 icns=${icons%$'\n'*}
@@ -16,8 +23,10 @@ catalog=${icons##*$'\n'}
 [[ -f $icns && -f $catalog ]] || fail 'Could not select the macOS icons'
 [[ $(lipo -archs "$2") == arm64 ]] || fail 'First binary must be arm64 only'
 [[ $(lipo -archs "$3") == x86_64 ]] || fail 'Second binary must be x86_64 only'
-[[ $(lipo -archs "$4") == arm64 ]] || fail 'First herdr-automate must be arm64 only'
-[[ $(lipo -archs "$5") == x86_64 ]] || fail 'Second herdr-automate must be x86_64 only'
+[[ $(lipo -archs "$acp_arm64") == arm64 ]] || fail 'First herdr-acp must be arm64 only'
+[[ $(lipo -archs "$acp_x86_64") == x86_64 ]] || fail 'Second herdr-acp must be x86_64 only'
+[[ $(lipo -archs "$automate_arm64") == arm64 ]] || fail 'First herdr-automate must be arm64 only'
+[[ $(lipo -archs "$automate_x86_64") == x86_64 ]] || fail 'Second herdr-automate must be x86_64 only'
 tmp=$(mktemp -d "${out%/*}/.herdr-assembly.XXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 trap 'exit 130' INT
@@ -25,8 +34,9 @@ trap 'exit 143' TERM
 app=$tmp/Herdr.app
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create "$2" "$3" -output "$app/Contents/MacOS/Herdr"
-lipo -create "$4" "$5" -output "$app/Contents/MacOS/herdr-automate"
-for executable in Herdr herdr-automate; do
+lipo -create "$acp_arm64" "$acp_x86_64" -output "$app/Contents/MacOS/herdr-acp"
+lipo -create "$automate_arm64" "$automate_x86_64" -output "$app/Contents/MacOS/herdr-automate"
+for executable in Herdr herdr-acp herdr-automate; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
@@ -46,7 +56,7 @@ cp "$catalog" "$app/Contents/Resources/Assets.car"
 cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$app/Contents/Resources/"
 cp "$release_root/crates/herdr-protocol/NOTICE.md" "$app/Contents/Resources/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$app/Contents/Resources/"
-cp "$7" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
+cp "$5" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$app/Contents/Resources/"
 mv "$app" "$out"
 printf '%s\n' "$out"
