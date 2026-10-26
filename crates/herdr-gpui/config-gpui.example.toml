@@ -168,8 +168,10 @@ layout = "normal"
 # "pills" (rounded pills led by the agent's logo, the status after the title),
 # "outline" (bare titles, the chosen one in an outlined pill with its close
 # button), "underline" (flat titles, a bar under the chosen one), "cards"
-# (browser-like, the chosen tab joined to its terminal), or "compact" (icons
-# only, the chosen tab named). View > Tab Layout lists them all.
+# (browser-like, the chosen tab joined to its terminal), "curved" (the chosen
+# tab's curved body flows into content sitting in an inset card, and slides
+# between tabs), or "compact" (icons only, the chosen tab named). View > Tab
+# Layout lists them all.
 tab_layout = "classic"
 
 [palette]

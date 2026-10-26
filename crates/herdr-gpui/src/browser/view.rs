@@ -60,6 +60,8 @@ pub(crate) struct Browser {
     pub(super) appear: super::tab_appear::TabAppear,
     /// Each strip's sideways scroll.
     pub(super) tab_scroll: super::tab_scroll::TabScroll,
+    /// Each strip's connected tab body, for layouts that draw one.
+    pub(crate) tab_body: super::tab_body::TabBodies,
     /// Groups opening from a split and folding away as they close.
     pub(super) group_motion: super::group_motion::GroupMotion,
     /// Why each tab's page could not be created, shown in its place. One
@@ -119,6 +121,7 @@ impl Browser {
             terminals: Default::default(),
             appear: Default::default(),
             tab_scroll: Default::default(),
+            tab_body: Default::default(),
             group_motion: Default::default(),
             failed: HashMap::new(),
             code_server: Default::default(),
