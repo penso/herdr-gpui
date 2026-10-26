@@ -8,10 +8,10 @@ use herdr_chat_protocol::{
 };
 use serde_json::Value;
 
-use super::{Activity, Asked, Pending, Session, now_ms};
+use super::{Asked, Pending, Session, Update, now_ms};
 use crate::{project, rpc::Inbound};
 
-impl<R: FnMut(Activity)> Session<R> {
+impl<R: FnMut(Update)> Session<R> {
     pub(super) fn agent(&mut self, inbound: Inbound) {
         match inbound {
             Inbound::Response { id, result } => {

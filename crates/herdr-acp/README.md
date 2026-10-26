@@ -43,7 +43,14 @@ through Herdr's JSON API:
   are exact rather than detected from the screen;
 - `pane.report_metadata` with the agent's display name and the `acp` token, the
   attach socket's id;
-- on exit, the token is cleared and the agent released.
+- each prompt sent, on one line and cut to 80 characters, as the pane's
+  `title`, which Herdr UI's sidebar and the phone's chat list show;
+- `tab.rename` of its tab to the agent and that prompt (`Claude: fix the…`,
+  at most 40 characters), only while the chat is the tab's one pane and the
+  tab still has the agent's name, a number, or the label the chat gave it, so
+  a name the user typed stays;
+- on exit, the token and title are cleared, the tab gets the agent's name
+  back unless the user renamed it, and the agent is released.
 
 It also writes OSC 7501 program status to the terminal, for terminals that read
 it; terminals that do not ignore it.

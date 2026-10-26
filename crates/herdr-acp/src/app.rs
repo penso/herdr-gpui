@@ -13,7 +13,7 @@ use crate::{
     harness::{Acp, Pipes, Reach},
     herdr::{Reporter, Target},
     process,
-    session::{Config, Flow, Input, Session},
+    session::{Config, Flow, Input, Session, Update},
 };
 
 /// Inputs waiting for the session thread.
@@ -153,9 +153,13 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
     let session_thread = thread::Builder::new()
         .name("acp-session".to_owned())
         .spawn(move || {
-            let mut session = Session::new(config, outbox, move |activity| {
-                if let Some(report) = &report {
-                    report.report(activity);
+            let mut session = Session::new(config, outbox, move |update| {
+                let Some(report) = &report else {
+                    return;
+                };
+                match update {
+                    Update::Activity(activity) => report.report(activity),
+                    Update::Prompt(prompt) => report.prompt(prompt),
                 }
             });
             for (level, text) in notices {

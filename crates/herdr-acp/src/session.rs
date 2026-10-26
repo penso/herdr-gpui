@@ -89,6 +89,15 @@ pub(crate) enum Activity {
     Blocked,
 }
 
+/// What the session passes on for Herdr.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Update {
+    Activity(Activity),
+    /// A prompt just sent to the agent, as the transcript shows it, which
+    /// names the pane and its tab.
+    Prompt(String),
+}
+
 pub(crate) struct Config {
     pub agent: String,
     pub cwd: PathBuf,
@@ -120,7 +129,7 @@ struct Asked {
     request: wire::RequestId,
 }
 
-pub(crate) struct Session<R: FnMut(Activity)> {
+pub(crate) struct Session<R: FnMut(Update)> {
     /// What the agent takes in a prompt besides text, from its handshake.
     accepts: crate::files::Accepts,
     acp_session: Option<wire::SessionId>,
@@ -146,7 +155,7 @@ pub(crate) struct Session<R: FnMut(Activity)> {
     turn: Option<i64>,
 }
 
-impl<R: FnMut(Activity)> Session<R> {
+impl<R: FnMut(Update)> Session<R> {
     pub(crate) fn new(config: Config, outbox: rpc::Outbox, report: R) -> Self {
         let transcript = Transcript::new(config.agent.clone());
         Self {
@@ -315,7 +324,7 @@ impl<R: FnMut(Activity)> Session<R> {
         };
         if self.activity != Some(activity) {
             self.activity = Some(activity);
-            (self.report)(activity);
+            (self.report)(Update::Activity(activity));
         }
     }
 

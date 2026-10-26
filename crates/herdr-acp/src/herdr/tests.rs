@@ -2,6 +2,9 @@
 
 use super::*;
 
+mod naming;
+mod titles;
+
 #[test]
 fn sequence_numbers_keep_increasing() {
     let mut sequence = Sequence::default();

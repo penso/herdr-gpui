@@ -74,7 +74,7 @@ impl FakeClaude {
 }
 
 /// Feeds what the bridge delivers to the session until `done` holds.
-fn pump<R: FnMut(crate::session::Activity)>(
+fn pump<R: FnMut(crate::session::Update)>(
     session: &mut Session<R>,
     delivered: &Receiver<Inbound>,
     done: impl Fn(&Session<R>) -> bool,
