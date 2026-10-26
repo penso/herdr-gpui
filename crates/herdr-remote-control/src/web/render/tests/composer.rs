@@ -51,7 +51,7 @@ fn one_button_stops_or_sends() {
     let send = button(&working, "Send");
     assert!(!stop.contains("display:none"), "{stop}");
     assert!(send.contains("display:none"), "{send}");
-    assert!(send.contains(r#"x-show="!working || draft""#), "{send}");
+    assert!(send.contains(r#"x-show="sendShown""#), "{send}");
     assert!(working.contains("data-working"));
 }
 

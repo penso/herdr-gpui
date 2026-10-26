@@ -310,9 +310,9 @@ fn composer(row: &ChatRow, view: &View) -> Markup {
                 // disabled Send otherwise. app.js flips it as the draft and
                 // the agent's status change; the markup is the first frame.
                 button type="button" class="round-btn bg-red" data-pane=(row.pane) data-command=r#"{"command":"cancel"}"# aria-label="Stop"
-                    x-show="working && !draft" style=[(!working).then_some("display:none")] { (icons::stop(16)) }
+                    x-show="stopShown" style=[(!working).then_some("display:none")] { (icons::stop(16)) }
                 button type="submit" class="round-btn bg-accent disabled:opacity-40" aria-label="Send"
-                    x-show="!working || draft" x-bind:disabled="!draft" disabled style=[working.then_some("display:none")] { (icons::arrow_up(20)) }
+                    x-show="sendShown" x-bind:disabled="sendOff" disabled style=[working.then_some("display:none")] { (icons::arrow_up(20)) }
             }
         }
     }

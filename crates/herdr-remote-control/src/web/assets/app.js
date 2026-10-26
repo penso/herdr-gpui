@@ -1286,6 +1286,16 @@ document.addEventListener("alpine:init", () => {
     refresh() {
       this.draft = this.$refs.text.value.trim() !== "" || this.files.length > 0;
     },
+    // Alpine's CSP build reads properties, not expressions.
+    get stopShown() {
+      return this.working && !this.draft;
+    },
+    get sendShown() {
+      return !this.working || this.draft;
+    },
+    get sendOff() {
+      return !this.draft;
+    },
     // Marks the composer while it holds pictures or work in flight, so a
     // live patch leaves it alone.
     mark() {
