@@ -13,6 +13,7 @@ mod gitlab;
 mod gitlab_hosts;
 mod incremental;
 mod keys;
+mod line_endings;
 mod location;
 mod naming;
 #[cfg(unix)]

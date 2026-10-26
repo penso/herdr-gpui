@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+/// The shim's line endings, on every platform it is built on.
+mod line_endings;
+
 /// The shim run with a fake `herdr`, as an agent on a host runs it.
 #[cfg(unix)]
 mod shim;

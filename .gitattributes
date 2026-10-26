@@ -1,6 +1,9 @@
 # The agent skill is compiled in with include_str! and written out verbatim,
 # so it keeps LF line endings on every platform, Windows checkouts included.
 skills/** text eol=lf
+# Shell scripts run on Unix hosts, including the ones compiled in and sent
+# over SSH from a Windows build, where a CR breaks the shebang and commands.
+*.sh text eol=lf
 
 # Conflicts are rebuilt by Cargo rather than resolved by hand; `just hooks`
 # configures the driver. Without it Git falls back to its ordinary merge.
