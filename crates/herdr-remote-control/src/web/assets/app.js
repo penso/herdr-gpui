@@ -317,10 +317,15 @@ function rememberOrigins(current) {
 
 const view = () => document.getElementById("view");
 
-function show(template) {
+/// One of this app's own templates, which sit directly in the body. A
+/// computer's fragment, inside the view, may carry an element with the same
+/// id; looking up by id alone would find that one first.
+const template = (id) => document.querySelector(`body > template#${id}`);
+
+function show(id) {
   stopStream();
   stopScan();
-  view().replaceChildren(document.getElementById(template).content.cloneNode(true));
+  view().replaceChildren(template(id).content.cloneNode(true));
   view().dataset.local = "";
 }
 
@@ -1035,7 +1040,7 @@ function showComputers() {
   show("t-computers");
   const list = view().querySelector("[data-hosts]");
   for (const host of hosts()) {
-    const row = document.getElementById("t-host").content.firstElementChild.cloneNode(true);
+    const row = template("t-host").content.firstElementChild.cloneNode(true);
     row.dataset.host = host.fingerprint;
     row.querySelector("[data-name]").textContent = host.computer || "Computer";
     row.querySelector("[data-shown]").hidden = host.fingerprint !== app.device?.fingerprint;
