@@ -151,6 +151,40 @@ fn history_recalls_a_repeated_prompt_first_before_its_echo() {
 }
 
 #[test]
+fn history_knows_a_sent_prompts_echo_after_the_transcript_trims() {
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = vec![user(1, "one"), user(2, "two")];
+    let mut history = History::default();
+    history.push("three", &transcript);
+
+    // The oldest prompt is trimmed away before the echo arrives, and
+    // another client sends a prompt after it.
+    transcript.entries = vec![user(2, "two"), user(3, "three"), user(4, "four")];
+    assert_eq!(history.older(&transcript), Some("four"));
+    assert_eq!(history.older(&transcript), Some("three"));
+    assert_eq!(history.older(&transcript), Some("two"), "recalled once");
+}
+
+#[test]
+fn history_knows_a_sent_prompt_that_waits_in_the_queue() {
+    let waiting = |text: &str| Queued {
+        attachments: Vec::new(),
+        id: CommandId::random(),
+        text: text.to_owned(),
+    };
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = vec![user(1, "one")];
+    transcript.queued = vec![waiting("two")];
+    let mut history = History::default();
+    history.push("two", &transcript);
+    transcript.queued.push(waiting("two"));
+    transcript.queued.push(waiting("three"));
+    assert_eq!(history.older(&transcript), Some("three"));
+    assert_eq!(history.older(&transcript), Some("two"));
+    assert_eq!(history.older(&transcript), Some("one"), "recalled once");
+}
+
+#[test]
 fn history_steps_through_what_it_had_when_recall_started() {
     let mut transcript = Transcript::new("Claude");
     transcript.entries = vec![user(1, "one"), user(2, "two")];
