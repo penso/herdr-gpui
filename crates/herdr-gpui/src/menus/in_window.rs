@@ -169,6 +169,16 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// Closes the open popup, which keeps its own copy of the menus, once a
+    /// config change rebuilds the bar so it cannot offer items that left.
+    pub(crate) fn close_stale_application_menu(&mut self, cx: &mut Context<Self>) {
+        if self.menu.application.take().is_none() {
+            return;
+        }
+        self.menu.page = None;
+        cx.notify();
+    }
+
     fn application_back(&mut self, cx: &mut Context<Self>) {
         if let Some(menu) = &mut self.menu.application {
             let selected = menu.path.pop();
