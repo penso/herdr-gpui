@@ -22,6 +22,7 @@ mod refresh;
 mod row_start;
 mod rows;
 mod sessions;
+mod source_chip;
 mod status;
 mod twin_text;
 mod twins;

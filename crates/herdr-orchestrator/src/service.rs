@@ -712,7 +712,19 @@ impl Worker {
             // left by a pull request lookup or another source must not apply.
             self.cooldown = None;
             let state = match self.sync_source(&key, token) {
-                Ok(state) => state,
+                // The view shows no sync times, so the log keeps them.
+                Ok(state) => {
+                    tracing::debug!(
+                        category = "orchestrator_sync",
+                        provider = ?key.provider,
+                        host = key.host.as_str(),
+                        repository = key.repository.as_str(),
+                        elapsed_ms = now.elapsed().as_millis(),
+                        state = ?state,
+                        "Orchestrator source synced"
+                    );
+                    state
+                }
                 Err(Error::Cancelled) => return,
                 Err(error) => {
                     let wait = retry_wait(&error, self.cooldown.take());
