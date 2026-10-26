@@ -44,6 +44,9 @@ const app = {
   retry: 0,
   // Android's install prompt, kept until the footer's Install uses it.
   install: null,
+  // Counts the views shown, so work begun in one leaves alone a view the
+  // phone has moved on to.
+  views: 0,
 };
 
 function readJson(storage, key) {
@@ -325,6 +328,7 @@ const template = (id) => document.querySelector(`body > template#${id}`);
 function show(id) {
   stopStream();
   stopScan();
+  app.views++;
   view().replaceChildren(template(id).content.cloneNode(true));
   view().dataset.local = "";
 }
@@ -392,6 +396,7 @@ async function route(event) {
   app.path = location.pathname;
   delete document.documentElement.dataset.sheet;
   stopStream();
+  app.views++;
   // Only the newest navigation may fill the view or open a stream: an
   // older page answering late must not replace the one the URL names.
   app.routing?.abort();
@@ -627,7 +632,9 @@ async function redeemHandoff(token) {
     const answer = await (
       await call("/api/handoff/redeem", { method: "POST", auth: false, body: { token, public_key: b64url(publicKey) } })
     ).json();
-    await adopt(pairKey, answer);
+    // Redeemed on the page of the computer that made the handoff, so its
+    // own answer names it.
+    await adopt(pairKey, answer, answer.fingerprint);
     return start();
   } catch (failure) {
     report("handoff", failure);
@@ -755,8 +762,11 @@ document.addEventListener("submit", async (event) => {
   form.dataset.sending = "";
   const submit = form.querySelector("[type=submit]");
   if (submit) submit.disabled = true;
+  const shown = app.views;
   try {
     const answer = await (await api(form.dataset.form, { method: "POST", body })).json();
+    // Left while it was sent, for another page or computer: stay there.
+    if (app.views !== shown) return;
     // The form is spent: going back from what it made returns to the list.
     history.replaceState(null, "", answer.location || "/");
     route();
@@ -1172,6 +1182,10 @@ async function pair(link, scanned = false) {
   const origin = link.origin;
   const here = origin === location.origin;
   show("t-approve");
+  // Leaving this view abandons the attempt: an approval that arrives after
+  // must not switch computers under the phone.
+  const shown = app.views;
+  const left = () => app.views !== shown;
   const state = view().querySelector("[data-state]");
   view().querySelector("[data-approve-back]").hidden = !scanned;
   showTrust(origin, params.get("fp") || "", here);
@@ -1186,11 +1200,14 @@ async function pair(link, scanned = false) {
         body: { token: params.get("t"), name: deviceName(), public_key: b64url(publicKey) },
       })
     ).json();
+    if (left()) return;
     view().querySelector("[data-code]").textContent = claim.code.replace(/(\d{3})(\d{3})/, "$1 $2");
     state.textContent = "Waiting for approval…";
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (left()) return;
       const answer = await (await call(`/api/pair/claim/${claim.claim}`, { auth: false, origin })).json();
+      if (left()) return;
       if (answer.state === "approved") {
         await adopt(pairKey, answer, params.get("fp"));
         // Straight home: its footer offers Add to Home Screen.
@@ -1205,6 +1222,7 @@ async function pair(link, scanned = false) {
     }
   } catch (failure) {
     report("pair", failure);
+    if (left()) return;
     // A network failure here is almost always a certificate this phone no
     // longer trusts. Drop the cached app and load the page itself once, so
     // Safari shows its warning instead.
