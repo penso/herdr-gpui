@@ -566,7 +566,7 @@ impl OrchestratorView {
     fn render_sort_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let look = &self.look;
         let theme = &look.theme;
-        deferred(
+        deferred(crate::motion::pop_in(
             div()
                 .absolute()
                 .top(px(120.))
@@ -604,7 +604,8 @@ impl OrchestratorView {
                             cx.notify();
                         }))
                 })),
-        )
+            "orchestrator-sort-menu",
+        ))
     }
 
     fn render_banners(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {

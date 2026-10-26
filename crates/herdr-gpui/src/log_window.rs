@@ -581,7 +581,7 @@ impl Render for LogWindow {
                                     }))
                                     .when_some(self.level_menu, |el, selected| el.child(
                                         deferred(
-                                            anchored().child(
+                                            anchored().child(crate::motion::pop_in(
                                                 div().id("level-menu").debug_selector(|| "level-menu".into())
                                                     .role(Role::Menu).aria_label("Minimum level")
                                                     .absolute().top_full().left_0().w(px(180.))
@@ -607,8 +607,9 @@ impl Render for LogWindow {
                                                                 this.generation = None;
                                                                 this.close_levels(window, cx);
                                                             }))
-                                                    }))
-                                            )
+                                                    })),
+                                                "log-level-menu",
+                                            ))
                                         ).with_priority(1)
                                     )),
                             )

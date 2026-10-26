@@ -240,8 +240,11 @@ impl HerdrWindow {
             }))
             .when_some(review.base_menu.as_ref(), |button, menu| {
                 button.child(
-                    deferred(anchored().child(self.render_base_menu(id, review, menu, cx)))
-                        .with_priority(1),
+                    deferred(anchored().child(crate::motion::pop_in(
+                        self.render_base_menu(id, review, menu, cx),
+                        "review-base-menu",
+                    )))
+                    .with_priority(1),
                 )
             })
     }

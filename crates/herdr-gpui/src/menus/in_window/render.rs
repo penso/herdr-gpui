@@ -473,7 +473,9 @@ impl HerdrWindow {
                     top,
                 ))
                 .snap_to_window_with_margin(Edges::all(px(8.)))
-                .child(panel),
+                // Moving to another heading keeps the menu still: only one
+                // opened from the closed bar drops in.
+                .child(crate::motion::pop_in(panel, "application-menu")),
         )
     }
 }
