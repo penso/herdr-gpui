@@ -67,9 +67,13 @@
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
+          # herdr-automate is the automation daemon the app finds beside its
+          # executable, so both land in $out/bin.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
+            "-p"
+            "herdr-automate"
           ];
           # The optimized CLI suite CI's main-branch build runs; the rest of
           # the workspace suite needs a desktop or a live daemon.

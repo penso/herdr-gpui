@@ -28,6 +28,8 @@
 #define AppName "Herdr UI"
 #define AppExe "herdr-gpui.exe"
 #define Launcher "herdr-gpui-launcher.exe"
+; The automation daemon the app finds beside its executable.
+#define Automate "herdr-automate.exe"
 ; The app's AppUserModelID (herdr_updater::APP_ID), which each window carries with
 ; relaunch properties naming the launcher (src/taskbar.rs). Shortcuts carry it
 ; too, so a pinned shortcut and the window share one taskbar button.
@@ -82,6 +84,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#SourceDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\{#Automate}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 ; Uninstall removes only directories Setup created. Over an install.ps1 copy

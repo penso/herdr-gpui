@@ -114,7 +114,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("secrets.", package)
         # Bash, so "$TARGET" and friends expand on the Windows runner.
         self.assertIn("    defaults:\n      run:\n        shell: bash\n", package)
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-automate --target "$TARGET"',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
                         'python scripts/release/windows-installer.py install-iscc',
                         'python scripts/release/windows-installer.py build "$VERSION" "$TARGET"',
@@ -155,7 +155,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", linux), [
             ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
             ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")])
-        for command in ('cargo build --locked --release -p herdr-gpui --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-automate --target "$TARGET"',
                         'python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'name: linux-package-${{ matrix.target }}',
@@ -172,7 +172,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", windows), [
             ("windows-2025", "x86_64-pc-windows-msvc"),
             ("windows-11-arm", "aarch64-pc-windows-msvc")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-automate --target "$TARGET"',
                         'python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'python scripts/release/generate-notices.py',
@@ -186,6 +186,12 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn("    runs-on: macos-15\n", macos)
         self.assertNotIn("intel", workflow)
         self.assertIn('python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"', macos)
+        # The automation daemon ships beside the app on every platform.
+        self.assertIn('cargo build --locked --release -p herdr-gpui -p herdr-automate --target "$TARGET"', macos)
+        self.assertIn("target/${{ matrix.target }}/release/herdr-automate\n", macos)
+        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate dist", jobs["sign"])
+        self.assertIn('"target/$TARGET/release/herdr-gpui" "target/$TARGET/release/herdr-automate" dist', jobs["linux"])
+        self.assertIn('"target/$TARGET/release/herdr-automate.exe" dist', jobs["windows"])
         for name in ("macos-build", "linux", "windows"):
             # `cargo test` rebuilds the binary with dev-dependency features and
             # overwrites the one built for release; the shipped bytes are
@@ -363,7 +369,7 @@ class WindowsTrust(unittest.TestCase):
         for setting in ("timestamp-rfc3161: http://timestamp.acs.microsoft.com", "timestamp-digest: SHA256",
                         "file-digest: SHA256", "exclude-environment-credential: true",
                         "cache-dependencies: false", "name: windows-package-${{ matrix.target }}",
-                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n",
+                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-automate.exe\n",
                         "name: windows-signed-${{ matrix.target }}"):
             self.assertIn(setting, sign)
         # Unpack, sign, check and repack, then sign the installer, then verify.

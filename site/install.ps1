@@ -4,8 +4,9 @@
 #   irm https://herdrui.dev/install.ps1 | iex
 #
 # It downloads the zip for this machine from GitHub Releases, checks it against
-# the release's published SHA-256, installs herdr-gpui.exe and
-# herdr-gpui-launcher.exe under %LOCALAPPDATA%\Programs\Herdr UI, adds that
+# the release's published SHA-256, installs herdr-gpui.exe,
+# herdr-gpui-launcher.exe, and the automation daemon herdr-automate.exe
+# under %LOCALAPPDATA%\Programs\Herdr UI, adds that
 # directory to the user PATH so herdr-gpui works as a command, and creates a
 # Start menu shortcut to herdr-gpui-launcher.exe, the windowed launcher that
 # starts herdr-gpui.exe without a console window. It never installs, starts or
