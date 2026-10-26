@@ -279,24 +279,46 @@ impl HerdrWindow {
             ToastHerdrPosition::BottomLeft,
             ToastHerdrPosition::BottomRight,
         ] {
-            let cards: Vec<_> = visible
+            let mut cards: Vec<_> = visible
                 .iter()
                 .filter(|(drawn, _)| drawn.corner == position)
                 .map(|(drawn, navigable)| {
                     let shown = self.toast_motion.shown(&drawn.key, now);
+                    let heights = self.toast_motion.heights.clone();
+                    let key = drawn.key.clone();
                     self.toast_card(drawn, look(shown, true, *navigable), cx)
+                        .child(
+                            canvas(
+                                move |bounds, _, _| {
+                                    heights.borrow_mut().insert(key, bounds.size.height);
+                                },
+                                |_, _, _, _| {},
+                            )
+                            .absolute()
+                            .inset_0(),
+                        )
+                        .into_any_element()
                 })
                 .collect();
-            // Leaving cards stack over where they were, apart from the live
-            // ones, so a toast arriving as another goes does not jump.
-            let leaving: Vec<_> = self
+            // A leaving card keeps its place in the stack, and the room it
+            // took closes as it goes, so the cards around it do not jump.
+            let mut leaving: Vec<_> = self
                 .toast_motion
                 .leaving(now)
-                .filter(|(drawn, _)| drawn.corner == position)
-                .map(|(drawn, left)| self.toast_card(drawn, look(left, false, false), cx))
+                .filter(|(gone, _)| gone.drawn.corner == position)
                 .collect();
-            if !leaving.is_empty() {
-                corners.push(corner(position, width).children(leaving).into_any_element());
+            leaving.sort_by_key(|(gone, _)| gone.place);
+            for (gone, left) in leaving {
+                let card = self.toast_card(&gone.drawn, look(left, false, false), cx);
+                let room = div()
+                    .w_full()
+                    .flex_none()
+                    .overflow_hidden()
+                    .when_some(gone.height, |room, height| {
+                        room.h(height * left).mb(px(-GAP * (1. - left)))
+                    })
+                    .child(card);
+                cards.insert(gone.place.min(cards.len()), room.into_any_element());
             }
             if !cards.is_empty() {
                 corners.push(
@@ -311,6 +333,9 @@ impl HerdrWindow {
     }
 }
 
+/// The space between stacked toasts.
+const GAP: f32 = 8.;
+
 /// The column toasts stack in at `position`, `width` wide.
 fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
     use ToastHerdrPosition::*;
@@ -319,7 +344,7 @@ fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
         .w(width)
         .flex()
         .flex_col()
-        .gap(px(8.))
+        .gap(px(GAP))
         .map(|d| match position {
             TopLeft | TopRight => d.top(px(72.)),
             BottomLeft | BottomRight => d.bottom(px(36.)),
@@ -331,8 +356,9 @@ fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
 }
 
 impl HerdrWindow {
-    /// Whether toasts or the file-transfer card show now, as their renders
-    /// decide: nothing shows over an open menu or in a window too small.
+    /// Whether toasts, ones still sliding out among them, or the
+    /// file-transfer card show now, as their renders decide: nothing shows
+    /// over an open menu or in a window too small.
     /// Only Windows hides pages under these.
     #[cfg(windows)]
     pub(crate) fn overlays_shown(&self) -> bool {
@@ -341,13 +367,18 @@ impl HerdrWindow {
         }
         self.file_transfer.is_some()
             || (!self.toasts_hidden
-                && self.endpoints.iter().any(|endpoint| {
-                    endpoint
-                        .toasts
-                        .entries
-                        .iter()
-                        .any(|(_, notice)| notice.visible)
-                }))
+                && (self
+                    .toast_motion
+                    .leaving(crate::motion::now())
+                    .next()
+                    .is_some()
+                    || self.endpoints.iter().any(|endpoint| {
+                        endpoint
+                            .toasts
+                            .entries
+                            .iter()
+                            .any(|(_, notice)| notice.visible)
+                    })))
     }
 }
 

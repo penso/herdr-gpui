@@ -57,7 +57,7 @@ fn a_new_toast_slides_in_and_a_gone_one_slides_out() {
     assert_eq!(toasts.shown(&new.key, start), 0.);
     let leaving: Vec<_> = toasts.leaving(start).collect();
     assert_eq!(leaving.len(), 1);
-    assert_eq!(leaving[0].0.key, old.key);
+    assert_eq!(leaving[0].0.drawn.key, old.key);
     assert_eq!(leaving[0].1, 1.);
     assert!(toasts.moving());
     let done = start + ENTER;

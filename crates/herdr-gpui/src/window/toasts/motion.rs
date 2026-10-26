@@ -1,16 +1,20 @@
 //! Toasts slide in from the side of the corner they sit in and slide back
 //! out when they expire or are dismissed. A toast on its way out is a copy of
 //! the last one drawn: the queue has already let it go, so it takes no input
-//! and keeps what it said.
+//! and keeps what it said. It keeps its place in the stack too, and the room
+//! it took closes as it goes, so the toasts around it do not jump.
 
 use crate::{
     motion::{self, ENTER, LEAVE},
     notifications::Notice,
     state::LiveState,
 };
+use gpui::Pixels;
 use herdr_client::protocol::ToastHerdrPosition;
 use std::{
+    cell::RefCell,
     collections::HashMap,
+    rc::Rc,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -40,6 +44,10 @@ pub(super) struct Drawn {
 pub(super) struct Leaving {
     pub(super) drawn: Drawn,
     since: Instant,
+    /// Where it sat among its corner's toasts, from the column's start.
+    pub(super) place: usize,
+    /// Its height as last laid out, the room that closes as it goes.
+    pub(super) height: Option<Pixels>,
 }
 
 #[derive(Default)]
@@ -49,6 +57,8 @@ pub(crate) struct ToastMotion {
     drawn: Option<Vec<Drawn>>,
     arriving: HashMap<Key, Instant>,
     leaving: Vec<Leaving>,
+    /// Each drawn toast's height as last laid out.
+    pub(super) heights: Rc<RefCell<HashMap<Key, Pixels>>>,
     /// Unit tests see toasts settled unless one asks to see them move, so
     /// card checks need not wait out the motion.
     #[cfg(test)]
@@ -72,15 +82,25 @@ impl ToastMotion {
                         .retain(|leaving| leaving.drawn.key != toast.key);
                 }
             }
+            let heights = self.heights.borrow();
             for old in last {
                 if !drawn.iter().any(|toast| toast.key == old.key) {
                     self.leaving.push(Leaving {
                         drawn: old.clone(),
                         since: now,
+                        place: last
+                            .iter()
+                            .filter(|toast| toast.corner == old.corner)
+                            .position(|toast| toast.key == old.key)
+                            .unwrap_or_default(),
+                        height: heights.get(&old.key).copied(),
                     });
                 }
             }
         }
+        self.heights
+            .borrow_mut()
+            .retain(|key, _| drawn.iter().any(|toast| toast.key == *key));
         self.drawn = Some(drawn);
         self.arriving
             .retain(|_, since| motion::progress(*since, now, ENTER).is_some());
@@ -97,10 +117,19 @@ impl ToastMotion {
     }
 
     /// The toasts sliding out, each with how much of it is left at `now`.
-    pub(super) fn leaving(&self, now: Instant) -> impl Iterator<Item = (&Drawn, f32)> {
+    pub(super) fn leaving(&self, now: Instant) -> impl Iterator<Item = (&Leaving, f32)> {
         self.leaving.iter().filter_map(move |leaving| {
-            motion::progress(leaving.since, now, LEAVE).map(|k| (&leaving.drawn, 1. - k))
+            motion::progress(leaving.since, now, LEAVE).map(|k| (leaving, 1. - k))
         })
+    }
+
+    /// Holds the toasts sliding out at the start of their way, however long
+    /// the frames take.
+    #[cfg(test)]
+    pub(super) fn hold(&mut self, start: Instant) {
+        for leaving in &mut self.leaving {
+            leaving.since = start;
+        }
     }
 
     /// Whether any toast is still sliding.

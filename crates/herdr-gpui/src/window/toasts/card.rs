@@ -43,6 +43,12 @@ impl HerdrWindow {
                 "toast-{endpoint_id}-{generation}-{id}{}",
                 if look.live { "" } else { "-leaving" }
             )))
+            .when(!look.live, |card| {
+                card.debug_selector({
+                    let endpoint_id = endpoint_id.clone();
+                    move || format!("toast-leaving-{endpoint_id}-{id}")
+                })
+            })
             .when(look.live, |card| {
                 card.debug_selector({
                     let endpoint_id = endpoint_id.clone();
