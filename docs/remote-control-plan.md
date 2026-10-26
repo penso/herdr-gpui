@@ -255,7 +255,8 @@ committed; Alpine's CSP build is vendored; everything is embedded with
   option buttons, "always" options set apart, opening by itself when a
   question arrives.
 - **Composer**: pinned above the keyboard (`visualViewport`), safe-area
-  insets, send and stop sharing one button, photo attachment. Typing `/`
+  insets, send and stop sharing one button, photo attachment, from the
+  picker or a pasted screenshot; a prompt may be pictures alone. Typing `/`
   lists the first commands whose names start with what follows, with
   their descriptions; tapping one fills it in.
 - System light or dark, colors exported from the desktop theme as CSS
@@ -284,6 +285,12 @@ focus nor resize anything:
   `ctrl+c`, `esc`, `up`, `pageup`), because `pane.send_text` arrives as a
   bracketed paste, which an editor inserts rather than runs; a paste uses
   `pane.send_text`.
+- **Pasting**: the field that raises the keyboard is hidden, so no native
+  Paste menu reaches it; a header Paste button reads the clipboard
+  (Safari asks first). Text goes as a paste; a screenshot, or a picture
+  from the picture button, is stored like a chat upload and its path typed
+  into the pane with shell characters escaped, as a file dropped on a
+  terminal is, so Claude Code and the like attach it.
 - **Actions** (the sheet): `pane.split {direction: right|down, focus:
   false}`, `pane.zoom`, `pane.close`, `tab.create {focus: false}`,
   `tab.close`, and moving between panes on the phone only.
@@ -298,14 +305,31 @@ phone never disturbs the desktop's layout.
 ## Several computers
 
 - The phone pairs each computer once; each pairing stores that computer's
-  addresses, CA, and device key. Home lists them all, merged.
-- Requests already use bearer tokens and CORS for the home origin, so one
-  installed app can talk to every computer's daemon.
+  addresses, CA fingerprint, and device key. Home lists them all, merged.
+- Built so far: the app keeps a list of computers (`herdr.hosts`, keyed by
+  CA fingerprint, keys under `device:ID`). Tapping the computer's name on
+  home opens Computers: each one with the address it answers at now, the
+  one shown marked, and Add a computer, which scans a pairing code with
+  the camera (jsQR, vendored) and pairs from inside the app. On launch the
+  app shows the computer shown last when it answers, otherwise the first
+  that does; a dropped stream reconnects to the same computer. `/api/ping`
+  returns the fingerprint, so an address that answers as another computer
+  is skipped. Home still shows one computer at a time.
+- Requests use bearer tokens, so one installed app can talk to every
+  computer's daemon. CORS admits a computer's own origins and the origins
+  of apps its paired devices use: any origin may claim a pairing and poll
+  the claim (which takes the one-minute token from the desktop's code),
+  and the desktop's approval stores that app's origin on the device
+  (`app` in `devices.json`), admitted until the device is revoked or
+  expires.
 - Push: a push subscription is bound to one sender key (VAPID), so each
   computer gets its own subscription, through one service worker
   registration per computer under its own scope (`/m/COMPUTER/`). Phase 0
   checks that an installed iOS PWA accepts several registrations; if not,
   the home computer relays the others' notifications.
+  Until then the app holds one subscription, for one computer
+  (`herdr.push-host`); Settings on any other says where notifications come
+  from, and a notification opens its page on the computer shown.
 - SSH hosts a paired computer's Herdr UI connects to appear as their own
   sections, reached through that computer with `herdr-acp connect ID`, with
   no pairing of their own.

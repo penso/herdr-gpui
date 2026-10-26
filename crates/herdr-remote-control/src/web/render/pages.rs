@@ -1,7 +1,7 @@
 //! Forms and settings: a new workspace, a new chat in a workspace, and this
 //! phone's settings.
 
-use super::{display_folder, home::urlencode, icons};
+use super::{display_folder, home::urlencode, icons, nav};
 use crate::hub::Workspace;
 use herdr_chat_protocol::Agent;
 use maud::{Markup, html};
@@ -107,11 +107,14 @@ pub(crate) fn devices(computer: &str, origins: &[String], fingerprint: &str) -> 
             div class="group-list" {
                 @for origin in origins { div class="row text-sm font-mono" { span class="min-w-0 break-all" { (origin) } } }
                 div class="row items-start text-xs text-muted" { span class="shrink-0" { "Certificate" } span class="min-w-0 break-all font-mono" { (fingerprint) } }
-                a class="row text-accent" href="/ca.mobileconfig" { "Install the certificate (iPhone, iPad)" }
-                a class="row text-accent" href="/ca.pem" download="herdr-remote-ca.pem" { "Download the certificate (Android)" }
+                // `data-computer`: the app points these at the computer it
+                // shows, which need not be the one it was installed from.
+                a class="row text-accent" href="/ca.mobileconfig" data-computer { "Install the certificate (iPhone, iPad)" }
+                a class="row text-accent" href="/ca.pem" download="herdr-remote-ca.pem" data-computer { "Download the certificate (Android)" }
             }
             h2 class="section-title" { "This phone" }
             div class="group-list" {
+                (nav("/computers", "row text-accent", html! { "Computers" }))
                 button type="button" class="row text-red w-full text-left" x-on:click="forget" { "Forget this computer" }
             }
         }

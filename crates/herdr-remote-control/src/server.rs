@@ -85,6 +85,7 @@ pub async fn run(options: Options) -> Result<()> {
         .and_then(|vapid| Sender::new(vapid, PUSH_SUBJECT))
         .ok();
     let auth = Auth::load(&options.state_dir, Limits::default())?;
+    let apps = auth.apps();
     let apns = crate::apns::Sender::load(&options.state_dir)?;
     // Only origins this computer's own authority serves may be remembered.
     let seen = match &authority {
@@ -94,6 +95,7 @@ pub async fn run(options: Options) -> Result<()> {
     let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
     let state = Arc::new(State {
         apns,
+        apps,
         auth: Mutex::new(auth),
         authority,
         computer: options::computer_name(),

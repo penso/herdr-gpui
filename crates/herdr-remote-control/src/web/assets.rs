@@ -33,6 +33,7 @@ const ASSETS: &[Asset] = assets! {
     "icon-192.png" => "image/png",
     "icon-512.png" => "image/png",
     "icon.svg" => "image/svg+xml",
+    "jsqr.min.js" => "text/javascript; charset=utf-8",
     // keep-sorted end
 };
 

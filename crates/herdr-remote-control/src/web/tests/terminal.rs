@@ -145,3 +145,46 @@ async fn only_terminal_panes_are_read() {
     let (status, _, _) = send(&state, authorized(get("/f/term/t2-p1"), &token)).await;
     assert_ne!(status, StatusCode::NOT_FOUND);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_pasted_picture_is_typed_as_a_dropped_file() {
+    use crate::web::terminal::dropped_path;
+    let path = std::path::Path::new("/Users/me/Library/Application Support/herdr (1)/a1.png");
+    assert_eq!(
+        dropped_path(path),
+        r"/Users/me/Library/Application\ Support/herdr\ \(1\)/a1.png "
+    );
+}
+
+#[tokio::test]
+async fn pictures_reach_only_terminal_panes() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = with_terminal(dir.path());
+    let (_, token) = signed_in(&state, 6);
+    let upload = |pane: &str, bytes: &'static [u8]| {
+        let request = HttpRequest::post(format!("/api/term/{pane}/upload"))
+            .header(header::CONTENT_TYPE, "image/png")
+            .body(Body::from(bytes))
+            .unwrap();
+        authorized(request, &token)
+    };
+    let png: &[u8] = b"\x89PNG\r\n\x1a\n rest";
+    assert_eq!(
+        send(&state, upload("p9", png)).await.0,
+        StatusCode::NOT_FOUND
+    );
+    let (status, _, body) = send(&state, upload("t2-p1", b"not a picture")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    // A picture for a known pane is stored, then its path goes to Herdr,
+    // which this test has none of.
+    let (status, _, _) = send(&state, upload("t2-p1", png)).await;
+    assert_ne!(status, StatusCode::OK);
+    assert_ne!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("uploads"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
