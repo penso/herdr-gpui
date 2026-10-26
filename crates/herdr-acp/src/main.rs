@@ -11,6 +11,8 @@ mod error;
 mod files;
 mod harness;
 mod herdr;
+mod mirror;
+mod observe;
 mod pi;
 mod pictures;
 mod process;
@@ -45,6 +47,20 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(cli::Parsed::Connect(id)) => match relay::run(&id) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("herdr-acp: {error:#}");
+                ExitCode::FAILURE
+            }
+        },
+        Ok(cli::Parsed::Mirror(options)) => match mirror::run(options) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("herdr-acp: {error:#}");
+                ExitCode::FAILURE
+            }
+        },
+        Ok(cli::Parsed::Observe(options)) => match observe::run(options) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("herdr-acp: {error:#}");

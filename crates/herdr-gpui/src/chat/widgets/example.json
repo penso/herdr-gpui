@@ -1,0 +1,16 @@
+{
+  "title": "Compare an analysis run",
+  "components": [
+    { "type": "text", "text": "Explore the settings below, then add your selection to the conversation for review." },
+    { "type": "card", "title": "Validation sample", "text": "The figures here are illustrative. Changing a control does not start a job." },
+    { "type": "metric", "label": "Validation accuracy", "value": "98.2%", "detail": "Illustrative result · 2,000 events" },
+    { "type": "choice", "id": "method", "label": "Estimator", "options": ["Baseline", "Reweighted", "Combined"], "value": "Reweighted" },
+    { "type": "toggle", "id": "uncertainty", "label": "Include uncertainty", "value": true },
+    { "type": "slider", "id": "threshold", "label": "Selection threshold", "min": 0, "max": 1, "step": 0.05, "value": 0.6 },
+    { "type": "input", "id": "note", "label": "Question for the agent", "placeholder": "What would you like to investigate?", "value": "Compare stability across the validation bins." },
+    { "type": "table", "columns": ["Estimator", "Accuracy", "Time"], "rows": [["Baseline", "94.1%", "12 s"], ["Reweighted", "98.2%", "18 s"], ["Combined", "98.6%", "24 s"]] },
+    { "type": "chart", "label": "Illustrative accuracy (%)", "points": [{ "label": "Baseline", "value": 94.1 }, { "label": "Reweighted", "value": 98.2 }, { "label": "Combined", "value": 98.6 }] },
+    { "type": "action", "label": "Review selection", "prompt": "Review the selected analysis settings and explain the tradeoffs before running anything.", "mode": "draft" },
+    { "type": "action", "label": "Discuss selection", "prompt": "Explain the selected analysis settings and answer my question. Do not start any jobs.", "mode": "send" }
+  ]
+}

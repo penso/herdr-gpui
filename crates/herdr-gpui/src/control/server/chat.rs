@@ -81,7 +81,10 @@ fn start_code(error: &crate::chat::StartError) -> ErrorCode {
 }
 
 mod info {
-    use crate::{HerdrWindow, control::protocol::chat::ChatInfo};
+    use crate::{
+        HerdrWindow,
+        control::protocol::chat::{ChatInfo, InputMode},
+    };
     use herdr_chat_protocol::Status;
 
     pub(super) fn infos(view: &HerdrWindow) -> Vec<ChatInfo> {
@@ -89,16 +92,38 @@ mod info {
             .panes()
             .map(|chat| {
                 let transcript = chat.session.transcript();
-                let status = match transcript.status {
+                let mut status = match transcript.status {
                     Status::Starting => "starting",
                     Status::Idle => "idle",
                     Status::Working => "working",
                     Status::Failed { .. } => "failed",
                     Status::Exited { .. } => "exited",
                 };
+                if chat.target.existing.is_some()
+                    && view.live.snapshot.as_ref().is_some_and(|snapshot| {
+                        snapshot.agents.iter().any(|agent| {
+                            agent.pane_id == chat.target.pane_id
+                                && agent.agent_status
+                                    == herdr_client::protocol::AgentStatus::Blocked
+                        })
+                    })
+                {
+                    status = "blocked";
+                }
                 ChatInfo {
                     pane_id: chat.target.pane_id.clone(),
                     agent: chat.session.agent().to_owned(),
+                    input_mode: if chat.target.existing.is_some() {
+                        InputMode::Terminal
+                    } else if transcript.read_only {
+                        InputMode::ReadOnly
+                    } else {
+                        InputMode::Chat
+                    },
+                    session_id: transcript
+                        .session
+                        .as_ref()
+                        .map(|session| session.id.clone()),
                     status: status.into(),
                     attached: chat.attached(),
                     shown: view.chats.shown(&chat.target.pane_id),

@@ -491,7 +491,7 @@ pub(super) const CATALOG: &[Entry] = &[
         Section::RemoteControl,
         "remote-idle",
         "Forget idle devices after",
-        "Days a paired device may stay away before it must pair again.",
+        "A day, a week, a month, or never: how long a paired device may stay away.",
     ),
     entry(
         Section::RemoteControl,

@@ -49,6 +49,7 @@ async fn a_phone_pairs_with_the_desktops_approval_and_signs_in() {
     let Response::Pairing(PairingState::Claimed {
         device_name,
         code: shown,
+        ..
     }) = control(
         &state,
         Request::Pairing {

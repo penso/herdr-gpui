@@ -124,19 +124,24 @@ impl Uploads {
         attachments: &[Attachment],
         now_ms: u64,
     ) -> Result<Vec<Attachment>, Error> {
-        let uploads = self.uploads.lock().unwrap_or_else(PoisonError::into_inner);
         attachments
             .iter()
             .map(|attachment| {
-                uploads
-                    .get(&attachment.path)
-                    .filter(|upload| now_ms.saturating_sub(upload.created_ms) < LIFETIME_MS)
-                    .map(|upload| Attachment {
-                        path: upload.path.to_string_lossy().into_owned(),
-                    })
-                    .ok_or(Error::UnknownUpload)
+                self.path(&attachment.path, now_ms).map(|path| Attachment {
+                    path: path.to_string_lossy().into_owned(),
+                })
             })
             .collect()
+    }
+
+    /// Where the upload `id` names was written, while it is still kept.
+    pub(crate) fn path(&self, id: &str, now_ms: u64) -> Result<PathBuf, Error> {
+        let uploads = self.uploads.lock().unwrap_or_else(PoisonError::into_inner);
+        uploads
+            .get(id)
+            .filter(|upload| now_ms.saturating_sub(upload.created_ms) < LIFETIME_MS)
+            .map(|upload| upload.path.clone())
+            .ok_or(Error::UnknownUpload)
     }
 
     /// Deletes every picture an earlier run left: their ids died with it,

@@ -73,10 +73,8 @@ impl Glide {
         });
     }
 
-    /// Takes a scroll a test made on the list as the user's own: it stops
-    /// the following unless it ends at the end. The user's wheel and
-    /// trackpad tell the list directly.
-    #[cfg(test)]
+    /// A keyboard or test scroll stops following unless it ends at the end.
+    /// Wheel and trackpad events tell the list directly.
     pub(crate) fn user_scrolled(&self) {
         self.scrolled.set(true);
     }

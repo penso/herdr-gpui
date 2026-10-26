@@ -80,6 +80,16 @@ impl Session {
         &self.transcript
     }
 
+    /// A log observer cannot infer live execution state from historical text.
+    /// Its daemon supplies status without changing the transcript wire cursor.
+    pub(crate) fn set_observed_status(&mut self, status: herdr_chat_protocol::Status) -> bool {
+        if !self.transcript.read_only || self.transcript.status == status {
+            return false;
+        }
+        self.transcript.status = status;
+        true
+    }
+
     pub(crate) fn agent(&self) -> &str {
         if self.transcript.agent.is_empty() {
             &self.agent
@@ -129,6 +139,9 @@ impl Session {
 
     /// Records `command` as waiting and returns the message that sends it.
     pub(crate) fn submit(&mut self, command: Command) -> Result<ClientMessage> {
+        if self.transcript.read_only {
+            return Err(Error::ReadOnly);
+        }
         if self.pending.len() >= MAX_PENDING {
             return Err(Error::Busy);
         }

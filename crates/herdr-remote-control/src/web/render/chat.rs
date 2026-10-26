@@ -284,7 +284,7 @@ fn entry_view(entry: &Entry, focus: bool) -> Markup {
         EntryKind::Turn(summary) => html! {
             div class="text-[11px] text-faint text-center border-t border-dashed border-line pt-1.5" { (summary.describe()) }
         },
-        EntryKind::Notice { level, text } => html! {
+        EntryKind::Notice { level, text, .. } => html! {
             div class={ "text-sm " (match level { NoticeLevel::Error => "text-red", NoticeLevel::Warning => "text-amber", NoticeLevel::Info => "text-muted" }) } { (text) }
         },
     }
@@ -380,7 +380,7 @@ fn composer(row: &ChatRow, view: &View) -> Markup {
     let transcript = &view.transcript;
     let working = transcript.status == Status::Working;
     html! {
-        form id="chat-composer" class="composer" x-data="composer" data-pane=(row.pane) x-on:submit="send" {
+        form id="chat-composer" class="composer" x-data="composer" data-pane=(row.pane) data-working[working] x-on:submit="send" {
             // Typing "/" lists the commands whose names start with what
             // follows; app.js shows the first few.
             @if !transcript.commands.is_empty() {
@@ -399,14 +399,18 @@ fn composer(row: &ChatRow, view: &View) -> Markup {
             div class="flex items-end gap-2 bg-raised rounded-3xl pl-1.5 pr-1.5 py-1.5" {
                 input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple x-ref="file" x-on:change="attach" class="hidden";
                 button type="button" class="w-9 h-9 grid place-items-center text-muted shrink-0" x-on:click="pick" aria-label="Attach a picture" { (icons::plus(22)) }
-                textarea name="text" rows="1" x-ref="text" x-on:input="grow" x-on:keydown="key"
-                    class="flex-1 bg-transparent resize-none outline-none py-1.5 max-h-40 placeholder:text-faint"
+                textarea name="text" rows="1" x-ref="text" x-on:input="grow" x-on:keydown="key" x-on:paste="paste"
+                    class="flex-1 min-w-0 bg-transparent resize-none outline-none py-1.5 max-h-40 placeholder:text-faint"
                     placeholder=(if working { "Queue a prompt…" } else { "Message the agent…" })
                     disabled[!transcript.status.accepts_prompts() || !view.connected] {}
-                @if working {
-                    button type="button" class="round-btn bg-red" data-pane=(row.pane) data-command=r#"{"command":"cancel"}"# aria-label="Stop" { (icons::stop(16)) }
-                }
-                button type="submit" class="round-btn bg-accent" aria-label="Send" { (icons::arrow_up(20)) }
+                // One button: Stop while the agent works and the draft is
+                // empty, Send once there is something to send, and a
+                // disabled Send otherwise. app.js flips it as the draft and
+                // the agent's status change; the markup is the first frame.
+                button type="button" class="round-btn bg-red" data-pane=(row.pane) data-command=r#"{"command":"cancel"}"# aria-label="Stop"
+                    x-show="stopShown" style=[(!working).then_some("display:none")] { (icons::stop(16)) }
+                button type="submit" class="round-btn bg-accent disabled:opacity-40" aria-label="Send"
+                    x-show="sendShown" x-bind:disabled="sendOff" disabled style=[working.then_some("display:none")] { (icons::arrow_up(20)) }
             }
         }
     }

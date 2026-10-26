@@ -12,6 +12,7 @@ use axum::{
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
+mod apps;
 mod handoff;
 mod indicators;
 mod origins;
@@ -42,9 +43,11 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
     let names = Names::new([IpAddr::V4(Ipv4Addr::new(192, 168, 1, 20))], Some("studio"));
     let authority = Authority::load_or_create(dir).unwrap();
     let seen = Origins::load(dir, authority.fingerprint());
+    let auth = Auth::load(dir, Limits::default()).unwrap();
     Arc::new(State {
         apns: None,
-        auth: Mutex::new(Auth::load(dir, Limits::default()).unwrap()),
+        apps: auth.apps(),
+        auth: Mutex::new(auth),
         computer: "Studio".into(),
         connected: Mutex::new(HashMap::new()),
         fingerprint: authority.fingerprint().to_owned(),
@@ -83,7 +86,7 @@ pub(super) async fn send(
 
 /// Pairs a phone whose key comes from `seed` straight through `Auth` and
 /// signs it in: its device and bearer token.
-pub(super) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
+pub(crate) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     use p256::ecdsa::{Signature, SigningKey, signature::Signer};
     let key = SigningKey::from_slice(&[seed; 32]).unwrap();

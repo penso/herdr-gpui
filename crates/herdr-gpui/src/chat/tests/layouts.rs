@@ -10,6 +10,8 @@ use crate::{HerdrWindow, chat::chats::Chats, config::ChatLayoutMode};
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use herdr_client::ConnectTarget;
 
+mod prompt_width;
+
 fn switch(view: &Entity<HerdrWindow>, mode: ChatLayoutMode, cx: &mut VisualTestContext) {
     view.update(cx, |view, cx| {
         view.set_chat_layout_with(mode, |_| Ok(()), cx)

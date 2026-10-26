@@ -5,7 +5,7 @@
 //! shade off the background with no border, its settings along the foot.
 
 use super::{
-    super::{Hues, agent_icon, column},
+    super::{Hues, agent_icon},
     ChatLayout, ComposerParts, Look, Row, Side, side, summary_row,
 };
 use crate::{config::corners, notifications::safe_text};
@@ -22,7 +22,7 @@ pub(super) struct Timeline;
 impl ChatLayout for Timeline {
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(this_side) = row.side() else {
-            return summary_row(row, SPACING + 4.);
+            return summary_row(row, look, SPACING + 4.);
         };
         let speaker = row.speaker();
         let theme = look.theme;
@@ -56,7 +56,7 @@ impl ChatLayout for Timeline {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(name)
         });
-        column(
+        look.column(
             div()
                 .id(("chat-entry", row.entry.id.0))
                 .flex()

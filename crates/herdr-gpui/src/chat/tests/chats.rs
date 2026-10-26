@@ -7,10 +7,42 @@ const B: &str = "fedcba9876543210fedcba9876543210";
 
 fn target(pane: &str, endpoint: &str) -> Target {
     Target {
+        existing: None,
         endpoint: endpoint.parse::<EndpointId>().unwrap(),
         pane_id: pane.into(),
         route: Route::Local,
     }
+}
+
+#[test]
+fn an_observed_process_exit_immediately_restores_the_terminal() {
+    let mut harness = Harness::new();
+    let mut target = target("p1", A);
+    target.existing = Some(existing::Binding {
+        pane_id: "p1".into(),
+        agent: herdr_chat_protocol::Agent::Codex,
+        session_id: "01234567-89ab-4cde-8123-456789abcdef".into(),
+        herdr_session: None,
+        pid: 21,
+        shell_pid: 20,
+        started_ticks: 123,
+    });
+    harness.reconcile(vec![target]);
+    let (mut stream, _) = harness.program.accept();
+    send(&mut stream, &welcome());
+    send(
+        &mut stream,
+        &snapshot(cursor(1, 0), vec![agent(1, "History")]),
+    );
+    harness.poll_until(|chats| chats.pane("p1").is_some_and(|pane| pane.available()));
+    send(
+        &mut stream,
+        &ServerMessage::Bye {
+            reason: ByeReason::Exiting,
+        },
+    );
+    harness.poll_until(|chats| chats.pane("p1").is_some_and(|pane| !pane.attached()));
+    assert!(!harness.chats.pane("p1").unwrap().available());
 }
 
 /// A window's chats, connecting every pane to one stand-in program.

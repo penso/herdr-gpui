@@ -101,12 +101,14 @@ class RepackTests(unittest.TestCase):
         self.app = executable()
         self.launcher = executable(length=0x303)
         self.acp = executable(length=0x305)
-        self.automate = executable(length=0x307)
+        self.remote_control = executable(length=0x307)
+        self.automate = executable(length=0x309)
         self.archive = self.work / f"{ROOT}.zip"
         with zipfile.ZipFile(self.archive, "w") as release:
             PACKAGE.add(release, f"{ROOT}/herdr-gpui.exe", self.app)
             PACKAGE.add(release, f"{ROOT}/herdr-gpui-launcher.exe", self.launcher)
             PACKAGE.add(release, f"{ROOT}/herdr-acp.exe", self.acp)
+            PACKAGE.add(release, f"{ROOT}/herdr-remote-control.exe", self.remote_control)
             PACKAGE.add(release, f"{ROOT}/herdr-automate.exe", self.automate)
             PACKAGE.add(release, f"{ROOT}/licenses/LICENSE", b"license")
         self.output = self.work / "signed"
@@ -118,6 +120,7 @@ class RepackTests(unittest.TestCase):
         (root / "herdr-gpui.exe").write_bytes(sign(self.app))
         (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))
         (root / "herdr-acp.exe").write_bytes(sign(self.acp))
+        (root / "herdr-remote-control.exe").write_bytes(sign(self.remote_control))
         (root / "herdr-automate.exe").write_bytes(sign(self.automate))
         return root
 
@@ -127,10 +130,11 @@ class RepackTests(unittest.TestCase):
         self.assertEqual(output, self.output.resolve() / self.archive.name)
         with zipfile.ZipFile(self.archive) as unsigned, zipfile.ZipFile(output) as signed:
             self.assertEqual(signed.namelist(), unsigned.namelist())
-            self.assertEqual([i.date_time for i in signed.infolist()], [PACKAGE.TIMESTAMP] * 5)
+            self.assertEqual([i.date_time for i in signed.infolist()], [PACKAGE.TIMESTAMP] * len(unsigned.infolist()))
             self.assertEqual(signed.read(f"{ROOT}/herdr-gpui.exe"), sign(self.app))
             self.assertEqual(signed.read(f"{ROOT}/herdr-gpui-launcher.exe"), sign(self.launcher))
             self.assertEqual(signed.read(f"{ROOT}/herdr-acp.exe"), sign(self.acp))
+            self.assertEqual(signed.read(f"{ROOT}/herdr-remote-control.exe"), sign(self.remote_control))
             self.assertEqual(signed.read(f"{ROOT}/herdr-automate.exe"), sign(self.automate))
             self.assertEqual(signed.read(f"{ROOT}/licenses/LICENSE"), b"license")
         with self.assertRaisesRegex(ValueError, "Output already exists"):
@@ -143,6 +147,8 @@ class RepackTests(unittest.TestCase):
              lambda: (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))),
             ("unsigned herdr-acp", lambda: (root / "herdr-acp.exe").write_bytes(self.acp),
              lambda: (root / "herdr-acp.exe").write_bytes(sign(self.acp))),
+            ("unsigned herdr-remote-control", lambda: (root / "herdr-remote-control.exe").write_bytes(self.remote_control),
+             lambda: (root / "herdr-remote-control.exe").write_bytes(sign(self.remote_control))),
             ("unsigned herdr-automate", lambda: (root / "herdr-automate.exe").write_bytes(self.automate),
              lambda: (root / "herdr-automate.exe").write_bytes(sign(self.automate))),
             ("changed license", lambda: (root / "licenses/LICENSE").write_bytes(b"other"),

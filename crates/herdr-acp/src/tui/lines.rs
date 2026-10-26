@@ -138,7 +138,7 @@ pub(crate) fn entry(entry: &Entry, width: usize) -> Vec<Line<'static>> {
                 Style::default().fg(Color::DarkGray),
             ));
         }
-        EntryKind::Notice { level, text } => {
+        EntryKind::Notice { level, text, .. } => {
             let color = match level {
                 NoticeLevel::Info => Color::Blue,
                 NoticeLevel::Warning => Color::Yellow,

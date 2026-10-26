@@ -17,9 +17,9 @@ fn platform_defaults_are_complete_unique_and_leave_edit_keys_available() {
     let keymap = with(&[]).unwrap();
     let mut seen = HashMap::new();
     for info in COMMANDS {
-        assert_eq!(
-            info.default_shortcuts().len(),
-            info.base_shortcuts().len(),
+        // A platform can append aliases for normalized backend keystrokes.
+        assert!(
+            info.default_shortcuts().len() >= info.base_shortcuts().len(),
             "{}",
             info.name
         );
@@ -59,9 +59,20 @@ fn linux_shortcuts_preserve_terminal_keys_and_shifted_actions() {
         (Command::SplitRight, "ctrl-shift-d"),
         (Command::SplitDown, "ctrl-alt-shift-d"),
         (Command::CopyMode, "ctrl-alt-shift-c"),
+        (Command::IncreaseFontSize, "ctrl-shift-="),
+        (Command::DecreaseFontSize, "ctrl-shift--"),
+        (Command::ResetFontSize, "ctrl-shift-0"),
         (Command::ToggleFullScreen, "f11"),
     ] {
         assert_eq!(keymap.primary(command), key);
+    }
+    // Linux's backend drops Shift for punctuation while keeping its symbol.
+    for (command, key) in [
+        (Command::IncreaseFontSize, "ctrl-+"),
+        (Command::DecreaseFontSize, "ctrl-_"),
+        (Command::ResetFontSize, "ctrl-)"),
+    ] {
+        assert!(keymap.triggers(command, &keystroke(key), false), "{key}");
     }
     for key in [
         "ctrl-c",

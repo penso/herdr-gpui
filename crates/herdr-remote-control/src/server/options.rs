@@ -28,7 +28,9 @@ pub struct Options {
     /// The folder chat sockets live in, as Herdr UI resolved it; `None`
     /// resolves it from this process's environment.
     pub chat_dir: Option<PathBuf>,
-    pub device_idle: Duration,
+    /// How long a device may stay away before it is forgotten; `None`
+    /// keeps it until revoked.
+    pub device_idle: Option<Duration>,
     /// The Herdr daemon's client socket, as Herdr UI resolved it; `None`
     /// discovers it from this process's environment. A service manager's
     /// environment may lack the shell's `XDG_CONFIG_HOME`.
@@ -78,7 +80,8 @@ Options:
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default generic)
-  --device-idle-days N     Forget devices unseen this long (default 30)
+  --device-idle-days N     Forget devices unseen this long, 0 for never
+                           (default 30)
   -h, --help               Show this help
   -V, --version            Show the version
 ";
@@ -142,7 +145,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                 idle_days = text(value("--device-idle-days")?, "--device-idle-days")?
                     .parse()
                     .ok()
-                    .filter(|days| (1..=MAX_IDLE_DAYS).contains(days))
+                    .filter(|days| *days <= MAX_IDLE_DAYS)
                     .ok_or(ParseError::Value {
                         option: "--device-idle-days",
                     })?;
@@ -160,7 +163,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         bind,
         certificate,
         chat_dir,
-        device_idle: Duration::from_secs(idle_days * 24 * 60 * 60),
+        device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
         herdr_socket,
         port,
         privacy,

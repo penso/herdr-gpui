@@ -291,20 +291,9 @@ impl<R: FnMut(Update)> Session<R> {
 
     /// Drops the oldest entries once the transcript holds too many or too much.
     fn bound(&mut self) {
-        let entries = &self.transcript.entries;
-        let mut drop = entries.len().saturating_sub(MAX_ENTRIES);
-        let kept = &entries[drop..];
-        let mut text: usize = kept.iter().map(entry_size).sum();
-        let mut media: usize = kept.iter().map(entry_media).sum();
-        while (text > MAX_TRANSCRIPT_TEXT || media > MAX_TRANSCRIPT_MEDIA)
-            && drop + 1 < entries.len()
-        {
-            text -= entry_size(&entries[drop]);
-            media -= entry_media(&entries[drop]);
-            drop += 1;
-        }
+        let drop = keep_from(&self.transcript.entries);
         if drop > 0 {
-            let before = entries[drop].id;
+            let before = self.transcript.entries[drop].id;
             self.emit(Change::Truncate { before });
         }
     }
@@ -473,10 +462,39 @@ pub(crate) fn now_ms() -> u64 {
         })
 }
 
+/// The index of the oldest entry a transcript keeps: at most [`MAX_ENTRIES`]
+/// and within both byte budgets, but always the newest entry. Live chats and
+/// mirrored logs share it so neither can hold more than a snapshot frame.
+pub(crate) fn keep_from(entries: &[herdr_chat_protocol::Entry]) -> usize {
+    let mut drop = entries.len().saturating_sub(MAX_ENTRIES);
+    let kept = &entries[drop..];
+    let mut text: usize = kept.iter().map(entry_size).sum();
+    let mut media: usize = kept.iter().map(entry_media).sum();
+    while (text > MAX_TRANSCRIPT_TEXT || media > MAX_TRANSCRIPT_MEDIA) && drop + 1 < entries.len() {
+        text -= entry_size(&entries[drop]);
+        media -= entry_media(&entries[drop]);
+        drop += 1;
+    }
+    drop
+}
+
 /// Roughly how many bytes an entry adds to a snapshot.
-fn entry_size(entry: &herdr_chat_protocol::Entry) -> usize {
+pub(crate) fn entry_size(entry: &herdr_chat_protocol::Entry) -> usize {
     use herdr_chat_protocol::{EntryKind, ToolContent};
     match &entry.kind {
+        EntryKind::Notice {
+            answers,
+            details,
+            text,
+            ..
+        } => {
+            text.len()
+                + details.as_ref().map_or(0, String::len)
+                + answers
+                    .iter()
+                    .map(|answer| answer.question.len() + answer.answer.len())
+                    .sum::<usize>()
+        }
         EntryKind::Tool(tool) => {
             tool.title.len()
                 + tool.locations.iter().map(String::len).sum::<usize>()

@@ -18,8 +18,11 @@ fn local(home: &std::path::Path) -> Command {
 fn the_probe_finds_herdr_where_the_bridge_looks() {
     use std::os::unix::fs::PermissionsExt;
     let home = tempfile::tempdir().unwrap();
-    // The fixed roots are system-wide; this host may already have Herdr there.
+    // The test's PATH and the probe's fixed roots are system-wide; a fresh
+    // HOME does not hide Herdr installed in /usr/bin or /bin by a package.
     let system = [
+        "/usr/bin/herdr",
+        "/bin/herdr",
         "/opt/homebrew/bin/herdr",
         "/usr/local/bin/herdr",
         "/home/linuxbrew/.linuxbrew/bin/herdr",

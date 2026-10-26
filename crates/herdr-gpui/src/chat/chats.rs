@@ -9,7 +9,7 @@ use super::{
     session::Session,
 };
 use crate::search_input::SearchInput;
-use gpui::{Entity, ListAlignment, ListState, px};
+use gpui::{App, Entity, FocusHandle, ListAlignment, ListState, Window, px};
 use herdr_chat_protocol::{ClientMessage, Command, Cursor, EndpointId, EntryId};
 use std::{
     collections::HashSet,
@@ -29,12 +29,45 @@ pub(crate) type Connect<'a> =
 
 /// The connector the app uses: the program's endpoint by the id its pane
 /// reported, a socket in this user's private directory or a named pipe, or
-/// for a chat on an SSH host, `herdr-acp connect` run there over `ssh`.
+/// for a chat on an SSH host, `herdr-acp connect` run there over `ssh`. An
+/// existing agent on this machine is observed by `program`, the same
+/// `herdr-acp` new chats start with.
 pub(crate) fn connect(
     target: &Target,
+    program: &super::Program,
     since: Option<Cursor>,
     resend: Vec<ClientMessage>,
 ) -> Result<Link> {
+    if let Some(binding) = &target.existing {
+        let args = [
+            "observe".to_owned(),
+            binding.agent.name().to_owned(),
+            binding.session_id.clone(),
+            binding.pid.to_string(),
+            binding.started_ticks.to_string(),
+            "--pane".to_owned(),
+            target.pane_id.clone(),
+        ];
+        let command = match &target.route {
+            super::Route::Local => {
+                // Unlike a missing socket directory, this is not permanent:
+                // the lookup started this tick may still be running.
+                let mut command = herdr_client::new_command(program.found()?);
+                command.args(args);
+                command
+            }
+            super::Route::Ssh(host) => {
+                let args = args
+                    .iter()
+                    .map(|arg| herdr_client::shell_quote(arg))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let script = super::remote_program_script(&args);
+                herdr_client::script_command(host, &script).map_err(Error::Remote)?
+            }
+        };
+        return Link::start(Dial::Process(command), since, resend);
+    }
     let dial = match &target.route {
         super::Route::Local => Dial::Socket(
             herdr_chat_protocol::endpoint_address(&target.endpoint).ok_or(Error::NoEndpointDir)?,
@@ -56,6 +89,19 @@ pub(crate) enum Menu {
     Setting(String),
     /// Every setting the header has no button for.
     Settings,
+}
+
+/// What takes the user's typing in a chat.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChatInput {
+    /// The chat's own composer, which sends prompts.
+    Composer,
+    /// Nothing: the transcript takes no prompts, and an inert focus keeps
+    /// keys from reaching the terminal beneath the chat.
+    ReadOnly,
+    /// An observed live agent's own editor, in its terminal below the
+    /// conversation. Its mirrored transcript is read-only as well.
+    Terminal,
 }
 
 pub(crate) struct ChatPane {
@@ -90,21 +136,75 @@ pub(crate) struct ChatPane {
     /// Trying again cannot help: the program speaks another version.
     permanent: bool,
     pub(crate) prepared: Prepared,
+    #[cfg(feature = "integration-test")]
+    preview: bool,
     /// Whether the plan and changed files show beside the entries.
     pub(crate) rail: bool,
+    /// A read-only overlay owns the keyboard without installing an input handler.
+    pub(crate) read_only_focus: Option<FocusHandle>,
     retry_at: Option<Instant>,
+    pub(crate) selection: super::selection::Selection,
     pub(crate) session: Session,
     pub(crate) target: Target,
+    /// Expose more of an existing agent's original editor and dialogs inline.
+    pub(crate) terminal_size: super::terminal::InputSize,
+    pub(crate) text_drag: super::reader::Drag,
+    pub(crate) text_focus: Option<FocusHandle>,
+    pub(crate) text_geometry: super::view::selection::Geometry,
     /// Files being copied to the chat's SSH host to attach there.
     pub(crate) uploading: usize,
+    /// Interactive message state, scoped to this pane and transcript revision.
+    pub(crate) widgets: super::widgets::State,
 }
 
 impl ChatPane {
+    /// Whether a callback made for `target` at `cursor` still applies: the
+    /// same binding and the same transcript epoch, not a replacement session.
+    pub(crate) fn is_current(&self, target: &Target, cursor: Option<Cursor>) -> bool {
+        self.target == *target
+            && self.session.since().map(|cursor| cursor.epoch) == cursor.map(|cursor| cursor.epoch)
+    }
+
+    /// The handle that takes the chat's typing; its original terminal takes
+    /// it instead for an observed agent.
+    pub(crate) fn input_focus(&self, cx: &App) -> Option<FocusHandle> {
+        match self.input() {
+            ChatInput::Composer => self
+                .composer
+                .as_ref()
+                .map(|input| input.read(cx).focus.clone()),
+            ChatInput::ReadOnly => self.read_only_focus.clone(),
+            ChatInput::Terminal => None,
+        }
+    }
+
+    /// Every handle through which the chat holds the keyboard: its composer,
+    /// its inert mirror focus, and its selectable text.
+    pub(crate) fn focus_handles<'a>(
+        &'a self,
+        cx: &'a App,
+    ) -> impl Iterator<Item = FocusHandle> + 'a {
+        self.composer
+            .iter()
+            .map(|input| input.read(cx).focus.clone())
+            .chain(self.read_only_focus.iter().cloned())
+            .chain(self.text_focus.iter().cloned())
+    }
+
+    /// Whether the user is reading, with the keyboard on the chat's text.
+    pub(crate) fn reading(&self, window: &Window) -> bool {
+        self.text_focus
+            .as_ref()
+            .is_some_and(|focus| focus.is_focused(window))
+    }
+
     fn new(target: Target) -> Self {
         // `glide` follows the end rather than the list's own tail mode,
         // which jumps there with each chunk.
         let list = ListState::new(0, ListAlignment::Top, px(OVERDRAW));
         let glide = super::glide::Glide::new(&list);
+        let mut prepared = Prepared::default();
+        prepared.set_remote_links(!target.is_local());
         Self {
             attachments: Vec::new(),
             completion: 0,
@@ -124,12 +224,21 @@ impl ChatPane {
             menu_search: None,
             pages: Vec::new(),
             permanent: false,
-            prepared: Prepared::default(),
+            prepared,
+            #[cfg(feature = "integration-test")]
+            preview: false,
             rail: true,
+            read_only_focus: None,
             retry_at: None,
+            selection: Default::default(),
             session: Session::default(),
             target,
+            terminal_size: Default::default(),
+            text_drag: Default::default(),
+            text_focus: None,
+            text_geometry: Default::default(),
             uploading: 0,
+            widgets: Default::default(),
         }
     }
 
@@ -140,6 +249,10 @@ impl ChatPane {
     }
 
     pub(crate) fn attached(&self) -> bool {
+        #[cfg(feature = "integration-test")]
+        if self.preview {
+            return self.session.live();
+        }
         self.link.is_some() && self.session.live()
     }
 
@@ -148,7 +261,6 @@ impl ChatPane {
         self.link.is_some()
     }
 
-    #[cfg(test)]
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
@@ -183,7 +295,10 @@ impl ChatPane {
         self.link = None;
         self.session.lost(error);
         self.menu = None;
-        if error.permanent() {
+        if error.permanent()
+            || (self.target.existing.is_some()
+                && matches!(error, Error::Bye(herdr_chat_protocol::ByeReason::Exiting)))
+        {
             self.permanent = true;
             return;
         }
@@ -240,6 +355,10 @@ impl ChatPane {
         if self.list_snapshots != self.session.snapshots() {
             self.list_snapshots = self.session.snapshots();
             self.prepared.clear();
+            self.selection.clear();
+            self.text_geometry.clear();
+            self.text_drag = Default::default();
+            self.widgets.clear();
             self.list.reset(keys.len());
             self.glide.reset(&self.list);
         } else {
@@ -255,8 +374,9 @@ impl ChatPane {
                 }
             }
         }
-        self.prepared.update(self.session.transcript(), &keys);
         self.list_keys = keys;
+        self.refresh_text();
+        self.widgets.retain(&self.prepared);
     }
 
     /// Redraws one entry, such as a thought folding open.
@@ -264,6 +384,36 @@ impl ChatPane {
         if let Some(index) = self.list_keys.iter().position(|(entry, _)| *entry == id) {
             super::glide::splice_in_place(&self.list, index..index + 1, 1);
         }
+    }
+
+    /// What takes the user's typing for this chat.
+    pub(crate) fn input(&self) -> ChatInput {
+        if self.target.existing.is_some() {
+            ChatInput::Terminal
+        } else if self.session.transcript().read_only {
+            ChatInput::ReadOnly
+        } else {
+            ChatInput::Composer
+        }
+    }
+
+    /// Opens a folded card or folds an open one, then redraws it.
+    pub(crate) fn toggle_expanded(&mut self, id: EntryId) {
+        if !self.expanded.remove(&id) {
+            self.expanded.insert(id);
+        }
+        self.refresh_text();
+        self.remeasure(id);
+    }
+
+    /// Reprojects the selectable text after the transcript changes, or after
+    /// folding a card changes what can be selected without changing it. Only
+    /// entries whose visible content changed are reprojected.
+    pub(crate) fn refresh_text(&mut self) {
+        self.prepared.set_expanded(&self.expanded);
+        self.prepared
+            .update(self.session.transcript(), &self.list_keys);
+        self.selection.validate(self.prepared.text());
     }
 }
 
@@ -293,6 +443,8 @@ pub(crate) enum Toward {
 pub(crate) struct Chats {
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
+    /// Exact CLI sessions already running in this connected daemon's panes.
+    pub(crate) existing: super::existing::Existing,
     /// The agent a chat was last started with, which the strips' one-button
     /// launcher offers first.
     pub(crate) last_started: Option<herdr_chat_protocol::Agent>,
@@ -302,6 +454,7 @@ pub(crate) struct Chats {
     pub(crate) launcher_deck: Option<LauncherDeck>,
     /// The layout the lists' rows were last measured in.
     measured: crate::config::ChatLayoutMode,
+    measured_width: u16,
     /// Chat pages opened so far, which numbers the next one.
     #[cfg(any(target_os = "macos", windows))]
     pub(crate) opened_pages: u64,
@@ -326,6 +479,39 @@ pub(crate) struct Chats {
 }
 
 impl Chats {
+    /// A native fixture with the normal reducer, prepared bodies, and list;
+    /// no connection, daemon, agent process, or personal settings.
+    #[cfg(feature = "integration-test")]
+    pub(super) fn preview(
+        &mut self,
+        target: Target,
+        transcript: herdr_chat_protocol::Transcript,
+    ) -> Result<()> {
+        let mut pane = ChatPane::new(target);
+        pane.preview = true;
+        pane.session.begin();
+        pane.session
+            .receive(herdr_chat_protocol::ServerMessage::Welcome {
+                agent: transcript.agent.clone(),
+                pane: Some(pane.target.pane_id.clone()),
+                version: herdr_chat_protocol::VERSION,
+            })?;
+        pane.session
+            .receive(herdr_chat_protocol::ServerMessage::Snapshot {
+                cursor: Cursor::new_epoch(),
+                transcript: Box::new(transcript),
+            })?;
+        pane.sync_view();
+        pane.list.set_follow_mode(gpui::FollowMode::Normal);
+        pane.list.scroll_to(gpui::ListOffset {
+            item_ix: 0,
+            offset_in_item: px(0.),
+        });
+        pane.rail = false;
+        self.panes = vec![pane];
+        Ok(())
+    }
+
     /// Measures every list's rows again once the layout they are drawn in
     /// changed, since each layout gives a row its own height. Says whether
     /// it did.
@@ -340,13 +526,28 @@ impl Chats {
         true
     }
 
+    pub(crate) fn rewidth(&mut self, width: u16) -> bool {
+        if self.measured_width == width {
+            return false;
+        }
+        self.measured_width = width;
+        for pane in &self.panes {
+            pane.list.remeasure();
+        }
+        true
+    }
+
     /// Moves each list a frame's step toward its end while it follows a
     /// reply, or with `smooth` off all the way there, and says whether to
     /// draw another frame.
     pub(crate) fn glide(&mut self, now: Instant, smooth: bool) -> bool {
         let mut more = false;
         for pane in &mut self.panes {
-            more |= pane.glide.tick(&pane.list, now, smooth);
+            if pane.selection.is_selecting() {
+                more |= pane.tick_text_drag(now);
+            } else if pane.selection.is_empty() {
+                more |= pane.glide.tick(&pane.list, now, smooth);
+            }
         }
         more
     }

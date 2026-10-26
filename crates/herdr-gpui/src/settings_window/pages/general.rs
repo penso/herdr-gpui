@@ -2,7 +2,7 @@
 //! feedback, merged worktrees, the browser skill, launch at login (Windows)
 //! and the update channel.
 use super::{CLIPBOARD_POSITIONS, SettingsWindow, on_off, on_value, ui};
-use crate::settings_window::inputs::DropdownField;
+use crate::settings_window::inputs::{DropdownField, NumberField};
 use crate::{
     agent_skill::{AgentSkill, Choice},
     config::{
@@ -122,6 +122,7 @@ impl SettingsWindow {
                         }),
                     ))
             }))
+            .children(self.config.features.acp_chats.then(|| self.chat_width_controls(cx)))
             .children(self.config.features.acp_chats.then(|| {
                 let launchers: Vec<_> = ChatLauncher::ALL
                     .iter()
@@ -325,5 +326,49 @@ impl SettingsWindow {
             move |cx| AgentSkill::choose(choice, cx),
             cx,
         );
+    }
+
+    fn chat_width_controls(&self, cx: &mut Context<Self>) -> Div {
+        let full = self.config.chat.max_width == 0;
+        let field = NumberField::ChatMaxWidth;
+        let value = self.number_value(field, f32::from(self.config.chat.max_width));
+        let view = cx.entity().downgrade();
+        div()
+            .child(
+                ui::row(&self.theme, "general-chat-full-width", "Full-width chat")
+                    .description("Use all available space for messages and the composer.")
+                    .switch(self.preference_toggle(
+                        "general-chat-full-width-toggle",
+                        full,
+                        Preference::ChatMaxWidth(if full {
+                            crate::config::chat::DEFAULT_MAX_WIDTH
+                        } else {
+                            0
+                        }),
+                        cx,
+                    )),
+            )
+            .when(!full, |controls| {
+                controls.child(
+                    ui::row(&self.theme, "general-chat-width", "Chat width")
+                        .description("Maximum reading width in logical pixels. Narrow windows fit automatically.")
+                        .control(ui::number(
+                            &self.theme,
+                            ui::Number {
+                                id: field.selector(),
+                                value,
+                                range: field.range(),
+                                unit: "px",
+                                slider: true,
+                                enabled: !self.quitting && self.closing.is_none(),
+                            },
+                            self.number_edit_for(field),
+                            on_value(cx, move |this, change, _, cx| this.commit_number(field, change, cx)),
+                            move |window, cx| {
+                                let _ = view.update(cx, |this, cx| this.begin_number_edit(field, value, window, cx));
+                            },
+                        )),
+                )
+            })
     }
 }

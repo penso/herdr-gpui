@@ -3,8 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ConfigOption, Entry, EntryId, Error, Modes, Permission, PermissionId, PlanEntry, Queued,
-    Result, SessionInfo, SlashCommand, Status, Transcript, Turn, Usage,
+    ConfigOption, Entry, EntryId, EntryKind, Error, Modes, Permission, PermissionId, PlanEntry,
+    Queued, Result, SessionInfo, SlashCommand, Status, Transcript, Turn, Usage,
+    valid_question_answers,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -78,6 +79,12 @@ impl Transcript {
     /// Applies `change`, or leaves the transcript as it was and reports why it
     /// does not fit.
     pub fn apply(&mut self, change: &Change) -> Result<()> {
+        if let Change::Push { entry } | Change::Replace { entry } = change
+            && let EntryKind::Notice { answers, .. } = &entry.kind
+            && !valid_question_answers(answers)
+        {
+            return Err(Error::QuestionAnswersLimit(entry.id));
+        }
         match change {
             Change::Push { entry } => {
                 if let Some(last) = self.last_entry_id()

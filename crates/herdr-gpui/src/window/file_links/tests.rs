@@ -117,6 +117,29 @@ fn only_documents_and_plain_folders_open_themselves() {
     }
 }
 
+#[gpui::test]
+fn a_document_check_cannot_open_after_switching_endpoints(cx: &mut gpui::TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("notes.md"), "# Notes\n").unwrap();
+    let (view, cx) = window("notes.md", directory.path(), cx);
+    view.update(cx, |view, cx| {
+        view.open_file_link(
+            FileLink {
+                path: "notes.md".into(),
+                line: None,
+                pane_id: "p1".into(),
+                cwd: Some(directory.path().to_str().unwrap().into()),
+                explicit: true,
+            },
+            false,
+            cx,
+        );
+        view.selection_epoch += 1;
+    });
+    cx.run_until_parked();
+    assert!(cx.opened_url().is_none());
+}
+
 /// A window whose only pane prints `text` and runs in `cwd`.
 fn window<'a>(
     text: &str,

@@ -60,7 +60,6 @@ fn remote_control_refuses_values_the_daemon_cannot_use() {
     let (cert, key) = (absolute("c.pem"), absolute("k.pem"));
     for (text, expected) in [
         ("port = 0".to_owned(), "port"),
-        ("device_idle_days = 0".to_owned(), "idle"),
         ("device_idle_days = 366".to_owned(), "idle"),
         (
             format!(
@@ -170,7 +169,7 @@ fn invalid_remote_edits_leave_the_file_alone() -> anyhow::Result<()> {
     fs::write(&path, "[remote]\nport = 8000\n")?;
     for edit in [
         Edit::Port(0),
-        Edit::DeviceIdleDays(0),
+        Edit::DeviceIdleDays(366),
         Edit::Certificate(Certificate::Files {
             cert: "relative.pem".into(),
             key: absolute("key.pem"),
@@ -179,5 +178,12 @@ fn invalid_remote_edits_leave_the_file_alone() -> anyhow::Result<()> {
         assert!(Config::save_preference_path(Preference::Remote(edit), &path).is_err());
     }
     assert_eq!(fs::read_to_string(&path)?, "[remote]\nport = 8000\n");
+    Ok(())
+}
+
+#[test]
+fn zero_idle_days_never_forgets_a_device() -> anyhow::Result<()> {
+    let config = Config::parse("[remote]\ndevice_idle_days = 0\n")?;
+    assert_eq!(config.remote.device_idle_days, 0);
     Ok(())
 }

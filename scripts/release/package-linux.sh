@@ -6,13 +6,13 @@ version_check "$1"
 case $2 in x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;; *) fail 'Unsupported Linux target';; esac
 [[ -f $3 && -d $4 ]] || fail 'Binary file and existing output directory required'
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
-# The app starts chats with the herdr-acp beside its executable, and
-# automations with the herdr-automate there; the build leaves both beside
-# herdr-gpui.
-acp=$(dirname -- "$3")/herdr-acp
-[[ -f $acp ]] || fail 'A herdr-acp beside the binary required'
-automate=$(dirname -- "$3")/herdr-automate
-[[ -f $automate ]] || fail 'A herdr-automate beside the binary required'
+# The app starts chats with the herdr-acp beside its executable, runs the
+# herdr-remote-control beside it as a user service, and runs automations in
+# the herdr-automate there; the build leaves all three beside herdr-gpui.
+companions=(herdr-acp herdr-remote-control herdr-automate)
+for companion in "${companions[@]}"; do
+    [[ -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside the binary required"
+done
 out=$(cd -- "$4" && pwd)/Herdr-$1-$2.tar.gz
 new_output "$out"
 selection=$(python3 "$release_root/scripts/release/build-icon.py" linux "$3")
@@ -27,9 +27,11 @@ name=Herdr-$1-$2
 root=$tmp/$name
 mkdir -p "$root/bin" "$root/share/applications" "$root/${icon_path%/*}" "$root/share/licenses/herdr-gpui"
 cp "$3" "$root/bin/herdr-gpui"
-cp "$acp" "$root/bin/herdr-acp"
-cp "$automate" "$root/bin/herdr-automate"
-chmod 755 "$root/bin/herdr-gpui" "$root/bin/herdr-acp" "$root/bin/herdr-automate"
+chmod 755 "$root/bin/herdr-gpui"
+for companion in "${companions[@]}"; do
+    cp "$(dirname -- "$3")/$companion" "$root/bin/$companion"
+    chmod 755 "$root/bin/$companion"
+done
 cp "$icon" "$root/$icon_path"
 cp "$release_root/scripts/release/so.pen.herdr-gpui.desktop" "$root/share/applications/"
 cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$release_root/crates/herdr-protocol/NOTICE.md" "$root/share/licenses/herdr-gpui/"

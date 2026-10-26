@@ -125,7 +125,7 @@ impl HerdrWindow {
         }
         let theme = &self.theme;
         let hues = Hues::of(theme);
-        let small = px((self.chat_text_size() - 1.).max(10.));
+        let small = self.chat_small_text();
         let section = |title: &'static str, count: String| {
             div()
                 .flex()

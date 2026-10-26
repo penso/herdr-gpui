@@ -65,6 +65,10 @@ fn symbol_cascade(window: &mut Window, cx: &mut App) -> Result<&'static str> {
 }
 
 pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
+    if std::env::var_os("HERDR_TEST_RICH_CHAT").is_some() {
+        crate::chat::preview::start(handle, cx);
+        return;
+    }
     #[cfg(target_os = "linux")]
     if std::env::var_os("HERDR_TEST_APPLICATION_MENUS").is_some() {
         cx.spawn(

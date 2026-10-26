@@ -46,7 +46,7 @@ fn picture_lines_load_on_request_or_name_what_follows() {
             "text:A chart:",
             "picture:chart",
             "remote:https://example.com/logo.png",
-            "text:See ![inline](a.png) here.",
+            "text:See ![inline](a.png) here. ![data](data:image/png;base64,AAAA) ![odd](ftp://example.com/a.png)",
         ]
     );
     let remote = VisualId::of("https://example.com/logo.png");

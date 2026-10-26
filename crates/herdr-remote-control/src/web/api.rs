@@ -2,7 +2,11 @@
 //! chats, and push subscriptions. Auth calls that write to disk run on the
 //! blocking pool.
 
-use super::{ApiError, Device, Peer, Shared, fragments::folders, render::now_ms};
+use super::{
+    ApiError, Device, Peer, Shared,
+    fragments::folders,
+    render::{now_ms, urlencode},
+};
 use crate::{
     auth::{ChallengeId, ClaimId},
     control::{DeviceId, PairingState},
@@ -11,10 +15,16 @@ use crate::{
 use axum::{
     Json,
     extract::{ConnectInfo, Path, State},
+    http::{HeaderMap, header},
 };
 use herdr_chat_protocol::{Agent, Command};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::time::Duration;
+
+/// How long starting a chat waits for it to open before answering with the
+/// list instead.
+const NEW_CHAT_WAIT: Duration = Duration::from_secs(10);
 
 /// Runs `action` with the auth state on the blocking pool.
 async fn with_auth<T: Send + 'static>(
@@ -27,8 +37,10 @@ async fn with_auth<T: Send + 'static>(
         .map_err(|_| ApiError::Invalid("the request was interrupted"))?
 }
 
+/// Says which computer answers, by its certificate's fingerprint: an
+/// address a phone saved may belong to another computer on another network.
 pub(super) async fn ping(State(state): State<Shared>) -> Json<Value> {
-    Json(json!({ "ok": true, "computer": state.computer }))
+    Json(json!({ "ok": true, "computer": state.computer, "fingerprint": state.fingerprint }))
 }
 
 #[derive(Deserialize)]
@@ -38,19 +50,36 @@ pub(super) struct ClaimRequest {
     public_key: String,
 }
 
+/// A claim from an app installed from another computer carries that app's
+/// origin, which approving the claim admits; a claim from this computer's
+/// own page carries none.
 pub(super) async fn claim(
     State(state): State<Shared>,
     ConnectInfo(Peer(peer)): ConnectInfo<Peer>,
+    headers: HeaderMap,
     Json(request): Json<ClaimRequest>,
 ) -> Result<Json<Value>, ApiError> {
+    let app = headers
+        .get(header::ORIGIN)
+        .and_then(|origin| origin.to_str().ok())
+        // Every device paired from another computer's app records that
+        // origin, even one already admitted for another device, so revoking
+        // one leaves the others working.
+        .filter(|origin| !state.serves(origin))
+        .map(|origin| app_origin(origin).ok_or(ApiError::Invalid("the app's origin is not valid")))
+        .transpose()?;
     let claim = with_auth(&state, move |auth| {
-        Ok(auth.claim(
+        let claim = auth.claim(
             peer.ip(),
             &request.token,
             &request.name,
             &request.public_key,
             now_ms(),
-        )?)
+        )?;
+        if let Some(app) = app {
+            auth.claimed_from(&claim.id, app);
+        }
+        Ok(claim)
     })
     .await?;
     Ok(Json(json!({
@@ -58,6 +87,18 @@ pub(super) async fn claim(
         "code": claim.code,
         "expires_ms": claim.expires_ms,
     })))
+}
+
+/// `origin` when it is an `https://` origin as a browser sends it: a host
+/// and an optional port, nothing more, at most 255 bytes.
+pub(super) fn app_origin(origin: &str) -> Option<String> {
+    let host = origin.strip_prefix("https://")?;
+    let valid = !host.is_empty()
+        && origin.len() <= 255
+        && host.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b':' | b'[' | b']')
+        });
+    valid.then(|| origin.to_owned())
 }
 
 pub(super) async fn claim_status(
@@ -273,8 +314,15 @@ pub(super) async fn start_chat(
         .agent
         .parse()
         .map_err(|_| ApiError::Invalid("unknown agent"))?;
-    state.hub.start_chat(&workspace, agent, None).await?;
-    Ok(Json(json!({ "location": "/" })))
+    let pane = state.hub.start_chat(&workspace, agent, None).await?;
+    // The chat is listed once its program reports in; open it then, or
+    // the list when it is slow to start.
+    let location = if state.hub.chat_ready(&pane, NEW_CHAT_WAIT).await {
+        format!("/chat/{}", urlencode(&pane))
+    } else {
+        "/".to_owned()
+    };
+    Ok(Json(json!({ "location": location })))
 }
 
 /// The iOS companion's Live Activity tokens: the push-to-start token when

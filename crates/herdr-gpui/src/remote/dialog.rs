@@ -164,9 +164,10 @@ impl HerdrWindow {
             Phase::Claimed {
                 device_name,
                 code,
+                app,
                 answer,
                 ..
-            } => self.pairing_claim(device_name, code, *answer, cx),
+            } => self.pairing_claim(device_name, code, app.as_deref(), *answer, cx),
             Phase::Approved { device_name } => self.pairing_message(
                 &format!("{} can now control your chats.", name(device_name)),
                 "Revoke it any time in Settings > Remote control.",
@@ -307,6 +308,7 @@ impl HerdrWindow {
         &self,
         device_name: &str,
         code: &str,
+        app: Option<&str>,
         answer: Option<Answer>,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -330,6 +332,19 @@ impl HerdrWindow {
                     )
                     .child("wants remote control of your chats."),
             )
+            // Approving admits this origin to the daemon's API, so the user
+            // sees which app asked: one installed from another computer.
+            .when_some(app, |claim, app| {
+                claim.child(
+                    div()
+                        .debug_selector(|| "remote-pair-app".into())
+                        .text_color(rgb(theme.subtext()))
+                        .child(format!(
+                            "It asks from the Herdr app at {}. Allow it only if you are adding this computer to that app.",
+                            crate::notifications::safe_text(app, 255)
+                        )),
+                )
+            })
             .child(
                 div()
                     .text_color(rgb(theme.subtext()))

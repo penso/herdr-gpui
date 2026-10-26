@@ -147,6 +147,7 @@ pub(crate) fn decide(
             EntryKind::Notice {
                 level: NoticeLevel::Error,
                 text,
+                ..
             } => {
                 let title = format!("{} hit an error", chat.agent);
                 Some(Notification::new(

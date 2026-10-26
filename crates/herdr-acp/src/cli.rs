@@ -1,8 +1,12 @@
 //! Command-line parsing, pure and on OS strings so paths need not be UTF-8.
 
-use std::{ffi::OsString, path::PathBuf};
+use std::{
+    ffi::{OsStr, OsString},
+    num::{NonZeroU32, NonZeroU64},
+    path::PathBuf,
+};
 
-use crate::agents::Agent;
+use crate::{agents::Agent, mirror::transcript::TranscriptAgent};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
@@ -22,6 +26,10 @@ pub enum Error {
     MissingEndpoint,
     #[error("`{0}` is not a chat endpoint id")]
     InvalidEndpoint(String),
+    #[error("mirror and observe support only codex and claude transcripts")]
+    TranscriptAgent,
+    #[error("observe needs a Codex/Claude session UUID, positive PID and process start ticks")]
+    ObserveIdentity,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,6 +37,10 @@ pub(crate) enum Parsed {
     Run(Options),
     /// Carry a client connection to a running chat over stdin and stdout.
     Connect(herdr_chat_protocol::EndpointId),
+    /// Watch an existing CLI transcript without starting or driving an agent.
+    Mirror(MirrorOptions),
+    /// Project one verified running CLI process over standard streams.
+    Observe(ObserveOptions),
     /// List the agents installed here, one name per line.
     Agents,
     Help,
@@ -64,6 +76,24 @@ pub(crate) enum AgentChoice {
     },
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct MirrorOptions {
+    pub agent: TranscriptAgent,
+    pub endpoint: Option<herdr_chat_protocol::EndpointId>,
+    pub pane: Option<String>,
+    pub path: PathBuf,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ObserveOptions {
+    pub agent: TranscriptAgent,
+    pub pane: Option<String>,
+    pub pid: u32,
+    pub session: String,
+    /// The process's start time in clock ticks, which a reused PID lacks.
+    pub started: u64,
+}
+
 pub(crate) const HELP: &str = "\
 Runs an ACP agent in this terminal and shares the conversation with Herdr UI.
 
@@ -73,6 +103,13 @@ Usage:
   herdr-acp connect ID   Attach stdin and stdout to the running chat ID
                          (Herdr UI runs this over SSH for remote chats)
   herdr-acp agents       List the agents installed here, one per line
+  herdr-acp observe codex|claude SESSION_ID PID START_TICKS [--pane ID]
+                        Render the existing Linux agent over stdin/stdout.
+                        Starts no agent; input stays in its original terminal.
+  herdr-acp mirror codex|claude FILE [--pane ID] [--endpoint ID]
+                        Watch an existing JSONL transcript, read-only; starts
+                        no agent and changes no Herdr pane metadata. Prints
+                        its endpoint ID once ready. Stop with Ctrl+C.
 
 Agents:
   claude     claude itself, or with --acp claude-agent-acp
@@ -109,23 +146,35 @@ Keys:
 
 pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, Error> {
     let mut args = args.into_iter().peekable();
-    if args.peek().and_then(|arg| arg.to_str()) == Some("agents") {
-        args.next();
-        return match args.next() {
-            Some(extra) => Err(Error::UnknownOption(extra)),
-            None => Ok(Parsed::Agents),
-        };
-    }
-    if args.peek().and_then(|arg| arg.to_str()) == Some("connect") {
-        args.next();
-        let id = utf8(args.next(), "connect").map_err(|_| Error::MissingEndpoint)?;
-        if let Some(extra) = args.next() {
-            return Err(Error::UnknownOption(extra));
+    // A subcommand word is consumed before its own arguments are parsed.
+    match args.peek().and_then(|arg| arg.to_str()) {
+        Some("agents") => {
+            args.next();
+            return match args.next() {
+                Some(extra) => Err(Error::UnknownOption(extra)),
+                None => Ok(Parsed::Agents),
+            };
         }
-        return id
-            .parse()
-            .map(Parsed::Connect)
-            .map_err(|_| Error::InvalidEndpoint(id));
+        Some("connect") => {
+            args.next();
+            let id = utf8(args.next(), "connect").map_err(|_| Error::MissingEndpoint)?;
+            if let Some(extra) = args.next() {
+                return Err(Error::UnknownOption(extra));
+            }
+            return id
+                .parse()
+                .map(Parsed::Connect)
+                .map_err(|_| Error::InvalidEndpoint(id));
+        }
+        Some("mirror") => {
+            args.next();
+            return mirror(args);
+        }
+        Some("observe") => {
+            args.next();
+            return observe(args);
+        }
+        _ => {}
     }
     let mut options = Options {
         adapter: false,
@@ -182,6 +231,79 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
         args: Vec::new(),
     };
     Ok(Parsed::Run(options))
+}
+
+/// A subcommand's arguments, or `None` when any of them asks for help.
+fn unless_help(args: impl Iterator<Item = OsString>) -> Option<std::vec::IntoIter<OsString>> {
+    let args: Vec<OsString> = args.collect();
+    let help = args
+        .iter()
+        .any(|arg| matches!(arg.to_str(), Some("-h" | "--help")));
+    (!help).then(|| args.into_iter())
+}
+
+/// The agent whose native transcript `mirror` or `observe` reads.
+fn transcript_agent(name: Option<&OsStr>) -> Result<TranscriptAgent, Error> {
+    name.and_then(OsStr::to_str)
+        .and_then(|name| name.parse::<Agent>().ok())
+        .and_then(|agent| TranscriptAgent::try_from(agent).ok())
+        .ok_or(Error::TranscriptAgent)
+}
+
+fn mirror(args: impl Iterator<Item = OsString>) -> Result<Parsed, Error> {
+    let Some(mut args) = unless_help(args) else {
+        return Ok(Parsed::Help);
+    };
+    let agent = transcript_agent(args.next().as_deref())?;
+    let path = args.next().ok_or(Error::MissingValue("mirror FILE"))?;
+    let mut options = MirrorOptions {
+        agent,
+        endpoint: None,
+        pane: None,
+        path: path.into(),
+    };
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--pane") => options.pane = Some(utf8(args.next(), "--pane")?),
+            Some("--endpoint") => {
+                let id = utf8(args.next(), "--endpoint")?;
+                options.endpoint = Some(id.parse().map_err(|_| Error::InvalidEndpoint(id))?);
+            }
+            _ => return Err(Error::UnknownOption(arg)),
+        }
+    }
+    Ok(Parsed::Mirror(options))
+}
+
+fn observe(args: impl Iterator<Item = OsString>) -> Result<Parsed, Error> {
+    let Some(mut args) = unless_help(args) else {
+        return Ok(Parsed::Help);
+    };
+    let agent = transcript_agent(args.next().as_deref())?;
+    let session = utf8(args.next(), "observe SESSION_ID")?;
+    uuid::Uuid::parse_str(&session).map_err(|_| Error::ObserveIdentity)?;
+    let pid = utf8(args.next(), "observe PID")?
+        .parse::<NonZeroU32>()
+        .map_err(|_| Error::ObserveIdentity)?
+        .get();
+    let started = utf8(args.next(), "observe START_TICKS")?
+        .parse::<NonZeroU64>()
+        .map_err(|_| Error::ObserveIdentity)?
+        .get();
+    let mut pane = None;
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("--pane") => pane = Some(utf8(args.next(), "--pane")?),
+            _ => return Err(Error::UnknownOption(arg)),
+        }
+    }
+    Ok(Parsed::Observe(ObserveOptions {
+        agent,
+        pane,
+        pid,
+        session,
+        started,
+    }))
 }
 
 fn utf8(value: Option<OsString>, option: &'static str) -> Result<String, Error> {

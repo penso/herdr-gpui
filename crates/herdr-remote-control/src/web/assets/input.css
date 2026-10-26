@@ -163,6 +163,8 @@
     @apply fixed left-0 right-0 bottom-0 z-20 bg-surface border-t border-line px-3 pt-2;
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
+  /* The keyboard covers the home indicator, so its inset is only a gap. */
+  :root[data-keyboard] .composer { padding-bottom: 10px; }
   .round-btn { @apply w-9 h-9 rounded-full grid place-items-center text-white shrink-0; }
   .chip { @apply text-xs px-2 py-1 rounded-lg bg-raised whitespace-nowrap; }
   .field { @apply bg-surface rounded-xl px-3 py-2.5 outline-none border border-transparent focus:border-accent; }

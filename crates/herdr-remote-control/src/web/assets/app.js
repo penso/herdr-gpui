@@ -4,10 +4,19 @@
 // eval: the page's CSP forbids both, and Alpine runs as its CSP build.
 "use strict";
 
-const DEVICE = "herdr.device"; // { id, origins, fingerprint, computer }
-/// The most addresses a phone keeps for its computer.
+// Every computer this app paired with, the one shown first. A computer is
+// known by its certificate's fingerprint; its device key is kept under
+// `device:ID` in IndexedDB.
+const HOSTS = "herdr.hosts"; // [{ id, origins, fingerprint, computer }]
+/// The one computer paired before this app held several; `migrate` moves it.
+const DEVICE = "herdr.device";
+/// The most computers, and addresses per computer, a phone keeps.
+const MAX_HOSTS = 16;
 const MAX_ORIGINS = 16;
-const TOKEN = "herdr.session"; // { token, expires, origin }
+/// Which computer this app's notifications come from: a push subscription
+/// carries one computer's sender key.
+const PUSH_HOST = "herdr.push-host";
+const TOKEN = "herdr.session"; // { token, expires, origin, device }
 const SIGN_PREFIX = "herdr-remote-session\0";
 const INSTALL_CLOSED = "herdr.install-closed"; // true once the footer is closed
 /// How long the row a list was left for stays marked; `.came-from` in input.css.
@@ -18,7 +27,8 @@ const HANDOFF = "herdr.handoff"; // { token, expires_ms } a tab offers its Home 
 const RELOADED = "herdr.pair-reloaded"; // set once a failed pairing reloaded without the cache
 
 const app = {
-  device: readJson(localStorage, DEVICE),
+  // The computer shown, `hosts()[0]`.
+  device: null,
   session: readJson(sessionStorage, TOKEN),
   origin: null,
   stream: null,
@@ -34,6 +44,9 @@ const app = {
   retry: 0,
   // Android's install prompt, kept until the footer's Install uses it.
   install: null,
+  // Counts the views shown, so work begun in one leaves alone a view the
+  // phone has moved on to.
+  views: 0,
 };
 
 function readJson(storage, key) {
@@ -50,6 +63,67 @@ function writeJson(storage, key, value) {
     else storage.setItem(key, JSON.stringify(value));
   } catch {
     // Private browsing: the session lives in memory only.
+  }
+}
+
+// ---- the paired computers ----
+
+function hosts() {
+  const list = readJson(localStorage, HOSTS);
+  if (Array.isArray(list)) return list.filter((host) => host?.id && host.fingerprint);
+  // Not moved yet (`migrate`): the one computer an older version paired.
+  const legacy = readJson(localStorage, DEVICE);
+  return legacy?.id && legacy.fingerprint ? [legacy] : [];
+}
+
+function saveHosts(list) {
+  writeJson(localStorage, HOSTS, list.slice(0, MAX_HOSTS));
+  app.device = list[0] || null;
+}
+
+/// Shows `host` from now on: it moves first, replacing an older pairing
+/// with the same computer.
+function useHost(host) {
+  // Keys and pastes still queued were typed into the other computer's panes.
+  if (app.device && app.device.fingerprint !== host.fingerprint) term.queue = [];
+  saveHosts([host, ...hosts().filter((other) => other.fingerprint !== host.fingerprint)]);
+  if (app.session?.device !== host.id) app.session = null;
+}
+
+/// Saves what changed about `host` without moving it.
+function keepHost(host) {
+  const list = hosts();
+  const index = list.findIndex((other) => other.fingerprint === host.fingerprint);
+  if (index < 0) return;
+  list[index] = host;
+  saveHosts(list);
+}
+
+/// Moves the one computer an older version paired, and its key, into the
+/// list. Nothing old is deleted until the new copies are saved: a storage
+/// failure leaves the pairing where it was (`hosts` and `loadKey` read it
+/// there) and the next launch tries again.
+async function migrate() {
+  const legacy = readJson(localStorage, DEVICE);
+  if (!legacy) return;
+  try {
+    if (legacy.id && legacy.fingerprint) {
+      const pair = await keyStore("readonly", (store) => store.get("device"));
+      if (pair) await saveKey(legacy, pair);
+      const list = readJson(localStorage, HOSTS);
+      const known = Array.isArray(list) ? list : [];
+      if (!known.some((host) => host.fingerprint === legacy.fingerprint)) {
+        writeJson(localStorage, HOSTS, [...known, legacy].slice(0, MAX_HOSTS));
+      }
+      const saved = readJson(localStorage, HOSTS);
+      if (!Array.isArray(saved) || !saved.some((host) => host.fingerprint === legacy.fingerprint)) return;
+      // Any push subscription was that computer's, the only one there was.
+      if (!readJson(localStorage, PUSH_HOST)) writeJson(localStorage, PUSH_HOST, legacy.fingerprint);
+    }
+    writeJson(localStorage, DEVICE, null);
+    await keyStore("readwrite", (store) => store.delete("device"));
+  } catch {
+    // Storage is unavailable now; the next launch tries again.
   }
 }
 
@@ -82,9 +156,16 @@ function keyStore(mode, action) {
   });
 }
 
-const loadKey = () => keyStore("readonly", (store) => store.get("device"));
-const saveKey = (pair) => keyStore("readwrite", (store) => store.put(pair, "device"));
-const dropKey = () => keyStore("readwrite", (store) => store.delete("device"));
+const keyName = (host) => `device:${host.id}`;
+/// `host`'s key, or the one an older version kept for its only computer
+/// while `migrate` has not moved it.
+async function loadKey(host) {
+  const key = await keyStore("readonly", (store) => store.get(keyName(host)));
+  if (key || readJson(localStorage, DEVICE)?.id !== host.id) return key;
+  return keyStore("readonly", (store) => store.get("device"));
+}
+const saveKey = (host, pair) => keyStore("readwrite", (store) => store.put(pair, keyName(host)));
+const dropKey = (host) => keyStore("readwrite", (store) => store.delete(keyName(host)));
 
 // ---- talking to the computer ----
 
@@ -146,9 +227,11 @@ function report(context, error) {
 window.addEventListener("error", (event) => report("script", event.error || event.message));
 window.addEventListener("unhandledrejection", (event) => report("script", event.reason));
 
-/// The first of the computer's addresses that answers, this page's first.
-async function reach() {
-  const origins = [location.origin, ...(app.device?.origins || [])].filter(
+/// The first of `host`'s addresses that answers as that computer, this
+/// page's first. An address may answer as another computer, after a
+/// network change or on another network, so the fingerprint must match.
+async function reach(host) {
+  const origins = [location.origin, ...(host.origins || [])].filter(
     (origin, index, all) => all.indexOf(origin) === index,
   );
   const tries = origins.map(async (origin) => {
@@ -157,6 +240,7 @@ async function reach() {
     try {
       const response = await fetch(`${origin}/api/ping`, { signal: controller.signal, cache: "no-store" });
       if (!response.ok) throw new Error("not ok");
+      if ((await response.json()).fingerprint !== host.fingerprint) throw new Error("another computer");
       return origin;
     } finally {
       clearTimeout(timer);
@@ -165,10 +249,35 @@ async function reach() {
   return Promise.any(tries);
 }
 
+/// The computer to show and the address it answers at: the one shown last
+/// when it answers, or else the first that does, in the order last shown.
+async function pickHost() {
+  const tries = hosts().map((host) => reach(host).then((origin) => ({ host, origin })));
+  // Settled from the start, so a computer failing first is not reported
+  // as an unhandled rejection.
+  const others = Promise.allSettled(tries.slice(1));
+  try {
+    return await tries[0];
+  } catch {
+    // Wait for the others.
+  }
+  for (const result of await others) {
+    if (result.status === "fulfilled") return result.value;
+  }
+  throw new Error("No paired computer answers.");
+}
+
 async function signIn() {
-  if (app.session && app.session.expires > Date.now() + 60_000 && app.session.origin === app.origin) return;
-  const pair = await loadKey();
-  if (!pair || !app.device) throw new HttpError(403, "This phone is not paired.");
+  if (
+    app.session &&
+    app.session.expires > Date.now() + 60_000 &&
+    app.session.origin === app.origin &&
+    app.session.device === app.device?.id
+  ) {
+    return;
+  }
+  const pair = app.device && (await loadKey(app.device));
+  if (!pair) throw new HttpError(403, "This phone is not paired.");
   const challenge = await (
     await call("/api/session/challenge", { method: "POST", body: { device: app.device.id }, auth: false })
   ).json();
@@ -181,7 +290,7 @@ async function signIn() {
       auth: false,
     })
   ).json();
-  app.session = { token: session.token, expires: session.expires_ms, origin: app.origin };
+  app.session = { token: session.token, expires: session.expires_ms, origin: app.origin, device: app.device.id };
   writeJson(sessionStorage, TOKEN, app.session);
   rememberOrigins(session.origins);
 }
@@ -204,17 +313,31 @@ function rememberOrigins(current) {
   const known = [...current, ...(app.device.origins || [])].filter(
     (origin, index, all) => typeof origin === "string" && origin.startsWith("https://") && all.indexOf(origin) === index,
   );
-  app.device = { ...app.device, origins: known.slice(0, MAX_ORIGINS) };
-  writeJson(localStorage, DEVICE, app.device);
+  keepHost({ ...app.device, origins: known.slice(0, MAX_ORIGINS) });
 }
 
 // ---- views ----
 
 const view = () => document.getElementById("view");
 
-function show(template) {
+/// One of this app's own templates, which sit directly in the body. A
+/// computer's fragment, inside the view, may carry an element with the same
+/// id; looking up by id alone would find that one first.
+const template = (id) => document.querySelector(`body > template#${id}`);
+
+function show(id) {
   stopStream();
-  view().replaceChildren(document.getElementById(template).content.cloneNode(true));
+  stopScan();
+  app.views++;
+  view().replaceChildren(template(id).content.cloneNode(true));
+  view().dataset.local = "";
+}
+
+/// Whether `element` sits in a view this app drew from its own templates,
+/// not in a fragment a computer sent. Any paired computer's markup runs in
+/// this page, so controls over the paired computers answer only here.
+function local(element) {
+  return "local" in view().dataset && view().contains(element);
 }
 
 function banner(text) {
@@ -273,16 +396,27 @@ async function route(event) {
   app.path = location.pathname;
   delete document.documentElement.dataset.sheet;
   stopStream();
+  app.views++;
   // Only the newest navigation may fill the view or open a stream: an
   // older page answering late must not replace the one the URL names.
   app.routing?.abort();
   const routing = new AbortController();
   app.routing = routing;
+  // The computers list is this phone's own, drawn here and shown even when
+  // no computer answers.
+  if (location.pathname === "/computers") return slide(from, location.pathname, event, showComputers);
+  // Left for a list with no computer connected, such as from the computers
+  // list while none answered: connect first, never to this page's own.
+  if (!app.origin) return start(true);
   try {
     const html = await (await api(target.fragment, { signal: routing.signal })).text();
     if (app.routing !== routing) return;
     await slide(from, location.pathname, event, async () => {
+      delete view().dataset.local;
       view().innerHTML = html;
+      for (const link of view().querySelectorAll("a[data-computer]")) {
+        link.href = app.origin + link.getAttribute("href");
+      }
       // Alpine sets up the new fragment from a mutation observer; let it
       // show or hide groups before measuring rows.
       await Promise.resolve();
@@ -392,18 +526,24 @@ function handleEvent(block) {
   const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
   for (const [id, html] of Object.entries(patch.regions || {})) {
     const element = document.getElementById(id);
-    if (!element) continue;
+    // A computer patches only what it drew: never this app's own chrome.
+    if (!element || element === view() || !view().contains(element) || "local" in view().dataset) continue;
     // Never replace a composer holding a draft, pictures, or a send.
     const draft = element.querySelector?.("textarea");
-    if (draft && (draft.value || document.activeElement === draft)) continue;
-    if (element.matches?.("[data-busy]") || element.querySelector?.("[data-busy]")) continue;
+    const busy = element.matches?.("[data-busy]") || element.querySelector?.("[data-busy]");
+    if ((draft && (draft.value || document.activeElement === draft)) || busy) {
+      syncComposer(element, html);
+      continue;
+    }
     element.outerHTML = html;
     if (id === "term-screen") fitTerminal();
   }
   // New chat entries: the server sends only what changed after the
   // stream's first patch, so these follow the entries already shown.
   for (const [id, html] of Object.entries(patch.append || {})) {
-    document.getElementById(id)?.insertAdjacentHTML("beforeend", html);
+    const element = document.getElementById(id);
+    if (!element || !view().contains(element) || "local" in view().dataset) continue;
+    element.insertAdjacentHTML("beforeend", html);
   }
   if (atBottom && document.getElementById("chat-turn")) window.scrollTo(0, document.body.scrollHeight);
   applySearch();
@@ -459,6 +599,9 @@ function showInstallHint() {
 async function offerHandoff() {
   if (installed() || !app.device) return;
   if (location.pathname !== "/" && location.pathname !== "/board") return;
+  // The Home Screen app redeems the token at its own origin, so only the
+  // computer this page was loaded from may offer one.
+  if (!app.device.origins?.includes(location.origin)) return;
   let offer = readJson(localStorage, HANDOFF);
   if (!offer?.token || offer.expires_ms - Date.now() < 3_600_000) {
     try {
@@ -489,7 +632,9 @@ async function redeemHandoff(token) {
     const answer = await (
       await call("/api/handoff/redeem", { method: "POST", auth: false, body: { token, public_key: b64url(publicKey) } })
     ).json();
-    await adopt(pairKey, answer);
+    // Redeemed on the page of the computer that made the handoff, so its
+    // own answer names it.
+    await adopt(pairKey, answer, answer.fingerprint);
     return start();
   } catch (failure) {
     report("handoff", failure);
@@ -499,11 +644,23 @@ async function redeemHandoff(token) {
   }
 }
 
-/// Keeps the key and device an approval or a handoff granted.
-async function adopt(pairKey, answer) {
-  await saveKey(pairKey);
-  app.device = { id: answer.device, origins: answer.origins, fingerprint: answer.fingerprint, computer: answer.computer };
-  writeJson(localStorage, DEVICE, app.device);
+/// Keeps the key and device an approval or a handoff granted, and shows
+/// that computer. Pairing a computer again replaces its older pairing.
+async function adopt(pairKey, answer, fingerprint) {
+  // The code scanned off the desktop names the computer; one answering with
+  // another fingerprint must not take, or replace, a pairing as that one.
+  // The code carries it bare; the computer reports it colon-separated.
+  const bare = (text) => String(text || "").replace(/:/g, "").toUpperCase();
+  if (!fingerprint || bare(answer.fingerprint) !== bare(fingerprint)) {
+    throw new Error("This code belongs to another computer.");
+  }
+  const host = { id: answer.device, origins: answer.origins, fingerprint: answer.fingerprint, computer: answer.computer };
+  const older = hosts().find((other) => other.fingerprint === host.fingerprint && other.id !== host.id);
+  await saveKey(host, pairKey);
+  if (older) await dropKey(older).catch(() => {});
+  useHost(host);
+  app.origin = null;
+  writeJson(sessionStorage, TOKEN, null);
 }
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -558,12 +715,25 @@ document.addEventListener("click", async (event) => {
     button.disabled = true;
     command(button.dataset.pane, JSON.parse(button.dataset.command)).finally(() => (button.disabled = false));
   }
-  if (event.target.closest("[data-retry]")) start();
+  const own = (selector) => {
+    const element = event.target.closest(selector);
+    return element && local(element) ? element : null;
+  };
+  if (own("[data-retry]")) start(true);
+  const host = own("[data-host]");
+  if (host) switchHost(host.dataset.host);
+  if (own("[data-add-computer]")) startScan();
+  if (own("[data-scan-cancel]")) navigate("/computers");
   terminalClick(event);
 });
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target.id === "term-file") {
+    pastePicture(target.files[0]);
+    target.value = "";
+    return;
+  }
   const pane = target.dataset.pane;
   if (target.dataset.option !== undefined) {
     command(pane, { command: "set_option", id: target.dataset.option, value: { type: "choice", id: target.value } });
@@ -586,11 +756,25 @@ document.addEventListener("submit", async (event) => {
   event.preventDefault();
   const body = Object.fromEntries(new FormData(form).entries());
   const error = form.querySelector(".form-error");
+  // A new chat answers once it can be opened, which takes a moment; a
+  // second tap must not start another one.
+  if (form.dataset.sending !== undefined) return;
+  form.dataset.sending = "";
+  const submit = form.querySelector("[type=submit]");
+  if (submit) submit.disabled = true;
+  const shown = app.views;
   try {
     const answer = await (await api(form.dataset.form, { method: "POST", body })).json();
-    navigate(answer.location || "/");
+    // Left while it was sent, for another page or computer: stay there.
+    if (app.views !== shown) return;
+    // The form is spent: going back from what it made returns to the list.
+    history.replaceState(null, "", answer.location || "/");
+    route();
   } catch (failure) {
     if (error) error.textContent = failure.message;
+  } finally {
+    delete form.dataset.sending;
+    if (submit) submit.disabled = false;
   }
 });
 
@@ -647,9 +831,39 @@ function pasteText(text) {
   flushInput();
 }
 
-/// The next request: one paste, or up to 64 keys in a row for one pane.
+/// A picture goes in the same line as keys, so its path lands where it was
+/// pasted; the computer stores it and types the path.
+function pastePicture(file) {
+  const pane = termPane();
+  if (!pane || !file) return;
+  term.queue.push({ pane, file });
+  flushInput();
+}
+
+/// The Paste button: Safari asks to allow it, then hands over a screenshot
+/// or text. A page cannot raise the native Paste menu over a hidden field.
+async function pasteClipboard() {
+  try {
+    const items = (await navigator.clipboard?.read?.()) || [];
+    for (const item of items) {
+      const type = item.types.find((kind) => kind.startsWith("image/"));
+      if (type) return pastePicture(await item.getType(type));
+    }
+    for (const item of items) {
+      if (item.types.includes("text/plain")) return pasteText(await (await item.getType("text/plain")).text());
+    }
+    if (!navigator.clipboard?.read) return pasteText(await navigator.clipboard.readText());
+    flash("The clipboard is empty.");
+  } catch (error) {
+    if (error.name !== "NotAllowedError") flash(error.message);
+  }
+}
+
+/// The next request: one paste or picture, or up to 64 keys in a row for
+/// one pane.
 function nextInput() {
   const first = term.queue.shift();
+  if (first.file !== undefined) return { pane: first.pane, kind: "upload", raw: first.file };
   if (first.text !== undefined) return { pane: first.pane, kind: "paste", body: { text: first.text } };
   const keys = [first.key];
   while (keys.length < 64 && term.queue.length && term.queue[0].pane === first.pane && term.queue[0].key !== undefined) {
@@ -662,9 +876,9 @@ async function flushInput() {
   if (term.sending) return;
   term.sending = true;
   while (term.queue.length) {
-    const { pane, kind, body } = nextInput();
+    const { pane, kind, body, raw } = nextInput();
     try {
-      await api(`/api/term/${encodeURIComponent(pane)}/${kind}`, { method: "POST", body });
+      await api(`/api/term/${encodeURIComponent(pane)}/${kind}`, { method: "POST", body, raw });
     } catch (error) {
       // What followed was typed after it; sent alone, it would mean something else.
       term.queue = [];
@@ -690,11 +904,27 @@ function fitTerminal() {
   screen.scrollTop = screen.scrollHeight;
 }
 
-/// Keeps the terminal above the on-screen keyboard.
+/// A composer holding a draft or focus is not replaced by a live patch,
+/// but it still follows the agent's status from the patch it skipped, so
+/// Stop turns back into Send when the agent finishes.
+function syncComposer(element, html) {
+  if (element.id !== "chat-composer") return;
+  const fresh = new DOMParser().parseFromString(html, "text/html").getElementById("chat-composer");
+  const text = element.querySelector("textarea");
+  const freshText = fresh?.querySelector("textarea");
+  if (!text || !freshText) return;
+  Alpine.$data(element).working = "working" in fresh.dataset;
+  text.placeholder = freshText.placeholder;
+  text.disabled = freshText.disabled;
+}
+
+/// Keeps the terminal above the on-screen keyboard, and marks the page
+/// while the keyboard is up so the composer drops the home-indicator inset.
 function followViewport() {
   const viewport = window.visualViewport;
   if (!viewport) return;
   document.documentElement.style.setProperty("--vvh", `${viewport.height}px`);
+  document.documentElement.toggleAttribute("data-keyboard", window.innerHeight - viewport.height > 120);
   const page = document.getElementById("term");
   if (page) page.style.transform = `translateY(${viewport.offsetTop}px)`;
   fitTerminal();
@@ -717,6 +947,8 @@ function terminalClick(event) {
     if (document.activeElement === input) input.blur();
     else input?.focus({ preventScroll: true });
   }
+  if (event.target.closest("[data-term-paste]")) pasteClipboard();
+  if (event.target.closest("[data-term-picture]")) document.getElementById("term-file")?.click();
   if (event.target.closest("[data-term-zoom]")) {
     term.zoomed = !term.zoomed;
     fitTerminal();
@@ -742,7 +974,7 @@ async function termAction(action) {
 
 // Keys above the keyboard keep the field focused, so the keyboard stays up.
 document.addEventListener("pointerdown", (event) => {
-  if (event.target.closest(".tkey")) event.preventDefault();
+  if (event.target.closest(".tkey, [data-term-paste]")) event.preventDefault();
 });
 
 document.addEventListener("input", (event) => {
@@ -763,9 +995,13 @@ document.addEventListener("beforeinput", (event) => {
     case "deleteContentBackward":
       sendKeys([modified("backspace")]);
       break;
-    case "insertFromPaste":
-      pasteText(event.dataTransfer?.getData("text/plain") || event.data || "");
+    case "insertFromPaste": {
+      // A hardware keyboard's paste lands here; a screenshot comes as a file.
+      const picture = [...(event.dataTransfer?.files || [])].find((file) => file.type.startsWith("image/"));
+      if (picture) pastePicture(picture);
+      else pasteText(event.dataTransfer?.getData("text/plain") || event.data || "");
       break;
+    }
     case "insertCompositionText":
       // An input method is composing; its text comes at compositionend.
       return;
@@ -807,6 +1043,113 @@ document.addEventListener("keydown", (event) => {
   sendKeys([named && !chord ? modified(key) : key]);
 });
 
+// ---- computers: the list, switching, and adding one by its code ----
+
+/// Lists the paired computers, each with the address it answers at now.
+function showComputers() {
+  show("t-computers");
+  const list = view().querySelector("[data-hosts]");
+  for (const host of hosts()) {
+    const row = template("t-host").content.firstElementChild.cloneNode(true);
+    row.dataset.host = host.fingerprint;
+    row.querySelector("[data-name]").textContent = host.computer || "Computer";
+    row.querySelector("[data-shown]").hidden = host.fingerprint !== app.device?.fingerprint;
+    const address = row.querySelector("[data-address]");
+    const dot = row.querySelector("[data-dot]");
+    reach(host).then(
+      (origin) => {
+        address.textContent = new URL(origin).host;
+        dot.classList.replace("bg-raised", "bg-green");
+      },
+      () => {
+        address.textContent = "Not answering";
+        dot.classList.replace("bg-raised", "bg-faint");
+      },
+    );
+    list.append(row);
+  }
+}
+
+/// Shows `fingerprint`'s computer from its home.
+function switchHost(fingerprint) {
+  const host = hosts().find((other) => other.fingerprint === fingerprint);
+  if (!host) return;
+  useHost(host);
+  app.origin = null;
+  history.pushState(null, "", "/");
+  start();
+}
+
+// `attempt` counts scans started and stopped, so one cancelled while the
+// camera starts stops the stream it gets.
+const scan = { stream: null, timer: 0, attempt: 0 };
+
+/// Loads the QR decoder the first time a code is scanned.
+function loadDecoder() {
+  if (window.jsQR) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/assets/jsqr.min.js";
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("The scanner did not load."));
+    document.head.append(script);
+  });
+}
+
+/// Scans a pairing code with the camera and pairs with its computer.
+async function startScan() {
+  show("t-scan");
+  const attempt = scan.attempt;
+  const state = view().querySelector("[data-scan-state]");
+  const video = view().querySelector("video");
+  try {
+    await loadDecoder();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    if (attempt !== scan.attempt) return stream.getTracks().forEach((track) => track.stop());
+    scan.stream = stream;
+    video.srcObject = stream;
+    await video.play();
+  } catch (error) {
+    if (attempt !== scan.attempt) return;
+    stopScan();
+    state.textContent =
+      error.name === "NotAllowedError"
+        ? "Herdr may not use the camera. Allow it in Settings, then try again."
+        : `The camera did not start: ${error.message}`;
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const look = () => {
+    if (!scan.stream) return;
+    if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth) {
+      // A code fills much of the frame; a smaller image decodes faster.
+      const scale = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      const code = window.jsQR(image.data, image.width, image.height, { inversionAttempts: "dontInvert" });
+      const link = code && pairingLink(code.data);
+      if (link) {
+        stopScan();
+        history.replaceState(null, "", "/computers");
+        return pair(link, true);
+      }
+      if (code) state.textContent = "That is not a Herdr pairing code.";
+    }
+    scan.timer = setTimeout(look, 150);
+  };
+  look();
+}
+
+function stopScan() {
+  scan.attempt += 1;
+  clearTimeout(scan.timer);
+  scan.stream?.getTracks().forEach((track) => track.stop());
+  scan.stream = null;
+}
+
 // ---- pairing ----
 
 /// What the computer calls this phone, from what the browser says it is.
@@ -819,12 +1162,33 @@ function deviceName() {
   return "Browser";
 }
 
-/// Claims the scanned code at once and waits for the desktop's approval.
-async function pair() {
-  const params = new URLSearchParams(location.hash.slice(1));
+/// The pairing link a code holds, `https://ADDRESS/pair#t=TOKEN&fp=FINGERPRINT`,
+/// as a URL; null for anything else.
+function pairingLink(text) {
+  try {
+    const url = new URL(text);
+    const params = new URLSearchParams(url.hash.slice(1));
+    return url.protocol === "https:" && url.pathname === "/pair" && params.get("t") && params.get("fp") ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/// Claims a scanned code at once and waits for the desktop's approval. The
+/// code may name this page's computer, opened by the camera, or another
+/// computer, scanned in the app to add it (`scanned`).
+async function pair(link, scanned = false) {
+  const params = new URLSearchParams(link.hash.slice(1));
+  const origin = link.origin;
+  const here = origin === location.origin;
   show("t-approve");
+  // Leaving this view abandons the attempt: an approval that arrives after
+  // must not switch computers under the phone.
+  const shown = app.views;
+  const left = () => app.views !== shown;
   const state = view().querySelector("[data-state]");
-  showTrust(params.get("fp") || "");
+  view().querySelector("[data-approve-back]").hidden = !scanned;
+  showTrust(origin, params.get("fp") || "", here);
   try {
     const pairKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
     const publicKey = await crypto.subtle.exportKey("raw", pairKey.publicKey);
@@ -832,16 +1196,20 @@ async function pair() {
       await call("/api/pair/claim", {
         method: "POST",
         auth: false,
+        origin,
         body: { token: params.get("t"), name: deviceName(), public_key: b64url(publicKey) },
       })
     ).json();
+    if (left()) return;
     view().querySelector("[data-code]").textContent = claim.code.replace(/(\d{3})(\d{3})/, "$1 $2");
     state.textContent = "Waiting for approval…";
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const answer = await (await call(`/api/pair/claim/${claim.claim}`, { auth: false })).json();
+      if (left()) return;
+      const answer = await (await call(`/api/pair/claim/${claim.claim}`, { auth: false, origin })).json();
+      if (left()) return;
       if (answer.state === "approved") {
-        await adopt(pairKey, answer);
+        await adopt(pairKey, answer, params.get("fp"));
         // Straight home: its footer offers Add to Home Screen.
         history.replaceState(null, "", "/");
         return start();
@@ -854,10 +1222,11 @@ async function pair() {
     }
   } catch (failure) {
     report("pair", failure);
+    if (left()) return;
     // A network failure here is almost always a certificate this phone no
     // longer trusts. Drop the cached app and load the page itself once, so
     // Safari shows its warning instead.
-    if (failure instanceof TypeError && !sessionStorage.getItem(RELOADED)) {
+    if (here && failure instanceof TypeError && !sessionStorage.getItem(RELOADED)) {
       sessionStorage.setItem(RELOADED, "1");
       await dropCachedApp();
       return location.reload();
@@ -881,31 +1250,46 @@ async function dropCachedApp() {
   }
 }
 
-/// Shows how to trust the computer's certificate only when this browser
-/// does not yet: pairing works without it, but the installed app and its
-/// notifications need it.
-async function showTrust(fingerprint) {
+/// Shows how to trust the computer at `origin`: on its own page only when
+/// this browser does not trust it yet, as pairing works without it but the
+/// installed app and its notifications need it; for another computer, only
+/// once a claim fails, as the app cannot reach it at all untrusted.
+async function showTrust(origin, fingerprint, here) {
+  const box = view().querySelector("[data-trust]");
+  if (!box) return;
+  for (const link of box.querySelectorAll("a[data-computer]")) link.href = origin + link.getAttribute("href");
+  box.querySelector("[data-fingerprint]").textContent = fingerprint.replace(/(.{2})(?=.)/g, "$1:");
+  if (!here) return;
   const trusted = await navigator.serviceWorker
     ?.register("/sw.js", { scope: "/" })
     .then(() => true, () => false);
-  const box = view().querySelector("[data-trust]");
-  if (trusted || !box) return;
-  box.querySelector("[data-fingerprint]").textContent = fingerprint.replace(/(.{2})(?=.)/g, "$1:");
-  box.hidden = false;
+  if (!trusted) box.hidden = false;
 }
 
+/// Forgets the computer shown, and shows the next one that answers.
 async function forget() {
-  try {
-    await (await navigator.serviceWorker?.ready)?.pushManager.getSubscription().then((sub) => sub?.unsubscribe());
-  } catch {
-    // No push subscription.
+  const host = app.device;
+  if (host && ownsPush(host)) {
+    try {
+      await (await pushSubscription())?.unsubscribe();
+    } catch {
+      // No push subscription.
+    }
+    writeJson(localStorage, PUSH_HOST, null);
   }
-  await dropKey().catch(() => {});
-  app.device = null;
+  if (host) await dropKey(host).catch(() => {});
+  // A pairing `migrate` has not moved yet would come back on the next launch.
+  if (host && readJson(localStorage, DEVICE)?.id === host.id) {
+    writeJson(localStorage, DEVICE, null);
+    await keyStore("readwrite", (store) => store.delete("device")).catch(() => {});
+  }
+  saveHosts(hosts().filter((other) => other.fingerprint !== host?.fingerprint));
   app.session = null;
-  writeJson(localStorage, DEVICE, null);
+  app.origin = null;
   writeJson(localStorage, HANDOFF, null);
   writeJson(sessionStorage, TOKEN, null);
+  if (app.device) return start(true);
+  history.replaceState(null, "", "/");
   show("t-unpaired");
 }
 
@@ -916,7 +1300,23 @@ async function pushSubscription() {
   return registration?.pushManager?.getSubscription();
 }
 
+/// Whether this app's push subscription is `host`'s. One made before the
+/// app held several computers belongs to the only one there was.
+function ownsPush(host) {
+  const owner = readJson(localStorage, PUSH_HOST);
+  return owner ? owner === host.fingerprint : hosts().length <= 1;
+}
+
+/// The computer whose notifications this app gets, when it is not `host`.
+async function pushElsewhere(host) {
+  if (ownsPush(host) || !(await pushSubscription())) return null;
+  const owner = readJson(localStorage, PUSH_HOST);
+  return hosts().find((other) => other.fingerprint === owner) || { computer: "another computer" };
+}
+
 async function subscribePush() {
+  const elsewhere = await pushElsewhere(app.device);
+  if (elsewhere) throw new Error(`Notifications come from ${elsewhere.computer}. Turn them off there first.`);
   const registration = await navigator.serviceWorker.ready;
   const { key } = await (await api("/api/push/key")).json();
   const subscription = await registration.pushManager.subscribe({
@@ -924,11 +1324,14 @@ async function subscribePush() {
     applicationServerKey: fromB64url(key),
   });
   await api("/api/push", { method: "POST", body: subscription.toJSON() });
+  writeJson(localStorage, PUSH_HOST, app.device.fingerprint);
 }
 
 async function unsubscribePush() {
-  const subscription = await pushSubscription();
-  await subscription?.unsubscribe();
+  if (ownsPush(app.device)) {
+    await (await pushSubscription())?.unsubscribe();
+    writeJson(localStorage, PUSH_HOST, null);
+  }
   await api("/api/push", { method: "DELETE" });
 }
 
@@ -960,6 +1363,26 @@ document.addEventListener("alpine:init", () => {
     files: [],
     uploading: 0,
     sending: false,
+    // Whether the draft holds text or pictures, and whether the agent is
+    // working; together they pick the Stop or Send button.
+    draft: false,
+    working: false,
+    init() {
+      this.working = "working" in this.$root.dataset;
+    },
+    refresh() {
+      this.draft = this.$refs.text.value.trim() !== "" || this.files.length > 0;
+    },
+    // Alpine's CSP build reads properties, not expressions.
+    get stopShown() {
+      return this.working && !this.draft;
+    },
+    get sendShown() {
+      return !this.working || this.draft;
+    },
+    get sendOff() {
+      return !this.draft;
+    },
     // Marks the composer while it holds pictures or work in flight, so a
     // live patch leaves it alone.
     mark() {
@@ -970,10 +1393,27 @@ document.addEventListener("alpine:init", () => {
     pick() {
       this.$refs.file.click();
     },
-    async attach(event) {
-      const pane = this.$el.closest("[data-pane]").dataset.pane;
-      const picked = [...event.target.files].slice(0, 4 - this.files.length);
+    attach(event) {
+      const files = [...event.target.files];
       event.target.value = "";
+      this.upload(files);
+    },
+    // A screenshot copied on the phone arrives as a file a textarea cannot
+    // hold; it becomes an attachment, and any text pasted with it still goes
+    // into the draft.
+    paste(event) {
+      const files = [...(event.clipboardData?.items || [])]
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+      if (!files.length) return;
+      if (!event.clipboardData.types.includes("text/plain")) event.preventDefault();
+      this.upload(files);
+    },
+    async upload(files) {
+      const pane = this.$root.closest("[data-pane]").dataset.pane;
+      const picked = files.slice(0, 4 - this.files.length - this.uploading);
+      if (picked.length < files.length) flash("A prompt holds at most 4 pictures.");
       this.uploading += picked.length;
       this.mark();
       for (const file of picked) {
@@ -1003,11 +1443,13 @@ document.addEventListener("alpine:init", () => {
         }),
       );
       this.mark();
+      this.refresh();
     },
     grow() {
       const text = this.$refs.text;
       text.style.height = "auto";
       text.style.height = `${text.scrollHeight}px`;
+      this.refresh();
       this.suggest();
     },
     // While the draft is "/" and a word, lists the first commands that
@@ -1032,6 +1474,7 @@ document.addEventListener("alpine:init", () => {
     },
     slash(event) {
       this.$refs.text.value = `/${event.currentTarget.dataset.slash} `;
+      this.refresh();
       this.$refs.text.focus();
       this.suggest();
     },
@@ -1040,7 +1483,7 @@ document.addEventListener("alpine:init", () => {
     async send(event) {
       event.preventDefault();
       const text = this.$refs.text.value.trim();
-      if (!text || this.sending || this.uploading > 0) return;
+      if ((!text && !this.files.length) || this.sending || this.uploading > 0) return;
       const attachments = this.files.map((file) => ({ path: file.id }));
       this.sending = true;
       this.mark();
@@ -1124,8 +1567,10 @@ document.addEventListener("alpine:init", () => {
         return;
       }
       this.pushOff = false;
-      this.push = Boolean(await pushSubscription());
-      this.pushHint = this.push ? "Questions and finished turns arrive here." : "";
+      const elsewhere = await pushElsewhere(app.device);
+      this.push = !elsewhere && Boolean(await pushSubscription());
+      if (elsewhere) this.pushHint = `Notifications come from ${elsewhere.computer}.`;
+      else this.pushHint = this.push ? "Questions and finished turns arrive here." : "";
     },
     // Alpine's CSP build cannot assign through x-model, so the switch's
     // own state says what the user asked for.
@@ -1151,8 +1596,15 @@ document.addEventListener("alpine:init", () => {
 
 // ---- start ----
 
-async function start() {
-  if (location.pathname === "/pair" && location.hash.includes("t=")) return pair();
+/// Connects to the computer shown and opens the page the address names.
+/// With `anyHost`, on launch or when asked to try again, another paired
+/// computer is shown when that one does not answer; otherwise, as when a
+/// stream drops, it stays on the computer shown.
+async function start(anyHost = false) {
+  await migrate();
+  app.device = hosts()[0] || null;
+  const link = location.pathname === "/pair" && pairingLink(location.href);
+  if (link) return pair(link);
   // Every launch of the Home Screen app opens its start address; only the
   // first, before it holds a device, redeems the token there.
   const handoff = new URLSearchParams(location.search).get("handoff");
@@ -1164,7 +1616,15 @@ async function start() {
   }
   show("t-loading");
   try {
-    app.origin = await reach();
+    if (anyHost) {
+      const { host, origin } = await pickHost();
+      // Another computer has none of this one's chats or terminals.
+      if (host.fingerprint !== app.device.fingerprint) history.replaceState(null, "", "/");
+      useHost(host);
+      app.origin = origin;
+    } else {
+      app.origin = await reach(app.device);
+    }
     await signIn();
     route();
     refreshOrigins();
@@ -1190,4 +1650,4 @@ document.addEventListener("visibilitychange", () => {
 navigator.serviceWorker?.addEventListener("message", (event) => {
   if (event.data?.navigate) navigate(event.data.navigate);
 });
-start();
+start(true);

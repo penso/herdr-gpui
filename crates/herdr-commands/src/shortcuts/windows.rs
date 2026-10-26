@@ -6,6 +6,9 @@ use crate::Command;
 /// itself differs, so a Linux change carries over unless Windows opts out.
 pub(super) fn defaults(command: Command) -> &'static [&'static str] {
     match command {
+        // Linux's extra symbol aliases match its backend's Shift removal.
+        Command::IncreaseFontSize => &["ctrl-shift-=", "ctrl-shift-+"],
+        Command::DecreaseFontSize => &["ctrl-shift--"],
         // Windows can claim Ctrl-Shift-0 as an input-language hotkey, so the
         // keystroke never arrives; Windows Terminal and browsers use Ctrl-0.
         Command::ResetFontSize => &["ctrl-0"],

@@ -4,7 +4,7 @@
 //! phone watching or typing leaves the desktop's layout alone. Only panes
 //! of terminal tabs in the layout are reachable, never a chat's pane.
 
-use super::{ApiError, Device, Shared, render};
+use super::{ApiError, Device, Shared, render, render::now_ms};
 use crate::hub::{ApiMethod, Layout};
 use axum::{
     Json,
@@ -150,6 +150,56 @@ pub(super) async fn paste(
         )
         .await?;
     Ok(Json(json!({})))
+}
+
+/// A picture pasted into a terminal: stored like a chat's upload, then its
+/// path typed into the pane as a terminal file drop would, so a program such
+/// as Claude Code attaches it. The phone never names the path; this computer
+/// chooses it.
+pub(super) async fn upload(
+    State(state): State<Shared>,
+    _device: Device,
+    Path(pane): Path<String>,
+    bytes: axum::body::Bytes,
+) -> Result<Json<Value>, ApiError> {
+    known(&state.hub.layout(), &pane)?;
+    let id = crate::auth::random_id()?;
+    let stored = state.clone();
+    let path = tokio::task::spawn_blocking(move || {
+        let now = now_ms();
+        let id = stored.uploads.store(id, &bytes, now)?;
+        stored.uploads.path(&id, now)
+    })
+    .await
+    .map_err(|_| ApiError::Invalid("the upload was interrupted"))??;
+    state
+        .hub
+        .call(
+            ApiMethod::PaneSendText,
+            json!({"pane_id": pane, "text": dropped_path(&path)}),
+        )
+        .await?;
+    Ok(Json(json!({})))
+}
+
+/// `path` as a terminal types a dropped file: shell characters escaped with
+/// a backslash, and a space after it so typing goes on.
+pub(crate) fn dropped_path(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy();
+    if cfg!(windows) {
+        return format!("\"{path}\" ");
+    }
+    let mut text = String::with_capacity(path.len() + 8);
+    for character in path.chars() {
+        if !(character.is_alphanumeric()
+            || matches!(character, '/' | '.' | '_' | '-' | '+' | ',' | ':' | '@'))
+        {
+            text.push('\\');
+        }
+        text.push(character);
+    }
+    text.push(' ');
+    text
 }
 
 /// What the action sheet asks of Herdr.

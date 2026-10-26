@@ -173,6 +173,11 @@ impl SearchInput {
         cx.notify();
     }
 
+    #[cfg(test)]
+    pub(crate) fn framed(&self) -> bool {
+        self.framed
+    }
+
     /// Byte `offset` of the text in the shaped line's index space.
     fn shown(&self, offset: usize) -> usize {
         if self.masked {

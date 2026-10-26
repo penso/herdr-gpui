@@ -3,10 +3,12 @@
 ; release zip's tree unchanged: herdr-gpui.exe, a console program because it is
 ; also the command line terminals and agents run, herdr-gpui-launcher.exe,
 ; which starts it without a console window, herdr-acp.exe, which the app starts
-; chats with, herdr-automate.exe, the automation daemon, and the licenses.
-; Closing applications before replacing files also ends running chats; their
-; agents' sessions can be resumed. It never installs, starts, or stops the
-; Herdr daemon, and uninstalling keeps settings and Herdr sessions.
+; chats with, herdr-remote-control.exe, the remote control daemon the app runs as
+; a scheduled task, herdr-automate.exe, the automation daemon, and the licenses.
+; Closing applications before replacing files also ends running chats, whose
+; agents' sessions can be resumed, and Remote control, which the app starts
+; again. It never installs, starts, or stops the Herdr daemon, and uninstalling
+; keeps settings and Herdr sessions.
 ; The directory and shortcut match site/install.ps1, so either replaces the other.
 
 #ifndef Version
@@ -88,6 +90,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-acp.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\herdr-remote-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Automate}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 

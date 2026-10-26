@@ -115,7 +115,8 @@ fn the_page_shows_what_the_daemon_reports(cx: &mut TestAppContext) {
         "remote-addresses",
         "remote-certificate-control-0",
         "remote-notifications-control-0",
-        "remote-idle-control",
+        "remote-idle-control-0",
+        "remote-idle-control-3",
         "remote-pair-button",
         "remote-device-0",
         "remote-device-1",
@@ -159,18 +160,14 @@ fn switches_and_choices_save_remote_edits(cx: &mut TestAppContext) {
         view.commit_number(NumberField::RemotePort, NumberChange::Commit(8443.), cx);
     });
     cx.run_until_parked();
-    view.update(cx, |view, cx| {
-        view.commit_number(NumberField::RemoteIdleDays, NumberChange::Commit(400.), cx);
-        view.commit_number(NumberField::RemoteIdleDays, NumberChange::Commit(90.), cx);
-    });
-    cx.run_until_parked();
+    click(cx, "remote-idle-control-3");
     view.update(cx, |view, cx| view.pick_remote_bind(1, cx));
     cx.run_until_parked();
     assert_eq!(
         *edits.lock().unwrap(),
         [
             Preference::Remote(Edit::Port(8443)),
-            Preference::Remote(Edit::DeviceIdleDays(90)),
+            Preference::Remote(Edit::DeviceIdleDays(0)),
             Preference::Remote(Edit::Bind(Bind::Address("192.168.1.20".parse().unwrap()))),
         ]
     );

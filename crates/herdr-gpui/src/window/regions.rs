@@ -375,12 +375,24 @@ impl HerdrWindow {
         // A chat view covers its pane's cells and paints its own background,
         // so they are not painted under it: on macOS a page in the chat
         // shows from beneath the window's drawing, and cells would cover it.
-        let covered = |owner: &Owner| {
-            surface.popup.is_none() && matches!(owner, Owner::Pane(id) if self.chats.shown(id))
-        };
-        for (owner, area) in partition(&surface.frame, &surface.panes) {
-            if covered(&owner) {
-                continue;
+        for (owner, mut area) in partition(&surface.frame, &surface.panes) {
+            if surface.popup.is_none()
+                && let Owner::Pane(id) = &owner
+                && self.chats.shown(id)
+            {
+                let input = surface
+                    .panes
+                    .iter()
+                    .find(|pane| pane.pane_id == *id)
+                    .and_then(|pane| self.chat_terminal_layout(pane, surface));
+                if let Some(layout) = input {
+                    // The live agent's original input stays at its original
+                    // coordinates. Only cells above that strip are replaced.
+                    let rows = layout.input.y..layout.input.y.saturating_add(layout.input.height);
+                    area.retain(|span| rows.contains(&span.row));
+                } else {
+                    continue;
+                }
             }
             let slide = match &owner {
                 Owner::Pane(id) => slide.take_if(|slide| slide.pane_id == *id),

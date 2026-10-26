@@ -49,6 +49,7 @@ class LinuxDistroTests(unittest.TestCase):
         # package-linux.sh reads the release build identity the binary embeds.
         self.binary.write_bytes(b"not executable\0HERDR_BUILD_IDENTITY_V1\nworktree=0\nbranch=\npr=\n\0")
         (self.work / "herdr-acp").write_bytes(b"chat program")
+        (self.work / "herdr-remote-control").write_bytes(b"remote control daemon")
         (self.work / "herdr-automate").write_bytes(b"automation daemon")
         self.notices = self.work / "notices.txt"
         self.notices.write_text("Third-party license text\n")
@@ -92,6 +93,7 @@ class LinuxDistroTests(unittest.TestCase):
                 modes = {entry["dst"]: entry["file_info"]["mode"] for entry in config["contents"]}
                 self.assertEqual(modes.pop("/usr/bin/herdr-gpui"), 0o755)
                 self.assertEqual(modes.pop("/usr/bin/herdr-acp"), 0o755)
+                self.assertEqual(modes.pop("/usr/bin/herdr-remote-control"), 0o755)
                 self.assertEqual(modes.pop("/usr/bin/herdr-automate"), 0o755)
                 self.assertEqual(set(modes.values()), {0o644})
                 depends = {packager: override["depends"] for packager, override in config["overrides"].items()}

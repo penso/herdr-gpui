@@ -7,6 +7,7 @@
 //! classified, not coloured: the window colours each class from its own
 //! theme, so a theme change recolours the diff.
 use super::diff::{Kind, Lines};
+use crate::config::Theme;
 use std::ops::Range;
 use std::sync::OnceLock;
 use syntect::parsing::{ParseState, Scope, ScopeStack, ScopeStackOp, SyntaxReference, SyntaxSet};
@@ -21,6 +22,38 @@ pub(crate) enum Token {
     Keyword,
     Type,
     Function,
+}
+
+/// How a token's colour is made readable where its code is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Contrast {
+    /// The theme's own: palette colours through [`Theme::ink`], comments
+    /// in its muted colour as they are.
+    Theme,
+    /// Every colour moved to read at text contrast on this background.
+    On(u32),
+}
+
+impl Token {
+    /// The token's colour in `theme`: the terminal palette's, or the muted
+    /// colour for comments, made readable as `contrast` says.
+    pub(crate) fn colour(self, theme: &Theme, contrast: Contrast) -> u32 {
+        let colour = match self {
+            Self::Comment => theme.muted,
+            Self::String => theme.palette[2],
+            Self::Number | Self::Constant => theme.palette[3],
+            Self::Keyword => theme.palette[5],
+            Self::Type => theme.palette[6],
+            Self::Function => theme.palette[4],
+        };
+        match contrast {
+            Contrast::Theme if self == Self::Comment => colour,
+            Contrast::Theme => theme.ink(colour),
+            Contrast::On(background) => {
+                crate::contrast::ink_on_chrome(colour, [background; 3], 4.5)
+            }
+        }
+    }
 }
 
 /// A coloured stretch of a row's text, in bytes.

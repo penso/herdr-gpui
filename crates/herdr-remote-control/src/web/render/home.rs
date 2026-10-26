@@ -39,8 +39,10 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
         div id="home" class="pb-28" {
             (strip(lists))
             div class="flex items-center gap-2.5 px-1 pt-4 pb-1.5" {
-                span class="grid text-muted" { (icons::computer(22)) }
-                b class="text-[19px] font-bold" { (lists.computer) }
+                (nav("/computers", "flex items-center gap-2.5 min-w-0", html! {
+                    span class="grid text-muted" { (icons::computer(22)) }
+                    b class="text-[19px] font-bold truncate" { (lists.computer) }
+                }))
                 @if !lists.layout.connected {
                     span class="badge" { "Herdr not running" }
                 }

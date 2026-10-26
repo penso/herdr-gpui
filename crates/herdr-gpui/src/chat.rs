@@ -16,20 +16,28 @@
 
 mod chats;
 mod discovery;
+mod existing;
 mod glide;
 mod harnesses;
 mod link;
 mod list;
 mod page;
 mod prepared;
+#[cfg(feature = "integration-test")]
+pub(crate) mod preview;
+mod reader;
+mod rich;
+mod selection;
 mod session;
 mod start;
 mod summary;
+mod terminal;
 mod view;
 mod visual;
+mod widgets;
 mod window;
 
-pub(crate) use chats::{Chats, LauncherDeck, Toward};
+pub(crate) use chats::{ChatInput, Chats, LauncherDeck, Toward};
 
 /// The wall clock in milliseconds since the Unix epoch, which the program
 /// on this machine stamps a running turn with.
@@ -81,6 +89,8 @@ pub enum Error {
     EnvironmentSize,
     #[error("the chat program did not greet first")]
     Handshake,
+    #[error("[chat.mirrors] needs at most 16 valid pane and endpoint identifiers")]
+    MirrorConfig,
     #[error("no private directory holds chat sockets")]
     NoEndpointDir,
     #[error("the chat view is not attached")]
@@ -89,6 +99,8 @@ pub enum Error {
     Overflow,
     #[error("could not read from the chat program")]
     Read(#[source] herdr_chat_protocol::Error),
+    #[error("This is a read-only transcript; use the agent's terminal to reply")]
+    ReadOnly,
     #[error("could not reach the chat program over SSH")]
     Remote(#[source] herdr_client::Error),
     #[error("could not start the chat worker")]
@@ -126,8 +138,17 @@ impl Error {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct Target {
     pub(crate) endpoint: EndpointId,
+    pub(crate) existing: Option<existing::Binding>,
     pub(crate) pane_id: String,
     pub(crate) route: Route,
+}
+
+impl Target {
+    /// Whether the chat's program runs on this machine, so the paths in its
+    /// conversation name files here.
+    pub(crate) fn is_local(&self) -> bool {
+        self.route == Route::Local
+    }
 }
 
 /// How the window reaches a chat's program.

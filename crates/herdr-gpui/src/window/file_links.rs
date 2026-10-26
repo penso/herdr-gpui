@@ -285,6 +285,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         let pane = link.pane_id.clone();
+        let selection_epoch = self.selection_epoch;
         let found = cx.background_executor().spawn(async move {
             let home = crate::config::home().ok();
             let path = link.resolve(home.as_deref())?;
@@ -318,15 +319,20 @@ impl HerdrWindow {
             };
             // The window may have closed meanwhile; the file is no longer
             // asked for then.
-            let _ = this.update(cx, |this, cx| match opened {
-                Opened::Editor(target) => this.open_in_editor(&target, Some(&pane), cx),
-                Opened::System(url) => cx.open_url(url.as_str()),
-                Opened::Missing(path) => this.show_flash(
-                    super::flash::Flash::warning(
-                        crate::Error::LinkedFileMissing { path }.to_string(),
+            let _ = this.update(cx, |this, cx| {
+                if this.selection_epoch != selection_epoch {
+                    return;
+                }
+                match opened {
+                    Opened::Editor(target) => this.open_in_editor(&target, Some(&pane), cx),
+                    Opened::System(url) => cx.open_url(url.as_str()),
+                    Opened::Missing(path) => this.show_flash(
+                        super::flash::Flash::warning(
+                            crate::Error::LinkedFileMissing { path }.to_string(),
+                        ),
+                        cx,
                     ),
-                    cx,
-                ),
+                }
             });
         })
         .detach();

@@ -6,6 +6,11 @@ use super::*;
 fn endpoint_ids_are_32_lowercase_hex_digits() {
     let id = EndpointId::random();
     assert_eq!(id.as_str().parse::<EndpointId>().unwrap(), id);
+    let uuid = uuid::Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+    assert_eq!(
+        EndpointId::from(uuid).as_str(),
+        "67e5504410b1426f9247bb680e5fe0c8"
+    );
     for bad in [
         "",
         "../../etc/passwd",

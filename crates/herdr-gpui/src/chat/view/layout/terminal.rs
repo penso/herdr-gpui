@@ -3,10 +3,7 @@
 //! and tool calls after `⏺` colored by state, how a turn ended after `✻`,
 //! and the session's settings in a status line under the prompt box.
 
-use super::{
-    super::{Hues, column},
-    ChatLayout, ComposerParts, Look, Row, Side, summary_row,
-};
+use super::{super::Hues, ChatLayout, ComposerParts, Look, Row, Side, summary_row};
 use crate::{
     config::{corners, mix},
     fonts::StyledFont,
@@ -24,7 +21,7 @@ fn gutter(look: &Look<'_>) -> Pixels {
 impl ChatLayout for Terminal {
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(side) = row.side() else {
-            return summary_row(row, 6.);
+            return summary_row(row, look, 6.);
         };
         let theme = look.theme;
         let hues = Hues::of(theme);
@@ -72,7 +69,7 @@ impl ChatLayout for Terminal {
                 .text_color(rgb(theme.subtext())),
             Side::Agent => line.mt(px(if speaker { 10. } else { 6. })),
         };
-        column(
+        look.column(
             div()
                 .id(("chat-entry", id))
                 .px(px(14.))
@@ -84,14 +81,17 @@ impl ChatLayout for Terminal {
         .into_any_element()
     }
 
-    fn turn(&self, text: &str, look: &Look<'_>) -> Div {
+    fn turn(&self, text: AnyElement, look: &Look<'_>) -> Div {
         div()
             .debug_selector(|| "chat-turn".into())
             .pl(gutter(look))
             .text_font(look.mono)
             .text_size(px((look.mono.size - 1.).max(10.)))
             .text_color(rgb(look.theme.muted))
-            .child(format!("\u{273b} {text}"))
+            .flex()
+            .gap(px(5.))
+            .child("\u{273b}")
+            .child(text)
     }
 
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div {

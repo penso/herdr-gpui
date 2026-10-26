@@ -22,6 +22,10 @@ MPL_VERSIONS = {
 LICENSE_NAME = re.compile(r"^(licen[cs]e|copying)(?:$|[._-])", re.I)
 NOTICE_NAME = re.compile(r"^(notice|copyright)(?:$|[._-])", re.I)
 LICENSE_DIRS = {"license", "licenses", "licence", "licences", "legal"}
+# This crate declares MIT for its code, but embeds separately licensed fonts.
+# Keep the upstream provenance and OFL text; review their paths on upgrades.
+KATEX_FONTS_VERSION = "0.1.15"
+KATEX_FONT_NOTICES = ("fonts/OFL.txt", "fonts/FONT_NOTICE.txt")
 
 
 def collect(package):
@@ -31,6 +35,12 @@ def collect(package):
     explicit = package.get("license_file")
     if explicit:
         paths.add(root / explicit)
+    if package["name"] == "ratex-katex-fonts":
+        if package["version"] != KATEX_FONTS_VERSION:
+            raise ValueError(f"KaTeX font notices need version review: {package['version']}")
+        # Required paths are read below even when absent, so incomplete crate
+        # contents cannot silently produce a release without its font license.
+        paths.update(root / name for name in KATEX_FONT_NOTICES)
     for path in root.iterdir():
         if path.is_file() and (LICENSE_NAME.match(path.name) or NOTICE_NAME.match(path.name)):
             paths.add(path)
@@ -101,6 +111,8 @@ def render(evidence, lock_bytes):
         )
         if package.get("source", "") == "registry+https://github.com/rust-lang/crates.io-index":
             sections.append(f"Source download: https://crates.io/api/v1/crates/{package['name']}/{package['version']}/download\n")
+        if package["name"] == "ratex-katex-fonts":
+            sections.append("Bundled KaTeX fonts: SIL Open Font License 1.1 (OFL-1.1); crate code: MIT.\n")
         for name, text in texts:
             sections.append(f"\n--- {name} ---\n{text.rstrip()}\n")
     return "\n".join(sections)

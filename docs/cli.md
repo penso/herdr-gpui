@@ -402,6 +402,11 @@ Native chat views are opt-in: turn on **ACP chats** in Settings > General
 (`acp_chats = true` under `[features]`). While it is off, chat panes show
 their terminal and `chat new` exits 8.
 
+Set the reading width with `herdr-gpui config set chat.max_width 1200`, or use
+`0` for the full available width. Bounded widths range from 320 to 4000 logical
+pixels; the default is 800. Settings > General offers the same width slider and
+**Full-width chat** switch.
+
 A chat on an SSH host shows in the native chat view like a local one. Herdr UI
 runs `herdr-acp connect ID` on the host over the same SSH connection it uses
 for Herdr, and the program there sees an ordinary client on its own socket.
@@ -420,3 +425,11 @@ download first is left out.
 Files dropped on a remote chat are copied to the host first, into private
 temporary files under its `${TMPDIR:-/tmp}`, and the copies are attached.
 
+### Existing agent rendering
+
+Set `chat.render_existing = true` along with `features.acp_chats = true` to
+render existing Linux Codex/Claude conversations automatically. The original
+terminal input remains interactive in the same pane. `chat status --json`
+reports `input_mode` (`chat`, `terminal`, or `read_only`) and `session_id`;
+`blocked` status means the running agent needs input. `chat show/hide/toggle`
+still switches the pane presentation, without starting or stopping its agent.

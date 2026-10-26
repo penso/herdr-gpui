@@ -6,7 +6,7 @@
 //! works on a turn. The composer is a round field with the attach button
 //! before it and send inside it.
 
-use super::{super::column, ChatLayout, ComposerParts, Look, Row, Side, summary_row};
+use super::{ChatLayout, ComposerParts, CopyPlacement, Look, Row, Side, summary_row};
 use crate::config::mix;
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryKind;
@@ -29,7 +29,7 @@ pub(super) struct IMessage;
 impl ChatLayout for IMessage {
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(side) = row.side() else {
-            return summary_row(row, GAP);
+            return summary_row(row, look, GAP);
         };
         let theme = look.theme;
         let id = row.entry.id.0;
@@ -38,14 +38,16 @@ impl ChatLayout for IMessage {
         let above = if row.speaker() { GAP } else { RUN_GAP };
         let small = px((look.text - 2.).max(10.));
         let body = match &row.entry.kind {
-            // Pictures and notices stand alone, as Messages draws photos
-            // and its own notes.
+            // Pictures and system notices stand alone; answered questions
+            // use the user's bubble like other retained user replies.
             EntryKind::Image { .. } => row.content,
-            EntryKind::Notice { .. } => div()
+            EntryKind::Notice { answers, .. } if answers.is_empty() => div()
                 .flex()
-                .justify_center()
+                .flex_col()
+                .items_center()
+                .min_w_0()
                 .text_size(small)
-                .child(row.content),
+                .child(row.content.max_w_full()),
             kind => {
                 let (fill, text) = match side {
                     Side::User => (user_blue(look), WHITE),
@@ -77,11 +79,15 @@ impl ChatLayout for IMessage {
                     });
                 div()
                     .flex()
-                    .when(side == Side::User, |row| row.justify_end())
+                    // Rich blocks need the available cross-axis width;
+                    // horizontal auto flex sizing collapses their percentages.
+                    .flex_col()
+                    .when(side == Side::User, |row| row.items_end())
+                    .when(side == Side::Agent, |row| row.items_start())
                     .child(bubble)
             }
         };
-        column(
+        look.column(
             div()
                 .id(("chat-entry", id))
                 .px(px(16.))
@@ -106,15 +112,39 @@ impl ChatLayout for IMessage {
     }
 
     /// Floats over the message's lower corner, inside it, so the pointer
-    /// can reach it without leaving the message.
-    fn copy(&self, button: Stateful<Div>, look: &Look<'_>) -> Div {
-        div().absolute().bottom_0().right_0().child(
-            button
-                .rounded_full()
-                .bg(rgb(look.theme.background))
-                .border_1()
-                .border_color(rgb(look.theme.active)),
-        )
+    /// can reach it without leaving the message. Over what it would cover,
+    /// the same pill takes a footer of its own height instead.
+    fn copy(&self, button: Stateful<Div>, placement: CopyPlacement, look: &Look<'_>) -> Div {
+        let button = button
+            .rounded_full()
+            .bg(rgb(look.theme.background))
+            .border_1()
+            .border_color(rgb(look.theme.active));
+        match placement {
+            CopyPlacement::Floating => div().absolute().bottom_0().right_0().child(button),
+            CopyPlacement::Footer => div()
+                .relative()
+                .flex()
+                .justify_end()
+                .pt(px(4.))
+                .child(button),
+        }
+    }
+
+    /// Prose takes the bubble's own text color.
+    fn prose(&self, _look: &Look<'_>) -> Option<u32> {
+        None
+    }
+
+    /// Links keep the bubble's text color, which reads on its fill.
+    fn link(&self, _look: &Look<'_>) -> Option<u32> {
+        None
+    }
+
+    /// Bubbles are filled, so what the theme's ink is drawn for keeps the
+    /// theme's background behind it.
+    fn backdrop(&self, look: &Look<'_>) -> Option<u32> {
+        Some(look.theme.background)
     }
 
     /// Muted under the last bubble, where Messages shows that the other
@@ -133,7 +163,7 @@ impl ChatLayout for IMessage {
         )
     }
 
-    fn turn(&self, text: &str, look: &Look<'_>) -> Div {
+    fn turn(&self, text: AnyElement, look: &Look<'_>) -> Div {
         div()
             .debug_selector(|| "chat-turn".into())
             .flex()
@@ -141,7 +171,7 @@ impl ChatLayout for IMessage {
             .text_size(px((look.text - 2.).max(10.)))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(rgb(look.theme.muted))
-            .child(text.to_owned())
+            .child(text)
     }
 
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div {

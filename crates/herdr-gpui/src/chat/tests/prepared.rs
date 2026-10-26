@@ -2,6 +2,26 @@ use super::*;
 use crate::chat::prepared::{Body, DiffSummary, Part, Prepared, diff_counts, summarize};
 use herdr_chat_protocol::{Tool, ToolContent, ToolKind, ToolStatus};
 
+mod cut;
+mod fences;
+
+#[test]
+fn literal_indented_widget_examples_cannot_become_controls() {
+    let json = r#"{"components":[{"type":"text","text":"Example"}]}"#;
+    for text in [
+        format!("    ```herdr-ui\n    {json}\n    ```"),
+        format!("\t```herdr-ui\n\t{json}\n\t```"),
+        format!("```example`herdr-ui\n{json}\n```"),
+    ] {
+        let (prepared, _) = visual::message(&text);
+        let body = prepared.body(EntryId(1)).unwrap();
+        let Body::Message(parts) = &*body else {
+            panic!("message");
+        };
+        assert!(!parts.iter().any(|part| matches!(part, Part::Widget(_))));
+    }
+}
+
 #[test]
 fn diffs_count_lines_added_and_removed() {
     assert_eq!(diff_counts("a\nb\nc\n", "a\nB\nc\nd\n"), (2, 1));
@@ -69,12 +89,17 @@ fn bodies_are_prepared_once_per_revision() {
     prepared.update(&transcript, &keys);
     let first = prepared.body(EntryId(1)).unwrap();
     assert!(matches!(&*first, Body::Message(parts)
-        if matches!(&parts[..], [Part::Text(lines)] if lines[0].text == "bold text")));
+        if matches!(&parts[..], [Part::Rich(blocks)]
+            if matches!(&blocks[0], rich::Block::Paragraph { content, .. }
+                if matches!(&content[0], rich::Inline::Text(text, style) if text == "bold" && style.bold)))));
     assert!(matches!(
         &*prepared.body(EntryId(2)).unwrap(),
         Body::Tool(_)
     ));
-    assert!(prepared.body(EntryId(3)).is_none());
+    assert!(matches!(
+        &*prepared.body(EntryId(3)).unwrap(),
+        Body::Message(_)
+    ));
     prepared.update(&transcript, &keys);
     assert!(std::rc::Rc::ptr_eq(
         &first,
@@ -101,7 +126,15 @@ fn an_answer_too_long_to_show_ends_with_a_note() {
     let Part::Text(lines) = parts.last().unwrap() else {
         panic!("not text");
     };
-    assert!(lines.len() > 400, "chat shows more than release notes do");
+    let Part::Rich(blocks) = &parts[0] else {
+        panic!("not structured prose");
+    };
+    assert!(
+        matches!(&blocks[0], rich::Block::Paragraph { content, .. }
+        if content.iter().any(|part| matches!(part, rich::Inline::Text(text, _)
+            if text.contains("line 1999")))),
+        "chat shows more than release notes do"
+    );
     assert!(lines.last().unwrap().text.contains("Copy takes all of it"));
     // A short answer has no note.
     transcript.entries = vec![agent(2, "short")];
@@ -109,5 +142,5 @@ fn an_answer_too_long_to_show_ends_with_a_note() {
     let Body::Message(parts) = &*prepared.body(EntryId(2)).unwrap() else {
         panic!("not a message");
     };
-    assert!(matches!(&parts[..], [Part::Text(lines)] if lines.len() == 1));
+    assert!(matches!(&parts[..], [Part::Rich(blocks)] if blocks.len() == 1));
 }

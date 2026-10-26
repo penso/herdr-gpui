@@ -109,7 +109,7 @@ impl HerdrWindow {
             .h(px(26.))
             .rounded(px(corners::CONTROL))
             .bg(rgb(theme.active))
-            .text_size(px((self.chat_text_size() - 1.).max(10.)))
+            .text_size(self.chat_small_text())
             .cursor_pointer()
             .hover(|button| button.bg(rgb(crate::config::mix(theme.active, theme.foreground, 12))))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -125,8 +125,7 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut font = self.config.ui.clone();
-        font.size = self.chat_text_size();
+        let font = self.chat_font();
         let theme = self.theme.clone();
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
@@ -473,7 +472,7 @@ impl HerdrWindow {
                 .px(px(8.))
                 .pt(px(6.))
                 .pb(px(2.))
-                .text_size(px((self.chat_text_size() - 1.).max(10.)))
+                .text_size(self.chat_small_text())
                 .text_color(rgb(theme.muted))
                 .child(safe_text(text, 80))
         };

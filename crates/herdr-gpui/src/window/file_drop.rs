@@ -95,6 +95,15 @@ impl HerdrWindow {
         if !self.chats.shown(pane_id) {
             return false;
         }
+        if self
+            .chats
+            .pane(pane_id)
+            .is_some_and(|pane| pane.input() == crate::chat::ChatInput::Terminal)
+        {
+            // This pane uses the real agent editor, including its established
+            // file/image paste path; the rich transcript is only its output.
+            return false;
+        }
         self.attach_chat_files(pane_id, paths.to_vec(), window, cx);
         true
     }

@@ -355,6 +355,7 @@ impl Render for HerdrWindow {
                     })
                 },
             )
+            .capture_key_down(cx.listener(Self::chat_zoom_key))
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))
             // The terminal has nothing for Cut to act on, and Copy only while

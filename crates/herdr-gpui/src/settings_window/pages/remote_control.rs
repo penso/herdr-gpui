@@ -303,7 +303,6 @@ impl SettingsWindow {
                 ("remote-port", "Port"),
                 "The HTTPS port phones connect to.",
                 f32::from(remote.port),
-                "",
                 cx,
             ))
             .child(self.remote_bind_row(&health, cx))
@@ -354,14 +353,23 @@ impl SettingsWindow {
                     )),
             )
             .child(ui::section(theme, "Devices", None))
-            .child(self.remote_number_row(
-                NumberField::RemoteIdleDays,
-                ("remote-idle", "Forget idle devices after"),
-                "A device that has not connected for this long is forgotten and must pair again.",
-                f32::from(remote.device_idle_days),
-                " days",
-                cx,
-            ))
+            .child(
+                ui::row(theme, "remote-idle", "Forget idle devices after")
+                    .description(
+                        "A device that has not connected for this long is forgotten and must \
+                         pair again.",
+                    )
+                    .control(ui::segmented(
+                        theme,
+                        "remote-idle-control",
+                        &[(1, "1 day"), (7, "1 week"), (30, "1 month"), (0, "Never")],
+                        Some(remote.device_idle_days),
+                        !self.busy(),
+                        on_value(cx, |this, days, _, cx| {
+                            this.save_remote(Edit::DeviceIdleDays(days), cx)
+                        }),
+                    )),
+            )
             .child(self.remote_devices(cx))
     }
 
@@ -446,7 +454,6 @@ impl SettingsWindow {
         (id, title): (&'static str, &'static str),
         description: &'static str,
         value: f32,
-        unit: &'static str,
         cx: &mut Context<Self>,
     ) -> ui::Row {
         let on_change = on_value(cx, move |this, change, _, cx| {
@@ -461,8 +468,8 @@ impl SettingsWindow {
                     id: field.selector(),
                     value,
                     range: field.range(),
-                    unit,
-                    slider: false,
+                    unit: "",
+                    look: ui::Look::Field,
                     enabled: true,
                 },
                 self.number_edit_for(field),

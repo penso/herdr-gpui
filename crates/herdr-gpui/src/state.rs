@@ -480,6 +480,20 @@ impl LiveState {
         })
     }
 
+    /// What the daemon reports of the agent in `pane_id`, while one runs there.
+    pub(crate) fn agent_status(
+        &self,
+        pane_id: &str,
+    ) -> Option<herdr_client::protocol::AgentStatus> {
+        self.snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .agents
+                .iter()
+                .find(|agent| agent.pane_id == pane_id)
+                .map(|agent| agent.agent_status)
+        })
+    }
+
     /// Track activation without treating receipt or focus gain as presentation.
     pub fn set_outer_focus(&mut self, focused: bool) {
         // A focus report retried after inbox contention must still cause a draw.

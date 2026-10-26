@@ -11,6 +11,48 @@ fn live(at: Cursor, entries: Vec<Entry>) -> Session {
 }
 
 #[test]
+fn daemon_status_updates_only_observers_and_preserves_the_wire_cursor() {
+    let mut session = live(cursor(1, 0), vec![agent(1, "Existing conversation")]);
+    assert!(!session.set_observed_status(Status::Working));
+    let mut transcript = session.transcript().clone();
+    transcript.read_only = true;
+    session
+        .receive(ServerMessage::Snapshot {
+            cursor: cursor(2, 4),
+            transcript: Box::new(transcript),
+        })
+        .unwrap();
+    assert!(session.set_observed_status(Status::Working));
+    assert_eq!(session.transcript().status, Status::Working);
+    assert_eq!(session.since(), Some(cursor(2, 4)));
+    assert!(!session.set_observed_status(Status::Working));
+    assert!(session.resend().is_empty());
+}
+
+#[test]
+fn a_read_only_transcript_cannot_queue_commands() {
+    let mut session = live(cursor(1, 0), vec![agent(1, "Existing CLI conversation")]);
+    let mut transcript = session.transcript().clone();
+    transcript.read_only = true;
+    session
+        .receive(ServerMessage::Snapshot {
+            cursor: cursor(2, 0),
+            transcript: Box::new(transcript),
+        })
+        .unwrap();
+    for command in [
+        Command::Cancel,
+        Command::Prompt {
+            text: "Continue".into(),
+            attachments: Vec::new(),
+        },
+    ] {
+        assert!(matches!(session.submit(command), Err(Error::ReadOnly)));
+    }
+    assert!(session.resend().is_empty());
+}
+
+#[test]
 fn changes_apply_in_order_after_a_snapshot() {
     let mut session = live(cursor(1, 4), vec![agent(1, "Hel")]);
     assert!(session.live());

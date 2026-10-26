@@ -8,6 +8,7 @@
 //! streaming does not redraw a diagram it already finished. Diagrams follow
 //! the theme: a theme change redraws them while the old texture stays up.
 
+use super::rich::MathMode;
 use crate::config::{FontConfig, Theme};
 use base64::Engine as _;
 use gpui::{RenderImage, SvgRenderer};
@@ -35,6 +36,10 @@ const MAX_TEXTURE_SIDE: f32 = 4_096.;
 const DIAGRAM_SCALE: f32 = 2.;
 /// Visuals one chat prepares at once; the rest wait their turn.
 const MAX_RUNNING: usize = 2;
+/// Rich entries admitted per pane, including queued work and failures.
+pub(crate) const MAX_RICH_VISUALS: usize = 128;
+/// Retained formula textures per pane; images/diagrams keep their own limits.
+pub(crate) const MAX_MATH_TEXTURE_BYTES: usize = 64 * 1024 * 1024;
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -49,6 +54,12 @@ pub(crate) enum Error {
     Diagram(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("the picture could not be fetched")]
     Fetch(#[source] Box<ureq::Error>),
+    #[error("the formula could not be drawn: {0}")]
+    Math(String),
+    #[error("the formula exceeds the rendering limits")]
+    MathLimit,
+    #[error("the formula could not be parsed")]
+    MathParse(#[source] ratex_parser::ParseError),
     #[error("the address does not answer with a picture")]
     NotAnImage,
     #[error("the diagram renderer failed")]
@@ -74,9 +85,29 @@ impl VisualId {
 #[derive(Clone, Debug)]
 pub(crate) enum Source {
     Image(Image),
+    Code {
+        language: String,
+        source: Arc<str>,
+    },
+    Math {
+        source: Arc<str>,
+        mode: MathMode,
+    },
     Diagram(Arc<str>),
     /// A picture on the web, asked for by the user.
     Remote(crate::browser::WebUrl),
+}
+
+impl Source {
+    /// Code and math count against the rich budget; math also against the
+    /// texture budget.
+    fn kind(&self) -> Kind {
+        match self {
+            Self::Code { .. } => Kind::Code,
+            Self::Math { .. } => Kind::Math,
+            Self::Image(_) | Self::Diagram(_) | Self::Remote(_) => Kind::Other,
+        }
+    }
 }
 
 /// A texture and the size it is drawn at, in points.
@@ -85,6 +116,34 @@ pub(crate) struct Drawn {
     pub(crate) texture: Arc<RenderImage>,
     pub(crate) width: f32,
     pub(crate) height: f32,
+    /// Distance from the top to the mathematical baseline, when this is math.
+    pub(crate) baseline: Option<f32>,
+}
+
+/// Prepared by the same bounded worker queue; code has no GPU texture.
+pub(crate) enum Output {
+    Image(Drawn),
+    Code(Vec<Vec<crate::review::highlight::Span>>),
+}
+
+impl Output {
+    /// Bytes of its texture; code has none.
+    fn texture_bytes(&self) -> usize {
+        match self {
+            Self::Image(drawn) => drawn
+                .texture
+                .as_bytes(0)
+                .map_or(usize::MAX, |bytes| bytes.len()),
+            Self::Code(_) => 0,
+        }
+    }
+
+    fn texture(self) -> Option<Arc<RenderImage>> {
+        match self {
+            Self::Image(drawn) => Some(drawn.texture),
+            Self::Code(_) => None,
+        }
+    }
 }
 
 /// What the view shows for a visual now.
@@ -181,21 +240,32 @@ pub(crate) struct Job {
 
 enum Work {
     Image(Image),
+    Code(String, Arc<str>),
+    Math(Arc<str>, MathMode, Arc<DiagramStyle>),
     Diagram(Arc<str>, Arc<DiagramStyle>, SvgRenderer),
     Remote(crate::browser::WebUrl),
 }
 
 impl Job {
     /// Runs on the background executor.
-    pub(crate) fn run(self) -> (VisualId, u64, Result<Drawn>) {
+    pub(crate) fn run(self) -> (VisualId, u64, Result<Output>) {
         let drawn = match self.work {
-            Work::Image(image) => decode(&image),
-            Work::Remote(url) => remote::fetch(&url),
+            Work::Image(image) => decode(&image).map(Output::Image),
+            Work::Code(language, source) => {
+                Ok(Output::Code(super::rich::highlight(&language, &source)))
+            }
+            Work::Math(source, mode, style) => catch_unwind(AssertUnwindSafe(|| {
+                super::rich::draw_math(&source, mode, style.size, style.text)
+            }))
+            .unwrap_or(Err(Error::Panicked))
+            .map(Output::Image),
+            Work::Remote(url) => remote::fetch(&url).map(Output::Image),
             Work::Diagram(source, style, renderer) => {
                 // The renderer is a third-party parser fed untrusted text; a
                 // panic in it fails this diagram rather than the app.
                 catch_unwind(AssertUnwindSafe(|| diagram(&source, &style, &renderer)))
                     .unwrap_or(Err(Error::Panicked))
+                    .map(Output::Image)
             }
         };
         (self.id, self.ticket, drawn)
@@ -231,6 +301,7 @@ fn decode_bytes(bytes: Vec<u8>, format: ImageFormat) -> Result<Drawn> {
         texture: Arc::new(texture),
         width: width as f32,
         height: height as f32,
+        baseline: None,
     })
 }
 
@@ -259,6 +330,7 @@ fn diagram(source: &str, style: &DiagramStyle, renderer: &SvgRenderer) -> Result
         texture,
         width,
         height,
+        baseline: None,
     })
 }
 
@@ -268,10 +340,18 @@ enum Phase {
     Done,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Code,
+    Math,
+    Other,
+}
+
 struct Item {
+    kind: Kind,
     phase: Phase,
     /// What is drawn now; a diagram keeps its old texture while it redraws.
-    shown: Option<Result<Drawn>>,
+    shown: Option<Result<Output>>,
     /// Kept for a diagram, which redraws with the theme; an image's bytes
     /// leave with its job.
     source: Option<Source>,
@@ -281,8 +361,16 @@ struct Item {
 #[derive(Default)]
 pub(crate) struct Visuals {
     items: HashMap<VisualId, Item>,
+    /// A preparation pass requests new visuals before it knows which old
+    /// ones remain. Stage bounded overflow until retain frees those slots.
+    deferred: HashMap<VisualId, Source>,
+    math_bytes: usize,
     /// Textures no longer drawn, for the window to drop from the atlas.
     released: Vec<Arc<RenderImage>>,
+    // Keep tickets even when a streamed revision forgets its old item: the
+    // work is still in flight and must continue to occupy its worker slot.
+    running: HashSet<u64>,
+    rich_count: usize,
     style: Option<Arc<DiagramStyle>>,
     tickets: u64,
 }
@@ -290,7 +378,21 @@ pub(crate) struct Visuals {
 impl Visuals {
     /// Asks for a visual; one already known is left as it is.
     pub(crate) fn want(&mut self, id: VisualId, source: Source) {
+        if self.items.contains_key(&id) {
+            return;
+        }
+        let kind = source.kind();
+        if kind != Kind::Other {
+            if self.rich_count >= MAX_RICH_VISUALS {
+                if self.deferred.len() < MAX_RICH_VISUALS {
+                    self.deferred.entry(id).or_insert(source);
+                }
+                return;
+            }
+            self.rich_count += 1;
+        }
         self.items.entry(id).or_insert(Item {
+            kind,
             phase: Phase::Queued,
             shown: None,
             source: Some(source),
@@ -300,13 +402,30 @@ impl Visuals {
     /// Forgets the visuals no entry draws any more.
     pub(crate) fn retain(&mut self, live: &HashSet<VisualId>) {
         let released = &mut self.released;
+        let math_bytes = &mut self.math_bytes;
+        let rich_count = &mut self.rich_count;
         self.items.retain(|id, item| {
             let keep = live.contains(id);
-            if !keep && let Some(Ok(drawn)) = item.shown.take() {
-                released.push(drawn.texture);
+            if !keep {
+                if item.kind != Kind::Other {
+                    *rich_count -= 1;
+                }
+                if let Some(Ok(drawn)) = item.shown.take() {
+                    if item.kind == Kind::Math {
+                        *math_bytes = math_bytes.saturating_sub(drawn.texture_bytes());
+                    }
+                    released.extend(drawn.texture());
+                }
             }
             keep
         });
+        // Only this pass's live requests are eligible. Anything still over
+        // budget stays source; do not retain an unbounded retry backlog.
+        for (id, source) in std::mem::take(&mut self.deferred) {
+            if live.contains(&id) && self.rich_count < MAX_RICH_VISUALS {
+                self.want(id, source);
+            }
+        }
     }
 
     pub(crate) fn clear(&mut self) {
@@ -320,9 +439,17 @@ impl Visuals {
 
     pub(crate) fn shown(&self, id: VisualId) -> Shown<'_> {
         match self.items.get(&id).and_then(|item| item.shown.as_ref()) {
-            Some(Ok(drawn)) => Shown::Ready(drawn),
+            Some(Ok(Output::Image(drawn))) => Shown::Ready(drawn),
+            Some(Ok(Output::Code(_))) => Shown::Pending,
             Some(Err(error)) => Shown::Failed(error),
             None => Shown::Pending,
+        }
+    }
+
+    pub(crate) fn code(&self, id: VisualId) -> Option<&[Vec<crate::review::highlight::Span>]> {
+        match self.items.get(&id)?.shown.as_ref()?.as_ref().ok()? {
+            Output::Code(spans) => Some(spans),
+            Output::Image(_) => None,
         }
     }
 
@@ -332,7 +459,7 @@ impl Visuals {
         if self.style.as_deref() != Some(style) {
             self.style = Some(Arc::new(style.clone()));
             for item in self.items.values_mut() {
-                if matches!(item.source, Some(Source::Diagram(_))) {
+                if matches!(item.source, Some(Source::Diagram(_) | Source::Math { .. })) {
                     item.phase = Phase::Queued;
                 }
             }
@@ -340,11 +467,7 @@ impl Visuals {
         let Some(style) = self.style.clone() else {
             return Vec::new();
         };
-        let running = self
-            .items
-            .values()
-            .filter(|item| matches!(item.phase, Phase::Running(_)))
-            .count();
+        let running = self.running.len();
         let mut jobs = Vec::new();
         for (id, item) in &mut self.items {
             if running + jobs.len() >= MAX_RUNNING {
@@ -359,12 +482,19 @@ impl Visuals {
                     item.source = Some(Source::Diagram(source));
                     work
                 }
+                Some(Source::Math { source, mode }) => {
+                    let work = Work::Math(source.clone(), mode, style.clone());
+                    item.source = Some(Source::Math { source, mode });
+                    work
+                }
+                Some(Source::Code { language, source }) => Work::Code(language, source),
                 Some(Source::Image(image)) => Work::Image(image),
                 Some(Source::Remote(url)) => Work::Remote(url),
                 None => continue,
             };
             self.tickets += 1;
             item.phase = Phase::Running(self.tickets);
+            self.running.insert(self.tickets);
             jobs.push(Job {
                 id: *id,
                 ticket: self.tickets,
@@ -376,22 +506,43 @@ impl Visuals {
 
     /// Takes a job's result; one overtaken by a newer job or a forgotten
     /// visual is dropped. Whether the view changed.
-    pub(crate) fn finish(&mut self, id: VisualId, ticket: u64, drawn: Result<Drawn>) -> bool {
+    pub(crate) fn finish(&mut self, id: VisualId, ticket: u64, mut drawn: Result<Output>) -> bool {
+        self.running.remove(&ticket);
         let Some(item) = self.items.get_mut(&id) else {
             if let Ok(drawn) = drawn {
-                self.released.push(drawn.texture);
+                self.released.extend(drawn.texture());
             }
             return false;
         };
         if !matches!(item.phase, Phase::Running(running) if running == ticket) {
             if let Ok(drawn) = drawn {
-                self.released.push(drawn.texture);
+                self.released.extend(drawn.texture());
             }
             return false;
         }
+        if item.kind == Kind::Math {
+            let old_bytes = item
+                .shown
+                .as_ref()
+                .and_then(|shown| shown.as_ref().ok())
+                .map_or(0, Output::texture_bytes);
+            self.math_bytes = self.math_bytes.saturating_sub(old_bytes);
+            let new_bytes = drawn.as_ref().map_or(0, Output::texture_bytes);
+            if new_bytes > MAX_MATH_TEXTURE_BYTES.saturating_sub(self.math_bytes) {
+                if let Ok(output) = drawn {
+                    self.released.extend(output.texture());
+                }
+                drawn = Err(Error::MathLimit);
+                // A cached failure stays source; a theme change must not
+                // restart work that cannot fit and starve other queued jobs.
+                item.source = None;
+            } else {
+                self.math_bytes += new_bytes;
+            }
+        }
         item.phase = Phase::Done;
         if let Some(Ok(old)) = item.shown.replace(drawn) {
-            self.released.push(old.texture);
+            self.released.extend(old.texture());
         }
         true
     }
@@ -399,5 +550,10 @@ impl Visuals {
     /// Textures to drop from the atlas.
     pub(crate) fn take_released(&mut self) -> Vec<Arc<RenderImage>> {
         std::mem::take(&mut self.released)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn rich_budget(&self) -> (usize, usize) {
+        (self.rich_count, self.math_bytes)
     }
 }

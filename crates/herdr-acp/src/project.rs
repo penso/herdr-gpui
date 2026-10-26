@@ -70,6 +70,8 @@ impl Projector {
             entry: Entry {
                 id,
                 kind: EntryKind::Notice {
+                    answers: Vec::new(),
+                    details: None,
                     level,
                     text: bounded(text.into()),
                 },

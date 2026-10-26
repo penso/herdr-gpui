@@ -18,7 +18,7 @@ pub(super) struct Bubbles;
 impl ChatLayout for Bubbles {
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         if row.side().is_none() {
-            return summary_row(row, SHAPE.gap);
+            return summary_row(row, look, SHAPE.gap);
         }
         bubble_row(row, look, SHAPE)
     }

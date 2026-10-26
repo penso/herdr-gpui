@@ -18,9 +18,8 @@ fn assert_ctrl_profile(profile: Profile) {
     let mut seen = HashMap::new();
     for info in COMMANDS {
         let shortcuts = profile(info.command);
-        assert_eq!(
-            shortcuts.len(),
-            info.base_shortcuts().len(),
+        assert!(
+            shortcuts.len() >= info.base_shortcuts().len(),
             "{}",
             info.name
         );

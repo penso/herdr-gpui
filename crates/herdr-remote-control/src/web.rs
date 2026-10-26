@@ -4,7 +4,10 @@
 //!
 //! Bearer tokens, not cookies: the phone may reach this computer at its LAN
 //! address or its Tailscale address, and the shell installed from one calls
-//! the other across origins. CORS admits only this computer's own origins.
+//! the other across origins. One installed app may also hold several
+//! computers, so it calls computers it was not installed from. CORS admits
+//! this computer's own origins, and the origins of apps its paired devices
+//! use, learned when the desktop approved them.
 
 mod api;
 mod assets;
@@ -44,6 +47,8 @@ use std::{
     sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock},
 };
 
+/// Claiming a pairing and polling the claim, the calls any origin may make.
+const PAIR_CLAIM: &str = "/api/pair/claim";
 /// The largest request body: a prompt at most 256 KiB, as JSON.
 const BODY_LIMIT: usize = 320 * 1024;
 
@@ -52,6 +57,8 @@ pub(crate) struct State {
     /// Live Activity pushes for the iOS companion, when the user set up an
     /// APNs key.
     pub(crate) apns: Option<crate::apns::Sender>,
+    /// `Auth::apps`: origins of apps installed from other computers.
+    pub(crate) apps: Arc<RwLock<Vec<String>>>,
     pub(crate) auth: Mutex<Auth>,
     /// Present when the daemon issues its own certificates.
     pub(crate) authority: Option<Authority>,
@@ -86,8 +93,18 @@ impl State {
             .origins(self.port)
     }
 
-    /// Whether `origin` may call the API: one served now or before.
+    /// Whether `origin` may call the API: one served now or before, or an
+    /// app a paired device uses.
     pub(crate) fn admits(&self, origin: &str) -> bool {
+        self.serves(origin)
+            || allowed_origin(
+                &self.apps.read().unwrap_or_else(PoisonError::into_inner),
+                origin,
+            )
+    }
+
+    /// Whether `origin` is this computer's own: served now or before.
+    pub(crate) fn serves(&self, origin: &str) -> bool {
         allowed_origin(&self.origins(), origin)
             || self
                 .seen
@@ -111,6 +128,7 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/", get(assets::shell))
         .route("/board", get(assets::shell))
         .route("/chat/{pane}", get(assets::shell))
+        .route("/computers", get(assets::shell))
         .route("/new", get(assets::shell))
         .route("/new-chat", get(assets::shell))
         .route("/pair", get(assets::shell))
@@ -124,7 +142,7 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/ca.pem", get(assets::ca_pem))
         .route("/ca.mobileconfig", get(assets::mobileconfig))
         .route("/api/ping", get(api::ping))
-        .route("/api/pair/claim", post(api::claim))
+        .route(PAIR_CLAIM, post(api::claim))
         .route("/api/pair/claim/{claim}", get(api::claim_status))
         .route("/api/session/challenge", post(api::challenge))
         .route("/api/origins", get(api::origins))
@@ -153,6 +171,10 @@ pub(crate) fn router(state: Shared) -> Router {
         )
         .route("/api/term/{pane}/keys", post(terminal::keys))
         .route("/api/term/{pane}/paste", post(terminal::paste))
+        .route(
+            "/api/term/{pane}/upload",
+            post(terminal::upload).layer(DefaultBodyLimit::max(uploads::MAX_UPLOAD + 1024)),
+        )
         .route("/api/term/{pane}/action", post(terminal::action))
         .route("/api/stream", get(stream::stream))
         .route("/f/home", get(fragments::home))
@@ -201,8 +223,24 @@ async fn security_headers(request: Request, next: Next) -> Response {
     response
 }
 
-/// Admits this computer's own origins across addresses; refuses any other
-/// origin outright, so no page elsewhere can drive the API.
+/// Whether `path` claims a pairing or asks how a claim stands: exactly
+/// `PAIR_CLAIM` or one segment under it, never a path that only starts with
+/// the same letters.
+fn is_pair_claim(path: &str) -> bool {
+    match path.strip_prefix(PAIR_CLAIM) {
+        Some("") => true,
+        Some(rest) => rest
+            .strip_prefix('/')
+            .is_some_and(|claim| !claim.is_empty() && !claim.contains('/')),
+        None => false,
+    }
+}
+
+/// Admits this computer's own origins across addresses, and apps its paired
+/// devices use. Any other origin may only claim a pairing, which takes the
+/// token from a code the desktop shows, and ask how the claim stands;
+/// everything else is refused outright, so no page elsewhere can drive the
+/// API.
 async fn cors(Extract(state): Extract<Shared>, request: Request, next: Next) -> Response {
     let origin = request
         .headers()
@@ -212,7 +250,8 @@ async fn cors(Extract(state): Extract<Shared>, request: Request, next: Next) -> 
     let Some(origin) = origin else {
         return next.run(request).await;
     };
-    if !state.admits(&origin) {
+    let pairing = is_pair_claim(request.uri().path());
+    if !pairing && !state.admits(&origin) {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
     let preflight = request.method() == Method::OPTIONS;

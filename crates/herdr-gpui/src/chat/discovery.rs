@@ -58,6 +58,7 @@ pub(crate) fn targets(snapshot: &ClientShellSnapshot, route: Option<&Route>) -> 
         .filter_map(|agent| {
             Some(Target {
                 endpoint: endpoint(&agent.tokens)?,
+                existing: None,
                 pane_id: agent.pane_id.clone(),
                 route: route.clone(),
             })
@@ -65,4 +66,88 @@ pub(crate) fn targets(snapshot: &ClientShellSnapshot, route: Option<&Route>) -> 
         .filter(|target| seen.insert(target.pane_id.clone()))
         .take(MAX_CHATS)
         .collect()
+}
+
+/// Verified CLI bindings add rich views to existing terminals. Real ACP
+/// endpoints win, and a vanished/changed agent cannot retain its old overlay.
+pub(crate) fn with_existing(
+    mut targets: Vec<Target>,
+    snapshot: &ClientShellSnapshot,
+    route: Option<&Route>,
+    bindings: &[super::existing::Binding],
+) -> Vec<Target> {
+    let Some(route) = route else { return targets };
+    extend(&mut targets, bindings, |binding| {
+        if !snapshot.agents.iter().any(|agent| {
+            agent.pane_id == binding.pane_id && agent.agent.as_deref() == Some(binding.agent.name())
+        }) {
+            return None;
+        }
+        Some(Target {
+            endpoint: uuid::Uuid::parse_str(&binding.session_id).ok()?.into(),
+            existing: Some(binding.clone()),
+            pane_id: binding.pane_id.clone(),
+            route: route.clone(),
+        })
+    });
+    targets
+}
+
+/// Trusted, explicit sidecars add a view to an existing agent without writing
+/// its lifecycle metadata. ACP's own endpoint always takes precedence.
+pub(crate) fn with_mirrors(
+    mut targets: Vec<Target>,
+    snapshot: &ClientShellSnapshot,
+    route: Option<&Route>,
+    mirrors: &[crate::config::chat::TranscriptMirror],
+    render_existing: bool,
+) -> Vec<Target> {
+    // A static mirror cannot stand in for a failed/pending live lookup: the
+    // pane may already contain a different conversation. Keep its terminal.
+    if render_existing {
+        return targets;
+    }
+    let Some(route) = route else { return targets };
+    extend(&mut targets, mirrors, |mirror| {
+        let matches_host = match (route, mirror.host.as_deref()) {
+            (Route::Local, None) => true,
+            (Route::Ssh(host), Some(expected)) => host == expected,
+            _ => false,
+        };
+        if !matches_host
+            || !snapshot
+                .agents
+                .iter()
+                .any(|agent| agent.pane_id == mirror.pane)
+        {
+            return None;
+        }
+        Some(Target {
+            endpoint: mirror.endpoint.parse().ok()?,
+            existing: None,
+            pane_id: mirror.pane.clone(),
+            route: route.clone(),
+        })
+    });
+    targets
+}
+
+/// Adds the target `target` makes of each of the first [`MAX_CHATS`]
+/// candidates, until there are [`MAX_CHATS`] targets. A pane keeps the
+/// target it already has, so earlier sources win.
+fn extend<T>(
+    targets: &mut Vec<Target>,
+    candidates: &[T],
+    mut target: impl FnMut(&T) -> Option<Target>,
+) {
+    for candidate in candidates.iter().take(MAX_CHATS) {
+        if targets.len() >= MAX_CHATS {
+            break;
+        }
+        if let Some(target) = target(candidate)
+            && !targets.iter().any(|known| known.pane_id == target.pane_id)
+        {
+            targets.push(target);
+        }
+    }
 }

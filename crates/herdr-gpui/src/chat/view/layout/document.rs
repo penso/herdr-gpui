@@ -1,9 +1,9 @@
-//! The chat as a document: each prompt is a heading with an accent bar,
+//! The chat as a document: each prompt has a speaker label and an accent bar,
 //! the reply is prose under it with each tool call in a small framed box,
 //! and a quiet rule under how the turn ended closes it. The composer is
 //! one plain box with its settings along the foot.
 
-use super::{super::column, ChatLayout, ComposerParts, Look, Row, Side, summary_row};
+use super::{ChatLayout, ComposerParts, Look, Row, Side, summary_row};
 use crate::config::{corners, mix};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryKind;
@@ -13,7 +13,7 @@ pub(super) struct Document;
 impl ChatLayout for Document {
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(side) = row.side() else {
-            return summary_row(row, 10.);
+            return summary_row(row, look, 10.);
         };
         let theme = look.theme;
         let speaker = row.speaker();
@@ -25,10 +25,22 @@ impl ChatLayout for Document {
                 .pl(px(10.))
                 .border_l_2()
                 .border_color(rgb(theme.primary()))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_size(px(look.text + 2.))
+                .font_weight(FontWeight::NORMAL)
+                .text_size(px(look.text))
+                .child(
+                    div()
+                        .debug_selector(|| "chat-user-label".into())
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .mb(px(6.))
+                        .child("You"),
+                )
                 .child(row.content),
-            (Side::User, _) => div().mt(px(4.)).pl(px(12.)).child(row.content),
+            (Side::User, _) => div()
+                .mt(px(4.))
+                .pl(px(12.))
+                .font_weight(FontWeight::NORMAL)
+                .text_size(px(look.text))
+                .child(row.content),
             (Side::Agent, EntryKind::Tool(_)) => div().mt(px(6.)).child(
                 div()
                     .px(px(8.))
@@ -43,7 +55,7 @@ impl ChatLayout for Document {
                 .mt(px(if speaker { 12. } else { 8. }))
                 .child(row.content),
         };
-        column(
+        look.column(
             div()
                 .id(("chat-entry", id))
                 .px(px(24.))
@@ -54,7 +66,7 @@ impl ChatLayout for Document {
         .into_any_element()
     }
 
-    fn turn(&self, text: &str, look: &Look<'_>) -> Div {
+    fn turn(&self, text: AnyElement, look: &Look<'_>) -> Div {
         div()
             .debug_selector(|| "chat-turn".into())
             .flex()
@@ -66,7 +78,7 @@ impl ChatLayout for Document {
                     .justify_end()
                     .text_size(px((look.text - 1.).max(10.)))
                     .text_color(rgb(look.theme.muted))
-                    .child(text.to_owned()),
+                    .child(text),
             )
             .child(div().h(px(1.)).bg(rgb(look.theme.active)))
     }
@@ -99,3 +111,6 @@ impl ChatLayout for Document {
             )
     }
 }
+
+#[cfg(test)]
+mod tests;

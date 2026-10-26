@@ -50,6 +50,8 @@ fn chat_replies_round_trip() {
                 permissions: 1,
                 queued: 0,
                 model: None,
+                input_mode: InputMode::Chat,
+                session_id: None,
                 context: None,
             }],
         },

@@ -21,6 +21,10 @@ pub(crate) const TOUCH_PERSIST_MS: u64 = 60_000;
 /// One paired device as the store keeps it.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct DeviceRecord {
+    /// The origin of an app installed from another computer, see
+    /// `NewDevice::app`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) app: Option<String>,
     pub(crate) id: DeviceId,
     pub(crate) name: String,
     pub(crate) public_key: PublicKey,
@@ -94,6 +98,7 @@ impl Devices {
     /// Stores an approved device. Blocking.
     pub(crate) fn add(&mut self, device: NewDevice, now_ms: u64) -> Result<()> {
         self.records.push(DeviceRecord {
+            app: device.app,
             id: device.id,
             name: device.name,
             public_key: device.public_key,
@@ -105,6 +110,19 @@ impl Devices {
         self.save_or_undo(|devices| {
             devices.records.pop();
         })
+    }
+
+    /// The origins of apps installed from other computers that paired
+    /// devices use.
+    pub(crate) fn apps(&self) -> Vec<String> {
+        let mut apps: Vec<String> = self
+            .records
+            .iter()
+            .filter_map(|record| record.app.clone())
+            .collect();
+        apps.sort_unstable();
+        apps.dedup();
+        apps
     }
 
     /// The devices for Herdr UI, oldest first; `connected` says whether one

@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 use std::{
     net::IpAddr,
     path::{Path, PathBuf},
+    sync::{Arc, PoisonError, RwLock},
 };
 use tokio::sync::watch;
 
@@ -255,6 +256,9 @@ impl Default for Limits {
 /// Everything the server needs to pair and authenticate phones.
 #[derive(Debug)]
 pub(crate) struct Auth {
+    /// `Devices::apps`, kept current for CORS, which must not wait on this
+    /// state's lock.
+    apps: Arc<RwLock<Vec<String>>>,
     challenge_limit: RateLimiter<IpAddr>,
     devices: Devices,
     handoffs: Handoffs,
@@ -268,13 +272,15 @@ pub(crate) struct Auth {
 impl Auth {
     /// Loads the paired devices from `state_dir`. Blocking.
     pub(crate) fn load(state_dir: &Path, limits: Limits) -> Result<Self> {
+        let devices = Devices::load(state_dir)?;
         Ok(Self {
+            apps: Arc::new(RwLock::new(devices.apps())),
             challenge_limit: RateLimiter::new(
                 limits.challenge_burst,
                 limits.challenge_refill_ms,
                 limits.addresses,
             ),
-            devices: Devices::load(state_dir)?,
+            devices,
             handoffs: Handoffs::load(state_dir),
             pair_limit: RateLimiter::new(
                 limits.pair_burst,
@@ -294,6 +300,16 @@ impl Auth {
 
     fn revoked(&self) {
         self.revoked.send_modify(|revision| *revision += 1);
+    }
+
+    /// The origins of apps installed from other computers that paired
+    /// devices use, shared with the server's CORS check.
+    pub(crate) fn apps(&self) -> Arc<RwLock<Vec<String>>> {
+        self.apps.clone()
+    }
+
+    fn sync_apps(&self) {
+        *self.apps.write().unwrap_or_else(PoisonError::into_inner) = self.devices.apps();
     }
 
     pub(crate) fn devices(&self) -> &Devices {
@@ -336,6 +352,11 @@ impl Auth {
         self.pairings.claim(token, device_name, public_key, now_ms)
     }
 
+    /// Notes that `claim` came from an app installed from another computer.
+    pub(crate) fn claimed_from(&mut self, claim: &ClaimId, origin: String) {
+        self.pairings.claimed_from(claim, origin);
+    }
+
     pub(crate) fn claim_status(&mut self, id: &ClaimId, now_ms: u64) -> Result<PairingState> {
         self.pairings.claim_status(id, now_ms)
     }
@@ -364,6 +385,7 @@ impl Auth {
         self.pairings.answer(id, allow, now_ms, |device| {
             devices.add(device.clone(), now_ms)
         })?;
+        self.sync_apps();
         self.pairings.state(id, now_ms)
     }
 
@@ -436,7 +458,9 @@ impl Auth {
         let _ = self.handoffs.forget(device);
         self.sessions.end_device(device);
         self.revoked();
-        self.devices.revoke(device)
+        let revoked = self.devices.revoke(device);
+        self.sync_apps();
+        revoked
     }
 
     /// Forgets devices unseen for `idle_ms` and ends their sessions.
@@ -447,6 +471,7 @@ impl Auth {
         }
         if !expired.is_empty() {
             self.revoked();
+            self.sync_apps();
         }
         Ok(expired)
     }

@@ -302,6 +302,11 @@ impl HerdrWindow {
             return;
         }
         self.config.terminal.size = size;
+        // Font changes can alter wrapped row heights without changing the
+        // reading column's width. Keep the reader's scroll position.
+        for pane in self.chats.panes() {
+            pane.list.remeasure();
+        }
         // The console follows the rendered terminal face, as a reload makes it.
         log_window::set_appearance(&self.config, &self.theme, cx);
         cx.notify();
@@ -582,9 +587,11 @@ impl HerdrWindow {
                     -FONT_SIZE_STEP
                 };
                 self.set_terminal_font_size(self.config.terminal.size + step, cx);
+                return;
             }
             Command::ResetFontSize => {
                 self.set_terminal_font_size(self.configured_terminal_size, cx);
+                return;
             }
             Command::ClearPane if !self.live.supports_pane_clear => {
                 // Older daemons do not advertise `pane.clear`. Say so rather than

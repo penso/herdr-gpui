@@ -5,6 +5,7 @@
 //! glide = true
 //! launcher = "plus"
 //! layout = "cards"
+//! max_width = 800 # logical pixels; 0 uses the full available width
 //!
 //! [chat.env]
 //! GH_HOST = "mycompany.ghe.com"
@@ -32,16 +33,66 @@ pub use launcher::ChatLauncher;
 /// a `tab.create` request stays small.
 pub(crate) const MAX_ENV: usize = 64;
 pub(crate) const MAX_ENV_BYTES: usize = 16 * 1024;
+/// The centered reading column, unless the user chooses full width with zero.
+pub(crate) const DEFAULT_MAX_WIDTH: u16 = 800;
+pub(crate) const MAX_WIDTH_RANGE: std::ops::RangeInclusive<u16> = 320..=4_000;
 /// Names the app sets itself, which the table may not replace.
 const RESERVED: [&str; 1] = [crate::chat::PROGRAM_ENV];
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct ChatConfig {
     pub env: BTreeMap<String, String>,
     pub glide: bool,
     pub launcher: ChatLauncher,
     pub layout: ChatLayoutMode,
+    /// Maximum reading-column width in logical pixels; zero uses all available space.
+    #[serde(deserialize_with = "deserialize_max_width")]
+    pub max_width: u16,
+    /// Explicit transcript sidecars. Never starts or replaces the pane's agent.
+    pub mirrors: Vec<TranscriptMirror>,
+    /// Show running Codex/Claude conversations over their existing terminal.
+    /// Discovery is opt-in and never starts or resumes an agent.
+    pub render_existing: bool,
+}
+
+impl Default for ChatConfig {
+    fn default() -> Self {
+        Self {
+            env: BTreeMap::new(),
+            glide: false,
+            launcher: ChatLauncher::default(),
+            layout: ChatLayoutMode::default(),
+            max_width: DEFAULT_MAX_WIDTH,
+            mirrors: Vec::new(),
+            render_existing: false,
+        }
+    }
+}
+
+fn deserialize_max_width<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
+    let width = u16::deserialize(deserializer)?;
+    check_max_width(width).map_err(serde::de::Error::custom)?;
+    Ok(width)
+}
+
+pub(super) fn check_max_width(width: u16) -> crate::Result<()> {
+    if width == 0 || MAX_WIDTH_RANGE.contains(&width) {
+        Ok(())
+    } else {
+        Err(super::Error::InvalidChatWidth.into())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TranscriptMirror {
+    pub pane: String,
+    pub endpoint: String,
+    /// Omit for a local daemon; otherwise the exact saved SSH target.
+    pub host: Option<String>,
 }
 
 /// Declares each layout once: its variant, the config value that selects
@@ -130,7 +181,24 @@ impl<'de> Deserialize<'de> for ChatLayoutMode {
 impl ChatConfig {
     /// Refuses a table a tab's environment cannot take.
     pub(super) fn check(&self) -> Result<(), crate::chat::Error> {
-        check_env(&self.env)
+        check_env(&self.env)?;
+        if self.mirrors.len() > 16
+            || self.mirrors.iter().any(|mirror| {
+                mirror.pane.is_empty()
+                    || mirror.pane.len() > 256
+                    || mirror
+                        .endpoint
+                        .parse::<herdr_chat_protocol::EndpointId>()
+                        .is_err()
+                    || mirror
+                        .host
+                        .as_ref()
+                        .is_some_and(|host| host.is_empty() || host.len() > 1024)
+            })
+        {
+            return Err(crate::chat::Error::MirrorConfig);
+        }
+        Ok(())
     }
 }
 

@@ -35,6 +35,8 @@ pub enum Phase {
         offer: Offer,
         device_name: String,
         code: String,
+        /// `PairingState::Claimed::app`: another computer's app claimed it.
+        app: Option<String>,
         /// The answer given, once sent: `Some(true)` waits for the daemon
         /// to report the device approved.
         answer: Option<Answer>,
@@ -240,14 +242,20 @@ impl Pairing {
                 qr,
                 lifetime,
             },
-            (Phase::Showing { offer, .. }, PairingState::Claimed { device_name, code }) => {
-                Phase::Claimed {
-                    offer,
+            (
+                Phase::Showing { offer, .. },
+                PairingState::Claimed {
                     device_name,
                     code,
-                    answer: None,
-                }
-            }
+                    app,
+                },
+            ) => Phase::Claimed {
+                offer,
+                device_name,
+                code,
+                app,
+                answer: None,
+            },
             (Phase::Claimed { device_name, .. }, PairingState::Approved { .. }) => {
                 Phase::Approved { device_name }
             }

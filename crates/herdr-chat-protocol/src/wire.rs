@@ -20,6 +20,17 @@ pub struct Cursor {
     pub seq: u64,
 }
 
+impl Cursor {
+    /// The start of a new epoch: a history no earlier cursor belongs to, so
+    /// every client replaces what it holds rather than merging into it.
+    pub fn new_epoch() -> Self {
+        Self {
+            epoch: Uuid::new_v4(),
+            seq: 0,
+        }
+    }
+}
+
 /// A client's identity for one command, kept across reconnects so a resend is
 /// recognised.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]

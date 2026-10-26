@@ -69,6 +69,18 @@ pub(crate) enum Program {
     Missing,
 }
 
+impl Program {
+    /// The program found on this machine. A lookup not yet finished is not
+    /// a missing program: it may still find one.
+    pub(crate) fn found(&self) -> Result<&Path, Error> {
+        match self {
+            Self::Found(program) => Ok(program),
+            Self::Missing => Err(Error::ProgramMissing),
+            Self::Unknown | Self::Looking => Err(Error::ProgramUnknown),
+        }
+    }
+}
+
 /// The program beside this app's executable, as the bundle and `cargo
 /// build` lay it out, else the first on the login shell's `PATH`. Blocking:
 /// run it off the UI thread.
@@ -203,11 +215,7 @@ impl HerdrWindow {
         }
         let program = match self.chat_route().ok_or(Error::NotLocal)? {
             super::Route::Ssh(_) => None,
-            super::Route::Local => match &self.chats.program {
-                Program::Found(program) => Some(program.clone()),
-                Program::Missing => return Err(Error::ProgramMissing),
-                Program::Unknown | Program::Looking => return Err(Error::ProgramUnknown),
-            },
+            super::Route::Local => Some(self.chats.program.found()?.to_owned()),
         };
         if self.script_slot_busy() {
             return Err(Error::SlotBusy);

@@ -114,8 +114,8 @@ class BuildMacosTests(unittest.TestCase):
         self.run_build(success=True)
         calls = (self.root / "calls").read_text().splitlines()
         self.assertEqual(calls[-4:], [
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-automate --target aarch64-apple-darwin",
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-automate --target x86_64-apple-darwin",
+            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target aarch64-apple-darwin",
+            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target x86_64-apple-darwin",
             "package", "sign",
         ])
         self.assertIn("Output already exists", self.run_build())

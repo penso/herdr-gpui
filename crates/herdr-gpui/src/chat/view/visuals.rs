@@ -3,6 +3,7 @@
 
 use super::super::{
     prepared::Part,
+    selection::Region,
     visual::{Shown, VisualId, Visuals},
 };
 use crate::{HerdrWindow, config::corners, release_notes};
@@ -43,13 +44,25 @@ impl HerdrWindow {
             .children(parts.iter().enumerate().map(|(index, part)| {
                 // Each part scopes its own links' element ids.
                 let part = match part {
-                    Part::Text(lines) => release_notes::render(
-                        "chat-agent",
-                        lines,
-                        &self.theme,
-                        &self.config.terminal,
-                    )
-                    .into_any_element(),
+                    Part::Text(lines) => self
+                        .render_chat_lines(
+                            "chat-agent",
+                            self.chat_text_scope(pane_id, entry, Region::Body(index)),
+                            lines,
+                            cx,
+                        )
+                        .into_any_element(),
+                    Part::Rich(blocks) => {
+                        match self.chat_text_scope(pane_id, entry, Region::Body(index)) {
+                            Some(scope) => self
+                                .render_chat_rich(pane_id, blocks, visuals, &scope, cx)
+                                .into_any_element(),
+                            None => div().into_any_element(),
+                        }
+                    }
+                    Part::Widget(document) => self
+                        .render_chat_widget(pane_id, entry, index, document, cx)
+                        .into_any_element(),
                     Part::Diagram(id, code) => self.render_chat_diagram(*id, code, visuals),
                     Part::Html { page } => self.render_chat_html(pane_id, entry, index, page, cx),
                     Part::Picture { alt } => self.render_chat_picture_caption(alt),
@@ -143,7 +156,7 @@ impl HerdrWindow {
                 .items_center()
                 .justify_center()
                 .bg(rgb(theme.surface))
-                .text_size(px((self.chat_text_size() - 1.).max(10.)))
+                .text_size(self.chat_small_text())
                 .text_color(rgb(theme.muted))
                 .child(match frame {
                     Frame::Diagram => "Drawing diagram\u{2026}",
@@ -152,7 +165,7 @@ impl HerdrWindow {
             Shown::Failed(error) => boxed
                 .px(px(8.))
                 .py(px(4.))
-                .text_size(px((self.chat_text_size() - 1.).max(10.)))
+                .text_size(self.chat_small_text())
                 .text_color(rgb(theme.muted))
                 .child(format!("[image] {error}")),
         }

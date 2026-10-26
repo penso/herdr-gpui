@@ -80,6 +80,8 @@ fn a_snapshot_round_trips_every_entry_kind() {
         Entry {
             id: EntryId(6),
             kind: EntryKind::Notice {
+                answers: Vec::new(),
+                details: None,
                 level: NoticeLevel::Warning,
                 text: "cancelled".to_owned(),
             },

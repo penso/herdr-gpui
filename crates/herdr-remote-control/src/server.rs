@@ -85,6 +85,7 @@ pub async fn run(options: Options) -> Result<()> {
         .and_then(|vapid| Sender::new(vapid, PUSH_SUBJECT))
         .ok();
     let auth = Auth::load(&options.state_dir, Limits::default())?;
+    let apps = auth.apps();
     let apns = crate::apns::Sender::load(&options.state_dir)?;
     // Only origins this computer's own authority serves may be remembered.
     let seen = match &authority {
@@ -94,6 +95,7 @@ pub async fn run(options: Options) -> Result<()> {
     let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
     let state = Arc::new(State {
         apns,
+        apps,
         auth: Mutex::new(auth),
         authority,
         computer: options::computer_name(),
@@ -195,20 +197,24 @@ fn remember_origins(state: &State) {
         .remember(&origins);
 }
 
-async fn expire(state: Arc<State>, idle: Duration) {
-    let idle_ms = u64::try_from(idle.as_millis()).unwrap_or(u64::MAX);
+async fn expire(state: Arc<State>, idle: Option<Duration>) {
+    let idle_ms = idle.map(|idle| u64::try_from(idle.as_millis()).unwrap_or(u64::MAX));
     let mut ticker = tokio::time::interval(IDLE_CHECK);
     loop {
         ticker.tick().await;
         let state = state.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            let now = web::now_ms();
-            // Pictures expire on their own schedule, whether or not another
-            // upload comes to sweep them.
-            state.uploads.prune(now);
-            state.auth().expire_idle(now, idle_ms)
-        })
-        .await;
+        let _ = tokio::task::spawn_blocking(move || sweep(&state, web::now_ms(), idle_ms)).await;
+    }
+}
+
+/// One tick of [`expire`]: drops old pictures, and devices away for
+/// `idle_ms`; with no limit, devices stay until revoked. Blocking.
+fn sweep(state: &State, now_ms: u64, idle_ms: Option<u64>) {
+    // Pictures expire on their own schedule, whether or not another
+    // upload comes to sweep them.
+    state.uploads.prune(now_ms);
+    if let Some(idle_ms) = idle_ms {
+        let _ = state.auth().expire_idle(now_ms, idle_ms);
     }
 }
 

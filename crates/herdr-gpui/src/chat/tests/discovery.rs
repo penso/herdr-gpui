@@ -4,11 +4,97 @@ use herdr_client::{ConnectTarget, protocol::ClientShellSnapshot};
 
 const ID: &str = "0123456789abcdef0123456789abcdef";
 
+#[test]
+fn existing_sessions_keep_acp_priority_and_require_the_same_agent() {
+    use crate::chat::existing::Binding;
+    let mut snapshot = snapshot(&[("cli", "not-acp"), ("acp", ID)]);
+    for agent in &mut snapshot.agents {
+        agent.agent = Some("codex".into());
+    }
+    let make = |pane: &str| Binding {
+        pane_id: pane.into(),
+        agent: herdr_chat_protocol::Agent::Codex,
+        session_id: "12345678-1234-4123-8123-123456789abc".into(),
+        herdr_session: Some("test-session".into()),
+        pid: 21,
+        shell_pid: 20,
+        started_ticks: 123,
+    };
+    let bindings = [make("cli"), make("acp"), make("absent")];
+    let targets = discovery::with_existing(
+        discovery::targets(&snapshot, Some(&Route::Local)),
+        &snapshot,
+        Some(&Route::Local),
+        &bindings,
+    );
+    assert_eq!(targets.len(), 2);
+    assert!(targets[0].existing.is_none());
+    assert_eq!(targets[1].existing.as_ref(), Some(&bindings[0]));
+    let mut replaced = targets[1].clone();
+    replaced.existing.as_mut().unwrap().started_ticks += 1;
+    assert_ne!(targets[1], replaced, "a reused pid needs a new observer");
+    snapshot.agents[0].agent = Some("claude".into());
+    assert!(
+        discovery::with_existing(Vec::new(), &snapshot, Some(&Route::Local), &bindings[..1])
+            .is_empty()
+    );
+}
+
 fn tokens(value: &str) -> Vec<(String, String)> {
     vec![
         ("model".into(), "opus".into()),
         (herdr_chat_protocol::TOKEN.into(), value.into()),
     ]
+}
+
+#[test]
+fn explicit_mirrors_are_bound_to_the_named_host_and_existing_pane() {
+    use crate::config::chat::TranscriptMirror;
+    let snapshot = snapshot(&[("cli", "not-acp"), ("acp", ID)]);
+    let mirrors = vec![
+        TranscriptMirror {
+            pane: "cli".into(),
+            endpoint: ID.into(),
+            host: None,
+        },
+        TranscriptMirror {
+            pane: "absent".into(),
+            endpoint: ID.into(),
+            host: None,
+        },
+        TranscriptMirror {
+            pane: "acp".into(),
+            endpoint: "fedcba9876543210fedcba9876543210".into(),
+            host: None,
+        },
+    ];
+    let route = Route::Local;
+    let targets = discovery::with_mirrors(
+        discovery::targets(&snapshot, Some(&route)),
+        &snapshot,
+        Some(&route),
+        &mirrors,
+        false,
+    );
+    assert_eq!(targets.len(), 2);
+    assert_eq!(targets[0].pane_id, "acp");
+    assert_eq!(targets[0].endpoint.as_str(), ID);
+    assert_eq!(targets[1].pane_id, "cli");
+    assert!(
+        discovery::with_mirrors(
+            Vec::new(),
+            &snapshot,
+            Some(&Route::Ssh("synthetic-host".into())),
+            &mirrors,
+            false,
+        )
+        .is_empty()
+    );
+    assert!(discovery::with_mirrors(Vec::new(), &snapshot, None, &mirrors, false).is_empty());
+    assert!(
+        discovery::with_mirrors(Vec::new(), &snapshot, Some(&route), &mirrors, true).is_empty(),
+        "a pending/failed live lookup must not show an old static transcript"
+    );
 }
 
 fn snapshot(agents: &[(&str, &str)]) -> ClientShellSnapshot {

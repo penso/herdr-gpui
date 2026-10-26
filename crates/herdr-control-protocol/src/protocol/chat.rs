@@ -23,12 +23,23 @@ pub enum ChatOp {
     },
 }
 
+/// Who owns input in the conversation pane.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputMode {
+    #[default]
+    Chat,
+    /// The running CLI's original editor is visible in the same pane.
+    Terminal,
+    ReadOnly,
+}
+
 /// One chat pane of the window's selected host.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatInfo {
     pub pane_id: String,
     pub agent: String,
-    /// "starting", "idle", "working", "failed", or "exited".
+    /// "starting", "idle", "working", "blocked", "failed", or "exited".
     pub status: String,
     /// Connected to the program now, rather than reconnecting.
     pub attached: bool,
@@ -44,6 +55,10 @@ pub struct ChatInfo {
     /// How full the context window is, in percent, once the agent says.
     #[serde(default)]
     pub context: Option<u8>,
+    #[serde(default)]
+    pub input_mode: InputMode,
+    #[serde(default)]
+    pub session_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

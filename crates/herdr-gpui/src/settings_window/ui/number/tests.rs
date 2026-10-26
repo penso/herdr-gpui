@@ -47,7 +47,7 @@ fn stepping_rounds_first_clamps_and_rejects_non_finite_values() {
 type Log = Rc<RefCell<Vec<NumberChange>>>;
 
 struct Harness {
-    slider: bool,
+    look: Look,
     enabled: bool,
     seen: Log,
     other: Log,
@@ -58,7 +58,7 @@ impl Harness {
     fn new() -> (Self, Log, Log, Rc<Cell<u32>>) {
         let (seen, other, edits) = (Log::default(), Log::default(), Rc::new(Cell::new(0)));
         let harness = Self {
-            slider: true,
+            look: Look::Slider,
             enabled: true,
             seen: seen.clone(),
             other: other.clone(),
@@ -72,12 +72,12 @@ impl Render for Harness {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::default();
         let (seen, other, edits) = (self.seen.clone(), self.other.clone(), self.edits.clone());
-        let spec = |id, slider, enabled| Number {
+        let spec = |id, look, enabled| Number {
             id,
             value: 14.,
             range: 0.0..=48.0,
             unit: "px",
-            slider,
+            look,
             enabled,
         };
         div()
@@ -88,14 +88,14 @@ impl Render for Harness {
             .gap(px(20.))
             .child(number(
                 &theme,
-                spec("n", self.slider, self.enabled),
+                spec("n", self.look, self.enabled),
                 None,
                 move |change, _, _| seen.borrow_mut().push(change),
                 move |_, _| edits.set(edits.get() + 1),
             ))
             .child(number(
                 &theme,
-                spec("m", true, true),
+                spec("m", Look::Slider, true),
                 None,
                 move |change, _, _| other.borrow_mut().push(change),
                 |_, _| {},
@@ -269,7 +269,7 @@ fn an_abandoned_drag_leaves_no_commit_behind(cx: &mut TestAppContext) {
     );
     // The slider disappears mid-drag, then comes back.
     view.update(cx, |harness, cx| {
-        harness.slider = false;
+        harness.look = Look::Steppers;
         cx.notify();
     });
     draw(cx);
@@ -278,7 +278,7 @@ fn an_abandoned_drag_leaves_no_commit_behind(cx: &mut TestAppContext) {
     cx.simulate_mouse_up(away, MouseButton::Left, Default::default());
     seen.borrow_mut().clear();
     view.update(cx, |harness, cx| {
-        harness.slider = true;
+        harness.look = Look::Slider;
         cx.notify();
     });
     draw(cx);
@@ -300,4 +300,19 @@ fn an_abandoned_drag_leaves_no_commit_behind(cx: &mut TestAppContext) {
         ),
         "{seen:?}"
     );
+}
+
+#[gpui::test]
+fn a_bare_field_shows_only_its_value(cx: &mut TestAppContext) {
+    let (mut harness, _, _, edits) = Harness::new();
+    harness.look = Look::Field;
+    let (_, cx) = cx.add_window_view(|_, _| harness);
+    draw(cx);
+    for selector in ["n-plus", "n-minus", "n-slider"] {
+        assert!(cx.debug_bounds(selector).is_none(), "{selector}");
+    }
+    let at = center(cx, "n-field");
+    cx.simulate_click(at, Default::default());
+    cx.run_until_parked();
+    assert_eq!(edits.get(), 1);
 }

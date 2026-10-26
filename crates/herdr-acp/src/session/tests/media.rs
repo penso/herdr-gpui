@@ -48,3 +48,25 @@ fn the_reconnect_log_is_bounded_in_bytes() {
     );
     assert!(!session.log.is_empty());
 }
+
+#[test]
+fn question_cards_count_parsed_text_and_original_source_in_retention() {
+    let entry = herdr_chat_protocol::Entry {
+        id: herdr_chat_protocol::EntryId(1),
+        kind: EntryKind::Notice {
+            answers: vec![herdr_chat_protocol::QuestionAnswer {
+                question: "Which approach?".into(),
+                answer: "A custom answer".into(),
+            }],
+            details: Some("Original source".into()),
+            level: NoticeLevel::Info,
+            text: "Question answered".into(),
+        },
+    };
+    let size = "Which approach?".len()
+        + "A custom answer".len()
+        + "Original source".len()
+        + "Question answered".len();
+    assert_eq!(entry_size(&entry), size);
+    assert_eq!(change_size(&Change::Push { entry }), size);
+}

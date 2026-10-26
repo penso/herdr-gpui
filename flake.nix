@@ -68,12 +68,15 @@
           };
           cargoLock.lockFile = ./Cargo.lock;
           # The app starts chats with the herdr-acp beside its executable,
-          # and automations with the herdr-automate there.
+          # runs the herdr-remote-control beside it as a user service, and
+          # runs automations in the herdr-automate there.
           cargoBuildFlags = [
             "-p"
             "herdr-gpui"
             "-p"
             "herdr-acp"
+            "-p"
+            "herdr-remote-control"
             "-p"
             "herdr-automate"
           ];

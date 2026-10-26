@@ -181,6 +181,10 @@ fn the_delay_field_commits_valid_numbers_and_holds_invalid_ones(cx: &mut TestApp
             view.begin_number_edit(NumberField::ToastDelay, 1., window, cx)
         })
     });
+    // One frame: the field's, not a second one around the typed text.
+    view.read_with(cx, |view, cx| {
+        assert!(!view.number_edit.as_ref().unwrap().input.read(cx).framed());
+    });
     cx.simulate_input("4000");
     cx.simulate_keystrokes("enter");
     view.read_with(cx, |view, _| {

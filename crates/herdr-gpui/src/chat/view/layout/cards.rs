@@ -4,10 +4,7 @@
 //! it, the rows inside carry its sides, and the turn's summary closes it,
 //! so the rows abut with no space between them.
 
-use super::{
-    super::{agent_icon, column},
-    ChatLayout, ComposerParts, Look, Row, Side,
-};
+use super::{super::agent_icon, ChatLayout, ComposerParts, Look, Row, Side};
 use crate::config::{corners, mix};
 use gpui::{prelude::*, *};
 
@@ -81,7 +78,7 @@ impl ChatLayout for Cards {
             .child(inner);
         // A page shown in the card lies beneath its background on macOS.
         let piece = look.ground(piece, mix(theme.background, theme.foreground, 3));
-        column(
+        look.column(
             div()
                 .id(("chat-entry", id))
                 .px(px(16.))
@@ -91,14 +88,14 @@ impl ChatLayout for Cards {
         .into_any_element()
     }
 
-    fn turn(&self, text: &str, look: &Look<'_>) -> Div {
+    fn turn(&self, text: AnyElement, look: &Look<'_>) -> Div {
         div()
             .debug_selector(|| "chat-turn".into())
             .flex()
             .justify_end()
             .text_size(px((look.text - 1.).max(10.)))
             .text_color(rgb(look.theme.muted))
-            .child(text.to_owned())
+            .child(text)
     }
 
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div {

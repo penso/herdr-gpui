@@ -20,11 +20,19 @@ pub struct EndpointId(String);
 
 impl EndpointId {
     pub fn random() -> Self {
-        Self(Uuid::new_v4().simple().to_string())
+        Uuid::new_v4().into()
     }
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+/// The id's 32 digits, as a session id that is already a UUID becomes the
+/// endpoint of the view attached to it.
+impl From<Uuid> for EndpointId {
+    fn from(id: Uuid) -> Self {
+        Self(id.simple().to_string())
     }
 }
 

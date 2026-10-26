@@ -9,7 +9,7 @@ use crate::{
     sidebar::layout_tests::{fixture_window, full_draw},
     window::MockPeer,
 };
-use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
+use gpui::{ClipboardItem, Entity, ExternalPaths, Modifiers, TestAppContext, VisualTestContext};
 use herdr_chat_protocol::Command;
 use herdr_client::{
     ConnectTarget,
@@ -31,6 +31,10 @@ pub(super) fn open(
         view.endpoints[0].connection.target = target;
         view.live.local_daemon_peer = true;
         let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        // Notification overlays have their own tests and would intercept chat
+        // pointer events in this fixture, especially in a narrow window.
+        snapshot.product_announcement = None;
+        snapshot.config_diagnostic = None;
         snapshot.agents[0].tokens = vec![(herdr_chat_protocol::TOKEN.into(), ENDPOINT.into())];
         window.focus(&view.focus, cx);
         view
@@ -187,4 +191,95 @@ fn the_terminal_can_be_shown_instead_and_back(cx: &mut TestAppContext) {
     cx.simulate_click(switch.center(), Modifiers::default());
     poll(&view, &program, cx);
     assert!(cx.debug_bounds("chat-view").is_some());
+}
+
+#[gpui::test]
+fn a_read_only_overlay_blocks_keys_paste_and_file_drops_until_switched_back(
+    cx: &mut TestAppContext,
+) {
+    let (view, mut peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut transcript = snapshot(cursor(1, 0), vec![agent(1, "Live transcript")]);
+    if let ServerMessage::Snapshot { transcript, .. } = &mut transcript {
+        transcript.read_only = true;
+    }
+    let _stream = attach_with(&view, &program, transcript, cx);
+    assert!(cx.debug_bounds("chat-read-only").is_some());
+    assert!(cx.update(|window, cx| {
+        let view = view.read(cx);
+        view.chat_focused(window, cx) && !view.focus.is_focused(window)
+    }));
+    let chat = cx.debug_bounds("chat-view").unwrap();
+    cx.simulate_click(chat.center(), Modifiers::default());
+    cx.simulate_input("do not send");
+    cx.simulate_keystrokes("enter ctrl-c");
+    cx.write_to_clipboard(ClipboardItem::new_string("do not paste\n".into()));
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-v"
+    } else {
+        "ctrl-shift-v"
+    });
+    cx.dispatch_action(crate::actions::Paste);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.drop_terminal_files(
+                &ExternalPaths(vec!["/work/notes.md".into()].into()),
+                window,
+                cx,
+            );
+        });
+    });
+    view.update(cx, |view, _| {
+        let pane = view.chats.pane_mut("w1:p1").unwrap();
+        assert!(pane.session.resend().is_empty());
+        assert!(pane.attachments.is_empty());
+        assert_eq!(pane.uploading, 0);
+    });
+
+    let target = view.read_with(cx, |view, _| {
+        view.chats.pane("w1:p1").unwrap().target.clone()
+    });
+    let button = cx.debug_bounds("chat-reply-terminal").unwrap();
+    cx.simulate_click(button.center(), Modifiers::default());
+    poll(&view, &program, cx);
+    assert!(cx.debug_bounds("chat-view").is_none());
+    assert!(cx.update(|window, cx| {
+        let view = view.read(cx);
+        !view.chat_focused(window, cx) && view.focus.is_focused(window)
+    }));
+    view.read_with(cx, |view, _| {
+        let pane = view.chats.pane("w1:p1").unwrap();
+        assert_eq!(pane.target, target);
+        assert_eq!(
+            pane.session.transcript().entries,
+            [agent(1, "Live transcript")]
+        );
+    });
+
+    // A real daemon peer proves no key, text, or clipboard event preceded
+    // this sentinel, including the reply button and paths that bypass
+    // Session::submit entirely. A terminal draft therefore stays untouched.
+    view.read_with(cx, |view, _| {
+        crate::connection::ConnectionBridge::send_input(
+            view.endpoints[0].connection.handle.as_ref().unwrap(),
+            &view.live.snapshot.as_ref().unwrap().boot_id,
+            &crate::terminal::InputTarget::Pane("w1:p1".into()),
+            ClientPaneInputEvent::TextCommit("sentinel".into()),
+        )
+        .unwrap();
+    });
+    loop {
+        if let HerdrMessage::ClientShellPaneInput { events, .. } = peer.receive() {
+            assert_eq!(
+                events,
+                [ClientPaneInputEvent::TextCommit("sentinel".into())]
+            );
+            break;
+        }
+    }
+
+    let switch = cx.debug_bounds("chat-switch").unwrap();
+    cx.simulate_click(switch.center(), Modifiers::default());
+    poll(&view, &program, cx);
+    assert!(cx.update(|window, cx| view.read(cx).chat_focused(window, cx)));
 }

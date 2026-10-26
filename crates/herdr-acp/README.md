@@ -18,8 +18,8 @@ Herdr owns terminals, not conversations. The agent's structured conversation
 has to live in something Herdr already keeps running, so it lives in this
 program: Herdr starts it in a pane like any other command, keeps it alive when
 Herdr UI closes, and the Herdr TUI shows its chat because it is an ordinary
-terminal program. Nothing reads an agent's logs or screen, and nothing is
-specific to one agent beyond the command that starts its ACP server.
+terminal program. Normal ACP sessions read no agent logs or terminal screen;
+the optional read-only mirror below reads an explicitly selected native log.
 
 `herdr-acp` is the only ACP client of the agent. Every view is a client of
 `herdr-acp` instead:
@@ -32,6 +32,85 @@ specific to one agent beyond the command that starts its ACP server.
   either one shows in both, and the first answer to a permission request wins.
 - **Anything else that speaks the attach protocol** in
   `crates/herdr-chat-protocol`.
+
+## Viewing an existing CLI session
+
+Herdr UI can automatically render existing Linux Codex/Claude sessions with
+`[chat] render_existing = true`. It resolves exact session and process identity,
+then runs a bounded `herdr-acp observe AGENT SESSION_ID PID START_TICKS --pane ID`
+child over standard streams. The observer pins and validates the session file;
+it exits if the original process ends or its identity changes. It starts no
+agent and writes no Herdr lifecycle metadata. The GUI retains the original
+terminal editor and approval interface directly below the rich conversation.
+No separate conversation, prompt injection or terminal/view round trip is needed.
+
+The manual, read-only historical mirror remains available separately:
+
+`mirror` watches one existing Codex rollout or Claude Code JSONL transcript.
+It starts no agent, resumes no session, and sends no Herdr metadata or activity
+reports. Prompts, approvals, cancellation, and settings stay in the original
+terminal; the mirror refuses every command even from another attach client.
+
+Start the watcher separately, leaving the running agent alone:
+
+```sh
+herdr-acp mirror codex /absolute/path/to/rollout.jsonl \
+  --pane PANE_ID --endpoint 0123456789abcdef0123456789abcdef
+# Or: herdr-acp mirror claude /absolute/path/to/session.jsonl ...
+```
+
+The endpoint is 32 lowercase hexadecimal digits. Omit `--endpoint` to generate
+one; the watcher prints its ID once ready. Stop that watcher with Ctrl+C when
+finished. This only stops the viewer. The GUI can show it over the selected
+existing pane using its own config (normally `config-gpui.toml`):
+
+```toml
+[features]
+acp_chats = true
+
+[[chat.mirrors]]
+pane = "PANE_ID"
+endpoint = "0123456789abcdef0123456789abcdef"
+# host = "my-saved-ssh-target"  # For a watcher running on that exact SSH host.
+```
+
+The pane must already exist on the matching host. An ordinary ACP endpoint
+advertised by the pane takes precedence. Remote watchers run beside their
+transcript on the SSH host and use the existing `herdr-acp connect ID` relay;
+the GUI does not launch them or deploy a binary. Remove the mirror's config
+entry when finished. No daemon configuration needs changing.
+
+The viewer refreshes once a second when the file changes. It reads at most the
+last 8 MiB and retains at most 2,000 entries / 2 MiB of text / 8 MiB of image
+data. Individual text fields are capped at 128 KiB. Records are limited to
+1 MiB, except Codex messages containing typed images, which may use the full
+8 MiB read window. Within retained records, unsupported images or encoded image
+data over the 5 MiB attachment limit show an unavailable notice while their captions
+remain visible. Other oversized records, unsupported record kinds, and malformed
+lines are skipped. A partially written final line waits for its newline. The
+displayed tool history is descriptive and never an approval UI.
+Messages, tool text, and bounded embedded Codex raster images are supported;
+linked files, complete session settings, and live permission state are not
+reconstructed from logs. Image paths and external image URLs are never fetched
+by the observer. Codex uses `response_item` records so matching `event_msg`
+records are not repeated;
+Claude sidechain records are excluded. Choose the exact session file yourself:
+the watcher does not guess from folders, recent timestamps, or terminal text.
+
+Claude records marked as internal task notifications or scheduled reminders
+appear as compact notices. Expand a notice to inspect or copy its retained
+source text; instructions, output-file paths, and links in it are inert.
+Ordinary user messages containing similar text remain user messages.
+
+Codex environment updates use the content's explicit harness provenance to
+become compact notices, keeping adjacent user text separate. Recognized image
+wrappers around a typed embedded image also become compact source notices;
+the image and its user caption remain visible. Literal user-pasted XML is not
+reclassified by its spelling. Expanded notice details retain the original text.
+
+The mirror's native-log format support is best effort because those storage
+formats can change. A missing or unreadable source ends the watcher with an
+error. It never repairs or writes to the transcript.
 
 ## What it tells Herdr
 

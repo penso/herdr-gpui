@@ -7,7 +7,7 @@ use std::{fmt, str::FromStr};
 macro_rules! agents {
     ($($variant:ident => $name:literal, $display:literal, $login:literal, [$(($program:literal $(, $arg:literal)*)),+ $(,)?];)+) => {
         /// An agent `herdr-acp` starts by name.
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         pub enum Agent {
             $($variant,)+
         }

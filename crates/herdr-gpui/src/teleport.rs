@@ -2,5 +2,5 @@
 
 mod ui;
 
-pub(crate) use herdr_remote::teleport::*;
+pub(crate) use herdr_remote::teleport::{snapshot::SessionKind, *};
 pub(crate) use ui::{Follow, Teleport};

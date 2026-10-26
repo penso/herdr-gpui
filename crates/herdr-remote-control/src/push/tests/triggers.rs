@@ -147,6 +147,8 @@ fn a_cancelled_turn_stays_quiet() {
 fn an_error_notice_is_an_error() {
     let before = Transcript::new("Claude");
     let change = push(EntryKind::Notice {
+        answers: Vec::new(),
+        details: None,
         level: NoticeLevel::Error,
         text: "Rate limited by the API".to_owned(),
     });
@@ -158,6 +160,8 @@ fn an_error_notice_is_an_error() {
     assert!(excerpt.body.starts_with("Rate limited by the API\n"));
 
     let warning = push(EntryKind::Notice {
+        answers: Vec::new(),
+        details: None,
         level: NoticeLevel::Warning,
         text: "slow".to_owned(),
     });

@@ -10,6 +10,7 @@ mod display;
 mod endpoint;
 mod frame;
 mod media;
+mod notices;
 mod wire;
 
 fn text(id: u64, kind: fn(String) -> EntryKind, value: &str) -> Entry {

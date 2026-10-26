@@ -15,7 +15,7 @@ use crate::{
     config::Theme,
     review::{
         diff::{Body, Kind, Lines, RowId, SplitRow},
-        highlight::{Span, Token},
+        highlight::{Contrast, Span},
     },
 };
 use gpui::{prelude::*, *};
@@ -46,19 +46,6 @@ fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, Option<Rgba>,
         Kind::Context => (" ", None, None, theme.foreground),
         Kind::Hunk | Kind::Meta => ("", None, None, theme.muted),
     }
-}
-
-/// A token's colour in this theme: the terminal palette's, made readable
-/// on the panel and its add and remove tints.
-fn token_colour(theme: &Theme, token: Token) -> Rgba {
-    rgb(match token {
-        Token::Comment => theme.muted,
-        Token::String => theme.ink(theme.palette[2]),
-        Token::Number | Token::Constant => theme.ink(theme.palette[3]),
-        Token::Keyword => theme.ink(theme.palette[5]),
-        Token::Type => theme.ink(theme.palette[6]),
-        Token::Function => theme.ink(theme.palette[4]),
-    })
 }
 
 /// The tint selected code is drawn on.
@@ -112,7 +99,7 @@ pub(crate) fn code(
         let colour = spans
             .iter()
             .find(|span| span.start <= range.start && range.end <= span.end)
-            .map(|span| token_colour(theme, span.token).into());
+            .map(|span| rgb(span.token.colour(theme, Contrast::Theme)).into());
         let in_selection = selected
             .as_ref()
             .is_some_and(|selected| selected.start <= range.start && range.end <= selected.end);

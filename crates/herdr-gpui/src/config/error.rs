@@ -18,6 +18,8 @@ pub enum Error {
     EmptyFontFamily(&'static str),
     #[error("theme must not be empty")]
     EmptyTheme,
+    #[error("chat.max_width must be 0 (full width) or 320–4000 logical pixels")]
+    InvalidChatWidth,
     #[error("code must be a TOML table")]
     InvalidCodeTable,
     #[error("devices.{0:?} is not a saved device ID")]

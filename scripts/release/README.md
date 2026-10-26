@@ -121,10 +121,11 @@ SIGKILL/power loss cannot be cleaned up. Apple security tools receive passwords
 as arguments, so the runner must not have untrusted local users. No GUI executable
 is run, including for version probing. Signing works on a copy of the input app.
 
-The bundle holds three universal executables: `Contents/MacOS/Herdr`, the
-`herdr-acp` the app starts chats with, and the `herdr-automate` automation
-daemon, which `package-macos.sh` takes from beside each architecture's
-`herdr-gpui`. `herdr-acp` and `herdr-automate` are signed first, without the
+The bundle holds four universal executables: `Contents/MacOS/Herdr`, the
+`herdr-acp` the app starts chats with, `herdr-remote-control`, the remote
+control daemon it runs as a user service, and `herdr-automate`, the automation
+daemon; `package-macos.sh` takes the last three from beside each architecture's
+`herdr-gpui`. Those three are signed first, without the
 app's entitlements, then `Herdr`, then the bundle, all with hardened runtime and secure
 timestamps. The zipped app must receive JSON status `Accepted`, then the app is
 stapled and validated. The DMG contains `Herdr.app` and an `/Applications` symlink;
@@ -142,11 +143,12 @@ The release workflow builds both natively on Ubuntu 24.04 architecture runners,
 using the same `scripts/install-linux-deps.sh` library setup as CI. Both archives
 are mandatory in the single immutable asset manifest; signing, provenance and
 consumer verification cover both. The SBOM unions both Linux, both macOS, and
-the Windows target graphs, each the app's joined with the shipped `herdr-acp`'s and `herdr-automate`'s. No separate per-platform manifest or publication job is used.
+the Windows target graphs, each the app's joined with those of the programs shipped beside it (`SHIPPED` in
+`generate-sbom.py`). No separate per-platform manifest or publication job is used.
 The caller must supply the matching release binary; packaging does not cross-build
 or resolve shared libraries. Output is `Herdr-VERSION-TARGET.tar.gz`, with a
-same-named root containing `bin/herdr-gpui`, `bin/herdr-acp`, and
-`bin/herdr-automate` (both taken from beside the binary), a scalable SVG icon, desktop entry, license and
+same-named root containing `bin/herdr-gpui`, `bin/herdr-acp`,
+`bin/herdr-remote-control`, and `bin/herdr-automate` (all taken from beside the binary), a scalable SVG icon, desktop entry, license and
 notice under `share/`. Install that tree into a chosen prefix with its `bin` on
 PATH. Archives are not promised to be bit-for-bit reproducible.
 
@@ -165,8 +167,8 @@ stamped with the release date, and the release host name is kept out of the
 RPM header, so repackaging one release produces identical bytes.
 `scripts/release/smoke-linux-packages.sh VERSION TARGET DIST_DIR` then installs
 each package into digest-pinned Ubuntu 24.04, Debian 13 and Fedora 42 containers,
-plus Arch Linux on x86_64 (no official ARM64 image exists), runs `herdr-gpui --help`,
-`herdr-acp --help`, and `herdr-automate --version`,
+plus Arch Linux on x86_64 (no official ARM64 image exists), runs `herdr-gpui --help`
+and the shipped programs' `--help` or `--version`,
 fails if `ldd` reports a missing library or a dlopened loader is absent, and removes
 the package again. When packaged dependencies change, update `DEPENDS` in
 `package-linux-distro.py` and rerun the smoke script.
@@ -186,7 +188,8 @@ OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has n
 zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named root
 containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
 installer's Start menu shortcut opens, `herdr-acp.exe`, which the app starts
-chats with, and the `herdr-automate.exe` automation daemon (both taken from
+chats with, `herdr-remote-control.exe`, the remote control daemon it runs as a
+scheduled task, and `herdr-automate.exe`, the automation daemon (all taken from
 beside `BINARY`), and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
@@ -236,7 +239,7 @@ fails instead of falling back to unsigned. When signing is on:
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
    `azure/artifact-signing-action` signs `herdr-gpui.exe`,
-   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, and `herdr-automate.exe` with SHA-256 and an RFC 3161 timestamp from
+   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`, and `herdr-automate.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended

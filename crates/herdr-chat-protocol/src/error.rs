@@ -24,6 +24,8 @@ pub enum Error {
     NoModes,
     #[error("entry {0:?} has no text to append to")]
     NotText(EntryId),
+    #[error("question answers in entry {0:?} exceed their count or text limit")]
+    QuestionAnswersLimit(EntryId),
     #[error("no entry {0:?}")]
     UnknownEntry(EntryId),
     #[error("no pending permission request {0:?}")]

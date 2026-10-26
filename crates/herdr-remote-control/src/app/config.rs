@@ -9,7 +9,7 @@
 //! certificate = "own"          # or { cert = "/path/cert.pem", key = "/path/key.pem" }
 //! keep_running = true          # the daemon outlives Herdr UI
 //! notifications = "generic"    # or "excerpt": a short excerpt in each push
-//! device_idle_days = 30
+//! device_idle_days = 30         # 0 never forgets a device
 //! ```
 //!
 //! Secrets and device keys never go here: the daemon keeps them in its own
@@ -21,8 +21,9 @@ use std::{fmt, net::IpAddr, ops::RangeInclusive, path::PathBuf};
 
 pub const DEFAULT_PORT: u16 = 7443;
 const DEFAULT_IDLE_DAYS: u16 = 30;
-/// How long a paired device may stay away before the daemon forgets it.
-pub const IDLE_DAYS: RangeInclusive<u16> = 1..=365;
+/// How long a paired device may stay away before the daemon forgets it;
+/// 0 keeps it until it is revoked.
+pub const IDLE_DAYS: RangeInclusive<u16> = 0..=365;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default)]

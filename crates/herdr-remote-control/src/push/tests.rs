@@ -4,6 +4,7 @@ use super::*;
 use base64::Engine as _;
 
 mod encrypt;
+mod notices;
 mod send;
 mod subscription;
 mod throttle;

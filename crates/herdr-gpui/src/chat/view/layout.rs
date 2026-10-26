@@ -14,6 +14,7 @@ mod imessage;
 mod terminal;
 mod timeline;
 
+use super::copy::CopyPlacement;
 use crate::{
     HerdrWindow,
     config::{ChatLayoutMode, FontConfig, Theme},
@@ -35,6 +36,7 @@ pub(super) fn side(kind: &EntryKind) -> Option<Side> {
             author: Author::User,
             ..
         } => Some(Side::User),
+        EntryKind::Notice { answers, .. } if !answers.is_empty() => Some(Side::User),
         EntryKind::Turn(_) => None,
         _ => Some(Side::Agent),
     }
@@ -75,6 +77,10 @@ pub(super) struct Look<'a> {
 }
 
 impl Look<'_> {
+    pub(super) fn column(&self, content: impl IntoElement) -> Div {
+        self.window.chat_column(content)
+    }
+
     /// `content` over `color`, as `.bg(color)` would paint it, except where
     /// a page in a message shows from beneath the window's drawing.
     pub(super) fn ground(&self, content: Div, color: u32) -> AnyElement {
@@ -124,9 +130,28 @@ pub(super) trait ChatLayout {
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div;
 
     /// Where an agent message's copy button sits: by default in a row
-    /// under the message.
-    fn copy(&self, button: Stateful<Div>, _look: &Look<'_>) -> Div {
+    /// under the message, wherever `placement` allows.
+    fn copy(&self, button: Stateful<Div>, _placement: CopyPlacement, _look: &Look<'_>) -> Div {
         div().h(px(18.)).flex().child(button)
+    }
+
+    /// The color an agent message's prose is drawn in: by default the
+    /// theme's foreground. `None` keeps the color the row gives it.
+    fn prose(&self, look: &Look<'_>) -> Option<u32> {
+        Some(look.theme.foreground)
+    }
+
+    /// The color of a link in a message: by default the theme's blue.
+    /// `None` draws it as the text around it.
+    fn link(&self, look: &Look<'_>) -> Option<u32> {
+        Some(look.theme.ink(look.theme.palette[4]))
+    }
+
+    /// The fill behind what is drawn for the theme's background inside a
+    /// message (a formula's texture, a copy button, a notice) where the
+    /// layout fills messages with another color: by default none.
+    fn backdrop(&self, _look: &Look<'_>) -> Option<u32> {
+        None
     }
 
     /// What shows under the conversation for whether the agent is working
@@ -139,7 +164,7 @@ pub(super) trait ChatLayout {
 
     /// How a turn ended, from its description: by default a quiet rule
     /// across the list.
-    fn turn(&self, text: &str, look: &Look<'_>) -> Div {
+    fn turn(&self, text: AnyElement, look: &Look<'_>) -> Div {
         let rule = || div().flex_1().h(px(1.)).bg(rgb(look.theme.active));
         div()
             .debug_selector(|| "chat-turn".into())
@@ -149,7 +174,7 @@ pub(super) trait ChatLayout {
             .text_size(px((look.text - 1.).max(10.)))
             .text_color(rgb(look.theme.muted))
             .child(rule())
-            .child(div().flex_none().child(text.to_owned()))
+            .child(div().flex_none().child(text))
             .child(rule())
     }
 }
@@ -167,8 +192,8 @@ pub(super) fn layout_for(mode: ChatLayoutMode) -> &'static dyn ChatLayout {
 
 /// How a turn ended, across the row: it breaks a timeline's line, and
 /// closes a turn between bubbles.
-pub(super) fn summary_row(row: Row<'_>, above: f32) -> AnyElement {
-    super::column(
+pub(super) fn summary_row(row: Row<'_>, look: &Look<'_>, above: f32) -> AnyElement {
+    look.column(
         div()
             .id(("chat-entry", row.entry.id.0))
             .px(px(12.))
@@ -193,7 +218,10 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
     let body = match row.side() {
         Some(Side::User) => {
             let fill = crate::config::mix(look.theme.background, look.theme.foreground, 9);
-            div().flex().justify_end().child(
+            // Measure rich blocks against the available cross-axis width.
+            // A horizontal auto flex basis collapses their percentage widths
+            // to the Copy button's width before the text is laid out.
+            div().flex().flex_col().items_end().child(
                 div()
                     .debug_selector(move || format!("chat-bubble-{id}"))
                     .max_w(relative(0.8))
@@ -208,7 +236,7 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
         }
         _ => div().min_w_0().child(row.content),
     };
-    super::column(
+    look.column(
         div()
             .id(("chat-entry", id))
             .px(px(16.))

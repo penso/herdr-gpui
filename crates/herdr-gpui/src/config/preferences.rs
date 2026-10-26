@@ -11,6 +11,8 @@ pub(crate) enum Preference {
     ChatLauncher(ChatLauncher),
     /// `[chat] layout`: how chat views draw.
     ChatLayout(ChatLayoutMode),
+    /// `[chat] max_width`: the reading column, or zero for full width.
+    ChatMaxWidth(u16),
     ConfirmCloseTab(bool),
     ConfirmClosePane(bool),
     ConfirmCloseWorkspace(bool),
@@ -119,6 +121,10 @@ impl Config {
                     (Some("chat"), "launcher", Some(launcher.name().into()))
                 }
                 Preference::ChatLayout(mode) => (Some("chat"), "layout", Some(mode.name().into())),
+                Preference::ChatMaxWidth(width) => {
+                    chat::check_max_width(width)?;
+                    (Some("chat"), "max_width", Some(i64::from(width).into()))
+                }
                 Preference::ConfirmCloseTab(value) => {
                     (None, "confirm_close_tab", Some(value.into()))
                 }

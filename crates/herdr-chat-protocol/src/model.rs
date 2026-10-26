@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Author, CommandId, Image};
 
+mod question_answers;
+pub use question_answers::{MAX_QUESTION_ANSWERS, MAX_QUESTION_TEXT, valid_question_answers};
+
 /// An entry's identity, assigned by the program in increasing order.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -48,6 +51,10 @@ pub struct Transcript {
     /// Prompts waiting for the current turn to end, oldest first.
     #[serde(default)]
     pub queued: Vec<Queued>,
+    /// A transcript viewer: prompts, permissions, and settings stay in the
+    /// original agent terminal. The server refuses every command as well.
+    #[serde(default)]
+    pub read_only: bool,
     #[serde(default)]
     pub session: Option<SessionInfo>,
     #[serde(default)]
@@ -153,11 +160,28 @@ pub enum EntryKind {
     Tool(Tool),
     /// How a prompt turn ended: how long it took and what it used.
     Turn(TurnSummary),
-    /// Something the program says about the session, not part of its history.
+    /// Something the program says about the session, or an imported system event.
     Notice {
+        /// Historical questions and answers, never actionable permission requests.
+        #[serde(
+            default,
+            skip_serializing_if = "Vec::is_empty",
+            deserialize_with = "question_answers::deserialize",
+            serialize_with = "question_answers::serialize"
+        )]
+        answers: Vec<QuestionAnswer>,
+        /// Optional source details, displayed only when the notice is expanded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        details: Option<String>,
         level: NoticeLevel,
         text: String,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct QuestionAnswer {
+    pub question: String,
+    pub answer: String,
 }
 
 impl EntryKind {

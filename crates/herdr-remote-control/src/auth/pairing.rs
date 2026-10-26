@@ -37,6 +37,10 @@ pub(crate) struct Claim {
 /// A device the desktop approved, for the device store to keep.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct NewDevice {
+    /// The origin of the Home Screen app that claimed it, when that app was
+    /// installed from another computer; admitted by CORS while the device
+    /// stays paired.
+    pub(crate) app: Option<String>,
     pub(crate) id: DeviceId,
     pub(crate) name: String,
     pub(crate) public_key: PublicKey,
@@ -91,6 +95,7 @@ impl Open {
             Phase::Claimed { device, code, .. } => PairingState::Claimed {
                 device_name: device.name.clone(),
                 code: code.clone(),
+                app: device.app.clone(),
             },
             Phase::Finished { state, .. } => state.clone(),
         }
@@ -166,6 +171,7 @@ impl Pairings {
         let nonce = random_bytes::<SECRET_LEN>()?;
         let claim = ClaimId(random_id()?);
         let device = NewDevice {
+            app: None,
             id: DeviceId(random_id()?),
             name,
             public_key,
@@ -183,6 +189,21 @@ impl Pairings {
             code,
             expires_ms: deadline_ms,
         })
+    }
+
+    /// Notes that `claim` came from an app installed from another computer,
+    /// at `origin`, so approving it admits that origin.
+    pub(crate) fn claimed_from(&mut self, claim: &ClaimId, origin: String) {
+        if let Some(Open {
+            phase: Phase::Claimed {
+                claim: id, device, ..
+            },
+            ..
+        }) = self.open.as_mut()
+            && id == claim
+        {
+            device.app = Some(origin);
+        }
     }
 
     /// Where the pairing stands, for the desktop dialog.

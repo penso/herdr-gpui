@@ -12,6 +12,8 @@ fn a_chat_pane_reads_as_one_line() {
         queued: 2,
         model: None,
         context: None,
+        input_mode: crate::control::protocol::chat::InputMode::Chat,
+        session_id: None,
     };
     assert_eq!(
         chat::describe(&chat),

@@ -161,7 +161,7 @@ fn shell_special(c: char) -> bool {
 }
 
 /// `token` without a trailing `:line` or `:line:column`, and that line.
-fn without_location(token: &str) -> (&str, Option<u32>) {
+pub(super) fn without_location(token: &str) -> (&str, Option<u32>) {
     let mut path = token;
     let mut line = None;
     for _ in 0..2 {

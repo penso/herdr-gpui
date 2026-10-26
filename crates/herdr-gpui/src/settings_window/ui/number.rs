@@ -1,4 +1,5 @@
-//! A number with -/+ steppers, typed entry, and an optional drag slider.
+//! A number with typed entry, and -/+ steppers and an optional drag slider
+//! unless it is a bare field.
 use crate::config::{Theme, corners};
 use crate::search_input::SearchInput;
 use gpui::{prelude::*, *};
@@ -32,8 +33,19 @@ pub(in crate::settings_window) struct Number {
     pub value: f32,
     pub range: RangeInclusive<f32>,
     pub unit: &'static str,
-    pub slider: bool,
+    pub look: Look,
     pub enabled: bool,
+}
+
+/// What surrounds the typed value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::settings_window) enum Look {
+    /// A drag slider, -/+ steppers, and the range beside them.
+    Slider,
+    /// -/+ steppers and the range.
+    Steppers,
+    /// Only the value, for numbers nobody steps through, such as a port.
+    Field,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -104,7 +116,7 @@ pub(in crate::settings_window) fn number(
         .gap(px(10.))
         .flex_none()
         .when(!enabled, |root| root.opacity(0.5));
-    if spec.slider {
+    if spec.look == Look::Slider {
         let fraction =
             ((spec.value - range.start()) / (range.end() - range.start()).max(1.)).clamp(0., 1.);
         let commit = {
@@ -166,18 +178,21 @@ pub(in crate::settings_window) fn number(
         });
     }
     let value_text = format!("{}", spec.value as i32);
+    let steppers = spec.look != Look::Field;
+    let width = px(if steppers { 44. } else { 56. });
     let border = match editing {
         Some(edit) if edit.invalid => theme.ink(0xd45b5b),
         _ => theme.active,
     };
     let shown = match editing {
         Some(edit) => div()
-            .w(px(44.))
+            .w(width)
+            .px(px(6.))
             .child(edit.input.clone())
             .into_any_element(),
         None => div()
             .id((ElementId::from(id), "value"))
-            .w(px(44.))
+            .w(width)
             .px(px(6.))
             .text_right()
             .when(enabled, |value| value.cursor_text())
@@ -212,8 +227,11 @@ pub(in crate::settings_window) fn number(
                 .text_color(rgb(theme.muted))
                 .child(spec.unit),
         )
-        .child(stepper_for("minus", "\u{2212}", -1.))
-        .child(stepper_for("plus", "+", 1.));
+        .when(steppers, |field| {
+            field
+                .child(stepper_for("minus", "\u{2212}", -1.))
+                .child(stepper_for("plus", "+", 1.))
+        });
     // The native desktop checks click the field by its painted bounds.
     #[cfg(all(feature = "integration-test", target_os = "macos"))]
     let field = field
@@ -221,16 +239,18 @@ pub(in crate::settings_window) fn number(
         .child(crate::settings_window::controls::native_probe(format!(
             "{id}-field"
         )));
-    root.child(field).child(
-        div()
-            .text_size(px(10.))
-            .text_color(rgb(theme.muted))
-            .child(format!(
-                "{} to {}",
-                *range.start() as i32,
-                *range.end() as i32
-            )),
-    )
+    root.child(field).when(steppers, |root| {
+        root.child(
+            div()
+                .text_size(px(10.))
+                .text_color(rgb(theme.muted))
+                .child(format!(
+                    "{} to {}",
+                    *range.start() as i32,
+                    *range.end() as i32
+                )),
+        )
+    })
 }
 
 fn stepper(

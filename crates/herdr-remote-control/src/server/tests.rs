@@ -5,6 +5,7 @@ use super::{
 use std::{ffi::OsString, net::IpAddr, path::PathBuf};
 
 mod control_socket;
+mod idle;
 mod shutdown;
 
 fn args(list: &[&str]) -> Vec<OsString> {
@@ -29,7 +30,10 @@ fn serve_takes_its_defaults() {
     assert!(options.bind.is_unspecified());
     assert_eq!(options.certificate, Certificate::Own);
     assert_eq!(options.privacy, Privacy::Generic);
-    assert_eq!(options.device_idle, Duration::from_secs(30 * 24 * 60 * 60));
+    assert_eq!(
+        options.device_idle,
+        Some(Duration::from_secs(30 * 24 * 60 * 60))
+    );
 }
 
 #[test]
@@ -61,7 +65,16 @@ fn every_option_is_read() {
         }
     );
     assert_eq!(options.privacy, Privacy::Excerpt);
-    assert_eq!(options.device_idle, Duration::from_secs(7 * 24 * 60 * 60));
+    assert_eq!(
+        options.device_idle,
+        Some(Duration::from_secs(7 * 24 * 60 * 60))
+    );
+}
+
+#[test]
+fn zero_idle_days_keeps_devices_until_revoked() {
+    let options = serve(&["serve", "--state-dir", "/s", "--device-idle-days", "0"]);
+    assert_eq!(options.device_idle, None);
 }
 
 #[test]
@@ -89,7 +102,7 @@ fn bad_command_lines_are_refused_before_anything_starts() {
             "--state-dir",
             "/s",
             "--device-idle-days",
-            "0"
+            "3651"
         ]))
         .unwrap_err(),
         ParseError::Value {

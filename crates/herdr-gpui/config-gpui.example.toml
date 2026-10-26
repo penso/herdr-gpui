@@ -470,6 +470,10 @@ size = 12
 # The button in a chat's header steps through them.
 # [chat]
 # layout = "timeline"
+# Maximum reading-column width in logical pixels: 320–4000, or 0 for full width.
+# Settings > General offers a width slider and Full-width chat switch.
+# Command line: herdr-gpui config set chat.max_width 0
+# max_width = 800
 #
 # Scroll smoothly to a streaming reply's new text, rather than jumping to it
 # as each chunk lands. Settings > General edits this while ACP chats are on.
@@ -512,7 +516,8 @@ size = 12
 # "generic" notifications say which chat needs you, without its text;
 # "excerpt" adds a short excerpt of the message.
 # notifications = "generic"
-# Forget a paired device that has not connected for this many days (1 to 365).
+# Forget a paired device that has not connected for this many days (1 to 365),
+# or 0 to keep it until it is revoked.
 # device_idle_days = 30
 
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.

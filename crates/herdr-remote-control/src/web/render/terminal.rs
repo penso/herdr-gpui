@@ -69,6 +69,11 @@ pub(crate) fn terminal(
                         @if let Some(place) = &place { " · " (place) }
                     }
                 }
+                // Paste reads the clipboard, text or a screenshot; a picture
+                // is stored on this computer and its path typed into the pane.
+                input type="file" id="term-file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden";
+                button type="button" class="tbtn" data-term-picture aria-label="Send a picture" { (icons::picture(18)) }
+                button type="button" class="tbtn" data-term-paste aria-label="Paste" { (icons::clipboard(18)) }
                 button type="button" class="tbtn" data-term-zoom aria-label="Text size" { "Aa" }
                 button type="button" class="tbtn herdr" x-on:click="openSheet" aria-label="Herdr actions" { "◆" }
             }

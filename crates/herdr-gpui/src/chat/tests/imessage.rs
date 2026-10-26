@@ -11,6 +11,8 @@ use crate::{HerdrWindow, config::ChatLayoutMode};
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use herdr_client::ConnectTarget;
 
+mod copy;
+
 fn imessage(view: &Entity<HerdrWindow>, program: &Program, cx: &mut VisualTestContext) {
     view.update(cx, |view, cx| {
         view.set_chat_layout_with(ChatLayoutMode::IMessage, |_| Ok(()), cx)
@@ -38,6 +40,10 @@ fn the_user_speaks_on_the_right_and_the_agent_on_the_left(cx: &mut TestAppContex
     assert!(reply.size.width > reply.size.height, "{reply:?}");
     let copy = cx.debug_bounds("chat-copy-2").unwrap();
     assert!(copy.left() >= reply.left() && copy.right() <= reply.right());
+    assert!(
+        cx.debug_bounds("chat-copy-footer-2").is_none(),
+        "plain prose stays compact"
+    );
     // The prompt was answered.
     assert!(cx.debug_bounds("chat-delivered").is_none());
 }

@@ -38,6 +38,7 @@
     <p class="text-lg font-semibold">Can't reach your computer</p>
     <p class="text-muted text-sm">Herdr Remote isn't answering at any address it gave this phone. Check that the computer is awake and on the same network, or that Tailscale is on.</p>
     <button type="button" class="btn btn-primary max-w-60" data-retry>Try again</button>
+    <a href="/computers" data-nav class="btn btn-subtle max-w-60">Other computers</a>
   </div>
 </template>
 
@@ -56,17 +57,56 @@
     <p class="text-muted">Check that this code matches the one Herdr shows, then choose Allow there.</p>
     <div class="font-mono font-bold text-[38px] tracking-widest px-5 py-4 bg-surface rounded-2xl min-w-48 min-h-[78px]" data-code></div>
     <p class="text-muted text-sm" data-state>Pairing…</p>
+    <a href="/computers" data-nav class="btn btn-subtle max-w-60" data-approve-back hidden>Back to computers</a>
     <div class="group-list w-full mt-6 text-left" data-trust hidden>
       <div class="row flex-col items-start gap-1">
         <b>Trust your computer for notifications</b>
         <small class="text-muted">Your computer uses its own certificate. Install it once so this phone trusts it, then turn on full trust in Settings › General › About › Certificate Trust Settings.</small>
         <div class="flex gap-2 mt-1">
-          <a class="chip text-accent" href="/ca.mobileconfig">iPhone profile</a>
-          <a class="chip text-accent" href="/ca.pem" download="herdr-remote-ca.pem">Android certificate</a>
+          <a class="chip text-accent" href="/ca.mobileconfig" data-computer>iPhone profile</a>
+          <a class="chip text-accent" href="/ca.pem" download="herdr-remote-ca.pem" data-computer>Android certificate</a>
         </div>
-        <small class="text-muted">Fingerprint <span class="font-mono" data-fingerprint></span></small>
+        <small class="text-muted">Install it only if this fingerprint matches the one Herdr shows beside the code on your computer: <span class="font-mono" data-fingerprint></span></small>
       </div>
     </div>
+  </div>
+</template>
+
+<template id="t-computers">
+  <div class="pb-16">
+    <header class="flex items-center gap-2 pt-1.5 pb-2">
+      <a href="/" data-nav class="grid place-items-center text-accent w-8 h-9 -ml-1.5 shrink-0" aria-label="Back">
+        <svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </a>
+      <h1 class="text-[22px] font-bold">Computers</h1>
+    </header>
+    <div class="group-list" data-hosts></div>
+    <div class="group-list mt-6">
+      <button type="button" class="row text-accent w-full text-left" data-add-computer>Add a computer</button>
+    </div>
+    <p class="text-muted text-xs px-4 pt-2">In Herdr on that computer, open Settings › Remote control and choose Pair a device, then scan its code here.</p>
+  </div>
+</template>
+
+<template id="t-host">
+  <button type="button" class="row w-full text-left">
+    <i class="w-2.5 h-2.5 rounded-full shrink-0 bg-raised" data-dot></i>
+    <span class="flex-1 min-w-0">
+      <b class="block truncate font-semibold" data-name></b>
+      <small class="block truncate text-muted font-mono" data-address>Checking…</small>
+    </span>
+    <span class="text-accent text-sm" data-shown>Shown</span>
+  </button>
+</template>
+
+<template id="t-scan">
+  <div class="flex flex-col gap-3 pt-1.5 pb-10">
+    <header class="flex items-center gap-2">
+      <button type="button" class="pill-button" data-scan-cancel>Cancel</button>
+      <h1 class="text-[19px] font-bold">Scan a pairing code</h1>
+    </header>
+    <video class="w-full aspect-square object-cover rounded-2xl bg-surface" playsinline muted></video>
+    <p class="text-muted text-sm text-center px-4" data-scan-state>Point the camera at the code Herdr shows in Settings › Remote control › Pair a device.</p>
   </div>
 </template>
 

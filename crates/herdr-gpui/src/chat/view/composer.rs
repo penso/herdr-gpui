@@ -20,6 +20,43 @@ impl HerdrWindow {
         let hues = Hues::of(theme);
         let transcript = chat.session.transcript();
         let pane_id = chat.target.pane_id.clone();
+        if transcript.read_only {
+            return div()
+                .debug_selector(|| "chat-read-only".into())
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(px(8.))
+                .p(px(12.))
+                .text_size(self.chat_small_text())
+                .text_color(rgb(theme.subtext()))
+                .child("Continue this conversation in its terminal.")
+                .child(
+                    div()
+                        .id("chat-reply-terminal")
+                        .debug_selector(|| "chat-reply-terminal".into())
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .px(px(12.))
+                        .py(px(8.))
+                        .rounded(px(corners::CONTROL))
+                        .border_1()
+                        .border_color(rgb(theme.active))
+                        .bg(rgb(theme.surface))
+                        .text_color(rgb(super::text_ink(theme.foreground, theme.surface)))
+                        .font_weight(FontWeight::MEDIUM)
+                        .cursor_pointer()
+                        .hover(|button| button.border_color(rgb(theme.primary())))
+                        .child(svg().path("icons/terminal.svg").size(px(13.)))
+                        .child("Reply in terminal")
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.set_chat_raw(&pane_id, true, window, cx);
+                        })),
+                );
+        }
         let problem = chat.error.clone().or_else(|| {
             chat.session
                 .rejection()

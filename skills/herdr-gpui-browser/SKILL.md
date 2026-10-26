@@ -23,6 +23,28 @@ URL, for example:
 
 ## Open a page
 
+### Native chat messages
+
+In the native chat view, write normal Markdown: headings, lists, links, tables,
+fenced code and Mermaid. Inline `$...$` / `\(...\)` and display `$$...$$` /
+`\[...\]` equations are typeset automatically. No browser page is needed for
+those messages. Terminal-cell views still display source text.
+
+For a small interactive selection, put a JSON document in a closed `herdr-ui`
+fence. The catalog supports native controls on Linux as well as macOS/Windows:
+
+```herdr-ui
+{"title":"Choose a view","components":[{"type":"choice","id":"view","label":"View","options":["Summary","Details"]},{"type":"action","label":"Discuss selection","prompt":"Explain the selected view","mode":"draft"}]}
+```
+
+The fixed catalog contains `text`, `card`, `metric`, `choice`, `toggle`, `slider`,
+`input`, `table`, `chart` (nonnegative horizontal bars) and `action`. Use `draft`
+actions by default; the user reviews the resulting message in the composer.
+Controls have no JavaScript, network or tool execution. Do not output arbitrary
+HTML and promise it will run on Linux: the embedded webview is platform-dependent.
+Existing CLI transcript mirrors are read-only; their controls can be explored,
+but actions cannot submit a prompt.
+
 ```sh
 herdr-gpui browser open ./mockup/index.html
 herdr-gpui browser open http://localhost:3000
@@ -223,6 +245,7 @@ for what only Herdr UI shows or keeps.
 | Open a dev server in a tab, forwarded when you run on an SSH host | `herdr-gpui ports open 3000` |
 | See the processes under a pane, with CPU and memory | `herdr-gpui processes` |
 | Start a chat with another agent in a new tab, shown as a native chat view | `herdr-gpui chat new claude`, then `herdr-gpui chat` for its status |
+| Render existing Linux Codex/Claude conversations in their current panes | `herdr-gpui config set chat.render_existing true` (also enable `features.acp_chats`); `chat status --json` reports the session and input mode |
 | List or focus the app's windows and its own tabs | `herdr-gpui window`, `herdr-gpui tab`, `herdr-gpui tab focus ID` |
 | Block until something happens in the app | `herdr-gpui wait tab-closed ID --timeout 600`, `herdr-gpui events --follow` |
 | Read or change a Herdr UI setting | `herdr-gpui config get KEY`, `herdr-gpui config set KEY VALUE` |

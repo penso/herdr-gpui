@@ -34,6 +34,23 @@ pub(super) fn message(text: &str) -> (Prepared, Vec<String>) {
         .iter()
         .map(|part| match part {
             Part::Text(lines) => format!("text:{}", lines[0].text),
+            Part::Rich(blocks) => match blocks.first() {
+                Some(rich::Block::Paragraph { content, .. }) => format!(
+                    "text:{}",
+                    content
+                        .iter()
+                        .filter_map(|part| match part {
+                            rich::Inline::Text(text, _) => Some(text.as_str()),
+                            _ => None,
+                        })
+                        .collect::<String>()
+                ),
+                Some(rich::Block::Code { source, .. }) => {
+                    format!("text:{}", source.lines().next().unwrap_or(""))
+                }
+                _ => "rich".to_owned(),
+            },
+            Part::Widget(_) => "widget".to_owned(),
             Part::Diagram(..) => "diagram".to_owned(),
             Part::Html { .. } => "page".to_owned(),
             Part::Picture { alt } => format!("picture:{alt}"),
@@ -68,7 +85,9 @@ fn a_fence_still_streaming_or_too_long_stays_code() {
         "```mermaid\n{}\n```\n",
         "A-->B\n".repeat(visual::MAX_DIAGRAM_SOURCE)
     );
-    assert_eq!(message(&long).1, ["text:A-->B"]);
+    let shape = message(&long).1;
+    assert_eq!(shape.first().map(String::as_str), Some("text:A-->B"));
+    assert!(!shape.iter().any(|part| part == "diagram"));
     // Other fences are code as before.
     assert_eq!(
         message("```rust\nfn main() {}\n```\n").1,
@@ -163,4 +182,256 @@ fn diagrams_are_drawn_off_thread_and_redrawn_for_a_new_theme(cx: &mut TestAppCon
     visuals.retain(&HashSet::new());
     assert!(matches!(visuals.shown(id), Shown::Pending));
     assert!(!visuals.take_released().is_empty());
+}
+
+#[gpui::test]
+fn forgotten_streamed_work_keeps_its_background_slot(cx: &mut TestAppContext) {
+    let renderer = cx.update(|cx| cx.svg_renderer());
+    let mut visuals = Visuals::default();
+    for source in ["x", "y"] {
+        visuals.want(
+            VisualId::of(source),
+            Source::Math {
+                source: source.into(),
+                mode: rich::MathMode::Inline,
+            },
+        );
+    }
+    let jobs = visuals.jobs(&styled(0xffffff), &renderer);
+    assert_eq!(jobs.len(), 2);
+    visuals.clear();
+    visuals.want(
+        VisualId::of("z"),
+        Source::Math {
+            source: "z".into(),
+            mode: rich::MathMode::Inline,
+        },
+    );
+    assert!(visuals.jobs(&styled(0xffffff), &renderer).is_empty());
+    for job in jobs {
+        let (id, ticket, result) = job.run();
+        assert!(!visuals.finish(id, ticket, result));
+    }
+    assert_eq!(visuals.jobs(&styled(0xffffff), &renderer).len(), 1);
+}
+
+#[gpui::test]
+fn rich_table_columns_align_and_fenced_code_copies_exactly(cx: &mut TestAppContext) {
+    use super::overlay::{attach_with, open, poll};
+    use gpui::Modifiers;
+    let (view, _peer, cx) = open(cx, herdr_client::ConnectTarget::Local);
+    let program = Program::new();
+    let code = "let α = 2;\nprintln!(\"{α}\");\n";
+    let text =
+        format!("| Name | Value |\n| :--- | ---: |\n| longer name | 42 |\n\n```rust\n{code}```");
+    let _stream = attach_with(
+        &view,
+        &program,
+        snapshot(cursor(1, 0), vec![agent(1, &text)]),
+        cx,
+    );
+    wait_until(|| {
+        poll(&view, &program, cx);
+        cx.debug_bounds("chat-copy-code").is_some()
+    });
+    let header = cx.debug_bounds("chat-table-cell-0-1").unwrap();
+    let value = cx.debug_bounds("chat-table-cell-1-1").unwrap();
+    assert_eq!(header.left(), value.left());
+    assert_eq!(header.size.width, value.size.width);
+    let table = cx.debug_bounds("chat-rich-table").unwrap();
+    assert!(
+        (header.right() - table.right()).abs() <= gpui::px(2.),
+        "the final column fills the table, allowing its border"
+    );
+    let copy = cx.debug_bounds("chat-copy-code").unwrap();
+    cx.simulate_click(copy.center(), Modifiers::default());
+    assert_eq!(
+        cx.update(|_, cx| cx.read_from_clipboard())
+            .and_then(|item| item.text())
+            .as_deref(),
+        Some(code)
+    );
+}
+
+#[gpui::test]
+fn multiline_display_math_and_inline_math_have_distinct_native_layouts(cx: &mut TestAppContext) {
+    use super::overlay::{attach_with, open, poll};
+    let (view, _peer, cx) = open(cx, herdr_client::ConnectTarget::Local);
+    let program = Program::new();
+    let text = "Before $x^2$ after.\n\n$$\n\\begin{aligned}a &= b \\\\ c &= d\\end{aligned}\n$$";
+    let _stream = attach_with(
+        &view,
+        &program,
+        snapshot(cursor(1, 0), vec![agent(1, text)]),
+        cx,
+    );
+    wait_until(|| {
+        // GPUI's test executor only advances when explicitly pumped. Polling
+        // sockets and drawing alone leaves the raster jobs pending forever.
+        cx.run_until_parked();
+        poll(&view, &program, cx);
+        view.read_with(cx, |view, _| {
+            let prepared = &view.chats.pane("w1:p1").unwrap().prepared;
+            let body = prepared.body(EntryId(1)).unwrap();
+            let Body::Message(parts) = &*body else {
+                panic!("expected the math message");
+            };
+            for part in parts {
+                if let Part::Rich(blocks) = part {
+                    for id in blocks.iter().flat_map(rich::Block::visuals) {
+                        if let Shown::Failed(error) = prepared.visuals.shown(id) {
+                            panic!("math raster failed: {error}");
+                        }
+                    }
+                }
+            }
+        });
+        cx.debug_bounds("chat-math-inline").is_some()
+            && cx.debug_bounds("chat-math-display").is_some()
+    });
+    let inline = cx.debug_bounds("chat-math-inline").unwrap();
+    let display = cx.debug_bounds("chat-math-display").unwrap();
+    assert!(inline.size.width > gpui::px(0.));
+    assert!(display.top() >= inline.bottom());
+    assert!(display.size.height > inline.size.height);
+}
+
+#[gpui::test]
+fn replacing_a_full_rich_transcript_admits_new_math_without_losing_worker_slots(
+    cx: &mut TestAppContext,
+) {
+    let renderer = cx.update(|cx| cx.svg_renderer());
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = (0..visual::MAX_RICH_VISUALS)
+        .map(|n| agent(n as u64 + 1, &format!("$x_{{{n}}}$")))
+        .collect();
+    let keys: Vec<_> = transcript
+        .entries
+        .iter()
+        .map(|entry| (entry.id, 1))
+        .collect();
+    let mut prepared = Prepared::default();
+    prepared.update(&transcript, &keys);
+    assert_eq!(prepared.visuals.rich_budget().0, visual::MAX_RICH_VISUALS);
+    let old_jobs = prepared.visuals.jobs(&styled(0xffffff), &renderer);
+    assert_eq!(old_jobs.len(), 2);
+
+    transcript.entries = vec![agent(1, "$y$")];
+    prepared.update(&transcript, &[(EntryId(1), 2)]);
+    let replacement = VisualId::of(("math", rich::MathMode::Inline, "y"));
+    assert!(prepared.visuals.wants(replacement));
+    assert_eq!(prepared.visuals.rich_budget().0, 1);
+    assert!(
+        prepared
+            .visuals
+            .jobs(&styled(0xffffff), &renderer)
+            .is_empty()
+    );
+    for job in old_jobs {
+        let (id, ticket, output) = job.run();
+        assert!(!prepared.visuals.finish(id, ticket, output));
+    }
+    let jobs = prepared.visuals.jobs(&styled(0xffffff), &renderer);
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].id, replacement);
+}
+
+#[gpui::test]
+fn rich_cache_admission_and_retained_math_bytes_are_bounded(cx: &mut TestAppContext) {
+    use visual::{Drawn, MAX_MATH_TEXTURE_BYTES, MAX_RICH_VISUALS, Output};
+    let renderer = cx.update(|cx| cx.svg_renderer());
+    let mut visuals = Visuals::default();
+    for n in 0..=MAX_RICH_VISUALS {
+        visuals.want(
+            VisualId::of(n),
+            Source::Code {
+                language: "rs".into(),
+                source: "let x = 1;".into(),
+            },
+        );
+    }
+    assert_eq!(visuals.rich_budget(), (MAX_RICH_VISUALS, 0));
+    assert!(!visuals.wants(VisualId::of(MAX_RICH_VISUALS)));
+    let picture = VisualId::of("ordinary image");
+    visuals.want(picture, Source::Image(png(1, 1)));
+    assert!(
+        visuals.wants(picture),
+        "the rich budget does not reject existing image types"
+    );
+    visuals.clear();
+    assert_eq!(visuals.rich_budget(), (0, 0));
+
+    // One shared 4 MiB fixture stands in for distinct worker textures. The
+    // accountant must charge each entry, independently of Arc sharing.
+    let texture = Arc::new(gpui::RenderImage::new(vec![image::Frame::new(
+        image::RgbaImage::new(1024, 1024),
+    )]));
+    let bytes = texture.as_bytes(0).unwrap().len();
+    let capacity = MAX_MATH_TEXTURE_BYTES / bytes;
+    let drawn = Drawn {
+        texture,
+        width: 512.,
+        height: 512.,
+        baseline: Some(20.),
+    };
+    let ids: Vec<_> = (0..=capacity)
+        .map(|n| VisualId::of(("math-budget", n)))
+        .collect();
+    for id in &ids {
+        visuals.want(
+            *id,
+            Source::Math {
+                source: "x".into(),
+                mode: rich::MathMode::Inline,
+            },
+        );
+    }
+    loop {
+        let jobs = visuals.jobs(&styled(0xffffff), &renderer);
+        if jobs.is_empty() {
+            break;
+        }
+        for job in jobs {
+            assert!(visuals.finish(job.id, job.ticket, Ok(Output::Image(drawn.clone()))));
+        }
+    }
+    assert_eq!(
+        visuals.rich_budget(),
+        (capacity + 1, MAX_MATH_TEXTURE_BYTES)
+    );
+    let refused = ids
+        .iter()
+        .find(|id| matches!(visuals.shown(**id), Shown::Failed(Error::MathLimit)))
+        .copied()
+        .unwrap();
+    assert!(
+        visuals.jobs(&styled(0xffffff), &renderer).is_empty(),
+        "limit failures do not retry every tick"
+    );
+    let jobs = visuals.jobs(&styled(0x101010), &renderer);
+    assert!(
+        jobs.iter().all(|job| job.id != refused),
+        "theme changes do not restart budget failures"
+    );
+    visuals.retain(&HashSet::from([refused]));
+    assert_eq!(visuals.rich_budget(), (1, 0));
+    for job in jobs {
+        assert!(!visuals.finish(job.id, job.ticket, Ok(Output::Image(drawn.clone()))));
+    }
+    visuals.clear();
+    assert_eq!(visuals.rich_budget(), (0, 0));
+    let fresh = VisualId::of("new formula");
+    visuals.want(
+        fresh,
+        Source::Math {
+            source: "y".into(),
+            mode: rich::MathMode::Inline,
+        },
+    );
+    assert!(
+        visuals
+            .jobs(&styled(0x101010), &renderer)
+            .iter()
+            .any(|job| job.id == fresh)
+    );
 }
