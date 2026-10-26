@@ -332,6 +332,17 @@ phone never disturbs the desktop's layout.
   paired computers (switch, add, retry) answer only in views the app drew
   from its own templates, and a computer's patches replace only elements
   inside the fragment view.
+- What this trusts: the computer the app was installed from serves the
+  page that holds every computer's key, so it can sign in to the others
+  as this phone. The keys cannot be exported, but that page can use them.
+  Every computer's authority covers the same private addresses, so a
+  paired computer that takes over another's saved address on some
+  network can also pass as it, `/api/ping` included: the fingerprint
+  check guards against an honest address that moved, not a hostile
+  computer. A browser cannot bind a signature to the TLS certificate it
+  checked, so pairing several computers in one app means trusting each of
+  them with the others. Pairing from each computer's own page instead,
+  as a single-computer app does, keeps them apart.
 - Push: a push subscription is bound to one sender key (VAPID), so each
   computer gets its own subscription, through one service worker
   registration per computer under its own scope (`/m/COMPUTER/`). Phase 0
