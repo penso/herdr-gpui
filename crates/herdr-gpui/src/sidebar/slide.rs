@@ -101,4 +101,5 @@ impl HerdrWindow {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests;
