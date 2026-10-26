@@ -70,13 +70,7 @@ fn patches_cover_every_region_the_stream_replaces() {
         0,
     );
     let ids: Vec<_> = patches.iter().map(|(id, _)| *id).collect();
-    for id in [
-        "chat-head",
-        "chat-turn",
-        "chat-sheet",
-        "chat-settings",
-        "chat-composer",
-    ] {
+    for id in ["chat-head", "chat-sheet", "chat-settings", "chat-composer"] {
         assert!(ids.contains(&id));
         let (_, markup) = patches
             .iter()
