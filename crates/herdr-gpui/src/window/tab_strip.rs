@@ -209,7 +209,7 @@ impl HerdrWindow {
         self.observe_strip(slot.id, listed, now);
         let scroll = self.strip_scroll(slot.id);
         let layout = self.tab_layout();
-        let (body, body_cells) = self
+        let (body, body_placer) = self
             .tab_body(slot, pick.as_ref(), self.strip_side(), window)
             .unzip();
         let faces = self.tab_context(slot, indicators);
@@ -227,8 +227,7 @@ impl HerdrWindow {
             .track_scroll(&scroll)
             .px(px(layout.padding()))
             .bg(self.fill().over(self.theme.surface, self.theme.surface))
-            .text_color(rgb(self.theme.foreground))
-            .children(body);
+            .text_color(rgb(self.theme.foreground));
         if let Some(snapshot) = &self.live.snapshot {
             for tab in snapshot.tabs.iter().filter(|t| {
                 Some(&t.workspace_id) == snapshot.focused_workspace_id.as_ref()
@@ -306,8 +305,8 @@ impl HerdrWindow {
             .into_iter()
             .map(|(tab_pick, tab)| {
                 let selected = pick.as_ref() == Some(&tab_pick);
-                let tab = match &body_cells {
-                    Some(cells) if selected => tab.child(curved::body_target(cells)),
+                let tab = match &body_placer {
+                    Some(placer) if selected => tab.child(placer.target()),
                     _ => tab,
                 };
                 self.draggable_tab(slot, tab_pick, tab, selected, drag.as_ref(), cx)
@@ -348,6 +347,10 @@ impl HerdrWindow {
                     }
                 }),
             )
+            // Beside the tab list rather than in it, so the body neither
+            // counts toward what the list scrolls nor shifts its tabs'
+            // indices; first, so every tab draws over it.
+            .children(body)
             .child(tabs.flex_shrink_1().min_w_0())
             .children(self.strip_thumb(slot.id).map(|thumb| {
                 div()

@@ -7,7 +7,7 @@ use crate::{
     HerdrWindow,
     browser::{
         Pick, Slot,
-        tab_body::{Cells, Span},
+        tab_body::{Cells, List, Span},
     },
     tab_layout::Connected,
 };
@@ -27,8 +27,8 @@ impl HerdrWindow {
     }
 
     /// `slot`'s body for this frame, with `pick` chosen: the canvas that
-    /// paints it, first in the tab list so every tab draws over it, and the
-    /// cells the chosen tab reports its bounds to. `None` for a layout
+    /// paints it, laid over the tab list and clipped to it, and the recorder
+    /// the chosen tab carries to place it. `None` for a layout
     /// without one.
     pub(super) fn tab_body(
         &mut self,
@@ -36,7 +36,7 @@ impl HerdrWindow {
         pick: Option<&Pick>,
         side: Side,
         window: &mut Window,
-    ) -> Option<(AnyElement, Cells)> {
+    ) -> Option<(AnyElement, Placer)> {
         let shape = self.connected()?;
         let now = crate::motion::now();
         let frame = self.browser.tab_body.frame(slot.id, pick, now);
@@ -44,28 +44,20 @@ impl HerdrWindow {
             window.request_animation_frame();
         }
         let color = self.fill().ground();
-        let cells = frame.cells.clone();
-        let from = frame.from;
+        let list = frame.cells.list.clone();
+        let drawn = frame.cells.drawn.clone();
         let canvas = canvas(
-            |_, _, _| {},
+            move |bounds, window, _| {
+                list.set(Some(List {
+                    bounds,
+                    clip: window.content_mask().bounds,
+                }));
+            },
             move |bounds, _, window, _| {
-                let Some(target) = cells.target.get() else {
-                    cells.drawn.set(None);
-                    cells.visible.set(None);
-                    return;
-                };
-                let span = Span {
-                    left: f32::from(target.left() - bounds.left()),
-                    width: f32::from(target.size.width),
-                }
-                .from(from, now);
-                cells.drawn.set(Some(span));
-                let left = bounds.left() + px(span.left - shape.shoulder);
-                let right = bounds.left() + px(span.left + span.width + shape.shoulder);
-                let clip = window.content_mask().bounds;
-                let (left, right) = (left.max(clip.left()), right.min(clip.right()));
-                cells.visible.set((right > left).then_some((left, right)));
-                if let Some(path) = body_path(bounds, span, &shape, side) {
+                if let Some(path) = drawn
+                    .get()
+                    .and_then(|span| body_path(bounds, span, &shape, side))
+                {
                     window.paint_path(path, color);
                 }
             },
@@ -77,9 +69,16 @@ impl HerdrWindow {
             .top_0()
             .left_0()
             .size_full()
+            .overflow_hidden()
             .child(canvas)
             .into_any_element();
-        Some((canvas, frame.cells))
+        let placer = Placer {
+            cells: frame.cells,
+            from: frame.from,
+            now,
+            shoulder: shape.shoulder,
+        };
+        Some((canvas, placer))
     }
 
     /// `body` in the card a connected layout sits a group's content in,
@@ -96,15 +95,13 @@ impl HerdrWindow {
             return body;
         };
         let chrome = self.fill().panel(self.theme.surface);
-        let visible = strip
-            .and_then(|_| self.browser.tab_body.cells(slot.id))
-            .map(|cells| cells.visible);
+        let cells = strip.and_then(|_| self.browser.tab_body.cells(slot.id));
         let inset = px(shape.inset);
         let frame = canvas(
             |_, _, _| {},
             move |bounds, _, window, _| {
                 let card = card_bounds(bounds, &shape, strip);
-                let reach = visible.as_ref().and_then(|visible| visible.get());
+                let reach = cells.as_ref().and_then(|cells| cells.visible.get());
                 let near = |corner: Pixels, distance: fn(Pixels, (Pixels, Pixels)) -> Pixels| {
                     reach.map_or(shape.card_radius, |run| {
                         eased(f32::from(distance(corner, run)), shape.card_radius)
@@ -117,6 +114,10 @@ impl HerdrWindow {
                     Some(Side::Below) => [shape.card_radius, shape.card_radius, leading, trailing],
                     None => [shape.card_radius; 4],
                 };
+                #[cfg(test)]
+                if let Some(cells) = &cells {
+                    cells.corners.set(Some(radii));
+                }
                 for piece in margins(bounds, card) {
                     window.paint_quad(fill(piece, chrome));
                 }
@@ -150,18 +151,45 @@ impl HerdrWindow {
     }
 }
 
-/// A canvas that records the chosen tab's bounds into `cells` as it
-/// prepaints, which happens before any body paints.
-pub(super) fn body_target(cells: &Cells) -> impl IntoElement {
-    let target = cells.target.clone();
-    canvas(
-        move |bounds, _, _| target.set(Some(bounds)),
-        |_, _, _, _| {},
-    )
-    .absolute()
-    .top_0()
-    .left_0()
-    .size_full()
+/// What places a strip's body for one frame, from the chosen tab.
+#[derive(Clone, Debug)]
+pub(super) struct Placer {
+    cells: Cells,
+    from: Option<(Span, std::time::Instant)>,
+    now: std::time::Instant,
+    shoulder: f32,
+}
+
+impl Placer {
+    /// A canvas the chosen tab carries, which places the body over it as
+    /// it prepaints: after the tab list's own canvas, and before anything
+    /// paints, the card under or over the strip included.
+    pub(super) fn target(&self) -> impl IntoElement {
+        let placer = self.clone();
+        canvas(move |bounds, _, _| placer.place(bounds), |_, _, _, _| {})
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+    }
+
+    /// Places the body heading for a chosen tab drawn at `target`.
+    fn place(&self, target: Bounds<Pixels>) {
+        let Some(List { bounds: list, clip }) = self.cells.list.get() else {
+            return;
+        };
+        let span = Span {
+            left: f32::from(target.left() - list.left()),
+            width: f32::from(target.size.width),
+        }
+        .from(self.from, self.now);
+        self.cells.drawn.set(Some(span));
+        let left = (list.left() + px(span.left - self.shoulder)).max(clip.left());
+        let right = (list.left() + px(span.left + span.width + self.shoulder)).min(clip.right());
+        self.cells
+            .visible
+            .set((right > left).then_some((left, right)));
+    }
 }
 
 /// How round a card's corner draws whose edge lies `clearance` from the

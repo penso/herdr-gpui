@@ -1,10 +1,5 @@
 use super::*;
 use crate::browser::GroupIds;
-use gpui::{point, px, size};
-
-fn bounds(left: f32, width: f32) -> Bounds<Pixels> {
-    Bounds::new(point(px(left), px(0.)), size(px(width), px(30.)))
-}
 
 fn pick(id: &str) -> Pick {
     Pick::Herdr(id.into())
@@ -56,11 +51,12 @@ fn a_new_choice_slides_from_where_the_body_drew() {
         width: 140.,
     };
     frame.cells.drawn.set(Some(drawn));
-    frame.cells.target.set(Some(bounds(12., 140.)));
-    // The same choice next frame starts nothing, and clears last frame's tab.
+    // The same choice next frame starts nothing; the strip places the body
+    // afresh.
     let again = bodies.frame(group, Some(&pick("a")), now);
     assert!(again.from.is_none());
-    assert_eq!(again.cells.target.get(), None);
+    assert_eq!(again.cells.drawn.get(), None);
+    again.cells.drawn.set(Some(drawn));
     let moved = bodies.frame(group, Some(&pick("b")), now);
     assert_eq!(moved.from, Some((drawn, now)));
     assert!(moved.moving(now));

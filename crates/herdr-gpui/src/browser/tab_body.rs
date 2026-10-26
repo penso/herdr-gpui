@@ -14,8 +14,8 @@ use std::{
 /// How long the body takes to reach a newly chosen tab.
 pub(crate) const SLIDE: Duration = Duration::from_millis(240);
 
-/// A run along the strip, from the tab list's own left edge, so it holds
-/// still while the list scrolls.
+/// A run along the strip, from the left edge of the box the tab list
+/// scrolls in.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct Span {
     pub(crate) left: f32,
@@ -42,19 +42,34 @@ impl Span {
     }
 }
 
-/// What a strip's paint shares with its render. Cells, because the chosen
-/// tab's bounds are known only once it is laid out, and the card under the
-/// strip reads where the body landed in the same frame.
+/// Where a strip's tab list lies, and the clip it draws under.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct List {
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) clip: Bounds<Pixels>,
+}
+
+/// What a strip's prepaint shares with its paint and the next render.
+/// Cells, because the chosen tab's bounds are known only once it is laid
+/// out. Everything is placed while prepainting, before anything paints, so
+/// the card reads this frame's body whether it paints before the strip or
+/// after it.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Cells {
-    /// The chosen tab's bounds this frame, set as it prepaints; `None`
-    /// while the strip shows no chosen tab.
-    pub(crate) target: Rc<Cell<Option<Bounds<Pixels>>>>,
-    /// Where the body drew last.
+    /// The box the tab list scrolls in and the clip the body draws under,
+    /// set as the body's canvas prepaints, ahead of the tabs.
+    pub(crate) list: Rc<Cell<Option<List>>>,
+    /// Where the body draws this frame, set as the chosen tab prepaints;
+    /// `None` while the strip shows no chosen tab. Read at the next choice,
+    /// it is where a slide starts.
     pub(crate) drawn: Rc<Cell<Option<Span>>>,
     /// The part of the body the strip shows, shoulders included, in window
     /// coordinates: the card squares off a corner the body reaches.
     pub(crate) visible: Rc<Cell<Option<(Pixels, Pixels)>>>,
+    /// The corner radii the card under the strip last painted, top left,
+    /// top right, bottom left, bottom right.
+    #[cfg(test)]
+    pub(crate) corners: Rc<Cell<Option<[f32; 4]>>>,
 }
 
 #[derive(Debug, Default)]
@@ -115,8 +130,11 @@ impl TabBodies {
                 ..frame
             }
         };
-        // The chosen tab sets it again as it prepaints, if it is drawn.
-        body.cells.target.set(None);
+        // The strip places them again as it prepaints, if it draws a
+        // chosen tab.
+        body.cells.list.set(None);
+        body.cells.drawn.set(None);
+        body.cells.visible.set(None);
         frame
     }
 
