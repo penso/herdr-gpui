@@ -5,9 +5,14 @@
 //! rename field, keeps it still: only a popup that is new to the eye moves.
 //!
 //! All Devices instead rises out of the sidebar footer that opened it and
-//! sinks back into it when it closes. It is the one page drawn again after
-//! closing: closing resets the menu's state in the same frame, and its list
-//! draws from what outlives that, the devices and the anchor.
+//! sinks back into it when it closes. It, the titlebar's Git popover with
+//! its pull request dialogs, and the phone pairing dialog are drawn again
+//! after closing, from what [`kept::Kept`] took out before the reset, as
+//! they go.
+
+mod kept;
+
+pub(super) use kept::{Kept, leaves};
 
 use super::Page;
 use crate::{
@@ -40,7 +45,7 @@ enum Shown {
     Dialog,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct Appear {
     /// What the last frame drew, `None` while no popup was open.
     shown: Option<Shown>,
@@ -48,8 +53,10 @@ pub(crate) struct Appear {
     page: Option<Page>,
     /// When the popup showing now began to appear.
     since: Option<Instant>,
-    /// A page sinking away after it closed, from when it did.
+    /// A page going away after it closed, from when it did.
     leaving: Option<(Page, Instant)>,
+    /// What the page that closed reads, taken out as it closed.
+    kept: Option<(Page, Kept)>,
     /// All Devices' height as last laid out, which its rise travels.
     pub(super) rise_height: std::rc::Rc<std::cell::Cell<Option<Pixels>>>,
     backdrop: Toggle,
@@ -70,9 +77,14 @@ impl Appear {
         #[cfg(not(test))]
         let still = false;
         self.leaving = match (shown, last) {
-            (None, Some(Page::Devices)) if !still => Some((Page::Devices, now)),
+            (None, Some(page)) if !still && leaves(page) => Some((page, now)),
             _ => None,
         };
+        // Only the page that just closed keeps what it read; anything else
+        // drops it, cancelling nothing more since closing did that.
+        if self.leaving.map(|(page, _)| page) != self.kept.as_ref().map(|(page, _)| *page) {
+            self.kept = None;
+        }
         self.since = shown.is_some().then_some(now).filter(|_| !still);
         self.backdrop.set(shown == Some(Shown::Dialog), now, still);
         self.shown = shown;
@@ -85,11 +97,16 @@ impl Appear {
             .unwrap_or(1.)
     }
 
-    /// How far the open popup still has to go: a popover toward its place
-    /// beside its anchor, a dialog up into the middle of the window.
-    pub(super) fn offset(&self, dims: bool, now: Instant) -> Pixels {
+    /// How far a popup `shown` of the way in still has to go: a popover
+    /// toward its place beside its anchor, a dialog up into the middle.
+    pub(super) fn offset(dims: bool, shown: f32) -> Pixels {
         let distance = if dims { DIALOG_RISE } else { POPOVER_SLIDE };
-        px((1. - self.panel(now)) * distance)
+        px((1. - shown) * distance)
+    }
+
+    /// Keeps what the closing `page` reads, for it to be drawn as it goes.
+    pub(super) fn keep(&mut self, page: Page, kept: Kept) {
+        self.kept = Some((page, kept));
     }
 
     /// How much of the dimming behind a dialog shows at `now`, from 0 to 1.
@@ -131,19 +148,27 @@ impl HerdrWindow {
 }
 
 impl HerdrWindow {
+    /// How much of a closed dialog's dimming is still lifting at `now`, from
+    /// 0 to 1; 0 while a dialog that dims the window itself is open.
+    pub(crate) fn menu_fading(&self, now: Instant) -> f32 {
+        if self.menu_dims() {
+            return 0.;
+        }
+        self.menu.appear.backdrop(now)
+    }
+
     /// What a popup that just closed leaves while it goes: a dialog's
     /// dimming lifting, or All Devices sinking into the footer. Neither takes
     /// input: the window beneath is already the one being used.
     pub(crate) fn render_menu_leaving(
-        &self,
+        &mut self,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        if self.menu.page.is_some() {
-            return Vec::new();
-        }
         let now = motion::now();
-        let shown = self.menu.appear.backdrop(now);
+        // Also behind a popover a dialog went back to, such as the session
+        // picker under its editor: it draws no dimming of its own.
+        let shown = self.menu_fading(now);
         let fade = (shown > 0.).then(|| {
             div()
                 .id("menu-fade")
@@ -153,9 +178,28 @@ impl HerdrWindow {
                 .bg(backdrop(self.theme.background, shown))
                 .into_any_element()
         });
-        let page = self.menu.appear.leaving(now).map(|(page, left)| {
-            self.render_menu_layer(page, Some(left), window, cx)
-                .into_any_element()
+        let leaving = self
+            .menu
+            .appear
+            .leaving(now)
+            .filter(|_| self.menu.page.is_none());
+        let page = leaving.map(|(page, left)| {
+            // Drawn as it was: its own fields and page back in the menu for
+            // the length of this one draw, which only reads them.
+            let mut kept = self.menu.appear.kept.take();
+            if let Some((_, kept)) = &mut kept {
+                kept.swap(&mut self.menu);
+            }
+            self.menu.page = Some(page);
+            let element = self
+                .render_menu_layer(page, Some(left), window, cx)
+                .into_any_element();
+            self.menu.page = None;
+            if let Some((_, kept)) = &mut kept {
+                kept.swap(&mut self.menu);
+            }
+            self.menu.appear.kept = kept;
+            element
         });
         fade.into_iter().chain(page).collect()
     }

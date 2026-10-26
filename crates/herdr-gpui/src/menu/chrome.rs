@@ -59,6 +59,11 @@ impl HerdrWindow {
             .application
             .as_ref()
             .and_then(|menu| menu.return_focus.clone());
+        // A page that animates out keeps what it reads from the reset.
+        if let Some(page) = self.menu.page.filter(|page| super::appear::leaves(*page)) {
+            let kept = super::appear::Kept::take(&mut self.menu);
+            self.menu.appear.keep(page, kept);
+        }
         self.menu.reset();
         self.apply_shared_theme(cx);
         window.focus(return_focus.as_ref().unwrap_or(&self.focus), cx);
@@ -314,7 +319,8 @@ impl HerdrWindow {
         let pointer_anchored = page.pointer_anchored();
         let dims = self.menu_dims();
         let now = crate::motion::now();
-        let lift = self.menu.appear.offset(dims, now);
+        let shown = leaving.unwrap_or_else(|| self.menu.appear.panel(now));
+        let lift = super::appear::Appear::offset(dims, shown);
         let rises = page == Page::Devices;
         let mut panel = div()
             .id("menu-panel")
@@ -355,7 +361,7 @@ impl HerdrWindow {
             })
             .when(rises, |panel| {
                 let (room, above) = self.footer_room(viewport);
-                let below = 1. - leaving.unwrap_or_else(|| self.menu.appear.panel(now));
+                let below = 1. - shown;
                 // Its own height, as the last frame laid it out; the box it
                 // rises in takes its height from it, so a share of that box
                 // would be a share of nothing. Until a frame has measured it,
@@ -597,7 +603,7 @@ impl HerdrWindow {
             .text_font(font)
             .text_size(px(font.size))
             .line_height(px(font.line_height()))
-            .when(!rises, |panel| panel.opacity(self.menu.appear.panel(now)))
+            .when(!rises, |panel| panel.opacity(shown))
             // A popover drops from the pointer that opened it; a dialog rises.
             // Footer and usage panels have slid already, by their own edge.
             .when(
@@ -818,6 +824,18 @@ impl HerdrWindow {
                 )
             })
         };
+        // On its way out it takes no clicks: what they would act on has
+        // already closed.
+        let panel = panel.when(leaving.is_some(), |panel| {
+            panel.child(
+                div()
+                    .id("menu-leaving-shield")
+                    .debug_selector(|| "menu-leaving-shield".into())
+                    .absolute()
+                    .inset_0()
+                    .occlude(),
+            )
+        });
         let placed = if pointer_anchored {
             let position = if page == Page::Git {
                 point(self.menu.anchor.x, px(crate::titlebar::HEIGHT + 6.))
@@ -842,17 +860,17 @@ impl HerdrWindow {
                 px(0.),
             )
             .child(panel)
-            // On its way out it takes no clicks: what they would act on
-            // has already closed.
-            .when(leaving.is_some(), |rise| {
-                rise.child(div().id("menu-rise-shield").absolute().inset_0().occlude())
-            })
             .into_any_element()
         } else {
             panel.into_any_element()
         };
         if leaving.is_some() {
-            return div().id("menu-leaving").absolute().inset_0().child(placed);
+            return div()
+                .id("menu-leaving")
+                .absolute()
+                .inset_0()
+                .when(dims, |layer| layer.flex().items_center().justify_center())
+                .child(placed);
         }
         div()
             .id("menu-overlay")

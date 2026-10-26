@@ -34,13 +34,21 @@ pub(crate) struct PairingDialog {
     _task: Option<Task<()>>,
 }
 
-impl Drop for PairingDialog {
-    fn drop(&mut self) {
-        if let (Some(client), Some(id)) = (&self.client, self.pairing.id())
+impl PairingDialog {
+    /// Cancels a pairing still open at the daemon, as closing the dialog
+    /// does. The dialog may still be drawn as it goes; it asks nothing more.
+    pub(crate) fn close(&mut self) {
+        if let (Some(client), Some(id)) = (self.client.take(), self.pairing.id())
             && self.pairing.cancels_on_close()
         {
             client.notify(Request::CancelPairing { id: id.clone() });
         }
+    }
+}
+
+impl Drop for PairingDialog {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 

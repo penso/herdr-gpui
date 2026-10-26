@@ -14,13 +14,16 @@ fn a_popover_slides_in_toward_its_anchor() {
     let mut appear = live();
     appear.observe(Some(Shown::Popover(point(px(10.), px(20.)))), None, start);
     assert_eq!(appear.panel(start), 0.);
-    assert_eq!(appear.offset(false, start), px(POPOVER_SLIDE));
+    assert_eq!(
+        Appear::offset(false, appear.panel(start)),
+        px(POPOVER_SLIDE)
+    );
     assert!(appear.moving(start));
     // A popover never dims the window.
     assert_eq!(appear.backdrop(start), 0.);
     let done = start + ENTER;
     assert_eq!(appear.panel(done), 1.);
-    assert_eq!(appear.offset(false, done), px(0.));
+    assert_eq!(Appear::offset(false, appear.panel(done)), px(0.));
     assert!(!appear.moving(done));
 }
 
@@ -41,7 +44,7 @@ fn a_dialog_rises_over_dimming_that_lifts_after_it() {
     let start = Instant::now();
     let mut appear = live();
     appear.observe(Some(Shown::Dialog), None, start);
-    assert_eq!(appear.offset(true, start), px(DIALOG_RISE));
+    assert_eq!(Appear::offset(true, appear.panel(start)), px(DIALOG_RISE));
     assert_eq!(appear.backdrop(start), 0.);
     let open = start + ENTER;
     // Another page of the same dialog, such as an Add Device source, stays put.
@@ -152,4 +155,66 @@ fn all_devices_draws_lower_while_it_rises(cx: &mut gpui::TestAppContext) {
         rising.origin.y > settled.origin.y + px(1.),
         "{rising:?} rises to {settled:?}"
     );
+}
+
+#[gpui::test]
+fn the_git_popover_is_drawn_as_it_goes_and_leaves_the_menu_reset(cx: &mut gpui::TestAppContext) {
+    use crate::sidebar::layout_tests::fixture_window;
+    let (view, cx) = cx.add_window_view(fixture_window);
+    let draw = |cx: &mut gpui::VisualTestContext| {
+        cx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx);
+        });
+    };
+    view.update(cx, |view, _| {
+        view.menu.appear.live = true;
+        view.menu.anchor = point(px(200.), px(40.));
+        view.menu.page = Some(Page::Git);
+        view.menu.error = Some("push failed".into());
+    });
+    draw(cx);
+    assert!(cx.debug_bounds("menu-leaving-shield").is_none());
+    cx.update(|window, cx| view.update(cx, |view, cx| view.dismiss_menu(window, cx)));
+    view.update(cx, |view, _| {
+        assert_eq!(view.menu.page, None);
+        assert_eq!(view.menu.error, None);
+        // Held at the start of its way out, however long the frames take.
+        let later = motion::now() + std::time::Duration::from_secs(3600);
+        view.menu.appear.observe(None, None, later);
+    });
+    draw(cx);
+    // The copy going away was drawn, shielded, and the menu's own state is
+    // as the reset left it once it was.
+    assert!(cx.debug_bounds("menu-leaving-shield").is_some());
+    view.update(cx, |view, _| {
+        assert_eq!(view.menu.page, None);
+        assert_eq!(view.menu.error, None);
+        assert!(view.menu.appear.leaving(motion::now()).is_some());
+    });
+}
+
+#[gpui::test]
+fn the_dimming_lifts_behind_the_picker_a_dialog_returns_to(cx: &mut gpui::TestAppContext) {
+    use crate::sidebar::layout_tests::fixture_window;
+    let (view, cx) = cx.add_window_view(fixture_window);
+    view.update(cx, |view, _| {
+        let start = Instant::now();
+        view.menu.appear.live = true;
+        view.menu
+            .appear
+            .observe(Some(Shown::Dialog), Some(Page::Sessions), start);
+        let open = start + ENTER;
+        // Escape in the session editor goes back to the picker, a popover.
+        view.menu.page = Some(Page::Sessions);
+        view.menu.appear.observe(
+            Some(Shown::Popover(point(px(10.), px(600.)))),
+            Some(Page::Sessions),
+            open,
+        );
+        assert!(!view.menu_dims());
+        assert_eq!(view.menu.appear.backdrop(open), 1.);
+        assert!(view.menu.appear.moving(open));
+        assert_eq!(view.menu.appear.backdrop(open + LEAVE), 0.);
+    });
 }
