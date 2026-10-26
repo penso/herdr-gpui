@@ -359,7 +359,7 @@ impl SettingsWindow {
                                 value,
                                 range: field.range(),
                                 unit: "px",
-                                slider: true,
+                                look: ui::Look::Slider,
                                 enabled: !self.quitting && self.closing.is_none(),
                             },
                             self.number_edit_for(field),
