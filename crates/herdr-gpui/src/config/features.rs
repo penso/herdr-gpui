@@ -68,6 +68,8 @@ features! {
     // keep-sorted start
     acp_chats: AcpChats, "ACP chats",
         "Show herdr-acp chats as native chat views and offer new chats with the agents installed on the host. Off, chat panes keep their terminal and nothing looks for herdr-acp or agents.";
+    qa_menu: QaMenu, "QA menu",
+        "Add a QA menu for checking the app by hand: sample toasts and dialogs, update progress, sounds, a test notification, the badge, and slowed animations.";
     sidebar_hover_menu: SidebarHoverMenu, "Open space menus on hover",
         "Open a space's menu when the pointer rests on its sidebar row, without a right click. Moving the pointer anywhere but into that menu closes it again.";
     // keep-sorted end

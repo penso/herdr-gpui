@@ -48,8 +48,8 @@ class AppNameTests(unittest.TestCase):
                 self.assertIn('app="$PWD/target/release/Herdr.app"', body.group(1))
                 self.assertIn('"$app" --args {{args}}', body.group(1))
                 self.assertRegex(body.group(1), r"\n\s*open -n -W ")
-                self.assertIn("{{just_executable()}} bundle release qa-menu", body.group(1))
-                self.assertIn("--features qa-menu -- {{args}}", body.group(1))
+                self.assertIn("{{just_executable()}} bundle release\n", body.group(1))
+                self.assertIn("--release -p herdr-gpui -- {{args}}", body.group(1))
             else:
                 launch = f"exec target/{profile}/Herdr.app/Contents/MacOS/Herdr {{{{args}}}}"
                 self.assertIn(launch, body.group(1))
