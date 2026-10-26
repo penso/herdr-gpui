@@ -141,6 +141,11 @@ fn all_devices_draws_lower_while_it_rises(cx: &mut gpui::TestAppContext) {
     view.update(cx, |view, _| view.menu.appear.live = true);
     open(cx);
     draw(cx);
+    // Held at its start, however long the frames take: a start still ahead
+    // reads as not begun.
+    view.update(cx, |view, _| {
+        view.menu.appear.since = Some(motion::now() + std::time::Duration::from_secs(3600));
+    });
     draw(cx);
     let rising = cx.debug_bounds("menu-panel").expect("All Devices draws");
     assert!(
