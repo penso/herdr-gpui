@@ -20,6 +20,9 @@ use std::{
 
 const HELPER: &str = "__read-clipboard";
 const TIMEOUT: Duration = Duration::from_secs(3);
+const READ_CHUNK: usize = 64 * 1024;
+// How far a read may run past the deadline.
+const READ_WAIT: Duration = Duration::from_millis(50);
 // One tag followed by an image at most. Text and file paths have a smaller cap.
 const OUTPUT_LIMIT: usize = IMAGE_LIMIT + 1;
 const CHANGED: u8 = 10;
@@ -115,10 +118,16 @@ fn acquire(
     if Instant::now() >= deadline {
         return Err(clipboard::Error::Timeout.into());
     }
-    // As in the Linux reader, a nonblocking socket needs no reader thread
-    // that could outlive a hung clipboard owner. Do not retain or log stderr.
+    // As in the Linux reader, a short read timeout needs no reader thread that
+    // could outlive a hung clipboard owner. Do not retain or log stderr.
     let (mut reader, writer) = UnixStream::pair().map_err(Error::Process)?;
-    reader.set_nonblocking(true).map_err(Error::Process)?;
+    // Block until output arrives rather than sleeping between reads: a socket
+    // pair holds only a few kilobytes, so polling paced a large TIFF copy past
+    // the deadline one small read at a time. Set it before the child can exit:
+    // macOS refuses socket options once the peer has closed.
+    reader
+        .set_read_timeout(Some(READ_WAIT))
+        .map_err(Error::Process)?;
     let spawned = command
         .stdin(Stdio::null())
         .stdout(Stdio::from(OwnedFd::from(writer)))
@@ -127,24 +136,31 @@ fn acquire(
     command.stdout(Stdio::null());
     let mut child = Reader(spawned.map_err(Error::Process)?);
     let mut bytes = Vec::new();
-    let mut buffer = [0; 8192];
+    let mut buffer = vec![0; READ_CHUNK];
     let mut eof = false;
     loop {
         if Instant::now() >= deadline {
             return Err(clipboard::Error::Timeout.into());
         }
-        match reader.read(&mut buffer) {
-            Ok(0) => eof = true,
-            Ok(count) => {
-                if count > limit.saturating_sub(bytes.len()) {
-                    return Err(clipboard::Error::Size { limit }.into());
+        if !eof {
+            match reader.read(&mut buffer) {
+                Ok(0) => eof = true,
+                Ok(count) => {
+                    if count > limit.saturating_sub(bytes.len()) {
+                        return Err(clipboard::Error::Size { limit }.into());
+                    }
+                    bytes.extend_from_slice(&buffer[..count]);
                 }
-                bytes.extend_from_slice(&buffer[..count]);
-                continue;
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock
+                            | io::ErrorKind::TimedOut
+                            | io::ErrorKind::Interrupted
+                    ) => {}
+                Err(error) => return Err(Error::Process(error).into()),
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(Error::Process(error).into()),
+            continue;
         }
         if let Some(status) = child.0.try_wait().map_err(Error::Process)? {
             if !status.success() {
@@ -161,10 +177,9 @@ fn acquire(
                     _ => Error::Exited(status).into(),
                 });
             }
-            if eof {
-                return wire::read(bytes);
-            }
+            return wire::read(bytes);
         }
+        // Output is complete; the reader is exiting.
         thread::sleep(Duration::from_millis(5));
     }
 }

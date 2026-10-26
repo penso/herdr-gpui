@@ -4,7 +4,8 @@
   unpack ZIP DIRECTORY
       Extract the tested, unsigned release zip that package-windows.py wrote
       into DIRECTORY, which must not exist, and print the tree root holding
-      herdr-gpui.exe and herdr-gpui-launcher.exe for the signing action.
+      herdr-gpui.exe, herdr-gpui-launcher.exe, and herdr-acp.exe for the
+      signing action.
   repack ZIP TREE_DIRECTORY OUTPUT_DIR
       Write OUTPUT_DIR/ZIP's name from the signed tree. Refuses unless every
       file is the zip's own and each executable differs from the tested one
@@ -12,8 +13,8 @@
       what was built and tested.
   verify [--subject SUBJECT] ZIP INSTALLER
       On Windows: require a valid, RFC 3161 timestamped signature from one
-      signer, optionally exactly SUBJECT, on the zip's two executables and on
-      the installer.
+      signer, optionally exactly SUBJECT, on the zip's executables and on the
+      installer.
 
 Signing comes after package-windows.py writes the zip from the tested
 executables, so the signed files are exactly what CI built and tested. Pure
@@ -30,7 +31,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-EXECUTABLES = ("herdr-gpui.exe", "herdr-gpui-launcher.exe")
+EXECUTABLES = ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe")
 # IMAGE_OPTIONAL_HEADER offsets: CheckSum, NumberOfRvaAndSizes, and the
 # certificate table, data directory 4, whose address is a file offset.
 CHECKSUM_OFFSET = 64

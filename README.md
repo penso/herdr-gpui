@@ -264,11 +264,11 @@ cd herdr-gpui
 just run
 ```
 
-`just run` uses the optimized release build with the QA menu enabled;
+`just run` uses the optimized release build;
 `just run-debug` is notably slower with a dense terminal on screen.
 On macOS both build a local bundle identified as `so.pen.herdr-gpui.dev`, so
 it never shares a Dock tile or icon cache with an installed release.
-Without `just`: `cargo run --locked --release -p herdr-gpui --features qa-menu`.
+Without `just`: `cargo run --locked --release -p herdr-gpui`.
 
 To compile and install the optimized executable on macOS, Linux, or Windows:
 
@@ -281,7 +281,7 @@ This installs `herdr-gpui` (`herdr-gpui.exe` on Windows, with
 into Cargo's bin directory, normally `~/.cargo/bin` or
 `%USERPROFILE%\.cargo\bin`, and replaces an earlier installation. Keep that directory on `PATH`; set `CARGO_INSTALL_ROOT`
 to use a different installation root (the executable goes in its `bin` directory).
-The build uses the pinned lockfile and default features, without the QA menu.
+The build uses the pinned lockfile and default features.
 On macOS this installs the standalone executable; use Homebrew above for the
 full app bundle. Linux needs the build dependencies below; Windows needs the
 Visual Studio C++ build tools and Windows SDK for the MSVC Rust toolchain.
@@ -415,10 +415,9 @@ forwarded ports, and its settings.
 
 ## Audio Test
 
-The QA menu is excluded from default Cargo builds, including published releases.
-`just run` enables it automatically; with Cargo, use
-`cargo run --locked --release -p herdr-gpui --features qa-menu`.
-To manually test native audio in that build, choose **QA > Play Sound**. It plays the built-in
+The QA menu is off by default in every build, including published releases;
+turn on **Settings > General > QA menu** (`qa_menu = true` under `[features]`)
+to show it. To manually test native audio, choose **QA > Play Sound**. It plays the built-in
 Done sound on the background Rodio worker, even without a daemon or active pane
 and even with notifications muted. `HERDR_DISABLE_SOUND` and `NEXTEST` still
 suppress playback. See [notification sounds](crates/herdr-gpui/README.md#notification-sounds)

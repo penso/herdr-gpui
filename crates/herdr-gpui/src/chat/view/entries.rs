@@ -47,7 +47,7 @@ impl HerdrWindow {
         };
         let body = chat.prepared.body(entry.id);
         let content = match &entry.kind {
-            EntryKind::User { text } => div().child(text.clone()),
+            EntryKind::User { text, .. } => div().child(text.clone()),
             EntryKind::Agent { text } => {
                 let message = match body.as_deref() {
                     Some(Body::Message(parts)) => self.render_chat_message(

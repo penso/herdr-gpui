@@ -3,7 +3,7 @@ use crate::{browser::Store, config::TabLayoutMode};
 
 /// A window whose strip lists a working tab, a plain one, a zoomed one, and
 /// a titled page, in `mode`.
-fn strip(
+pub(super) fn strip(
     cx: &mut TestAppContext,
     mode: TabLayoutMode,
 ) -> (Entity<HerdrWindow>, &mut VisualTestContext) {

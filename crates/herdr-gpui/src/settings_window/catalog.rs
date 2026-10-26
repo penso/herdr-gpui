@@ -292,6 +292,7 @@ pub(super) const CATALOG: &[Entry] = &[
     // One per `[features]` flag; a test checks none is missing.
     // keep-sorted start
     feature(Feature::AcpChats),
+    feature(Feature::QaMenu),
     feature(Feature::SidebarHoverMenu),
     // keep-sorted end
     entry(

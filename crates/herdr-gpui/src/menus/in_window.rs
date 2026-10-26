@@ -143,7 +143,7 @@ impl HerdrWindow {
             return;
         }
         let return_focus = window.focused(cx);
-        let mut menus: Vec<_> = super::menus(self.config.layout, self.config.tab_layout)
+        let mut menus: Vec<_> = super::menus(&self.config)
             .into_iter()
             .map(Menu::owned)
             .collect();
@@ -166,6 +166,16 @@ impl HerdrWindow {
         menu.select_first();
         self.menu.application = Some(menu);
         self.menu.page = Some(Page::Application);
+        cx.notify();
+    }
+
+    /// Closes the open popup, which keeps its own copy of the menus, once a
+    /// config change rebuilds the bar so it cannot offer items that left.
+    pub(crate) fn close_stale_application_menu(&mut self, cx: &mut Context<Self>) {
+        if self.menu.application.take().is_none() {
+            return;
+        }
+        self.menu.page = None;
         cx.notify();
     }
 

@@ -93,7 +93,7 @@ fn prefixed(
 pub(crate) fn entry(entry: &Entry, width: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     match &entry.kind {
-        EntryKind::User { text } => {
+        EntryKind::User { text, .. } => {
             let style = Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD);

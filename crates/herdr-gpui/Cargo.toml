@@ -108,7 +108,6 @@ opensandbox = ["cloud", "herdr-client/opensandbox", "herdr-remote/opensandbox"]
 railway = ["cloud", "herdr-client/railway", "herdr-remote/railway"]
 # Fly Sprites as devices, with an API token and this app as their exec relay.
 sprites = ["cloud", "herdr-client/sprites", "herdr-remote/sprites"]
-qa-menu = []
 # Development only: `--mockup` shows UI variants from HERDR_MOCKUP_FILE side by
 # side in a native window. Never enabled in release builds. GPUI's test support
 # provides `Window::render_to_image`, so `--capture` needs no screen-recording

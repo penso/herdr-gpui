@@ -389,7 +389,7 @@ impl HerdrWindow {
             }
             "up" | "down" if text.is_empty() || pane.history.recalling() => {
                 let recalled = if key == "up" {
-                    pane.history.older()
+                    pane.history.older(pane.session.transcript())
                 } else {
                     pane.history.newer()
                 };
@@ -681,7 +681,7 @@ impl HerdrWindow {
             return;
         }
         if !text.trim().is_empty() {
-            pane.history.push(&text);
+            pane.history.push(&text, pane.session.transcript());
         }
         let attachments = pane
             .attachments

@@ -212,7 +212,7 @@ mod tests {
     /// Classic macOS puts About first in the application menu, above a separator.
     #[test]
     fn about_leads_the_application_menu() {
-        let menus = crate::menus(Default::default(), Default::default());
+        let menus = crate::menus(&crate::config::Config::default());
         let application = menus.first().unwrap();
         assert_eq!(application.name.as_ref(), "Herdr");
         let MenuItem::Action { name, action, .. } = application.items.first().unwrap() else {
