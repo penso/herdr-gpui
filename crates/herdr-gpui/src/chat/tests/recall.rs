@@ -12,7 +12,10 @@ use herdr_client::ConnectTarget;
 fn user(id: u64, text: &str) -> Entry {
     Entry {
         id: EntryId(id),
-        kind: EntryKind::User { text: text.into() },
+        kind: EntryKind::User {
+            text: text.into(),
+            files: 0,
+        },
     }
 }
 

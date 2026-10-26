@@ -20,6 +20,7 @@ pub(super) fn conversation(plan: bool) -> ServerMessage {
             id: EntryId(1),
             kind: EntryKind::User {
                 text: "Fix it".into(),
+                files: 0,
             },
         },
         agent(2, "Looking."),

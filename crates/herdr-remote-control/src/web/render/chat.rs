@@ -163,10 +163,10 @@ fn turn(row: &ChatRow, view: &View) -> Markup {
 /// calls are steps; in the history everything is a plain line.
 fn entry_view(entry: &Entry, focus: bool) -> Markup {
     match &entry.kind {
-        EntryKind::User { text } if focus => html! {
+        EntryKind::User { text, .. } if focus => html! {
             p class="text-[17px] font-semibold leading-snug whitespace-pre-wrap" { "“" (text) "”" }
         },
-        EntryKind::User { text } => html! {
+        EntryKind::User { text, .. } => html! {
             div class="self-end max-w-[85%] bg-accent text-white px-3 py-2 rounded-2xl rounded-br-md whitespace-pre-wrap" { (text) }
         },
         EntryKind::Agent { text } => html! {

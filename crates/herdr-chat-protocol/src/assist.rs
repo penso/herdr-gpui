@@ -40,14 +40,25 @@ pub struct History {
     at: Option<usize>,
     /// The prompt this view sent last, until the transcript shows it, so it
     /// recalls before the program echoes it, or when it refused it.
-    sent: Option<String>,
+    sent: Option<Sent>,
+}
+
+struct Sent {
+    prompt: String,
+    /// How many prompts the transcript held when it was sent; only one
+    /// after them can be its echo, not an earlier prompt with its text.
+    after: usize,
 }
 
 impl History {
-    /// Notes a prompt this view sent and ends recall.
-    pub fn push(&mut self, prompt: &str) {
+    /// Notes a prompt this view sent to the session `transcript` mirrors,
+    /// and ends recall.
+    pub fn push(&mut self, prompt: &str, transcript: &Transcript) {
         self.at = None;
-        self.sent = Some(prompt.to_owned());
+        self.sent = Some(Sent {
+            prompt: prompt.to_owned(),
+            after: prompts(transcript).count(),
+        });
     }
 
     pub fn recalling(&self) -> bool {
@@ -84,46 +95,52 @@ impl History {
     }
 
     fn collect(&mut self, transcript: &Transcript) {
-        let shown = transcript
-            .entries
-            .iter()
-            .filter_map(|entry| match &entry.kind {
-                EntryKind::User { text } => Some(prompt_text(text)),
-                _ => None,
-            });
-        let queued = transcript.queued.iter().map(|queued| queued.text.as_str());
-        let mut prompts: Vec<String> = Vec::new();
-        for prompt in shown.chain(queued) {
-            if prompt.trim().is_empty() || prompts.last().is_some_and(|last| last == prompt) {
+        let all: Vec<&str> = prompts(transcript).collect();
+        if let Some(sent) = &self.sent
+            && all
+                .get(sent.after..)
+                .is_some_and(|newer| newer.contains(&sent.prompt.as_str()))
+        {
+            self.sent = None;
+        }
+        let mut recalled: Vec<String> = Vec::new();
+        let sent = self.sent.as_ref().map(|sent| sent.prompt.as_str());
+        for prompt in all.into_iter().chain(sent) {
+            if prompt.trim().is_empty() || recalled.last().is_some_and(|last| last == prompt) {
                 continue;
             }
-            prompts.push(prompt.to_owned());
+            recalled.push(prompt.to_owned());
         }
-        if let Some(sent) = &self.sent {
-            if prompts.contains(sent) {
-                self.sent = None;
-            } else {
-                prompts.push(sent.clone());
-            }
-        }
-        let skip = prompts.len().saturating_sub(HISTORY);
-        prompts.drain(..skip);
-        self.prompts = prompts;
+        let skip = recalled.len().saturating_sub(HISTORY);
+        recalled.drain(..skip);
+        self.prompts = recalled;
     }
 }
 
-/// A prompt as the user typed it: the transcript's text without the lines
-/// naming the files it carried.
-fn prompt_text(shown: &str) -> &str {
+/// Every prompt in the session, as the user typed it, oldest first: those
+/// the transcript shows, then those still queued. A queued prompt moves to
+/// the transcript when sent, so each keeps its place in the order.
+fn prompts(transcript: &Transcript) -> impl Iterator<Item = &str> {
+    let shown = transcript
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.kind {
+            EntryKind::User { text, files } => Some(typed(text, *files)),
+            _ => None,
+        });
+    shown.chain(transcript.queued.iter().map(|queued| queued.text.as_str()))
+}
+
+/// A prompt's text without the `files` lines the transcript added after it,
+/// one per file it carried.
+fn typed(shown: &str, files: usize) -> &str {
     let mut text = shown;
-    while let Some((before, line)) = text.rsplit_once('\n') {
-        if !line.starts_with(ATTACHED) {
-            break;
+    for _ in 0..files {
+        match text.rsplit_once('\n') {
+            Some((before, line)) if line.starts_with(ATTACHED) => text = before,
+            None if text.starts_with(ATTACHED) => return "",
+            _ => break,
         }
-        text = before;
-    }
-    if text.starts_with(ATTACHED) && !text.contains('\n') {
-        return "";
     }
     text
 }

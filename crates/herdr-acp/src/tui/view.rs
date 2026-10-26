@@ -344,7 +344,7 @@ impl View {
                 self.scroll = 0;
                 let text = self.composer.take();
                 if !text.trim().is_empty() {
-                    self.history.push(&text);
+                    self.history.push(&text, &self.transcript);
                 }
                 return Some(Out::Command(Command::Prompt {
                     text,

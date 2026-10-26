@@ -54,6 +54,7 @@ fn an_unanswered_prompt_reads_delivered(cx: &mut TestAppContext) {
             id: EntryId(2),
             kind: EntryKind::User {
                 text: "Fix it".into(),
+                files: 0,
             },
         },
     ];
@@ -94,6 +95,7 @@ fn typing_shows_while_the_agent_works(cx: &mut TestAppContext) {
         id: EntryId(1),
         kind: EntryKind::User {
             text: "Fix it".into(),
+            files: 0,
         },
     }];
     let snapshot = ServerMessage::Snapshot {
@@ -131,6 +133,7 @@ fn a_streaming_reply_takes_the_whole_width_until_it_ends(cx: &mut TestAppContext
             id: EntryId(1),
             kind: EntryKind::User {
                 text: "Fix it".into(),
+                files: 0,
             },
         },
         agent(2, "On it."),

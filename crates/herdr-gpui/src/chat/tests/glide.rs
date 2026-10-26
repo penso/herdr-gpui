@@ -200,6 +200,7 @@ fn a_sent_prompt_shows_whole_with_its_delivered_note(cx: &mut TestAppContext) {
                     id: EntryId(41),
                     kind: EntryKind::User {
                         text: "another".into(),
+                        files: 0,
                     },
                 },
             },

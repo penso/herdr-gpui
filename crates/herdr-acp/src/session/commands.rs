@@ -96,7 +96,7 @@ impl<R: FnMut(Activity)> Session<R> {
             shown.push_str(herdr_chat_protocol::ATTACHED);
             shown.push_str(attachment.name());
         }
-        let prompt = self.projector.prompt(&shown);
+        let prompt = self.projector.prompt(&shown, attachments.len());
         self.emit(prompt);
         let mut blocks = Vec::with_capacity(prepared.len() + 1);
         if !text.trim().is_empty() {

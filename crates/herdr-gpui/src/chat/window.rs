@@ -681,7 +681,7 @@ impl HerdrWindow {
             return;
         }
         if !text.trim().is_empty() {
-            pane.history.push(&text);
+            pane.history.push(&text, pane.session.transcript());
         }
         let attachments = pane
             .attachments
