@@ -248,6 +248,7 @@ mod loading;
 mod origin;
 mod panel_editing;
 mod pending_send;
+mod remembered;
 mod resend;
 mod resize;
 mod scale;

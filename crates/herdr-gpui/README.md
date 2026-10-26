@@ -2975,7 +2975,9 @@ the titlebar's Git menu where its button would.
 - Each file's header folds it (the chevron, or `x`) and marks it **Viewed**,
   which folds it too. Deleted files, lockfiles and files `.gitattributes`
   marks `linguist-generated` start folded. A viewed file that changes again
-  is no longer viewed. Renames show as `old → new`.
+  is no longer viewed. Marks are kept per checkout and branch across
+  restarts, in `review-viewed.json` beside the app's other state, up to 64
+  checkouts and 4,096 files. Renames show as `old → new`.
 - A hunk header shows how many unchanged lines it leaves out above it;
   click that to show them, up to 200 at a time, read from the working tree.
 - Removed lines and the added lines that replaced them have the words that

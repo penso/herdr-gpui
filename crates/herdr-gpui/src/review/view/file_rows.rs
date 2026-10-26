@@ -250,6 +250,10 @@ impl HerdrWindow {
         }
         review.set_folded(file, !viewed);
         review.refresh_shown();
+        if let Some((place, branch)) = crate::review::viewed::key(&review.checkout) {
+            let (place, branch) = (place.to_owned(), branch.to_owned());
+            crate::review::Viewed::remember(cx, &place, &branch, &review.viewed);
+        }
         cx.notify();
     }
 }
