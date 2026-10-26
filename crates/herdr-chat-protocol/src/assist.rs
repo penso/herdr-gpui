@@ -3,7 +3,8 @@
 //! session's settings (model, thinking level, mode).
 
 use crate::{
-    Command, ConfigOption, OptionCategory, OptionKind, OptionValue, SlashCommand, Transcript,
+    ATTACHED, Command, ConfigOption, EntryKind, OptionCategory, OptionKind, OptionValue,
+    SlashCommand, Transcript,
 };
 
 /// Commands offered for completion at most.
@@ -28,24 +29,25 @@ pub fn completions<'a>(transcript: &'a Transcript, text: &str) -> Vec<&'a SlashC
         .collect()
 }
 
-/// Prompts sent from this view, newest last, and where recall stands.
+/// Recalling earlier prompts: the session's own, sent from any client or
+/// replayed from its history, then those still queued, newest last.
 #[derive(Default)]
 pub struct History {
+    /// The prompts being stepped through, taken when recall starts so the
+    /// transcript growing meanwhile does not shift them.
     prompts: Vec<String>,
     /// The index being shown, while the user steps through.
     at: Option<usize>,
+    /// The prompt this view sent last, until the transcript shows it, so it
+    /// recalls before the program echoes it, or when it refused it.
+    sent: Option<String>,
 }
 
 impl History {
+    /// Notes a prompt this view sent and ends recall.
     pub fn push(&mut self, prompt: &str) {
         self.at = None;
-        if self.prompts.last().map(String::as_str) == Some(prompt) {
-            return;
-        }
-        if self.prompts.len() == HISTORY {
-            self.prompts.remove(0);
-        }
-        self.prompts.push(prompt.to_owned());
+        self.sent = Some(prompt.to_owned());
     }
 
     pub fn recalling(&self) -> bool {
@@ -57,11 +59,14 @@ impl History {
     }
 
     /// The prompt before the one shown, or the newest.
-    pub fn older(&mut self) -> Option<&str> {
+    pub fn older(&mut self, transcript: &Transcript) -> Option<&str> {
         let at = match self.at {
             Some(0) => 0,
             Some(at) => at - 1,
-            None => self.prompts.len().checked_sub(1)?,
+            None => {
+                self.collect(transcript);
+                self.prompts.len().checked_sub(1)?
+            }
         };
         self.at = Some(at);
         self.prompts.get(at).map(String::as_str)
@@ -77,6 +82,50 @@ impl History {
         self.at = Some(at);
         self.prompts.get(at).map(String::as_str)
     }
+
+    fn collect(&mut self, transcript: &Transcript) {
+        let shown = transcript
+            .entries
+            .iter()
+            .filter_map(|entry| match &entry.kind {
+                EntryKind::User { text } => Some(prompt_text(text)),
+                _ => None,
+            });
+        let queued = transcript.queued.iter().map(|queued| queued.text.as_str());
+        let mut prompts: Vec<String> = Vec::new();
+        for prompt in shown.chain(queued) {
+            if prompt.trim().is_empty() || prompts.last().is_some_and(|last| last == prompt) {
+                continue;
+            }
+            prompts.push(prompt.to_owned());
+        }
+        if let Some(sent) = &self.sent {
+            if prompts.contains(sent) {
+                self.sent = None;
+            } else {
+                prompts.push(sent.clone());
+            }
+        }
+        let skip = prompts.len().saturating_sub(HISTORY);
+        prompts.drain(..skip);
+        self.prompts = prompts;
+    }
+}
+
+/// A prompt as the user typed it: the transcript's text without the lines
+/// naming the files it carried.
+fn prompt_text(shown: &str) -> &str {
+    let mut text = shown;
+    while let Some((before, line)) = text.rsplit_once('\n') {
+        if !line.starts_with(ATTACHED) {
+            break;
+        }
+        text = before;
+    }
+    if text.starts_with(ATTACHED) && !text.contains('\n') {
+        return "";
+    }
+    text
 }
 
 /// The command that moves `option` one choice along (`step` of 1 or -1),

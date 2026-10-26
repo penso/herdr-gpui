@@ -312,7 +312,7 @@ impl View {
         let recall = (empty || self.history.recalling()) && !asking && !shift;
         match key.code {
             KeyCode::Up if recall => {
-                if let Some(prompt) = self.history.older().map(str::to_owned) {
+                if let Some(prompt) = self.history.older(&self.transcript).map(str::to_owned) {
                     self.composer.set(prompt);
                 }
                 return None;

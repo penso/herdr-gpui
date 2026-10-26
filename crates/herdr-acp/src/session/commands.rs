@@ -93,7 +93,7 @@ impl<R: FnMut(Activity)> Session<R> {
             if !shown.is_empty() {
                 shown.push('\n');
             }
-            shown.push_str("\u{1f4ce} ");
+            shown.push_str(herdr_chat_protocol::ATTACHED);
             shown.push_str(attachment.name());
         }
         let prompt = self.projector.prompt(&shown);

@@ -49,17 +49,74 @@ fn slash_commands_complete_a_name_being_typed() {
 
 #[test]
 fn history_steps_back_and_forth() {
+    let mut transcript = Transcript::new("Claude");
     let mut history = History::default();
-    assert_eq!(history.older(), None);
-    history.push("one");
-    history.push("two");
-    history.push("two");
-    assert_eq!(history.older(), Some("two"));
-    assert_eq!(history.older(), Some("one"));
-    assert_eq!(history.older(), Some("one"));
+    assert_eq!(history.older(&transcript), None);
+    transcript.entries = vec![
+        user(1, "one"),
+        agent(2, "ok"),
+        user(3, "two"),
+        user(4, "two"),
+    ];
+    assert_eq!(history.older(&transcript), Some("two"));
+    assert_eq!(history.older(&transcript), Some("one"));
+    assert_eq!(history.older(&transcript), Some("one"));
     assert_eq!(history.newer(), Some("two"));
     assert_eq!(history.newer(), Some(""));
     assert!(!history.recalling());
+}
+
+#[test]
+fn history_recalls_prompts_from_every_client_and_the_queue() {
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = vec![
+        user(1, "replayed"),
+        user(2, "look\n\u{1f4ce} notes.md\n\u{1f4ce} shot.png"),
+        user(3, "\u{1f4ce} only.png"),
+    ];
+    transcript.queued = vec![Queued {
+        attachments: Vec::new(),
+        id: CommandId::random(),
+        text: "waiting".to_owned(),
+    }];
+    let mut history = History::default();
+    assert_eq!(history.older(&transcript), Some("waiting"));
+    assert_eq!(
+        history.older(&transcript),
+        Some("look"),
+        "files are not text"
+    );
+    assert_eq!(history.older(&transcript), Some("replayed"));
+}
+
+#[test]
+fn history_recalls_a_sent_prompt_before_the_program_shows_it() {
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = vec![user(1, "one")];
+    let mut history = History::default();
+    history.push("two");
+    assert_eq!(history.older(&transcript), Some("two"));
+    assert_eq!(history.older(&transcript), Some("one"));
+
+    // Once shown, it is recalled once, and later prompts come after it.
+    history.stop();
+    transcript
+        .entries
+        .extend([user(2, "two"), user(3, "three")]);
+    assert_eq!(history.older(&transcript), Some("three"));
+    assert_eq!(history.older(&transcript), Some("two"));
+    assert_eq!(history.older(&transcript), Some("one"));
+}
+
+#[test]
+fn history_steps_through_what_it_had_when_recall_started() {
+    let mut transcript = Transcript::new("Claude");
+    transcript.entries = vec![user(1, "one"), user(2, "two")];
+    let mut history = History::default();
+    assert_eq!(history.older(&transcript), Some("two"));
+    transcript.entries.push(user(3, "three"));
+    assert_eq!(history.older(&transcript), Some("one"));
+    assert_eq!(history.newer(), Some("two"));
 }
 
 #[test]

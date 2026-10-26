@@ -357,6 +357,10 @@ pub struct Queued {
     pub text: String,
 }
 
+/// Starts each line the transcript adds after a prompt's text, one per file
+/// the prompt carried.
+pub const ATTACHED: &str = "\u{1f4ce} ";
+
 /// The most files one prompt carries.
 pub const MAX_ATTACHMENTS: usize = 10;
 

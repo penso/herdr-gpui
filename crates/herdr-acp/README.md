@@ -131,7 +131,8 @@ session has cost when the agent says. Each finished turn leaves a line saying
 how long it took and the tokens it used. Settings the agent offers through
 ACP's session config options (model, thinking level, mode, and any others)
 change from **Ctrl+O** here and from the header's buttons in Herdr UI; the
-agent's slash commands complete after `/`, and Up recalls earlier prompts.
+agent's slash commands complete after `/`, and Up and Down step through the
+session's earlier prompts, whichever client sent them.
 
 ## Behaviour
 
