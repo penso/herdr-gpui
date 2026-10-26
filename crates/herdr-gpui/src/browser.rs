@@ -54,6 +54,7 @@ mod snapshot;
 mod stacking;
 mod store;
 mod tab_appear;
+pub(crate) mod tab_body;
 mod tab_move;
 mod tab_scroll;
 #[cfg(target_os = "macos")]

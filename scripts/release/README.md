@@ -121,7 +121,10 @@ SIGKILL/power loss cannot be cleaned up. Apple security tools receive passwords
 as arguments, so the runner must not have untrusted local users. No GUI executable
 is run, including for version probing. Signing works on a copy of the input app.
 
-Both executable and bundle are explicitly signed with hardened runtime and secure
+The bundle holds two universal executables: `Contents/MacOS/Herdr` and the
+`herdr-acp` the app starts chats with, which `package-macos.sh` takes from beside
+each architecture's `herdr-gpui`. `herdr-acp` is signed first, without the app's
+entitlements, then `Herdr`, then the bundle, all with hardened runtime and secure
 timestamps. The zipped app must receive JSON status `Accepted`, then the app is
 stapled and validated. The DMG contains `Herdr.app` and an `/Applications` symlink;
 it is signed, separately notarized, stapled, and checked with codesign and
@@ -138,10 +141,11 @@ The release workflow builds both natively on Ubuntu 24.04 architecture runners,
 using the same `scripts/install-linux-deps.sh` library setup as CI. Both archives
 are mandatory in the single immutable asset manifest; signing, provenance and
 consumer verification cover both. The SBOM unions both Linux, both macOS, and
-the Windows target graphs. No separate per-platform manifest or publication job is used.
+the Windows target graphs, each the app's joined with the shipped `herdr-acp`'s. No separate per-platform manifest or publication job is used.
 The caller must supply the matching release binary; packaging does not cross-build
 or resolve shared libraries. Output is `Herdr-VERSION-TARGET.tar.gz`, with a
-same-named root containing `bin/herdr-gpui`, a scalable SVG icon, desktop entry, license and
+same-named root containing `bin/herdr-gpui` and `bin/herdr-acp` (taken from beside
+the binary), a scalable SVG icon, desktop entry, license and
 notice under `share/`. Install that tree into a chosen prefix with its `bin` on
 PATH. Archives are not promised to be bit-for-bit reproducible.
 
@@ -179,7 +183,8 @@ there. `scripts/release/package-windows.py VERSION TARGET BINARY LAUNCHER
 OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
 zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named root
 containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
-installer's Start menu shortcut opens, and `licenses/` holding the same license
+installer's Start menu shortcut opens, `herdr-acp.exe` (taken from beside
+`BINARY`), which the app starts chats with, and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
 `scripts/release/windows-installer.py` then installs the pinned Inno Setup
@@ -223,8 +228,8 @@ fails instead of falling back to unsigned. When signing is on:
 
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
-   `azure/artifact-signing-action` signs `herdr-gpui.exe` and
-   `herdr-gpui-launcher.exe` with SHA-256 and an RFC 3161 timestamp from
+   `azure/artifact-signing-action` signs `herdr-gpui.exe`,
+   `herdr-gpui-launcher.exe`, and `herdr-acp.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended

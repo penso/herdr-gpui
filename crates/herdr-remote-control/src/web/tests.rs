@@ -18,6 +18,8 @@ mod origins;
 mod pairing;
 mod routes;
 mod stream;
+#[cfg(unix)]
+mod streaming;
 mod terminal;
 mod uploads;
 
@@ -25,6 +27,18 @@ pub(super) const ORIGIN: &str = "https://192.168.1.20:7443";
 
 /// A server state on a private directory with no daemon behind it.
 pub(crate) fn state(dir: &std::path::Path) -> Shared {
+    state_with(
+        dir,
+        Hub::offline(Layout {
+            connected: true,
+            boot: "b".into(),
+            workspaces: Vec::new(),
+        }),
+    )
+}
+
+/// A server state on a private directory showing what `hub` holds.
+pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
     let names = Names::new([IpAddr::V4(Ipv4Addr::new(192, 168, 1, 20))], Some("studio"));
     let authority = Authority::load_or_create(dir).unwrap();
     let seen = Origins::load(dir, authority.fingerprint());
@@ -35,11 +49,7 @@ pub(crate) fn state(dir: &std::path::Path) -> Shared {
         connected: Mutex::new(HashMap::new()),
         fingerprint: authority.fingerprint().to_owned(),
         authority: Some(authority),
-        hub: Hub::offline(Layout {
-            connected: true,
-            boot: "b".into(),
-            workspaces: Vec::new(),
-        }),
+        hub,
         look: Look::load(dir),
         names: RwLock::new(names),
         port: 7443,

@@ -30,6 +30,7 @@ mod list;
 mod menus;
 mod overlay;
 mod prepared;
+mod recall;
 mod session;
 mod start;
 mod timeline;

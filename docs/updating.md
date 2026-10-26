@@ -346,6 +346,8 @@ Standalone Linux installation requires an ordinary user-owned executable under `
 as `~/.local/bin/herdr-gpui`, with safe ancestor permissions. Root, system locations,
 symlinked paths, hard-linked binaries, and known package-container environments
 are refused. Supported archive targets are x86_64 GNU and aarch64 GNU Linux.
+The update replaces that executable only: the `herdr-acp` beside it, which chats
+run, stays as installed until the next manual archive install.
 On macOS the app must be user-owned and its parent writable without elevation;
 the usual root/admin-owned `/Applications` parent is allowed. The installed and
 candidate bundles must have matching Developer ID teams, Herdr's bundle identifier,
@@ -500,9 +502,8 @@ the ordinary test suite uses fake Homebrew processes instead.
 
 ## Native QA
 
-`just run` enables the QA menu automatically. With Cargo, enable it with
-`cargo run --locked --release -p herdr-gpui --features qa-menu`.
-Default Cargo builds and published releases omit this menu.
+The QA menu is off by default in every build, including published releases;
+turn on **Settings > General > QA menu** (`qa_menu = true` under `[features]`) to show it.
 
 The GPUI **QA > Show app update available** action presents safe synthetic
 update state for version `9999.0.0`, without network requests, installing files,

@@ -5,7 +5,7 @@
 
 use herdr_chat_protocol::{Author, Change, EntryId, EntryKind};
 
-use super::{Activity, Session};
+use super::{Session, Update};
 
 /// What the session remembers so each message and tool call is looked at
 /// once.
@@ -17,7 +17,7 @@ pub(super) struct Pictures {
     tools: std::collections::HashSet<String>,
 }
 
-impl<R: FnMut(Activity)> Session<R> {
+impl<R: FnMut(Update)> Session<R> {
     /// Before `change` lands: when it starts an entry after an agent
     /// message, the pictures that message linked go between them, and the
     /// entry takes an id after theirs, as ids only grow.

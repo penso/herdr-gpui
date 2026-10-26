@@ -36,7 +36,7 @@ fn files_go_with_the_prompt_and_show_in_the_transcript() {
     assert_eq!(kinds, ["text", "resource", "image"]);
     let entries = &harness.transcript().entries;
     assert!(matches!(&entries[0].kind,
-        EntryKind::User { text } if text == "look\n\u{1f4ce} notes.md\n\u{1f4ce} shot.png"));
+        EntryKind::User { text, files: 2 } if text == "look\n\u{1f4ce} notes.md\n\u{1f4ce} shot.png"));
     assert!(matches!(&entries[1].kind, EntryKind::Image { .. }));
 }
 

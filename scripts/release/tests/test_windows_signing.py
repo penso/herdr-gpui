@@ -100,10 +100,12 @@ class RepackTests(unittest.TestCase):
         self.work = Path(temp.name)
         self.app = executable()
         self.launcher = executable(length=0x303)
+        self.acp = executable(length=0x305)
         self.archive = self.work / f"{ROOT}.zip"
         with zipfile.ZipFile(self.archive, "w") as release:
             PACKAGE.add(release, f"{ROOT}/herdr-gpui.exe", self.app)
             PACKAGE.add(release, f"{ROOT}/herdr-gpui-launcher.exe", self.launcher)
+            PACKAGE.add(release, f"{ROOT}/herdr-acp.exe", self.acp)
             PACKAGE.add(release, f"{ROOT}/licenses/LICENSE", b"license")
         self.output = self.work / "signed"
         self.output.mkdir()
@@ -113,6 +115,7 @@ class RepackTests(unittest.TestCase):
         self.assertEqual(root, (self.work / "tree" / ROOT).resolve())
         (root / "herdr-gpui.exe").write_bytes(sign(self.app))
         (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))
+        (root / "herdr-acp.exe").write_bytes(sign(self.acp))
         return root
 
     def test_repacks_the_signed_tree_in_the_zips_order(self):
@@ -121,9 +124,10 @@ class RepackTests(unittest.TestCase):
         self.assertEqual(output, self.output.resolve() / self.archive.name)
         with zipfile.ZipFile(self.archive) as unsigned, zipfile.ZipFile(output) as signed:
             self.assertEqual(signed.namelist(), unsigned.namelist())
-            self.assertEqual([i.date_time for i in signed.infolist()], [PACKAGE.TIMESTAMP] * 3)
+            self.assertEqual([i.date_time for i in signed.infolist()], [PACKAGE.TIMESTAMP] * 4)
             self.assertEqual(signed.read(f"{ROOT}/herdr-gpui.exe"), sign(self.app))
             self.assertEqual(signed.read(f"{ROOT}/herdr-gpui-launcher.exe"), sign(self.launcher))
+            self.assertEqual(signed.read(f"{ROOT}/herdr-acp.exe"), sign(self.acp))
             self.assertEqual(signed.read(f"{ROOT}/licenses/LICENSE"), b"license")
         with self.assertRaisesRegex(ValueError, "Output already exists"):
             SIGNING.repack(self.archive, self.work / "tree", self.output)
@@ -133,6 +137,8 @@ class RepackTests(unittest.TestCase):
         for name, change, undo in [
             ("unsigned launcher", lambda: (root / "herdr-gpui-launcher.exe").write_bytes(self.launcher),
              lambda: (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))),
+            ("unsigned herdr-acp", lambda: (root / "herdr-acp.exe").write_bytes(self.acp),
+             lambda: (root / "herdr-acp.exe").write_bytes(sign(self.acp))),
             ("changed license", lambda: (root / "licenses/LICENSE").write_bytes(b"other"),
              lambda: (root / "licenses/LICENSE").write_bytes(b"license")),
             ("extra file", lambda: (root / "extra.dll").write_bytes(b"x"),

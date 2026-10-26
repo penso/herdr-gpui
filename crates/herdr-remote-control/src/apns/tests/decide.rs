@@ -30,6 +30,7 @@ fn running() -> Transcript {
         id: EntryId(1),
         kind: EntryKind::User {
             text: "split the tests".to_owned(),
+            files: 0,
         },
     });
     transcript.usage = Some(Usage {
@@ -336,6 +337,7 @@ fn current_step_prefers_the_running_call_then_the_plan_then_the_last_call() {
         id: EntryId(4),
         kind: EntryKind::User {
             text: "next".to_owned(),
+            files: 0,
         },
     });
     assert_eq!(current_step(&transcript), DEFAULT_STEP);
