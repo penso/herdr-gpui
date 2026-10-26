@@ -180,8 +180,11 @@ fn the_git_popover_is_drawn_as_it_goes_and_leaves_the_menu_reset(cx: &mut gpui::
         assert_eq!(view.menu.page, None);
         assert_eq!(view.menu.error, None);
         // Held at the start of its way out, however long the frames take.
+        // Closing may already have drawn a frame that started it, so the
+        // start is set as well as observed.
         let later = motion::now() + std::time::Duration::from_secs(3600);
         view.menu.appear.observe(None, None, later);
+        view.menu.appear.leaving = Some((Page::Git, later));
     });
     draw(cx);
     // The copy going away was drawn, shielded, and the menu's own state is
