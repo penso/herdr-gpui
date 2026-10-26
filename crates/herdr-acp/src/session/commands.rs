@@ -98,7 +98,6 @@ impl<R: FnMut(Update)> Session<R> {
         }
         let prompt = self.projector.prompt(&shown);
         self.emit(prompt);
-        (self.report)(Update::Prompt(shown));
         let mut blocks = Vec::with_capacity(prepared.len() + 1);
         if !text.trim().is_empty() {
             blocks.push(wire::ContentBlock::Text(wire::TextContent::new(text)));
@@ -112,6 +111,8 @@ impl<R: FnMut(Update)> Session<R> {
         }
         let request = wire::PromptRequest::new(session, blocks);
         if self.request("session/prompt", &request, Pending::Prompt) {
+            // Only a prompt the agent received names the chat.
+            (self.report)(Update::Prompt(shown));
             self.turn = Some(self.next_request);
             self.emit(Change::Turn {
                 turn: Some(Turn {

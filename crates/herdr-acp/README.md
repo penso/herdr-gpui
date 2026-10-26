@@ -43,12 +43,14 @@ through Herdr's JSON API:
   are exact rather than detected from the screen;
 - `pane.report_metadata` with the agent's display name and the `acp` token, the
   attach socket's id;
-- each prompt sent, on one line and cut to 80 characters, as the pane's
-  `title`, which Herdr UI's sidebar and the phone's chat list show;
+- each prompt the agent received, on one line and cut to 80 characters, as
+  the pane's `title`, which Herdr UI's sidebar and the phone's chat list
+  show; a report or rename Herdr fails is tried again a few times;
 - `tab.rename` of its tab to the agent and that prompt (`Claude: fix the…`,
   at most 40 characters), only while the chat is the tab's one pane and the
   tab still has the agent's name, a number, or the label the chat gave it, so
-  a name the user typed stays;
+  a name the user typed stays (Herdr has no conditional rename, so a name
+  saved in the instant between reading the label and renaming is replaced);
 - on exit, the token and title are cleared, the tab gets the agent's name
   back unless the user renamed it, and the agent is released.
 

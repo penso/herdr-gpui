@@ -35,3 +35,18 @@ fn a_refused_prompt_is_not_passed_on() {
     );
     assert!(harness.prompts.borrow().is_empty());
 }
+
+#[test]
+fn a_prompt_the_agent_never_got_is_not_passed_on() {
+    let mut harness = ready();
+    let (_, gone) = bounded(1);
+    drop(std::mem::replace(&mut harness.agent, gone));
+    harness.command(
+        0,
+        Command::Prompt {
+            text: "lost".to_owned(),
+            attachments: Vec::new(),
+        },
+    );
+    assert!(harness.prompts.borrow().is_empty());
+}

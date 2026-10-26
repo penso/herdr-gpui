@@ -26,6 +26,8 @@ const AGENT: &str = "acp";
 const TIMEOUT: Duration = Duration::from_secs(2);
 /// How long a failed announcement waits before it is sent again.
 const RETRY: Duration = Duration::from_secs(2);
+/// How many times a prompt's title and tab name are sent before giving up.
+const TITLE_ATTEMPTS: u32 = 5;
 const MAX_RESPONSE: u64 = 64 * 1024;
 
 #[derive(Clone, Debug)]
@@ -124,12 +126,15 @@ fn run(
     // The tab label this chat gave last, so a label the user typed since
     // is left alone, and closing puts the agent's name back.
     let mut given: Option<String> = None;
+    // The latest prompt's title until Herdr has it and the tab is named,
+    // tried again after `RETRY` up to `TITLE_ATTEMPTS` times.
+    let mut title: Option<(String, u32)> = None;
     loop {
         let (activity, prompt, closing) = {
             let (lock, wake) = mailbox;
             let mut state = lock.lock().unwrap_or_else(PoisonError::into_inner);
             while state.activity.is_none() && state.prompt.is_none() && !state.closing {
-                if reported && !announced {
+                if reported && (!announced || title.is_some()) {
                     let (next, waited) = wake
                         .wait_timeout(state, RETRY)
                         .unwrap_or_else(PoisonError::into_inner);
@@ -170,19 +175,31 @@ fn run(
             )
             .is_ok();
         }
-        if let Some(title) = prompt.as_deref().and_then(naming::title)
-            && reported
+        if let Some(latest) = prompt.as_deref().and_then(naming::title) {
+            title = Some((latest, 0));
+        }
+        if reported
             && !closing
+            && let Some((latest, attempts)) = title.take()
         {
-            let _ = call(
+            let titled = call(
                 &target.socket,
                 "pane.report_metadata",
                 json!({"pane_id": target.pane, "source": SOURCE, "agent": AGENT,
-                    "title": title, "seq": seq.next()}),
-            );
-            let label = naming::label(display, &title);
-            if let Ok(true) = rename_tab(target, display, given.as_deref(), &label, true) {
-                given = Some(label);
+                    "title": latest, "seq": seq.next()}),
+            )
+            .is_ok();
+            let label = naming::label(display, &latest);
+            let named = match rename_tab(target, display, given.as_deref(), &label, true) {
+                Ok(true) => {
+                    given = Some(label);
+                    true
+                }
+                Ok(false) => true,
+                Err(_) => false,
+            };
+            if !(titled && named) && attempts + 1 < TITLE_ATTEMPTS {
+                title = Some((latest, attempts + 1));
             }
         }
         if closing {
@@ -229,6 +246,10 @@ impl Sequence {
 /// Renames the pane's tab to `label` when its label now is one this chat
 /// may replace, and, with `alone`, only while the chat is its one pane;
 /// whether the tab has `label` afterwards.
+///
+/// Herdr's API has no conditional rename, so a name the user saves between
+/// `tab.get` and `tab.rename` is replaced; reading the label right before
+/// the write keeps that gap to one round trip.
 fn rename_tab(
     target: &Target,
     display: &str,

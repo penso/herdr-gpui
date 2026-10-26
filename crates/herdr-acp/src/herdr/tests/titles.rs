@@ -14,12 +14,18 @@ struct Fake {
 
 /// Starts a fake API whose pane `p_1` is alone in tab `t_1`, labelled `label`.
 fn fake(label: &str) -> (Fake, Reporter) {
+    failing(label, 0)
+}
+
+/// As `fake`, with the first `failures` renames answered by an error.
+fn failing(label: &str, failures: u32) -> (Fake, Reporter) {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("api.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     let (sender, requests) = crossbeam_channel::unbounded::<Value>();
     let label = Arc::new(Mutex::new(label.to_owned()));
     let shared = Arc::clone(&label);
+    let mut failures = failures;
     thread::spawn(move || {
         for stream in listener.incoming() {
             let mut stream = stream.unwrap();
@@ -29,6 +35,12 @@ fn fake(label: &str) -> (Fake, Reporter) {
                 .unwrap();
             let request: Value = serde_json::from_str(&line).unwrap();
             let id = request["id"].clone();
+            if request["method"] == "tab.rename" && failures > 0 {
+                failures -= 1;
+                sender.send(request).unwrap();
+                writeln!(stream, "{}", json!({"id": id, "error": {"code": "busy"}})).unwrap();
+                continue;
+            }
             let result = match request["method"].as_str().unwrap() {
                 "pane.get" => json!({"type": "pane_info", "pane": {"tab_id": "t_1"}}),
                 "tab.get" => json!({"type": "tab_info", "tab": {"tab_id": "t_1",
@@ -118,4 +130,15 @@ fn a_label_the_user_gave_stays() {
         .iter()
         .find(|request| request["params"]["clear_title"] == true);
     assert!(cleared.is_some());
+}
+
+#[test]
+fn a_failed_rename_is_tried_again() {
+    let (fake, reporter) = failing("Claude", 1);
+    reporter.handle().prompt("fix it".to_owned());
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Claude");
+    fake.until("tab.rename");
+    assert_eq!(fake.label(), "Claude: fix it");
+    reporter.close();
 }
