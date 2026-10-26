@@ -128,9 +128,12 @@ pub(in crate::settings_window) fn dropdown(
             deferred(
                 anchored()
                     .snap_to_window_with_margin(px(8.))
-                    .child(popover_list(theme, open, on_pick, move |window, cx| {
-                        dismiss_list(window, cx)
-                    })),
+                    .child(crate::motion::pop_in(
+                        popover_list(theme, open, on_pick, move |window, cx| {
+                            dismiss_list(window, cx)
+                        }),
+                        SharedString::from(format!("{id}-list")),
+                    )),
             )
             .with_priority(1)
         }))

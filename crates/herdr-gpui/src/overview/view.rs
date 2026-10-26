@@ -625,7 +625,10 @@ impl HerdrWindow {
                         .absolute()
                         .top(px(30.))
                         .right_0()
-                        .child(self.snooze_menu(row, look, cx)),
+                        .child(crate::motion::pop_in(
+                            self.snooze_menu(row, look, cx),
+                            "overview-snooze-menu",
+                        )),
                 )
                 .with_priority(1),
             );

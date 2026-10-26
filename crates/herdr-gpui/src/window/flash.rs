@@ -2,10 +2,14 @@
 //! shortcut did nothing, or how to do what a gesture did not. It answers the
 //! user's own gesture, so it needs no dismissing and retires on its own. Any
 //! window code can raise one with [`HerdrWindow::show_flash`]; nothing here
-//! names individual messages.
+//! names individual messages. It fades in where it shows and fades back out
+//! when its time is up.
 
 use super::HerdrWindow;
-use crate::config::Theme;
+use crate::{
+    config::Theme,
+    motion::{self, ENTER, LEAVE},
+};
 use gpui::{Context, SharedString};
 use std::time::{Duration, Instant};
 
@@ -15,6 +19,9 @@ const FLASH_DURATION: Duration = Duration::from_secs(2);
 /// How long a hint stays up. It teaches rather than confirms, so it needs a
 /// read, not a glance.
 const HINT_DURATION: Duration = Duration::from_secs(4);
+
+/// How far the flash over the terminal slides in from the edge it sits by.
+pub(super) const SLIDE: f32 = 6.;
 
 /// Whether the flash reports something done or something declined, or
 /// suggests another way to do what was tried.
@@ -71,12 +78,59 @@ impl Flash {
     }
 }
 
+/// How the flash comes and goes, timed by [`motion::now`] rather than the
+/// real time its expiry keeps.
+#[derive(Debug, Default)]
+pub(crate) struct Motion {
+    /// When the flash up now began to fade in.
+    since: Option<Instant>,
+    /// The flash that retired, fading out from when it did.
+    leaving: Option<(Flash, Instant)>,
+}
+
+impl Motion {
+    fn moving(&self, now: Instant) -> bool {
+        self.since
+            .is_some_and(|since| motion::progress(since, now, ENTER).is_some())
+            || self
+                .leaving
+                .as_ref()
+                .is_some_and(|(_, since)| motion::progress(*since, now, LEAVE).is_some())
+    }
+}
+
 impl HerdrWindow {
     /// Replaces whatever flash is up, so the newest gesture is the one answered.
+    /// A flash already up takes the new text where it is, without fading again.
     pub(crate) fn show_flash(&mut self, flash: Flash, cx: &mut Context<Self>) {
         let expires = Instant::now() + flash.duration();
+        if self.flash.is_none() {
+            self.flash_motion.since = Some(motion::now());
+        }
+        self.flash_motion.leaving = None;
         self.flash = Some((flash, expires));
         cx.notify();
+    }
+
+    /// The flash to draw and how much of it shows, from 0 to 1: the one up
+    /// now as it fades in, or the one that just retired as it fades out.
+    pub(crate) fn flash_shown(&self) -> Option<(&Flash, f32)> {
+        let now = motion::now();
+        if let Some((flash, _)) = &self.flash {
+            let shown = self
+                .flash_motion
+                .since
+                .and_then(|since| motion::progress(since, now, ENTER))
+                .unwrap_or(1.);
+            return Some((flash, shown));
+        }
+        let (flash, since) = self.flash_motion.leaving.as_ref()?;
+        motion::progress(*since, now, LEAVE).map(|k| (flash, 1. - k))
+    }
+
+    /// Whether the flash is still fading in or out.
+    pub(crate) fn flash_moving(&self) -> bool {
+        self.flash_motion.moving(motion::now())
     }
 
     /// Retires the flash once its time is up. `true` when the window has to
@@ -89,7 +143,13 @@ impl HerdrWindow {
         {
             return false;
         }
-        self.flash = None;
+        if let Some((flash, _)) = self.flash.take() {
+            self.flash_motion.leaving = Some((flash, motion::now()));
+        }
         true
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests;

@@ -52,6 +52,8 @@ pub(crate) struct MenuState {
     pub page: Option<Page>,
     pub(crate) application: Option<crate::menus::in_window::OpenMenu>,
     pub(crate) application_bar: crate::menus::in_window::Geometry,
+    /// How the open popup, or the dimming a closed dialog left, moves.
+    pub(crate) appear: super::appear::Appear,
     /// Written by the menu's layout, read when presenting Windows pages.
     #[cfg(any(windows, test, feature = "integration-test"))]
     pub(crate) cover: std::rc::Rc<std::cell::Cell<Cover>>,
@@ -325,6 +327,7 @@ impl MenuState {
             page: None,
             application: None,
             application_bar: Default::default(),
+            appear: Default::default(),
             #[cfg(any(windows, test, feature = "integration-test"))]
             cover: Default::default(),
             device_setup: None,

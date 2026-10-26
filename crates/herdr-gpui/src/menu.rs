@@ -3,6 +3,7 @@
 //! popup while one is open, and every modal action is fenced by the connection
 //! it was started under.
 
+mod appear;
 mod checkpoints;
 mod chrome;
 #[cfg(feature = "cloud")]

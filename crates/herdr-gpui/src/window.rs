@@ -22,6 +22,7 @@ mod find;
 mod flash;
 pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
+pub(crate) use zen::slide_left;
 mod function_keys;
 mod image_source;
 mod images;
@@ -197,6 +198,7 @@ pub(crate) struct HerdrWindow {
     pub(crate) find_memory: crate::find::memory::Memory,
     /// The brief message over the terminal, and when it stops showing.
     pub(crate) flash: Option<(Flash, std::time::Instant)>,
+    pub(crate) flash_motion: flash::Motion,
     pub(crate) focus: FocusHandle,
     pub(crate) git: git::Git,
     /// Where the titlebar's Git button last painted. The window owns it so a
@@ -333,6 +335,7 @@ pub(crate) struct HerdrWindow {
     /// Spaces and agents lists, in that order.
     pub(crate) sidebar_scroll: [ScrollHandle; 2],
     pub(crate) sidebar_search: sidebar::SidebarSearch,
+    pub(crate) sidebar_slide: sidebar::slide::SidebarSlide,
     pub(crate) sidebar_split: Option<f32>,
     pub(crate) sidebar_split_modified: bool,
     /// Herdr's `ui.sidebar_start_collapsed` still applies: no shared settings
@@ -377,6 +380,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) theme_light: bool,
     /// Last title pushed to the OS, so the window is renamed only when it changes.
     pub(crate) title: String,
+    /// Toasts sliding in and out of their corners.
+    pub(crate) toast_motion: toasts::motion::ToastMotion,
     pub(crate) toasts_hidden: bool,
     /// SSH tunnels to remote ports that listen on their host's loopback only.
     pub(crate) tunnels: crate::listening_ports::Tunnels,

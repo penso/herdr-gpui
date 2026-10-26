@@ -98,6 +98,8 @@ impl Render for HerdrWindow {
         self.leave_vanished_region(window, cx);
         self.sync_backdrop(window, cx);
         self.tick_chrome(window, cx);
+        self.tick_menu_appear(window);
+        self.tick_sidebar_slide(window, cx);
         if self
             .chats
             .glide(crate::motion::now(), self.config.chat.glide)
@@ -666,15 +668,18 @@ impl Render for HerdrWindow {
                     .when_some(copy_badge, |terminal, badge| terminal.child(badge))
                     // Direct feedback for the user's own gesture, not a daemon notice:
                     // it sits over the cells it copied and needs no dismissing.
-                    .when_some(self.flash.as_ref(), |terminal, (flash, _)| {
+                    .when_some(self.flash_shown(), |terminal, (flash, shown)| {
                         use ClipboardToastPosition::*;
                         let position = self.config.clipboard_toast.position;
+                        // It comes in from the edge it sits by and goes back to it.
+                        let edge = px(12. - (1. - shown) * super::flash::SLIDE);
                         terminal.child(
                             div()
                                 .absolute()
+                                .opacity(shown)
                                 .map(|row| match position {
-                                    TopLeft | TopCenter | TopRight => row.top(px(12.)),
-                                    BottomLeft | BottomCenter | BottomRight => row.bottom(px(12.)),
+                                    TopLeft | TopCenter | TopRight => row.top(edge),
+                                    BottomLeft | BottomCenter | BottomRight => row.bottom(edge),
                                 })
                                 .map(|row| match position {
                                     TopLeft | BottomLeft => row.justify_start(),
@@ -796,6 +801,7 @@ impl Render for HerdrWindow {
             | self.tabs_growing()
             | self.annotations_moving()
             | self.chrome_sliding()
+            | self.flash_moving()
         {
             window.request_animation_frame();
         }
@@ -969,6 +975,7 @@ impl Render for HerdrWindow {
             .children(self.render_tab_ghost(cx))
             .children(self.render_toasts(window, cx))
             .children(self.render_file_transfer(window, cx))
+            .children(self.render_menu_leaving(window, cx))
             .when(self.menu.page.is_some(), |root| {
                 root.child(self.render_menu(window, cx))
             });

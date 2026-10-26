@@ -678,12 +678,12 @@ impl HerdrWindow {
             // The group in use carries the window's flash, as a page's
             // toolbar and the terminal do.
             .children(
-                self.flash
-                    .as_ref()
+                self.flash_shown()
                     .filter(|_| self.active_group() == Some(slot.id))
-                    .map(|(flash, _)| {
+                    .map(|(flash, shown)| {
                         div()
                             .debug_selector(|| "flash".into())
+                            .opacity(shown)
                             .max_w_full()
                             .truncate()
                             .text_color(rgb(flash.accent(&self.theme)))

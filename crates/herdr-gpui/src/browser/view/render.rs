@@ -286,12 +286,12 @@ impl HerdrWindow {
             )
             // A split shows the window's flash once, in the group in use.
             .children(
-                self.flash
-                    .as_ref()
+                self.flash_shown()
                     .filter(|_| Some(slot.id) == self.active_group())
-                    .map(|(flash, _)| {
+                    .map(|(flash, shown)| {
                         div()
                             .flex_none()
+                            .opacity(shown)
                             .max_w(px(240.))
                             .truncate()
                             .text_color(rgb(flash.accent(&self.theme)))

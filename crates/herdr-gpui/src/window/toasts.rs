@@ -1,13 +1,15 @@
 use super::HerdrWindow;
-use crate::{
-    fonts::StyledFont,
-    notifications::{Notice, VISIBLE_LIMIT, safe_text},
-};
+use crate::notifications::{Notice, VISIBLE_LIMIT};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind, ToastHerdrPosition};
 use std::{sync::TryLockError, task::Poll, time::Instant};
 
 mod badge;
+mod card;
+pub(crate) mod motion;
+
+use card::Look;
+use motion::{Drawn, Key};
 
 impl HerdrWindow {
     pub(crate) fn click_toast(
@@ -201,7 +203,7 @@ impl HerdrWindow {
 
     pub(super) fn render_toasts(
         &mut self,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let viewport = window.viewport_size();
@@ -210,18 +212,15 @@ impl HerdrWindow {
             self.menu.page.is_some() || self.toasts_hidden,
             Instant::now(),
         );
-        if self.menu.page.is_some() {
-            return Vec::new();
-        }
-        let viewport = window.viewport_size();
-        if viewport.height < px(180.) || viewport.width < px(180.) {
+        // Hidden toasts keep their motion where it was: they come back as
+        // they left once the menu closes or the window grows.
+        if self.menu.page.is_some() || self.toasts_hidden {
             return Vec::new();
         }
         let visible_limit =
             ((viewport.height.to_f64() as usize).saturating_sub(108) / 108).clamp(1, VISIBLE_LIMIT);
-        let realm = viewport.width;
-        let narrow = realm < px(720.);
-        let width = (realm - px(24.)).max(px(0.)).min(px(340.));
+        let narrow = viewport.width < px(720.);
+        let width = (viewport.width - px(24.)).max(px(0.)).min(px(340.));
         let visible: Vec<_> = self
             .endpoints
             .iter()
@@ -231,246 +230,149 @@ impl HerdrWindow {
                     .entries
                     .iter()
                     .filter(|(_, notice)| notice.visible)
-                    .map(move |(id, notice)| (endpoint, *id, notice))
+                    .map(move |(id, notice)| {
+                        let navigable = endpoint
+                            .live
+                            .snapshot
+                            .as_deref()
+                            .and_then(|s| notice.target(s))
+                            .is_some();
+                        let drawn = Drawn {
+                            key: Key {
+                                endpoint: endpoint.id.clone(),
+                                generation: endpoint.generation,
+                                id: *id,
+                            },
+                            label: endpoint.label.clone(),
+                            inbox: endpoint.connection.inbox.clone(),
+                            notice: notice.clone(),
+                            corner: if narrow {
+                                ToastHerdrPosition::BottomRight
+                            } else {
+                                notice.position
+                            },
+                        };
+                        (drawn, navigable)
+                    })
             })
             .take(visible_limit)
             .collect();
-        [
+        let now = crate::motion::now();
+        self.toast_motion.observe(
+            visible.iter().map(|(drawn, _)| drawn.clone()).collect(),
+            now,
+        );
+        if self.toast_motion.moving() {
+            window.request_animation_frame();
+        }
+        let look = |shown, live, navigable| Look {
+            shown,
+            live,
+            navigable,
+            max_height: (viewport.height - px(132.)) / visible_limit as f32,
+            body_room: (viewport.height - px(208.)).max(px(20.)),
+        };
+        let mut corners = Vec::new();
+        for position in [
             ToastHerdrPosition::TopLeft,
             ToastHerdrPosition::TopRight,
             ToastHerdrPosition::BottomLeft,
             ToastHerdrPosition::BottomRight,
-        ]
-        .into_iter()
-        .filter_map(|position| {
-            let mut cards = Vec::new();
-            for (endpoint, id, notice) in &visible {
-                let corner = if narrow {
-                    ToastHerdrPosition::BottomRight
-                } else {
-                    notice.position
-                };
-                if corner != position {
-                    continue;
-                }
-                let endpoint_id = endpoint.id.clone();
-                let inbox = endpoint.connection.inbox.clone();
-                let generation = endpoint.generation;
-                let id = *id;
-                let badge = badge::badge(notice);
-                let accent = self.theme.ink(match notice.kind {
-                    SemanticNotificationKind::NeedsAttention => self.theme.palette[3],
-                    SemanticNotificationKind::Finished => self.theme.palette[2],
-                    _ => self.theme.primary(),
-                });
-                cards.push(
+        ] {
+            let mut cards: Vec<_> = visible
+                .iter()
+                .filter(|(drawn, _)| drawn.corner == position)
+                .map(|(drawn, navigable)| {
+                    let shown = self.toast_motion.shown(&drawn.key, now);
+                    let heights = self.toast_motion.heights.clone();
+                    let key = drawn.key.clone();
+                    // Measured around the card, so the height counts its
+                    // border too.
                     div()
-                        .id(SharedString::from(format!(
-                            "toast-{}-{generation}-{id}",
-                            endpoint.id
-                        )))
-                        .debug_selector({
-                            let endpoint_id = endpoint.id.clone();
-                            move || format!("toast-{endpoint_id}-{id}")
-                        })
-                        .occlude()
+                        .relative()
                         .w_full()
                         .flex_none()
-                        .overflow_hidden()
-                        .max_h((viewport.height - px(132.)) / visible_limit as f32)
-                        .rounded(px(crate::config::corners::PANEL))
-                        .border_1()
-                        .border_color(rgb(crate::config::mix(
-                            self.theme.surface,
-                            self.theme.foreground,
-                            14,
-                        )))
-                        .bg(rgb(self.theme.surface))
-                        .text_color(rgb(self.theme.foreground))
-                        .text_font(&self.config.ui)
-                        .text_size(px(self.config.ui.size))
-                        .p(px(10.))
-                        .flex()
-                        .gap(px(10.))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                        .when(
-                            endpoint
-                                .live
-                                .snapshot
-                                .as_deref()
-                                .and_then(|s| notice.target(s))
-                                .is_some(),
-                            |d| d.cursor_pointer(),
-                        )
-                        .on_click({
-                            let endpoint_id = endpoint_id.clone();
-                            let inbox = inbox.clone();
-                            cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.click_toast(&endpoint_id, generation, &inbox, id, cx);
-                            })
-                        })
+                        .child(self.toast_card(drawn, look(shown, true, *navigable), cx))
                         .child(
-                            badge::circle(badge.mark, &self.theme, accent).debug_selector({
-                                let endpoint_id = endpoint.id.clone();
-                                move || format!("toast-badge-{endpoint_id}-{id}")
-                            }),
+                            canvas(
+                                move |bounds, _, _| {
+                                    heights.borrow_mut().insert(key, bounds.size.height);
+                                },
+                                |_, _, _, _| {},
+                            )
+                            .absolute()
+                            .inset_0(),
                         )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.))
-                                .child(
-                                    div()
-                                        .truncate()
-                                        .text_color(rgb(self.theme.muted))
-                                        .child(safe_text(&endpoint.label, 80)),
-                                )
-                                .child({
-                                    let title = SharedString::from(badge.title.to_owned());
-                                    div()
-                                        // Names the drawn text, so tests can
-                                        // tell which title reached the screen.
-                                        .debug_selector({
-                                            let endpoint_id = endpoint.id.clone();
-                                            let title = title.clone();
-                                            move || {
-                                                format!("toast-title-{endpoint_id}-{id}: {title}")
-                                            }
-                                        })
-                                        .truncate()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(title)
-                                })
-                                .when_some(notice.body.clone(), |d, body| {
-                                    d.child(
-                                        div()
-                                            .id("body")
-                                            .debug_selector({
-                                                let endpoint_id = endpoint.id.clone();
-                                                move || format!("toast-body-{endpoint_id}-{id}")
-                                            })
-                                            .when(notice.is_local_feedback(), |body| {
-                                                body.max_h(
-                                                    (viewport.height - px(208.)).max(px(20.)),
-                                                )
-                                                .overflow_y_scroll()
-                                            })
-                                            .when(!notice.is_local_feedback(), |body| {
-                                                body.max_h(px(48.)).overflow_hidden()
-                                            })
-                                            // A long task must not wrap the
-                                            // place out of the clipped body.
-                                            .when(notice.described, |d| {
-                                                d.children(body.lines().enumerate().map(
-                                                    |(row, line)| {
-                                                    let endpoint_id = endpoint.id.clone();
-                                                    div()
-                                                        .debug_selector(move || {
-                                                            format!(
-                                                                "toast-body-row-{endpoint_id}-{id}-{row}"
-                                                            )
-                                                        })
-                                                        .truncate()
-                                                        .child(SharedString::from(line.to_owned()))
-                                                    },
-                                                ))
-                                            })
-                                            .when(!notice.described, |d| d.child(body)),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .id("dismiss")
-                                .debug_selector({
-                                    let endpoint_id = endpoint.id.clone();
-                                    move || format!("toast-dismiss-{endpoint_id}-{id}")
-                                })
-                                .flex_none()
-                                .size(px(24.))
-                                .rounded(px(crate::config::corners::CONTROL))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(rgb(self.theme.active)))
-                                .child(
-                                    svg()
-                                        .path("icons/close.svg")
-                                        .size(px(12.))
-                                        .text_color(rgb(self.theme.foreground)),
-                                )
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    if let Some(endpoint) = this.endpoints.iter_mut().find(|e| {
-                                        e.id == endpoint_id
-                                            && e.generation == generation
-                                            && std::sync::Arc::ptr_eq(&e.connection.inbox, &inbox)
-                                    }) {
-                                        endpoint.toasts.dismiss(id);
-                                        cx.notify();
-                                    }
-                                })),
-                        ),
+                        .into_any_element()
+                })
+                .collect();
+            // A leaving card keeps its place in the stack, and the room it
+            // took closes as it goes, so the cards around it do not jump.
+            let mut leaving: Vec<_> = self
+                .toast_motion
+                .leaving(now)
+                .filter(|(gone, _)| gone.drawn.corner == position)
+                .collect();
+            let bottom = matches!(
+                position,
+                ToastHerdrPosition::BottomLeft | ToastHerdrPosition::BottomRight
+            );
+            leaving.sort_by_key(|(gone, _)| if bottom { gone.after } else { gone.before });
+            for (gone, left) in leaving {
+                let card = self.toast_card(&gone.drawn, look(left, false, false), cx);
+                let room = div()
+                    .w_full()
+                    .flex_none()
+                    .overflow_hidden()
+                    .when_some(gone.height, |room, height| {
+                        room.h(height * left).mb(px(-GAP * (1. - left)))
+                    })
+                    .child(card);
+                let place = match bottom {
+                    true => cards.len().saturating_sub(gone.after),
+                    false => gone.before.min(cards.len()),
+                };
+                cards.insert(place, room.into_any_element());
+            }
+            if !cards.is_empty() {
+                corners.push(
+                    corner(position, width)
+                        .children(cards)
+                        .children(self.overlay_probe())
+                        .into_any_element(),
                 );
             }
-            if cards.is_empty() {
-                return None;
-            }
-            Some(
-                div()
-                    .absolute()
-                    .w(width)
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.))
-                    .when(
-                        matches!(
-                            position,
-                            ToastHerdrPosition::TopLeft | ToastHerdrPosition::TopRight
-                        ),
-                        |d| d.top(px(72.)),
-                    )
-                    .when(
-                        matches!(
-                            position,
-                            ToastHerdrPosition::BottomLeft | ToastHerdrPosition::BottomRight
-                        ),
-                        |d| d.bottom(px(36.)),
-                    )
-                    .when(
-                        matches!(
-                            position,
-                            ToastHerdrPosition::TopLeft | ToastHerdrPosition::BottomLeft
-                        ),
-                        |d| d.left(px(12.)),
-                    )
-                    .when(
-                        matches!(
-                            position,
-                            ToastHerdrPosition::TopRight | ToastHerdrPosition::BottomRight
-                        ),
-                        |d| d.right(px(12.)),
-                    )
-                    .children(cards)
-                    .children(self.overlay_probe())
-                    .into_any_element(),
-            )
-        })
-        .collect()
+        }
+        corners
     }
 }
 
+/// The space between stacked toasts.
+const GAP: f32 = 8.;
+
+/// The column toasts stack in at `position`, `width` wide.
+fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
+    use ToastHerdrPosition::*;
+    div()
+        .absolute()
+        .w(width)
+        .flex()
+        .flex_col()
+        .gap(px(GAP))
+        .map(|d| match position {
+            TopLeft | TopRight => d.top(px(72.)),
+            BottomLeft | BottomRight => d.bottom(px(36.)),
+        })
+        .map(|d| match position {
+            TopLeft | BottomLeft => d.left(px(12.)),
+            TopRight | BottomRight => d.right(px(12.)),
+        })
+}
+
 impl HerdrWindow {
-    /// Whether toasts or the file-transfer card show now, as their renders
-    /// decide: nothing shows over an open menu or in a window too small.
+    /// Whether toasts, ones still sliding out among them, or the
+    /// file-transfer card show now, as their renders decide: nothing shows
+    /// over an open menu or in a window too small.
     /// Only Windows hides pages under these.
     #[cfg(windows)]
     pub(crate) fn overlays_shown(&self) -> bool {
@@ -479,13 +381,18 @@ impl HerdrWindow {
         }
         self.file_transfer.is_some()
             || (!self.toasts_hidden
-                && self.endpoints.iter().any(|endpoint| {
-                    endpoint
-                        .toasts
-                        .entries
-                        .iter()
-                        .any(|(_, notice)| notice.visible)
-                }))
+                && (self
+                    .toast_motion
+                    .leaving(crate::motion::now())
+                    .next()
+                    .is_some()
+                    || self.endpoints.iter().any(|endpoint| {
+                        endpoint
+                            .toasts
+                            .entries
+                            .iter()
+                            .any(|(_, notice)| notice.visible)
+                    })))
     }
 }
 

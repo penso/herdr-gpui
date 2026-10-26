@@ -92,6 +92,9 @@ impl HerdrWindow {
         // above the bar.
         let cover = match (open, self.browser.tooltip_band) {
             (Some(_), _) if self.menu_dims() => Some(Cover::All),
+            // The dimming a closed dialog leaves is GPUI's, under the pages:
+            // they stay hidden until it has lifted, rather than show over it.
+            _ if self.menu_fading(crate::motion::now()) > 0. => Some(Cover::All),
             (Some(_), _) => Some(self.menu.cover.get().settled(measured_for, open)),
             (None, Some(band)) => Some(Cover::Panel(band)),
             (None, None) => None,

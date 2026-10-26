@@ -82,7 +82,7 @@ impl HerdrWindow {
     /// SSH host is shown, as Herdr keeps presentation local. Before shared
     /// settings load, Herdr's default rail applies.
     pub(crate) fn chrome_sidebar_mode(&self) -> SidebarMode {
-        if self.sidebar_visible {
+        if self.sidebar_visible || self.sidebar_slide.closing() {
             return SidebarMode::Expanded;
         }
         match self
@@ -99,6 +99,8 @@ impl HerdrWindow {
 
     pub(crate) fn toggle_sidebar(&mut self) {
         self.sidebar_visible = !self.sidebar_visible;
+        self.sidebar_slide
+            .set(self.sidebar_visible, crate::motion::now());
         self.sidebar_start_pending = false;
     }
 

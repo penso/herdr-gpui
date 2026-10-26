@@ -23,6 +23,14 @@ fn fake_herdr() -> &'static Path {
         std::fs::create_dir_all(&dir).unwrap();
         let program = dir.join(format!("herdr{}", std::env::consts::EXE_SUFFIX));
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/fake_herdr.rs");
+        // An earlier process with this ID left its program here. Rewriting
+        // it in place keeps that inode's cached code signature on macOS,
+        // which then kills the new program (signal 9); a new file has none.
+        match std::fs::remove_file(&program) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("removing {}: {error}", program.display()),
+        }
         // `rustc` writes the program, so this process never holds it open for
         // writing while a sibling test forks (Linux would refuse to run it).
         let status = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))

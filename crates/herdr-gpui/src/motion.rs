@@ -4,6 +4,7 @@
 //! drawing frames only while something is still moving.
 mod slow;
 
+use gpui::{AnimationElement, AnimationExt, ElementId, IntoElement, Styled, px};
 use std::time::{Duration, Instant};
 
 pub(crate) use slow::{duration, is_slow, now, set_slow};
@@ -18,6 +19,27 @@ pub(crate) const LEAVE: Duration = Duration::from_millis(150);
 pub(crate) fn progress(since: Instant, now: Instant, length: Duration) -> Option<f32> {
     let k = now.saturating_duration_since(since).as_secs_f32() / length.as_secs_f32();
     (k < 1.).then(|| 1. - (1. - k.clamp(0., 1.)).powi(3))
+}
+
+/// How far a dropdown drops into place as it appears.
+const DROP: f32 = 4.;
+
+/// A dropdown or small popover appearing: it fades in while dropping a few
+/// pixels into place, on the same curve as [`progress`]. `id` names it; GPUI
+/// plays the motion again each time an element of that id appears anew.
+/// Unit tests see it in place, so geometry checks need not wait it out.
+pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
+    element: E,
+    id: impl Into<ElementId>,
+) -> AnimationElement<E> {
+    element.with_animation(
+        id,
+        gpui::Animation::new(duration(ENTER)).with_easing(|k| 1. - (1. - k).powi(3)),
+        |element, k| {
+            let k = if cfg!(test) { 1. } else { k };
+            element.opacity(k).mt(px(-(1. - k) * DROP))
+        },
+    )
 }
 
 /// Something that opens and closes, such as a panel: how much of it shows.
