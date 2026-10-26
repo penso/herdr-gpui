@@ -226,7 +226,6 @@ impl HerdrWindow {
             .overflow_x_scroll()
             .track_scroll(&scroll)
             .px(px(layout.padding()))
-            .bg(self.fill().over(self.theme.surface, self.theme.surface))
             .text_color(rgb(self.theme.foreground));
         if let Some(snapshot) = &self.live.snapshot {
             for tab in snapshot.tabs.iter().filter(|t| {
@@ -339,6 +338,9 @@ impl HerdrWindow {
             .flex()
             .flex_shrink_1()
             .min_w_0()
+            // The list's fill, here rather than on the list so the body,
+            // laid over the list, draws above it.
+            .bg(self.fill().over(self.theme.surface, self.theme.surface))
             .on_drag_move(
                 cx.listener(move |this, event: &DragMoveEvent<ThumbDrag>, _, cx| {
                     let ThumbDrag(group) = *event.drag(cx);
