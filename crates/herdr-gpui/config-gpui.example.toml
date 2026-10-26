@@ -510,7 +510,8 @@ size = 12
 # "generic" notifications say which chat needs you, without its text;
 # "excerpt" adds a short excerpt of the message.
 # notifications = "generic"
-# Forget a paired device that has not connected for this many days (1 to 365).
+# Forget a paired device that has not connected for this many days (1 to 365),
+# or 0 to keep it until it is revoked.
 # device_idle_days = 30
 
 # Native GitHub sign-in uses the public Herdr GPUI GitHub App by default.

@@ -86,7 +86,7 @@ impl SettingsWindow {
                         value: size,
                         range: FONT_SIZE_RANGE,
                         unit: "px",
-                        slider: false,
+                        look: ui::Look::Steppers,
                         enabled: true,
                     },
                     self.number_edit_for(field),

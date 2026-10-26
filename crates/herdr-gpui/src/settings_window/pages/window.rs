@@ -64,7 +64,7 @@ impl SettingsWindow {
                     value,
                     range: field.range(),
                     unit: "px",
-                    slider: true,
+                    look: ui::Look::Slider,
                     enabled: true,
                 },
                 self.number_edit_for(field),

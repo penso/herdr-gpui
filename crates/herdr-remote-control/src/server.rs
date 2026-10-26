@@ -195,8 +195,8 @@ fn remember_origins(state: &State) {
         .remember(&origins);
 }
 
-async fn expire(state: Arc<State>, idle: Duration) {
-    let idle_ms = u64::try_from(idle.as_millis()).unwrap_or(u64::MAX);
+async fn expire(state: Arc<State>, idle: Option<Duration>) {
+    let idle_ms = idle.map(|idle| u64::try_from(idle.as_millis()).unwrap_or(u64::MAX));
     let mut ticker = tokio::time::interval(IDLE_CHECK);
     loop {
         ticker.tick().await;
@@ -206,7 +206,9 @@ async fn expire(state: Arc<State>, idle: Duration) {
             // Pictures expire on their own schedule, whether or not another
             // upload comes to sweep them.
             state.uploads.prune(now);
-            state.auth().expire_idle(now, idle_ms)
+            if let Some(idle_ms) = idle_ms {
+                let _ = state.auth().expire_idle(now, idle_ms);
+            }
         })
         .await;
     }
