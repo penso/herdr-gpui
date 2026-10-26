@@ -125,6 +125,25 @@ class InstallScriptTests(unittest.TestCase):
         self.assertLess(install.index(remove[0]), install.index("    Write-Host \"Uninstalled Herdr UI from"))
         self.assertIn(remove[1], steps)
 
+    def test_installed_automation_daemon_stops_before_its_files_change(self):
+        # Windows will not overwrite or delete herdr-automate.exe while the
+        # daemon the app started from it still runs.
+        install = INSTALL.read_text(encoding="utf-8")
+        stop = install.index("  $stopAutomate = {")
+        self.assertIn("$_.Path -eq $automate", install[stop:install.index("\n  }\n", stop)])
+        self.assertLess(stop, install.index("  if ($Uninstall) {"))
+        self.assertLess(install.index("    & $stopAutomate | Out-Null"),
+                        install.index("    if (Test-Path -LiteralPath $dest) { Remove-Item"))
+        self.assertLess(install.index("    $restartAutomate = & $stopAutomate"),
+                        install.index("    Copy-Item -Recurse -Force"))
+        self.assertLess(install.index("    Copy-Item -Recurse -Force"),
+                        install.index("    & $automate start"))
+        iss = ISS.read_text(encoding="utf-8")
+        for caller in ("function PrepareToInstall(", "function InitializeUninstall("):
+            body = iss[iss.index(caller):]
+            self.assertIn("StopAutomate()", body[:body.index("\nend;")], caller)
+        self.assertIn('Parameters: "start"; WorkingDir: "{app}"; Flags: runhidden nowait; Check: AutomateStopped', iss)
+
     @unittest.skipUnless(sys.platform == "win32" and shutil.which("powershell.exe"), "needs Windows PowerShell")
     def test_links_open_the_launcher_as_setup_exe_registers_and_uninstall_removes_them(self):
         """Registers a throwaway scheme with the script's own lines, reads it

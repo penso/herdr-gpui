@@ -2,8 +2,9 @@
 ; `windows-installer.py build`, which passes the defines below. It installs the
 ; release zip's tree unchanged: herdr-gpui.exe, a console program because it is
 ; also the command line terminals and agents run, herdr-gpui-launcher.exe,
-; which starts it without a console window, and the licenses. It never installs, starts, or stops
-; the Herdr daemon, and uninstalling keeps settings and Herdr sessions.
+; which starts it without a console window, herdr-automate.exe, the automation
+; daemon, and the licenses. It never installs, starts, or stops the Herdr daemon,
+; and uninstalling keeps settings and Herdr sessions.
 ; The directory and shortcut match site/install.ps1, so either replaces the other.
 
 #ifndef Version
@@ -133,10 +134,15 @@ Filename: "{app}\{#Launcher}"; Description: "{cm:LaunchProgram,{#AppName}}"; Fla
 ; The app's in-app update runs Setup silently with /RELAUNCH=1 and quits; this
 ; starts the updated app, through the launcher, once its files are in place.
 Filename: "{app}\{#Launcher}"; WorkingDir: "{app}"; Flags: nowait; Check: RelaunchRequested
+; The automation daemon Setup stopped to replace it, now the new copy.
+Filename: "{app}\{#Automate}"; Parameters: "start"; WorkingDir: "{app}"; Flags: runhidden nowait; Check: AutomateStopped
 
 [Code]
 const
   EnvironmentKey = 'Environment';
+
+var
+  StoppedAutomate: Boolean;
 
 { Set by the app's own updater, which has quit for the install. }
 function RelaunchRequested(): Boolean;
@@ -207,6 +213,78 @@ begin
     Path := Path + ExpandConstant('{app}');
   end;
   SetUserPath(Path);
+end;
+
+{ Whether herdr-automate.exe runs from Path. WQL strings escape backslashes
+  and quotes, and compare without case. }
+function AutomateRunsFrom(Path: String): Boolean;
+var
+  Locator, Service, Found: Variant;
+begin
+  StringChangeEx(Path, '\', '\\', True);
+  StringChangeEx(Path, '''', '\''', True);
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\CIMV2');
+    Found := Service.ExecQuery('SELECT ProcessId FROM Win32_Process WHERE Name = ''{#Automate}'' AND ExecutablePath = ''' + Path + '''');
+    Result := Found.Count > 0;
+  except
+    Log('Could not list running automation daemons: ' + GetExceptionMessage);
+    Result := False;
+  end;
+end;
+
+{ The automation daemon the app starts keeps running after it quits, and
+  Windows will not replace or delete its executable while it runs. Restart
+  Manager would end it mid-run, or fail to, so ask the installed copy to stop
+  once its runs finish and wait for it to exit. A daemon started from anywhere
+  else is left alone. Returns an error message, or '' once it is not running. }
+function StopAutomate(): String;
+var
+  Exe: String;
+  Code, Waited: Integer;
+begin
+  Result := '';
+  Exe := ExpandConstant('{app}\{#Automate}');
+  if not FileExists(Exe) or not AutomateRunsFrom(Exe) then
+    exit;
+  if not Exec(Exe, 'shutdown', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+  begin
+    Result := 'The automation daemon at ' + Exe + ' did not stop. Stop its runs with herdr-automate stop, then run Setup again.';
+    exit;
+  end;
+  Waited := 0;
+  while AutomateRunsFrom(Exe) do
+  begin
+    if Waited >= 30000 then
+    begin
+      Result := 'The automation daemon at ' + Exe + ' is still running. Quit it, then run Setup again.';
+      exit;
+    end;
+    Sleep(200);
+    Waited := Waited + 200;
+  end;
+  StoppedAutomate := True;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := StopAutomate();
+end;
+
+function AutomateStopped(): Boolean;
+begin
+  Result := StoppedAutomate;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  Problem: String;
+begin
+  Problem := StopAutomate();
+  Result := Problem = '';
+  if not Result then
+    SuppressibleMsgBox(Problem, mbError, MB_OK, IDOK);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

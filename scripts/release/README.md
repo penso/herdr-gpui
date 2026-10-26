@@ -194,13 +194,17 @@ compiler (`install-iscc`, checked against its SHA-256), compiles
 `Herdr-VERSION-TARGET-setup.exe` (`build`), and installs and uninstalls it on
 the runner (`smoke`), checking the files, their subsystems, `herdr-gpui.exe`'s
 output, the Start menu shortcut's target (the launcher) and AppUserModelID,
-the user `PATH` entry, and the Settings entry. CI's `windows-package` job runs the same
+the user `PATH` entry, and the Settings entry, and that an update and the
+uninstaller stop a running `herdr-automate.exe` daemon (the update starts the
+new copy again) rather than failing to replace it. CI's `windows-package` job runs the same
 optimized build, packaging, installer build, and install/uninstall check on
 `windows-2025` for any pull request that changes their inputs
 (`scripts/ci-changes.sh` lists them), and the required gate then requires it. The installer is per-user (no elevation),
 installs to `%LOCALAPPDATA%\Programs\Herdr UI` as `site/install.ps1` does, adds
 that directory to the user `PATH`, and creates the Start menu shortcut to the
-launcher. Both zips and both
+launcher. Both stop the installed automation daemon with `herdr-automate
+shutdown`, which lets its runs finish, before replacing or removing its files.
+Both zips and both
 installers are mandatory in the asset manifest and receive checksums, Sigstore
 sidecars and provenance like every other asset, after the Authenticode signing
 below when it is set up. The installers are also listed in their own

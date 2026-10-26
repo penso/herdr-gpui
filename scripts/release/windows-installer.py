@@ -263,14 +263,24 @@ def smoke(installer, signed=False):
         subprocess.run([str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
                         "/TASKS=addtopath", f"/DIR={app}", f"/LOG={Path(temp) / 'setup.log'}"],
                        check=True, timeout=600)
+        # The automation daemon keeps its state here rather than in the
+        # runner's profile; Setup and the uninstaller pass it on to the
+        # daemon commands they run.
+        env = {**os.environ, "HERDR_AUTOMATE_HOME": str(Path(temp).resolve() / "automate")}
         # Uninstall even when a check fails, so the user PATH and the
         # uninstall entry never point into the deleted scratch directory.
         try:
             check_installation(app, installer if signed else None)
-            check_update_relaunches(installer, app)
+            daemon = start_automate(app, env)
+            check_update_relaunches(installer, app, env)
+            check_automate_restarted(app, daemon)
             enable_startup(app / "herdr-gpui-launcher.exe")
         finally:
-            uninstall(app)
+            # With the daemon still running, so the uninstaller has to stop it.
+            try:
+                uninstall(app, env)
+            finally:
+                stop_processes_at(app / "herdr-automate.exe")
 
 
 def check_installation(app, signed_installer):
@@ -311,7 +321,7 @@ def check_installation(app, signed_installer):
 
 def processes_at(path):
     """Ids of running processes started from exactly `path`."""
-    query = ("Get-CimInstance Win32_Process -Filter \"Name='herdr-gpui.exe'\" | "
+    query = (f"Get-CimInstance Win32_Process -Filter \"Name='{path.name}'\" | "
              f"Where-Object ExecutablePath -eq '{path}' | ForEach-Object ProcessId")
     output = subprocess.run(["powershell", "-NoProfile", "-Command", query],
                             capture_output=True, text=True, check=True, timeout=60).stdout
@@ -323,7 +333,34 @@ def stop_processes_at(path):
         subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=60)
 
 
-def check_update_relaunches(installer, app):
+def start_automate(app, env):
+    """Start the installed automation daemon as the app does, and return its
+    process id."""
+    automate = app / "herdr-automate.exe"
+    # Not through pipes: the detached daemon inherits this command's output
+    # handles, and a pipe it holds would never reach end of file.
+    subprocess.run([str(automate), "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   check=True, timeout=60, env=env)
+    deadline = time.monotonic() + 60
+    while not (running := processes_at(automate)):
+        if time.monotonic() > deadline:
+            raise ValueError("herdr-automate start did not leave the daemon running")
+        time.sleep(1)
+    return running[0]
+
+
+def check_automate_restarted(app, before):
+    """Setup replaced herdr-automate.exe while its daemon ran: it stopped
+    that daemon and started the new copy."""
+    automate = app / "herdr-automate.exe"
+    deadline = time.monotonic() + 60
+    while not (running := processes_at(automate)) or before in running:
+        if time.monotonic() > deadline:
+            raise ValueError(f"Setup did not restart the automation daemon: {running}, before {before}")
+        time.sleep(1)
+
+
+def check_update_relaunches(installer, app, env):
     """Run Setup over the installation as the app's in-app update does
     (herdr-updater/src/windows.rs), and require it to start the app again."""
     gui = app / "herdr-gpui.exe"
@@ -331,7 +368,7 @@ def check_update_relaunches(installer, app):
         raise ValueError("A silent install started the app without /RELAUNCH=1")
     subprocess.run([str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
                     "/CLOSEAPPLICATIONS", "/RELAUNCH=1", f"/DIR={app}",
-                    f"/LOG={app.parent / 'update.log'}"], check=True, timeout=600)
+                    f"/LOG={app.parent / 'update.log'}"], check=True, timeout=600, env=env)
     try:
         deadline = time.monotonic() + 60
         while not processes_at(gui):
@@ -342,9 +379,9 @@ def check_update_relaunches(installer, app):
         stop_processes_at(gui)
 
 
-def uninstall(app):
+def uninstall(app, env):
     subprocess.run([str(app / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
-                   check=True, timeout=600)
+                   check=True, timeout=600, env=env)
     # The uninstaller hands off to a copy of itself and returns early.
     entry = str(app).lower()
     shortcut = Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Herdr UI.lnk"
