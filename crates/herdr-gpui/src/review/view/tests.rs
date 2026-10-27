@@ -198,6 +198,7 @@ fn a_stale_load_never_replaces_a_newer_one(cx: &mut gpui::TestAppContext) {
                 the(view),
                 0,
                 Err(herdr_vcs::Error::from(crate::git::Error::Worker).into()),
+                cx,
             );
             let review = view.reviews.values().next().unwrap();
             assert!(review.loaded().is_some());
@@ -205,6 +206,7 @@ fn a_stale_load_never_replaces_a_newer_one(cx: &mut gpui::TestAppContext) {
                 the(view),
                 1,
                 Err(herdr_vcs::Error::from(crate::git::Error::Worker).into()),
+                cx,
             );
             let review = view.reviews.values().next().unwrap();
             assert!(matches!(review.state, State::Failed(_)));
@@ -248,6 +250,7 @@ mod loading;
 mod origin;
 mod panel_editing;
 mod pending_send;
+mod remembered;
 mod resend;
 mod resize;
 mod scale;

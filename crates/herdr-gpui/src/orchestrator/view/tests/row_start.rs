@@ -16,6 +16,7 @@ fn start_agent_stays_on_a_row_beside_an_open_page(cx: &mut TestAppContext) {
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing::default(),
     };
     let config = crate::config::Config::default();

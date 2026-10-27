@@ -256,6 +256,7 @@ embedded_icons! {
     "file.svg",
     "git-branch.svg",
     "github.svg",
+    "gitlab.svg",
     "globe.svg",
     "issue.svg",
     "keyboard.svg",

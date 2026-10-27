@@ -280,6 +280,8 @@ impl HerdrWindow {
         self.menu.github_selected = None;
         self.menu.error = None;
         self.close_github_token();
+        self.github_auth_mut()
+            .recheck_access(std::time::Instant::now());
     }
 
     /// The strip naming the device's account and each additional one, with

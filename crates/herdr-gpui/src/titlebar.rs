@@ -34,7 +34,17 @@ const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if self.menu.page != Some(Page::GitHub) && !self.open_menu(window, cx) {
+        let shown = matches!(self.menu.page, Some(Page::GitHub | Page::GitLab));
+        if !shown && !self.open_menu(window, cx) {
+            return;
+        }
+        // GitLab waiting for a token opens its page, once GitHub has an
+        // account and nothing of its own to ask.
+        if self.orchestrator_gitlab_needs_sign_in(cx)
+            && self.pr_profile().is_some()
+            && !self.github_needs_attention()
+        {
+            self.open_gitlab_page(window, cx);
             return;
         }
         self.menu.page = Some(Page::GitHub);
@@ -303,7 +313,7 @@ impl HerdrWindow {
         let image = self
             .pr_profile()
             .and_then(|profile| self.menu.github_avatars.get(&profile.avatar_url));
-        let attention = self.github_needs_attention();
+        let attention = self.github_needs_attention() || self.orchestrator_gitlab_needs_sign_in(cx);
         div()
             .flex()
             .flex_none()
@@ -324,9 +334,9 @@ impl HerdrWindow {
                             .id("titlebar-avatar")
                             .role(Role::Button)
                             .aria_label(if attention {
-                                "GitHub account, needs attention"
+                                "Accounts, needs attention"
                             } else {
-                                "GitHub account"
+                                "Accounts"
                             })
                             .map(|control| {
                                 self.chrome_stop(

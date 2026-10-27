@@ -65,6 +65,22 @@ fn entries_are_named_by_service_and_account() {
         "dev.herdr.gpui.coder/coder"
     );
     assert_eq!(wide("ab"), [u16::from(b'a'), u16::from(b'b'), 0]);
+    assert_eq!(
+        part_target("dev.herdr.gpui.gitlab", "tokens", Set::A, 0),
+        "dev.herdr.gpui.gitlab/tokens#a1"
+    );
+    assert_eq!(
+        part_target("dev.herdr.gpui.gitlab", "tokens", Set::B, 2),
+        "dev.herdr.gpui.gitlab/tokens#b3"
+    );
+    let split = Split {
+        set: Set::B,
+        count: 3,
+    };
+    assert_eq!(Split::of(split.entry().as_bytes()).unwrap().unwrap(), split);
+    assert!(Split::of(b"glpat-token").is_none());
+    assert!(Split::of(b"herdr-parts:c:1").unwrap().is_err());
+    assert!(Split::of(b"herdr-parts:a:0").unwrap().is_err());
 }
 
 #[test]
@@ -83,26 +99,89 @@ fn saves_reads_replaces_and_removes_an_entry() {
     assert_eq!(scratch.read(host).as_deref(), Some("elsewhere"));
 }
 
+/// No part of either set is left for `account`.
+fn no_parts(scratch: &Scratch, account: &str) -> bool {
+    Set::BOTH.iter().all(|&set| {
+        (0..PARTS).all(|index| {
+            read_part(&part_target(&scratch.service, account, set, index))
+                .unwrap()
+                .is_none()
+        })
+    })
+}
+
 #[test]
-fn a_secret_too_large_for_credential_manager_is_refused_and_keeps_the_old_one() {
+fn a_secret_too_large_for_one_credential_is_split_and_joined_again() {
     let scratch = Scratch::new("large");
     let [main, _] = scratch.accounts;
-    scratch.save(main, Some("kept")).unwrap();
-    let largest = "a".repeat(CRED_MAX_CREDENTIAL_BLOB_SIZE as usize);
+    let largest = "a".repeat(PART);
     scratch.save(main, Some(&largest)).unwrap();
     assert_eq!(scratch.read(main), Some(largest));
+    // Each new split secret takes the other set of parts.
+    for fill in ["abc", "xyz", "abc"] {
+        let split = fill.repeat(PART);
+        scratch.save(main, Some(&split)).unwrap();
+        assert_eq!(scratch.read(main), Some(split));
+    }
+    // A smaller secret leaves no part of the larger one behind.
     scratch.save(main, Some("kept")).unwrap();
+    assert_eq!(scratch.read(main).as_deref(), Some("kept"));
+    assert!(no_parts(&scratch, main));
     let error = scratch
-        .save(
-            main,
-            Some(&"a".repeat(CRED_MAX_CREDENTIAL_BLOB_SIZE as usize + 1)),
-        )
+        .save(main, Some(&"a".repeat(PART * PARTS + 1)))
         .unwrap_err();
     assert!(
         matches!(&error, crate::Error::CredentialManager(Error::Write(source)) if source.kind() == io::ErrorKind::FileTooLarge),
         "{error:?}"
     );
     assert_eq!(scratch.read(main).as_deref(), Some("kept"));
+    // Removing the entry removes every part.
+    scratch.save(main, Some(&"abc".repeat(PART))).unwrap();
+    scratch.save(main, None).unwrap();
+    assert_eq!(scratch.read(main), None);
+    assert!(no_parts(&scratch, main));
+}
+
+#[test]
+fn a_save_stopped_before_its_switch_leaves_the_previous_secret_whole() {
+    let scratch = Scratch::new("stopped");
+    let [main, _] = scratch.accounts;
+    let previous = "p".repeat(PART * 2);
+    scratch.save(main, Some(&previous)).unwrap();
+    // A save that wrote the other set's parts, then stopped.
+    for index in 0..3 {
+        let target = part_target(&scratch.service, main, Set::B, index);
+        write_part(&target, "Herdr UI test", main, b"half-written").unwrap();
+    }
+    assert_eq!(scratch.read(main), Some(previous));
+    // The next save writes over them, and leaves none behind.
+    scratch.save(main, Some("next")).unwrap();
+    assert_eq!(scratch.read(main).as_deref(), Some("next"));
+    assert!(no_parts(&scratch, main));
+}
+
+#[test]
+fn a_split_secret_missing_a_part_is_an_error_not_a_shorter_secret() {
+    let scratch = Scratch::new("missing");
+    let [main, _] = scratch.accounts;
+    scratch.save(main, Some(&"m".repeat(PART * 2))).unwrap();
+    let entry = read_part(&target(&scratch.service, main)).unwrap().unwrap();
+    let split = Split::of(&entry).unwrap().unwrap();
+    delete(&wide(&part_target(&scratch.service, main, split.set, 1))).unwrap();
+    let error = read(&scratch.service, main).unwrap_err();
+    assert!(
+        matches!(&error, crate::Error::CredentialManager(Error::Read(source)) if source.kind() == io::ErrorKind::NotFound),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_secret_that_starts_like_a_split_entry_is_kept_as_given() {
+    let scratch = Scratch::new("marker");
+    let [main, _] = scratch.accounts;
+    let secret = "herdr-parts:a:1";
+    scratch.save(main, Some(secret)).unwrap();
+    assert_eq!(scratch.read(main).as_deref(), Some(secret));
 }
 
 #[test]

@@ -6,7 +6,9 @@
 //! agents, and each host's GitHub account, and acts on its events. The view
 //! itself knows nothing of its host.
 
-use super::{Event, LiveAgent, LiveBranch, Look, OrchestratorView, RepoSpec, Request, Timing};
+use super::{
+    Event, GitLabRead, LiveAgent, LiveBranch, Look, OrchestratorView, RepoSpec, Request, Timing,
+};
 use crate::{
     HerdrWindow, NavigationTarget,
     browser::{OrchestratorRepo, WebUrl},
@@ -151,6 +153,12 @@ impl HerdrWindow {
     /// of one repository are one: they share its database.
     pub(crate) fn repo_specs(&self) -> Vec<RepoSpec> {
         let mut specs: Vec<RepoSpec> = Vec::new();
+        // A headless window never reads the user's saved GitLab tokens.
+        let gitlab_store = if self.reads_credentials() {
+            self.config.gitlab.store()
+        } else {
+            herdr_credentials::Store::default()
+        };
         for (index, endpoint) in self.endpoints.iter().enumerate() {
             let target = &endpoint.connection.target;
             let state = if index == self.selected_endpoint {
@@ -190,6 +198,7 @@ impl HerdrWindow {
                         workspace_id: workspace.workspace_id.clone(),
                         token: token.clone(),
                         data_root: None,
+                        gitlab_store,
                         timing: Timing::default(),
                     },
                 });
@@ -221,6 +230,64 @@ impl HerdrWindow {
         self.orchestrators
             .get(&id)
             .map(|orchestrator| &orchestrator.view)
+    }
+
+    /// The GitLab projects this window's views read, for the account menu.
+    pub(crate) fn orchestrator_gitlab_hosts(&self, cx: &App) -> Vec<GitLabRead> {
+        self.orchestrators
+            .values()
+            .flat_map(|orchestrator| {
+                orchestrator
+                    .view
+                    .read(cx)
+                    .gitlab_hosts()
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// [`Self::orchestrator_gitlab_hosts`] over every main window, since a
+    /// saved token serves them all. A window handling its own input is left
+    /// out; never call it while a window's root view is being updated
+    /// without its window, as a spawned task's update is, since GPUI panics
+    /// reading that view.
+    pub(crate) fn all_orchestrator_gitlab_hosts(cx: &App) -> Vec<GitLabRead> {
+        cx.windows()
+            .into_iter()
+            .filter_map(|handle| handle.downcast::<HerdrWindow>())
+            .filter_map(|handle| handle.read(cx).ok())
+            .flat_map(|window| window.orchestrator_gitlab_hosts(cx))
+            .collect()
+    }
+
+    /// One of this window's views has a GitLab source waiting for a token,
+    /// which the title bar's account button marks.
+    pub(crate) fn orchestrator_gitlab_needs_sign_in(&self, cx: &App) -> bool {
+        self.orchestrators
+            .values()
+            .any(|orchestrator| orchestrator.view.read(cx).gitlab_needs_sign_in())
+    }
+
+    /// A saved sign-in changed, such as a GitLab token pasted in the account
+    /// menu: every view in every main window syncs again, so a new token
+    /// shows without pressing Refresh. Each window keeps its own views and
+    /// workers. Like [`Self::all_orchestrator_gitlab_hosts`], it runs
+    /// outside any window's update.
+    pub(crate) fn refresh_all_orchestrators(cx: &mut App) {
+        let windows: Vec<_> = cx
+            .windows()
+            .into_iter()
+            .filter_map(|handle| handle.downcast::<HerdrWindow>())
+            .collect();
+        for handle in windows {
+            let _ = handle.update(cx, |window, _, cx| {
+                for orchestrator in window.orchestrators.values() {
+                    orchestrator
+                        .view
+                        .update(cx, |view, cx| view.credentials_changed(cx));
+                }
+            });
+        }
     }
 
     /// Every view, by id.
@@ -443,9 +510,13 @@ impl HerdrWindow {
                 }
                 Err(_) => self.tell_orchestrator(id, super::Error::NotWebAddress, cx),
             },
-            Event::SignIn => {
+            Event::SignIn(provider) => {
                 if self.open_menu(window, cx) {
-                    self.menu.page = Some(crate::menu::Page::GitHub);
+                    if provider == super::Provider::Gitlab {
+                        self.open_gitlab_page(window, cx);
+                    } else {
+                        self.menu.page = Some(crate::menu::Page::GitHub);
+                    }
                 }
                 cx.notify();
             }

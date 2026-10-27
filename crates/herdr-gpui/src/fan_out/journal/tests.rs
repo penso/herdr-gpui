@@ -331,12 +331,21 @@ fn only_the_first_process_to_open_the_journal_saves_it() {
     assert!(first.begin(record(1)).unwrap().is_some());
     assert!(second.begin(record(2)).unwrap().is_none(), "kept in memory");
     drop(first);
-    assert!(
-        Journal::locked(dir.path())
+    // Another test's child process, between its fork and exec, briefly
+    // shares every open file of this one, so the lock may still be held
+    // for a moment after `first` closed it.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if Journal::locked(dir.path())
             .begin(record(3))
             .unwrap()
             .is_some()
-    );
+        {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "the lock was freed");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
 
 #[test]

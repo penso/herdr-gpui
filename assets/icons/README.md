@@ -172,6 +172,13 @@ identity or GitHub logo. All of them are embedded through a
 minimal GPUI asset source. GPUI renders them as SVG masks tinted with the current
 theme foreground, rather than fixed-color cached images.
 
+`gitlab.svg` is GitLab's tanuki mark from
+[Simple Icons 15.0.0 `icons/gitlab.svg`](https://github.com/simple-icons/simple-icons/blob/15.0.0/icons/gitlab.svg)
+(CC0-1.0), with its fill set to `currentColor` and its title removed. It
+names GitLab in the title bar's account menu and on GitLab items in the
+Orchestrator; the logo remains GitLab's trademark and identifies the service
+only.
+
 `vscode.svg`, `error.svg`, and `pass.svg` are Codicons from Microsoft's
 vscode-codicons, unchanged, under CC BY 4.0; `LICENSE-codicons` has the source
 revision, the license, and the trademark notice. `vscode.svg` marks the VS Code

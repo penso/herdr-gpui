@@ -15,6 +15,7 @@ fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut T
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing::default(),
     };
     let config = crate::config::Config::default();

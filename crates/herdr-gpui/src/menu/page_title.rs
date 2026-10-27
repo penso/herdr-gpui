@@ -61,6 +61,7 @@ impl Page {
             Self::Git => "Git",
             Self::GitCommit => "Commit",
             Self::GitHub => "GitHub account",
+            Self::GitLab => "GitLab tokens",
             Self::Group => "Tab actions",
             Self::Host => "Device",
             Self::Install => "Install",

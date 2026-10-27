@@ -15,6 +15,7 @@ pub(crate) mod devices;
 mod fan_out;
 mod git;
 mod github;
+pub(crate) mod gitlab;
 mod open_checkout;
 mod open_link;
 mod page;
