@@ -433,11 +433,24 @@ pub fn repository_input(
     worktree: Option<&herdr_client::protocol::ClientShellWorktree>,
     branch: Option<&str>,
 ) -> crate::Result<Input> {
+    repository_input_on(worktree, branch, &Origin::Local)
+}
+
+fn repository_input_on(
+    worktree: Option<&herdr_client::protocol::ClientShellWorktree>,
+    branch: Option<&str>,
+    origin: &Origin,
+) -> crate::Result<Input> {
     let key = worktree
         .map(|tree| tree.key.as_str())
         .ok_or(super::Error::Metadata)?;
     let branch = valid_branch(branch)?;
-    if !Path::new(key).is_absolute() {
+    let absolute = match origin {
+        Origin::Local => Path::new(key).is_absolute(),
+        // SSH Git commands run in a POSIX shell, including on Windows clients.
+        Origin::Ssh(_) => key.starts_with('/') && !key.chars().any(char::is_control),
+    };
+    if !absolute {
         return Err(super::Error::AbsolutePath.into());
     }
     Ok(Input {
@@ -465,7 +478,7 @@ pub fn workspace_input(
     });
     let branch = workspace.branch.as_deref();
     if worktree.is_some() || *origin != Origin::Local || workspace.new_workspace_cwd.is_empty() {
-        return repository_input(worktree, branch);
+        return repository_input_on(worktree, branch, origin);
     }
     let branch = valid_branch(branch)?;
     if !Path::new(&workspace.new_workspace_cwd).is_absolute() {

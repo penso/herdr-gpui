@@ -2,8 +2,8 @@
 //! flight at a time and a superseded one is dropped by generation, so a reply
 //! from a dismissed dialog can never land in a newer one.
 
-use super::{Item, Origin, fetch};
-use crate::{github::Tokens, pull_request::Input};
+use super::{Item, Origin, Target, fetch};
+use crate::github::Tokens;
 use std::{
     sync::{
         Arc,
@@ -34,7 +34,7 @@ pub(crate) enum Done {
 type Answer = crate::Result<Done>;
 
 struct Worker {
-    requests: mpsc::SyncSender<(u64, Input, Tokens, Task)>,
+    requests: mpsc::SyncSender<(u64, Target, Tokens, Task)>,
     results: mpsc::Receiver<(u64, Answer)>,
 }
 
@@ -43,7 +43,7 @@ pub(crate) struct Lookup {
     worker: Option<Worker>,
     generation: Arc<AtomicU64>,
     busy: bool,
-    waiting: Option<(Input, Tokens, Task)>,
+    waiting: Option<(Target, Tokens, Task)>,
     /// Set while any request is outstanding, so the tabs can say so.
     pub loading: bool,
     pub origin: Option<Origin>,
@@ -65,17 +65,17 @@ impl Lookup {
         self.origin.is_some()
     }
 
-    pub fn list(&mut self, input: Input, tokens: impl Into<Tokens>) {
+    pub fn list(&mut self, input: Target, tokens: impl Into<Tokens>) {
         self.request(input, tokens.into(), Task::List);
         self.items.clear();
         self.origin = None;
     }
 
-    pub fn fetch_branch(&mut self, input: Input, tokens: impl Into<Tokens>, item: &Item) {
+    pub fn fetch_branch(&mut self, input: Target, tokens: impl Into<Tokens>, item: &Item) {
         self.request(input, tokens.into(), Task::Fetch(item.clone()));
     }
 
-    fn request(&mut self, input: Input, token: Tokens, task: Task) {
+    fn request(&mut self, input: Target, token: Tokens, task: Task) {
         self.generation.fetch_add(1, Ordering::Relaxed);
         self.waiting = Some((input, token, task));
         self.loading = true;
@@ -144,7 +144,7 @@ impl Lookup {
     }
 
     fn start(&mut self) -> bool {
-        let (requests, incoming) = mpsc::sync_channel::<(u64, Input, Tokens, Task)>(1);
+        let (requests, incoming) = mpsc::sync_channel::<(u64, Target, Tokens, Task)>(1);
         let (outgoing, results) = mpsc::sync_channel(1);
         let current = self.generation.clone();
         let mut cooldown = self.cooldown;

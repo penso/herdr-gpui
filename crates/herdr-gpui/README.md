@@ -3715,6 +3715,15 @@ Ctrl+Shift+U is left unbound for
   then they are faded, and hovering one says to sign in from the account
   button. A `gh` or browser login is not picked up by itself, and a development build
   (`just run`) keeps its sign-in apart from the installed app's Keychain entry.
+  Both tabs work on saved SSH hosts with daemon-reported repository metadata.
+  The repository's GitHub remote is read over SSH, and listings use that device's
+  GitHub account (or the main account when it has no separate sign-in), including
+  additional-account owner routing. GitHub tokens stay on this computer. Picking
+  a PR fetches its head on the selected host before asking its daemon to create
+  the worktree; picking an issue creates a new branch there. The checkout's agent
+  context notes are also written on that host. These SSH operations require a
+  POSIX shell and Git; fetching uses the host's Git credentials. The branch tab
+  still lists local branches only.
   The PR tab supports fork pull requests: it fetches GitHub's PR head ref from
   the listed repository's remote and creates a local `pr/<number>` branch.
   Existing local branches are preserved; repository trust is not granted. In a

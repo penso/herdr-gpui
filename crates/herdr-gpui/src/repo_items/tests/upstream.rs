@@ -116,10 +116,13 @@ fn upstream_pull_requests_are_fetched_from_upstream_not_origin() {
     let outsider = commit(&base, "outsider head");
     git(&base, &["update-ref", "refs/pull/9/head", &outsider]);
     git(&base, &["branch", "release-fix"]);
-    let input = crate::pull_request::Input {
-        checkout: Some(checkout.to_str().unwrap().into()),
-        repo_key: Some(checkout.join(".git").to_str().unwrap().into()),
-        branch: "main".into(),
+    let input = super::super::Target {
+        host: crate::pull_request::Origin::Local,
+        input: crate::pull_request::Input {
+            checkout: Some(checkout.to_str().unwrap().into()),
+            repo_key: Some(checkout.join(".git").to_str().unwrap().into()),
+            branch: "main".into(),
+        },
     };
     let prs = listed();
     super::super::fetch::fetch_branch(&input, &prs[2], &|| false).unwrap();

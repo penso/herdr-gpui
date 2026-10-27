@@ -20,6 +20,40 @@ use std::{
 const TIMEOUT: Duration = Duration::from_secs(15);
 pub(crate) const DIRECTORY: &str = "herdr";
 
+/// Keep daemon-reported paths on their owning host, even when the same path
+/// happens to exist on this computer.
+pub(crate) fn write_on(
+    host: &crate::pull_request::Origin,
+    checkout: &str,
+    item: &Item,
+    origin: &Origin,
+) -> crate::Result<()> {
+    match host {
+        crate::pull_request::Origin::Local => write(Path::new(checkout), item, origin).map(|_| ()),
+        crate::pull_request::Origin::Ssh(host) => super::remote::run(
+            host,
+            &remote_script(checkout, item, origin)?,
+            Instant::now() + TIMEOUT,
+            &|| false,
+        ),
+    }
+}
+
+pub(super) fn remote_script(checkout: &str, item: &Item, origin: &Origin) -> crate::Result<String> {
+    use herdr_client::shell_quote;
+    let checkout = super::remote::directory(checkout)?;
+    Ok(format!(
+        "set -eu\ndirectory=$(git -c core.fsmonitor=false -C {} rev-parse --absolute-git-dir)\n\
+         case \"$directory\" in /*) ;; *) exit 1 ;; esac\n\
+         directory=\"$directory/{DIRECTORY}\"\nmkdir -p -- \"$directory\"\n\
+         printf '%s' {} > \"$directory/context.json\"\n\
+         printf '%s' {} > \"$directory/CONTEXT.md\"\n",
+        shell_quote(checkout),
+        shell_quote(&json(item, origin)),
+        shell_quote(&markdown(item, origin)),
+    ))
+}
+
 /// Write the note for `item` into `checkout`, reporting the directory it landed
 /// in. Blocking: callers run it on a background thread.
 pub(crate) fn write(checkout: &Path, item: &Item, origin: &Origin) -> crate::Result<PathBuf> {

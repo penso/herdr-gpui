@@ -23,6 +23,7 @@ mod github_sign_in_hint;
 mod local_listings;
 mod name_field;
 mod open_remove_shortcuts;
+mod remote_listings;
 
 fn origin() -> Origin {
     Origin {

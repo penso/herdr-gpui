@@ -2,8 +2,8 @@
 //! request's head branch reachable before a checkout is asked for. Every step
 //! has a deadline and runs off the UI thread.
 
-use super::{Item, Kind, Origin, model::LIMIT, model::parse};
-use crate::pull_request::{Input, local_checkout, local_repository, run};
+use super::{Item, Kind, Origin, Target, model::LIMIT, model::parse};
+use crate::pull_request::{local_checkout, local_repository, remote_repository, run};
 use std::time::{Duration, Instant};
 
 pub(super) const TIMEOUT: Duration = Duration::from_secs(20);
@@ -24,13 +24,20 @@ const QUERY: &str = r#"query($owner: String!, $repo: String!, $count: Int!) {
 
 /// The repository's open pull requests and issues, most recently updated first.
 pub(super) fn list(
-    input: &Input,
+    target: &Target,
     tokens: &crate::github::Tokens,
     cancelled: impl Fn() -> bool,
     cooldown: &mut Option<Duration>,
 ) -> crate::Result<(Origin, Vec<Item>)> {
     let deadline = Instant::now() + TIMEOUT;
-    let origin = Origin::from(local_repository(input, deadline, &cancelled)?);
+    let origin = Origin::from(match &target.host {
+        crate::pull_request::Origin::Local => {
+            local_repository(&target.input, deadline, &cancelled)?
+        }
+        crate::pull_request::Origin::Ssh(host) => {
+            remote_repository(host, &target.input, deadline, &cancelled)?
+        }
+    });
     // The account that reads the listed repository's owner, which is the
     // upstream owner in a fork checkout.
     let token = tokens.for_owner(&origin.owner).clone();
@@ -55,12 +62,25 @@ pub(super) fn list(
 /// published fork PR refs on the listed repository's remote.
 /// Existing local branches are never moved by this fetch.
 pub(super) fn fetch_branch(
-    input: &Input,
+    target: &Target,
     item: &Item,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<()> {
     let deadline = Instant::now() + FETCH_TIMEOUT;
-    let checkout = local_checkout(input, deadline, cancelled)?;
+    if let crate::pull_request::Origin::Ssh(host) = &target.host {
+        let directory = target
+            .input
+            .repo_key
+            .as_deref()
+            .ok_or(herdr_github::pull_request::Error::Metadata)?;
+        return super::remote::run(
+            host,
+            &super::remote::fetch_script(directory, item)?,
+            deadline,
+            cancelled,
+        );
+    }
+    let checkout = local_checkout(&target.input, deadline, cancelled)?;
     let refspec = item.fetch_refspec();
     let mut command = herdr_client::new_command("git");
     command

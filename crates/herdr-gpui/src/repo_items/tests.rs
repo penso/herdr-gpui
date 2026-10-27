@@ -1,10 +1,13 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{Kind, Origin, issue_branch, model::parse, write_context};
+use super::{Kind, Origin, context::write as write_context, issue_branch, model::parse};
 use crate::Error;
 use core::prelude::v1::test;
 use serde_json::json;
 
+#[cfg(unix)]
+mod remote;
+mod remote_target;
 mod upstream;
 
 fn origin() -> Origin {
@@ -183,10 +186,13 @@ fn fork_pr_fetch_uses_the_origin_pr_ref_without_moving_local_branches() {
     );
     let head = git(&remote, &["rev-parse", "HEAD"]);
     git(&remote, &["update-ref", "refs/pull/51/head", &head]);
-    let input = crate::pull_request::Input {
-        checkout: Some(checkout.to_str().unwrap().into()),
-        repo_key: Some(checkout.join(".git").to_str().unwrap().into()),
-        branch: "main".into(),
+    let input = super::Target {
+        host: crate::pull_request::Origin::Local,
+        input: crate::pull_request::Input {
+            checkout: Some(checkout.to_str().unwrap().into()),
+            repo_key: Some(checkout.join(".git").to_str().unwrap().into()),
+            branch: "main".into(),
+        },
     };
     let prs = parse(&response(), &origin(), Kind::PullRequest).unwrap();
     super::fetch::fetch_branch(&input, &prs[1], &|| false).unwrap();

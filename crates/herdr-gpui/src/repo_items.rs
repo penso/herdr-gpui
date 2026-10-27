@@ -8,13 +8,14 @@ mod context;
 mod fetch;
 mod lookup;
 mod model;
+mod remote;
 
 #[cfg(test)]
 mod tests;
 
 pub(crate) use {
     branches::{Branch, list as list_branches},
-    context::write as write_context,
+    context::write_on as write_context,
     lookup::Lookup,
     model::{Item, Kind},
 };
@@ -23,6 +24,14 @@ pub(crate) use {
 pub(crate) use model::issue_branch;
 
 use crate::pull_request::Remote;
+
+/// A lookup's checkout and the host that owns its paths travel together,
+/// including through the worker queue and PR preparation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Target {
+    pub host: crate::pull_request::Origin,
+    pub input: crate::pull_request::Input,
+}
 
 /// The GitHub repository a workspace's pull requests are opened against: its
 /// `upstream` remote in a fork checkout, otherwise `origin`.

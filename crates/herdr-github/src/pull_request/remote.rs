@@ -65,12 +65,42 @@ pub fn base_repository(
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Base> {
     let origin = origin_repository(checkout, deadline, cancelled);
-    if let Ok(upstream) = git(
+    let upstream = git(
         checkout,
         &["config", "--default", "", "--get", "remote.upstream.url"],
         deadline,
         cancelled,
-    ) && let Some((owner, repo)) = crate::github_repo(&upstream)
+    );
+    base(origin, upstream.ok().as_deref())
+}
+
+/// Resolve a saved SSH host's repository without interpreting its paths on
+/// this machine. Both reads share one deadline and the caller's cancellation.
+pub fn remote_repository(
+    target: &str,
+    input: &super::Input,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<Base> {
+    let directory = input.repo_key.as_deref().ok_or(super::Error::Metadata)?;
+    let read = |key| {
+        let timeout = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(super::Error::Timeout)?;
+        Ok::<_, crate::Error>(herdr_client::remote_config_value(
+            target, directory, key, timeout, cancelled,
+        )?)
+    };
+    let origin = read("remote.origin.url")?
+        .as_deref()
+        .and_then(crate::github_repo)
+        .ok_or_else(|| super::Error::Origin.into());
+    let upstream = read("remote.upstream.url")?;
+    base(origin, upstream.as_deref())
+}
+
+fn base(origin: crate::Result<(String, String)>, upstream: Option<&str>) -> crate::Result<Base> {
+    if let Some((owner, repo)) = upstream.and_then(crate::github_repo)
         && !origin
             .as_ref()
             .is_ok_and(|origin| same_repository(origin, (&owner, &repo)))
@@ -99,3 +129,6 @@ pub fn base_repository(
 fn same_repository((owner, repo): &(String, String), other: (&str, &str)) -> bool {
     owner.eq_ignore_ascii_case(other.0) && repo.eq_ignore_ascii_case(other.1)
 }
+
+#[cfg(test)]
+mod tests;

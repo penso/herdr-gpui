@@ -435,7 +435,7 @@ impl HerdrWindow {
             if !source.checkouts.listed {
                 self.list_checkouts();
             }
-            if self.menu.github.connected() {
+            if self.pr_profile().is_some() {
                 self.list_repo_items();
             }
         }
@@ -453,7 +453,7 @@ impl HerdrWindow {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
-        if tab.kind().is_some() && !self.menu.github.connected() {
+        if tab.kind().is_some() && self.pr_profile().is_none() {
             return;
         }
         let Some(source) = &mut self.menu.worktree else {
@@ -550,7 +550,7 @@ impl HerdrWindow {
 
     /// Read the repository's branches off the UI thread. Local Git only reads
     /// a repository on this machine, so it is limited to the owned local
-    /// daemon, as the GitHub listings are.
+    /// daemon.
     fn list_branches(&mut self, cx: &mut Context<Self>) {
         let input = self.local_repository_input();
         let Some(source) = &mut self.menu.worktree else {
@@ -626,14 +626,23 @@ impl HerdrWindow {
     }
 
     /// The checkout to read and the token to read GitHub with.
-    fn repo_items_request(
+    pub(super) fn repo_items_request(
         &self,
-    ) -> crate::Result<(crate::pull_request::Input, crate::github::Tokens)> {
-        let input = self.local_repository_input()?;
+    ) -> crate::Result<(repo_items::Target, crate::github::Tokens)> {
+        if !self.menu_target_current() {
+            return Err(crate::Error::StaleWorkspace);
+        }
+        if !self.live.status.is_connected() {
+            return Err(crate::Error::NotConnected);
+        }
+        let host = self
+            .pr_origin()
+            .ok_or(herdr_github::pull_request::Error::UntrustedEndpoint)?;
+        let input = self.menu_target_input(&host)?;
         let tokens = self
-            .main_tokens()
+            .pr_tokens()
             .ok_or(herdr_github::Error::Authentication)?;
-        Ok((input, tokens))
+        Ok((repo_items::Target { host, input }, tokens))
     }
 
     /// Open or create whatever the row at `row` of the open listing names.
@@ -780,6 +789,9 @@ impl HerdrWindow {
         response: &serde_json::Value,
         cx: &mut Context<Self>,
     ) {
+        let Some(host) = self.pr_origin() else {
+            return;
+        };
         let Some(source) = &mut self.menu.worktree else {
             return;
         };
@@ -790,15 +802,14 @@ impl HerdrWindow {
         };
         let Some(checkout) = response["workspace"]["worktree"]["checkout_path"]
             .as_str()
-            .filter(|path| std::path::Path::new(path).is_absolute())
-            .map(std::path::PathBuf::from)
+            .map(str::to_owned)
         else {
             self.local_error = Some("The daemon did not report the new checkout path, so no agent context note was written.".into());
             return;
         };
         let write = cx
             .background_executor()
-            .spawn(async move { repo_items::write_context(&checkout, &item, &origin) });
+            .spawn(async move { repo_items::write_context(&host, &checkout, &item, &origin) });
         cx.spawn(async move |this, cx| {
             let result = write.await;
             let _ = this.update(cx, |this, cx| {

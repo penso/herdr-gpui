@@ -23,7 +23,7 @@ pub use {
         Input, MergeMethod, Origin, Outcome, PullRequest, ReviewDecision, State, Tone, clean,
         fork_branch_number, repository_input, workspace_input,
     },
-    remote::{Base, Remote, base_repository},
+    remote::{Base, Remote, base_repository, remote_repository},
     store::{Store, View},
 };
 
