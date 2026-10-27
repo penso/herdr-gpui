@@ -10,10 +10,11 @@ fn sustained_inbound_progress_survives_a_backpressured_outgoing_image() {
         .unwrap();
     let mut prefix = [0; 4];
     server.read_exact(&mut prefix).unwrap();
-    // Never drain the image. Repeated large inbound frames must still finish
-    // within the unchanged partial-frame deadline while outbound writes stall.
+    // Never drain the image. The worker must deliver repeated large inbound
+    // frames while enforcing its unchanged partial-frame deadline. A stopwatch
+    // here would also time serialization and payload validation outside that
+    // deadline, making debug builds fail under CPU contention after delivery.
     for value in [11, 22] {
-        let started = Instant::now();
         send(
             &mut server,
             ServerMessage::Graphics {
@@ -27,7 +28,6 @@ fn sustained_inbound_progress_survives_a_backpressured_outgoing_image() {
             matches!(event, ClientEvent::Message(ServerMessage::Graphics { bytes })
             if bytes.len() == 24 * 1024 * 1024 && bytes.iter().all(|byte| *byte == value))
         );
-        assert!(started.elapsed() < TIMEOUT);
         assert!(
             !cancel.is_finished(),
             "publication is not worker completion"
