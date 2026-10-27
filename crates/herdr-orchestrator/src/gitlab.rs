@@ -2,13 +2,20 @@
 //! agent-launcher's GitLab row format: `native_id` is the issue's project
 //! `iid`. Every sync is a complete listing, so it may replace the cache.
 //!
-//! The token comes from `GITLAB_TOKEN` (or `GITLAB_ACCESS_TOKEN`) for the host
-//! `GITLAB_HOST` names, gitlab.com by default, else from the GitLab CLI's own
-//! sign-in for the remote's instance. Without one, public projects still list.
+//! The token comes from the `GITLAB_TOKEN` (or `GITLAB_ACCESS_TOKEN`) a local
+//! checkout's `.envrc` sets (`envrc`), else from the login shell's for the
+//! instance `GITLAB_HOST` names, gitlab.com by default, else from the one
+//! pasted in the account menu (`saved`), else from the GitLab CLI's own
+//! sign-in there (`account`). Without one, public projects still list.
 //!
 //! A remote on an SSH host of its own, such as `gitlab-ssh.example.com` for
 //! an instance served at `gitlab.example.com`, is read from the instance
 //! whose `ssh_host` the GitLab CLI's config names it, as glab itself does.
+
+pub mod account;
+pub mod envrc;
+pub mod oauth;
+pub mod saved;
 
 use super::{Activity, Checkpoint, Item, ItemKey, Provider, SourceKey};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -60,15 +67,25 @@ pub enum Error {
     #[error("The GitLab token is not one an HTTP header can carry")]
     Token,
     #[error(
-        "GitLab shows {repository} only when signed in: set GITLAB_TOKEN or run glab auth login"
+        "GitLab shows {repository} only when signed in: add a token from the account button at the top right"
     )]
     SignIn { repository: String },
     #[error(
         "GitLab shows {repository} only when signed in, and a token is never sent over plain HTTP: use an https:// remote"
     )]
     InsecureRemote { repository: String },
-    #[error("GitLab refused the token; renew it with glab auth login or replace GITLAB_TOKEN")]
+    #[error("GitLab refused the token; replace it from the account button at the top right")]
     Authentication,
+    #[error(
+        "GitLab refused GITLAB_TOKEN; change or unset it, since it is tried before a token saved in the app"
+    )]
+    EnvironmentRefused,
+    #[error(
+        "GitLab refused the GITLAB_TOKEN this checkout's .envrc sets; change it there, since it is tried first"
+    )]
+    EnvrcRefused,
+    #[error("GitLab refused the token's access; it needs the read_api scope")]
+    Scope,
     #[error("GitLab refused access to {repository}; the token needs the read_api scope")]
     Forbidden { repository: String },
     #[error("GitLab shows no project {repository} to this token")]
@@ -77,6 +94,73 @@ pub enum Error {
     RateLimit,
     #[error("GitLab request failed (HTTP {0})")]
     Status(u16),
+    #[error("GitLab's sign-in was declined")]
+    Denied,
+    #[error("The GitLab sign-in code expired; connect again")]
+    CodeExpired,
+    #[error("{0:?} is not a GitLab host name")]
+    Host(String),
+    #[error(
+        "GitLab at {0} is read over plain HTTP, and a token is only ever sent over HTTPS: use an https:// remote"
+    )]
+    InsecureHost(String),
+    #[error("GitLab tokens are saved for at most {} hosts", saved::MAX_HOSTS)]
+    TooManyHosts,
+    #[error("The saved GitLab tokens are not in the expected form")]
+    Record,
+    #[error("The folder for saved GitLab tokens could not be found: {0}")]
+    Directory(#[source] herdr_client::local_path::PathError),
+    #[cfg(target_os = "linux")]
+    #[error(
+        "No desktop keyring is running to save a GitLab token in. Start GNOME Keyring, KWallet, or KeePassXC, set [gitlab] allow_plaintext_credentials = true, or use GITLAB_TOKEN"
+    )]
+    NoKeyring(#[source] herdr_credentials::Error),
+    #[error(
+        "No secure credential store is available to save a GitLab token in. Set [gitlab] allow_plaintext_credentials = true, or use GITLAB_TOKEN"
+    )]
+    NoStore(#[source] herdr_credentials::Error),
+    #[error("The GitLab token could not be read or saved: {0}")]
+    Store(#[source] herdr_credentials::Error),
+}
+
+impl From<herdr_credentials::Error> for Error {
+    fn from(error: herdr_credentials::Error) -> Self {
+        match error {
+            #[cfg(target_os = "linux")]
+            herdr_credentials::Error::SecretServiceUnavailable => Self::NoKeyring(error),
+            herdr_credentials::Error::Policy => Self::NoStore(error),
+            error => Self::Store(error),
+        }
+    }
+}
+
+/// The `[gitlab]` table.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Config {
+    /// Saves pasted tokens in the private `0600` `gitlab-credentials` file
+    /// when no desktop keyring is running. Same meaning as `[github]`'s.
+    pub allow_plaintext_credentials: bool,
+    /// The OAuth application ID that connects accounts on a self-managed
+    /// instance, by instance (`"gitlab.example.com" = "<id>"`). gitlab.com
+    /// uses Herdr UI's own unless one is set here.
+    pub applications: std::collections::BTreeMap<String, String>,
+}
+
+impl Config {
+    /// The OAuth application that connects accounts on `instance`, if any.
+    pub fn application(&self, instance: &str) -> Option<&str> {
+        self.applications
+            .iter()
+            .find(|(host, _)| saved::normalize_host(host).as_deref() == Some(instance))
+            .map(|(_, application)| application.as_str())
+            .or_else(|| (instance == DEFAULT_HOST).then_some(oauth::GITLAB_COM_APPLICATION))
+    }
+
+    /// Where pasted tokens are saved.
+    pub fn store(&self) -> herdr_credentials::Store {
+        herdr_credentials::Store::for_policy(self.allow_plaintext_credentials)
+    }
 }
 
 impl Error {
@@ -87,9 +171,29 @@ impl Error {
             Self::SignIn { .. }
                 | Self::InsecureRemote { .. }
                 | Self::Authentication
+                | Self::EnvironmentRefused
+                | Self::EnvrcRefused
+                | Self::Scope
                 | Self::Forbidden { .. }
                 | Self::NotFound { .. }
         )
+    }
+
+    /// A missing or refused token, which a token pasted in Settings >
+    /// GitLab fixes; the view offers that page rather than a failure.
+    pub fn needs_sign_in(&self) -> bool {
+        matches!(self, Self::SignIn { .. } | Self::Authentication)
+    }
+
+    /// The same failure for a token from `source`: a refused `GITLAB_TOKEN`
+    /// asks for the shell or `.envrc` that sets it to change, since a token
+    /// saved in the app is only tried after it.
+    pub fn from_source(self, source: account::Source) -> Self {
+        match (self, source) {
+            (Self::Authentication, account::Source::Environment) => Self::EnvironmentRefused,
+            (Self::Authentication, account::Source::Envrc) => Self::EnvrcRefused,
+            (error, _) => error,
+        }
     }
 }
 
@@ -116,6 +220,14 @@ impl Scheme {
             Ok(url) if url.scheme() == "http" => Self::Http,
             _ => Self::Https,
         }
+    }
+
+    /// How `source` is read: over its repository's remote's scheme when that
+    /// remote is the source's, else HTTPS.
+    pub fn of_source(info: Option<&super::repo::RepoInfo>, source: &SourceKey) -> Self {
+        info.and_then(|info| info.remote.as_ref())
+            .filter(|remote| remote.source == *source)
+            .map_or(Self::Https, |remote| Self::of_remote(&remote.url))
     }
 
     fn as_str(self) -> &'static str {
@@ -173,11 +285,31 @@ impl Api {
                 .api_host
                 .clone()
                 .unwrap_or_else(|| mapped.host.clone()),
-            // glab reads its API over HTTPS unless told otherwise.
-            scheme: match mapped.api_protocol.as_deref() {
-                Some(protocol) if protocol.eq_ignore_ascii_case("http") => Scheme::Http,
-                _ => Scheme::Https,
-            },
+            scheme: Self::cli_scheme(Some(mapped)),
+        }
+    }
+
+    /// The API of instance `host`, as typed in the account menu or named by
+    /// a saved token: the GitLab CLI's `api_host` and `api_protocol` for it,
+    /// else the instance itself over HTTPS.
+    pub fn of_instance(host: &str, cli: &[cli_hosts::CliHost]) -> Self {
+        let named = cli
+            .iter()
+            .find(|named| named.host.eq_ignore_ascii_case(host));
+        Self {
+            instance: host.to_owned(),
+            host: named
+                .and_then(|named| named.api_host.clone())
+                .unwrap_or_else(|| host.to_owned()),
+            scheme: Self::cli_scheme(named),
+        }
+    }
+
+    /// glab reads an instance's API over HTTPS unless told otherwise.
+    fn cli_scheme(named: Option<&cli_hosts::CliHost>) -> Scheme {
+        match named.and_then(|named| named.api_protocol.as_deref()) {
+            Some(protocol) if protocol.eq_ignore_ascii_case("http") => Scheme::Http,
+            _ => Scheme::Https,
         }
     }
 
@@ -222,12 +354,7 @@ pub fn sync(
     cancelled: &impl Fn() -> bool,
     cooldown: &mut Option<Duration>,
 ) -> super::Result<Listing> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(TIMEOUT))
-        .max_redirects(0)
-        .http_status_as_error(false)
-        .build()
-        .into();
+    let agent = agent(TIMEOUT);
     let credential = Credential::new(api.scheme, token);
     let mut fetch = |after| {
         if cancelled() {
@@ -353,17 +480,34 @@ fn fetch_page(
         );
         return Err(status_error(status, &source.repository, credential));
     }
+    serde_json::from_slice(&body(&mut reply, LIMIT)?).map_err(Error::Json)
+}
+
+/// An agent for GitLab's API: bounded by `timeout`, following no redirect,
+/// so a token is never carried to another address, and returning refusals
+/// as statuses to read.
+fn agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .max_redirects(0)
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
+/// A reply's body, refused when it is larger than `limit`.
+fn body(reply: &mut ureq::http::Response<ureq::Body>, limit: u64) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
     reply
         .body_mut()
         .as_reader()
-        .take(LIMIT + 1)
+        .take(limit + 1)
         .read_to_end(&mut bytes)
         .map_err(Error::Read)?;
-    if bytes.len() as u64 > LIMIT {
+    if bytes.len() as u64 > limit {
         return Err(Error::Size);
     }
-    serde_json::from_slice(&bytes).map_err(Error::Json)
+    Ok(bytes)
 }
 
 fn authorization(token: &SecretString) -> Result<ureq::http::HeaderValue, Error> {
@@ -414,10 +558,16 @@ pub fn retry_after(
     Some(Duration::from_secs(wait.clamp(300, 86400)))
 }
 
-/// The token to read instance `host` as: the environment's, when it is meant
-/// for this instance, else the GitLab CLI's. Blocks on a subprocess: call it from a worker.
-pub fn token(host: &str) -> Option<SecretString> {
-    environment_token(host, |name| std::env::var_os(name)).or_else(|| cli_token(host))
+/// The token to read instance `host` as and where it came from, in
+/// [`account::lookup`]'s order. Blocks on the credential store and
+/// subprocesses, which `cancelled` stops: call it from a worker.
+pub fn token(
+    host: &str,
+    store: herdr_credentials::Store,
+    checkout: Option<&std::path::Path>,
+    cancelled: &impl Fn() -> bool,
+) -> Option<account::Found> {
+    account::lookup(host, store, checkout, cancelled)
 }
 
 /// The GitLab CLI's environment token, sent only to the host it names, so a

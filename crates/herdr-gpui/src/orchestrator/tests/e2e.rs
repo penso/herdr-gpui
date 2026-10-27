@@ -112,6 +112,7 @@ fn pull_requests_and_issues_list_a_local_checkout(cx: &mut TestAppContext) {
         workspace_id: "w1".into(),
         token: Some(crate::github::Tokens::new(&main, std::iter::empty())),
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),
             sync: Duration::from_secs(3600),

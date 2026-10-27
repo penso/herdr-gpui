@@ -76,6 +76,35 @@ The status dot pulses amber during local daemon startup and is red when disconne
 Healthy connections leave the status bar quiet; connection indicators live in the
 device picker. Startup, disconnection, and operation errors remain in the status bar.
 
+## macOS Git permission troubleshooting
+
+If Git in a local Herdr UI terminal reports `Operation not permitted`, even
+though the relevant Files & Folders permission is enabled, restarting the GUI
+may not restart the daemon that runs terminal commands. This recovery worked in
+one reported case; the underlying cause is not established, so it is not a
+guaranteed fix.
+
+For the default local session only:
+
+1. Save your work and stop any ongoing tasks. Stopping the daemon terminates its
+   running pane processes; restoring the layout does not preserve arbitrary
+   processes that were running in those panes.
+2. Quit Herdr UI.
+3. From another terminal, stop the default local daemon and reopen the app:
+
+   ```zsh
+   herdr server stop
+   open -a Herdr
+   ```
+
+4. Retry `git status` in the reopened Herdr terminal. If the error remains,
+   investigate the permission or repository issue separately; this restart does
+   not diagnose or guarantee a fix for other causes.
+
+These commands target the default local session, not a named session, SSH host,
+or other device. For named-session and other recovery guidance, see the
+[Herdr troubleshooting guide](https://herdr.dev/docs/troubleshooting/).
+
 For split terminal panes within a tab, **Focus follows mouse** is on by default.
 Disable it in **Settings > Tabs & panes > Panes**, or run
 `herdr-gpui config set focus_follows_mouse false`.
@@ -2352,15 +2381,27 @@ prompt profiles from `~/.config/agent-launcher/agents/<name>/prompt.md` (the
 built-in prompt when none is chosen). GitHub is read as the account used
 for pull requests on that host. A GitLab remote, on gitlab.com or a
 self-managed host, lists its open issues (not yet its merge requests), read
-with `GITLAB_TOKEN` or `GITLAB_ACCESS_TOKEN` when `GITLAB_HOST` names that host
-(gitlab.com by default), else with the GitLab CLI's sign-in (`glab auth
-login`), and sent only over HTTPS; public projects need neither, and an
-`http://` remote is read without one. A remote on an SSH host of its own, such
-as `git@gitlab-ssh.example.com:group/project.git` for an instance served at
-`gitlab.example.com`, is read from the instance whose `ssh_host` the GitLab
-CLI's config names it, at that instance's `api_host` and `api_protocol`, with
-its token (`glab config set ssh_host gitlab-ssh.example.com --host
-gitlab.example.com`). GitHub Enterprise is listed as not
+with the `GITLAB_TOKEN` or `GITLAB_ACCESS_TOKEN` the checkout's `.envrc` sets
+(loaded through direnv, for a checkout on this computer whose `.envrc` you
+allowed), else with your login shell's when `GITLAB_HOST` names that instance
+(gitlab.com by default), else with the account connected or the token pasted
+in the account menu, else
+with the GitLab CLI's sign-in (`glab auth login`), and sent only over HTTPS;
+public projects need none, and an `http://` remote is read without one. The
+account button at the top right of the title bar switches between GitHub and
+GitLab: the GitLab side lists each instance with where its token comes from
+and whom it signs in as. **Connect** signs in through GitLab in the browser
+with a one-time code, as GitHub's sign-in does (gitlab.com out of the box; a
+self-managed instance once `[gitlab] applications` names its OAuth
+application), and the page also checks a pasted personal access token (scope
+`read_api`) before saving it in the credential store. When GitLab needs a
+token, the button shows a dot and the source shows "sign in", which opens that
+page. A remote on an SSH host
+of its own, such as `git@gitlab-ssh.example.com:group/project.git` for an
+instance served at `gitlab.example.com`, is read from the instance whose
+`ssh_host` the GitLab CLI's config names it, at that instance's `api_host` and
+`api_protocol`, with its token (`glab config set ssh_host
+gitlab-ssh.example.com --host gitlab.example.com`). GitHub Enterprise is listed as not
 supported yet. The window button in the tab's header moves the view into
 a window of its own.
 
@@ -2975,7 +3016,9 @@ the titlebar's Git menu where its button would.
 - Each file's header folds it (the chevron, or `x`) and marks it **Viewed**,
   which folds it too. Deleted files, lockfiles and files `.gitattributes`
   marks `linguist-generated` start folded. A viewed file that changes again
-  is no longer viewed. Renames show as `old → new`.
+  is no longer viewed. Marks are kept per checkout and branch across
+  restarts, in `review-viewed.json` beside the app's other state, up to 64
+  checkouts and 4,096 files. Renames show as `old → new`.
 - A hunk header shows how many unchanged lines it leaves out above it;
   click that to show them, up to 200 at a time, read from the working tree.
 - Removed lines and the added lines that replaced them have the words that
@@ -3539,6 +3582,10 @@ three newest reports, redacted like the log records, and lists dumps by name and
 size without including them: they hold the app's memory, so attach one only
 when asked.
 
+For the known macOS Touch Bar window-close crash, see the
+[investigation and native validation steps](../../docs/macos-window-close.md).
+The upstream dependency fix has not yet been adopted by this checkout.
+
 Local Windows connections are supported through the daemon's named pipe; pass
 the binary client socket path to `--socket`, not the JSON API socket. No debug
 build or `RUST_LOG` setting is needed: client debug records are captured in
@@ -3821,7 +3868,7 @@ Ctrl+Shift+U is left unbound for
   checks before it is saved: an Enterprise Managed User cannot install Herdr's
   GitHub App on its own repositories, so a token is how one reads them. A
   repository is read with the first additional account whose login, organizations
-  (read when it signs in, if its token may list them), or configured owners
+  (from visible memberships and GitHub App installations), or configured owners
   include the repository's owner, and with the device's account otherwise. This
   applies to sidebar PR badges, the New worktree pull request and issue lists, PR
   checks, comments and merges, creating a pull request, and the orchestrator.
@@ -3858,11 +3905,16 @@ Ctrl+Shift+U is left unbound for
   every five-minute session check, the app compares the App's requested
   permissions (`GET /apps/<slug>`) with each installation the account can see
   (`GET /user/installations`). If no installation exists, or one still has
-  fewer permissions than the App now requests, the avatar shows a red dot, a
-  toast says so once per window, and the account panel links each owner's
+  fewer non-security permissions than the App now requests, the avatar shows
+  a red dot, a toast says so once per window, and the account panel links each owner's
   approval page (or the install page, for Herdr GPUI's own App). With the
-  panel open, the check runs again within 30 seconds. Tokens from the GitHub
-  CLI, `GH_TOKEN`, an OAuth App, or a personal access token are not checked.
+  panel open, every waiting account shown in it is checked promptly, at most
+  once every 30 seconds. Switching accounts or opening an approval link also
+  schedules that check. Optional security permissions (`repository_advisories`,
+  `security_events`, `vulnerability_alerts`) do not raise the core repository
+  access warning; the Security section reports unavailable access separately.
+  Tokens from the GitHub CLI, `GH_TOKEN`, an OAuth App, or a personal access
+  token are not checked.
   The compact native macOS titlebar design
   is integrated from main commit `3909f21`, without unrelated tab changes.
   Signed macOS release builds keep tokens in this app's Keychain entry; unsigned
@@ -4076,7 +4128,8 @@ Ctrl+Shift+U is left unbound for
   **Projects**, or cycle filters with Ctrl-Tab / Ctrl-Shift-Tab (or Alt-] /
   Alt-[) without clearing the search. Search is fzf's: every space-separated
   term must match, and `'exact`, `^prefix`, `suffix$`, and `!negate` apply per
-  term; host, workspace, path, status, and command ID are searchable context.
+  term; host, workspace, path, status, command ID, and an agent's titles and
+  pane name are searchable context.
   Rows chosen often and recently rise among the matches for a typed query, and
   the Projects filter lists the most frecent projects first before anything is
   typed; that history stays on this machine in `palette-frecency.json`.

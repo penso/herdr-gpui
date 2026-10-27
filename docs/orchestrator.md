@@ -113,16 +113,86 @@ the read is anonymous, and a project that is not public asks for an
 may replace the cache; a larger project is shown and not written, as GitHub's
 is.
 
-Its token is looked up once per view on the worker, and again on Refresh or
-when the remote's instance changes:
+Its token is looked up once per view on the worker, and again on Refresh,
+when the remote's instance changes, or when GitLab refuses it (once, before
+asking to sign in, so a connected account renewed since is picked up):
 
-1. `GITLAB_TOKEN`, then `GITLAB_ACCESS_TOKEN`, only for the instance
-   `GITLAB_HOST` names (gitlab.com when unset), so a gitlab.com token never
-   reaches another host;
-2. else `glab config get token --host <instance>`, the GitLab CLI's own sign-in,
+1. the `GITLAB_TOKEN`, then `GITLAB_ACCESS_TOKEN`, that the checkout's
+   `.envrc` sets (`gitlab/envrc.rs`): `direnv exec <checkout> env`, only for a
+   checkout on this computer with an `.envrc` there or above it. direnv loads
+   only a file the user allowed, so nothing runs that their shell would not.
+   direnv runs without the app's own token variables, so only a token the
+   `.envrc` sets counts. What it loads is reused for five minutes while every
+   `.envrc` is unchanged, and closing the view stops a load under way;
+2. else `GITLAB_TOKEN`, then `GITLAB_ACCESS_TOKEN`, from the login shell (or
+   the app's own environment), only for the instance `GITLAB_HOST` names
+   (gitlab.com when unset), so a gitlab.com token never reaches another host.
+   An `.envrc` that sets `GITLAB_HOST` names the instance in step 1 too;
+3. else the account connected, or the token pasted, in the account menu for
+   the instance (`gitlab/saved.rs`). A connected account's access token is
+   renewed shortly before it expires;
+4. else `glab config get token --host <instance>`, the GitLab CLI's own sign-in,
    with its environment tokens removed and the shared bounded process policy;
-3. else none: public projects still list, and a private one asks for a token.
+5. else none: public projects still list, and a private one asks for a token.
+
+A missing or refused token (`SignIn`, `Authentication`) shows the source as
+"sign in", as a signed-out GitHub does, and the chip opens the account menu's
+GitLab page; the title bar's account button shows its attention dot meanwhile.
+It still waits 30 minutes before the next try, which Refresh skips. Other
+refusals, such as a token without the `read_api` scope, stay failures, and so
+does a refused `.envrc` or shell `GITLAB_TOKEN` (`EnvrcRefused`,
+`EnvironmentRefused`): a pasted token is only tried after them, so the message
+asks for the file or variable to change instead.
+
+The account button at the right of the title bar opens one menu for both
+providers, with a GitHub and a GitLab tab in its header. The GitLab tab shows
+a card for each GitLab instance the open views of every window read, and every
+instance with a saved token, once each by its lowercase name (a remote on an SSH host
+of its own counts as the instance glab maps it to, and its token is checked at
+that instance's `api_host`), with where its token comes from and whom GitLab
+signs it in as (`/api/v4/user`, always over HTTPS; `gitlab/account.rs`), with
+the account's picture when it is gitlab.com's or Gravatar's (a self-managed
+instance's is not fetched, and its card shows the GitLab mark). The saved
+record is read once and each instance is checked on its own, so a slow one
+never holds the others' cards. A card checked again keeps what it showed,
+picture included, until the new answer lands, and closing the menu stops the
+checks. While no instance has a token, the tab shows a
+single **Connect** button for the instance this window reads instead. An
+instance every remote reads over plain `http://` takes no token, so its card
+says so and the page refuses to save one for it. The token form is folded
+behind a link and **Add instance**, which starts it at an empty instance for
+one no repository reads yet; Escape folds it again. A pasted personal access
+token is checked with GitLab before it is saved, stays in its field until the
+save succeeds, and saving or forgetting one makes every view sync again.
+
+**Connect** signs in with OAuth's device authorization grant
+(`gitlab/oauth.rs`), as GitHub's sign-in does: GitLab issues a code, the page
+shows it with **Open GitLab** and **Copy code**, and polls `/oauth/token` on
+timers until the user approves it there. The application is public, so only
+its ID is sent: gitlab.com uses Herdr UI's own, and a self-managed instance
+gets Connect once `[gitlab] applications` names one for it. The approval page
+must be an HTTPS page on the instance, or nothing opens. The granted pair is
+checked with `/api/v4/user`, then kept like a pasted token. GitLab's access
+tokens last two hours and its refresh tokens are single-use, so whoever reads
+a connected account's token (`saved::token`) renews it, one renewal per
+instance at a time, when it is within 10 minutes of expiring, and keeps the
+new pair before using it. The saved record is not locked while GitLab answers,
+so other instances, saves, and forgets never wait on it, and a pair renewed
+after a Disconnect or a new Connect is dropped. A renewed pair the store
+refuses is still used, and kept in memory and saved again by the next lookup,
+since GitLab has spent the stored one. A renewal that fails keeps the old
+token, which GitLab refuses once it expires, so the view asks to connect again
+and the card offers **Connect again**. **Disconnect** removes the pair. Closing
+the menu stops a connection waiting for approval. A saved record not in the expected form is
+reported on the page and replaced by the next save or forget; a store that
+cannot be read at all is never overwritten. Saved tokens are one
+credential-store record of tab-separated lines (`host<TAB>token`, or
+`host<TAB>oauth<TAB>access<TAB>refresh<TAB>expires_at<TAB>application`), at
+most 16 instances: the
+desktop keyring (`dev.herdr.gpui.gitlab`), or with `[gitlab]
+allow_plaintext_credentials = true` the private `0600` `gitlab-credentials`
+file beside the GUI config. A headless window never reads or writes them.
 
 Merge requests are not listed yet. They would need `PullRequest`-like
 metadata in the shared schema, which is a contract change for both
-applications, and herdr-gpui has no native GitLab sign-in.
+applications.

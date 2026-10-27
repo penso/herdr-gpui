@@ -60,6 +60,7 @@ pub(super) fn opened(dir: &std::path::Path) -> (Service, Worker, Host) {
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.join("data")),
+        gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),
             sync: Duration::from_secs(3600),

@@ -82,6 +82,7 @@ pub use fonts::symbol_fallbacks;
 pub use fonts::{FONT_SIZE_RANGE, FONT_SIZE_STEP, FontConfig};
 pub(crate) use github::MAX_ACCOUNTS;
 pub use github::{GitHubAccount, GitHubConfig};
+pub use herdr_orchestrator::gitlab::Config as GitLabConfig;
 pub use herdr_remote::config::AzureConfig;
 #[cfg(feature = "azure")]
 pub(crate) use herdr_remote::config::AzureFields;
@@ -197,6 +198,8 @@ pub struct Config {
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
     pub github: GitHubConfig,
+    /// Where GitLab tokens pasted in the account menu are saved.
+    pub gitlab: GitLabConfig,
     /// Font resolution searched for an icon font for the terminal and found
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
@@ -404,6 +407,7 @@ impl Default for Config {
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
+            gitlab: GitLabConfig::default(),
             icon_font_missing: false,
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
@@ -487,6 +491,7 @@ struct Settings {
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
+    gitlab: GitLabConfig,
     keep_selection_after_copy: Option<bool>,
     keybindings: BTreeMap<String, Binding>,
     layout: Layout,
@@ -769,6 +774,7 @@ impl Config {
         settings.github.client_id_with_override(None)?;
         settings.github.check_accounts()?;
         config.github = settings.github;
+        config.gitlab = settings.gitlab;
         #[cfg(feature = "azure")]
         settings.azure.check()?;
         config.azure = settings.azure;

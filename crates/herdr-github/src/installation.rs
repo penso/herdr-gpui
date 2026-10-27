@@ -1,7 +1,7 @@
 //! Whether a GitHub App sign-in can reach private repositories. Such a token
 //! only reads what the App is installed on, with the permissions each owner
-//! accepted. When the App asks for more, GitHub keeps every installation on
-//! its old permissions until the owner approves, so the user must be told.
+//! accepted. When the App asks for more core permissions, GitHub keeps every
+//! installation on its old permissions until the owner approves.
 //! What the App asks for is read from GitHub, never kept here, so a later
 //! change to the registration needs no change to this build.
 
@@ -17,7 +17,7 @@ use std::time::Duration;
 
 /// Installations read from GitHub's first page; an account in more is rare,
 /// and the rest are simply not judged.
-const PAGE: usize = 100;
+pub(super) const PAGE: usize = 100;
 
 /// What a GitHub App sign-in still needs from the user.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -25,11 +25,11 @@ pub enum Access {
     /// Not checked yet, not a GitHub App token, or the check failed.
     #[default]
     Unknown,
-    /// Every installation the account can see has the App's permissions.
+    /// Every installation checked has the App's non-security permissions.
     Ready,
     /// No installation reaches the account, so only public repositories load.
     NotInstalled,
-    /// Owners that have not approved the App's current permissions.
+    /// Owners that have not approved the App's non-security permissions.
     Pending(Vec<Installation>),
 }
 
@@ -100,17 +100,25 @@ pub(super) struct App {
     permissions: Map<String, Value>,
 }
 
-/// The access of a GitHub App user token (`ghu_`). Any other token reaches
-/// repositories by its own grants, so it is [`Access::Unknown`] unchecked.
-pub(super) fn check(token: &SecretString) -> Result<Access> {
+/// The installations of a GitHub App user token (`ghu_`). Other tokens reach
+/// repositories by their own grants and have no App installations to inspect.
+pub(super) fn list(token: &SecretString) -> Result<Option<Listing>> {
     if !app_token(token) {
-        return Ok(Access::Unknown);
+        return Ok(None);
     }
-    let listing: Listing = get(
+    get(
         "installations",
         token,
         &format!("https://api.github.com/user/installations?per_page={PAGE}"),
-    )?;
+    )
+    .map(Some)
+}
+
+/// Reuse the listing for both access checks and additional-account routing.
+pub(super) fn check(token: &SecretString, listing: Option<&Listing>) -> Result<Access> {
+    let Some(listing) = listing else {
+        return Ok(Access::Unknown);
+    };
     // Every installation a user token lists belongs to the token's own App.
     let Some(slug) = listing.installations.first().map(|i| i.app_slug.as_str()) else {
         return Ok(Access::NotInstalled);
@@ -123,7 +131,21 @@ pub(super) fn check(token: &SecretString) -> Result<Access> {
         return Ok(Access::Unknown);
     }
     let app: App = get("app", token, &format!("https://api.github.com/apps/{slug}"))?;
-    Ok(assess(&listing, &app))
+    Ok(assess(listing, &app))
+}
+
+/// Installations expose organization owners even with private membership.
+pub(super) fn organization_owners(listing: &Listing) -> Vec<String> {
+    listing
+        .installations
+        .iter()
+        .take(PAGE)
+        .filter(|installation| {
+            installation.account.kind == "Organization"
+                && crate::config::valid_owner(&installation.account.login)
+        })
+        .map(|installation| installation.account.login.clone())
+        .collect()
 }
 
 /// Whether `token` is a GitHub App user token, the only kind checked.
@@ -146,6 +168,9 @@ pub(super) fn assess(listing: &Listing, app: &App) -> Access {
         .filter(|(installation, organization)| {
             app.permissions
                 .iter()
+                // Security views report unavailable grants themselves. They
+                // must not imply that working PR/check access is blocked.
+                .filter(|(name, _)| !optional_security(name))
                 .filter(|(name, _)| *organization || !organization_only(name))
                 .any(|(name, wanted)| {
                     level(wanted) > installation.permissions.get(name.as_str()).map_or(0, level)
@@ -174,6 +199,13 @@ pub(super) fn assess(listing: &Listing, app: &App) -> Access {
 /// never receives however its owner answers.
 fn organization_only(name: &str) -> bool {
     name.starts_with("organization_") || matches!(name, "members" | "team_discussions")
+}
+
+fn optional_security(name: &str) -> bool {
+    matches!(
+        name,
+        "repository_advisories" | "security_events" | "vulnerability_alerts"
+    )
 }
 
 /// GitHub's permission levels in order; one this build does not know ranks

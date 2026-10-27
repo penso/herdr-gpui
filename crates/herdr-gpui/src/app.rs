@@ -396,6 +396,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::worktree_notes::Notes::default()
     };
+    // Nor with the files the user marked viewed in reviews.
+    let review_viewed = if mode == LaunchMode::Normal {
+        crate::review::Viewed::load()
+    } else {
+        crate::review::Viewed::default()
+    };
     // Nor with what the user snoozed, settled, or pinned in the Overview.
     let overview_marks = if mode == LaunchMode::Normal {
         crate::overview::Marks::load()
@@ -435,6 +441,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             browser_tabs.install(cx);
             group_layouts.install(cx);
             worktree_notes.install(cx);
+            review_viewed.install(cx);
             overview_marks.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);

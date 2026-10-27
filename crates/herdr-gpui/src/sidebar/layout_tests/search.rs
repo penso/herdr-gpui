@@ -2,6 +2,7 @@ use super::*;
 
 mod heading;
 mod hidden;
+mod names;
 mod scrolling;
 
 fn connected(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {

@@ -27,6 +27,7 @@ pub(super) fn open(
         workspace_id: "app".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing::default(),
     };
     let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));

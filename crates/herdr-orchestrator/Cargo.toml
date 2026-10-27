@@ -10,21 +10,22 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-chrono.workspace       = true
-gix.workspace          = true
-herdr-client.workspace = true
-herdr-github.workspace = true
-herdr-remote.workspace = true
-rusqlite.workspace     = true
-secrecy.workspace      = true
-serde.workspace        = true
-serde_json.workspace   = true
-thiserror.workspace    = true
-tracing.workspace      = true
-ureq.workspace         = true
-url.workspace          = true
-uuid.workspace         = true
-zeroize.workspace      = true
+chrono.workspace            = true
+gix.workspace               = true
+herdr-client.workspace      = true
+herdr-credentials.workspace = true
+herdr-github.workspace      = true
+herdr-remote.workspace      = true
+rusqlite.workspace          = true
+secrecy.workspace           = true
+serde.workspace             = true
+serde_json.workspace        = true
+thiserror.workspace         = true
+tracing.workspace           = true
+ureq.workspace              = true
+url.workspace               = true
+uuid.workspace              = true
+zeroize.workspace           = true
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true

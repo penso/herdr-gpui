@@ -405,6 +405,13 @@ binary **client** socket, renders the surfaces it is sent, and sends semantic
 input back. Closing or detaching the GUI leaves the daemon and its terminals
 running.
 
+### macOS Git permission errors
+
+If Git in a Herdr UI terminal reports `Operation not permitted`, restarting the
+GUI alone does not restart an already-running daemon. For a recovery option and
+its risks, see the [macOS Git permission troubleshooting
+section](crates/herdr-gpui/README.md#macos-git-permission-troubleshooting).
+
 [Browser tabs](crates/herdr-gpui/README.md#browser-tabs) are the exception:
 Herdr has no browser panes, so web pages shown beside a workspace's terminals
 belong to the GUI alone. Agents in your panes open them with

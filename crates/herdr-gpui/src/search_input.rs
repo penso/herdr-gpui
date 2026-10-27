@@ -240,9 +240,19 @@ impl SearchInput {
         cx.notify();
     }
 
+    /// The field's accessible name, which the placeholder otherwise stands
+    /// in for. Unchanged is a no-op, so the owner may set it from its render.
     pub(crate) fn set_label(&mut self, label: &'static str, cx: &mut Context<Self>) {
+        if self.label.as_deref() == Some(label) {
+            return;
+        }
         self.label = Some(label.into());
         cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn label(&self) -> Option<&str> {
+        self.label.as_deref()
     }
 
     #[cfg(test)]
@@ -565,7 +575,12 @@ impl Render for SearchInput {
                         .aria_value(SharedString::from(self.edit.text.clone()))
                 };
                 match &self.label {
-                    Some(label) => field.aria_label(label.clone()),
+                    Some(label) => field.aria_label(label.clone()).when(
+                        !self.placeholder.is_empty(),
+                        |field| {
+                            field.aria_placeholder(SharedString::from(self.placeholder.clone()))
+                        },
+                    ),
                     None => field.when(!self.placeholder.is_empty(), |field| {
                         field.aria_label(SharedString::from(self.placeholder.clone()))
                     }),

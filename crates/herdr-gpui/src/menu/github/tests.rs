@@ -2,6 +2,7 @@
 use super::Action;
 use gpui::TestAppContext;
 
+mod access_refresh;
 mod accounts;
 mod github_cli;
 mod installation;
@@ -180,11 +181,11 @@ fn connected_panel_is_content_sized_with_only_header_close(cx: &mut TestAppConte
         assert!(cx.debug_bounds("github-status").is_none());
         assert!(cx.debug_bounds("github-close").is_none());
         assert!(cx.debug_bounds("github-header-close").is_some());
-        // The mark is vector, so it is sharp at the header's own size, and
-        // the avatar slot beside it stays square for a round crop.
+        // The mark is vector, so it is sharp at its header tab's size, and
+        // the avatar slot stays square for a round crop.
         let mark = cx.debug_bounds("github-mark").unwrap();
         let avatar = cx.debug_bounds("github-avatar").unwrap();
-        assert_eq!(mark.size, gpui::size(gpui::px(28.), gpui::px(28.)));
+        assert_eq!(mark.size, gpui::size(gpui::px(20.), gpui::px(20.)));
         assert_eq!(avatar.size, gpui::size(gpui::px(40.), gpui::px(40.)));
         // Sign out, Add account, then Close.
         cx.simulate_keystrokes("tab tab tab enter");
