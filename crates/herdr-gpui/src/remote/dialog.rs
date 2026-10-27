@@ -29,6 +29,7 @@ const NAME_LIMIT: usize = 64;
 /// a pairing still open at the daemon, so its token stops working at once.
 pub(crate) struct PairingDialog {
     pub(crate) pairing: Pairing,
+    addresses_scroll: ScrollHandle,
     client: Option<Client>,
     _lease: Option<Lease>,
     _task: Option<Task<()>>,
@@ -86,6 +87,7 @@ impl HerdrWindow {
             .map(|client| Self::drive_pairing(client, cx));
         self.menu.remote_pairing = Some(PairingDialog {
             pairing: pairing.with_address(address),
+            addresses_scroll: ScrollHandle::new(),
             client,
             _lease: Supervisor::lease(cx),
             _task: task,
@@ -148,6 +150,64 @@ impl HerdrWindow {
             dialog.pairing.restart();
             cx.notify();
         }
+    }
+
+    pub(crate) fn remote_pairing_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        window.prevent_default();
+        if event.keystroke.modifiers != Modifiers::default() {
+            return;
+        }
+        let key = event.keystroke.key.as_str();
+        if key == "escape" {
+            self.dismiss_menu(window, cx);
+            return;
+        }
+        let Some(dialog) = &self.menu.remote_pairing else {
+            return;
+        };
+        let Phase::Showing { offer, .. } = dialog.pairing.phase() else {
+            return;
+        };
+        let count = offer.addresses.len();
+        if count == 0 {
+            return;
+        }
+        let selected = offer
+            .addresses
+            .iter()
+            .position(|address| offer.url.starts_with(&format!("{address}/")))
+            .unwrap_or(0);
+        let index = match key {
+            "up" => (selected + count - 1) % count,
+            "down" => (selected + 1) % count,
+            "home" => 0,
+            "end" => count - 1,
+            _ => return,
+        };
+        let address = offer.addresses[index].clone();
+        self.select_pairing_address(&address, cx);
+    }
+
+    fn select_pairing_address(&mut self, address: &str, cx: &mut Context<Self>) {
+        let Some(dialog) = &mut self.menu.remote_pairing else {
+            return;
+        };
+        if let Err(error) = dialog.pairing.select_address(address) {
+            tracing::warn!(%error, "Could not select pairing address");
+            return;
+        }
+        if let Phase::Showing { offer, .. } = dialog.pairing.phase()
+            && let Some(index) = offer.addresses.iter().position(|item| item == address)
+        {
+            dialog.addresses_scroll.scroll_to_item(index);
+        }
+        cx.notify();
     }
 
     /// Whether a remote control dialog is open, for the menu's layout.
@@ -283,7 +343,7 @@ impl HerdrWindow {
                         .child("Scan with your phone's camera"),
                 )
                 .child(div().text_color(rgb(theme.subtext())).child(
-                    "Choose the address for this QR. Use Tailscale on both devices to connect across networks, or a local address on the same network.",
+                    "Choose the address for this QR with Up/Down or a click. Use Tailscale on both devices to connect across networks, or a local address on the same network.",
                 ))
                 .child(self.pairing_addresses(offer, cx))
                 .child(
@@ -335,6 +395,9 @@ impl HerdrWindow {
             .flex_col()
             .max_h(px(132.))
             .overflow_y_scroll()
+            .when_some(self.menu.remote_pairing.as_ref(), |list, dialog| {
+                list.track_scroll(&dialog.addresses_scroll)
+            })
             .children(offer.addresses.iter().enumerate().map(|(index, address)| {
                 let selected = offer.url.starts_with(&format!("{address}/"));
                 let address = address.clone();
@@ -368,12 +431,7 @@ impl HerdrWindow {
                     .child(div().min_w_0().child(label))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        if let Some(dialog) = &mut this.menu.remote_pairing {
-                            if let Err(error) = dialog.pairing.select_address(&address) {
-                                tracing::warn!(%error, "Could not select pairing address");
-                            }
-                            cx.notify();
-                        }
+                        this.select_pairing_address(&address, cx);
                     }))
             }))
     }

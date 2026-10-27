@@ -15,6 +15,7 @@ use std::{
 };
 
 mod addresses;
+mod keyboard;
 
 fn on() -> RemoteConfig {
     RemoteConfig {

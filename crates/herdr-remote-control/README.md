@@ -28,7 +28,9 @@ tests pass explicit times.
 
 The pairing QR prefers a Tailscale address when one is available, then a LAN
 address. The desktop dialog lets you select any advertised HTTPS address and
-keeps that choice when the QR token refreshes. For pairing across networks,
+keeps that choice when the QR token refreshes. Use Up/Down to select an address
+with the keyboard, or Home/End to select the first/last; the selected row stays
+visible. Escape closes the dialog. For pairing across networks,
 connect both devices to the same Tailscale network and allow access to the
 remote-control port (7443 by default). Local addresses still work on the same
 network. Pair and install the phone app from the stable Tailscale address to
