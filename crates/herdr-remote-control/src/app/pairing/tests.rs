@@ -1,6 +1,8 @@
 use super::*;
 use crate::control::DeviceId;
 
+mod addresses;
+
 fn offer(id: &str) -> Offer {
     Offer {
         id: PairingId(id.into()),

@@ -20,6 +20,10 @@ pub enum Error {
     },
     #[error("Herdr UI has no state directory for remote control")]
     NoStateDir,
+    #[error("The selected pairing address is not served by this computer")]
+    PairingAddress,
+    #[error("The daemon supplied an invalid pairing URL")]
+    PairingUrl(#[source] url::ParseError),
     #[error("{} cannot go in a service definition", path.display())]
     PathText { path: PathBuf },
     #[error("remote.port must be between 1 and 65535")]

@@ -31,12 +31,12 @@ pub(super) fn serve(
             .unwrap_or(false),
         Err(response) => return incoming.respond(response),
     };
-    if op == RemoteOp::Pair {
+    if let RemoteOp::Pair { address } = op {
         return incoming.respond(in_free_window(&caller, cx, |view, window, cx| {
             if !enabled {
                 return Response::error(ErrorCode::Failed, OFF);
             }
-            if view.open_remote_pairing(window, cx) {
+            if view.open_remote_pairing_at(address, window, cx) {
                 Response::done(
                     "Showing the pairing dialog in Herdr UI; the device is approved there",
                 )
@@ -126,7 +126,7 @@ pub(super) fn serve(
                 })
             })
         }
-        RemoteOp::Pair | RemoteOp::Restart => return,
+        RemoteOp::Pair { .. } | RemoteOp::Restart => return,
     };
     answer_when_done(task, wait, incoming, watches, cx);
 }

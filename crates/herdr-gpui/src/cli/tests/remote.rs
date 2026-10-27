@@ -1,6 +1,8 @@
 use super::*;
 use control::{ControlCommand, Invocation, RemoteCommand};
 
+mod addresses;
+
 fn parse(args: &[&str]) -> Result<Invocation, CliError> {
     LaunchOptions::parse(args.iter().copied()).map(|options| match options.mode {
         LaunchMode::Control(invocation) => invocation,
@@ -26,7 +28,7 @@ fn remote_reports_status_by_default() {
 fn remote_pairs_lists_and_revokes() {
     assert_eq!(
         command(&["remote", "pair"]),
-        ControlCommand::Remote(RemoteCommand::Pair)
+        ControlCommand::Remote(RemoteCommand::Pair { address: None })
     );
     for verb in ["devices", "list"] {
         assert_eq!(

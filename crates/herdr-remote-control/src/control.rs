@@ -160,7 +160,7 @@ pub struct Status {
     pub version: String,
     /// The port HTTPS listens on.
     pub port: u16,
-    /// Every `https://` origin the certificate covers, LAN first.
+    /// Every `https://` origin the certificate covers, Tailscale first, then LAN.
     pub addresses: Vec<String>,
     /// SHA-256 of the certificate authority, colon-separated hex.
     pub fingerprint: String,

@@ -62,6 +62,15 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        self.open_remote_pairing_at(None, window, cx)
+    }
+
+    pub(crate) fn open_remote_pairing_at(
+        &mut self,
+        address: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if self.menu.page.is_some() || !self.open_menu(window, cx) {
             return false;
         }
@@ -76,7 +85,7 @@ impl HerdrWindow {
             .filter(|_| self.config.remote.enabled)
             .map(|client| Self::drive_pairing(client, cx));
         self.menu.remote_pairing = Some(PairingDialog {
-            pairing,
+            pairing: pairing.with_address(address),
             client,
             _lease: Supervisor::lease(cx),
             _task: task,
@@ -233,7 +242,7 @@ impl HerdrWindow {
                             .hover(|button| button.bg(rgb(theme.active)))
                             .child(
                                 svg()
-                                    .path("icons/x.svg")
+                                    .path("icons/close.svg")
                                     .size(px(12.))
                                     .text_color(rgb(theme.subtext())),
                             )
@@ -248,7 +257,7 @@ impl HerdrWindow {
 
     /// The QR with what the phone needs beside it; a placeholder square
     /// until the daemon has answered.
-    fn pairing_offer(&self, pairing: Option<&Pairing>, _cx: &mut Context<Self>) -> Div {
+    fn pairing_offer(&self, pairing: Option<&Pairing>, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let showing = pairing.and_then(|pairing| match pairing.phase() {
             Phase::Showing { offer, qr, .. } => Some((offer, qr.clone())),
@@ -273,12 +282,10 @@ impl HerdrWindow {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Scan with your phone's camera"),
                 )
-                .child(
-                    div()
-                        .debug_selector(|| "remote-pair-addresses".into())
-                        .text_color(rgb(theme.subtext()))
-                        .child(addresses(&offer.addresses)),
-                )
+                .child(div().text_color(rgb(theme.subtext())).child(
+                    "Choose the address for this QR. Use Tailscale on both devices to connect across networks, or a local address on the same network.",
+                ))
+                .child(self.pairing_addresses(offer, cx))
                 .child(
                     div()
                         .debug_selector(|| "remote-pair-fingerprint".into())
@@ -313,6 +320,62 @@ impl HerdrWindow {
             .items_start()
             .child(div().flex_none().child(square))
             .child(div().flex_1().min_w_0().child(details))
+    }
+
+    fn pairing_addresses(
+        &self,
+        offer: &herdr_remote_control::control::Offer,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let theme = &self.theme;
+        div()
+            .id("remote-pair-addresses")
+            .debug_selector(|| "remote-pair-addresses".into())
+            .flex()
+            .flex_col()
+            .max_h(px(132.))
+            .overflow_y_scroll()
+            .children(offer.addresses.iter().enumerate().map(|(index, address)| {
+                let selected = offer.url.starts_with(&format!("{address}/"));
+                let address = address.clone();
+                let label = addresses(std::slice::from_ref(&address));
+                div()
+                    .id(("remote-pair-address", index))
+                    .debug_selector(move || format!("remote-pair-address-{index}"))
+                    .flex_none()
+                    .role(Role::Button)
+                    .aria_label(format!(
+                        "{}{}",
+                        if selected { "Selected: " } else { "Use " },
+                        label
+                    ))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .px(px(6.))
+                    .py(px(4.))
+                    .rounded(px(crate::config::corners::SMALL))
+                    .cursor_pointer()
+                    .when(selected, |row| row.bg(rgb(theme.active)))
+                    .hover(|row| row.bg(rgb(theme.active)))
+                    .child(
+                        svg()
+                            .path("icons/check.svg")
+                            .size(px(12.))
+                            .flex_none()
+                            .when(!selected, |icon| icon.invisible()),
+                    )
+                    .child(div().min_w_0().child(label))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        if let Some(dialog) = &mut this.menu.remote_pairing {
+                            if let Err(error) = dialog.pairing.select_address(&address) {
+                                tracing::warn!(%error, "Could not select pairing address");
+                            }
+                            cx.notify();
+                        }
+                    }))
+            }))
     }
 
     fn pairing_claim(

@@ -14,6 +14,8 @@ use std::{
     },
 };
 
+mod addresses;
+
 fn on() -> RemoteConfig {
     RemoteConfig {
         enabled: true,

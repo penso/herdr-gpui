@@ -148,8 +148,9 @@ impl Names {
     }
 
     /// `https://` origins for every name on `port`, the likeliest to answer
-    /// from a phone first: LAN IPv4, then Tailscale, then other addresses
-    /// and `.local` names, then loopback. IPv6 addresses are bracketed.
+    /// from a phone across networks first: Tailscale, then LAN IPv4, then
+    /// other addresses and `.local` names, then loopback. IPv6 addresses
+    /// are bracketed.
     pub(crate) fn origins(&self, port: u16) -> Vec<String> {
         let mut ranked: Vec<(Reach, String)> = self
             .ips
@@ -191,8 +192,8 @@ impl Names {
 /// How likely a phone is to reach an address, best first.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Reach {
-    Lan,
     Tailscale,
+    Lan,
     Other,
     Loopback,
 }

@@ -145,7 +145,12 @@ async fn an_answer_streams_to_the_phone_as_it_is_written() {
     };
     let (first, word) = patch().await;
     assert_eq!(word, 0);
-    assert!(first.contains(r#"id=\"chat-turn\""#), "{first}");
+    // If the stream opens before the attach snapshot arrives, the first
+    // answer appends entries to an already-rendered empty turn. Otherwise
+    // it renders the whole turn. Both must deliver the earlier step and
+    // the answer before we let the agent produce another word.
+    assert!(first.contains(r#"id=\"entry-2\""#), "{first}");
+    assert!(first.contains(r#"id=\"entry-3\""#), "{first}");
     for expected in 1..WORDS {
         next.send(()).unwrap();
         let (chunk, word) = patch().await;

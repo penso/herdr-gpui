@@ -285,7 +285,7 @@ fn mobileconfig_is_a_stable_plist_carrying_the_ca() {
 }
 
 #[test]
-fn origins_put_lan_first_then_tailscale_then_the_rest() {
+fn origins_put_tailscale_first_then_lan_then_the_rest() {
     let mut names = Names::new(
         [
             ip("fd7a:115c:a1e0::1"),
@@ -301,10 +301,10 @@ fn origins_put_lan_first_then_tailscale_then_the_rest() {
     assert_eq!(
         names.origins(7443),
         vec![
-            "https://10.0.0.7:7443",
-            "https://192.168.1.20:7443",
             "https://100.101.102.103:7443",
             "https://[fd7a:115c:a1e0::1]:7443",
+            "https://10.0.0.7:7443",
+            "https://192.168.1.20:7443",
             "https://169.254.3.4:7443",
             "https://[fd12:3456::9]:7443",
             "https://studio.local:7443",

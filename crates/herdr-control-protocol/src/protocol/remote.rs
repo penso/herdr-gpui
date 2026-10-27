@@ -13,7 +13,10 @@ const DAEMON_WAIT_SECONDS: u64 = 12;
 pub enum RemoteOp {
     Status,
     /// Opens the pairing dialog in the window.
-    Pair,
+    Pair {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        address: Option<String>,
+    },
     Devices,
     /// Opens the confirmation for revoking a device, by ID or name.
     Revoke {
@@ -27,7 +30,7 @@ impl RemoteOp {
     pub fn wait_seconds(&self) -> u64 {
         match self {
             Self::Status | Self::Devices | Self::Revoke { .. } => DAEMON_WAIT_SECONDS,
-            Self::Pair | Self::Restart => 0,
+            Self::Pair { .. } | Self::Restart => 0,
         }
     }
 }

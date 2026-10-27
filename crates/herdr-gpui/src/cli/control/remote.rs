@@ -6,7 +6,9 @@ pub enum RemoteCommand {
     /// Whether the daemon runs, where, and who is connected.
     Status,
     /// Open the pairing dialog; never prints a token.
-    Pair,
+    Pair {
+        address: Option<String>,
+    },
     Devices,
     /// Open the confirmation for revoking a device, by ID or name.
     Revoke {
@@ -22,7 +24,9 @@ pub(super) fn remote(args: &mut Args) -> Result<RemoteCommand, CliError> {
     };
     Ok(match verb.to_str() {
         Some("status") => RemoteCommand::Status,
-        Some("pair") => RemoteCommand::Pair,
+        Some("pair") => RemoteCommand::Pair {
+            address: args.text_option("--address")?,
+        },
         Some("devices" | "list") => RemoteCommand::Devices,
         Some("restart") => RemoteCommand::Restart,
         // A name may be typed unquoted, as `remote revoke Fabien's iPhone`.

@@ -3,6 +3,8 @@ use super::*;
 use crate::protocol::{Call, Caller, Request, Response};
 use herdr_remote_control::control::DeviceId;
 
+mod addresses;
+
 #[test]
 fn remote_requests_have_a_stable_wire_form() {
     let request = Request::Remote(Call {
@@ -19,7 +21,7 @@ fn remote_requests_have_a_stable_wire_form() {
     assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
     for (text, op) in [
         (r#"{"op":"status"}"#, RemoteOp::Status),
-        (r#"{"op":"pair"}"#, RemoteOp::Pair),
+        (r#"{"op":"pair"}"#, RemoteOp::Pair { address: None }),
         (r#"{"op":"devices"}"#, RemoteOp::Devices),
     ] {
         let request: Request = serde_json::from_str(&format!(
@@ -91,7 +93,7 @@ fn remote_replies_round_trip() {
 
 #[test]
 fn daemon_requests_wait_for_the_daemon_and_pairing_does_not() {
-    assert_eq!(RemoteOp::Pair.wait_seconds(), 0);
+    assert_eq!(RemoteOp::Pair { address: None }.wait_seconds(), 0);
     // A restart answers once it starts; the app shows how it went.
     assert_eq!(RemoteOp::Restart.wait_seconds(), 0);
     assert!(

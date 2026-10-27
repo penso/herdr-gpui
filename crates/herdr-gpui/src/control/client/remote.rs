@@ -13,7 +13,7 @@ use herdr_remote_control::control::{Device, Status};
 pub(super) fn remote(command: RemoteCommand, context: &Context) -> crate::Result<Output> {
     let op = match command {
         RemoteCommand::Status => RemoteOp::Status,
-        RemoteCommand::Pair => RemoteOp::Pair,
+        RemoteCommand::Pair { address } => RemoteOp::Pair { address },
         RemoteCommand::Devices => RemoteOp::Devices,
         RemoteCommand::Revoke { device } => RemoteOp::Revoke { device },
         RemoteCommand::Restart => RemoteOp::Restart,

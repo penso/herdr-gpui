@@ -26,6 +26,14 @@ sessions, and per-address rate limits. It is synchronous and takes every time
 as milliseconds since the Unix epoch, so the server calls it under a mutex and
 tests pass explicit times.
 
+The pairing QR prefers a Tailscale address when one is available, then a LAN
+address. The desktop dialog lets you select any advertised HTTPS address and
+keeps that choice when the QR token refreshes. For pairing across networks,
+connect both devices to the same Tailscale network and allow access to the
+remote-control port (7443 by default). Local addresses still work on the same
+network. Pair and install the phone app from the stable Tailscale address to
+avoid tying its browser origin to temporary Wi-Fi. Bluetooth is not used.
+
 ## Push notifications
 
 `push` (server feature only) sends Web Push: a VAPID key created once at
