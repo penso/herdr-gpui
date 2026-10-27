@@ -8,6 +8,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "../../test-support/executable.rs"]
+mod executable;
+
 pub struct Fixture {
     /// Held so the directory lives as long as the fixture.
     _dir: tempfile::TempDir,
@@ -48,8 +51,7 @@ impl Fixture {
         let script = FAKE
             .replace("{calls}", &calls.to_string_lossy())
             .replace("{worktree}", &root.join("worktree").to_string_lossy());
-        fs::write(&fake, script).unwrap();
-        make_executable(&fake);
+        executable::write(&fake, script, 0o755).unwrap();
         Self {
             herdr: Herdr::new(Some(fake), None),
             _dir: dir,
@@ -125,12 +127,3 @@ pub fn git(repo: &Path, args: &[&str]) {
         .unwrap();
     assert!(status.success(), "git {args:?}");
 }
-
-#[cfg(unix)]
-fn make_executable(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-#[cfg(not(unix))]
-fn make_executable(_: &Path) {}
