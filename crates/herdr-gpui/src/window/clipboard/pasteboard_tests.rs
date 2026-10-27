@@ -7,6 +7,8 @@ use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardWriting};
 use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 use std::path::{Path, PathBuf};
 
+mod timing;
+
 /// One pasteboard item per entry, each holding `(type, string or bytes)` pairs.
 fn pasteboard(items: &[&[(&str, Vec<u8>)]]) -> Retained<NSPasteboard> {
     let pasteboard = NSPasteboard::pasteboardWithUniqueName();
