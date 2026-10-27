@@ -8,6 +8,7 @@ use crate::{
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 mod accent;
+mod agent_skill;
 mod agents_placement;
 mod azure;
 pub(crate) mod backdrop;
@@ -60,6 +61,7 @@ mod worktrees;
 mod zen;
 
 pub use accent::Accent;
+pub use agent_skill::{AgentSkillConfig, SkillInstall};
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
 pub use chat::{ChatLauncher, ChatLayoutMode};
@@ -159,6 +161,8 @@ pub struct Config {
     /// Snapshot a checkout's files each time one of its agents starts or
     /// finishes a turn, so they can be rolled back.
     pub agent_checkpoints: bool,
+    /// Where the managed agent skill may go on its own.
+    pub agent_skill: AgentSkillConfig,
     /// Where the sidebar lists agents while `show_agents` is on.
     pub agents_placement: AgentsPlacement,
     /// What shows behind the main window's terminals and chrome.
@@ -381,6 +385,7 @@ impl Default for Config {
             // keep-sorted start
             accent: Accent::default(),
             agent_checkpoints: true,
+            agent_skill: AgentSkillConfig::default(),
             agents_placement: AgentsPlacement::default(),
             azure: AzureConfig::default(),
             backdrop: Backdrop::default(),
@@ -465,6 +470,7 @@ struct Settings {
     // keep-sorted start
     accent: Accent,
     agent_checkpoints: Option<bool>,
+    agent_skill: AgentSkillConfig,
     agents_placement: AgentsPlacement,
     azure: AzureConfig,
     backdrop: Backdrop,
@@ -869,6 +875,7 @@ impl Config {
         config.accent = settings.accent;
         config.contrast = settings.contrast;
         config.agents_placement = settings.agents_placement;
+        config.agent_skill = settings.agent_skill;
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;

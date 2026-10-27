@@ -3163,6 +3163,11 @@ removed; a skill of the same name you wrote yourself is left alone.
   left alone. A host without a POSIX shell is skipped. Removing the skill
   takes the shim and those copies off each host again, the next time a
   window connects to it.
+- `[agent_skill] install` in `config-gpui.local.toml` wins over that saved
+  answer, so it can travel with your dotfiles. `"ask"`, the default, works as
+  above; `"local"` never touches saved SSH hosts; `"off"` never offers,
+  refreshes, or removes the skill anywhere. Installing from Preferences or the
+  palette still works, but the app then leaves that copy as it is.
 
 `herdr-gpui browser skill` prints the same text, for example to install it
 elsewhere:

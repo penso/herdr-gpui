@@ -231,6 +231,12 @@ project_roots = []
 # [updates]
 # channel = "stable"
 
+# Where the managed agent skill may go on its own, over the answer saved when
+# the app asked. "local" keeps it off saved SSH hosts; "off" never offers,
+# refreshes, or removes it anywhere. Settings and the palette still install it.
+# [agent_skill]
+# install = "ask"
+
 # Native shortcuts. Each key is a command; the value is one keystroke or a list,
 # primary first. "" or [] unbinds it. Assigning a keystroke here takes it away
 # from its default command. Modifiers: cmd (Super on Linux, Win on Windows),

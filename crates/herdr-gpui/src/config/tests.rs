@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 mod accent;
 mod activity_bar;
+mod agent_skill;
 mod agents_header;
 mod agents_placement;
 mod backdrop;
