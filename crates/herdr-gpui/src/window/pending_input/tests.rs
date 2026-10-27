@@ -197,12 +197,16 @@ fn a_key_held_after_a_paste_that_cannot_be_sent_is_not_sent(cx: &mut TestAppCont
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         let kind = if cfg!(any(target_os = "macos", target_os = "linux")) {
-            "Image"
+            "Paste"
         } else {
             "Input"
         };
         let expected = format!("{kind} not sent: {error} (1 held input discarded)");
         assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
+        if cfg!(any(target_os = "macos", target_os = "linux")) {
+            let (_, notice) = view.endpoints[0].toasts.entries.back().unwrap();
+            assert_eq!(notice.title, "Paste discarded");
+        }
     });
     sentinel_is_next(&mut peer);
 }

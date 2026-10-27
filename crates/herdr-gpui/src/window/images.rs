@@ -24,6 +24,15 @@ enum PreparationKind {
     Input,
 }
 
+impl PreparationKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Image => "Image",
+            Self::Input => "Paste",
+        }
+    }
+}
+
 pub(crate) struct PendingImage {
     token: Arc<()>,
     kind: PreparationKind,
@@ -51,10 +60,16 @@ impl Drop for PendingImage {
 }
 
 impl HerdrWindow {
-    fn report_image_error(&mut self, error: &Error, cx: &mut Context<Self>) {
-        self.local_error = Some(format!("Image not sent: {error}"));
+    fn report_preparation_error(
+        &mut self,
+        kind: PreparationKind,
+        error: &Error,
+        cx: &mut Context<Self>,
+    ) {
+        let label = kind.label();
+        self.local_error = Some(format!("{label} not sent: {error}"));
         self.local_transfer_notice(
-            "Image discarded",
+            &format!("{label} discarded"),
             format!("{error} Nothing was uploaded or pasted."),
             cx,
         );
@@ -353,7 +368,8 @@ impl HerdrWindow {
                     .any(|image| image.kind == PreparationKind::Image && image.preparing))
         {
             self.local_error = Some(format!(
-                "Image not sent: {}",
+                "{} not sent: {}",
+                kind.label(),
                 herdr_client::clipboard::Error::Busy
             ));
             cx.notify();
@@ -378,7 +394,7 @@ impl HerdrWindow {
         } {
             Ok(upload) => upload,
             Err(error) => {
-                self.local_error = Some(format!("Image not sent: {error}"));
+                self.local_error = Some(format!("{} not sent: {error}", kind.label()));
                 cx.notify();
                 return Delivery::Refused;
             }
@@ -420,7 +436,7 @@ impl HerdrWindow {
                         this.cancel_stale_image();
                         this.release_held_behind(&task_token, Delivery::Refused, cx);
                     } else if let Err(error) = &prepared {
-                        this.report_image_error(error, cx);
+                        this.report_preparation_error(kind, error, cx);
                         this.release_held_behind(&task_token, Delivery::Refused, cx);
                     }
                     current
@@ -485,6 +501,7 @@ impl HerdrWindow {
         let current = self.image_target_current(&self.pending_images[index]);
         let target = self.pending_images[index].target.clone();
         let pending = &mut self.pending_images[index];
+        let kind = pending.kind;
         pending.preparing = false;
         let mut delivery = Delivery::Refused;
         if current {
@@ -494,7 +511,7 @@ impl HerdrWindow {
             }
             match result {
                 Err(error) => {
-                    self.report_image_error(&Error::Client(error), cx);
+                    self.report_preparation_error(kind, &Error::Client(error), cx);
                     delivery = Delivery::Refused;
                 }
                 Ok(true) => self.local_transfer_notice(
@@ -559,6 +576,8 @@ mod tests {
     use super::*;
     use herdr_client::ConnectTarget;
     use std::io;
+
+    mod paste_errors;
 
     fn processing_errors() -> Vec<Error> {
         vec![
@@ -659,7 +678,7 @@ mod tests {
                 view.config.notifications.enabled = false;
                 view.config.notifications.delay_seconds = 3600;
                 view.endpoints[0].toasts.entries.clear();
-                view.report_image_error(&error, cx);
+                view.report_preparation_error(PreparationKind::Image, &error, cx);
                 let (_, notice) = view.endpoints[0].toasts.entries.back().unwrap();
                 assert_eq!(notice.title, "Image discarded");
                 assert!(notice.visible);

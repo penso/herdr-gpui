@@ -161,7 +161,7 @@ fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
         assert_eq!(
             view.local_error,
             Some(format!(
-                "Image not sent: {}",
+                "Paste not sent: {}",
                 herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
             ))
         );
@@ -232,7 +232,7 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
             assert_eq!(
                 view.local_error,
                 Some(format!(
-                    "Image not sent: {}",
+                    "Paste not sent: {}",
                     herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
                 ))
             );

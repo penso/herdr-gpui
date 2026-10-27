@@ -79,7 +79,7 @@ fn input_after_a_paste_whose_preparation_fails_is_discarded(cx: &mut TestAppCont
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         let error = view.local_error.as_deref().unwrap_or_default();
-        assert!(error.starts_with("Image not sent: "), "{error:?}");
+        assert!(error.starts_with("Paste not sent: "), "{error:?}");
         assert!(error.ends_with(" (2 held inputs discarded)"), "{error:?}");
         assert_eq!(view.pending_input.len(), 0);
     });
