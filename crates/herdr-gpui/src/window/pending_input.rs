@@ -207,9 +207,9 @@ impl HerdrWindow {
     }
 
     /// Paste what the clipboard holds into the focused pane or popup. On
-    /// macOS only the background reader touches the native clipboard; Linux
-    /// has no text-only clipboard API in GPUI and its native ordinary paste
-    /// needs no helper executable, and Windows has no background reader.
+    /// macOS and Linux use the bounded background reader. GPUI's synchronous
+    /// Wayland reader can return a cached selection before its event loop has
+    /// processed the new offer; a helper asks the compositor for a fresh one.
     fn replay_paste(
         &mut self,
         image_only: bool,
@@ -218,7 +218,7 @@ impl HerdrWindow {
     ) -> Delivery {
         if image_only {
             self.paste_native_clipboard(true, fallback, cx)
-        } else if cfg!(target_os = "macos") {
+        } else if cfg!(any(target_os = "macos", target_os = "linux")) {
             self.paste_native_clipboard(false, None, cx)
         } else if let Some(item) = cx.read_from_clipboard() {
             self.paste_item(item, false, cx).unwrap_or(Delivery::Queued)

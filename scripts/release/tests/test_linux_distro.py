@@ -100,6 +100,9 @@ class LinuxDistroTests(unittest.TestCase):
                 self.assertIn("libc6 (>= 2.39)", depends["deb"])
                 self.assertIn("libc.so.6(GLIBC_2.39)(64bit)", depends["rpm"])
                 self.assertIn("glibc>=2.39", depends["archlinux"])
+                for requirements in depends.values():
+                    self.assertIn("wl-clipboard", requirements)
+                    self.assertIn("xclip", requirements)
                 # GPUI's platform text support links Fontconfig at startup.
                 self.assertIn("libfontconfig1", depends["deb"])
                 self.assertIn("libfontconfig.so.1()(64bit)", depends["rpm"])

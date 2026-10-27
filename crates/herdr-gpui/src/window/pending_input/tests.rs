@@ -4,6 +4,8 @@
 #![allow(clippy::unwrap_used)]
 
 mod background;
+#[cfg(target_os = "linux")]
+mod linux_clipboard;
 
 use super::DropAt;
 use crate::{
@@ -174,7 +176,6 @@ fn a_held_key_that_cannot_be_sent_reports_the_input_discarded_after_it(cx: &mut 
 }
 
 /// The text of a paste too large for one frame is refused as it is sent.
-#[cfg(not(target_os = "macos"))]
 #[gpui::test]
 fn a_key_held_after_a_paste_that_cannot_be_sent_is_not_sent(cx: &mut TestAppContext) {
     let mut peer = MockPeer::new();
@@ -192,7 +193,15 @@ fn a_key_held_after_a_paste_that_cannot_be_sent_is_not_sent(cx: &mut TestAppCont
         view.send(crate::menu::enter_key(), cx);
         assert_eq!(view.pending_input.len(), 2);
         frame_returns(view, cx);
-        let expected = format!("Input not sent: {error} (1 held input discarded)");
+    });
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        let kind = if cfg!(any(target_os = "macos", target_os = "linux")) {
+            "Image"
+        } else {
+            "Input"
+        };
+        let expected = format!("{kind} not sent: {error} (1 held input discarded)");
         assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
     });
     sentinel_is_next(&mut peer);
@@ -220,7 +229,6 @@ fn a_key_held_after_a_paste_refused_by_an_open_menu_is_not_sent(cx: &mut TestApp
 
 /// Four pastes fill the queue; the fifth is refused, and the key typed
 /// after it is not sent without it.
-#[cfg(not(target_os = "macos"))]
 #[gpui::test]
 fn a_key_held_after_a_refused_fifth_paste_is_not_sent(cx: &mut TestAppContext) {
     let mut peer = MockPeer::new();
@@ -236,6 +244,18 @@ fn a_key_held_after_a_refused_fifth_paste_is_not_sent(cx: &mut TestAppContext) {
         assert_eq!(view.local_error.as_deref(), Some(STOPPED));
         view.send(crate::menu::enter_key(), cx);
         frame_returns(view, cx);
+    });
+    cx.run_until_parked();
+    // Rendering the refusal sizes the fixture to its window. Supply that
+    // matching frame so the remaining background pastes can be delivered.
+    view.update(cx, |view, cx| {
+        let frame = &view.live.surface.as_ref().unwrap().frame;
+        view.options.surface_size.cols = frame.width;
+        view.options.surface_size.rows = frame.height;
+        assert!(view.flush_pending_input(cx));
+    });
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
         let expected = format!("{STOPPED} (1 held input discarded)");
         assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
     });

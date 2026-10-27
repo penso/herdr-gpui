@@ -2424,12 +2424,13 @@ stall fails that paste without closing the GUI; the reader is killed and reaped
 on timeout. Clipboard data travels only over a private socket, never a temporary
 file or a log. The existing format priority, revision check, and paste ordering
 are preserved. AppKit may still materialize data inside the reader before its
-size can be checked. Linux uses `wl-paste` (Wayland) or
-`xclip` (X11) for explicit Ctrl-V image acquisition, with bounded output and a
-three-second acquisition deadline. Ordinary Linux paste retains GPUI's native
-clipboard reader and needs no helper; that existing synchronous API can still
-materialize image data on the UI thread. Install the matching utility for
-background image paste. Regular-file reads use bounded
+size can be checked. Linux terminal paste reads the current selection in the
+background using `wl-paste` (Wayland, from `wl-clipboard`) or `xclip` (X11),
+with bounded output and a three-second acquisition deadline. Install the matching
+utility for text and image paste; a missing utility reports a clipboard error.
+Wayland never falls back to the X11 clipboard, which may hold different content.
+The UI remains responsive while reading, and subsequent terminal input stays
+ordered behind the paste. Regular-file reads use bounded
 chunks and a three-second deadline between reads, but an OS-blocked network/FUSE
 filesystem operation cannot be forcibly interrupted. Such a read stays isolated
 from the UI and holds its bounded preparation slot until it returns.

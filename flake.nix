@@ -89,6 +89,7 @@
             "cli"
           ];
           nativeBuildInputs = [
+            pkgs.makeWrapper
             pkgs.pkg-config
             rustPlatform.bindgenHook
           ];
@@ -110,6 +111,8 @@
           '';
           postFixup = ''
             patchelf --add-rpath ${lib.makeLibraryPath runtimeLibraries} $out/bin/herdr-gpui
+            wrapProgram $out/bin/herdr-gpui \
+              --prefix PATH : ${lib.makeBinPath [ pkgs.wl-clipboard pkgs.xclip ]}
           '';
           meta = {
             description = "Native GPUI client for an existing local Herdr daemon";

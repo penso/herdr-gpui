@@ -304,7 +304,9 @@ and `libasound2-dev` for Rodio/CPAL native audio. CI and release builds use the
 same script. Linux binaries require the system ALSA shared library (`libasound2t64`
 on Ubuntu 24.04), a configured default audio device, and Vulkan for rendering.
 Audio normally routes through the desktop's ALSA plugin configuration; no CLI
-audio player is required. Custom notification sounds are MP3 only. See
+audio player is required. Terminal clipboard paste needs `wl-paste` (the
+`wl-clipboard` package) on Wayland or `xclip` on X11; the distribution packages
+and Nix build include these dependencies. Custom notification sounds are MP3 only. See
 [notification sounds](crates/herdr-gpui/README.md#notification-sounds).
 
 ### Windows

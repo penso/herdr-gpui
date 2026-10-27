@@ -199,7 +199,9 @@ mod linux {
                         &["--no-newline", "--type", mime][..],
                     ),
                     (
-                        x11,
+                        // XWayland may hold a different selection. Never use
+                        // it as a fallback for an empty/unsupported Wayland offer.
+                        x11 && !wayland,
                         "xclip",
                         &["-selection", "clipboard", "-t", mime, "-o"][..],
                     ),
@@ -256,7 +258,6 @@ mod linux {
         command.stdout(Stdio::null());
         let mut child = match spawned {
             Ok(child) => child,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => {
                 return Err(Error::Process(error).into());
             }
@@ -310,6 +311,8 @@ mod linux {
     mod tests {
         use super::*;
 
+        mod current_selection;
+
         #[test]
         fn commands_preserve_text_and_skip_image_requests() -> Result<()> {
             let item = read_commands(false, true, true, |program, args, limit, _| {
@@ -343,7 +346,7 @@ mod linux {
         fn image_commands_fall_back_and_reject_text_from_image_targets() -> Result<()> {
             let mut calls = Vec::new();
             let mut first_deadline = None;
-            let item = read_commands(true, true, true, |program, args, limit, deadline| {
+            let item = read_commands(true, false, true, |program, args, limit, deadline| {
                 assert_eq!(limit, IMAGE_LIMIT);
                 assert_eq!(*first_deadline.get_or_insert(deadline), deadline);
                 calls.push(program.to_owned());
@@ -353,12 +356,7 @@ mod linux {
                     Ok(Some(b"not an image".to_vec()))
                 }
             })?;
-            assert_eq!(
-                calls,
-                [
-                    "wl-paste", "xclip", "wl-paste", "xclip", "wl-paste", "xclip"
-                ]
-            );
+            assert_eq!(calls, ["xclip", "xclip", "xclip"]);
             assert!(matches!(item.as_ref().map(|item| item.entries()),
                 Some([gpui::ClipboardEntry::Image(image)]) if image.format == ImageFormat::Jpeg));
             assert!(
@@ -386,14 +384,15 @@ mod linux {
             ));
             assert!(run("printf partial; exit 1", 16)?.is_none());
             assert_eq!(run("exit 0", 0)?, Some(Vec::new()));
-            assert!(
+            assert!(matches!(
                 output(
                     &mut Command::new("/nonexistent/herdr-clipboard-helper"),
                     4,
                     Instant::now() + Duration::from_secs(3)
-                )?
-                .is_none()
-            );
+                ),
+                Err(crate::Error::Clipboard(Error::Process(error)))
+                    if error.kind() == io::ErrorKind::NotFound
+            ));
             Ok(())
         }
 

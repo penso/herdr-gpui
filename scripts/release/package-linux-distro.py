@@ -30,17 +30,19 @@ TREE = {
 # The release binary is built on Ubuntu 24.04 and requires GLIBC_2.39. It links
 # ALSA, FreeType, Fontconfig, xcb and xkbcommon, and dlopens the Vulkan loader and
 # libwayland-client, so those are hard requirements too. A Vulkan driver is
-# hardware-specific and therefore only recommended.
+# hardware-specific and therefore only recommended. Clipboard acquisition runs
+# wl-paste or xclip in the background rather than blocking the UI event loop.
 DEPENDS = {
     "deb": ["libc6 (>= 2.39)", "libgcc-s1", "libasound2t64 | libasound2", "libfreetype6", "libfontconfig1",
-            "libxcb1", "libxkbcommon0", "libxkbcommon-x11-0", "libwayland-client0", "libvulkan1"],
+            "libxcb1", "libxkbcommon0", "libxkbcommon-x11-0", "libwayland-client0", "libvulkan1",
+            "wl-clipboard", "xclip"],
     # Soname requirements resolve on any RPM distribution, not only Fedora.
     "rpm": ["libc.so.6(GLIBC_2.39)(64bit)", *(f"{soname}()(64bit)" for soname in (
         "libgcc_s.so.1", "libasound.so.2", "libfreetype.so.6", "libfontconfig.so.1", "libxcb.so.1",
         "libxkbcommon.so.0", "libxkbcommon-x11.so.0", "libwayland-client.so.0",
-        "libvulkan.so.1"))],
+        "libvulkan.so.1")), "wl-clipboard", "xclip"],
     "archlinux": ["glibc>=2.39", "gcc-libs", "alsa-lib", "freetype2", "fontconfig", "libxcb", "libxkbcommon",
-                  "libxkbcommon-x11", "wayland", "vulkan-icd-loader"],
+                  "libxkbcommon-x11", "wayland", "vulkan-icd-loader", "wl-clipboard", "xclip"],
 }
 RECOMMENDS = {
     "deb": ["mesa-vulkan-drivers | vulkan-icd", "fonts-dejavu-core"],

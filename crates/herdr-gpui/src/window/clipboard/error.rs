@@ -12,7 +12,9 @@ pub enum Error {
     #[cfg(target_os = "macos")]
     #[error(transparent)]
     Native(#[from] super::macos::Error),
-    #[error("Could not read the clipboard; on Linux, install wl-paste or xclip.")]
+    #[error(
+        "Could not read the clipboard; on Linux, install wl-clipboard for Wayland or xclip for X11."
+    )]
     Process(#[source] io::Error),
     #[error("Clipboard content exceeds the {limit}-byte limit.")]
     Size { limit: usize },

@@ -89,8 +89,8 @@ fn a_paste_in_a_gap_arrives_between_the_keys_typed_around_it(cx: &mut gpui::Test
                 "nothing leaves before the gap closes"
             );
             close_gap(view, cx, frame);
-            // macOS reads the paste in the background, and `b` waits for it.
-            let waiting = usize::from(cfg!(target_os = "macos"));
+            // Background clipboard acquisition holds `b` until the paste is ready.
+            let waiting = usize::from(cfg!(any(target_os = "macos", target_os = "linux")));
             assert_eq!(view.pending_input.len(), waiting);
             view.send(text("sentinel"), cx);
         });
