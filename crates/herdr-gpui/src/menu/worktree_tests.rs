@@ -76,11 +76,20 @@ fn items() -> Vec<Item> {
 fn open_dialog(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, connected: bool, tab: Tab) {
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
+            let ssh = matches!(
+                view.endpoints[view.selected_endpoint].connection.target,
+                herdr_client::ConnectTarget::Ssh { .. }
+            );
             let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
-            snapshot.workspaces = sidebar::layout_tests::snapshot(7).workspaces;
+            snapshot.workspaces = if ssh {
+                sidebar::layout_tests::ssh_snapshot(7)
+            } else {
+                sidebar::layout_tests::snapshot(7)
+            }
+            .workspaces;
             view.live.status = crate::state::ConnectionStatus::Connected;
-            // The listing reads a checkout, so it is owned-local-socket only.
-            view.live.local_daemon_peer = true;
+            // Only the local fixture models a verified daemon on this machine.
+            view.live.local_daemon_peer = !ssh;
             view.menu.reset();
             view.menu.github = if connected {
                 crate::github::Auth::connected_fixture()

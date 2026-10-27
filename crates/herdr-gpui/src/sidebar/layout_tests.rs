@@ -459,6 +459,16 @@ pub(crate) const REPO_KEY: &str = if cfg!(windows) {
 };
 
 pub(crate) fn snapshot(workspace_count: usize) -> ClientShellSnapshot {
+    snapshot_with_repo_key(workspace_count, REPO_KEY)
+}
+
+/// SSH fixtures describe the POSIX host, not the platform running the test.
+#[cfg(test)]
+pub(crate) fn ssh_snapshot(workspace_count: usize) -> ClientShellSnapshot {
+    snapshot_with_repo_key(workspace_count, "/fixture/agent-launcher/.git")
+}
+
+fn snapshot_with_repo_key(workspace_count: usize, repo_key: &str) -> ClientShellSnapshot {
     serde_json::from_value(serde_json::json!({
         "boot_id": "layout-test", "revision": 1,
         "update_install_command": "", "latest_release_notes_available": false,
@@ -475,13 +485,13 @@ pub(crate) fn snapshot(workspace_count: usize) -> ClientShellSnapshot {
         "workspaces": (0..workspace_count).map(|i| serde_json::json!({
             "workspace_id": format!("w{i}"), "active_tab_id": "t0",
             // The main checkout's shell stands in its repository, as Herdr opens it.
-            "new_workspace_cwd": if i == 3 { REPO_KEY.trim_end_matches("/.git") } else { "/tmp" },
+            "new_workspace_cwd": if i == 3 { repo_key.trim_end_matches("/.git") } else { "/tmp" },
             "number": i + 1,
             "label": match i { 0 => "herdr", 1 => "herdr-gpui-sidebar-rendering-regression-investigation", 3..=5 => "agent-launcher", _ => "another workspace" },
             "custom_label": false,
             "branch": match i { 0 => "main", 2 => "1256789", 3 => "develop", 4 => "worktree/sidebar-child", 5 => "worktree/sidebar-child-with-a-long-readable-branch-name", _ => "fix/sidebar-label-width-and-overflow-regression" },
             "worktree": if (3..=5).contains(&i) { serde_json::json!({
-                "key": REPO_KEY, "label": "agent-launcher", "is_linked_worktree": i != 3
+                "key": repo_key, "label": "agent-launcher", "is_linked_worktree": i != 3
             }) } else { serde_json::Value::Null },
             "tokens": [], "focused": i == 0, "agent_status": "working"
         })).collect::<Vec<_>>(),

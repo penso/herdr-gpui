@@ -4,7 +4,7 @@ use herdr_client::protocol::ClientShellWorktree;
 
 #[test]
 fn metadata_priority_alternates_with_round_robin_and_skips_ineligible_workspaces() {
-    let mut snapshot = crate::sidebar::layout_tests::snapshot(6);
+    let mut snapshot = crate::sidebar::layout_tests::ssh_snapshot(6);
     snapshot.focused_workspace_id = Some("w5".into());
     // A saved device requires daemon metadata, so only metadata decides here.
     let origin = Origin::Ssh("device".into());
