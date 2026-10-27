@@ -404,6 +404,18 @@ pub fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                         // away, which is precisely when the terminal area used to blank.
                         window.refresh();
                         window.draw(cx).clear(cx);
+                        view.update(cx, |view, _| -> Result<()> {
+                            let target = NavigationTarget::Workspace(workspace.as_str());
+                            let picture = view.presentation.navigation_picture(
+                                &view.live, Some(target),
+                                (view.options.surface_size.cols, view.options.surface_size.rows),
+                            ).context("missing navigation picture")?;
+                            let expected_panes = if view.cache_remote_surfaces() { 3 } else { 1 };
+                            if picture.frame.panes.len() != expected_panes {
+                                bail!("space switch picture has {} panes, expected {expected_panes}", picture.frame.panes.len());
+                            }
+                            Ok(())
+                        })?;
                         let after = view.read(cx).presentation.probe;
                         if after.blank > before.blank {
                             bail!("space switch blanked the terminal area: {} empty frame(s); {}", after.blank - before.blank, diagnostic());

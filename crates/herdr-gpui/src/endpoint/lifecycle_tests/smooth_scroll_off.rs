@@ -47,7 +47,7 @@ fn turning_smooth_scrolling_off_snaps_a_resting_pane_to_its_row(cx: &mut gpui::T
             surface.frame.cells.rotate_right(width);
             view.presentation.frame(&view.live);
             let rest = Instant::now() + Duration::from_secs(1);
-            assert!(view.presentation.scroll.slide(rest).is_some());
+            assert!(view.presentation.scroll.slide(rest, false).is_some());
             let (_, y) = view.grid_position(mouse_position(view, 3.5, 2.5));
             assert_ne!(y / height, 2.5, "the resting pane is drawn between rows");
             view.config.smooth_scroll = false;

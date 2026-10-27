@@ -120,7 +120,10 @@ fn run(seed: u64) -> (u32, u32) {
                 }
             }
             8 => {
-                trace.push(format!("paint {:?}", scroll.slide(now).map(|s| s.offset)));
+                trace.push(format!(
+                    "paint {:?}",
+                    scroll.slide(now, false).map(|s| s.offset)
+                ));
             }
             _ if in_flight.is_empty() => {
                 let lines = rng.below(2) as i64 + 1;

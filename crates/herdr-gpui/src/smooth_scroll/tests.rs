@@ -73,7 +73,7 @@ fn back(n: u32) -> Arc<PaneSurfaceFrame> {
 /// The slide's offset and the shifts of the frames behind it.
 fn offset(scroll: &mut SmoothScroll, now: Instant) -> Option<(f32, Vec<i32>)> {
     scroll
-        .slide(now)
+        .slide(now, false)
         .map(|slide| (slide.offset, slide.behind.iter().map(|(_, s)| *s).collect()))
 }
 
@@ -183,13 +183,13 @@ fn an_application_reading_the_wheel_another_boot_or_the_keyboard_ends_it() {
     app.panes[0].mouse_reporting = true;
     assert_eq!(scroll.wheel(&app, "pane", 1., now), None);
     assert_eq!(scroll.wheel(&back(10), "other", 1., now), None);
-    assert!(scroll.slide(now).is_none());
+    assert!(scroll.slide(now, false).is_none());
 
     assert_eq!(scroll.wheel(&back(10), "pane", 1., now), Some(1));
     let mut rebooted = (*back(11)).clone();
     rebooted.boot_id = "other".into();
     scroll.observe(&back(10), &rebooted);
-    assert!(scroll.slide(now).is_none());
+    assert!(scroll.slide(now, false).is_none());
 
     // Resting mid-row, a scroll the wheel did not ask for lands on its row.
     assert_eq!(scroll.wheel(&back(10), "pane", 0.5, now), Some(1));
@@ -197,7 +197,7 @@ fn an_application_reading_the_wheel_another_boot_or_the_keyboard_ends_it() {
     let later = now + 10 * SPREAD;
     assert_eq!(offset(&mut scroll, later), Some((-0.5, vec![1])));
     scroll.observe(&back(11), &back(12));
-    assert!(scroll.slide(later).is_none());
+    assert!(scroll.slide(later, false).is_none());
 }
 
 #[test]
@@ -309,7 +309,7 @@ fn requests_served_together_never_answer_a_later_scroll() {
     // One surface serves all three; the keyboard then moves to row 10.
     scroll.observe(&back(10), &back(11));
     scroll.observe(&back(11), &back(10));
-    assert!(scroll.slide(now).is_none());
+    assert!(scroll.slide(now, false).is_none());
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn a_long_wait_for_answers_keeps_every_row_asked() {
     }
     // The first answer finally lands, on the first row asked.
     scroll.observe(&back(10), &back(11));
-    assert!(scroll.slide(now).is_some());
+    assert!(scroll.slide(now, false).is_some());
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn blank_rows_tell_output_from_a_scroll() {
     assert_eq!(offset(&mut scroll, later), Some((-0.5, vec![1])));
     // The keyboard's row through them leaves the history as it was: it lands.
     scroll.observe(&blank(989, 13), &blank(988, 14));
-    assert!(scroll.slide(later).is_none());
+    assert!(scroll.slide(later, false).is_none());
 }
 
 #[test]
@@ -366,3 +366,4 @@ fn a_few_blank_rows_never_pass_for_a_scroll() {
 }
 
 mod model;
+mod retained;

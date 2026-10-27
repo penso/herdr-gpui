@@ -76,6 +76,19 @@ The status dot pulses amber during local daemon startup and is red when disconne
 Healthy connections leave the status bar quiet; connection indicators live in the
 device picker. Startup, disconnection, and operation errors remain in the status bar.
 
+Worktree selection highlights immediately, including while a remote host is still
+answering an earlier selection. On remote hosts, revisiting a terminal worktree or
+tab shows its last screen while the fresh one arrives; input still waits for the
+daemon to confirm the destination. These previews are kept in memory for the
+selected remote connection, up to 16 screens and 16 MiB, and are discarded on
+disconnect or host changes. Resized grids, changed pane membership or zoom, popups,
+and image-bearing screens fall back to the last live picture. On remote hosts,
+smooth scrolling also keeps its four recent screens after a gesture ends, so
+reversing over those rows can move locally before the server replies. History the
+client has not received still needs the network. Local connections, including WSL,
+do not cache navigation previews and release scroll screens when the gesture
+settles.
+
 For split terminal panes within a tab, **Focus follows mouse** is on by default.
 Disable it in **Settings > Tabs & panes > Panes**, or run
 `herdr-gpui config set focus_follows_mouse false`.

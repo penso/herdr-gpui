@@ -233,8 +233,9 @@ impl HerdrWindow {
                     break;
                 }
                 let workspace = &snapshot.workspaces[index];
+                let focused = self.workspace_selected(endpoint_index, workspace);
                 let linked = crate::worktree_identity::is_linked(workspace);
-                if selected && workspace.focused {
+                if focused {
                     highlighted[0] = Some(space_rows);
                 }
                 let unit = plan.as_ref().and_then(|plan| plan.unit_of(index));
@@ -430,7 +431,7 @@ impl HerdrWindow {
                     }),
                     &row_cx,
                 )
-                .selected(selected && workspace.focused)
+                .selected(focused)
                 .highlighted(selected && menu_target == Some(id.as_str()))
                 .lift(match (carried, floating) {
                     (true, _) => RowLift::Lifted,
@@ -510,7 +511,7 @@ impl HerdrWindow {
                         shown_status,
                         row_cx.host,
                     );
-                    self.workspace_item(row, name, selected && workspace.focused, folds, cx)
+                    self.workspace_item(row, name, focused, folds, cx)
                 })
                 .when(multi, |row| {
                     row.debug_selector(|| format!("workspace-{endpoint_id}-{id}"))

@@ -10,6 +10,47 @@ pub(crate) enum NavigationTarget<T> {
 
 pub(crate) type OwnedNavigationTarget = NavigationTarget<String>;
 
+impl crate::HerdrWindow {
+    /// The newest requested destination, for presentation only. The daemon's
+    /// snapshot remains authoritative for commands and terminal input.
+    pub(crate) fn navigation_preview(&self) -> Option<&OwnedNavigationTarget> {
+        self.pending_navigation.as_ref().or_else(|| {
+            self.live
+                .activation
+                .as_ref()
+                .filter(|activation| !activation.failed && activation.active)
+                .and_then(|activation| activation.focus.as_ref())
+        })
+    }
+
+    pub(crate) fn workspace_selected(
+        &self,
+        endpoint: usize,
+        workspace: &herdr_client::protocol::ClientShellWorkspace,
+    ) -> bool {
+        if endpoint != self.selected_endpoint {
+            return false;
+        }
+        let requested = self.navigation_preview().and_then(|target| {
+            let snapshot = self.live.snapshot.as_ref()?;
+            match target.as_deref() {
+                NavigationTarget::Workspace(id) => Some(id),
+                NavigationTarget::Tab(id) => snapshot
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.tab_id == id)
+                    .map(|tab| tab.workspace_id.as_str()),
+                NavigationTarget::Pane(id) => snapshot
+                    .panes
+                    .iter()
+                    .find(|pane| pane.pane_id == id)
+                    .map(|pane| pane.workspace_id.as_str()),
+            }
+        });
+        requested.map_or(workspace.focused, |id| workspace.workspace_id == id)
+    }
+}
+
 impl<T: AsRef<str>> NavigationTarget<T> {
     /// Borrow the payload, as `Option::as_deref` does. Not `AsRef`, which
     /// returns a reference to the same value rather than a new target.

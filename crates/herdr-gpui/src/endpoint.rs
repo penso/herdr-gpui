@@ -798,6 +798,7 @@ impl HerdrWindow {
             self.navigate(target, cx);
         } else {
             self.pending_navigation = Some((&target).into());
+            cx.notify();
         }
         true
     }

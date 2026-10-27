@@ -138,10 +138,17 @@ impl Render for HerdrWindow {
                 marks.forget(self.sidebar_view.entity_id());
             }
         }
-        // Paints the frame on screen, which during a focus change is the one
-        // presented before it: the terminal area never blanks between two
-        // projections. What the client knows to be current stays in `live`.
-        let picture = self.presentation.picture(&self.live);
+        // A visited destination can paint before its remote focus lands.
+        // What the client knows to be current stays exclusively in `live`.
+        let target = self.navigation_preview().cloned();
+        let picture = self.presentation.navigation_picture(
+            &self.live,
+            target.as_ref().map(|target| target.as_deref()),
+            (
+                self.options.surface_size.cols,
+                self.options.surface_size.rows,
+            ),
+        );
         let surface = picture.as_ref().map(|picture| picture.frame.clone());
         let images = picture.as_ref().map(|picture| picture.images.clone());
         // A group picking the tab another shows paints this same frame.
@@ -223,7 +230,10 @@ impl Render for HerdrWindow {
             self.presentation.scroll.clear();
         }
         let now = crate::motion::now();
-        let slide = self.presentation.scroll.slide(now);
+        let slide = self
+            .presentation
+            .scroll
+            .slide(now, self.cache_remote_surfaces());
         // A link in a pane drawn mid-row underlines where its text is drawn.
         let link_shift = link_rows.first().and_then(|(row, columns)| {
             self.shift_at(point(

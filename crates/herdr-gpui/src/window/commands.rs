@@ -247,6 +247,8 @@ impl HerdrWindow {
         if !self.live.supports_surface {
             return;
         }
+        self.presentation
+            .remember(&self.live, self.cache_remote_surfaces());
         if let (Some(handle), Some(snapshot)) = (
             &self.endpoints[self.selected_endpoint].connection.handle,
             &self.live.snapshot,

@@ -275,14 +275,23 @@ impl SmoothScroll {
     /// The pane's rect and the offset last painted, for hit testing.
     pub(crate) fn offset(&self) -> Option<(SurfaceRect, f32)> {
         let motion = self.motion.as_ref()?;
+        if motion.target == motion.shown as f64 && motion.painted == 0. {
+            return None;
+        }
         Some((motion.rect, motion.painted))
     }
 
-    pub(crate) fn slide(&mut self, now: Instant) -> Option<Slide> {
+    pub(crate) fn slide(&mut self, now: Instant, retain_settled: bool) -> Option<Slide> {
         let moving = self.moving(now);
         let motion = self.motion.as_mut()?;
         if motion.target == motion.shown as f64 && !moving {
-            self.motion = None;
+            // Remote connections keep earlier screens for the next gesture;
+            // local connections release them as soon as this one settles.
+            if retain_settled {
+                motion.painted = 0.;
+            } else {
+                self.motion = None;
+            }
             return None;
         }
         let offset = motion.offset(now);

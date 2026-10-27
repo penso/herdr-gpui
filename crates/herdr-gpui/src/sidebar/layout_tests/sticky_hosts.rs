@@ -163,9 +163,9 @@ fn the_pinned_header_takes_input_instead_of_the_rows_under_it(cx: &mut gpui::Tes
     let row = cx.debug_bounds("workspace-local-w2").unwrap();
     cx.simulate_click(row.center(), Default::default());
     view.read_with(cx, |view, _| assert!(view.pending_navigation.is_some()));
-    view.update(cx, |view, _| view.pending_navigation = None);
 
-    // The wheel still scrolls the list with the pointer on the pinned header.
+    // The selection highlights before the daemon answers. The wheel still
+    // scrolls the list over the pinned header while that navigation is pending.
     let before = view.read_with(cx, |view, _| view.sidebar_scroll[0].offset());
     cx.simulate_event(ScrollWheelEvent {
         position: pinned.center(),

@@ -247,7 +247,7 @@ impl HerdrWindow {
                 let navigate_endpoint = endpoint_id.clone();
                 let context_endpoint = endpoint_id.clone();
                 let context_id = id.clone();
-                let focused = selected && workspace.focused;
+                let focused = self.workspace_selected(endpoint_index, workspace);
                 let number = workspace.number.to_string();
                 let marks = div()
                     .flex()

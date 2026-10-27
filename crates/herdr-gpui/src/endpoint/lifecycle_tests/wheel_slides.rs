@@ -144,7 +144,7 @@ fn the_uncovered_edge_of_a_resting_pane_resolves_no_link(cx: &mut gpui::TestAppC
             view.presentation.frame(&view.live);
             // Hit testing follows what was painted: paint the pane at rest.
             let rest = Instant::now() + Duration::from_secs(1);
-            assert!(view.presentation.scroll.slide(rest).is_some());
+            assert!(view.presentation.scroll.slide(rest, false).is_some());
             let (middle, edge) = (
                 mouse_position(view, 3.5, 2.5),
                 mouse_position(view, 3.5, 22.9),
