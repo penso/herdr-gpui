@@ -3552,6 +3552,10 @@ error codes (for example, `5` for Windows access denied). A successful plain
 pipe client alone does not establish why the GUI was denied; include these
 records when reporting the failure.
 
+For the access-denied investigation in #357, see
+[Windows local access](../../docs/windows-local-access.md) for the actual open
+flags, isolated access-control tests, and the native evidence still needed.
+
 ## Keyboard Shortcuts
 
 Open **Herdr > Keyboard Shortcuts** to search every application command,
