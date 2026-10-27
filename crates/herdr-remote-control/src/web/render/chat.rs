@@ -69,7 +69,7 @@ fn head(workspace: &Workspace, row: &ChatRow, view: &View, now_ms: u64) -> Marku
         }
     };
     html! {
-        header id="chat-head" class="sticky top-0 z-10 bg-bg/90 backdrop-blur border-b border-line" {
+        header id="chat-head" class="sticky top-[env(safe-area-inset-top)] z-10 bg-bg border-b border-line" {
             div class="flex items-center gap-2.5 px-3.5 pt-1.5 pb-2" {
                 a href="/" data-nav class="grid place-items-center text-accent w-8 h-9 -ml-1.5 shrink-0" aria-label="Back" { (icons::chevron_left(28)) }
                 @if session::has_settings(transcript) {
@@ -217,10 +217,23 @@ fn extras(row: &ChatRow, transcript: &Transcript) -> Markup {
     html! {
         div id="chat-extras" class="contents" {
             @if transcript.entries.is_empty() {
-                p class="text-muted text-center py-10" {
-                    @match &transcript.status {
-                        Status::Starting => "The agent is starting…",
-                        _ => "Send a prompt to start.",
+                section id="chat-empty" class="flex flex-col items-center gap-3 px-6 pt-10 pb-8 text-center" {
+                    (super::agent_icon(row.agent.as_deref(), "w-12 h-12 text-2xl"))
+                    div class="flex flex-col gap-1.5 max-w-64" {
+                        h2 class="text-[17px] font-semibold" {
+                            @match &transcript.status {
+                                Status::Starting => "Starting your agent",
+                                Status::Failed { .. } | Status::Exited { .. } => "No conversation yet",
+                                _ => "Start a conversation",
+                            }
+                        }
+                        p class="text-sm text-muted" {
+                            @match &transcript.status {
+                                Status::Starting => "Your agent is getting ready. Its replies will appear here.",
+                                Status::Failed { .. } | Status::Exited { .. } => "The agent stopped before the conversation began.",
+                                _ => "Ask a question or describe a task in the message field below.",
+                            }
+                        }
                     }
                 }
             }

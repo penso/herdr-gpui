@@ -64,6 +64,21 @@ HTTPS post to the phone's push service, the triggers that turn chat changes
 into questions, finished turns, and errors, and a per-device throttle. The
 service worker receives `push::Message` as JSON.
 
+## Empty chats
+
+An empty chat opens at its header with the agent's icon and a prompt to start.
+Populated chats open at the latest entry; stream updates follow only while the
+reader is already at the bottom. The header uses an opaque background and stays
+below the status-bar safe area.
+
+![Empty chat in a narrow desktop browser preview](../../docs/screenshots/remote-chat-empty.png)
+
+## Browser controller tests
+
+The phone's scroll-controller regression checks run without browser dependencies:
+`node --test scripts/test-remote-chat-scroll.mjs` from the repository root.
+Node is needed only for these optional checks, not for building the daemon.
+
 ## Errors
 
 The crate exports `Error` and `Result<T>`.

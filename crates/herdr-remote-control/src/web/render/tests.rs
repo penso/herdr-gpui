@@ -11,6 +11,7 @@ use std::collections::HashMap;
 mod ansi;
 mod chat_view;
 mod composer;
+mod empty_chat;
 mod icons;
 mod lists;
 mod markup;

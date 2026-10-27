@@ -421,7 +421,8 @@ async function route(event) {
       // show or hide groups before measuring rows.
       await Promise.resolve();
       applySearch();
-      window.scrollTo(0, location.pathname.startsWith("/chat/") ? document.body.scrollHeight : 0);
+      if (location.pathname.startsWith("/chat/")) scrollChatToEnd();
+      else window.scrollTo(0, 0);
       revealCameFrom();
     });
     fitTerminal();
@@ -469,6 +470,13 @@ function markRow() {
 function navigate(path) {
   if (path !== location.pathname + location.search) history.pushState(null, "", path);
   route();
+}
+
+// Empty chats start at the header, not at the bottom of the viewport's
+// safe-area/composer padding. Populated chats still follow the latest entry.
+function scrollChatToEnd() {
+  const entries = document.getElementById("chat-entries");
+  window.scrollTo(0, entries?.childElementCount ? document.body.scrollHeight : 0);
 }
 
 // ---- the patch stream: server-sent events read with fetch, so the
@@ -545,7 +553,7 @@ function handleEvent(block) {
     if (!element || !view().contains(element) || "local" in view().dataset) continue;
     element.insertAdjacentHTML("beforeend", html);
   }
-  if (atBottom && document.getElementById("chat-turn")) window.scrollTo(0, document.body.scrollHeight);
+  if (atBottom && document.getElementById("chat-turn")) scrollChatToEnd();
   applySearch();
   markRow();
 }

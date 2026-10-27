@@ -202,6 +202,22 @@ fn write_preview_pages() {
         "chat.html",
         chat(&layout.workspaces[0], &row("p1"), &view, 72_000),
     );
+    page(
+        &dir,
+        "chat-empty.html",
+        chat(
+            &layout.workspaces[0],
+            &row("p1"),
+            &View {
+                transcript: Transcript {
+                    status: Status::Idle,
+                    ..Transcript::new("Claude")
+                },
+                connected: true,
+            },
+            0,
+        ),
+    );
     let mut asking = demo_transcript();
     asking.permissions = vec![question("Run `just ci` in ~/code/herdr-gpui?")];
     let view = View {
