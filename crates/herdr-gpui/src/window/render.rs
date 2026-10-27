@@ -330,33 +330,7 @@ impl Render for HerdrWindow {
                 terminal.bg(fill.base(self.terminal_theme().background))
             })
             .children(self.terminal_ground(fill.base(self.terminal_theme().background)))
-            .track_focus(&self.focus)
-            // Screen readers and selection tools read the rows on screen and
-            // the selection among them. The rows are built while GPUI
-            // prepaints, and only while an assistive client is listening.
-            .role(Role::Terminal)
-            .aria_label("Terminal")
-            .when(
-                window.is_a11y_active() && self.live.surface_ready(),
-                |terminal| {
-                    let surface = self.live.surface.clone();
-                    let selection = self.selection.clone();
-                    let cell_width = self.cell_width;
-                    let cell_height = self.config.terminal.line_height();
-                    let origin = (
-                        f32::from(self.bounds.origin.x),
-                        f32::from(self.bounds.origin.y),
-                    );
-                    let scale = window.scale_factor();
-                    terminal.a11y_synthetic_children(move |builder| {
-                        if let Some(transcript) = surface.as_deref().and_then(|surface| {
-                            Transcript::read(surface, selection.as_ref(), cell_width, cell_height)
-                        }) {
-                            transcript.expose(builder, origin, scale);
-                        }
-                    })
-                },
-            )
+            .map(|terminal| self.accessible_terminal(terminal, window, cx))
             .capture_key_down(cx.listener(Self::chat_zoom_key))
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))

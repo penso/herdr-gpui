@@ -1782,6 +1782,14 @@ no trailing padding. A selection reaching rows scrolled out of view exposes
 only its visible part, though the copy still includes all of it. Copy mode's
 keyboard selection is not exposed.
 
+While the terminal has keyboard focus and is ready for input, its accessibility
+node also accepts text insertion (`AXValue` on macOS), so dictation tools can
+recognize a writable target. Setting it pastes into the focused pane or open
+terminal popup; it does not replace terminal output or the selected cells.
+Insertion is unavailable while a dialog, another field, copy mode, or an IME
+composition owns input. The terminal's screen-reader role and selection text
+remain the same.
+
 ## File Drops
 
 Drop files from your file manager onto a terminal pane or popup to paste their

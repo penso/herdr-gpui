@@ -3,6 +3,7 @@
 //! split by responsibility across the submodules below; the fields live here
 //! because every one of them describes this window's own presentation state.
 
+mod accessibility;
 mod annotate;
 mod announcement;
 mod backdrop;
