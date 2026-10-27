@@ -167,8 +167,15 @@ impl HerdrWindow {
             self.menu.github.probe_github_cli(std::time::Instant::now());
         }
         if self.menu.page == Some(super::Page::GitHub) {
-            self.github_auth_mut()
-                .recheck_access(std::time::Instant::now());
+            let now = std::time::Instant::now();
+            let host = self.github_host().map(str::to_owned);
+            let menu = &mut self.menu;
+            host.and_then(|id| menu.github_hosts.get_mut(&id))
+                .unwrap_or(&mut menu.github)
+                .recheck_access(now);
+            for account in &mut menu.github_accounts {
+                account.auth.recheck_access(now);
+            }
         }
         let connected = self.github_auth().connected();
         let mut changed = self.menu.github.poll();
@@ -584,7 +591,7 @@ impl HerdrWindow {
                     .child(message),
             );
         }
-        if let Some(attention) = self.render_github_attention() {
+        if let Some(attention) = self.render_github_attention(cx) {
             body = body.child(attention);
         }
         if let Some(note) = auth

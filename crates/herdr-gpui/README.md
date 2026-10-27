@@ -3821,7 +3821,7 @@ Ctrl+Shift+U is left unbound for
   checks before it is saved: an Enterprise Managed User cannot install Herdr's
   GitHub App on its own repositories, so a token is how one reads them. A
   repository is read with the first additional account whose login, organizations
-  (read when it signs in, if its token may list them), or configured owners
+  (from visible memberships and GitHub App installations), or configured owners
   include the repository's owner, and with the device's account otherwise. This
   applies to sidebar PR badges, the New worktree pull request and issue lists, PR
   checks, comments and merges, creating a pull request, and the orchestrator.
@@ -3858,11 +3858,16 @@ Ctrl+Shift+U is left unbound for
   every five-minute session check, the app compares the App's requested
   permissions (`GET /apps/<slug>`) with each installation the account can see
   (`GET /user/installations`). If no installation exists, or one still has
-  fewer permissions than the App now requests, the avatar shows a red dot, a
-  toast says so once per window, and the account panel links each owner's
+  fewer non-security permissions than the App now requests, the avatar shows
+  a red dot, a toast says so once per window, and the account panel links each owner's
   approval page (or the install page, for Herdr GPUI's own App). With the
-  panel open, the check runs again within 30 seconds. Tokens from the GitHub
-  CLI, `GH_TOKEN`, an OAuth App, or a personal access token are not checked.
+  panel open, every waiting account shown in it is checked promptly, at most
+  once every 30 seconds. Switching accounts or opening an approval link also
+  schedules that check. Optional security permissions (`repository_advisories`,
+  `security_events`, `vulnerability_alerts`) do not raise the core repository
+  access warning; the Security section reports unavailable access separately.
+  Tokens from the GitHub CLI, `GH_TOKEN`, an OAuth App, or a personal access
+  token are not checked.
   The compact native macOS titlebar design
   is integrated from main commit `3909f21`, without unrelated tab changes.
   Signed macOS release builds keep tokens in this app's Keychain entry; unsigned

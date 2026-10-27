@@ -49,6 +49,7 @@ pub struct Auth {
     pub(super) store: Store,
     pub(super) account: Account,
     pub(super) profile_incoming: Option<mpsc::Receiver<Result<Option<Profile>>>>,
+    pub(super) last_session_check: Option<Instant>,
     pub(super) next_session_check: Option<Instant>,
     pub profile: Option<Profile>,
     pub message: Option<String>,
@@ -83,6 +84,7 @@ impl Auth {
     pub fn connected_fixture() -> Self {
         Self {
             initialized: true,
+            last_session_check: Some(Instant::now()),
             profile: Some(Profile {
                 login: "fixture-user".into(),
                 avatar_url: String::new(),
@@ -93,6 +95,10 @@ impl Auth {
             }),
             ..Self::default()
         }
+    }
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn access_recheck_scheduled_fixture(&self) -> bool {
+        self.next_session_check.is_some()
     }
     pub fn connected(&self) -> bool {
         self.profile.is_some()
@@ -466,19 +472,24 @@ impl Auth {
         self.cancelled = false;
         self.message = Some("Signed out locally. Removing saved GitHub credential...".into());
     }
-    /// Check the account again soon, for a user who may just have approved
-    /// its GitHub App on GitHub. At most every 30 seconds, and only while
-    /// something is waiting on them.
+    /// Check promptly while the account panel is open, including after the
+    /// user returns from approving the App. Repeated calls coalesce, and
+    /// session checks start at most once every 30 seconds.
     pub fn recheck_access(&mut self, now: Instant) {
-        if self
-            .profile
-            .as_ref()
-            .is_none_or(|profile| !profile.access.needs_attention())
+        if self.loading_profile()
+            || self.busy()
+            || self.signed_out
+            || self
+                .profile
+                .as_ref()
+                .is_none_or(|profile| !profile.access.needs_attention())
         {
             return;
         }
-        let soon = now + ACCESS_RECHECK;
-        if self.next_session_check.is_some_and(|next| next > soon) {
+        let soon = self
+            .last_session_check
+            .map_or(now, |last| (last + ACCESS_RECHECK).max(now));
+        if self.next_session_check.is_none_or(|next| next > soon) {
             self.next_session_check = Some(soon);
         }
     }
@@ -531,6 +542,7 @@ impl Auth {
         if self.reload_pending && !self.busy() && self.profile_incoming.is_none() {
             self.reload_pending = false;
             self.cancelled = false;
+            self.last_session_check = Some(now);
             self.load_profile_with(None, load);
             return true;
         }
@@ -543,6 +555,7 @@ impl Auth {
             // Resolve the store again under its transaction lock: another window
             // may already have rotated the single-use refresh token or signed out.
             self.next_session_check = Some(now + SESSION_CHECK_INTERVAL);
+            self.last_session_check = Some(now);
             self.load_profile_with(None, load);
             return true;
         }
@@ -695,6 +708,7 @@ impl Auth {
                             self.committing = false;
                             self.credential_cleanup = true;
                             self.next_session_check = Some(now + SESSION_CHECK_INTERVAL);
+                            self.last_session_check = Some(now);
                             self.profile = Some(profile);
                             self.failed = false;
                             self.message = None;
@@ -711,6 +725,7 @@ impl Auth {
                         Ok(Reply::Authenticated(token)) => {
                             self.committing = false;
                             self.message = Some("Loading GitHub profile...".into());
+                            self.last_session_check = Some(now);
                             self.load_profile_with(Some(token), load);
                         }
                         Err(error) => {
@@ -774,9 +789,9 @@ impl Auth {
 /// A loaded account, with what its GitHub App installations still need and
 /// what an additional account also needs: the organizations it covers.
 fn complete(profile: Profile, account: &Account) -> Profile {
-    let profile = with_access(profile);
+    let (profile, installed) = with_access(profile);
     match account {
-        Account::Additional(_) => with_organizations(profile),
+        Account::Additional(_) => with_organizations(profile, installed),
         Account::Main | Account::Host(_) => profile,
     }
 }

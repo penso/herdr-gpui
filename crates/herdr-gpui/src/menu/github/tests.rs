@@ -2,6 +2,7 @@
 use super::Action;
 use gpui::TestAppContext;
 
+mod access_refresh;
 mod accounts;
 mod github_cli;
 mod installation;
