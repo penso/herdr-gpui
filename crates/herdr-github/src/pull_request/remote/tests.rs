@@ -65,8 +65,12 @@ fn remote_repository_refuses_missing_metadata_invalid_paths_and_expired_deadline
         ));
     }
     input.repo_key = Some("/repo/.git".into());
-    assert!(matches!(
-        remote_repository("work", &input, Instant::now(), &|| false),
-        Err(crate::Error::PullRequest(Error::Timeout))
-    ));
+    // Windows can report the same Instant on consecutive reads. Both an
+    // expired deadline and a zero remaining budget must stop before SSH.
+    for expired in [Instant::now() - Duration::from_secs(1), Instant::now()] {
+        assert!(matches!(
+            remote_repository("work", &input, expired, &|| false),
+            Err(crate::Error::PullRequest(Error::Timeout))
+        ));
+    }
 }

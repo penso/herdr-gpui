@@ -2,6 +2,8 @@ use super::super::{context, remote};
 use super::*;
 use std::path::Path;
 
+mod ssh_commands;
+
 fn git(path: &Path, args: &[&str]) -> String {
     let output = std::process::Command::new("git")
         .env("GIT_CONFIG_NOSYSTEM", "1")

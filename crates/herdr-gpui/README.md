@@ -3740,7 +3740,8 @@ Ctrl+Shift+U is left unbound for
   a PR fetches its head on the selected host before asking its daemon to create
   the worktree; picking an issue creates a new branch there. The checkout's agent
   context notes are also written on that host. These SSH operations require a
-  POSIX shell and Git; fetching uses the host's Git credentials. The branch tab
+  POSIX shell and Git; fetching uses the host's Git credentials, preserving its
+  `core.sshCommand`, `GIT_SSH_COMMAND`, and `GIT_SSH` selections. The branch tab
   still lists local branches only.
   The PR tab supports fork pull requests: it fetches GitHub's PR head ref from
   the listed repository's remote and creates a local `pr/<number>` branch.

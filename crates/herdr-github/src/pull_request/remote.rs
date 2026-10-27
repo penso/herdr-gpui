@@ -86,6 +86,7 @@ pub fn remote_repository(
     let read = |key| {
         let timeout = deadline
             .checked_duration_since(Instant::now())
+            .filter(|timeout| !timeout.is_zero())
             .ok_or(super::Error::Timeout)?;
         Ok::<_, crate::Error>(herdr_client::remote_config_value(
             target, directory, key, timeout, cancelled,

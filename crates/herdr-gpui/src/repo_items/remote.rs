@@ -12,8 +12,24 @@ pub(super) fn directory(path: &str) -> crate::Result<&str> {
 }
 
 pub(super) fn fetch_script(path: &str, item: &Item) -> crate::Result<String> {
+    // Let Git choose the host's configured key or SSH wrapper. Only supply
+    // OpenSSH defaults when neither the environment nor Git config names one.
+    // The remote command has no TTY; disable graphical SSH prompts as well.
     Ok(format!(
-        "export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never; export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o StrictHostKeyChecking=yes'; exec git -c core.fsmonitor=false -C {} fetch --no-tags --quiet {} {}",
+        r#"set -eu
+export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never SSH_ASKPASS_REQUIRE=never
+directory={}
+if [ "${{GIT_SSH_COMMAND+x}}" != x ] && [ "${{GIT_SSH+x}}" != x ]; then
+    if git -c core.fsmonitor=false -C "$directory" config --get core.sshCommand >/dev/null; then
+        :
+    else
+        status=$?
+        [ "$status" -eq 1 ] || exit "$status"
+        export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o StrictHostKeyChecking=yes'
+    fi
+fi
+exec git -c core.fsmonitor=false -C "$directory" fetch --no-tags --quiet {} {}
+"#,
         shell_quote(directory(path)?),
         shell_quote(item.remote.name()),
         shell_quote(&item.fetch_refspec()),
