@@ -316,6 +316,9 @@ impl AgentSkill {
         let skill = cx.global_mut::<Self>();
         skill.choice = Some(choice);
         skill.ask = false;
+        // An answer now outdates the start's refresh: installing writes the
+        // skill itself, and a removed one must not come back.
+        skill.refresh = false;
         let Some(path) = skill.path.clone() else {
             return;
         };

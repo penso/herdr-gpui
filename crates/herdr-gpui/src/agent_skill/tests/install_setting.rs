@@ -54,3 +54,19 @@ fn off_leaves_the_installed_skill_unrefreshed(cx: &mut gpui::TestAppContext) {
         assert!(cx.global::<AgentSkill>().refresh);
     });
 }
+
+#[gpui::test]
+fn removing_the_skill_cancels_the_refresh_off_held_back(cx: &mut gpui::TestAppContext) {
+    cx.update(|cx| {
+        cx.set_global(AgentSkill {
+            refresh: true,
+            ..installed()
+        });
+        AgentSkill::allow(cx, SkillInstall::Off);
+        AgentSkill::choose(Choice::Declined, cx);
+        assert!(!cx.global::<AgentSkill>().refresh);
+        // So allowing it again rewrites nothing.
+        AgentSkill::allow(cx, SkillInstall::Ask);
+        assert_eq!(AgentSkill::choice(cx), Some(Choice::Declined));
+    });
+}
