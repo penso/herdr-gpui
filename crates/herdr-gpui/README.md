@@ -3539,6 +3539,10 @@ three newest reports, redacted like the log records, and lists dumps by name and
 size without including them: they hold the app's memory, so attach one only
 when asked.
 
+For the known macOS Touch Bar window-close crash, see the
+[investigation and native validation steps](../../docs/macos-window-close.md).
+The upstream dependency fix has not yet been adopted by this checkout.
+
 Local Windows connections are supported through the daemon's named pipe; pass
 the binary client socket path to `--socket`, not the JSON API socket. No debug
 build or `RUST_LOG` setting is needed: client debug records are captured in
