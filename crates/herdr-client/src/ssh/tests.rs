@@ -6,6 +6,8 @@ mod command;
 mod config_dir;
 mod forward;
 mod incompatible;
+#[cfg(unix)]
+mod mise;
 mod probe_failure;
 mod windows_host;
 #[cfg(windows)]
