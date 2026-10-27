@@ -31,7 +31,7 @@ fn listener(
     let address = PathBuf::from(format!(r"\\.\pipe\{}", path.display()));
     let descriptor = SecurityDescriptor::deserialize(&sddl.to_wtf_16().unwrap()).unwrap();
     let listener = PipeListenerOptions::new()
-        .path(&address)
+        .path(address.as_path())
         .accept_remote(false)
         .nonblocking(true)
         .security_descriptor(Some(descriptor))

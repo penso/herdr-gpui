@@ -39,7 +39,7 @@ fn read_only_lock_preserves_native_open_error_and_leaves_config_untouched() -> a
     let result = Config::prepare_files(&path);
     // Restore before asserting, so even a regression leaves a removable fixture.
     fs::set_permissions(&lock_path, permissions)?;
-    let error = result.unwrap_err();
+    let error = result.err().context("read-only lock unexpectedly opened")?;
     let crate::Error::Path {
         path: failed,
         source,
