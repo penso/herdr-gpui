@@ -11,6 +11,7 @@ mod conversation;
 mod conversation_list;
 mod dialog;
 mod empty;
+mod failure_text;
 mod groups;
 mod list_switch;
 mod markdown;

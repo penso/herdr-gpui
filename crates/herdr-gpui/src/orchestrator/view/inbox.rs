@@ -620,9 +620,7 @@ impl OrchestratorView {
             }
             for status in &snapshot.sources {
                 let text = match &status.state {
-                    SyncState::Failed(error) => {
-                        format!("{}: {error}", provider_name(status.key.provider))
-                    }
+                    SyncState::Failed(error) => failure_text(status.key.provider, error),
                     SyncState::Capped { count } => format!(
                         "{} has more than {count} items; the newest are shown and not cached.",
                         provider_name(status.key.provider)
@@ -722,6 +720,18 @@ pub(super) fn source_summary(states: &[(&SyncState, usize)]) -> (SourceState, St
         (SourceState::Synced, text)
     } else {
         (SourceState::Unsupported, "not supported yet".to_owned())
+    }
+}
+
+/// A failed sync's banner text, led by its backend's name unless the error
+/// already starts with it, as "Beads is not installed…" does.
+pub(super) fn failure_text(provider: Provider, error: &impl std::fmt::Display) -> String {
+    let name = provider_name(provider);
+    let error = error.to_string();
+    if error.starts_with(name) {
+        error
+    } else {
+        format!("{name}: {error}")
     }
 }
 
