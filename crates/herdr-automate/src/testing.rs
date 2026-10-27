@@ -9,6 +9,7 @@ use std::{
 };
 
 #[path = "../../test-support/executable.rs"]
+#[allow(clippy::disallowed_methods)]
 mod test_executable;
 
 pub struct Fixture {
