@@ -502,6 +502,7 @@ impl HerdrWindow {
                         | Page::CodeSearch
                         | Page::AppUpdate
                         | Page::GitHub
+                        | Page::GitLab
                         | Page::AddDevice
                         | Page::AddWsl
                         | Page::Usage(_)
@@ -552,7 +553,7 @@ impl HerdrWindow {
                         .min(px(crate::remote::MENU_WIDTH)))
                     .shadow_lg()
             })
-            .when(page == Page::GitHub, |panel| {
+            .when(matches!(page, Page::GitHub | Page::GitLab), |panel| {
                 panel
                     .w((viewport.width - px(32.)).max(px(0.)).min(px(400.)))
                     .flex()
@@ -674,6 +675,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_remove_wsl(cx));
         } else if page == Page::GitHub {
             panel = panel.child(self.render_github_auth(cx));
+        } else if page == Page::GitLab {
+            panel = panel.child(self.render_gitlab_page(cx));
         } else if page == Page::RemoteDevices {
             panel = panel.child(self.render_remote_menu(cx));
         } else if page == Page::Workspace {

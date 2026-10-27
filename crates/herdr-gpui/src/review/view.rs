@@ -220,8 +220,12 @@ impl Review {
         }
     }
 
-    /// Shows `loaded`, folding and marking files as the user left them.
-    fn set_loaded(&mut self, mut loaded: Loaded) {
+    /// Shows `loaded`, folding and marking files as the user left them. A
+    /// mark on a file that changed again is forgotten in the saved marks too,
+    /// so it cannot come back when the review reopens. A file this comparison
+    /// leaves out, as committed files are when only uncommitted changes show,
+    /// keeps its saved mark for the comparison that shows it.
+    fn set_loaded(&mut self, mut loaded: Loaded, cx: &mut App) {
         for file in &mut loaded.diff.files {
             let viewed = self.viewed.get(&file.path) == Some(&(file.added, file.removed));
             file.folded = self
@@ -230,13 +234,27 @@ impl Review {
                 .copied()
                 .unwrap_or(file.folded || viewed);
         }
-        self.viewed.retain(|path, counts| {
-            loaded
-                .diff
-                .files
-                .iter()
-                .any(|file| file.path == *path && (file.added, file.removed) == *counts)
-        });
+        let (kept, stale): (HashMap<_, _>, HashMap<_, _>) = std::mem::take(&mut self.viewed)
+            .into_iter()
+            .partition(|(path, counts)| {
+                loaded
+                    .diff
+                    .files
+                    .iter()
+                    .any(|file| file.path == *path && (file.added, file.removed) == *counts)
+            });
+        self.viewed = kept;
+        let paths = loaded.diff.paths();
+        let changed: Vec<_> = stale
+            .iter()
+            .filter(|(path, _)| paths.contains_key(path.as_str()))
+            .map(|(path, counts)| (path.as_str(), *counts))
+            .collect();
+        if !changed.is_empty()
+            && let Some((place, branch)) = super::viewed::key(&self.checkout)
+        {
+            super::Viewed::forget(cx, place, branch, changed);
+        }
         self.tree = tree::Tree::build(&loaded.diff);
         self.state = State::Loaded(loaded);
         self.reading.clear();
@@ -327,7 +345,7 @@ impl HerdrWindow {
         cx.spawn(async move |this, cx| {
             let result = loading.await;
             this.update(cx, |this, cx| {
-                this.review_loaded(id, request, result);
+                this.review_loaded(id, request, result, cx);
                 this.schedule_review_reads(id, cx);
                 cx.notify();
             })
@@ -428,14 +446,20 @@ impl HerdrWindow {
         let mut review = self.new_review(id, input_checkout, agent, cx);
         review.scope = loaded.scope;
         review.request = 1;
-        review.set_loaded(loaded);
+        review.set_loaded(loaded, cx);
         review.refresh_shown();
         self.reviews.insert(id, review);
         self.show_browser_tab(id, window, cx);
         id
     }
 
-    fn review_loaded(&mut self, id: TabId, request: u64, result: crate::Result<Loaded>) {
+    fn review_loaded(
+        &mut self,
+        id: TabId,
+        request: u64,
+        result: crate::Result<Loaded>,
+        cx: &mut App,
+    ) {
         let Some(review) = self
             .reviews
             .get_mut(&id)
@@ -444,7 +468,7 @@ impl HerdrWindow {
             return;
         };
         match result {
-            Ok(loaded) => review.set_loaded(loaded),
+            Ok(loaded) => review.set_loaded(loaded, cx),
             Err(error) => {
                 tracing::warn!(%error, "Could not read the changes to review");
                 review.state = State::Failed(error.to_string());

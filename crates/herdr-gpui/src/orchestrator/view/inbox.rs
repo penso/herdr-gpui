@@ -349,8 +349,14 @@ impl OrchestratorView {
                         el.child(div().text_color(rgb(theme.muted)).child(text))
                     })
                     .when(sign_in, |el| {
-                        el.cursor_pointer()
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(Event::SignIn)))
+                        el.debug_selector(move || {
+                            format!(
+                                "orchestrator-sign-in-{}",
+                                provider_name(provider).to_lowercase()
+                            )
+                        })
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |_, _, _, cx| cx.emit(Event::SignIn(provider))))
                     })
             });
         // A repository without a GitHub remote has no GitHub source, which
@@ -620,9 +626,7 @@ impl OrchestratorView {
             }
             for status in &snapshot.sources {
                 let text = match &status.state {
-                    SyncState::Failed(error) => {
-                        format!("{}: {error}", provider_name(status.key.provider))
-                    }
+                    SyncState::Failed(error) => failure_text(status.key.provider, error),
                     SyncState::Capped { count } => format!(
                         "{} has more than {count} items; the newest are shown and not cached.",
                         provider_name(status.key.provider)
@@ -725,6 +729,18 @@ pub(super) fn source_summary(states: &[(&SyncState, usize)]) -> (SourceState, St
     }
 }
 
+/// A failed sync's banner text, led by its backend's name unless the error
+/// already starts with it, as "Beads is not installed…" does.
+pub(super) fn failure_text(provider: Provider, error: &impl std::fmt::Display) -> String {
+    let name = provider_name(provider);
+    let error = error.to_string();
+    if error.starts_with(name) {
+        error
+    } else {
+        format!("{name}: {error}")
+    }
+}
+
 pub(super) fn provider_name(provider: Provider) -> &'static str {
     match provider {
         Provider::Github => "GitHub",
@@ -752,14 +768,16 @@ fn source_chip(look: &Look, id: (&'static str, usize), provider: Provider) -> St
         .child(provider_name(provider))
 }
 
-/// A backend's mark: GitHub's logo, else a short colored tag.
+/// A backend's mark: GitHub's or GitLab's logo, else a short colored tag.
 pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
     match provider {
         Provider::Github => look
             .icon("icons/github.svg", 12., look.theme.subtext())
             .into_any_element(),
+        Provider::Gitlab => look
+            .icon("icons/gitlab.svg", 12., look.theme.subtext())
+            .into_any_element(),
         Provider::Beads => look.badge("bd", MAGENTA).into_any_element(),
-        Provider::Gitlab => look.badge("gl", RED).into_any_element(),
     }
 }
 

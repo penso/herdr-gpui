@@ -105,13 +105,19 @@ impl HerdrWindow {
     }
 
     /// Open the first link the page offers, for its keyboard action.
-    pub(super) fn open_github_attention(&self, cx: &mut App) {
+    pub(super) fn open_github_attention(&mut self, cx: &mut App) {
         if let Some((_, url)) = self
             .github_attention()
             .and_then(|attention| attention.links.into_iter().next())
         {
-            cx.open_url(&url);
+            self.open_github_approval(&url, cx);
         }
+    }
+
+    fn open_github_approval(&mut self, url: &str, cx: &mut App) {
+        self.github_auth_mut()
+            .recheck_access(std::time::Instant::now());
+        cx.open_url(url);
     }
 
     /// Toast an account the first time this window finds it waiting, so a
@@ -142,7 +148,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_github_attention(&self) -> Option<Div> {
+    pub(super) fn render_github_attention(&self, cx: &mut Context<Self>) -> Option<Div> {
         let attention = self.github_attention()?;
         let theme = &self.theme;
         let warning = rgb(theme.ink(theme.palette[1]));
@@ -180,10 +186,10 @@ impl HerdrWindow {
                             .cursor_pointer()
                             .hover(|style| style.border_color(super::super::accent(theme)))
                             .child(crate::sidebar::label_text(&label))
-                            .on_click(move |_, _, cx| {
+                            .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                cx.open_url(&url);
-                            }),
+                                this.open_github_approval(&url, cx);
+                            })),
                     ),
                 );
             }

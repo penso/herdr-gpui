@@ -59,9 +59,10 @@ pub const APP_VERSION: &str = match option_env!("HERDR_RELEASE_VERSION") {
 const CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
 /// The sample release body the QA preview shows, so the notes section can be
-/// reviewed without waiting for a real release. Shared with the layout test so
-/// the two cannot drift.
-pub const PREVIEW_NOTES: &str = "### Added\n- Release notes are shown before you update.\n\n### Fixed\n- A sample fix, so the preview shows a realistic body.";
+/// reviewed without waiting for a real release. Grouped the way several skipped
+/// releases are, so the preview exercises the multi-release form too. Shared
+/// with the layout test so the two cannot drift.
+pub const PREVIEW_NOTES: &str = "## 20260920.2\n\n### Added\n- Release notes are shown before you update.\n\n## 20260920.1\n\n### Fixed\n- A sample fix, so the preview shows several releases grouped.";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum State {

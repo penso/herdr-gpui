@@ -29,6 +29,15 @@ impl Heading {
         }
     }
 
+    /// The field's accessible name, which stays put while the visible
+    /// label swaps between the heading and the placeholder.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Spaces => "Search spaces",
+            Self::DeviceTree => "Search devices",
+        }
+    }
+
     fn placeholder(self) -> &'static str {
         match self {
             Self::Spaces => "Devices, worktrees, branches, notes",
@@ -78,7 +87,10 @@ impl HerdrWindow {
         } else {
             look.header_label(heading.label())
         };
-        input.update(cx, |input, cx| input.set_placeholder(&placeholder, cx));
+        input.update(cx, |input, cx| {
+            input.set_label(heading.name(), cx);
+            input.set_placeholder(&placeholder, cx);
+        });
         let magnifier = || {
             svg()
                 .path("icons/search.svg")
@@ -121,6 +133,8 @@ impl HerdrWindow {
                     div()
                         .id("sidebar-search-clear")
                         .debug_selector(|| "sidebar-search-clear".into())
+                        .role(Role::Button)
+                        .aria_label("Clear search")
                         .flex_none()
                         .size(px(20.))
                         .flex()

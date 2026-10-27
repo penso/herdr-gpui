@@ -231,6 +231,12 @@ project_roots = []
 # [updates]
 # channel = "stable"
 
+# Where the managed agent skill may go on its own, over the answer saved when
+# the app asked. "local" keeps it off saved SSH hosts; "off" never offers,
+# refreshes, or removes it anywhere. Settings and the palette still install it.
+# [agent_skill]
+# install = "ask"
+
 # Native shortcuts. Each key is a command; the value is one keystroke or a list,
 # primary first. "" or [] unbinds it. Assigning a keystroke here takes it away
 # from its default command. Modifiers: cmd (Super on Linux, Win on Windows),
@@ -541,6 +547,21 @@ size = 12
 # its organizations, or one of its owners below is read with that account;
 # every other repository with the main sign-in. At most 8 accounts.
 # accounts = [{ id = "0123456789abcdef0123456789abcdef", owners = ["my-emu-org"] }]
+
+# GitLab tokens the Orchestrator reads issues with: GITLAB_TOKEN from the
+# checkout's .envrc (through direnv), then from your login shell, then the
+# account connected (Connect) or the token pasted in the title bar's account
+# menu (scope read_api; kept per instance in the credential store), then the
+# GitLab CLI's sign-in. Tokens are never read from this file.
+# [gitlab]
+# Same meaning as [github] allow_plaintext_credentials, for the saved tokens,
+# which are kept in their own 0600 gitlab-credentials file. Default is false.
+# allow_plaintext_credentials = false
+# The OAuth application that lets Connect sign in on a self-managed instance,
+# by instance. Register it on the instance (Settings > Applications): not
+# confidential, scope read_api; its redirect URI is never visited. gitlab.com
+# uses Herdr UI's own application unless one is set here.
+# applications = { "gitlab.example.com" = "<application id>" }
 
 # A Coder deployment whose workspaces can be created and added as devices from
 # the device picker's "Add Coder Workspace…". Settings > Cloud devices edits

@@ -10,7 +10,7 @@ use std::{
 
 #[path = "../../test-support/executable.rs"]
 #[allow(clippy::disallowed_methods)]
-mod test_executable;
+mod executable;
 
 pub struct Fixture {
     /// Held so the directory lives as long as the fixture.
@@ -52,7 +52,7 @@ impl Fixture {
         let script = FAKE
             .replace("{calls}", &calls.to_string_lossy())
             .replace("{worktree}", &root.join("worktree").to_string_lossy());
-        test_executable::write(&fake, script, 0o755).unwrap();
+        executable::write(&fake, script, 0o755).unwrap();
         Self {
             herdr: Herdr::new(Some(fake), None),
             _dir: dir,

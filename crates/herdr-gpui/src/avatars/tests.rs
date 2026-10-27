@@ -65,10 +65,17 @@ fn profile_disk_hits_skip_network_and_stale_images_survive_failed_refresh() {
 
 #[test]
 fn profile_avatar_urls_never_accept_credentials_or_other_hosts() {
-    assert!(valid_profile_avatar(
-        "https://avatars.githubusercontent.com/u/123?v=4"
-    ));
     for url in [
+        "https://avatars.githubusercontent.com/u/123?v=4",
+        "https://gitlab.com/uploads/-/system/user/avatar/108429/avatar.png?v=1",
+        "https://secure.gravatar.com/avatar/0123abcd?s=80&d=identicon",
+    ] {
+        assert!(valid_profile_avatar(url), "{url}");
+    }
+    for url in [
+        "https://gitlab.com/uploads/-/system/project/avatar/1/a.png",
+        "https://gitlab.example.com/uploads/-/system/user/avatar/1/a.png",
+        "https://gitlab.com.evil.test/uploads/-/system/user/avatar/1/a.png",
         "http://avatars.githubusercontent.com/u/1",
         "https://avatars.githubusercontent.com.evil.test/u/1",
         "https://avatars.githubusercontent.com@evil.test/u/1",

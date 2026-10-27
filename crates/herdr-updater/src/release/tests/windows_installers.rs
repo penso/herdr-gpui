@@ -73,6 +73,10 @@ impl Installers {
                     self.manifest.clone()
                 } else if url == release_url("20260920.2", sig) {
                     self.signature.clone()
+                } else if url == HISTORY_URL {
+                    // No grouped history in this fixture, so the offer keeps the
+                    // target release's own notes.
+                    b"[]".to_vec()
                 } else {
                     panic!("unexpected fetch or fallback: {url}")
                 };
@@ -100,7 +104,8 @@ fn windows_checks_select_the_signed_installer_for_their_architecture() -> anyhow
             [
                 LATEST_URL.into(),
                 release_url("20260920.2", "windows-manifest.json"),
-                release_url("20260920.2", "windows-manifest.sig")
+                release_url("20260920.2", "windows-manifest.sig"),
+                HISTORY_URL.into()
             ]
         );
     }

@@ -8,6 +8,16 @@ fn ssh() -> ConnectTarget {
     }
 }
 
+/// A dialing worker briefly holds the inbox while it reports progress, and
+/// `recover` then asks to be called again, as the next poll does in the app.
+fn recover_when_readable(endpoint: &mut Endpoint, trigger: Trigger, now: Instant) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !endpoint.recover(trigger, now) {
+        assert!(Instant::now() < deadline, "the inbox stayed locked");
+        std::thread::yield_now();
+    }
+}
+
 #[test]
 fn recovering_starts_the_backoff_over_and_keeps_a_live_link() {
     let (mut endpoint, _server) = connected_endpoint("ssh:test");
@@ -58,7 +68,7 @@ fn recovering_redials_a_remote_attempt_still_dialing_but_not_a_local_one() {
         endpoint.attempts = 8;
         let now = Instant::now();
 
-        assert!(endpoint.recover(Trigger::NetworkRestored, now));
+        recover_when_readable(&mut endpoint, Trigger::NetworkRestored, now);
 
         assert_eq!(endpoint.attempts, 0);
         assert_eq!(handle.is_disconnected(), redialed);

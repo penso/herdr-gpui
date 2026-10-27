@@ -8,6 +8,7 @@ use crate::{
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 mod accent;
+mod agent_skill;
 mod agents_placement;
 mod azure;
 pub(crate) mod backdrop;
@@ -60,6 +61,7 @@ mod worktrees;
 mod zen;
 
 pub use accent::Accent;
+pub use agent_skill::{AgentSkillConfig, SkillInstall};
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
 pub use chat::{ChatLauncher, ChatLayoutMode};
@@ -82,6 +84,7 @@ pub use fonts::symbol_fallbacks;
 pub use fonts::{FONT_SIZE_RANGE, FONT_SIZE_STEP, FontConfig};
 pub(crate) use github::MAX_ACCOUNTS;
 pub use github::{GitHubAccount, GitHubConfig};
+pub use herdr_orchestrator::gitlab::Config as GitLabConfig;
 pub use herdr_remote::config::AzureConfig;
 #[cfg(feature = "azure")]
 pub(crate) use herdr_remote::config::AzureFields;
@@ -159,6 +162,8 @@ pub struct Config {
     /// Snapshot a checkout's files each time one of its agents starts or
     /// finishes a turn, so they can be rolled back.
     pub agent_checkpoints: bool,
+    /// Where the managed agent skill may go on its own.
+    pub agent_skill: AgentSkillConfig,
     /// Where the sidebar lists agents while `show_agents` is on.
     pub agents_placement: AgentsPlacement,
     /// What shows behind the main window's terminals and chrome.
@@ -197,6 +202,8 @@ pub struct Config {
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
     pub github: GitHubConfig,
+    /// Where GitLab tokens pasted in the account menu are saved.
+    pub gitlab: GitLabConfig,
     /// Font resolution searched for an icon font for the terminal and found
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
@@ -381,6 +388,7 @@ impl Default for Config {
             // keep-sorted start
             accent: Accent::default(),
             agent_checkpoints: true,
+            agent_skill: AgentSkillConfig::default(),
             agents_placement: AgentsPlacement::default(),
             azure: AzureConfig::default(),
             backdrop: Backdrop::default(),
@@ -404,6 +412,7 @@ impl Default for Config {
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
+            gitlab: GitLabConfig::default(),
             icon_font_missing: false,
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
@@ -465,6 +474,7 @@ struct Settings {
     // keep-sorted start
     accent: Accent,
     agent_checkpoints: Option<bool>,
+    agent_skill: AgentSkillConfig,
     agents_placement: AgentsPlacement,
     azure: AzureConfig,
     backdrop: Backdrop,
@@ -487,6 +497,7 @@ struct Settings {
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
+    gitlab: GitLabConfig,
     keep_selection_after_copy: Option<bool>,
     keybindings: BTreeMap<String, Binding>,
     layout: Layout,
@@ -769,6 +780,7 @@ impl Config {
         settings.github.client_id_with_override(None)?;
         settings.github.check_accounts()?;
         config.github = settings.github;
+        config.gitlab = settings.gitlab;
         #[cfg(feature = "azure")]
         settings.azure.check()?;
         config.azure = settings.azure;
@@ -869,6 +881,7 @@ impl Config {
         config.accent = settings.accent;
         config.contrast = settings.contrast;
         config.agents_placement = settings.agents_placement;
+        config.agent_skill = settings.agent_skill;
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;

@@ -66,8 +66,9 @@ pub(crate) enum Event {
     },
     /// Open a web address, such as an issue's page, in a browser tab.
     OpenUrl(String),
-    /// Sign in to GitHub, which the view needs to list a repository.
-    SignIn,
+    /// Sign in to the provider the view needs to list a repository: the
+    /// account menu's GitHub or GitLab page.
+    SignIn(Provider),
     /// Start `request` on the host `endpoint`, which the window sets it up
     /// for, then hands back through [`OrchestratorView::dispatch_elsewhere`].
     Dispatch {
@@ -125,6 +126,15 @@ impl DetailTab {
             Self::Details => "Details",
         }
     }
+}
+
+/// A GitLab project a view reads: the host its remote names, the scheme
+/// that remote reads it over, and the checkout when it is on this computer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GitLabRead {
+    pub(crate) host: String,
+    pub(crate) scheme: herdr_orchestrator::gitlab::Scheme,
+    pub(crate) checkout: Option<std::path::PathBuf>,
 }
 
 pub(crate) struct OrchestratorView {
@@ -544,6 +554,41 @@ impl OrchestratorView {
         }
         self.reload_pull_request();
         self.reload_conversation();
+    }
+
+    /// The GitLab hosts this view's repositories are read from.
+    pub(crate) fn gitlab_hosts(&self) -> impl Iterator<Item = GitLabRead> + '_ {
+        self.repos.iter().flat_map(|repo| {
+            let info = repo.snapshot.repo.as_ref();
+            // A remote checkout's .envrc is that machine's, not run here.
+            let checkout = (!repo.request.target.is_remote())
+                .then(|| std::path::PathBuf::from(&repo.request.checkout));
+            repo.snapshot
+                .sources
+                .iter()
+                .filter(|status| status.key.provider == Provider::Gitlab)
+                .map(move |status| GitLabRead {
+                    host: status.key.host.clone(),
+                    scheme: herdr_orchestrator::gitlab::Scheme::of_source(info, &status.key),
+                    checkout: checkout.clone(),
+                })
+        })
+    }
+
+    /// A GitLab source waits for a token that works.
+    pub(crate) fn gitlab_needs_sign_in(&self) -> bool {
+        self.repos
+            .iter()
+            .flat_map(|repo| &repo.snapshot.sources)
+            .any(|status| {
+                status.key.provider == Provider::Gitlab && matches!(status.state, SyncState::SignIn)
+            })
+    }
+
+    /// A saved credential changed: sync again, as Refresh does.
+    pub(crate) fn credentials_changed(&mut self, cx: &mut Context<Self>) {
+        self.refresh();
+        cx.notify();
     }
 
     /// Whether a sync is under way, or Refresh was pressed so recently that

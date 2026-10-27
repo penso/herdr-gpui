@@ -654,6 +654,9 @@ impl HerdrWindow {
             self.discard_composition(cx);
         }
         self.poll_github(window, cx);
+        if self.poll_gitlab_avatars() {
+            cx.notify();
+        }
         if self.update_workspace_pr() {
             cx.notify();
         }

@@ -66,6 +66,10 @@ impl Packages {
                     self.manifest.clone()
                 } else if url == release_url("20260920.2", "package-manifest.sig") {
                     self.signature.clone()
+                } else if url == HISTORY_URL {
+                    // No grouped history in this fixture, so the offer keeps the
+                    // target release's own notes.
+                    b"[]".to_vec()
                 } else {
                     panic!("unexpected fetch or archive fallback: {url}")
                 };
@@ -92,7 +96,8 @@ fn checks_fetch_package_metadata_and_select_exact_format_and_architecture() -> a
                 [
                     LATEST_URL.into(),
                     release_url("20260920.2", "package-manifest.json"),
-                    release_url("20260920.2", "package-manifest.sig")
+                    release_url("20260920.2", "package-manifest.sig"),
+                    HISTORY_URL.into()
                 ]
             );
         }
