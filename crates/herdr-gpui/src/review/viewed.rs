@@ -156,18 +156,50 @@ impl Viewed {
             .unwrap_or_default()
     }
 
-    /// Remembers `files` as what `place` on `branch` has marked viewed, for
-    /// fixtures too, which keep it unsaved.
-    pub(crate) fn remember(
+    /// Marks `path` viewed in `place` on `branch` at `counts`, for fixtures
+    /// too, which keep it unsaved. Only that file changes, so reviews of one
+    /// checkout in two windows keep each other's marks.
+    pub(crate) fn remember(cx: &mut App, place: &str, branch: &str, path: &str, counts: Counts) {
+        Self::installed(cx).mark(place, branch, path, counts);
+    }
+
+    /// Unmarks each of `marks` in `place` on `branch` that is still saved at
+    /// the same counts; a file marked again since, in another window, stays.
+    pub(crate) fn forget<'a>(
         cx: &mut App,
         place: &str,
         branch: &str,
-        files: &HashMap<String, Counts>,
+        marks: impl IntoIterator<Item = (&'a str, Counts)>,
     ) {
+        Self::installed(cx).unmark(place, branch, marks);
+    }
+
+    fn installed(cx: &mut App) -> &mut Self {
         if !cx.has_global::<Self>() {
             cx.set_global(Self::default());
         }
-        cx.global_mut::<Self>().set(place, branch, files);
+        cx.global_mut::<Self>()
+    }
+
+    fn mark(&mut self, place: &str, branch: &str, path: &str, counts: Counts) -> bool {
+        let mut files = self.get(place, branch);
+        files.insert(path.to_owned(), counts);
+        self.set(place, branch, &files)
+    }
+
+    fn unmark<'a>(
+        &mut self,
+        place: &str,
+        branch: &str,
+        marks: impl IntoIterator<Item = (&'a str, Counts)>,
+    ) -> bool {
+        let mut files = self.get(place, branch);
+        for (path, counts) in marks {
+            if files.get(path) == Some(&counts) {
+                files.remove(path);
+            }
+        }
+        self.set(place, branch, &files)
     }
 
     fn get(&self, place: &str, branch: &str) -> HashMap<String, Counts> {

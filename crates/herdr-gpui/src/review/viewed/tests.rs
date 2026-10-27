@@ -96,3 +96,17 @@ fn a_review_is_keyed_by_its_directory_else_its_repository() {
     );
     assert_eq!(key(&input(None, None)), None);
 }
+
+#[test]
+fn marks_change_one_file_at_a_time_and_unmark_only_the_same_counts() {
+    let mut viewed = Viewed::default();
+    assert!(viewed.mark("/work/repo", "feat", "a.rs", (Some(1), Some(2))));
+    assert!(viewed.mark("/work/repo", "feat", "b.rs", (Some(1), Some(2))));
+    assert_eq!(viewed.get("/work/repo", "feat"), files(&["a.rs", "b.rs"]));
+    assert!(
+        !viewed.unmark("/work/repo", "feat", [("a.rs", (Some(5), None))]),
+        "a newer mark stays"
+    );
+    assert!(viewed.unmark("/work/repo", "feat", [("a.rs", (Some(1), Some(2)))]));
+    assert_eq!(viewed.get("/work/repo", "feat"), files(&["b.rs"]));
+}

@@ -243,6 +243,13 @@ impl HerdrWindow {
             return;
         };
         let viewed = review.viewed.get(&path) == Some(&counts);
+        if let Some((place, branch)) = crate::review::viewed::key(&review.checkout) {
+            if viewed {
+                crate::review::Viewed::forget(cx, place, branch, [(path.as_str(), counts)]);
+            } else {
+                crate::review::Viewed::remember(cx, place, branch, &path, counts);
+            }
+        }
         if viewed {
             review.viewed.remove(&path);
         } else {
@@ -250,10 +257,6 @@ impl HerdrWindow {
         }
         review.set_folded(file, !viewed);
         review.refresh_shown();
-        if let Some((place, branch)) = crate::review::viewed::key(&review.checkout) {
-            let (place, branch) = (place.to_owned(), branch.to_owned());
-            crate::review::Viewed::remember(cx, &place, &branch, &review.viewed);
-        }
         cx.notify();
     }
 }
