@@ -22,6 +22,8 @@ pub(super) struct CloseConfirmation {
     tab: String,
     pane: Option<String>,
     label: String,
+    /// The agents closing it would interrupt, as the dialog names them.
+    interrupts: Option<String>,
     confirm_selected: bool,
     /// Pane closes only: confirming also saves `confirm_close_pane = false`.
     do_not_ask_again: bool,
@@ -37,22 +39,26 @@ impl CloseConfirmation {
         }
         close.pane = Some(pane.pane_id.clone());
         close.label = pane.label.clone().unwrap_or_else(|| pane.pane_id.clone());
+        close.interrupts = close.interrupted(snapshot);
         close.request(snapshot).ok()?;
         Some(close)
     }
 
     pub(super) fn capture_tab(snapshot: &ClientShellSnapshot, id: &str) -> Option<Self> {
         let tab = snapshot.tabs.iter().find(|tab| tab.tab_id == id)?;
-        Some(Self {
+        let mut close = Self {
             boot: snapshot.boot_id.clone(),
             workspace: tab.workspace_id.clone(),
             tab: tab.tab_id.clone(),
             pane: None,
             label: tab.label.clone(),
+            interrupts: None,
             confirm_selected: false,
             do_not_ask_again: false,
             error: None,
-        })
+        };
+        close.interrupts = close.interrupted(snapshot);
+        Some(close)
     }
 
     fn capture(command: Command, snapshot: &ClientShellSnapshot) -> Option<Self> {
@@ -74,7 +80,7 @@ impl CloseConfirmation {
         } else {
             None
         };
-        Some(Self {
+        let mut close = Self {
             boot: snapshot.boot_id.clone(),
             workspace: tab.workspace_id.clone(),
             tab: tab.tab_id.clone(),
@@ -82,10 +88,47 @@ impl CloseConfirmation {
             label: pane
                 .map(|pane| pane.label.clone().unwrap_or_else(|| pane.pane_id.clone()))
                 .unwrap_or_else(|| tab.label.clone()),
+            interrupts: None,
             confirm_selected: false,
             do_not_ask_again: false,
             error: None,
-        })
+        };
+        close.interrupts = close.interrupted(snapshot);
+        Some(close)
+    }
+
+    /// Names the agents in this pane or tab that are working or waiting on
+    /// the user, so the dialog says what closing it stops; none when nothing
+    /// is in flight.
+    fn interrupted(&self, snapshot: &ClientShellSnapshot) -> Option<String> {
+        let busy: Vec<_> = snapshot
+            .agents
+            .iter()
+            .filter(|agent| {
+                agent.tab_id == self.tab
+                    && self.pane.as_ref().is_none_or(|pane| agent.pane_id == *pane)
+                    && matches!(
+                        agent.agent_status,
+                        AgentStatus::Working | AgentStatus::Blocked
+                    )
+            })
+            .collect();
+        match busy.as_slice() {
+            [] => None,
+            [agent] => Some(format!(
+                "{} is {}.",
+                crate::sidebar::agent_name(agent),
+                if agent.agent_status == AgentStatus::Blocked {
+                    "waiting on you"
+                } else {
+                    "working"
+                }
+            )),
+            agents => Some(format!(
+                "{} agents are working or waiting on you.",
+                agents.len()
+            )),
+        }
     }
 
     /// Whether closing this target could interrupt an agent mid-task: one
@@ -334,6 +377,7 @@ impl HerdrWindow {
         div().p(px(12.)).flex().flex_col().gap(px(12.))
             .child(div().text_size(px(self.config.ui.size * 1.35)).font_weight(FontWeight::SEMIBOLD).child(format!("Close {kind}?")))
             .child(div().child(close.label.clone()))
+            .when_some(close.interrupts.clone(), |panel, interrupts| panel.child(div().debug_selector(|| "close-interrupts".into()).text_color(crate::menu::danger(theme)).child(interrupts)))
             .child(div().text_color(rgb(theme.subtext())).child(if close.pane.is_some() {
                 "This terminates the pane and its running processes. This cannot be undone."
             } else { "This terminates every pane and running process in this tab. This cannot be undone." }))
@@ -350,7 +394,7 @@ impl HerdrWindow {
                     .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))))
                 .child(div().id("close-confirm").debug_selector(|| "close-confirm".into()).px(px(12.)).py(px(6.)).rounded(px(crate::config::corners::CONTROL)).border_1()
                     .border_color(rgb(if close.confirm_selected { theme.foreground } else { theme.active }))
-                    .bg(rgb(theme.active)).cursor_pointer().child(format!("Close {kind}"))
+                    .bg(rgb(theme.active)).text_color(crate::menu::danger(theme)).cursor_pointer().child(format!("Close {kind}"))
                     .on_click(cx.listener(|this, _, window, cx| this.confirm_close(window, cx)))))
     }
 }
