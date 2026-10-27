@@ -253,7 +253,7 @@ for what only Herdr UI shows or keeps.
 | Get cloud machines of your own (the user confirms once), and wait until they are ready | `herdr-gpui cloud create coder --count 3 --json`, `herdr-gpui cloud wait BATCH --timeout 600 --json` |
 | Run a command on a saved cloud machine (clone, build, commit, push) | `herdr-gpui cloud exec ID --cwd ~/code/app -- git status` |
 | Delete saved cloud machines you are done with, then follow it | `herdr-gpui cloud destroy ID... --json`, `herdr-gpui cloud wait BATCH --timeout 600 --json` |
-| Check remote control from a phone, or let the user pair one in Herdr UI (Tailscale preferred; optionally choose an origin from status) | `herdr-gpui remote status`, `herdr-gpui remote pair [--address HTTPS_ORIGIN]` |
+| Check remote control and its daemon-host network interfaces, or pair a phone (Tailscale preferred; optionally choose an origin from status) | `herdr-gpui remote status`, `herdr-gpui remote pair [--address HTTPS_ORIGIN]` |
 | Keep the machine awake during a long job | `herdr-gpui caffeine on --for 2h` |
 | Check whether the app runs, and which windows and hosts it has | `herdr-gpui status` |
 

@@ -78,10 +78,17 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
     let now = now_ms();
     let result = match request {
         Request::Status => return Response::Status(status(state)),
-        Request::Pair => state
-            .auth()
-            .mint(now, &state.origins(), &state.fingerprint)
-            .map(Response::Offer),
+        Request::Pair => {
+            let origins = state.origins();
+            let details = super::addresses::current(&origins);
+            state
+                .auth()
+                .mint(now, &origins, &state.fingerprint)
+                .map(|mut offer| {
+                    offer.address_details = details;
+                    Response::Offer(offer)
+                })
+        }
         Request::Pairing { id } => state.auth().pairing(&id, now).map(Response::Pairing),
         Request::Approve { id, allow, code } => state
             .auth()
@@ -129,10 +136,12 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
 
 fn status(state: &State) -> Status {
     let layout = state.hub.layout();
+    let addresses = state.origins();
     Status {
+        address_details: super::addresses::current(&addresses),
         version: version().to_owned(),
         port: state.port,
-        addresses: state.origins(),
+        addresses,
         fingerprint: state.fingerprint.clone(),
         herdr: layout.connected,
         chats: layout.chats().count(),

@@ -16,6 +16,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod addresses;
+
 /// How often the dialog looks for a request to send, and redraws its ring.
 const STEP: Duration = Duration::from_millis(250);
 /// The QR's side.
@@ -30,7 +32,9 @@ const NAME_LIMIT: usize = 64;
 pub(crate) struct PairingDialog {
     pub(crate) pairing: Pairing,
     addresses_scroll: ScrollHandle,
+    other_addresses: crate::motion::Toggle,
     client: Option<Client>,
+    _addresses_task: Option<Task<()>>,
     _lease: Option<Lease>,
     _task: Option<Task<()>>,
 }
@@ -42,6 +46,7 @@ impl PairingDialog {
     pub(crate) fn close(&mut self) {
         self._lease = None;
         self._task = None;
+        self._addresses_task = None;
         if let (Some(client), Some(id)) = (self.client.take(), self.pairing.id())
             && self.pairing.cancels_on_close()
         {
@@ -88,7 +93,9 @@ impl HerdrWindow {
         self.menu.remote_pairing = Some(PairingDialog {
             pairing: pairing.with_address(address),
             addresses_scroll: ScrollHandle::new(),
+            other_addresses: crate::motion::Toggle::default(),
             client,
+            _addresses_task: None,
             _lease: Supervisor::lease(cx),
             _task: task,
         });
@@ -124,7 +131,14 @@ impl HerdrWindow {
                     let Some(dialog) = view.menu.remote_pairing.as_mut() else {
                         return false;
                     };
+                    let new_offer = matches!(
+                        &result,
+                        Ok(herdr_remote_control::control::Response::Offer(_))
+                    );
                     dialog.pairing.receive(&ticket, result, Instant::now());
+                    if new_offer {
+                        dialog.reveal_selected_address();
+                    }
                     if matches!(dialog.pairing.phase(), Phase::Approved { .. }) {
                         Supervisor::refresh(cx);
                     }
@@ -188,6 +202,10 @@ impl HerdrWindow {
             "down" => (selected + 1) % count,
             "home" => 0,
             "end" => count - 1,
+            "right" | "left" => {
+                self.set_other_addresses(key == "right", cx);
+                return;
+            }
             _ => return,
         };
         let address = offer.addresses[index].clone();
@@ -202,11 +220,7 @@ impl HerdrWindow {
             tracing::warn!(%error, "Could not select pairing address");
             return;
         }
-        if let Phase::Showing { offer, .. } = dialog.pairing.phase()
-            && let Some(index) = offer.addresses.iter().position(|item| item == address)
-        {
-            dialog.addresses_scroll.scroll_to_item(index);
-        }
+        dialog.reveal_selected_address();
         cx.notify();
     }
 
@@ -343,20 +357,9 @@ impl HerdrWindow {
                         .child("Scan with your phone's camera"),
                 )
                 .child(div().text_color(rgb(theme.subtext())).child(
-                    "Choose the address for this QR with Up/Down or a click. Use Tailscale on both devices to connect across networks, or a local address on the same network.",
+                    "Choose how your phone reaches this computer. Up/Down changes the QR address.",
                 ))
-                .child(self.pairing_addresses(offer, cx))
-                .child(
-                    div()
-                        .debug_selector(|| "remote-pair-fingerprint".into())
-                        .text_font(&self.config.terminal)
-                        .text_size(px(10.))
-                        .text_color(rgb(theme.subtext()))
-                        .child(format!(
-                            "CA {}",
-                            crate::notifications::safe_text(&offer.fingerprint, 200)
-                        )),
-                )
+                .child(self.pairing_selected_address(offer))
                 .children(countdown.map(|(left, share)| {
                     div()
                         .debug_selector(|| "remote-pair-countdown".into())
@@ -376,64 +379,29 @@ impl HerdrWindow {
         };
         div()
             .flex()
-            .gap(px(16.))
-            .items_start()
-            .child(div().flex_none().child(square))
-            .child(div().flex_1().min_w_0().child(details))
-    }
-
-    fn pairing_addresses(
-        &self,
-        offer: &herdr_remote_control::control::Offer,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let theme = &self.theme;
-        div()
-            .id("remote-pair-addresses")
-            .debug_selector(|| "remote-pair-addresses".into())
-            .flex()
             .flex_col()
-            .max_h(px(132.))
-            .overflow_y_scroll()
-            .when_some(self.menu.remote_pairing.as_ref(), |list, dialog| {
-                list.track_scroll(&dialog.addresses_scroll)
-            })
-            .children(offer.addresses.iter().enumerate().map(|(index, address)| {
-                let selected = offer.url.starts_with(&format!("{address}/"));
-                let address = address.clone();
-                let label = addresses(std::slice::from_ref(&address));
+            .gap(px(12.))
+            .child(
                 div()
-                    .id(("remote-pair-address", index))
-                    .debug_selector(move || format!("remote-pair-address-{index}"))
-                    .flex_none()
-                    .role(Role::Button)
-                    .aria_label(format!(
-                        "{}{}",
-                        if selected { "Selected: " } else { "Use " },
-                        label
-                    ))
                     .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .px(px(6.))
-                    .py(px(4.))
-                    .rounded(px(crate::config::corners::SMALL))
-                    .cursor_pointer()
-                    .when(selected, |row| row.bg(rgb(theme.active)))
-                    .hover(|row| row.bg(rgb(theme.active)))
-                    .child(
-                        svg()
-                            .path("icons/check.svg")
-                            .size(px(12.))
-                            .flex_none()
-                            .when(!selected, |icon| icon.invisible()),
-                    )
-                    .child(div().min_w_0().child(label))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.select_pairing_address(&address, cx);
-                    }))
-            }))
+                    .gap(px(16.))
+                    .items_start()
+                    .child(div().flex_none().child(square))
+                    .child(div().flex_1().min_w_0().child(details)),
+            )
+            .when_some(showing, |body, (offer, _)| {
+                body.child(self.pairing_addresses(offer, cx)).child(
+                    div()
+                        .debug_selector(|| "remote-pair-fingerprint".into())
+                        .text_font(&self.config.terminal)
+                        .text_size(px(10.))
+                        .text_color(rgb(theme.subtext()))
+                        .child(format!(
+                            "CA {}",
+                            crate::notifications::safe_text(&offer.fingerprint, 200)
+                        )),
+                )
+            })
     }
 
     fn pairing_claim(

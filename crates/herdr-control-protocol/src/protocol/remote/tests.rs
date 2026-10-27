@@ -63,6 +63,7 @@ fn remote_replies_round_trip() {
         Reply::Status {
             enabled: true,
             status: Some(Box::new(Status {
+                address_details: Default::default(),
                 version: "dev".into(),
                 port: 7443,
                 addresses: vec!["https://192.168.1.20:7443".into()],

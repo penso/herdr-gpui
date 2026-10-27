@@ -2,8 +2,11 @@ use super::*;
 use crate::control::protocol::remote::Reply;
 use herdr_remote_control::control::{Device, DeviceId, Status};
 
+mod addresses;
+
 fn status() -> Status {
     Status {
+        address_details: Default::default(),
         version: "20261022.1".into(),
         port: 7443,
         addresses: vec![

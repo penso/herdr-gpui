@@ -26,10 +26,14 @@ fn selected(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, index: usize
     );
     assert_eq!(*qr, Qr::encode(&offer.url).unwrap());
     draw(cx);
+    if index == 0 {
+        assert!(cx.debug_bounds("remote-pair-address-0").is_some());
+        return;
+    }
     let list = cx.debug_bounds("remote-pair-addresses").unwrap();
     let row = view.read_with(cx, |view, _| {
         let scroll = &view.menu.remote_pairing.as_ref().unwrap().addresses_scroll;
-        let row = scroll.bounds_for_item(index).unwrap();
+        let row = scroll.bounds_for_item(index - 1).unwrap();
         Bounds::new(row.origin + scroll.offset(), row.size)
     });
     assert!(row.top() >= list.top(), "{row:?} above {list:?}");

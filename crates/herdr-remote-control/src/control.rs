@@ -156,6 +156,9 @@ pub enum ErrorCode {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Status {
+    /// Interface metadata keyed by advertised origin; absent on older daemons.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub address_details: std::collections::BTreeMap<String, AddressDetails>,
     /// The daemon's version, for Herdr UI to restart an older one.
     pub version: String,
     /// The port HTTPS listens on.
@@ -175,6 +178,8 @@ pub struct Status {
 /// What the pairing dialog shows: a QR of `url`, valid until `expires_in_ms`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Offer {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub address_details: std::collections::BTreeMap<String, AddressDetails>,
     pub id: PairingId,
     /// `https://ADDRESS:PORT/pair#t=TOKEN&fp=FINGERPRINT`.
     pub url: String,
@@ -182,6 +187,40 @@ pub struct Offer {
     pub expires_in_ms: u64,
     /// Every origin the phone may reach this computer at.
     pub addresses: Vec<String>,
+}
+
+/// Observed on the daemon's host, never inferred from the GUI host's adapters.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AddressDetails {
+    pub interfaces: Vec<String>,
+    pub kind: AddressKind,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AddressKind {
+    // keep-sorted start
+    Bridge,
+    Local,
+    Loopback,
+    Tailscale,
+    // keep-sorted end
+    // Serde's forward-compatible fallback must be last.
+    #[default]
+    #[serde(other)]
+    Other,
+}
+
+impl AddressKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bridge => "Network bridge",
+            Self::Local => "Local network",
+            Self::Loopback => "This computer only",
+            Self::Other => "Network address",
+            Self::Tailscale => "Tailscale",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

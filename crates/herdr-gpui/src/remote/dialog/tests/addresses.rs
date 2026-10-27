@@ -15,7 +15,9 @@ fn choosing_an_address_updates_the_qr_and_the_dialog_still_closes(cx: &mut TestA
     let (view, cx) = window(cx, true, daemon);
     open(&view, cx);
     cx.run_until_parked();
+    view.update(cx, |view, cx| view.set_other_addresses(true, cx));
     draw(cx);
+    assert!(cx.debug_bounds("remote-pair-older-daemon").is_some());
     let address = cx.debug_bounds("remote-pair-address-1").unwrap().center();
     cx.simulate_click(address, Modifiers::default());
     let Phase::Showing {
@@ -76,10 +78,11 @@ fn many_addresses_scroll_without_squeezing_the_rows(cx: &mut TestAppContext) {
             cx.notify();
         })
     });
+    view.update(cx, |view, cx| view.set_other_addresses(true, cx));
     draw(cx);
     let list = cx.debug_bounds("remote-pair-addresses").unwrap();
     assert!(list.size.height <= px(132.));
-    let row = cx.debug_bounds("remote-pair-address-0").unwrap();
+    let row = cx.debug_bounds("remote-pair-address-1").unwrap();
     assert!(row.size.height >= px(20.), "{row:?}");
     assert!(row.size.width <= list.size.width);
 }

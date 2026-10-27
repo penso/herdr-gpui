@@ -16,6 +16,7 @@ use std::{
 
 mod addresses;
 mod keyboard;
+mod networks;
 
 fn on() -> RemoteConfig {
     RemoteConfig {
@@ -26,6 +27,7 @@ fn on() -> RemoteConfig {
 
 fn offer() -> Offer {
     Offer {
+        address_details: Default::default(),
         id: PairingId("p1".into()),
         url: "https://192.168.1.20:7443/pair#t=TOKEN&fp=5F:2A".into(),
         fingerprint: "5F:2A:C1:9E".into(),

@@ -81,12 +81,20 @@ fn status_text(enabled: bool, status: Option<&Status>, error: Option<&str>) -> S
     if !status.fingerprint.is_empty() {
         lines.push(format!("Certificate authority: {}", status.fingerprint));
     }
-    lines.extend(
-        status
-            .addresses
-            .iter()
-            .map(|address| format!("Address: {address}")),
-    );
+    lines.extend(status.addresses.iter().map(
+        |address| match status.address_details.get(address) {
+            Some(details) => format!(
+                "Address: {address} — {}{}",
+                details.kind.label(),
+                if details.interfaces.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {}", details.interfaces.join(", "))
+                }
+            ),
+            None => format!("Address: {address}"),
+        },
+    ));
     lines.join("\n")
 }
 

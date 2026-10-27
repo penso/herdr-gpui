@@ -21,6 +21,7 @@ use std::path::Path;
 
 fn status() -> Status {
     Status {
+        address_details: Default::default(),
         version: "dev".into(),
         port: 7443,
         addresses: vec![

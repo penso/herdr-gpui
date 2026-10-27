@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn status(connected: usize) -> Status {
     Status {
+        address_details: Default::default(),
         version: "dev".into(),
         port: 7443,
         addresses: vec!["https://192.168.1.20:7443".into()],

@@ -2,6 +2,7 @@
 //! devices, VAPID key), connects to the local Herdr daemon, and serves the
 //! web app over HTTPS until Herdr UI asks it to stop.
 
+mod addresses;
 mod control;
 mod listener;
 mod live;

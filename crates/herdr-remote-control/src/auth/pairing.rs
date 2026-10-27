@@ -126,6 +126,7 @@ impl Pairings {
             phase: Phase::Waiting,
         });
         Ok(Offer {
+            address_details: Default::default(),
             id,
             url: format!(
                 "{origin}/pair#t={}&fp={}",
