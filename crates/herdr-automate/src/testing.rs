@@ -9,6 +9,8 @@ use std::{
 };
 
 #[path = "../../test-support/executable.rs"]
+// This Unix-only fixture starts its writer shell directly, as other test crates do.
+#[allow(clippy::disallowed_methods)]
 mod executable;
 
 pub struct Fixture {
