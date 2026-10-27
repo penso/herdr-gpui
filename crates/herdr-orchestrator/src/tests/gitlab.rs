@@ -295,7 +295,7 @@ fn refusals_say_whether_a_token_is_needed_or_wrong() {
         gitlab::Error::Status(502)
     ));
     let error = Error::from(status_error(404, "g/app", Credential::Anonymous));
-    assert!(error.to_string().contains("GITLAB_TOKEN"));
+    assert!(error.to_string().contains("account button"));
     let error = Error::from(status_error(404, "g/app", Credential::Withheld));
     assert!(error.to_string().contains("https://"));
 }

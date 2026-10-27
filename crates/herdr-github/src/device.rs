@@ -95,9 +95,9 @@ pub struct Profile {
     pub avatar_url: String,
     pub token: Arc<SecretString>,
     pub source: Source,
-    /// The organizations the account belongs to, read only for an additional
-    /// account: the owners it covers besides its own login. `None` until
-    /// GitHub listed them, so a failed listing is not mistaken for none.
+    /// Visible memberships and GitHub App organization installations, read
+    /// only for additional accounts. `None` until both applicable sources
+    /// were listed, so a failed request does not erase earlier routing.
     pub organizations: Option<Vec<String>>,
     /// What a GitHub App sign-in still needs installed or approved.
     pub access: super::installation::Access,
@@ -218,26 +218,49 @@ impl Profile {
     }
 }
 
-/// `profile` with what its GitHub App installations still need. A failed
-/// check is only logged: the account works for public repositories either way.
-pub(super) fn with_access(mut profile: Profile) -> Profile {
-    match super::installation::check(&profile.token) {
+pub(super) enum InstallationOrganizations {
+    /// Not an App token: memberships alone determine organization coverage.
+    Unavailable,
+    /// A failed listing must not erase the last complete routing set.
+    Unknown,
+    Listed(Vec<String>),
+}
+
+/// Reuse the bounded installation listing even when the App permission check
+/// fails. Neither failure prevents public repository access.
+pub(super) fn with_access(mut profile: Profile) -> (Profile, InstallationOrganizations) {
+    let installations = match super::installation::list(&profile.token) {
+        Ok(installations) => installations,
+        Err(error) => {
+            log::failure("installations", &error);
+            return (profile, InstallationOrganizations::Unknown);
+        }
+    };
+    let organizations =
+        installations
+            .as_ref()
+            .map_or(InstallationOrganizations::Unavailable, |listing| {
+                InstallationOrganizations::Listed(super::installation::organization_owners(listing))
+            });
+    match super::installation::check(&profile.token, installations.as_ref()) {
         Ok(access) => profile.access = access,
         Err(error) => log::failure("installations", &error),
     }
-    profile
+    (profile, organizations)
 }
 
+const ORGANIZATION_LIMIT: usize = 100;
 const ORGANIZATIONS: &str = "query { viewer { organizations(first: 100) { nodes { login } } } }";
 
-/// `profile` with the organizations its account belongs to, as far as its
-/// token may list them. A token that may not (a classic one without
-/// `read:org`, say) still covers its own login, so the failure is only logged
-/// and the organizations stay unknown: [`Profile::keep_organizations`] then
-/// keeps those an earlier check listed.
-pub(super) fn with_organizations(mut profile: Profile) -> Profile {
+/// Combine visible memberships with installed organization owners. Failed
+/// listings leave coverage unknown: [`Profile::keep_organizations`] retains
+/// the previous union instead of moving repositories to the main account.
+pub(super) fn with_organizations(
+    mut profile: Profile,
+    installed: InstallationOrganizations,
+) -> Profile {
     let mut cooldown = None;
-    match super::graphql(
+    let memberships = match super::graphql(
         "organizations",
         &profile.token,
         ORGANIZATIONS,
@@ -246,10 +269,38 @@ pub(super) fn with_organizations(mut profile: Profile) -> Profile {
         || false,
         &mut cooldown,
     ) {
-        Ok(value) => profile.organizations = Some(organizations(&value)),
-        Err(error) => log::failure("organizations", &error),
-    }
+        Ok(value) => Some(organizations(&value)),
+        Err(error) => {
+            log::failure("organizations", &error);
+            None
+        }
+    };
+    profile.organizations = organization_coverage(memberships, installed);
     profile
+}
+
+/// A partial failure retains the last complete union through
+/// `keep_organizations`; a successful empty union clears removed owners.
+pub(super) fn organization_coverage(
+    memberships: Option<Vec<String>>,
+    installed: InstallationOrganizations,
+) -> Option<Vec<String>> {
+    let installed = match installed {
+        InstallationOrganizations::Unavailable => Vec::new(),
+        InstallationOrganizations::Unknown => return None,
+        InstallationOrganizations::Listed(owners) => owners,
+    };
+    let mut merged: Vec<String> = Vec::new();
+    for owner in memberships?
+        .into_iter()
+        .take(ORGANIZATION_LIMIT)
+        .chain(installed.into_iter().take(super::installation::PAGE))
+    {
+        if !merged.iter().any(|seen| seen.eq_ignore_ascii_case(&owner)) {
+            merged.push(owner);
+        }
+    }
+    Some(merged)
 }
 
 /// The organization logins of a viewer query, bounded and checked like the
@@ -261,7 +312,7 @@ pub(super) fn organizations(value: &serde_json::Value) -> Vec<String> {
         .flatten()
         .filter_map(|node| node["login"].as_str())
         .filter(|login| crate::config::valid_owner(login))
-        .take(100)
+        .take(ORGANIZATION_LIMIT)
         .map(str::to_owned)
         .collect()
 }

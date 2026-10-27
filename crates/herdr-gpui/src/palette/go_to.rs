@@ -149,13 +149,17 @@ pub(super) fn go_to_entries(
                     .collect::<Vec<_>>()
                     .join("  ");
                 // An agent is also found by its kind, name, and plain status word,
-                // whatever its row is titled or its integration labels the state.
+                // whatever its row is titled or its integration labels the state,
+                // and by the titles and Rename label its sidebar row can show.
                 let keywords = agent.map_or(String::new(), |agent| {
                     [
                         agent.agent.as_deref(),
                         agent.name.as_deref(),
                         Some(status_badge(agent.agent_status)),
                         Some("agent"),
+                        agent.title.as_deref(),
+                        agent.terminal_title_stripped.as_deref(),
+                        pane.label.as_deref(),
                     ]
                     .into_iter()
                     .flatten()

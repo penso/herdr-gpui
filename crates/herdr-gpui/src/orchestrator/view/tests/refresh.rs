@@ -23,6 +23,7 @@ fn refresh_spins_until_the_sync_it_asked_for_ends(cx: &mut TestAppContext) {
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing::default(),
     };
     let config = crate::config::Config::default();

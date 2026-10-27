@@ -1,5 +1,5 @@
 use super::*;
-use crate::installation::{Access, App, Installation, Listing, assess, check};
+use crate::installation::{Access, App, Installation, Listing, assess, check, list};
 
 fn listing(installations: Value) -> Listing {
     serde_json::from_value(serde_json::json!({ "installations": installations })).unwrap()
@@ -115,7 +115,10 @@ fn approval_links_point_at_each_owners_settings() {
 fn only_a_github_app_user_token_is_checked() {
     // These return before any request, so no network is needed.
     for token in ["ghp_classic", "gho_oauth", "github_pat_fine", "plain"] {
-        assert_eq!(check(&token.into()).unwrap(), Access::Unknown);
+        let token = SecretString::from(token);
+        let listing = list(&token).unwrap();
+        assert!(listing.is_none());
+        assert_eq!(check(&token, listing.as_ref()).unwrap(), Access::Unknown);
     }
 }
 
@@ -146,6 +149,7 @@ fn a_failed_check_keeps_what_the_last_one_found() {
 fn a_waiting_account_is_checked_again_soon_but_not_constantly() {
     let now = Instant::now();
     let mut auth = Auth::connected_fixture();
+    auth.last_session_check = Some(now);
     auth.next_session_check = Some(now + Duration::from_secs(300));
     auth.recheck_access(now);
     assert_eq!(

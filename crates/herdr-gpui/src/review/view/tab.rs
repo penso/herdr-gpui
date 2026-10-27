@@ -238,6 +238,9 @@ impl HerdrWindow {
         let input = field("Describe the change\u{2026}", cx);
         let filter = field("Filter files\u{2026}", cx);
         let search = field("Find in changes\u{2026}", cx);
+        let viewed = crate::review::viewed::key(&checkout)
+            .map(|(place, branch)| crate::review::Viewed::of(cx, place, branch))
+            .unwrap_or_default();
         let subscriptions = vec![
             cx.subscribe(&filter, move |this, _, _: &search_input::Changed, cx| {
                 this.review_filter_changed(id, cx);
@@ -265,7 +268,7 @@ impl HerdrWindow {
             cursor: 0,
             expanding: HashSet::new(),
             colours: Default::default(),
-            viewed: HashMap::new(),
+            viewed,
             folds: HashMap::new(),
             tree: Default::default(),
             closed: HashSet::new(),

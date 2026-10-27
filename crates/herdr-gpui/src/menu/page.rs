@@ -51,6 +51,8 @@ pub(crate) enum Page {
     Git,
     GitCommit,
     GitHub,
+    /// The account menu's GitLab tokens, beside GitHub's sign-in.
+    GitLab,
     /// A group's "…" menu: opening tabs other than a terminal, closing
     /// tabs, and splitting.
     Group,

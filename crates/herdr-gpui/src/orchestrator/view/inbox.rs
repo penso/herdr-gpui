@@ -349,8 +349,14 @@ impl OrchestratorView {
                         el.child(div().text_color(rgb(theme.muted)).child(text))
                     })
                     .when(sign_in, |el| {
-                        el.cursor_pointer()
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(Event::SignIn)))
+                        el.debug_selector(move || {
+                            format!(
+                                "orchestrator-sign-in-{}",
+                                provider_name(provider).to_lowercase()
+                            )
+                        })
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |_, _, _, cx| cx.emit(Event::SignIn(provider))))
                     })
             });
         // A repository without a GitHub remote has no GitHub source, which
@@ -752,14 +758,16 @@ fn source_chip(look: &Look, id: (&'static str, usize), provider: Provider) -> St
         .child(provider_name(provider))
 }
 
-/// A backend's mark: GitHub's logo, else a short colored tag.
+/// A backend's mark: GitHub's or GitLab's logo, else a short colored tag.
 pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
     match provider {
         Provider::Github => look
             .icon("icons/github.svg", 12., look.theme.subtext())
             .into_any_element(),
+        Provider::Gitlab => look
+            .icon("icons/gitlab.svg", 12., look.theme.subtext())
+            .into_any_element(),
         Provider::Beads => look.badge("bd", MAGENTA).into_any_element(),
-        Provider::Gitlab => look.badge("gl", RED).into_any_element(),
     }
 }
 

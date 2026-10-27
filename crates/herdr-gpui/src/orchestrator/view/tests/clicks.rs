@@ -16,6 +16,7 @@ fn a_click_opens_the_item_beside_the_list(cx: &mut TestAppContext) {
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
         timing: Timing::default(),
     };
     let config = crate::config::Config::default();

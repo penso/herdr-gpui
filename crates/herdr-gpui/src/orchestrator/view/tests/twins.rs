@@ -47,6 +47,7 @@ fn one_issue_from_two_hosts_is_one_row_of_the_checkout_it_shows(cx: &mut gpui::T
                 workspace_id: "other".into(),
                 token: None,
                 data_root: Some(dir.path().join("other-data")),
+                gitlab_store: Default::default(),
                 timing: Timing::default(),
             };
             view.repos.push(Repo::start(RepoSpec {
