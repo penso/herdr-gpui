@@ -221,8 +221,10 @@ impl Review {
     }
 
     /// Shows `loaded`, folding and marking files as the user left them. A
-    /// mark the changes no longer match is forgotten in the saved marks too,
-    /// so it cannot come back when the review reopens.
+    /// mark on a file that changed again is forgotten in the saved marks too,
+    /// so it cannot come back when the review reopens. A file this comparison
+    /// leaves out, as committed files are when only uncommitted changes show,
+    /// keeps its saved mark for the comparison that shows it.
     fn set_loaded(&mut self, mut loaded: Loaded, cx: &mut App) {
         for file in &mut loaded.diff.files {
             let viewed = self.viewed.get(&file.path) == Some(&(file.added, file.removed));
@@ -242,11 +244,16 @@ impl Review {
                     .any(|file| file.path == *path && (file.added, file.removed) == *counts)
             });
         self.viewed = kept;
-        if !stale.is_empty()
+        let paths = loaded.diff.paths();
+        let changed: Vec<_> = stale
+            .iter()
+            .filter(|(path, _)| paths.contains_key(path.as_str()))
+            .map(|(path, counts)| (path.as_str(), *counts))
+            .collect();
+        if !changed.is_empty()
             && let Some((place, branch)) = super::viewed::key(&self.checkout)
         {
-            let stale = stale.iter().map(|(path, counts)| (path.as_str(), *counts));
-            super::Viewed::forget(cx, place, branch, stale);
+            super::Viewed::forget(cx, place, branch, changed);
         }
         self.tree = tree::Tree::build(&loaded.diff);
         self.state = State::Loaded(loaded);

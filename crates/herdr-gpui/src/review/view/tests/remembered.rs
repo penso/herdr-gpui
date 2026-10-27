@@ -48,22 +48,24 @@ fn two_reviews_of_one_checkout_keep_each_others_marks(cx: &mut gpui::TestAppCont
 }
 
 #[gpui::test]
-fn a_mark_the_changes_dropped_does_not_come_back(cx: &mut gpui::TestAppContext) {
+fn a_mark_on_a_changed_file_is_forgotten_and_a_left_out_one_kept(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx, None);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             let id = view.seed_review(many_files(), window, cx);
             view.toggle_review_viewed(id, 0, cx);
             view.toggle_review_viewed(id, 1, cx);
-            // README.md leaves the changes, then a later review shows it
-            // again with the same counts: it is not viewed any more.
-            let mut fewer = many_files();
-            fewer.diff.files.remove(0);
-            view.review_loaded(id, 1, Ok(fewer), cx);
+            // README.md changes again, and src/a.rs is left out, as a
+            // committed file is when only uncommitted changes show.
+            let mut next = many_files();
+            next.diff.files[0].added = Some(9);
+            next.diff.files.remove(1);
+            view.review_loaded(id, 1, Ok(next), cx);
+            // A later review whose files are as they were marked.
             let next = view.seed_review(many_files(), window, cx);
             let review = &view.reviews[&next];
-            assert!(!review.is_viewed(0));
-            assert!(review.is_viewed(1), "a mark still matching stays");
+            assert!(!review.is_viewed(0), "the changed file's mark is gone");
+            assert!(review.is_viewed(1), "the left out file's mark is kept");
         });
     });
 }
