@@ -33,7 +33,7 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
                         // Remote clipboard reads reserve FIFO order even for text-only
                         // Ctrl-V. Local Ctrl-V stays a key for agents that read the
                         // clipboard themselves; local Cmd-V bridges images.
-                        let native_paste = key == "cmd-v" && (image || !cfg!(target_os = "linux"));
+                        let native_paste = key == "cmd-v";
                         assert_eq!(
                             view.pending_images.len(),
                             usize::from(native_paste || (remote && key == "ctrl-v"))
