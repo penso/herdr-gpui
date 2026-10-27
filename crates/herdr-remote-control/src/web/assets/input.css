@@ -87,6 +87,22 @@
   button, select, input, textarea { font: inherit; color: inherit; }
 }
 
+/* iOS uses an opaque fixed top edge for the installed app's status bar;
+   a translucent edge lets its system blur spill into the search field. */
+.status-bar-background { display: none; }
+@media (display-mode: standalone) {
+  body { padding-top: max(6px, env(safe-area-inset-top)); }
+  .status-bar-background {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    height: max(6px, env(safe-area-inset-top));
+    background: var(--bg);
+    pointer-events: none;
+    z-index: 40;
+  }
+}
+
 @layer components {
   .group-list { @apply bg-surface rounded-2xl overflow-hidden; }
   .searching [data-group] > ul { display: block !important; }
