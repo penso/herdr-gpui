@@ -37,6 +37,8 @@ mod device_multi_select;
 #[cfg(all(test, feature = "azure"))]
 mod device_removing;
 #[cfg(test)]
+mod device_sessions_row;
+#[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
 mod gpu_line;

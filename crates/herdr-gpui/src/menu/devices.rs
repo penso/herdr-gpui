@@ -548,6 +548,14 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
+        // The footer's Sessions button is an icon with no label, so the
+        // picker, whose Local row already names the session, offers it too.
+        rows.push((
+            "Sessions…".into(),
+            "Switch, add, or delete this device's sessions".into(),
+            false,
+            true,
+        ));
         let mut view = div()
             .id("devices-list")
             .max_h(device_list_height(self.menu.anchor.y))
@@ -616,7 +624,16 @@ impl HerdrWindow {
                                                 .text_color(rgb(self.theme.foreground)),
                                         )
                                     })
-                                    .when(index > self.endpoints.len(), |row| {
+                                    .when(index == self.session_list_row(), |row| {
+                                        row.child(
+                                            svg()
+                                                .path("icons/sessions.svg")
+                                                .size(px(16.))
+                                                .flex_none()
+                                                .text_color(rgb(self.theme.foreground)),
+                                        )
+                                    })
+                                    .when(index == self.add_device_row(), |row| {
                                         row.child(
                                             svg()
                                                 .path("icons/plus.svg")
@@ -772,11 +789,22 @@ impl HerdrWindow {
         }
     }
 
+    /// The picker's rows after the devices: Add Device, then Sessions.
+    fn add_device_row(&self) -> usize {
+        self.endpoints.len() + 1
+    }
+
+    fn session_list_row(&self) -> usize {
+        self.endpoints.len() + 2
+    }
+
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index > self.endpoints.len() + 1 {
+        if index == self.session_list_row() {
+            // Where the picker opened, so the list replaces it in place.
+            self.open_sessions(self.menu.anchor, window, cx);
+        } else if index > self.add_device_row() {
             return;
-        }
-        if index == self.endpoints.len() + 1 {
+        } else if index == self.add_device_row() {
             self.open_device_setup(window, cx);
         } else {
             let id = if index == 0 {
@@ -803,7 +831,7 @@ impl HerdrWindow {
     /// one still listed, so the terminal always belongs to a listed device;
     /// like any switch of device, that closes the picker.
     fn toggle_listed_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        // All Devices and Add Device have nothing to add.
+        // All Devices, Add Device, and Sessions have nothing to add.
         let Some(endpoint) = index
             .checked_sub(1)
             .and_then(|index| self.endpoints.get(index))
@@ -854,7 +882,7 @@ impl HerdrWindow {
             }
         } else {
             let key = event.keystroke.key.as_str();
-            let count = self.endpoints.len() + 2;
+            let count = self.session_list_row() + 1;
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

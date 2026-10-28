@@ -35,7 +35,7 @@ fn the_wheel_does_not_move_a_device_picker_that_fits(cx: &mut gpui::TestAppConte
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     let panel = cx.debug_bounds("menu-panel").unwrap();
     let first = cx.debug_bounds("device-row-0").unwrap();
-    let last = cx.debug_bounds("device-row-3").unwrap();
+    let last = cx.debug_bounds("device-row-4").unwrap();
     assert!(panel.contains(&first.origin) && last.bottom() <= panel.bottom());
 
     cx.simulate_event(ScrollWheelEvent {
@@ -45,7 +45,7 @@ fn the_wheel_does_not_move_a_device_picker_that_fits(cx: &mut gpui::TestAppConte
     });
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     assert_eq!(cx.debug_bounds("device-row-0").unwrap(), first);
-    assert_eq!(cx.debug_bounds("device-row-3").unwrap(), last);
+    assert_eq!(cx.debug_bounds("device-row-4").unwrap(), last);
 }
 
 /// More devices than fit still scroll, inside the list, and the panel keeps
