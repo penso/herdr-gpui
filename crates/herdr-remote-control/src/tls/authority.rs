@@ -19,6 +19,7 @@ use rustls::{
 use sha2::{Digest, Sha256};
 use std::{
     fs, io,
+    net::IpAddr,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -43,7 +44,7 @@ const LEAF_COMMON_NAME: &str = "Herdr Remote";
 pub(crate) struct Authority {
     ca_der: CertificateDer<'static>,
     ca_pem: String,
-    /// Where the issued leaf is kept; none for a CA only held in memory.
+    /// Where issued leaves are kept; none for a CA only held in memory.
     dir: Option<PathBuf>,
     fingerprint: String,
     issuer: Issuer<'static, KeyPair>,
@@ -148,10 +149,21 @@ impl Authority {
         &self.ca_der
     }
 
-    /// The leaf this CA issued and saved before, if it is still there.
+    /// A leaf this CA issued and saved before; `None` selects the DNS/legacy file.
     /// Blocking.
-    pub(super) fn stored(&self) -> Option<Stored> {
-        stored::load(self.dir.as_deref()?, &self.ca_der)
+    pub(super) fn stored(&self, address: Option<IpAddr>) -> Option<Stored> {
+        stored::load(self.dir.as_deref()?, address, &self.ca_der)
+    }
+
+    /// Preserve an already-trusted legacy leaf for an IP it covers. The caller
+    /// validates its issuer, key, names and expiry before migrating it.
+    pub(super) fn migrate_leaf(&self, address: IpAddr) -> Result<()> {
+        let Some(dir) = &self.dir else {
+            return Ok(());
+        };
+        let path = stored::path(dir, None);
+        let pem = fs::read(&path).map_err(|source| Error::Read { path, source })?;
+        write_private(&stored::path(dir, Some(address)), &pem)
     }
 
     /// The iOS configuration profile that installs this CA.
@@ -163,6 +175,15 @@ impl Authority {
     /// [`LEAF_LIFETIME`], with a fresh P-256 key. Its chain is the leaf then
     /// this CA. A CA kept on disk saves it there too, for the next start.
     pub(crate) fn issue(&self, names: &Names, now: SystemTime) -> Result<Arc<CertifiedKey>> {
+        self.issue_for(names, now, None)
+    }
+
+    pub(super) fn issue_for(
+        &self,
+        names: &Names,
+        now: SystemTime,
+        address: Option<IpAddr>,
+    ) -> Result<Arc<CertifiedKey>> {
         let key = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256).map_err(Error::Certificate)?;
         let mut params = CertificateParams::default();
         params.distinguished_name = DistinguishedName::new();
@@ -182,12 +203,10 @@ impl Authority {
         let leaf = params
             .signed_by(&key, &self.issuer)
             .map_err(Error::Certificate)?;
-        if let Some(dir) = &self.dir
-            && let Err(error) = stored::save(dir, &leaf.pem(), &key.serialize_pem())
-        {
-            // Only costs phones that skipped installing the CA a prompt
-            // after the next restart.
-            tracing::warn!(error = %error, "Could not save the server certificate");
+        if let Some(dir) = &self.dir {
+            // Never present a replacement that a restart cannot recover.
+            // A failed refresh leaves the resolver's current certificate intact.
+            stored::save(dir, address, &leaf.pem(), &key.serialize_pem())?;
         }
         let key_der = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key.serialize_der()));
         let signing_key = ring::default_provider()

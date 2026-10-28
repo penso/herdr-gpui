@@ -14,6 +14,9 @@ use tokio::{
 };
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 
+#[cfg(test)]
+mod tests;
+
 /// Connections open at once.
 const MAX_CONNECTIONS: usize = 256;
 /// How long a handshake may take.
@@ -51,10 +54,13 @@ pub(super) struct TlsListener {
 }
 
 impl TlsListener {
-    pub(super) fn new(tcp: TcpListener, config: Arc<rustls::ServerConfig>) -> Self {
+    pub(super) fn new(
+        tcp: TcpListener,
+        config: Arc<rustls::ServerConfig>,
+        resolver: Arc<crate::tls::Resolver>,
+    ) -> Self {
         let local = tcp.local_addr();
         let (sender, ready) = mpsc::channel(READY);
-        let acceptor = TlsAcceptor::from(config);
         let slots = Arc::new(Semaphore::new(MAX_CONNECTIONS));
         tokio::spawn(async move {
             loop {
@@ -65,7 +71,12 @@ impl TlsListener {
                     continue;
                 };
                 let _ = tcp.set_nodelay(true);
-                let (acceptor, sender) = (acceptor.clone(), sender.clone());
+                let Ok(address) = tcp.local_addr() else {
+                    continue;
+                };
+                let mut selected = (*config).clone();
+                selected.cert_resolver = resolver.at(address.ip());
+                let (acceptor, sender) = (TlsAcceptor::from(Arc::new(selected)), sender.clone());
                 tokio::spawn(async move {
                     let handshake =
                         tokio::time::timeout(HANDSHAKE_TIMEOUT, acceptor.accept(tcp)).await;

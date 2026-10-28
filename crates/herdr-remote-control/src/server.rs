@@ -131,12 +131,12 @@ pub async fn run(options: Options) -> Result<()> {
     // A user's certificate lists fixed names; only the daemon's own follows
     // the computer's addresses.
     if state.authority.is_some() {
-        tokio::spawn(watch_addresses(state.clone(), resolver, bind));
+        tokio::spawn(watch_addresses(state.clone(), resolver.clone(), bind));
     }
     tokio::spawn(expire(state.clone(), options.device_idle));
     let app = web::router(state).into_make_service_with_connect_info::<web::Peer>();
     let mut shutdown = stopped.clone();
-    let serve = axum::serve(listener::TlsListener::new(tcp, config), app)
+    let serve = axum::serve(listener::TlsListener::new(tcp, config, resolver), app)
         .with_graceful_shutdown(async move {
             let _ = shutdown.wait_for(|stop| *stop).await;
         })
@@ -163,7 +163,7 @@ async fn until_stopped(
     }
 }
 
-/// Reissues the certificate when the computer's addresses change.
+/// Adds certificates for new addresses and renews existing ones independently.
 async fn watch_addresses(state: Arc<State>, resolver: Arc<Resolver>, bind: IpAddr) {
     let mut ticker = tokio::time::interval(ADDRESS_CHECK);
     loop {
@@ -172,11 +172,17 @@ async fn watch_addresses(state: Arc<State>, resolver: Arc<Resolver>, bind: IpAdd
         else {
             continue;
         };
-        if let Some(authority) = &state.authority
-            && resolver
-                .refresh(authority, &names, SystemTime::now())
-                .is_err()
-        {
+        let (refresh_state, refresh_resolver, refresh_names) =
+            (state.clone(), resolver.clone(), names.clone());
+        let refreshed = tokio::task::spawn_blocking(move || match &refresh_state.authority {
+            Some(authority) => refresh_resolver
+                .refresh(authority, &refresh_names, SystemTime::now())
+                .map(|_| ()),
+            None => Ok(()),
+        })
+        .await;
+        if !matches!(refreshed, Ok(Ok(()))) {
+            tracing::warn!(error = ?refreshed, "Could not refresh remote certificates; keeping the current addresses");
             continue;
         }
         if let Ok(mut current) = state.names.write() {

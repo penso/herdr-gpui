@@ -55,13 +55,21 @@ impl Names {
     }
 
     /// Names from `addresses` and `host`: addresses outside the private
-    /// ranges and link-local IPv6 are dropped, loopback and `localhost` are
+    /// ranges and link-local addresses are dropped, loopback and `localhost` are
     /// always added, and `host` (a host name, `.local` or a domain allowed)
     /// becomes `LABEL.local` when its first label is a valid DNS label.
     pub(crate) fn new(addresses: impl IntoIterator<Item = IpAddr>, host: Option<&str>) -> Self {
         let mut ips: Vec<IpAddr> = addresses
             .into_iter()
-            .filter(|ip| is_private(*ip) && !within(*ip, LINK_LOCAL_V6))
+            // Transient, self-assigned adapters must not rotate the certificate
+            // of a stable Tailscale/LAN connection. IPv6 also needs a zone ID.
+            .filter(|ip| {
+                is_private(*ip)
+                    && !match ip {
+                        IpAddr::V4(ip) => ip.is_link_local(),
+                        IpAddr::V6(ip) => ip.is_unicast_link_local(),
+                    }
+            })
             .chain([
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
                 IpAddr::V6(Ipv6Addr::LOCALHOST),

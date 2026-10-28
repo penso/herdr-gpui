@@ -23,7 +23,7 @@ const INSTALL_CLOSED = "herdr.install-closed"; // true once the footer is closed
 const MARK_MS = 1600;
 /// How many commands the composer lists under a typed "/".
 const SLASH_SHOWN = 5;
-const HANDOFF = "herdr.handoff"; // { token, expires_ms } a tab offers its Home Screen app
+const HANDOFF = "herdr.handoff"; // { token, expires_ms, device, fingerprint }
 const RELOADED = "herdr.pair-reloaded"; // set once a failed pairing reloaded without the cache
 
 const app = {
@@ -42,6 +42,7 @@ const app = {
   // replaces the list marks the new row where the fade had reached.
   mark: null,
   retry: 0,
+  handoffBusy: false,
   // Android's install prompt, kept until the footer's Install uses it.
   install: null,
   // Counts the views shown, so work begun in one leaves alone a view the
@@ -605,27 +606,37 @@ function showInstallHint() {
 /// link too. One token serves until it nears expiry, so an icon already
 /// added keeps a valid one.
 async function offerHandoff() {
-  if (installed() || !app.device) return;
+  if (installed() || !app.device || app.handoffBusy) return;
   if (location.pathname !== "/" && location.pathname !== "/board") return;
   // The Home Screen app redeems the token at its own origin, so only the
   // computer this page was loaded from may offer one.
   if (!app.device.origins?.includes(location.origin)) return;
-  let offer = readJson(localStorage, HANDOFF);
-  if (!offer?.token || offer.expires_ms - Date.now() < 3_600_000) {
-    try {
-      offer = await (await api("/api/handoff", { method: "POST" })).json();
-    } catch {
-      return;
+  const device = app.device;
+  app.handoffBusy = true;
+  try {
+    let offer = readJson(localStorage, HANDOFF);
+    // A fresh browser pairing must not inherit the token consumed by the
+    // previous Home Screen installation. Legacy, unscoped caches refresh too.
+    if (!offer?.token || offer.device !== device.id || offer.fingerprint !== device.fingerprint || !Number.isFinite(offer.expires_ms) || offer.expires_ms - Date.now() < 3_600_000) {
+      try {
+        offer = { ...await (await api("/api/handoff", { method: "POST" })).json(), device: device.id, fingerprint: device.fingerprint };
+      } catch {
+        return;
+      }
+      if (app.device?.id !== device.id || app.device?.fingerprint !== device.fingerprint) return;
+      writeJson(localStorage, HANDOFF, offer);
     }
-    writeJson(localStorage, HANDOFF, offer);
-  }
-  const address = `${location.pathname}?handoff=${encodeURIComponent(offer.token)}`;
-  const link = document.querySelector('link[rel="manifest"]');
-  const loaded = link && new URL(link.href).searchParams.get("handoff");
-  if (loaded === offer.token) {
-    history.replaceState(history.state, "", address);
-  } else if (new URLSearchParams(location.search).get("handoff") !== offer.token) {
-    location.replace(address);
+    if (location.pathname !== "/" && location.pathname !== "/board") return;
+    const address = `${location.pathname}?handoff=${encodeURIComponent(offer.token)}`;
+    const link = document.querySelector('link[rel="manifest"]');
+    const loaded = link && new URL(link.href).searchParams.get("handoff");
+    if (loaded === offer.token) {
+      history.replaceState(history.state, "", address);
+    } else if (new URLSearchParams(location.search).get("handoff") !== offer.token) {
+      location.replace(address);
+    }
+  } finally {
+    app.handoffBusy = false;
   }
 }
 
@@ -648,7 +659,7 @@ async function redeemHandoff(token) {
     report("handoff", failure);
     show("t-unpaired");
     view().querySelector("[data-reason]").textContent =
-      `${failure.message}. Open Herdr in the browser, then add it to the Home Screen again.`;
+      `${failure.message}. Scan a fresh pairing code here to connect this installation.`;
   }
 }
 
@@ -667,6 +678,8 @@ async function adopt(pairKey, answer, fingerprint) {
   await saveKey(host, pairKey);
   if (older) await dropKey(older).catch(() => {});
   useHost(host);
+  // This approval has a new key, even when the server kept the same device ID.
+  writeJson(localStorage, HANDOFF, null);
   app.origin = null;
   writeJson(sessionStorage, TOKEN, null);
 }

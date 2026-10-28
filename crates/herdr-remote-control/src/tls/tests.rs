@@ -13,6 +13,8 @@ use std::{
 };
 
 mod advertised;
+mod per_address;
+mod persistence;
 mod stored;
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
@@ -132,6 +134,7 @@ fn names_outside_the_private_ranges_are_never_listed() {
             ip("8.8.8.8"),
             ip("2001:db8::1"),
             ip("fe80::1"),
+            ip("169.254.244.63"),
             ip("10.0.0.7"),
         ],
         Some("studio.example.com"),
@@ -139,7 +142,7 @@ fn names_outside_the_private_ranges_are_never_listed() {
     assert_eq!(
         names.ips,
         vec![ip("10.0.0.7"), ip("127.0.0.1"), ip("::1")],
-        "public and link-local IPv6 addresses are dropped"
+        "public and link-local addresses are dropped"
     );
     assert_eq!(names.dns, vec!["localhost", "studio.local"]);
 
@@ -203,14 +206,17 @@ fn refresh_reissues_only_when_names_change_or_expiry_nears() {
     let start = SystemTime::now();
     let names = lan_names();
     let resolver = Resolver::issue(&authority, names.clone(), start).unwrap();
-    let first = resolver.current();
+    let first = resolver.current_for(ip("192.168.1.20")).unwrap();
 
     assert!(!resolver.refresh(&authority, &names, start + DAY).unwrap());
-    assert!(Arc::ptr_eq(&first, &resolver.current()));
+    assert!(Arc::ptr_eq(
+        &first,
+        &resolver.current_for(ip("192.168.1.20")).unwrap()
+    ));
 
     let moved = Names::new([ip("192.168.7.9")], Some("studio"));
     assert!(resolver.refresh(&authority, &moved, start + DAY).unwrap());
-    let second = resolver.current();
+    let second = resolver.current_for(ip("192.168.7.9")).unwrap();
     assert!(!Arc::ptr_eq(&first, &second));
     verify(&authority, &second, "192.168.7.9", start + DAY).unwrap();
     assert!(verify(&authority, &second, "192.168.1.20", start + DAY).is_err());
@@ -305,7 +311,6 @@ fn origins_put_tailscale_first_then_lan_then_the_rest() {
             "https://[fd7a:115c:a1e0::1]:7443",
             "https://10.0.0.7:7443",
             "https://192.168.1.20:7443",
-            "https://169.254.3.4:7443",
             "https://[fd12:3456::9]:7443",
             "https://studio.local:7443",
             "https://127.0.0.1:7443",

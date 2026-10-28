@@ -1,7 +1,7 @@
-//! The issued server certificate, kept beside the CA. A restart presents
-//! the same leaf, so a phone that accepted it once (Safari's "visit this
-//! website" before the CA is installed) keeps reaching the computer; only
-//! a new address or renewal replaces it.
+//! Issued server certificates and their keys, kept beside the CA as private
+//! atomic PEM files. IP filenames encode the address, never user-controlled
+//! paths. `leaf.pem` holds the DNS leaf and may be an older shared certificate
+//! which the resolver migrates to per-IP files without changing its bytes.
 
 use super::{Names, Result};
 use rustls::{
@@ -10,14 +10,21 @@ use rustls::{
     sign::CertifiedKey,
 };
 use std::{
-    path::Path,
+    net::IpAddr,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime},
 };
 use x509_parser::{certificate::X509Certificate, extensions::ParsedExtension};
 
 /// The leaf certificate then its private key, as PEM, in one 0600 file.
-const LEAF_FILE: &str = "leaf.pem";
+pub(super) fn path(dir: &Path, address: Option<IpAddr>) -> PathBuf {
+    dir.join(match address.map(|ip| ip.to_canonical()) {
+        None => "leaf.pem".into(),
+        Some(IpAddr::V4(ip)) => format!("leaf-ip4-{:08x}.pem", u32::from(ip)),
+        Some(IpAddr::V6(ip)) => format!("leaf-ip6-{:032x}.pem", u128::from(ip)),
+    })
+}
 
 /// A leaf read back from the state directory.
 pub(super) struct Stored {
@@ -27,17 +34,26 @@ pub(super) struct Stored {
 }
 
 /// Saves the leaf `cert_pem` and its `key_pem` in `dir`. Blocking.
-pub(super) fn save(dir: &Path, cert_pem: &str, key_pem: &str) -> Result<()> {
+pub(super) fn save(
+    dir: &Path,
+    address: Option<IpAddr>,
+    cert_pem: &str,
+    key_pem: &str,
+) -> Result<()> {
     super::authority::write_private(
-        &dir.join(LEAF_FILE),
+        &path(dir, address),
         format!("{cert_pem}{key_pem}").as_bytes(),
     )
 }
 
 /// The leaf saved in `dir`, when there is one this CA (`ca_der`) issued and
 /// its key matches; anything else is ignored and replaced. Blocking.
-pub(super) fn load(dir: &Path, ca_der: &CertificateDer<'_>) -> Option<Stored> {
-    let pem = std::fs::read(dir.join(LEAF_FILE)).ok()?;
+pub(super) fn load(
+    dir: &Path,
+    address: Option<IpAddr>,
+    ca_der: &CertificateDer<'_>,
+) -> Option<Stored> {
+    let pem = std::fs::read(path(dir, address)).ok()?;
     let leaf = CertificateDer::pem_slice_iter(&pem).next()?.ok()?;
     let key_der = PrivateKeyDer::from_pem_slice(&pem).ok()?;
     let (_, ca) = x509_parser::parse_x509_certificate(ca_der).ok()?;

@@ -56,6 +56,30 @@ The native pairing dialog, shown with synthetic addresses and an inactive QR:
 
 [Expanded alternatives in a narrow native window](../../docs/screenshots/remote-pairing-narrow.png).
 
+## Saved certificates and Home Screen pairing
+
+The CA, its key, and server certificates/keys live in the daemon's persistent
+`STATE_DIR/tls/` directory (`ca.pem`, `ca-key.pem`, `leaf.pem`, and per-IP
+`leaf-ip4-*.pem` / `leaf-ip6-*.pem` files), under Herdr
+UI's state directory: for example `~/.local/state/herdr/gpui/remote/tls/`.
+Certificate files are private (`0600` on Unix), written
+atomically, and reused across ordinary restarts and rebuilds. Each IP has its own
+saved server certificate, signed by the same CA: a new LAN IP gets a new leaf
+without replacing the Tailscale leaf. Returning IPs reuse their saved certificates.
+IP clients normally send no TLS SNI, so the TCP connection's local destination
+selects the certificate. DNS names use a separate leaf; custom certificate files
+are left alone. Existing shared certificates are migrated without changing the
+certificate for any address they still cover. Each leaf renews near its own expiry.
+Transient link-local addresses (`169.254.x.x` and `fe80::/10`) are excluded from
+pairing discovery so temporary adapters do not rotate a stable connection's certificate.
+If a replacement cannot be saved, it is not presented; a running resolver keeps
+its existing certificate. Trusting the CA on the phone covers these renewals.
+
+Safari and Home Screen installations have separate storage. Transfer tokens
+are single-use and scoped to the browser's current pairing; pairing again
+clears an older transfer token. An unpaired Home Screen app can also scan a
+fresh desktop pairing code directly, without reinstalling the shortcut.
+
 ## Push notifications
 
 `push` (server feature only) sends Web Push: a VAPID key created once at
@@ -76,7 +100,8 @@ below the status-bar safe area.
 ## Browser controller tests
 
 The phone's scroll-controller regression checks run without browser dependencies:
-`node --test scripts/test-remote-chat-scroll.mjs` from the repository root.
+`node --test scripts/test-remote-chat-scroll.mjs scripts/test-remote-handoff.mjs`
+from the repository root.
 Node is needed only for these optional checks, not for building the daemon.
 
 ## Errors

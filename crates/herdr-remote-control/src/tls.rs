@@ -7,8 +7,9 @@
 //!   [`Authority::mobileconfig`] on iOS or [`Authority::ca_pem`] elsewhere.
 //! - [`Names`] lists what this machine is reachable as right now: LAN and
 //!   Tailscale addresses, loopback, `localhost`, and `HOSTNAME.local`.
-//! - [`Resolver`] hands rustls the current leaf, and [`Resolver::refresh`]
-//!   reissues it when the names change or it nears expiry, without a restart.
+//! - [`Resolver`] keeps a leaf per IP and a separate DNS leaf. The listener
+//!   selects by the connection's local address for IP clients without SNI.
+//!   [`Resolver::refresh`] adds or renews each independently, without a restart.
 //!   A user-supplied certificate ([`Resolver::from_files`]) is never reissued.
 //!
 //! Everything here is blocking and runtime-free; the server decides when to
