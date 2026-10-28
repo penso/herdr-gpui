@@ -19,6 +19,8 @@
   --amber: #f2b33d;
   --green: #4fd18b;
   --red: #ff6b6b;
+  --pr-held: #f5a34b;
+  --pr-merged: #c792ea;
   /* Agent status, Herdr's own palette (Catppuccin Mocha), as Herdr UI and
      the terminal client draw it. */
   --st-working: #f9e2af; --st-blocked: #f38ba8; --st-done: #94e2d5; --st-idle: #a6e3a1; --st-unknown: #6c7086;
@@ -41,6 +43,8 @@
     --amber: #c98a0b;
     --green: #1f9d5c;
     --red: #d64545;
+    --pr-held: #b96514;
+    --pr-merged: #8839ef;
     /* The same hues darkened for light chrome, as Herdr UI's Theme::ink. */
     --st-working: #b07d12; --st-blocked: #d0345e; --st-done: #1b9a87; --st-idle: #2e9b45; --st-unknown: #8c8fa1;
     --term-bg: #fbfbfc; --term-fg: #1d222b;
@@ -111,6 +115,12 @@
     content: ""; @apply absolute top-0 left-[52px] right-0 border-t border-line;
   }
   .badge { @apply text-[10.5px] text-muted border border-line rounded-md px-1.5; }
+  .pr-attention { color: var(--st-blocked); }
+  .pr-held { color: var(--pr-held); }
+  .pr-merged { color: var(--pr-merged); }
+  .pr-muted { color: var(--muted); }
+  .pr-ready { color: var(--st-idle); }
+  .pr-waiting { color: var(--st-working); }
   .pill-amber { @apply text-[11px] font-bold text-black bg-amber rounded-full px-2 py-0.5; }
   .count { @apply min-w-5 h-5 rounded-full text-[11px] font-bold grid place-items-center text-black px-1.5; }
   /* Agent status in the user's Herdr UI set (render/status.rs). */

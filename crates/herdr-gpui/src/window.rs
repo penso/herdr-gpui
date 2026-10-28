@@ -660,6 +660,7 @@ impl HerdrWindow {
         if self.update_workspace_pr() {
             cx.notify();
         }
+        self.publish_remote_pull_requests(cx);
         self.update_merged_cleanup(window, cx);
         if self.update_git() {
             cx.notify();

@@ -49,6 +49,7 @@ required-features = ["server"]
 [dependencies]
 herdr-chat-protocol.workspace = true
 herdr-client.workspace        = true
+herdr-github.workspace        = true
 # The pairing dialog's QR code, drawn by Herdr UI.
 qrcode.workspace              = true
 # The macOS user ID the LaunchAgent loads under, and the server's host name.

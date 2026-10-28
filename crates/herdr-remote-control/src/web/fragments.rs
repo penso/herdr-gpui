@@ -36,12 +36,14 @@ pub(super) fn summaries(state: &Shared, layout: &Layout) -> HashMap<String, Summ
 pub(super) fn lists(state: &Shared, board: bool) -> (Markup, usize) {
     let layout = state.hub.layout();
     let summaries = summaries(state, &layout);
+    let pull_requests = state.pull_requests.borrow();
     let lists = Lists {
         computer: &state.computer,
         layout: &layout,
         summaries: &summaries,
         now_ms: now_ms(),
         indicators: state.look.indicators(),
+        pull_requests: Some(&pull_requests),
     };
     let markup = if board {
         render::board(&lists)

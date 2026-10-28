@@ -56,6 +56,27 @@ The native pairing dialog, shown with synthetic addresses and an inactive QR:
 
 [Expanded alternatives in a narrow native window](../../docs/screenshots/remote-pairing-narrow.png).
 
+## Workspace pull requests and titles
+
+Mobile workspace headers show the PR number and the same readiness/lifecycle
+tone as the desktop: green for ready, yellow for pending checks/review, orange
+for blocked/behind, red for attention, purple for merged, and muted for drafts
+or unknown state. Tapping the badge opens its PR.
+
+Herdr UI publishes its existing PR cache through the private control socket;
+no GitHub credentials are sent to the phone and no second lookup is started.
+Updates reach open lists through the patch stream. Badges show the last state
+reported by the desktop while it is closed; a daemon restart waits for the next
+desktop refresh. Boot, workspace, directory, and branch identities must match,
+so a recycled workspace cannot inherit another checkout's badge.
+
+Issue-dispatched agents keep explicit issue/PR captions. Old wrapper-only
+`pasted_content` titles fall back to useful names on both desktop and phone.
+
+| Light browser preview | Dark browser preview |
+| --- | --- |
+| ![PR numbers and status colors](../../docs/screenshots/remote-pr-badges-light.png) | ![PR numbers and status colors in dark mode](../../docs/screenshots/remote-pr-badges-dark.png) |
+
 ## Saved certificates and Home Screen pairing
 
 The CA, its key, and server certificates/keys live in the daemon's persistent

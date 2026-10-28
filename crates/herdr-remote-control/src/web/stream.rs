@@ -255,6 +255,7 @@ async fn follow_terminal(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>)
 async fn follow_lists(state: &Shared, board: bool, sender: &mpsc::Sender<Sse>) {
     let mut all = state.hub.subscribe_all();
     let mut layout = state.hub.watch_layout();
+    let mut pull_requests = state.pull_requests.subscribe();
     loop {
         let (markup, waiting) = lists(state, board);
         let patch = Patch {
@@ -273,6 +274,7 @@ async fn follow_lists(state: &Shared, board: bool, sender: &mpsc::Sender<Sse>) {
                     Err(RecvError::Closed) => return,
                 },
                 changed = layout.changed() => if changed.is_err() { return } else { break },
+                changed = pull_requests.changed() => if changed.is_err() { return } else { break },
                 () = sender.closed() => return,
             }
         }

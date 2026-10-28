@@ -5017,6 +5017,7 @@ dependencies = [
  "getrandom 0.4.3",
  "herdr-chat-protocol",
  "herdr-client",
+ "herdr-github",
  "hkdf 0.13.0",
  "http-body-util",
  "hyper",

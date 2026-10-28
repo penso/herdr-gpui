@@ -127,6 +127,25 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             stop.send_replace(true);
             return Response::Done;
         }
+        Request::PullRequests { snapshot } => {
+            if !snapshot.valid() {
+                return Response::Error {
+                    code: ErrorCode::Unsupported,
+                    message: "Invalid pull request presentation data".into(),
+                };
+            }
+            let layout = state.hub.layout();
+            if snapshot.boot_id != layout.boot {
+                return Response::Error {
+                    code: ErrorCode::Other,
+                    message: "The daemon layout changed".into(),
+                };
+            }
+            if state.pull_requests.borrow().as_ref() != &snapshot {
+                state.pull_requests.send_replace(Arc::new(snapshot));
+            }
+            return Response::Done;
+        }
     };
     result.unwrap_or_else(|error| Response::Error {
         code: ErrorCode::from(&error),
@@ -139,6 +158,7 @@ fn status(state: &State) -> Status {
     let mut addresses = state.origins();
     let address_details = super::addresses::current(&mut addresses);
     Status {
+        boot_id: layout.boot.clone(),
         address_details,
         version: version().to_owned(),
         port: state.port,

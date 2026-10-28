@@ -72,6 +72,8 @@ pub(crate) struct State {
     pub(crate) names: RwLock<Names>,
     pub(crate) port: u16,
     pub(crate) privacy: Privacy,
+    pub(crate) pull_requests:
+        tokio::sync::watch::Sender<Arc<crate::control::pull_requests::PullRequests>>,
     pub(crate) push: Option<Sender>,
     /// How often each address may write a phone's error to the log.
     pub(crate) reports: Mutex<auth::RateLimiter<std::net::IpAddr>>,

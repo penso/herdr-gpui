@@ -94,6 +94,7 @@ pub async fn run(options: Options) -> Result<()> {
         None => web::Origins::none(),
     };
     let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
+    let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
     let state = Arc::new(State {
         apns,
         apps,
@@ -107,6 +108,7 @@ pub async fn run(options: Options) -> Result<()> {
         names: RwLock::new(names),
         port: options.port,
         privacy: options.privacy,
+        pull_requests,
         push,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),

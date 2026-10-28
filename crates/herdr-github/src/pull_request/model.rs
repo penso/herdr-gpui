@@ -4,7 +4,7 @@
 
 #[cfg(any(test, feature = "test-support"))]
 use super::parse::parse;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Where a workspace's checkout lives, which decides how its GitHub
@@ -319,21 +319,25 @@ impl From<Option<String>> for Outcome {
 }
 
 /// What a pull request's badge says about it, before a theme colors it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Tone {
-    /// Merged.
-    Merged,
+    // keep-sorted start
     /// Closed, or something needs fixing: conflicts, failed checks, or
     /// requested changes.
     Attention,
-    /// Draft, or its state is unknown.
-    Muted,
-    /// Checks are running, a review is required, or GitHub has not decided.
-    Waiting,
     /// Blocked or behind its base.
     Held,
+    /// Merged.
+    Merged,
     /// Ready to merge.
     Ready,
+    /// Checks are running, a review is required, or GitHub has not decided.
+    Waiting,
+    // keep-sorted end
+    /// Draft, unknown, or a future tone a client does not yet know.
+    #[serde(other)]
+    Muted,
 }
 
 impl PullRequest {

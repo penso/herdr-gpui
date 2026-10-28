@@ -9,6 +9,7 @@
 //! in the daemon.
 
 use herdr_chat_protocol::{read_frame, write_frame};
+pub mod pull_requests;
 use serde::{Deserialize, Serialize};
 use std::{
     io::{BufReader, BufWriter, Write},
@@ -120,6 +121,10 @@ pub enum Request {
     Indicators {
         set: String,
     },
+    /// The desktop's cached PR badges, fenced by daemon boot and workspace identity.
+    PullRequests {
+        snapshot: pull_requests::PullRequests,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -156,6 +161,9 @@ pub enum ErrorCode {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Status {
+    /// The local Herdr session whose workspaces this daemon exposes.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub boot_id: String,
     /// Interface metadata keyed by advertised origin; absent on older daemons.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub address_details: std::collections::BTreeMap<String, AddressDetails>,

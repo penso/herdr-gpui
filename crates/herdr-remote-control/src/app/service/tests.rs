@@ -289,6 +289,7 @@ fn host(dir: &Path) -> Host {
 
 fn status(version: &str) -> Response {
     Response::Status(Status {
+        boot_id: String::new(),
         address_details: Default::default(),
         version: version.into(),
         port: 7443,

@@ -8,7 +8,10 @@
 use super::service::{self, Outcome};
 use crate::config::RemoteConfig;
 use gpui::{App, BackgroundExecutor, Global, Task};
+use herdr_remote_control::control::pull_requests::PullRequests;
 use herdr_remote_control::control::{self, Device, DeviceId, Request, Response, Status};
+
+mod pull_requests;
 use std::{
     cell::Cell,
     path::{Path, PathBuf},
@@ -97,6 +100,10 @@ pub(crate) struct Supervisor {
     /// Ask now rather than at the next interval.
     poke: bool,
     polling: bool,
+    pull_requests: Option<Arc<PullRequests>>,
+    pull_requests_checked: Option<Instant>,
+    pull_requests_sent: Option<Arc<PullRequests>>,
+    pull_requests_sent_at: Option<Instant>,
     quitting: bool,
     reconcile: Reconcile,
     reconciling: bool,
@@ -123,6 +130,10 @@ impl Default for Supervisor {
             loaded: false,
             poke: false,
             polling: false,
+            pull_requests: None,
+            pull_requests_checked: None,
+            pull_requests_sent: None,
+            pull_requests_sent_at: None,
             quitting: false,
             reconcile: reconcile_host,
             reconciling: false,
@@ -277,6 +288,12 @@ impl Supervisor {
         let indicators = supervisor
             .indicators
             .filter(|name| supervisor.indicators_sent != Some(*name));
+        let pull_requests = supervisor.pull_requests.clone().filter(|snapshot| {
+            supervisor.pull_requests_sent.as_ref() != Some(snapshot)
+                || supervisor
+                    .pull_requests_sent_at
+                    .is_none_or(|sent| sent.elapsed() >= Duration::from_secs(30))
+        });
         let task = executor.spawn(async move {
             let status = send(&address, &Request::Status);
             // Every poll: the title bar shows whether any phone is paired.
@@ -293,16 +310,34 @@ impl Supervisor {
                     )
                     .is_ok()
             });
-            (status, devices, sent)
+            let sent_prs = pull_requests.filter(|snapshot| {
+                status.is_ok()
+                    && matches!(
+                        send(
+                            &address,
+                            &Request::PullRequests {
+                                snapshot: snapshot.as_ref().clone(),
+                            },
+                        ),
+                        Ok(Response::Done)
+                    )
+            });
+            (status, devices, sent, sent_prs)
         });
         cx.spawn(async move |cx| {
-            let (status, devices, sent) = task.await;
+            let (status, devices, sent, sent_prs) = task.await;
             cx.update(|cx| {
                 let supervisor = cx.global_mut::<Self>();
                 if status.is_err() {
                     supervisor.indicators_sent = None;
+                    supervisor.pull_requests_sent = None;
+                    supervisor.pull_requests_sent_at = None;
                 } else if sent.is_some() {
                     supervisor.indicators_sent = sent;
+                }
+                if let Some(sent) = sent_prs {
+                    supervisor.pull_requests_sent = Some(sent);
+                    supervisor.pull_requests_sent_at = Some(Instant::now());
                 }
                 if supervisor.polled(status, devices) {
                     cx.refresh_windows();
@@ -318,6 +353,8 @@ impl Supervisor {
         match result {
             Ok(outcome) => {
                 tracing::info!(?outcome, enabled = config.enabled, "Remote control service");
+                self.pull_requests_sent = None;
+                self.pull_requests_sent_at = None;
                 self.failure = None;
             }
             Err(error) => {

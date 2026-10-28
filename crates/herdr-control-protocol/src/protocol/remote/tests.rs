@@ -63,6 +63,7 @@ fn remote_replies_round_trip() {
         Reply::Status {
             enabled: true,
             status: Some(Box::new(Status {
+                boot_id: String::new(),
                 address_details: Default::default(),
                 version: "dev".into(),
                 port: 7443,

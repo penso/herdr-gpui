@@ -9,6 +9,7 @@ fn rows_carry_the_words_a_search_matches() {
     };
     let summaries = HashMap::new();
     let lists = Lists {
+        pull_requests: None,
         computer: "MacBook Pro",
         layout: &layout,
         summaries: &summaries,

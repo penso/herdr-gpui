@@ -7,6 +7,7 @@ use std::path::Path;
 
 fn status(connected: usize) -> Status {
     Status {
+        boot_id: String::new(),
         address_details: Default::default(),
         version: "dev".into(),
         port: 7443,

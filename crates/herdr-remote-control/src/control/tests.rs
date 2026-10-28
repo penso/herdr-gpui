@@ -2,6 +2,7 @@ use super::*;
 use serde_json::json;
 
 mod addresses;
+mod pull_requests;
 
 #[test]
 fn requests_and_responses_keep_their_wire_names() {

@@ -6,6 +6,7 @@ mod addresses;
 
 fn status() -> Status {
     Status {
+        boot_id: String::new(),
         address_details: Default::default(),
         version: "20261022.1".into(),
         port: 7443,

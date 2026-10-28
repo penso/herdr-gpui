@@ -18,6 +18,7 @@ pub(crate) struct Lists<'a> {
     pub(crate) now_ms: u64,
     /// The status marks the user picked in Herdr UI.
     pub(crate) indicators: Indicators,
+    pub(crate) pull_requests: Option<&'a crate::control::pull_requests::PullRequests>,
 }
 
 impl Lists<'_> {
@@ -30,6 +31,61 @@ impl Lists<'_> {
             .values()
             .map(|summary| summary.questions)
             .sum()
+    }
+
+    fn pull_request(
+        &self,
+        workspace: &Workspace,
+    ) -> Option<&crate::control::pull_requests::WorkspacePullRequest> {
+        self.pull_requests
+            .filter(|snapshot| snapshot.boot_id == self.layout.boot)
+            .and_then(|snapshot| {
+                snapshot.entries.iter().find(|entry| {
+                    entry.workspace_id == workspace.id
+                        && entry.cwd == workspace.cwd
+                        && Some(entry.branch.as_str()) == workspace.branch.as_deref()
+                })
+            })
+    }
+
+    fn pr_badge(&self, workspace: &Workspace) -> Markup {
+        let Some(pr) = self.pull_request(workspace) else {
+            return html! {};
+        };
+        html! { a class="shrink-0" href=(pr.url) target="_blank" rel="noopener noreferrer" { (pr_label(pr)) } }
+    }
+
+    fn pr_mark(&self, workspace: &Workspace) -> Markup {
+        self.pull_request(workspace)
+            .map(pr_label)
+            .unwrap_or_else(|| html! {})
+    }
+
+    fn find(&self, workspace: &Workspace, words: &[&str]) -> String {
+        let mut text = find(workspace, words);
+        if let Some(pr) = self.pull_request(workspace) {
+            text.push_str(&format!(" #{}", pr.number));
+        }
+        text
+    }
+}
+
+fn pr_label(pr: &crate::control::pull_requests::WorkspacePullRequest) -> Markup {
+    use crate::control::pull_requests::Tone;
+    let (class, status) = match pr.tone {
+        Tone::Attention => ("pr-attention", "needs attention"),
+        Tone::Held => ("pr-held", "blocked or behind"),
+        Tone::Merged => ("pr-merged", "merged"),
+        Tone::Muted => ("pr-muted", "draft or unknown"),
+        Tone::Ready => ("pr-ready", "ready to merge"),
+        Tone::Waiting => ("pr-waiting", "checks or review pending"),
+    };
+    html! {
+        span class={ "shrink-0 text-xs font-semibold tabular-nums px-1 " (class) }
+            title={ "Pull request #" (pr.number) ", " (status) " — last reported by Herdr UI" }
+            aria-label={ "Pull request #" (pr.number) ", " (status) } {
+            "#" (pr.number)
+        }
     }
 }
 
@@ -60,13 +116,14 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                                 span class="font-normal text-faint" { " · " (branch) }
                             }
                         }
+                        (lists.pr_badge(workspace))
                         (nav(&format!("/new-chat?workspace={}", urlencode(&workspace.id)), "text-[17px] px-1", html! { span class="grid" aria-label="New chat" { (icons::plus_circle(20)) } }))
                         button type="button" class="grid px-1 transition" x-bind:class="openClass" x-on:click="toggle" aria-label="Collapse" { (icons::chevron_down(18)) }
                     }
                     ul class="group-list" x-show="open" {
                         @for chat in &workspace.chats {
                             @let summary = lists.summary(&chat.pane);
-                            li data-find=(find(workspace, &[&chat.title, chat.agent.as_deref().unwrap_or_default()])) {
+                            li data-find=(lists.find(workspace, &[&chat.title, chat.agent.as_deref().unwrap_or_default()])) {
                                 (nav(&format!("/chat/{}", urlencode(&chat.pane)), "row", html! {
                                     span class="relative" {
                                         (agent_icon(chat.agent.as_deref(), "w-[30px] h-[30px] text-base"))
@@ -83,7 +140,7 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                         }
                         @for terminal in &workspace.terminals {
                             @if let Some(pane) = terminal.first_pane() {
-                                li data-find=(find(workspace, &[&terminal.label, terminal.cwd.as_deref().unwrap_or_default()])) {
+                                li data-find=(lists.find(workspace, &[&terminal.label, terminal.cwd.as_deref().unwrap_or_default()])) {
                                     (nav(&format!("/term/{}", urlencode(&pane.pane)), "row", html! {
                                         @if let Some((agent, _)) = &terminal.agent {
                                             (agent_icon(agent.as_deref(), "w-[30px] h-[30px] text-base"))
@@ -135,7 +192,7 @@ fn strip(lists: &Lists<'_>) -> Markup {
                         span class="flex flex-col min-w-0" {
                             b class="truncate" { (question.title) }
                             small class="text-muted truncate" {
-                                (workspace.label) " · " (chat.title)
+                                (workspace.label) (lists.pr_mark(workspace)) " · " (chat.title)
                                 @if *count > 1 { " · " (count) " waiting" }
                             }
                         }
@@ -174,7 +231,7 @@ pub(crate) fn board(lists: &Lists<'_>) -> Markup {
                 }
                 ul class="group-list" {
                     @for (workspace, chat, summary) in items {
-                        li data-find=(find(workspace, &[&chat.title, chat.agent.as_deref().unwrap_or_default(), summary.question.as_ref().map_or("", |question| question.title.as_str())])) {
+                        li data-find=(lists.find(workspace, &[&chat.title, chat.agent.as_deref().unwrap_or_default(), summary.question.as_ref().map_or("", |question| question.title.as_str())])) {
                             (nav(&format!("/chat/{}", urlencode(&chat.pane)), "row py-2.5", html! {
                                 (agent_icon(chat.agent.as_deref(), "w-[30px] h-[30px] text-base"))
                                 span class="flex-1 min-w-0 flex flex-col" {
@@ -182,7 +239,7 @@ pub(crate) fn board(lists: &Lists<'_>) -> Markup {
                                         @if let Some(question) = &summary.question { (question.title) } @else { (chat.title) }
                                     }
                                     small class="text-muted truncate" {
-                                        (lists.computer) " · " (workspace.label) " · " (chat.title)
+                                        (lists.computer) " · " (workspace.label) (lists.pr_mark(workspace)) " · " (chat.title)
                                         @if let Some(started) = summary.turn_started_ms {
                                             " · " (elapsed(lists.now_ms, started))
                                         }

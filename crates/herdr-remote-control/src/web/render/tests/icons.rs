@@ -12,6 +12,7 @@ fn home_draws_its_controls_as_line_icons() {
     };
     let summaries = HashMap::new();
     let lists = Lists {
+        pull_requests: None,
         computer: "MacBook Pro",
         layout: &layout,
         summaries: &summaries,

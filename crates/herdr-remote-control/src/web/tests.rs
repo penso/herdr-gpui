@@ -17,6 +17,7 @@ mod handoff;
 mod indicators;
 mod origins;
 mod pairing;
+mod pull_requests;
 mod routes;
 mod stream;
 #[cfg(unix)]
@@ -44,6 +45,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
     let authority = Authority::load_or_create(dir).unwrap();
     let seen = Origins::load(dir, authority.fingerprint());
     let auth = Auth::load(dir, Limits::default()).unwrap();
+    let (pull_requests, _) = tokio::sync::watch::channel(Arc::new(Default::default()));
     Arc::new(State {
         apns: None,
         apps: auth.apps(),
@@ -57,6 +59,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         names: RwLock::new(names),
         port: 7443,
         privacy: Privacy::Generic,
+        pull_requests,
         push: None,
         reports: Mutex::new(report_limit()),
         seen: Mutex::new(seen),
