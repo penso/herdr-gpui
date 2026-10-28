@@ -345,6 +345,7 @@ impl HerdrWindow {
                 | Command::ResizeUp
                 | Command::ResizeDown
                 | Command::ResizeMode
+                | Command::EqualizeSplits
                 | Command::RenamePane
                 | Command::MovePane
                 | Command::RenameWorkspace

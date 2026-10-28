@@ -357,3 +357,5 @@ fn a_tab_switch_drops_the_rest_of_an_even_queue(cx: &mut gpui::TestAppContext) {
     assert_eq!(path, serde_json::json!([]));
     assert!((ratio - 0.25).abs() < 1e-5, "ratio was {ratio}");
 }
+
+mod command;

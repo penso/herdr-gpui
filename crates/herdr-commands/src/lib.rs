@@ -113,6 +113,8 @@ pub enum Command {
     ResizeUp,
     ResizeDown,
     ResizeMode,
+    /// Evens every split in the focused tab, as a double-click on a border does.
+    EqualizeSplits,
     RenamePane,
     MovePane,
     PreviousWorkspace,
@@ -373,6 +375,11 @@ pub const COMMANDS: &[CommandInfo] = &[
         command: Command::ResizeMode,
         name: "resize_mode",
         label: "Resize Mode",
+    },
+    CommandInfo {
+        command: Command::EqualizeSplits,
+        name: "equalize_splits",
+        label: "Equalize Splits",
     },
     CommandInfo {
         command: Command::RenamePane,
@@ -911,6 +918,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Back
         | Command::Forward
         | Command::ResizeMode
+        | Command::EqualizeSplits
         | Command::RenamePane
         | Command::MovePane
         | Command::PreviousWorkspace
