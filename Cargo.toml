@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -51,6 +51,17 @@ ed25519-dalek        = { default-features = false, features = ["std"], version =
 flate2               = "1"
 # Use the same strict macOS family lookup as GPUI, including legacy aliases.
 font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
+# Fluent messages (docs/i18n.md): `herdr-i18n` loads them through
+# i18n-embed's loader and negotiates the locale; `herdr-gpui`'s build script
+# parses them to check `fl!` calls. i18n-embed 0.16 does not build without
+# its default `rust-embed` feature, though the app embeds files itself.
+fluent               = "0.17"
+fluent-langneg       = "0.13"
+fluent-syntax        = "0.12"
+i18n-embed           = { features = ["fluent-system"], version = "0.16" }
+# The user's preferred languages, as the OS lists them.
+sys-locale           = "0.3"
+unic-langid          = { features = ["macros"], version = "0.9" }
 # Time zone names in automation schedules; the version the lockfile already has.
 jiff                 = "0.2.38"
 # Locates installed font files on Linux, as GPUI's own text system does.
@@ -74,6 +85,7 @@ herdr-control-protocol = { path = "crates/herdr-control-protocol" }
 herdr-credentials    = { path = "crates/herdr-credentials" }
 herdr-diagnostics    = { path = "crates/herdr-diagnostics" }
 herdr-github         = { path = "crates/herdr-github" }
+herdr-i18n           = { path = "crates/herdr-i18n" }
 herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }

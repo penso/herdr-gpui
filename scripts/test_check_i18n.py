@@ -1,0 +1,102 @@
+"""Tests for scripts/check-i18n.py."""
+
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+# Loading the hyphenated script as a module would leave a __pycache__ beside it.
+sys.dont_write_bytecode = True
+SPEC = importlib.util.spec_from_file_location(
+    "check_i18n", Path(__file__).with_name("check-i18n.py")
+)
+assert SPEC and SPEC.loader
+check_i18n = importlib.util.module_from_spec(SPEC)
+# Dataclasses look their module up by name.
+sys.modules["check_i18n"] = check_i18n
+SPEC.loader.exec_module(check_i18n)
+
+EN = Path("crates/app/locales/en-US/menu.ftl")
+
+
+def parse(text: str, path: Path = EN):
+    return check_i18n.parse(path, text)
+
+
+class ParseTests(unittest.TestCase):
+    def test_messages_comments_and_multiline_values_parse(self) -> None:
+        ftl, errors = parse(
+            "# Menu text.\n"
+            "\n"
+            "menu-quit = Quit\n"
+            "menu-tabs = { $count ->\n"
+            "    [one] One tab\n"
+            "   *[other] { $count } tabs\n"
+            "}\n"
+            "menu-long =\n"
+            "    First line\n"
+            "\n"
+            "    second line\n"
+            "    .title = { menu-quit }\n"
+            "-brand = Herdr\n"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(list(ftl.messages), ["menu-quit", "menu-tabs", "menu-long"])
+        self.assertEqual(ftl.references, {"menu-quit"})
+
+    def test_ids_take_the_feature_prefix_once(self) -> None:
+        _, errors = parse("menu-quit = Quit\nquit = Quit\nmenu-quit = Again\n")
+        self.assertEqual(len(errors), 2)
+        self.assertIn(":2: quit must start with menu-", errors[0])
+        self.assertIn(":3: menu-quit is defined twice", errors[1])
+
+    def test_stray_lines_and_open_placeables_are_reported(self) -> None:
+        _, errors = parse("menu-quit = Quit\nnot a message\n")
+        self.assertEqual(errors, [f"{EN}:2: not a message, comment, or continuation"])
+        _, errors = parse("menu-quit = { $name\n")
+        self.assertEqual(errors, [f"{EN}: a placeable is not closed"])
+
+
+class CheckTests(unittest.TestCase):
+    def files(self, *texts: tuple[Path, str]):
+        return [parse(text, path)[0] for path, text in texts]
+
+    def test_examples_in_comments_are_not_calls(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\n"))
+        sources = {Path("a.rs"): '/// `fl!("id")`\nfl!("menu-quit")'}
+        self.assertEqual(check_i18n.check(files, sources), [])
+
+    def test_used_messages_pass(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\nmenu-all = All { menu-quit }\n"))
+        sources = {Path("a.rs"): 'fl!("menu-all")'}
+        self.assertEqual(check_i18n.check(files, sources), [])
+
+    def test_a_table_literal_counts_as_a_use(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\n"))
+        sources = {Path("a.rs"): 'message: "menu-quit",'}
+        self.assertEqual(check_i18n.check(files, sources), [])
+
+    def test_unused_and_unknown_messages_are_reported(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\n"))
+        sources = {Path("a.rs"): 'fl!("menu-open")'}
+        self.assertEqual(
+            check_i18n.check(files, sources),
+            [
+                'a.rs: fl!("menu-open") names no en-US message',
+                f"{EN}:1: menu-quit is not used",
+            ],
+        )
+
+    def test_an_id_repeated_across_files_and_a_stale_translation_fail(self) -> None:
+        other = Path("crates/app/locales/en-US/menu2.ftl")
+        french = Path("crates/app/locales/fr/menu.ftl")
+        files = self.files((EN, "menu-quit = Quit\n"), (other, "menu-quit = Quit\n"))
+        files[1].feature = "menu"
+        files += self.files((french, "menu-gone = Parti\n"))
+        errors = check_i18n.check(files, {Path("a.rs"): '"menu-quit"'})
+        self.assertIn(f"{other}:1: menu-quit is also defined in {EN}", errors)
+        self.assertIn(f"{french}: menu-gone has no en-US message", errors)
+
+
+if __name__ == "__main__":
+    unittest.main()

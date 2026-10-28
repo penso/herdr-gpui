@@ -178,6 +178,13 @@ jobs:
         run: |
           python3 scripts/test_check_sorted.py
           python3 scripts/check-sorted.py
+      - name: Check Fluent messages
+        if: matrix.features == 'default'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 scripts/test_check_i18n.py
+          python3 scripts/check-i18n.py
       - name: Test mockup feedback receiver
         if: matrix.features == 'default'
         run: python3 .claude/skills/gpui-mockup/scripts/test_wait.py

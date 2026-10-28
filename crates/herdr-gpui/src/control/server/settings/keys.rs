@@ -41,7 +41,7 @@ pub(super) fn keybinds(caller: &Caller, cx: &mut App) -> Response {
             .iter()
             .map(|info| BindingInfo {
                 name: info.name.to_owned(),
-                label: info.label.to_owned(),
+                label: crate::i18n::command_english(info),
                 keys: keymap.shortcuts(info.command).map(str::to_owned).collect(),
             })
             .collect();

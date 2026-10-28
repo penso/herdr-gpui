@@ -469,6 +469,8 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::cloud::install_idle_checks(cx);
             }
             cx.set_global(appearance.select(light_appearance(cx)));
+            let language = cx.global::<InitialAppearance>().config.language.clone();
+            crate::i18n::install(&language, cx);
             app_icon::install();
             crate::caffeine::install(cx);
             crate::endpoint::watch_network();
@@ -479,6 +481,9 @@ pub(crate) fn run() -> std::process::ExitCode {
             cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
             cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
             cx.on_action(|_: &ShowLogs, cx| log_window::open(cx));
+            cx.on_action(|action: &crate::actions::TogglePseudoLocale, cx| {
+                crate::i18n::toggle_pseudo(action.pseudo, cx);
+            });
             cx.on_action(|_: &crate::actions::ToggleSlowAnimations, cx| {
                 crate::motion::set_slow(!crate::motion::is_slow());
                 // The menu shows the switch checked while it is on.

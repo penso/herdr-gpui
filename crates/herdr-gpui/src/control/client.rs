@@ -468,6 +468,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         } => local::search(files, &query, limit),
         ControlCommand::Config(command) => settings::config(command, &context),
         ControlCommand::Theme(command) => settings::theme(command, &context),
+        ControlCommand::Language(command) => settings::language(command, &context),
         ControlCommand::Font(command) => settings::font(command, &context),
         ControlCommand::Keybinds(command) => settings::keybinds(command, &context),
         ControlCommand::Caffeine(command) => settings::caffeine(command, &context),

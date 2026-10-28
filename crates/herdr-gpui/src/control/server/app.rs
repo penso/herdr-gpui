@@ -346,7 +346,7 @@ pub(super) fn command(call: Call<CommandOp>, cx: &mut App) -> Response {
         ),
         command => in_free_window(&call.caller, cx, |view, window, cx| {
             view.command(command, window, cx);
-            Response::done(format!("Ran {}", info.label))
+            Response::done(format!("Ran {}", crate::i18n::command_english(info)))
         }),
     }
 }

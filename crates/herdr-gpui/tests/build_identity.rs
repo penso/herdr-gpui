@@ -217,6 +217,12 @@ fn second_cargo_build_is_fresh_for_archive_ordinary_and_linked_checkouts() {
             include_str!("../release_version.rs"),
         )
         .unwrap();
+        // The real module needs fluent-syntax and the app's locales.
+        fs::write(
+            path.join("locales.rs"),
+            "#[derive(Debug)]\npub enum Error {}\nimpl std::fmt::Display for Error {\n    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        match *self {}\n    }\n}\nimpl std::error::Error for Error {}\npub fn generate(_: &std::path::Path, _: &std::path::Path) -> Result<(), Error> {\n    Ok(())\n}\n",
+        )
+        .unwrap();
         // The real module needs winresource; this fixture has no dependencies.
         // The stub names the parser as the real module does, so it is not dead code.
         fs::write(

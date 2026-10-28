@@ -38,6 +38,12 @@ contrast = "standard"
 # the theme, "system" from Windows Settings > Personalization > Colors.
 # Other platforms keep the theme's. Terminal colors never change with it.
 accent = "theme"
+# The language of the app's own text: "system" follows the OS's preferred
+# languages, or a BCP 47 tag such as "fr-CA". Only English ships so far, so
+# any other language shows English. "en-XA" (accented and longer) and "en-XB"
+# (right to left) are pseudo-locales for testing; see docs/i18n.md. Terminal
+# output, names, and what the daemon reports never change with it.
+language = "system"
 
 # Ask before closing a tab (closing terminates its terminal processes).
 confirm_close_tab = true

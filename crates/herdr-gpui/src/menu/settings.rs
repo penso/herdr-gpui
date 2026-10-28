@@ -186,6 +186,7 @@ impl HerdrWindow {
                             error: None,
                         });
                         crate::caffeine::set_scope(config.status_bar.keep_awake_scope, cx);
+                        crate::i18n::follow_config(&config.language, cx);
                         let menus_changed = crate::menus::changed(&this.config, &config);
                         if config.keybindings != this.config.keybindings {
                             crate::actions::rebind_keys(cx);
@@ -406,7 +407,7 @@ impl HerdrWindow {
                 keys.into_iter()
                     .map(|key| (Cow::Borrowed(key), None))
                     .collect(),
-                Cow::Borrowed(info.label),
+                Cow::Owned(crate::i18n::command(info)),
                 Some(info),
             ));
         }
@@ -429,7 +430,9 @@ impl HerdrWindow {
                         // are generated per boot and mean nothing to a reader.
                         let earlier = usize::from(
                             description == PASTE_LABEL
-                                || COMMANDS.iter().any(|info| info.label == description),
+                                || COMMANDS
+                                    .iter()
+                                    .any(|info| crate::i18n::command(info) == description),
                         ) + commands[..index]
                             .iter()
                             .filter(|other| command_name(other) == description)

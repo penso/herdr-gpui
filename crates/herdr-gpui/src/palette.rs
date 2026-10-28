@@ -1,6 +1,7 @@
 use crate::{
     HerdrWindow, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
+    i18n::fl,
     keymap::Reach,
     menu::Page,
     search_input::{Changed, SearchInput},
@@ -89,13 +90,24 @@ impl Filter {
         Self::Notes,
     ];
 
-    fn label(self) -> &'static str {
+    /// The English name its selectors use.
+    fn name(self) -> &'static str {
         match self {
-            Self::All => "All",
-            Self::Navigation => "Navigation",
-            Self::Commands => "Commands",
-            Self::Projects => "Projects",
-            Self::Notes => "Notes",
+            Self::All => "all",
+            Self::Navigation => "navigation",
+            Self::Commands => "commands",
+            Self::Projects => "projects",
+            Self::Notes => "notes",
+        }
+    }
+
+    fn label(self) -> String {
+        match self {
+            Self::All => fl!("palette-filter-all"),
+            Self::Navigation => fl!("palette-filter-navigation"),
+            Self::Commands => fl!("palette-filter-commands"),
+            Self::Projects => fl!("palette-filter-projects"),
+            Self::Notes => fl!("palette-filter-notes"),
         }
     }
 
@@ -581,7 +593,7 @@ impl HerdrWindow {
                 })
             });
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search workspaces, commands, agents, and projects...", cx);
+            input.set_placeholder(&fl!("palette-placeholder"), cx);
             input.set_frameless(cx);
             input.set_appearance(render::search_font(&self.config.ui), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
@@ -679,12 +691,16 @@ impl HerdrWindow {
                     _ => true,
                 })
                 .map(|info| {
-                    Entry::new(
-                        info.label.into(),
+                    // A translated name still answers to its English one.
+                    let label = crate::i18n::command(info);
+                    let english = crate::i18n::command_english(info);
+                    Entry::with_keywords(
+                        label.clone(),
                         self.keymap().primary(info.command).into(),
-                        "GUI action",
+                        fl!("palette-badge-command"),
                         Action::Native(info.command),
                         None,
+                        if english == label { "" } else { &english },
                     )
                 }),
         );
@@ -736,7 +752,7 @@ impl HerdrWindow {
                                 .unwrap_or(&command.command_id)
                                 .clone(),
                             detail,
-                            "Herdr command",
+                            fl!("palette-badge-herdr-command"),
                             Action::Configured(command.command_id.clone(), command.action),
                             None,
                         )
@@ -747,7 +763,7 @@ impl HerdrWindow {
             let mut entry = Entry::new(
                 project.label.clone(),
                 format!("Local  {}", project.path.display()),
-                "Project",
+                fl!("palette-badge-project"),
                 Action::Project(project.clone()),
                 None,
             );
@@ -821,7 +837,7 @@ impl HerdrWindow {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
+pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
     view.live.snapshot = Some(Arc::new(
         serde_json::from_str(include_str!(

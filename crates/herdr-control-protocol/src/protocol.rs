@@ -28,8 +28,8 @@ pub enum Placement {
 /// Raised whenever a request or reply changes shape, so `status` can tell
 /// an outdated app from a refused request. 3: `browser.open` placement.
 /// 4: `link`. 5: the `tab` family's `zoom`. 6: the `cloud` family. 7: `chat`.
-/// 8: `host` `automation_approve`. 9: `remote`.
-pub const PROTOCOL_VERSION: u32 = 9;
+/// 8: `host` `automation_approve`. 9: `remote`. 10: `settings` `language`.
+pub const PROTOCOL_VERSION: u32 = 10;
 
 /// Older apps and clients know only tabs, so a tab is left off the wire.
 fn is_tab(placement: &Placement) -> bool {

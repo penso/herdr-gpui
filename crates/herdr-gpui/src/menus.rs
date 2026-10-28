@@ -9,7 +9,8 @@ use crate::{
     ShowUpdatePreview,
     actions::{
         Copy, Cut, Paste, RingBellPreview, SelectAll, SetLayout, SetTabLayout, ShowToastPreview,
-        ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, ToggleSlowAnimations,
+        ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
+        ToggleSlowAnimations,
     },
     config::{Config, LayoutMode, TabLayoutMode},
     controls::Command,
@@ -18,6 +19,7 @@ use crate::{
 use crate::{Hide, HideOthers, Minimize, ShowAll};
 use gpui::{App, Menu, MenuItem, OsAction};
 use herdr_client::protocol::SemanticNotificationKind;
+use herdr_i18n::Pseudo;
 
 /// Linux and Windows have no global menu bar, so each window draws its own.
 pub(crate) const IN_WINDOW: bool = cfg!(any(target_os = "linux", windows));
@@ -408,6 +410,7 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
 
 /// Previews and test actions for checking the app's surfaces by hand.
 fn qa_menu() -> Menu {
+    let pseudo = crate::i18n::shown_pseudo();
     Menu {
         name: "QA".into(),
         disabled: false,
@@ -423,6 +426,20 @@ fn qa_menu() -> Menu {
             MenuItem::action("Ring Bell in 3 Seconds", RingBellPreview),
             MenuItem::action("Slow Animations", ToggleSlowAnimations)
                 .checked(crate::motion::is_slow()),
+            MenuItem::action(
+                "Pseudo-Locale: Accented (en-XA)",
+                TogglePseudoLocale {
+                    pseudo: Pseudo::Accented,
+                },
+            )
+            .checked(pseudo == Some(Pseudo::Accented)),
+            MenuItem::action(
+                "Pseudo-Locale: Right to Left (en-XB)",
+                TogglePseudoLocale {
+                    pseudo: Pseudo::Bidi,
+                },
+            )
+            .checked(pseudo == Some(Pseudo::Bidi)),
             #[cfg(any(target_os = "macos", windows))]
             MenuItem::action(
                 "Enable badge",

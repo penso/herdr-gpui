@@ -1,0 +1,22 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-i18n"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluent.workspace         = true
+fluent-langneg.workspace = true
+i18n-embed.workspace     = true
+serde.workspace          = true
+sys-locale.workspace     = true
+thiserror.workspace      = true
+unic-langid.workspace    = true
+
+[dev-dependencies]
+serde_json.workspace = true

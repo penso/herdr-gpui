@@ -1,16 +1,12 @@
 //! The palette paints prepared entries; input and daemon operations live elsewhere.
 
 use super::{Action, AgentFilter, Filter, Palette, preview};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 
 /// The narrowest window, less its margins, that fits Go To's list and
 /// preview side by side; a narrower one shows the list alone.
 const PREVIEW_MIN_WIDTH: f32 = 840.;
-
-const HINTS: &str = "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ↵ select · Esc close";
-const GO_TO_HINTS: &str =
-    "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ⌥B/W/I/D/A status · ⌥P preview · ↵ select · Esc close";
 
 /// How much larger than the interface text the palette's query is drawn.
 const SEARCH_SCALE: f32 = 1.5;
@@ -58,7 +54,7 @@ impl HerdrWindow {
                                 div()
                                     .id(("palette-filter", filter as usize))
                                     .debug_selector(move || {
-                                        format!("palette-filter-{}", filter.label().to_lowercase())
+                                        format!("palette-filter-{}", filter.name())
                                     })
                                     .px_2()
                                     .py_1()
@@ -78,10 +74,10 @@ impl HerdrWindow {
                                     }))
                             })),
                     )
-                    .child(div().flex_none().child(format!(
-                        "{} of {}",
-                        palette.filtered.len(),
-                        palette.entries.len()
+                    .child(div().flex_none().child(fl!(
+                        "palette-count",
+                        shown = palette.filtered.len(),
+                        total = palette.entries.len(),
                     ))),
             )
             .when(palette.filter == Filter::Navigation, |header| {
@@ -321,7 +317,7 @@ impl HerdrWindow {
                     div()
                         .pt(px(10.))
                         .text_color(rgb(theme.muted))
-                        .child("Not on screen. Press Enter to go there and watch it live."),
+                        .child(fl!("palette-not-on-screen")),
                 ),
             None => pane,
         }
@@ -346,7 +342,7 @@ impl HerdrWindow {
                         .px(px(16.))
                         .py(px(8.))
                         .text_color(rgb(theme.muted))
-                        .child("Loading local projects..."),
+                        .child(fl!("palette-loading-projects")),
                 )
             })
             .when(!palette.projects.errors.is_empty(), |panel| {
@@ -394,7 +390,7 @@ impl HerdrWindow {
                                 .flex_1()
                                 .p(px(16.))
                                 .text_color(rgb(theme.muted))
-                                .child("No matching results. Try a shorter search."),
+                                .child(fl!("palette-no-results")),
                         )
                     })
                     .when(!palette.filtered.is_empty(), |body| {
@@ -430,11 +426,11 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
                     .child(if palette.busy() {
-                        "Opening local project... Esc to dismiss."
+                        fl!("palette-opening-project")
                     } else if palette.filter == Filter::Navigation {
-                        GO_TO_HINTS
+                        fl!("palette-go-to-hints")
                     } else {
-                        HINTS
+                        fl!("palette-hints")
                     }),
             )
     }

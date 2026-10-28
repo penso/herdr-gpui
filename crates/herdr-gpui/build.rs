@@ -2,6 +2,7 @@
 #![allow(clippy::disallowed_methods)]
 
 mod build_identity;
+mod locales;
 mod release_version;
 mod windows_resource;
 
@@ -12,6 +13,8 @@ mod windows_resource;
 #[derive(Debug)]
 enum BuildError {
     MissingManifestDir,
+    MissingOutDir,
+    Locales(locales::Error),
     InvalidPrNumber,
     PrNumberEncoding(std::env::VarError),
     MockupFileEncoding,
@@ -23,6 +26,8 @@ impl std::fmt::Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MissingManifestDir => f.write_str("CARGO_MANIFEST_DIR is not set"),
+            Self::MissingOutDir => f.write_str("OUT_DIR is not set"),
+            Self::Locales(error) => write!(f, "invalid messages: {error}"),
             Self::InvalidPrNumber => {
                 f.write_str("HERDR_BUILD_PR_NUMBER must be empty or a positive decimal integer")
             }
@@ -43,7 +48,9 @@ impl std::error::Error for BuildError {
         match self {
             Self::PrNumberEncoding(error) => Some(error),
             Self::WindowsResource(error) => Some(error),
+            Self::Locales(error) => Some(error),
             Self::MissingManifestDir
+            | Self::MissingOutDir
             | Self::InvalidPrNumber
             | Self::MockupFileEncoding
             | Self::InvalidMockupFile => None,
@@ -54,12 +61,16 @@ impl std::error::Error for BuildError {
 fn main() -> Result<(), BuildError> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build_identity.rs");
+    println!("cargo:rerun-if-changed=locales.rs");
     println!("cargo:rerun-if-changed=release_version.rs");
     println!("cargo:rerun-if-changed=windows_resource.rs");
     println!("cargo:rerun-if-env-changed=HERDR_BUILD_PR_NUMBER");
     let manifest = std::path::PathBuf::from(
         std::env::var_os("CARGO_MANIFEST_DIR").ok_or(BuildError::MissingManifestDir)?,
     );
+    let out =
+        std::path::PathBuf::from(std::env::var_os("OUT_DIR").ok_or(BuildError::MissingOutDir)?);
+    locales::generate(&manifest, &out).map_err(BuildError::Locales)?;
     let identity = build_identity::detect(&manifest);
     windows_resource::embed(&manifest, identity.worktree).map_err(BuildError::WindowsResource)?;
     for path in &identity.watched {

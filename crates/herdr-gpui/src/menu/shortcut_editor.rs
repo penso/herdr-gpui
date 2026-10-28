@@ -220,7 +220,7 @@ impl HerdrWindow {
             .flex_none().py(px(8.))
             .border_b_1().border_color(rgb(theme.active))
             .child(div().font_weight(FontWeight::SEMIBOLD)
-                .child(format!("Edit {}", editor.info.label)))
+                .child(format!("Edit {}", crate::i18n::command(editor.info))))
             .child(editor.input.clone())
             .child(div().text_color(rgb(theme.muted)).child("Type key names with modifiers, e.g. ctrl-shift-t. Separate alternatives with spaces."))
             .child(div().text_color(rgb(theme.muted)).child("Save replaces this command's shortcuts, including daemon chords. Reset restores inherited defaults."))

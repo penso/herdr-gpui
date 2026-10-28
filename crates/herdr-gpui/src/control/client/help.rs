@@ -143,6 +143,9 @@ fn family(name: &str) -> &'static str {
         "font" => {
             "herdr-gpui font [list]\n    The installed font families.\nherdr-gpui font set NAME...\nherdr-gpui font reset\n    The font of every face; reset goes back to the default.\nThese need Herdr UI running, which knows the installed fonts."
         }
+        "language" => {
+            "herdr-gpui language [status]\n    The language set, and the locale Herdr UI shows: the best match for\n    the setting among the languages there are, else en-US.\nherdr-gpui language list\n    The languages there are, and the en-XA and en-XB pseudo-locales.\nherdr-gpui language set system|TAG\n    Save the language setting: system follows the OS's languages; TAG is\n    a BCP 47 tag such as fr-CA. A running Herdr UI switches at once.\nOnly status asks Herdr UI; without it, status reports what it would show."
+        }
         "keybinds" => {
             "herdr-gpui keybinds [list]\n    The window's shortcuts.\nherdr-gpui keybinds check\n    Herdr's custom commands this client cannot reach; exits 1 if any."
         }

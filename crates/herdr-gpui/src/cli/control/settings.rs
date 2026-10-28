@@ -1,5 +1,5 @@
-//! `config`, `theme`, `font`, `keybinds`, `caffeine`, `sound`, `update`, and
-//! `integrations`.
+//! `config`, `theme`, `font`, `keybinds`, `caffeine`, `sound`, `update`,
+//! `integrations`, and `language`.
 use super::{Args, CliError, Sound, Switch, duration, switch, unknown};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,6 +25,15 @@ pub enum ConfigCommand {
 pub enum ThemeCommand {
     List,
     Set(Option<String>),
+}
+
+/// `language`: what the windows show, the languages there are, or the
+/// `language` setting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LanguageCommand {
+    Status,
+    List,
+    Set(herdr_i18n::Language),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,5 +185,21 @@ pub(super) fn integrations(args: &mut Args) -> Result<IntegrationsCommand, CliEr
         Some("list") => IntegrationsCommand::List,
         Some("install-skill") => IntegrationsCommand::InstallSkill,
         _ => return Err(unknown("integrations", verb)),
+    })
+}
+
+pub(super) fn language(args: &mut Args) -> Result<LanguageCommand, CliError> {
+    let Some(verb) = args.verb() else {
+        return Ok(LanguageCommand::Status);
+    };
+    Ok(match verb.to_str() {
+        Some("status") => LanguageCommand::Status,
+        Some("list") => LanguageCommand::List,
+        Some("set") => {
+            LanguageCommand::Set(args.required_text("TAG")?.parse().map_err(|_| {
+                CliError::InvalidValue("TAG (system or a BCP 47 tag such as fr-CA)")
+            })?)
+        }
+        _ => return Err(unknown("language", verb)),
     })
 }

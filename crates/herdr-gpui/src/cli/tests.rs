@@ -9,6 +9,7 @@ mod cloud_exec;
 mod cloud_images;
 mod cloud_setup;
 mod control_commands;
+mod language;
 mod links;
 mod open_command;
 mod px0;

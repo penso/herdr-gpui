@@ -33,6 +33,7 @@ herdr-control-protocol.workspace = true
 herdr-credentials.workspace    = true
 herdr-diagnostics.workspace    = true
 herdr-github.workspace         = true
+herdr-i18n.workspace           = true
 herdr-orchestrator.workspace   = true
 herdr-remote.workspace         = true
 # Remote control without its server: the control protocol and `app`.
@@ -74,6 +75,8 @@ ureq.workspace                 = true
 uuid.workspace                 = true
 
 [build-dependencies]
+# Parses the `.ftl` files so `fl!` calls are checked against them.
+fluent-syntax.workspace = true
 winresource.workspace = true
 
 [dev-dependencies]
