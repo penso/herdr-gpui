@@ -40,14 +40,16 @@ class Ftl:
     references: set[str] = field(default_factory=set)
 
 
-def placeables(text: str, depth: int) -> tuple[int, bool]:
-    """The placeable depth after `text`, and whether a `}` closed none.
-    Inside a placeable a string literal, such as `{ "{" }`, holds braces
-    that are text; outside one, Fluent has no quotes, only text."""
+def placeables(text: str, stack: list[str]) -> bool:
+    """Reads `text` into `stack`, the placeables open around it, innermost
+    last: an `expression`, or a `select` once its `->` is read. Returns
+    whether a `}` closed none. Only an expression has string literals, so
+    `{ "{" }` holds text; a select's branches are text, where a quote is a
+    quote, as it is outside any placeable."""
     unbalanced = False
     quoted = False
     escaped = False
-    for ch in text:
+    for index, ch in enumerate(text):
         if quoted:
             if escaped:
                 escaped = False
@@ -55,16 +57,19 @@ def placeables(text: str, depth: int) -> tuple[int, bool]:
                 escaped = True
             elif ch == '"':
                 quoted = False
-        elif ch == '"' and depth > 0:
-            quoted = True
         elif ch == "{":
-            depth += 1
+            stack.append("expression")
         elif ch == "}":
-            if depth == 0:
-                unbalanced = True
+            if stack:
+                stack.pop()
             else:
-                depth -= 1
-    return depth, unbalanced
+                unbalanced = True
+        elif stack and stack[-1] == "expression":
+            if ch == '"':
+                quoted = True
+            elif ch == "-" and text[index + 1 : index + 2] == ">":
+                stack[-1] = "select"
+    return unbalanced
 
 
 def is_test(path: Path) -> bool:
@@ -80,15 +85,15 @@ def parse(path: Path, text: str) -> tuple[Ftl, list[str]]:
     """The file's messages and the problems in it, each as `path:line: why`."""
     ftl = Ftl(path, path.parent.name, path.stem)
     errors: list[str] = []
-    depth = 0
+    stack: list[str] = []
     in_entry = False
     for number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
-        if not stripped or (line.startswith("#") and depth == 0):
+        if not stripped or (line.startswith("#") and not stack):
             # A blank line ends no message: values may span them.
             in_entry = in_entry and not line.startswith("#")
             continue
-        entry = ENTRY.match(line) if depth == 0 else None
+        entry = ENTRY.match(line) if not stack else None
         if entry:
             in_entry = True
             name = entry.group(1)
@@ -101,18 +106,17 @@ def parse(path: Path, text: str) -> tuple[Ftl, list[str]]:
                     )
                 ftl.messages.setdefault(name, number)
             body = entry.group(2)
-        elif in_entry and (line[0] in " \t" or depth > 0):
+        elif in_entry and (line[0] in " \t" or stack):
             body = line
-            if ATTRIBUTE.match(line) and depth == 0:
+            if ATTRIBUTE.match(line) and not stack:
                 body = line.split("=", 1)[1]
         else:
             errors.append(f"{path}:{number}: not a message, comment, or continuation")
             continue
         ftl.references.update(REFERENCE.findall(body))
-        depth, unbalanced = placeables(body, depth)
-        if unbalanced:
+        if placeables(body, stack):
             errors.append(f"{path}:{number}: unbalanced }}")
-    if depth:
+    if stack:
         errors.append(f"{path}: a placeable is not closed")
     return ftl, errors
 

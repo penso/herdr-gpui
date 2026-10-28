@@ -61,6 +61,22 @@ class ParseTests(unittest.TestCase):
         _, errors = parse("menu-quit = Quit }\n")
         self.assertEqual(errors, [f"{EN}:1: unbalanced }}"])
 
+    def test_quotes_in_select_branches_are_text(self) -> None:
+        ftl, errors = parse(
+            "menu-count = { $count ->\n"
+            "    [one] One item\n"
+            '   *[other] Items measured in "inches }\n'
+            "menu-size = { NUMBER($size, style: \"unit\") ->\n"
+            '    [one] One "{ $size }" unit\n'
+            '   *[other] { $size } units, { "}" } and "more\n'
+            "}\n"
+            "menu-term = { -brand } \"quoted\" { -brand-name }\n"
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(list(ftl.messages), ["menu-count", "menu-size", "menu-term"])
+        _, errors = parse('menu-open = { $count ->\n   *[other] "Open\n')
+        self.assertEqual(errors, [f"{EN}: a placeable is not closed"])
+
     def test_stray_lines_and_open_placeables_are_reported(self) -> None:
         _, errors = parse("menu-quit = Quit\nnot a message\n")
         self.assertEqual(errors, [f"{EN}:2: not a message, comment, or continuation"])
