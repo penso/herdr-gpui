@@ -79,8 +79,8 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
     let result = match request {
         Request::Status => return Response::Status(status(state)),
         Request::Pair => {
-            let origins = state.origins();
-            let details = super::addresses::current(&origins);
+            let mut origins = state.origins();
+            let details = super::addresses::current(&mut origins);
             state
                 .auth()
                 .mint(now, &origins, &state.fingerprint)
@@ -136,9 +136,10 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
 
 fn status(state: &State) -> Status {
     let layout = state.hub.layout();
-    let addresses = state.origins();
+    let mut addresses = state.origins();
+    let address_details = super::addresses::current(&mut addresses);
     Status {
-        address_details: super::addresses::current(&addresses),
+        address_details,
         version: version().to_owned(),
         port: state.port,
         addresses,

@@ -155,10 +155,10 @@ impl Names {
         self.normalize();
     }
 
-    /// `https://` origins for every name on `port`, the likeliest to answer
-    /// from a phone across networks first: Tailscale, then LAN IPv4, then
-    /// other addresses and `.local` names, then loopback. IPv6 addresses
-    /// are bracketed.
+    /// `https://` origins for every name on `port`: known Tailscale IPv6/DNS
+    /// names, then LAN IPv4, other names, and loopback. The control worker
+    /// refines this with interface evidence for Tailscale IPv4 before minting
+    /// a QR; the shared CGNAT range alone is not proof. IPv6 is bracketed.
     pub(crate) fn origins(&self, port: u16) -> Vec<String> {
         let mut ranked: Vec<(Reach, String)> = self
             .ips
@@ -210,7 +210,7 @@ fn reach_of_ip(ip: IpAddr) -> Reach {
     if ip.is_loopback() {
         return Reach::Loopback;
     }
-    if within(ip, TAILSCALE_V4) || within(ip, TAILSCALE_V6) {
+    if within(ip, TAILSCALE_V6) {
         return Reach::Tailscale;
     }
     match ip {

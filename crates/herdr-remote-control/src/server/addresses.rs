@@ -3,15 +3,36 @@
 use crate::control::{AddressDetails, AddressKind};
 use std::{collections::BTreeMap, net::IpAddr};
 
-pub(super) fn current(origins: &[String]) -> BTreeMap<String, AddressDetails> {
+pub(super) fn current(origins: &mut [String]) -> BTreeMap<String, AddressDetails> {
     let interfaces = if_addrs::get_if_addrs().unwrap_or_default();
-    describe(
+    let details = describe(
         origins,
         &interfaces
             .iter()
             .map(|interface| (interface.name.as_str(), interface.ip()))
             .collect::<Vec<_>>(),
-    )
+    );
+    rank(origins, &details);
+    details
+}
+
+/// `mint` uses the first origin. Its order must use the same evidence as the
+/// labels, rather than upgrading every carrier-grade NAT address to Tailscale.
+fn rank(origins: &mut [String], details: &BTreeMap<String, AddressDetails>) {
+    origins.sort_by_key(|origin| {
+        let rank = match details
+            .get(origin)
+            .map(|details| details.kind)
+            .unwrap_or_default()
+        {
+            AddressKind::Tailscale => 0,
+            AddressKind::Local => 1,
+            AddressKind::Bridge => 2,
+            AddressKind::Other => 3,
+            AddressKind::Loopback => 4,
+        };
+        (rank, origin.starts_with("https://["))
+    });
 }
 
 fn describe(origins: &[String], interfaces: &[(&str, IpAddr)]) -> BTreeMap<String, AddressDetails> {
@@ -37,7 +58,11 @@ fn describe(origins: &[String], interfaces: &[(&str, IpAddr)]) -> BTreeMap<Strin
             names.dedup();
             // CGNAT alone does not prove Tailscale. Its IPv6 prefix or an explicitly
             // named Tailscale adapter does, including the IPv4 on that adapter.
-            let tailscale = ip.is_some_and(tailscale_v6)
+            let tailscale = url
+                .as_ref()
+                .and_then(url::Url::domain)
+                .is_some_and(|name| name.ends_with(".ts.net"))
+                || ip.is_some_and(tailscale_v6)
                 || interfaces.iter().any(|(name, address)| {
                     names.iter().any(|candidate| candidate == name)
                         && (tailscale_v6(*address)

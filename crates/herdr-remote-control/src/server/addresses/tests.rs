@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod ranking;
+
 #[test]
 fn metadata_joins_adapters_without_adding_uncertified_origins() {
     let origins = [
