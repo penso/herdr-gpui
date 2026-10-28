@@ -251,6 +251,8 @@ impl SettingsWindow {
                     .as_ref()
                     .map(|_| (self.config.theme.clone(), self.theme.clone()));
                 crate::caffeine::set_scope(loaded.config.status_bar.keep_awake_scope, cx);
+                // Settings may outlive every main window, whose reload also follows it.
+                crate::i18n::follow_config(&loaded.config.language, cx);
                 self.config = loaded.config;
                 if let Some(mode) = self.layout_intent {
                     self.config.layout.mode = mode;
