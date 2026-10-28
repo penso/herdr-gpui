@@ -83,7 +83,19 @@ pub(crate) fn automations_text(executable: Option<&Path>) -> String {
     if executable.and_then(Path::to_str).is_some() {
         text = text.replace("herdr-gpui ", &format!("{} ", command(executable)));
     }
-    text
+    escape_description(text)
+}
+
+/// The frontmatter's description is a double-quoted YAML scalar, where a
+/// Windows path's backslashes would read as escapes such as `\U`.
+fn escape_description(text: String) -> String {
+    let Some(line) = text
+        .lines()
+        .find(|line| line.starts_with("description: ") && line.contains('\\'))
+    else {
+        return text;
+    };
+    text.replacen(line, &line.replace('\\', r"\\"), 1)
 }
 
 fn managed(contents: &str) -> bool {
@@ -410,6 +422,31 @@ mod tests {
             shell_word(app.to_str().unwrap())
         )));
         assert!(!text.contains("herdr-gpui automation"));
+    }
+
+    /// A Windows install path lands in the description, and YAML reads a
+    /// backslash in a double-quoted scalar as an escape (#868).
+    #[test]
+    fn a_backslashed_install_path_stays_valid_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        // One directory named with a backslash on Unix, two on Windows.
+        let install = dir.path().join(r"Programs\Herdr UI");
+        std::fs::create_dir_all(&install).unwrap();
+        let app = install.join("Herdr");
+        std::fs::write(&app, "").unwrap();
+        let automate = install.join(if cfg!(windows) {
+            "herdr-automate.exe"
+        } else {
+            "herdr-automate"
+        });
+        std::fs::write(&automate, "").unwrap();
+        let text = automations_text(Some(&app));
+        let raw = description(&text);
+        assert!(!raw.replace(r"\\", "").contains('\\'), "{raw}");
+        let word = shell_word(automate.to_str().unwrap());
+        assert!(raw.replace(r"\\", r"\").contains(&format!("{word} check")));
+        // The body is Markdown, so its commands keep the path as it is.
+        assert!(text.contains(&format!("{word} check FILE")));
     }
 
     #[test]
