@@ -214,6 +214,10 @@
     font: var(--term-size, 11px)/1.32 ui-monospace, SFMono-Regular, Menlo, monospace;
     background: var(--term-bg); color: var(--term-fg);
   }
+  /* An inline span paints its background over the font's height only, so
+     colored rows showed the screen between them as stripes. As inline
+     blocks the runs fill the whole line box; a run never spans a line. */
+  .term-screen span { display: inline-block; vertical-align: top; }
   .term-input {
     @apply fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none;
     /* 16px keeps Safari from zooming the page when it takes focus. */
