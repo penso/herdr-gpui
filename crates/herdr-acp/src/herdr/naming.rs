@@ -10,7 +10,7 @@ const ELLIPSIS: char = '\u{2026}';
 /// `prompt` as the pane's title: its words on one line, at most [`TITLE`]
 /// characters; `None` when it has none.
 pub(super) fn title(prompt: &str) -> Option<String> {
-    let line = one_line(prompt);
+    let line = one_line(herdr_client::text::caption(prompt)?);
     (!line.is_empty()).then(|| shorten(&line, TITLE))
 }
 

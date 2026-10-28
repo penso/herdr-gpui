@@ -2356,7 +2356,9 @@ selected destination host, an optional model (passed as `--model`), a branch
 (`agent/<number>-<slug>-<hash>` as agent-launcher names it, editable), and
 extra instructions. The new worktree is
 created from the main checkout's `HEAD` in the workspace's repository, and the
-agent starts in it with the prompt. With more than one host connected, the
+agent starts in it with the prompt. Its tab and pane are explicitly named with
+the issue or PR identifier and title, so long-paste transport markers do not
+replace that task context. With more than one host connected, the
 dialog also ranks the hosts as [Smart Dispatch](#smart-dispatch) does; picking
 another one sets the repository up there the same way and starts the agent
 there, and its run card then acts on that host. A pull

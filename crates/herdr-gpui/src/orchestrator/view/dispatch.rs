@@ -296,6 +296,7 @@ impl OrchestratorView {
             kind,
             model: (!model.is_empty()).then_some(model),
             prompt: text,
+            title: crate::orchestrator::naming::title(item),
             branch,
             workspace_id,
             base: None,

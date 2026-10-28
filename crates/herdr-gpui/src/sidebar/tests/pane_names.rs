@@ -1,5 +1,7 @@
 use super::*;
 
+mod transport;
+
 fn pane(id: &str, label: Option<&str>) -> ClientShellPane {
     ClientShellPane {
         pane_id: id.to_owned(),

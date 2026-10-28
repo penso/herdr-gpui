@@ -5,6 +5,8 @@ use crate::{
 };
 use herdr_client::protocol::AgentStatus;
 
+mod titles;
+
 #[test]
 fn branches_are_named_as_agent_launcher_names_them() {
     let issue = item(&github(), "377", "Prompt icons: render as tofu!");

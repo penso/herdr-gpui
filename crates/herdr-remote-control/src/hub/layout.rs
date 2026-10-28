@@ -152,11 +152,19 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
         .filter_map(|agent| {
             let endpoint = endpoint(&agent.tokens)?;
             seen.insert(agent.pane_id.clone()).then(|| {
-                let title = [&agent.title, &agent.terminal_title_stripped, &agent.name]
-                    .into_iter()
-                    .flatten()
-                    .find(|title| !title.trim().is_empty())
-                    .cloned()
+                let title = snapshot
+                    .panes
+                    .iter()
+                    .find(|pane| pane.pane_id == agent.pane_id)
+                    .and_then(|pane| pane.label.as_deref())
+                    .and_then(herdr_client::text::caption)
+                    .or_else(|| {
+                        [&agent.title, &agent.terminal_title_stripped]
+                            .into_iter()
+                            .flatten()
+                            .find_map(|title| herdr_client::text::caption(title))
+                    })
+                    .map(str::to_owned)
                     .unwrap_or_else(|| tab_label(snapshot, &agent.tab_id));
                 (
                     agent.workspace_id.clone(),
@@ -208,7 +216,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                         .map(|agent| (agent_kind(agent), agent.agent_status));
                     let terminal = Terminal {
                         tab: tab.tab_id.clone(),
-                        label: tab.label.clone(),
+                        label: herdr_client::text::tab_label(snapshot, tab).to_owned(),
                         cwd: None,
                         zoomed: tab.zoomed,
                         panes,
@@ -240,5 +248,8 @@ fn tab_label(snapshot: &ClientShellSnapshot, tab: &str) -> String {
         .tabs
         .iter()
         .find(|candidate| candidate.tab_id == tab)
-        .map_or_else(|| "Chat".to_owned(), |tab| tab.label.clone())
+        .map_or_else(
+            || "Chat".to_owned(),
+            |tab| herdr_client::text::tab_label(snapshot, tab).to_owned(),
+        )
 }

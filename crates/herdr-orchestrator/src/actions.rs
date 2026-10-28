@@ -48,6 +48,8 @@ pub struct DispatchRequest {
     /// Passed to the agent as `--model`, when chosen.
     pub model: Option<String>,
     pub prompt: String,
+    /// Human issue/PR context, independent of the agent's pasted prompt envelope.
+    pub title: String,
     pub branch: String,
     /// The Herdr workspace of the repository, whose worktree list gets the
     /// new checkout.
@@ -581,6 +583,28 @@ fn launch(
         created.root_pane.terminal_id.as_deref(),
         cancelled,
     )?;
+    let title = herdr_client::text::safe_text(&request.title, 80);
+    // Herdr's variadic labels treat `--` as text; keep a title from being
+    // parsed as an option without inserting a visible separator.
+    let title = if title.trim_start().starts_with('-') {
+        format!("Task {title}").chars().take(80).collect()
+    } else {
+        title
+    };
+    if !title.trim().is_empty() {
+        herdr(
+            host,
+            &["tab", "rename", &created.tab.tab_id, &title],
+            "Naming the agent tab",
+            cancelled,
+        )?;
+        herdr(
+            host,
+            &["pane", "rename", &herdr_session.pane_id, &title],
+            "Naming the agent pane",
+            cancelled,
+        )?;
+    }
     // The pane is the target: a name could match an agent started elsewhere.
     herdr(
         host,

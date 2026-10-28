@@ -15,14 +15,26 @@ fn busy_new_shell_keeps_its_worktree_and_sends_exactly_one_prompt_when_ready() {
         "Agent started"
     );
     let calls = calls(dir.path());
-    assert_eq!(calls.len(), 8, "{calls:?}");
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|call| call.starts_with("agent prompt "))
+            .count(),
+        1,
+        "{calls:?}"
+    );
+    assert!(
+        !calls
+            .iter()
+            .any(|call| call.starts_with("worktree remove "))
+    );
     assert!(calls[1].starts_with("worktree create "));
     assert_eq!(calls[2], calls[4]);
     assert_eq!(calls[2], calls[6]);
     assert!(calls[2].starts_with("agent start herdr-gpui-"));
     assert_eq!(calls[3], "pane get p9");
     assert_eq!(calls[5], "pane get p9");
-    assert!(calls[7].starts_with("agent prompt p9 "));
+    assert!(calls.last().unwrap().starts_with("agent prompt p9 "));
     let store = Store::open(&site.database).unwrap();
     let run = store.runs().unwrap().remove(0);
     assert_eq!(run.state, RunState::Running);

@@ -96,13 +96,17 @@ pub(super) fn agent_rows(
     machine: Option<&str>,
 ) -> Option<Vec<Vec<ResolvedToken>>> {
     let (workspace, tab) = agent_place(agent, snapshot)?;
-    let pane = agent.title.as_deref().or_else(|| {
-        snapshot
-            .panes
-            .iter()
-            .find(|pane| pane.pane_id == agent.pane_id)
-            .and_then(|pane| pane.label.as_deref())
-    });
+    let pane = agent
+        .title
+        .as_deref()
+        .and_then(herdr_client::text::caption)
+        .or_else(|| {
+            snapshot
+                .panes
+                .iter()
+                .find(|pane| pane.pane_id == agent.pane_id)
+                .and_then(|pane| pane.label.as_deref())
+        });
     let state_text = state_label(
         agent,
         match agent.agent_status {

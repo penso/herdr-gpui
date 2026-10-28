@@ -12,6 +12,7 @@ mod agent_name;
 mod parent;
 mod remove;
 mod startup;
+mod titles;
 
 /// `tests/support/fake_herdr.rs`, compiled once per test process: a program
 /// rather than a script, so the dispatch tests run on every client platform.
@@ -141,6 +142,7 @@ fn request() -> DispatchRequest {
         kind: AgentKind::Claude,
         model: None,
         prompt: "Fix the icons; don't break 'quotes'.".into(),
+        title: "#377 Fix the icons".into(),
         branch: "377-icons".into(),
         workspace_id: "w1".into(),
         base: None,
@@ -181,8 +183,8 @@ fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
         format!("agent start {name} --kind claude --pane p9 --timeout 90000")
     );
     assert_eq!(
-        calls[3],
-        "agent prompt p9 Fix the icons; don't break 'quotes'."
+        calls.last().map(String::as_str),
+        Some("agent prompt p9 Fix the icons; don't break 'quotes'.")
     );
 
     let store = Store::open(&site.database).unwrap();

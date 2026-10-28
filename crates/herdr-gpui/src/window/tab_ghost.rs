@@ -104,14 +104,16 @@ impl HerdrWindow {
     /// The card for `ghost`, labelled as its strip labels the tab.
     pub(super) fn ghost_card(&self, ghost: &Ghost, cx: &App) -> Option<Card> {
         let label = match &ghost.pick {
-            Pick::Herdr(id) => self
-                .live
-                .snapshot
-                .as_ref()?
-                .tabs
-                .iter()
-                .find(|tab| tab.tab_id == *id)
-                .map(|tab| SharedString::from(tab.label.clone())),
+            Pick::Herdr(id) => {
+                let snapshot = self.live.snapshot.as_ref()?;
+                snapshot
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.tab_id == *id)
+                    .map(|tab| {
+                        SharedString::from(herdr_client::text::tab_label(snapshot, tab).to_owned())
+                    })
+            }
             Pick::Page(_) => self
                 .browser_tab_labels(cx)
                 .into_iter()

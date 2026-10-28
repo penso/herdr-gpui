@@ -80,8 +80,7 @@ fn destination(snapshot: &ClientShellSnapshot, pane_id: &str) -> (Option<String>
         .tabs
         .iter()
         .find(|tab| tab.tab_id == pane.tab_id)
-        .map(|tab| tab.label.trim())
-        .filter(|label| !label.is_empty());
+        .and_then(|tab| herdr_client::text::caption(&tab.label));
     let place = [workspace, tab].into_iter().flatten().collect::<Vec<_>>();
     (target, place.join(" / "))
 }

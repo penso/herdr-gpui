@@ -150,7 +150,7 @@ pub(super) fn agent_names(agent: &ClientShellAgent) -> [Option<&str>; 4] {
         agent.display_agent.as_deref(),
         agent.name.as_deref(),
         agent.agent.as_deref(),
-        agent.title.as_deref(),
+        agent.title.as_deref().and_then(herdr_client::text::caption),
     ]
 }
 
@@ -178,7 +178,8 @@ pub(super) fn pane_name(
 pub(super) const PANE_CAPTION_LIMIT: usize = 160;
 
 fn safe_caption(text: Option<&str>) -> Option<String> {
-    let text = crate::notifications::safe_text(text?, PANE_CAPTION_LIMIT);
+    let text =
+        crate::notifications::safe_text(herdr_client::text::caption(text?)?, PANE_CAPTION_LIMIT);
     let text = text.trim();
     (!text.is_empty()).then(|| text.to_owned())
 }
@@ -204,7 +205,7 @@ pub(super) fn agent_place<'a>(
         .iter()
         .find(|tab| tab.tab_id == agent.tab_id)
         .filter(|tab| tabs > 1 || tab.custom_label)
-        .map(|tab| tab.label.as_str());
+        .and_then(|tab| herdr_client::text::caption(&tab.label));
     Some((workspace.label.as_str(), tab))
 }
 

@@ -53,7 +53,13 @@ delete_local_session(executable: &Path, name: &str) -> Result<()>
 delete_remote_session(target: &str, name: &str) -> Result<()>
 ConnectOptions { surface_size: ClientSurfaceSize, cell_width_px: u32, cell_height_px: u32 }
 HostTheme { pub foreground: ClientHostColor, pub background: ClientHostColor, pub palette: [ClientHostColor; 256], pub appearance: ClientHostAppearance }
+text::caption(&str) -> Option<&str>
+text::tab_label(&ClientShellSnapshot, &ClientShellTab) -> &str
 ```
+
+The text helpers unwrap an agent's leading `pasted_content` envelope for display;
+a wrapper-only title falls back to a pane, agent, or workspace caption. They
+leave the authoritative snapshot and ordinary titles unchanged.
 
 `store_saved_host` atomically appends a validated profile without connecting to
 or provisioning the remote host. It preserves existing profiles and selection,

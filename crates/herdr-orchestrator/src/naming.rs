@@ -19,6 +19,15 @@ const HASH: usize = 8;
 /// The most branches read from a repository.
 const MAX_BRANCHES: usize = 500;
 
+/// A concise task caption, set explicitly so a paste envelope cannot rename it.
+pub fn title(item: &Item) -> String {
+    let text = format!("{} {}", item.identifier, item.title)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    herdr_client::text::safe_text(&text, 80)
+}
+
 /// agent-launcher's branch for a new checkout of `item`.
 pub fn branch(item: &Item) -> String {
     let name = workspace_name(&format!("{}-{}", item.identifier, item.title));

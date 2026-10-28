@@ -168,7 +168,9 @@ impl HerdrWindow {
                         (
                             (
                                 Pick::Herdr(t.tab_id.clone()),
-                                SharedString::from(t.label.clone()),
+                                SharedString::from(
+                                    herdr_client::text::tab_label(snapshot, t).to_owned(),
+                                ),
                             ),
                             herdr_mark(snapshot, t).lead(),
                             t.zoomed,
@@ -243,11 +245,13 @@ impl HerdrWindow {
                         move || slot.selector(&format!("tab-{id}"))
                     })
                     .role(Role::Tab)
-                    .aria_label(tab.label.clone())
+                    .aria_label(herdr_client::text::tab_label(snapshot, tab).to_owned())
                     .aria_selected(selected)
                     .map(|control| faces.stop(control));
                 let face = TabFace {
-                    label: tab.label.clone().into(),
+                    label: herdr_client::text::tab_label(snapshot, tab)
+                        .to_owned()
+                        .into(),
                     mark: herdr_mark(snapshot, tab),
                     zoomed: tab.zoomed,
                     probe: Probe::Herdr(id.clone()),
@@ -637,8 +641,9 @@ impl HerdrWindow {
                             .tabs
                             .iter()
                             .find(|candidate| &candidate.tab_id == tab)
+                            .map(|tab| herdr_client::text::tab_label(snapshot, tab).to_owned())
                     })
-                    .map_or_else(|| tab.clone(), |tab| tab.label.clone());
+                    .unwrap_or_else(|| tab.clone());
                 (label.into(), "Opening\u{2026}")
             }
             // A terminal group whose connection has not shown its tab yet.
