@@ -4289,7 +4289,9 @@ Ctrl+Shift+U is left unbound for
   `[pane_keys]` entry on the symbol, keeps its key even when a custom
   command is bound to the shifted key. `resize_mode` (`prefix+r`)
   makes h, j, k, l or the arrows resize the focused pane until Escape, Enter,
-  or the shortcut again; the status bar shows it. Renames and
+  or the shortcut again; the status bar shows it. `equalize_splits` evens
+  every split in the focused tab, as a double-click on a border between
+  panes does; it has no default shortcut. Renames and
   `close_workspace` open the same dialogs as their menus, and `reload_config`
   reloads both the daemon's config and this one. The daemon's
   `[[keys.command]]` shortcuts, prefix chords or direct keys, run their

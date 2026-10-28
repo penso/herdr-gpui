@@ -771,6 +771,40 @@ impl HerdrWindow {
         true
     }
 
+    /// Evens every split in the focused tab, as a double-click on a border
+    /// does, from a command. A zoomed tab, or one with a border still being
+    /// dragged or evened, is left alone.
+    pub(crate) fn equalize_splits(&mut self, cx: &mut Context<Self>) {
+        if self.split_drag.is_some() {
+            return;
+        }
+        let (Some(snapshot), Some(surface)) = (&self.live.snapshot, self.live.surface.as_deref())
+        else {
+            return;
+        };
+        let Some(tab) = snapshot.focused_tab_id.clone() else {
+            return;
+        };
+        let zoomed = snapshot
+            .tabs
+            .iter()
+            .any(|item| item.tab_id == tab && item.zoomed);
+        // Only a pointer drag moves this split; evening sends every ratio.
+        let Some(split) = surface.splits.first().cloned().filter(|_| !zoomed) else {
+            return;
+        };
+        self.split_drag = Some(SplitDrag {
+            boot: snapshot.boot_id.clone(),
+            tab,
+            topology: splits::topology(surface),
+            split,
+            held: false,
+            motion: SplitMotion::Even(splits::even_targets(&surface.splits)),
+        });
+        self.flush_split(cx);
+        cx.notify();
+    }
+
     pub(crate) fn split_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
