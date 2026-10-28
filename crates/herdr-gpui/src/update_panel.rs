@@ -154,6 +154,30 @@ fn update_progress(state: &State, accent: Hsla, track: Hsla) -> Option<Div> {
     ))
 }
 
+/// Decimal megabytes with one place, as browsers and Finder show downloads.
+fn megabytes(bytes: u64) -> String {
+    format!("{:.1} MB", bytes as f64 / 1_000_000.)
+}
+
+/// The line under a download's bar: how much has arrived, and the percentage
+/// when the size is known. `None` outside a download, and once a complete
+/// download moves on to verification.
+pub(crate) fn download_caption(state: &State) -> Option<(String, Option<String>)> {
+    let State::Downloading { received, total } = *state else {
+        return None;
+    };
+    if total == 0 {
+        return Some((format!("{} downloaded", megabytes(received)), None));
+    }
+    if received >= total {
+        return None;
+    }
+    Some((
+        format!("{} of {}", megabytes(received), megabytes(total)),
+        Some(format!("{:.0}%", received as f64 / total as f64 * 100.)),
+    ))
+}
+
 #[derive(Clone, Copy)]
 enum UpdateAction {
     Check,
@@ -221,14 +245,12 @@ impl HerdrWindow {
                 Some(UpdateAction::Download),
             ),
             State::Downloading { received, total } => (
-                if *total == 0 {
-                    format!("Downloading: {received} bytes received (size unknown)")
-                } else if received >= total {
+                if *total > 0 && received >= total {
                     "Download complete. Verifying the update...".into()
                 } else {
-                    format!(
-                        "Downloading: {received} / {total} bytes ({:.0}%)",
-                        (*received as f64 / *total as f64 * 100.).min(100.)
+                    self.updater.latest_version().map_or_else(
+                        || "Downloading the update".into(),
+                        |version| format!("Downloading {version}"),
                     )
                 },
                 Some(UpdateAction::Cancel),
@@ -384,7 +406,33 @@ impl HerdrWindow {
                             &self.config.terminal,
                         ))
                     })
-                    .children(update_progress(state, accent.into(), rgb(theme.active).into()))
+                    .children(update_progress(state, accent.into(), rgb(theme.active).into()).map(
+                        |bar| {
+                            div().flex().flex_col().gap(px(8.)).child(bar).when_some(
+                                download_caption(state),
+                                |progress, (sizes, percent)| {
+                                    progress.child(
+                                        div()
+                                            .debug_selector(|| "app-update-download-size".into())
+                                            .flex()
+                                            .justify_between()
+                                            .gap(px(12.))
+                                            .text_size(px(font.size - 1.))
+                                            .text_color(rgb(theme.subtext()))
+                                            .child(div().min_w_0().truncate().child(sizes))
+                                            .children(percent.map(|percent| {
+                                                div()
+                                                    .debug_selector(|| {
+                                                        "app-update-download-percent".into()
+                                                    })
+                                                    .flex_none()
+                                                    .child(percent)
+                                            })),
+                                    )
+                                },
+                            )
+                        },
+                    ))
                     .child(div().text_color(rgb(theme.subtext())).child(
                         "Downloads are verified before installation. Your daemon and terminal sessions stay running.",
                     ))
