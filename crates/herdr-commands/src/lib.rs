@@ -394,7 +394,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     CommandInfo {
         command: Command::EqualizeSplits,
         name: "equalize_splits",
-        label: "Equalize Splits",
+        message: "commands-equalize-splits",
     },
     CommandInfo {
         command: Command::RenamePane,

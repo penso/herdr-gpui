@@ -18,6 +18,7 @@ commands-detach = Detach
 commands-devices-overview = Devices Overview
 commands-edit-scrollback = Open Scrollback in Editor
 commands-edit-worktree-note = Edit Worktree Note
+commands-equalize-splits = Equalize Splits
 commands-find = Find
 commands-find-next = Find Next
 commands-find-previous = Find Previous
