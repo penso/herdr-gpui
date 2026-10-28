@@ -50,6 +50,17 @@ class ParseTests(unittest.TestCase):
         self.assertIn(":2: quit must start with menu-", errors[0])
         self.assertIn(":3: menu-quit is defined twice", errors[1])
 
+    def test_braces_in_string_literals_are_text(self) -> None:
+        ftl, errors = parse(
+            'menu-brace = { "{" }\n'
+            'menu-close = { "}" } and { "\\"}" }\n'
+            'menu-quoted = Say "{ $name }"\n'
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(list(ftl.messages), ["menu-brace", "menu-close", "menu-quoted"])
+        _, errors = parse("menu-quit = Quit }\n")
+        self.assertEqual(errors, [f"{EN}:1: unbalanced }}"])
+
     def test_stray_lines_and_open_placeables_are_reported(self) -> None:
         _, errors = parse("menu-quit = Quit\nnot a message\n")
         self.assertEqual(errors, [f"{EN}:2: not a message, comment, or continuation"])
@@ -75,6 +86,31 @@ class CheckTests(unittest.TestCase):
         files = self.files((EN, "menu-quit = Quit\n"))
         sources = {Path("a.rs"): 'message: "menu-quit",'}
         self.assertEqual(check_i18n.check(files, sources), [])
+
+    def test_a_message_only_tests_name_is_unused(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\nmenu-open = Open\n"))
+        sources = {
+            Path("crates/app/src/menu.rs"): 'fl!("menu-quit")',
+            Path("crates/app/src/menu/tests.rs"): 'fl!("menu-open")',
+            Path("crates/app/src/menu/tests/keys.rs"): '"menu-open"',
+            Path("crates/app/src/layout_tests/rows.rs"): '"menu-open"',
+            Path("crates/app/src/interaction_tests.rs"): '"menu-open"',
+            Path("crates/app/tests/cli.rs"): '"menu-open"',
+        }
+        self.assertEqual(
+            check_i18n.check(files, sources), [f"{EN}:2: menu-open is not used"]
+        )
+
+    def test_a_test_still_cannot_name_a_missing_message(self) -> None:
+        files = self.files((EN, "menu-quit = Quit\n"))
+        sources = {
+            Path("crates/app/src/menu.rs"): 'fl!("menu-quit")',
+            Path("crates/app/src/menu/tests.rs"): 'fl!("menu-gone")',
+        }
+        self.assertEqual(
+            check_i18n.check(files, sources),
+            ['crates/app/src/menu/tests.rs: fl!("menu-gone") names no en-US message'],
+        )
 
     def test_unused_and_unknown_messages_are_reported(self) -> None:
         files = self.files((EN, "menu-quit = Quit\n"))

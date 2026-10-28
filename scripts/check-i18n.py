@@ -4,9 +4,10 @@
 Every `crates/*/locales/<tag>/<feature>.ftl` must parse as Fluent's message
 syntax, and each message ID start with its file's feature and a hyphen.
 Within a language no ID repeats, and a translation has no ID English lacks.
-Every English message is used: Rust code names it as a string literal
-(`fl!("id")`, or a table such as the command catalog's), or another message
-references it. Every `fl!` names an English message; the compiler checks
+Every English message is used: the app's Rust code names it as a string
+literal (`fl!("id")`, or a table such as the command catalog's), or another
+message references it. Tests do not count, so a message only a test names is
+reported. Every `fl!` names an English message; the compiler checks
 that too, and the build script parses each file in full.
 
     python3 scripts/check-i18n.py
@@ -37,6 +38,42 @@ class Ftl:
     # ID -> line, in file order.
     messages: dict[str, int] = field(default_factory=dict)
     references: set[str] = field(default_factory=set)
+
+
+def placeables(text: str, depth: int) -> tuple[int, bool]:
+    """The placeable depth after `text`, and whether a `}` closed none.
+    Inside a placeable a string literal, such as `{ "{" }`, holds braces
+    that are text; outside one, Fluent has no quotes, only text."""
+    unbalanced = False
+    quoted = False
+    escaped = False
+    for ch in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                quoted = False
+        elif ch == '"' and depth > 0:
+            quoted = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                unbalanced = True
+            else:
+                depth -= 1
+    return depth, unbalanced
+
+
+def is_test(path: Path) -> bool:
+    """Test files, by the repository's layout: `tests.rs`, a `tests/`
+    directory, or a `*_tests` module or directory."""
+    return any(
+        part == "tests" or part == "tests.rs" or part.removesuffix(".rs").endswith("_tests")
+        for part in path.parts
+    )
 
 
 def parse(path: Path, text: str) -> tuple[Ftl, list[str]]:
@@ -72,10 +109,9 @@ def parse(path: Path, text: str) -> tuple[Ftl, list[str]]:
             errors.append(f"{path}:{number}: not a message, comment, or continuation")
             continue
         ftl.references.update(REFERENCE.findall(body))
-        depth += body.count("{") - body.count("}")
-        if depth < 0:
+        depth, unbalanced = placeables(body, depth)
+        if unbalanced:
             errors.append(f"{path}:{number}: unbalanced }}")
-            depth = 0
     if depth:
         errors.append(f"{path}: a placeable is not closed")
     return ftl, errors
@@ -102,7 +138,8 @@ def check(files: list[Ftl], sources: dict[Path, str]) -> list[str]:
     for path, text in sources.items():
         # Comments name messages by way of example.
         text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
-        used.update(LITERAL.findall(text))
+        if not is_test(path):
+            used.update(LITERAL.findall(text))
         for name in FL.findall(text):
             if name not in english:
                 errors.append(f"{path}: fl!(\"{name}\") names no {FALLBACK} message")
