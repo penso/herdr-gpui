@@ -136,6 +136,60 @@ fn a_subagent_shows_a_bounded_number_of_steps() {
 }
 
 #[test]
+fn results_of_steps_past_the_cap_stay_inside_their_subagent() {
+    let mut projector = Projector::default();
+    let mut transcript = Transcript::default();
+    tagged(
+        &mut projector,
+        &mut transcript,
+        call("task", "Search", &subagent(ActivityState::Running)),
+        1_000,
+    );
+    let step = Tag {
+        parent: Some("task".to_owned()),
+        ..Tag::default()
+    };
+    let total = MAX_STEPS + 3;
+    for index in 0..total {
+        tagged(
+            &mut projector,
+            &mut transcript,
+            call(&format!("step-{index}"), &format!("Step {index}"), &step),
+            1_000,
+        );
+    }
+    // Both bridges send a step's result without its sub-agent's tag.
+    for index in 0..total {
+        tagged(
+            &mut projector,
+            &mut transcript,
+            ended(&format!("step-{index}"), "completed", &Tag::default()),
+            2_000,
+        );
+    }
+    let tools: Vec<&Tool> = transcript
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.kind {
+            EntryKind::Tool(tool) => Some(tool),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        tools.len(),
+        MAX_STEPS + 1,
+        "the sub-agent and its shown steps"
+    );
+    assert!(
+        tools
+            .iter()
+            .all(|tool| tool.call_id == "task" || tool.parent.as_deref() == Some("task")),
+        "no step's result comes back as a call of its own"
+    );
+    assert!(projector.skipped.is_empty(), "ended steps are forgotten");
+}
+
+#[test]
 fn a_shell_label_and_detail_are_bounded_to_one_line() {
     let mut projector = Projector::default();
     let mut transcript = Transcript::default();

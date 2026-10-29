@@ -24,6 +24,9 @@ const TRUNCATED: &str = "\n… (truncated)";
 /// The most steps of one sub-agent the transcript shows; later ones only
 /// update its activity's detail.
 pub(crate) const MAX_STEPS: usize = 64;
+/// Steps past [`MAX_STEPS`] remembered until they end, so their results do
+/// not show as calls of their own.
+const MAX_SKIPPED: usize = 1024;
 
 pub(crate) mod activity;
 mod claude_code;
@@ -47,6 +50,8 @@ struct Open {
 pub(crate) struct Projector {
     next: u64,
     open: Option<Open>,
+    /// Steps past [`MAX_STEPS`] that have not ended, with their sub-agent.
+    skipped: HashMap<String, String>,
     /// How many steps each sub-agent has shown, by its call id.
     steps: HashMap<String, usize>,
     tools: HashMap<String, EntryId>,
@@ -238,8 +243,11 @@ impl Projector {
         let mut changes = Vec::new();
         let shown = self.tools.contains_key(call_id);
         let step = tag.parent.as_deref().filter(|_| !shown);
+        // A bridge tags a step's start with its sub-agent, but not always
+        // its result.
+        let skipped = self.skipped.contains_key(call_id);
         let mut tool = None;
-        if step.is_none_or(|parent| self.admit(transcript, parent)) {
+        if !skipped && step.is_none_or(|parent| self.admit(transcript, parent)) {
             let change = self.tool(transcript, call_id, |tool| {
                 update(tool);
                 tag.mark(tool);
@@ -262,6 +270,11 @@ impl Projector {
                 title: call_id.to_owned(),
             };
             update(&mut found);
+            if matches!(found.status, ToolStatus::Completed | ToolStatus::Failed) {
+                self.skipped.remove(call_id);
+            } else if let Some(parent) = step {
+                self.skip(transcript, call_id, parent);
+            }
             tool = Some(found);
         }
         let Some(tool) = tool else {
@@ -280,6 +293,21 @@ impl Projector {
             changes.extend(activity::step(transcript, parent, &tool.title));
         }
         changes
+    }
+
+    /// Remembers the step `call` of the sub-agent `parent` as not shown.
+    fn skip(&mut self, transcript: &Transcript, call: &str, parent: &str) {
+        if self.skipped.len() >= MAX_SKIPPED {
+            // A sub-agent that ended takes its unfinished steps with it.
+            self.skipped.retain(|_, parent| {
+                transcript
+                    .activity(parent)
+                    .is_some_and(|activity| activity.is_running())
+            });
+        }
+        if self.skipped.len() < MAX_SKIPPED {
+            self.skipped.insert(call.to_owned(), parent.to_owned());
+        }
     }
 
     /// Whether a new step of the sub-agent `parent` still shows as a call.
