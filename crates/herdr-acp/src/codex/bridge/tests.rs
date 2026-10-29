@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 use super::*;
 use crate::harness::tests::{file_name, file_uri};
 
+mod background;
+
 const THREAD: &str = "01a160d5-4de7-7262-b413-0ce5180918ce";
 
 fn harness(out: &Out) -> &Value {
