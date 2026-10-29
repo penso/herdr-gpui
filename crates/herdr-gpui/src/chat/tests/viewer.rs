@@ -115,3 +115,41 @@ fn composer_text(
         format!("{draft}{line}")
     })
 }
+
+#[gpui::test]
+fn a_picture_in_another_pane_makes_its_pane_active(cx: &mut TestAppContext) {
+    let (view, mut peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let image = png(40, 30);
+    let _stream = attach_with(&view, &program, with_picture(&image), cx);
+    // Input waits for the daemon's frame to match the window.
+    selection::acknowledge_size(&view, cx);
+    let id = VisualId::of(&image.data);
+    wait_until(|| {
+        poll(&view, &program, cx);
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            view.chats
+                .panes()
+                .next()
+                .is_some_and(|pane| matches!(pane.prepared.visuals.shown(id), Shown::Ready(_)))
+        })
+    });
+    poll(&view, &program, cx);
+    // Another pane is the active one when the picture is clicked.
+    let chat_pane = view.update(cx, |view, _| {
+        let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+        snapshot.focused_pane_id = Some("elsewhere".into());
+        view.chats.panes().next().unwrap().target.pane_id.clone()
+    });
+    let small = cx.debug_bounds("chat-visual").unwrap();
+    cx.simulate_click(small.center(), Modifiers::default());
+    poll(&view, &program, cx);
+    assert!(cx.debug_bounds("chat-viewer").is_some());
+    // The clicked chat's pane becomes the active one.
+    let focus = std::iter::repeat_with(|| peer.request())
+        .take(8)
+        .find(|request| request["method"] == herdr_client::Method::PaneFocus.as_str())
+        .expect("a pane focus request");
+    assert_eq!(focus["params"]["pane_id"], chat_pane.as_str());
+}

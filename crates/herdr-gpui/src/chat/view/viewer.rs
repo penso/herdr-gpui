@@ -51,7 +51,9 @@ impl HerdrWindow {
     }
 
     /// Shows the picture `id` large over the chat in `pane_id`, with the
-    /// keyboard on it.
+    /// keyboard on it. The click that opened it never reached the chat, so
+    /// the chat's pane is made the active one here, as a click on the chat
+    /// would; otherwise the keyboard would go back to the active pane.
     pub(crate) fn open_chat_viewer(
         &mut self,
         pane_id: &str,
@@ -59,6 +61,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.chats.pane(pane_id).is_none() {
+            return;
+        }
+        self.focus_chat(pane_id, window, cx);
         let focus = cx.focus_handle();
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
