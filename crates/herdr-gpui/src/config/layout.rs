@@ -140,20 +140,25 @@ impl LayoutMode {
     }
 
     /// How menus title it.
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> String {
+        crate::i18n::message(self.message(), &[])
+    }
+
+    /// The message naming it.
+    pub const fn message(self) -> &'static str {
         match self {
             Self::Classic { density, style } => match (density, style) {
-                (Density::Normal, Style::Flat) => "Normal",
-                (Density::Compact, Style::Flat) => "Compact",
-                (Density::Comfortable, Style::Flat) => "Comfortable",
-                (Density::Normal, Style::Rounded) => "Normal Rounded",
-                (Density::Compact, Style::Rounded) => "Compact Rounded",
-                (Density::Comfortable, Style::Rounded) => "Comfortable Rounded",
+                (Density::Normal, Style::Flat) => "layout-normal",
+                (Density::Compact, Style::Flat) => "layout-compact",
+                (Density::Comfortable, Style::Flat) => "layout-comfortable",
+                (Density::Normal, Style::Rounded) => "layout-normal-rounded",
+                (Density::Compact, Style::Rounded) => "layout-compact-rounded",
+                (Density::Comfortable, Style::Rounded) => "layout-comfortable-rounded",
             },
-            Self::Superset => "Superset",
-            Self::Orca => "Orca",
-            Self::Minimal => "Minimal",
-            Self::Devices => "Devices",
+            Self::Superset => "layout-superset",
+            Self::Orca => "layout-orca",
+            Self::Minimal => "layout-minimal",
+            Self::Devices => "layout-devices",
         }
     }
 }

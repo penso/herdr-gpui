@@ -1,9 +1,11 @@
 //! Shared definitions for the macOS native and the Linux and Windows
 //! in-window menu bars.
 //! Every item dispatches the same action the palette and the keymap use.
+// i18n: migrated
 
 pub(crate) mod in_window;
 
+use crate::i18n::fl;
 use crate::{
     CheckForUpdates, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
     ShowUpdatePreview,
@@ -58,7 +60,7 @@ fn layout_menu(current: LayoutMode) -> MenuItem {
                 MenuItem::action(mode.label(), SetLayout { mode }).checked(mode == current)
             ])
         });
-    MenuItem::submenu(Menu::new("Layout").items(items))
+    MenuItem::submenu(Menu::new(fl!("menus-layout")).items(items))
 }
 
 /// View > Tab Layout: how tab strips draw their tabs, the one in use checked.
@@ -66,7 +68,7 @@ fn tab_layout_menu(current: TabLayoutMode) -> MenuItem {
     let items = TabLayoutMode::ALL.iter().map(|&mode| {
         MenuItem::action(mode.label(), SetTabLayout { mode }).checked(mode == current)
     });
-    MenuItem::submenu(Menu::new("Tab Layout").items(items))
+    MenuItem::submenu(Menu::new(fl!("menus-tab-layout")).items(items))
 }
 
 /// Whether the menu bar built from `new` differs from the one built from
@@ -83,104 +85,104 @@ pub(crate) fn changed(old: &Config, new: &Config) -> bool {
 pub(crate) fn menus(config: &Config) -> Vec<Menu> {
     let mut menus = vec![
         Menu {
-            name: "Herdr".into(),
+            name: fl!("menus-herdr").into(),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "About Herdr",
+                    fl!("menus-about-herdr"),
                     RunCommand {
                         command: Command::About,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Command Palette",
+                    fl!("menus-command-palette"),
                     RunCommand {
                         command: Command::Palette,
                     },
                 ),
                 MenuItem::action(
-                    "Settings",
+                    fl!("menus-settings"),
                     RunCommand {
                         command: Command::Settings,
                     },
                 ),
                 MenuItem::action(
-                    "Keyboard Shortcuts",
+                    fl!("menus-keyboard-shortcuts"),
                     RunCommand {
                         command: Command::Keybinds,
                     },
                 ),
-                MenuItem::action("Check for Updates...", CheckForUpdates),
+                MenuItem::action(fl!("menus-check-for-updates"), CheckForUpdates),
                 // macOS reserves Hide for every app; without these items
                 // Cmd-H has no key equivalent and does nothing.
                 #[cfg(target_os = "macos")]
                 MenuItem::separator(),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Herdr", Hide),
+                MenuItem::action(fl!("menus-hide-herdr"), Hide),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Hide Others", HideOthers),
+                MenuItem::action(fl!("menus-hide-others"), HideOthers),
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Show All", ShowAll),
+                MenuItem::action(fl!("menus-show-all"), ShowAll),
                 MenuItem::separator(),
-                MenuItem::action("Quit Herdr", Quit),
+                MenuItem::action(fl!("menus-quit-herdr"), Quit),
             ],
         },
         Menu {
-            name: "File".into(),
+            name: fl!("menus-file").into(),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "New Workspace",
+                    fl!("menus-new-workspace"),
                     RunCommand {
                         command: Command::Workspace,
                     },
                 ),
                 MenuItem::action(
-                    "New Worktree...",
+                    fl!("menus-new-worktree"),
                     RunCommand {
                         command: Command::NewWorktree,
                     },
                 ),
                 MenuItem::action(
-                    "New Tab",
+                    fl!("menus-new-tab"),
                     RunCommand {
                         command: Command::Tab,
                     },
                 ),
                 MenuItem::action(
-                    "Go To",
+                    fl!("menus-go-to"),
                     RunCommand {
                         command: Command::WorkspacePicker,
                     },
                 ),
                 MenuItem::action(
-                    "Go to Symbol...",
+                    fl!("menus-go-to-symbol"),
                     RunCommand {
                         command: Command::GoToSymbol,
                     },
                 ),
                 MenuItem::action(
-                    "Go to File...",
+                    fl!("menus-go-to-file"),
                     RunCommand {
                         command: Command::GoToFile,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Close Pane...",
+                    fl!("menus-close-pane"),
                     RunCommand {
                         command: Command::ClosePane,
                     },
                 ),
                 MenuItem::action(
-                    "Close Tab...",
+                    fl!("menus-close-tab"),
                     RunCommand {
                         command: Command::CloseTab,
                     },
                 ),
                 MenuItem::action(
-                    "Reopen Closed Tab",
+                    fl!("menus-reopen-closed-tab"),
                     RunCommand {
                         command: Command::ReopenClosedTab,
                     },
@@ -190,35 +192,35 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
         // OS actions also route these items to native text fields, such as
         // the file panels, the way every macOS app's Edit menu does.
         Menu {
-            name: "Edit".into(),
+            name: fl!("menus-edit").into(),
             disabled: false,
             items: vec![
-                MenuItem::os_action("Cut", Cut, OsAction::Cut),
-                MenuItem::os_action("Copy", Copy, OsAction::Copy),
-                MenuItem::os_action("Paste", Paste, OsAction::Paste),
+                MenuItem::os_action(fl!("menus-cut"), Cut, OsAction::Cut),
+                MenuItem::os_action(fl!("menus-copy"), Copy, OsAction::Copy),
+                MenuItem::os_action(fl!("menus-paste"), Paste, OsAction::Paste),
                 MenuItem::separator(),
-                MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+                MenuItem::os_action(fl!("menus-select-all"), SelectAll, OsAction::SelectAll),
             ],
         },
         Menu {
-            name: "View".into(),
+            name: fl!("menus-view").into(),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "Increase Font Size",
+                    fl!("menus-increase-font-size"),
                     RunCommand {
                         command: Command::IncreaseFontSize,
                     },
                 ),
                 MenuItem::action(
-                    "Decrease Font Size",
+                    fl!("menus-decrease-font-size"),
                     RunCommand {
                         command: Command::DecreaseFontSize,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Reset Font Size",
+                    fl!("menus-reset-font-size"),
                     RunCommand {
                         command: Command::ResetFontSize,
                     },
@@ -227,20 +229,20 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
                 layout_menu(config.layout.mode),
                 tab_layout_menu(config.tab_layout),
                 MenuItem::action(
-                    "Devices Overview",
+                    fl!("menus-devices-overview"),
                     RunCommand {
                         command: Command::DevicesOverview,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Toggle Full Screen",
+                    fl!("menus-toggle-full-screen"),
                     RunCommand {
                         command: Command::ToggleFullScreen,
                     },
                 ),
                 MenuItem::action(
-                    "Toggle Zen Mode",
+                    fl!("menus-toggle-zen-mode"),
                     RunCommand {
                         command: Command::ToggleZenMode,
                     },
@@ -248,121 +250,121 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
             ],
         },
         Menu {
-            name: "Terminal".into(),
+            name: fl!("menus-terminal").into(),
             disabled: false,
             items: vec![
                 MenuItem::action(
-                    "Split Vertically (Right)",
+                    fl!("menus-split-vertically-right"),
                     RunCommand {
                         command: Command::SplitRight,
                     },
                 ),
                 MenuItem::action(
-                    "Split Horizontally (Down)",
+                    fl!("menus-split-horizontally-down"),
                     RunCommand {
                         command: Command::SplitDown,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Next Tab",
+                    fl!("menus-next-tab"),
                     RunCommand {
                         command: Command::NextTab,
                     },
                 ),
                 MenuItem::action(
-                    "Previous Tab",
+                    fl!("menus-previous-tab"),
                     RunCommand {
                         command: Command::PreviousTab,
                     },
                 ),
                 MenuItem::action(
-                    "Back",
+                    fl!("menus-back"),
                     RunCommand {
                         command: Command::Back,
                     },
                 ),
                 MenuItem::action(
-                    "Forward",
+                    fl!("menus-forward"),
                     RunCommand {
                         command: Command::Forward,
                     },
                 ),
                 MenuItem::action(
-                    "Toggle Pane Zoom",
+                    fl!("menus-toggle-pane-zoom"),
                     RunCommand {
                         command: Command::Zoom,
                     },
                 ),
                 MenuItem::action(
-                    "Clear Pane",
+                    fl!("menus-clear-pane"),
                     RunCommand {
                         command: Command::ClearPane,
                     },
                 ),
                 MenuItem::action(
-                    "Find",
+                    fl!("menus-find"),
                     RunCommand {
                         command: Command::Find,
                     },
                 ),
                 MenuItem::action(
-                    "Find Next",
+                    fl!("menus-find-next"),
                     RunCommand {
                         command: Command::FindNext,
                     },
                 ),
                 MenuItem::action(
-                    "Find Previous",
+                    fl!("menus-find-previous"),
                     RunCommand {
                         command: Command::FindPrevious,
                     },
                 ),
                 MenuItem::action(
-                    "Copy Mode",
+                    fl!("menus-copy-mode"),
                     RunCommand {
                         command: Command::CopyMode,
                     },
                 ),
                 MenuItem::action(
-                    "Open Scrollback in Editor",
+                    fl!("menus-open-scrollback-in-editor"),
                     RunCommand {
                         command: Command::EditScrollback,
                     },
                 ),
                 MenuItem::action(
-                    "Open Notification Target",
+                    fl!("menus-open-notification-target"),
                     RunCommand {
                         command: Command::OpenNotificationTarget,
                     },
                 ),
                 MenuItem::action(
-                    "Toggle Sidebar",
+                    fl!("menus-toggle-sidebar"),
                     RunCommand {
                         command: Command::ToggleSidebar,
                     },
                 ),
                 MenuItem::action(
-                    "Toggle Status Bar",
+                    fl!("menus-toggle-status-bar"),
                     RunCommand {
                         command: Command::ToggleStatusBar,
                     },
                 ),
                 MenuItem::action(
-                    "Open VS Code",
+                    fl!("menus-open-vs-code"),
                     RunCommand {
                         command: Command::OpenCode,
                     },
                 ),
                 MenuItem::action(
-                    "Open px0",
+                    fl!("menus-open-px0"),
                     RunCommand {
                         command: Command::OpenPx0,
                     },
                 ),
                 MenuItem::separator(),
                 MenuItem::action(
-                    "Reconnect",
+                    fl!("menus-reconnect"),
                     RunCommand {
                         command: Command::Reconnect,
                     },
@@ -370,35 +372,35 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
             ],
         },
         Menu {
-            name: "Window".into(),
+            name: fl!("menus-window").into(),
             disabled: false,
             items: vec![
                 // Without this item Cmd-M has no key equivalent and does
                 // nothing; the pane zoom above is unrelated to the window.
                 #[cfg(target_os = "macos")]
-                MenuItem::action("Minimize", Minimize),
+                MenuItem::action(fl!("menus-minimize"), Minimize),
                 #[cfg(target_os = "macos")]
                 MenuItem::separator(),
                 MenuItem::action(
-                    "New Window",
+                    fl!("menus-new-window"),
                     RunCommand {
                         command: Command::NewWindow,
                     },
                 ),
                 MenuItem::action(
-                    "Cycle Through Windows",
+                    fl!("menus-cycle-through-windows"),
                     RunCommand {
                         command: Command::CycleWindows,
                     },
                 ),
                 MenuItem::action(
-                    "Close Window",
+                    fl!("menus-close-window"),
                     RunCommand {
                         command: Command::CloseWindow,
                     },
                 ),
                 MenuItem::separator(),
-                MenuItem::action("Logs", ShowLogs),
+                MenuItem::action(fl!("menus-logs"), ShowLogs),
             ],
         },
     ];
@@ -412,29 +414,26 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
 fn qa_menu() -> Menu {
     let pseudo = crate::i18n::shown_pseudo();
     Menu {
-        name: "QA".into(),
+        name: fl!("menus-qa").into(),
         disabled: false,
         items: vec![
-            MenuItem::action("Show herdr non-detected modal", ShowHerdrNotDetected),
-            MenuItem::action("Show app update available", ShowUpdatePreview),
-            MenuItem::action(
-                "Show update download progress (50%)",
-                ShowUpdateDownloadPreview,
-            ),
-            MenuItem::action("Show Homebrew update progress", ShowUpdateHomebrewPreview),
-            MenuItem::action("Play Sound", PlaySound),
-            MenuItem::action("Ring Bell in 3 Seconds", RingBellPreview),
-            MenuItem::action("Slow Animations", ToggleSlowAnimations)
+            MenuItem::action(fl!("menus-qa-herdr-not-detected"), ShowHerdrNotDetected),
+            MenuItem::action(fl!("menus-qa-update-available"), ShowUpdatePreview),
+            MenuItem::action(fl!("menus-qa-update-download"), ShowUpdateDownloadPreview),
+            MenuItem::action(fl!("menus-qa-update-homebrew"), ShowUpdateHomebrewPreview),
+            MenuItem::action(fl!("menus-qa-play-sound"), PlaySound),
+            MenuItem::action(fl!("menus-qa-ring-bell"), RingBellPreview),
+            MenuItem::action(fl!("menus-qa-slow-animations"), ToggleSlowAnimations)
                 .checked(crate::motion::is_slow()),
             MenuItem::action(
-                "Pseudo-Locale: Accented (en-XA)",
+                fl!("menus-qa-pseudo-accented"),
                 TogglePseudoLocale {
                     pseudo: Pseudo::Accented,
                 },
             )
             .checked(pseudo == Some(Pseudo::Accented)),
             MenuItem::action(
-                "Pseudo-Locale: Right to Left (en-XB)",
+                fl!("menus-qa-pseudo-bidi"),
                 TogglePseudoLocale {
                     pseudo: Pseudo::Bidi,
                 },
@@ -442,42 +441,42 @@ fn qa_menu() -> Menu {
             .checked(pseudo == Some(Pseudo::Bidi)),
             #[cfg(any(target_os = "macos", windows))]
             MenuItem::action(
-                "Enable badge",
+                fl!("menus-qa-badge-enable"),
                 crate::actions::SetBadgePreview { enabled: true },
             ),
             #[cfg(any(target_os = "macos", windows))]
             MenuItem::action(
-                "Disable badge preview",
+                fl!("menus-qa-badge-disable"),
                 crate::actions::SetBadgePreview { enabled: false },
             ),
             MenuItem::separator(),
             MenuItem::action(
-                "Show NeedsAttention toast",
+                fl!("menus-qa-toast-needs-attention"),
                 ShowToastPreview {
                     kind: SemanticNotificationKind::NeedsAttention,
                 },
             ),
             MenuItem::action(
-                "Show Finished toast",
+                fl!("menus-qa-toast-finished"),
                 ShowToastPreview {
                     kind: SemanticNotificationKind::Finished,
                 },
             ),
             MenuItem::action(
-                "Show UpdateInstalled toast",
+                fl!("menus-qa-toast-update-installed"),
                 ShowToastPreview {
                     kind: SemanticNotificationKind::UpdateInstalled,
                 },
             ),
             MenuItem::action(
-                "Show Custom toast",
+                fl!("menus-qa-toast-custom"),
                 ShowToastPreview {
                     kind: SemanticNotificationKind::Custom,
                 },
             ),
             MenuItem::separator(),
             MenuItem::action(
-                "Send notification in 3 seconds",
+                fl!("menus-qa-notification"),
                 crate::actions::ShowSystemNotificationPreview,
             ),
         ],

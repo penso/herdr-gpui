@@ -221,7 +221,7 @@ fn a_failed_destroy_keeps_the_device_and_says_why(cx: &mut TestAppContext) {
         let Some(Outcome::Failed(message)) = &card.outcome else {
             panic!("the failure is reported");
         };
-        assert!(message.starts_with("Could not delete Box sb-1: "));
+        assert!(message.starts_with("Could not delete \u{2068}Box sb-1\u{2069}: "));
         assert!(card.can_destroy(), "Destroy can run again");
     });
 }

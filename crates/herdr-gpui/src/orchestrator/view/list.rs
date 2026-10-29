@@ -622,12 +622,16 @@ impl OrchestratorView {
 
 /// A backend's muted mark in a row.
 pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
-    let icon = match provider {
+    look.icon(source_icon(provider), 12., look.theme.muted)
+        .into_any_element()
+}
+
+pub(super) fn source_icon(provider: Provider) -> &'static str {
+    match provider {
         Provider::Github => "icons/github.svg",
         Provider::Beads => "icons/beads.svg",
         Provider::Gitlab => "icons/gitlab.svg",
-    };
-    look.icon(icon, 12., look.theme.muted).into_any_element()
+    }
 }
 
 /// A button small enough to sit in a row with room above and below.

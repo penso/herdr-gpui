@@ -1,4 +1,6 @@
 //! The Settings pages and the groups the section list shows them under.
+// i18n: migrated
+use crate::i18n;
 
 /// One Settings page. `ALL` is the section list's order: General alone at the
 /// top, then group by group.
@@ -38,12 +40,26 @@ impl Group {
         Self::Advanced,
     ];
 
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
+        i18n::message(self.message(), &[])
+    }
+
+    fn message(self) -> &'static str {
         match self {
-            Self::Appearance => "Appearance",
-            Self::Behaviour => "Behaviour",
-            Self::Connect => "Connect",
-            Self::Advanced => "Advanced",
+            Self::Appearance => "settings-group-appearance",
+            Self::Behaviour => "settings-group-behaviour",
+            Self::Connect => "settings-group-connect",
+            Self::Advanced => "settings-group-advanced",
+        }
+    }
+
+    /// The group label's selector, the same in every language.
+    pub(super) fn slug(self) -> &'static str {
+        match self {
+            Self::Appearance => "appearance",
+            Self::Behaviour => "behaviour",
+            Self::Connect => "connect",
+            Self::Advanced => "advanced",
         }
     }
 }
@@ -71,53 +87,48 @@ impl Section {
         Self::Configuration,
     ];
 
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
+        i18n::message(self.message(), &[])
+    }
+
+    /// The message naming the page, which search also matches.
+    pub(super) fn message(self) -> &'static str {
         match self {
-            Self::Theme => "Theme",
-            Self::Sidebar => "Sidebar",
-            Self::Indicators => "Indicators",
-            Self::Fonts => "Fonts",
-            Self::StatusBar => "Status bar",
-            Self::General => "General",
-            Self::Tabs => "Tabs & panes",
-            Self::Code => "Code",
-            Self::Notifications => "Notifications",
-            Self::Integrations => "Integrations",
-            Self::Plugins => "Plugins",
+            Self::Theme => "settings-section-theme",
+            Self::Sidebar => "settings-section-sidebar",
+            Self::Indicators => "settings-section-indicators",
+            Self::Fonts => "settings-section-fonts",
+            Self::StatusBar => "settings-section-status-bar",
+            Self::General => "settings-section-general",
+            Self::Tabs => "settings-section-tabs-and-panes",
+            Self::Code => "settings-section-code",
+            Self::Notifications => "settings-section-notifications",
+            Self::Integrations => "settings-section-integrations",
+            Self::Plugins => "settings-section-plugins",
             #[cfg(feature = "cloud")]
-            Self::CloudDevices => "Cloud devices",
-            Self::RemoteControl => "Remote control",
-            Self::Configuration => "Configuration",
+            Self::CloudDevices => "settings-section-cloud-devices",
+            Self::RemoteControl => "settings-section-remote-control",
+            Self::Configuration => "settings-section-configuration",
         }
     }
 
-    pub(super) fn lead(self) -> Option<&'static str> {
-        match self {
-            Self::Theme => Some("Hover a theme to try it in the app; click to keep it."),
-            Self::Sidebar => Some("Changes apply to every open window immediately."),
-            Self::Indicators => Some(
-                "How agent status shows in the sidebar, tabs and the collapsed rail. \
-                 Working always moves; reduced motion holds it still.",
-            ),
-            Self::Fonts => Some("Each face can have its own family and size."),
-            Self::StatusBar => Some("Which items the bottom bar shows, and how compactly."),
-            Self::Code => Some(
-                "Review code and diffs beside your terminals through a Visual Studio Code server.",
-            ),
-            Self::Integrations => Some("Agents Herdr can launch and track."),
-            Self::Plugins => Some("Show what your plugins report in the sidebar."),
+    pub(super) fn lead(self) -> Option<String> {
+        let id = match self {
+            Self::Theme => "settings-lead-theme",
+            Self::Sidebar => "settings-lead-sidebar",
+            Self::Indicators => "settings-lead-indicators",
+            Self::Fonts => "settings-lead-fonts",
+            Self::StatusBar => "settings-lead-status-bar",
+            Self::Code => "settings-lead-code",
+            Self::Integrations => "settings-lead-integrations",
+            Self::Plugins => "settings-lead-plugins",
             #[cfg(feature = "cloud")]
-            Self::CloudDevices => {
-                Some("Create machines from your cloud accounts and use them as devices.")
-            }
-            Self::RemoteControl => Some(
-                "Use your chats from a phone, over HTTPS on your network or through Tailscale.",
-            ),
-            Self::Configuration => {
-                Some("Files behind these settings. Saved edits reload automatically.")
-            }
-            Self::General | Self::Tabs | Self::Notifications => None,
-        }
+            Self::CloudDevices => "settings-lead-cloud-devices",
+            Self::RemoteControl => "settings-lead-remote-control",
+            Self::Configuration => "settings-lead-configuration",
+            Self::General | Self::Tabs | Self::Notifications => return None,
+        };
+        Some(i18n::message(id, &[]))
     }
 
     /// The group the section list shows this page under; `None` for pages
@@ -157,14 +168,9 @@ impl Section {
         }
     }
 
+    /// The page's selector, the same in every language: its message ID.
     pub(super) fn selector(self) -> String {
-        format!(
-            "settings-section-{}",
-            self.label()
-                .to_lowercase()
-                .replace(' ', "-")
-                .replace('&', "and")
-        )
+        self.message().to_owned()
     }
 
     /// The section's index among the scrolled section list's children, which

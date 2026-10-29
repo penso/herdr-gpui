@@ -1,5 +1,6 @@
 //! Daemon-host integration management. No native credentials or local file writes.
-use crate::{HerdrWindow, connection::IntegrationInbox};
+// i18n: migrated
+use crate::{HerdrWindow, connection::IntegrationInbox, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 use serde_json::Value;
@@ -282,8 +283,7 @@ impl HerdrWindow {
                 .iter()
                 .any(|row| row.target == target && row.available)
         {
-            self.integrations.error =
-                Some("The host or integration list changed. Refresh before installing.".into());
+            self.integrations.error = Some(fl!("integrations-list-changed"));
             cx.notify();
             return;
         }
@@ -328,7 +328,7 @@ impl HerdrWindow {
             self.integrations.scope = None;
             self.integrations.rows.clear();
             self.integrations.messages.clear();
-            self.integrations.error = Some("The selected daemon changed or disconnected. Refresh to load integrations. An already queued install may have completed on the previous host.".into());
+            self.integrations.error = Some(fl!("integrations-host-changed"));
             cx.notify();
             return;
         }
@@ -372,13 +372,13 @@ impl HerdrWindow {
             .as_ref()
             .filter(|scope| self.integration_scope_current(scope));
         let host = current
-            .map(|scope| scope.host.as_str())
+            .map(|scope| scope.host.clone())
             .or_else(|| {
                 self.endpoints
                     .get(self.selected_endpoint)
-                    .map(|endpoint| endpoint.label.as_str())
+                    .map(|endpoint| endpoint.label.clone())
             })
-            .unwrap_or("No selected host");
+            .unwrap_or_else(|| fl!("integrations-no-host"));
         let can_install = !state.busy
             && current.is_some_and(|scope| {
                 scope
@@ -387,10 +387,26 @@ impl HerdrWindow {
                     .is_ok_and(|inbox| inbox.install.is_some())
             });
         let epoch = self.selection_epoch;
-        let mut body = div().id("integrations-body").min_h_0().overflow_y_scroll()
-            .track_scroll(&state.scroll).p(px(16.))
-            .child(div().font_weight(FontWeight::SEMIBOLD).child(crate::sidebar::label_text(&format!("Daemon host: {host}"))))
-            .child(div().mt(px(8.)).text_color(rgb(theme.subtext())).child("Install updates agent configuration on this daemon's host, not necessarily this computer. No integrations are installed automatically."));
+        let mut body = div()
+            .id("integrations-body")
+            .min_h_0()
+            .overflow_y_scroll()
+            .track_scroll(&state.scroll)
+            .p(px(16.))
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(crate::sidebar::label_text(&fl!(
+                        "integrations-host",
+                        host = host
+                    ))),
+            )
+            .child(
+                div()
+                    .mt(px(8.))
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("integrations-explainer")),
+            );
         if let Some(error) = &state.error {
             body = body.child(
                 div()
@@ -400,14 +416,14 @@ impl HerdrWindow {
             );
         }
         if state.busy {
-            body = body.child(div().mt(px(12.)).child("Working on the selected daemon..."));
+            body = body.child(div().mt(px(12.)).child(fl!("integrations-working")));
         } else {
             body = body.child(
                 div()
                     .id("integrations-refresh")
                     .mt(px(12.))
                     .cursor_pointer()
-                    .child("Refresh integrations")
+                    .child(fl!("integrations-refresh"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if this.selection_epoch == epoch {
                             this.load_integrations(cx);
@@ -417,11 +433,7 @@ impl HerdrWindow {
         }
         if let Some(scope) = current {
             if !state.busy && state.rows.is_empty() && state.error.is_none() {
-                body = body.child(
-                    div()
-                        .mt(px(12.))
-                        .child("No integrations reported by this daemon."),
-                );
+                body = body.child(div().mt(px(12.)).child(fl!("integrations-none")));
             }
             let rows: Vec<_> = state
                 .rows
@@ -429,13 +441,13 @@ impl HerdrWindow {
                 .filter(|row| row.matches(&query))
                 .collect();
             if rows.is_empty() && !state.rows.is_empty() {
-                body = body.child(div().mt(px(12.)).child("No matching integrations."));
+                body = body.child(div().mt(px(12.)).child(fl!("integrations-no-match")));
             }
             for row in rows {
                 let status = match row.state {
-                    State::NotInstalled => "Not installed",
-                    State::Current => "Current",
-                    State::Outdated => "Outdated",
+                    State::NotInstalled => fl!("integrations-not-installed"),
+                    State::Current => fl!("integrations-current"),
+                    State::Outdated => fl!("integrations-outdated"),
                 };
                 let mut item = div()
                     .py(px(12.))
@@ -446,16 +458,16 @@ impl HerdrWindow {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(row.label.clone()),
                     )
-                    .child(
-                        div()
-                            .text_color(rgb(theme.muted))
-                            .child(format!("{status} | {}", row.command)),
-                    );
+                    .child(div().text_color(rgb(theme.muted)).child(fl!(
+                        "integrations-row-detail",
+                        status = status,
+                        command = row.command.as_str()
+                    )));
                 if !row.available {
                     item = item.child(
                         div()
                             .text_color(rgb(theme.muted))
-                            .child("Agent not available on this host"),
+                            .child(fl!("integrations-unavailable")),
                     );
                 } else if can_install {
                     let target = row.target.clone();
@@ -466,9 +478,9 @@ impl HerdrWindow {
                             .mt(px(6.))
                             .cursor_pointer()
                             .child(if row.state == State::NotInstalled {
-                                "Install"
+                                fl!("integrations-install")
                             } else {
-                                "Reinstall"
+                                fl!("integrations-reinstall")
                             })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if this.integration_scope_current(&scope) {
@@ -480,7 +492,7 @@ impl HerdrWindow {
                     item = item.child(
                         div()
                             .text_color(rgb(theme.muted))
-                            .child("Installation not supported by this daemon"),
+                            .child(fl!("integrations-install-unsupported")),
                     );
                 }
                 body = body.child(item);
@@ -502,6 +514,7 @@ mod tests {
 
     fn list() -> Value {
         json!({"result":{"type":"integration_list","integrations":[{
+            // i18n: data
             "target":"antigravity_cli","label":"Antigravity CLI","command":"antigravity",
             "available":true,"state":"outdated"
         }]}})
@@ -511,6 +524,7 @@ mod tests {
     fn list_sort_and_search_keep_original_action_targets() {
         let response = json!({"result":{"type":"integration_list","integrations":[
             {"target":"zebra","label":"alpha","command":"z","available":true,"state":"current"},
+            // i18n: data
             {"target":"beta","label":"Beta","command":"b","available":true,"state":"current"},
             {"target":"alpha","label":"ALPHA","command":"a","available":true,"state":"current"}
         ]}});
@@ -584,6 +598,7 @@ mod tests {
 
     #[test]
     fn install_requires_matching_target_and_bounded_messages() {
+        // i18n: data
         let mut response = json!({"result":{"type":"integration_install","target":"claude","details":{"messages":["Installed"]}}});
         assert_eq!(
             parse_install(&response, "claude", Method::IntegrationInstall).unwrap(),
@@ -605,6 +620,7 @@ mod tests {
     #[test]
     fn daemon_errors_are_validated_before_display() {
         let response =
+            // i18n: data
             json!({"error":{"code":"integration_install_failed","message":"Permission denied"}});
         assert!(matches!(
             parse_list(&response, Method::IntegrationList),
@@ -620,6 +636,7 @@ mod tests {
     #[test]
     fn v2_list_parses_omo_target_and_searches_by_label_or_target() {
         let response = json!({"result":{"type":"integration_list_v2","integrations":[{
+            // i18n: data
             "target":"omo","label":"Omo Coding Agent","command":"omo","available":true,"state":"not_installed"
         }]}});
         let rows = parse_list(&response, Method::IntegrationListV2).unwrap();
@@ -632,6 +649,7 @@ mod tests {
     #[test]
     fn v2_accepts_legacy_cli_target_spelling_without_widening_v1() {
         let mut response = json!({"result":{"type":"integration_list_v2","integrations":[{
+            // i18n: data
             "target":"antigravity-cli","label":"Antigravity","command":"agy","available":true,"state":"current"
         }]}});
         let rows = parse_list(&response, Method::IntegrationListV2).unwrap();
@@ -643,6 +661,7 @@ mod tests {
     #[test]
     fn v2_omo_target_survives_explicit_install_and_reloaded_list() {
         let response = json!({"result":{"type":"integration_install_v2","target":"omo",
+            // i18n: data
             "details":{"messages":["Installed"]}}});
         let operation = Operation::Install {
             target: "omo".into(),
@@ -657,8 +676,10 @@ mod tests {
         );
         assert_eq!(target, "omo");
         let reloaded = json!({"result":{"type":"integration_list_v2","integrations":[{
-            "target":"omo","label":"Omo","command":"omo","available":true,"state":"current"
-        }]}});
+                    // i18n: data
+                    "target":"omo","label":"Omo","command"
+        :"omo","available":true,"state":"current"
+                }]}});
         let rows = parse_list(&reloaded, Method::IntegrationListV2).unwrap();
         assert_eq!(rows[0].target, target);
     }

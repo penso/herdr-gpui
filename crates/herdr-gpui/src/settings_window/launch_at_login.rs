@@ -2,7 +2,9 @@
 //! the setting (`crate::launch_at_login`), read when the window opens, each
 //! time it comes to the front (Task Manager may have changed it meanwhile),
 //! and after each change, so the row shows what Windows will do.
+// i18n: migrated
 use super::{SettingsWindow, ui};
+use crate::i18n::fl;
 use crate::launch_at_login::{self, State};
 use gpui::{prelude::*, *};
 
@@ -46,7 +48,10 @@ impl SettingsWindow {
                 this.launch_at_login.busy = false;
                 if let Err(error) = &saved {
                     tracing::warn!(%error, "Could not change launch at login");
-                    this.error = Some(format!("Launch at login: {error}"));
+                    this.error = Some(fl!(
+                        "settings-general-error-launch-at-login",
+                        error = error.to_string()
+                    ));
                 }
                 match state {
                     Ok(state) => this.launch_at_login.state = Some(state),
@@ -54,7 +59,10 @@ impl SettingsWindow {
                         this.launch_at_login.state = None;
                         tracing::warn!(%error, "Could not read launch at login");
                         if saved.is_ok() {
-                            this.error = Some(format!("Launch at login: {error}"));
+                            this.error = Some(fl!(
+                                "settings-general-error-launch-at-login",
+                                error = error.to_string()
+                            ));
                         }
                     }
                 }
@@ -69,11 +77,15 @@ impl SettingsWindow {
         let state = self.launch_at_login.state;
         let on = state == Some(State::On);
         let ready = !self.launch_at_login.busy && matches!(state, Some(State::On | State::Off));
-        let row = ui::row(theme, "general-launch-at-login", "Launch at login")
-            .description("Open Herdr UI when you sign in to Windows.");
+        let row = ui::row(
+            theme,
+            "general-launch-at-login",
+            fl!("settings-general-launch-at-login"),
+        )
+        .description(fl!("settings-general-launch-at-login-description"));
         // Windows' own switch wins; the app never clears its mark.
         let row = if state == Some(State::DisabledByWindows) {
-            row.disabled("Turned off in Settings > Apps > Startup. Turn it back on there.")
+            row.disabled(fl!("settings-general-launch-at-login-disabled"))
         } else {
             row
         };
@@ -84,7 +96,7 @@ impl SettingsWindow {
                 )
             });
         vec![
-            ui::section(theme, "Startup", None).into_any_element(),
+            ui::section(theme, &fl!("settings-general-section-startup"), None).into_any_element(),
             row.switch(toggle).into_any_element(),
         ]
     }

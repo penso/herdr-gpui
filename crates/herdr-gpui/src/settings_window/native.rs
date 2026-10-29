@@ -1,4 +1,5 @@
 //! Native checks run only inside live_gui's isolated HOME/XDG fixture process.
+// i18n: migrated
 use super::*;
 use crate::sidebar::native_tests::Target;
 use anyhow::{Context as _, Result, bail, ensure};
@@ -87,6 +88,7 @@ async fn capture_settings(
             anyhow::Ok(())
         })
         .await?;
+    // i18n: data
     eprintln!("SIDEBAR Settings GPU capture: {}", printed_path.display());
     Ok(())
 }
@@ -260,8 +262,8 @@ pub(crate) async fn verify_native(
                     settings.update(cx, |view, _, cx| {
                         if seeded {
                             let mut intent = SidebarIntent::of(&view.config);
-                            intent.style.hosts.insert("Personal".into(), 0x3a4a6b);
-                            intent.style.hosts.insert("Work".into(), 0x5a3a3a);
+                            intent.style.hosts.insert("Personal".into(), 0x3a4a6b); // i18n: data
+                            intent.style.hosts.insert("Work".into(), 0x5a3a3a); // i18n: data
                             view.preview_sidebar(intent, cx);
                         }
                         view.body_scroll.set_offset(Point::default());
@@ -379,6 +381,7 @@ pub(crate) async fn verify_native(
         Ok(())
     })??;
     eprintln!(
+        // i18n: data
         "SIDEBAR native standalone settings PASS: all {} category clicks and bounds at 680x560/960x780, 2/4-column theme grid, native Nord search {filtered}/{unfiltered} and clear, native Nord card click, singleton Cmd-comma, isolated Cmd-W; theme draft live across windows without config writes; final theme persisted on close in sandbox",
         Section::ALL.len()
     );

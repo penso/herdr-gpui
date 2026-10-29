@@ -3,6 +3,7 @@
 //! Creating a sprite hands a job to the main window, which shows progress in
 //! the device picker and a toast when it is ready. Account reads and removals
 //! run through `cloud::worker`, never on the UI thread.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
@@ -15,6 +16,7 @@ use crate::{
     },
     config::{Config, SpritesFields},
     github::Store,
+    i18n::fl,
     search_input::SearchInput,
     sprites::{
         Settings,
@@ -67,13 +69,19 @@ impl SpritesCard {
     ) -> Self {
         let loaded = loaded(config);
         let api_url = [input(
-            crate::sprites::DEFAULT_API_URL,
+            || crate::sprites::DEFAULT_API_URL.to_owned(),
             &loaded.api_url,
             config,
             theme,
             cx,
         )];
-        let token = input("Sprites API token", "", config, theme, cx);
+        let token = input(
+            || fl!("settings-cloud-sprites-token-placeholder"),
+            "",
+            config,
+            theme,
+            cx,
+        );
         token.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             api_url,
@@ -136,6 +144,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "sprites_worker", error_kind = ?error.kind(), "Could not start the Sprites settings worker");
                 if let Some(card) = &mut self.sprites_card {
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -248,9 +257,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.sprites_card {
             card.message = Some(match started {
-                Ok(Ok(())) => format!("Creating {name}. The device picker shows its progress."),
+                Ok(Ok(())) => fl!("settings-cloud-creating", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a sprite.".into(),
+                Err(_) => fl!("settings-cloud-sprites-no-window"),
             });
         }
         cx.notify();
@@ -274,20 +283,17 @@ impl SettingsWindow {
         let ready = !self.busy();
         let configured = self.sprites_settings().is_some();
         let (status, token) = match &card.account {
-            _ if !configured => (
-                "Not configured. Check the API URL, add a token, then save.".to_owned(),
-                Token::Missing,
-            ),
-            Account::Checking => ("Checking…".to_owned(), Token::Missing),
+            _ if !configured => (fl!("settings-cloud-sprites-not-configured"), Token::Missing),
+            Account::Checking => (fl!("settings-cloud-checking"), Token::Missing),
             Account::Known(overview) => (
                 match (&overview.token, &overview.sprites) {
-                    (Token::Missing, _) => "No API token saved.".to_owned(),
-                    (_, Some(Ok(count))) => format!(
-                        "Connected. The token sees {count} sprite{} made here.",
-                        if *count == 1 { "" } else { "s" }
+                    (Token::Missing, _) => fl!("settings-cloud-sprites-token-none"),
+                    (_, Some(Ok(count))) => fl!("settings-cloud-sprites-count", count = *count),
+                    (_, Some(Err(error))) => fl!(
+                        "settings-cloud-sprites-token-unusable",
+                        error = error.to_string()
                     ),
-                    (_, Some(Err(error))) => format!("The API token could not be used: {error}"),
-                    (_, None) => "Checking…".to_owned(),
+                    (_, None) => fl!("settings-cloud-checking"),
                 },
                 overview.token,
             ),
@@ -295,21 +301,26 @@ impl SettingsWindow {
         let usable = matches!(&card.account, Account::Known(overview)
             if matches!(overview.sprites, Some(Ok(_))));
         let token_note = match token {
-            Token::Environment => "Set by HERDR_SPRITES_TOKEN, which takes precedence.",
-            Token::Saved => "Saved. Type a new token to replace it.",
-            Token::Missing => {
-                "Not saved yet. Create one with `sprite org auth` or in the Sprites dashboard."
-            }
+            Token::Environment => fl!("settings-cloud-sprites-token-environment"),
+            Token::Saved => fl!("settings-cloud-sprites-token-saved"),
+            Token::Missing => fl!("settings-cloud-sprites-token-missing"),
         };
         let account = self
-            .control_card("Sprites (experimental)")
-            .debug_selector(|| "cloud-sprites-card".into())
-            .child(self.control_note(
-                "Create Fly sprites and use them as devices: persistent Linux machines that sleep when idle and wake on the next command. Herdr reaches each one through the API's exec stream, relayed by this app; the token never leaves this computer.",
+            .cloud_card(fl!(
+                "settings-cloud-experimental",
+                provider = crate::cloud::name(CloudProvider::Sprites)
             ))
+            .debug_selector(|| "cloud-sprites-card".into())
+            .child(self.control_note(fl!("settings-cloud-sprites-note")))
             .child(div().min_w_0().child(status))
-            .child(self.cloud_field("API URL", card.api_url[0].clone().into()))
-            .child(self.cloud_field("API token", card.token.clone().into()))
+            .child(self.cloud_field(
+                fl!("settings-cloud-sprites-api-url"),
+                card.api_url[0].clone().into(),
+            ))
+            .child(self.cloud_field(
+                fl!("settings-cloud-sprites-token"),
+                card.token.clone().into(),
+            ))
             .child(
                 div()
                     .flex()
@@ -320,18 +331,22 @@ impl SettingsWindow {
                     .child(self.control_note(token_note))
                     .when(token == Token::Saved, |row| {
                         row.child(
-                            self.cloud_button("cloud-sprites-forget-token", "Forget token", ready)
-                                .when(ready, |button| {
-                                    button.on_click(
-                                        cx.listener(|this, _, _, cx| this.forget_sprites_token(cx)),
-                                    )
-                                }),
+                            self.cloud_button(
+                                "cloud-sprites-forget-token",
+                                fl!("settings-cloud-sprites-forget-token"),
+                                ready,
+                            )
+                            .when(ready, |button| {
+                                button.on_click(
+                                    cx.listener(|this, _, _, cx| this.forget_sprites_token(cx)),
+                                )
+                            }),
                         )
                     }),
             )
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-sprites-save", "Save", ready)
+                    self.cloud_button("cloud-sprites-save", fl!("settings-cloud-save"), ready)
                         .debug_selector(|| "cloud-sprites-save".into())
                         .when(ready, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| this.save_sprites(cx)))
@@ -340,15 +355,13 @@ impl SettingsWindow {
             );
         let create = ready && usable && crate::cloud::unavailable().is_none();
         let mut new = self
-            .control_card("New sprite")
+            .cloud_card(fl!("settings-cloud-sprites-new"))
             .debug_selector(|| "cloud-sprites-new".into())
-            .child(self.control_note(
-                "Creates a sprite with a generated name, runs Herdr's server there as a service so it is back after every sleep, and adds it as a device.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-sprites-new-note")))
             .child(
                 self.control_switch(
                     "cloud-sprites-install",
-                    "Install Herdr in it when missing",
+                    fl!("settings-cloud-install-herdr-in-it"),
                     card.install,
                     ready,
                 )
@@ -374,24 +387,26 @@ impl SettingsWindow {
             ))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-sprites-create", "Create sprite", create)
-                        .debug_selector(|| "cloud-sprites-create".into())
-                        .when(create, |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| this.create_sprite(cx)))
-                        }),
+                    self.cloud_button(
+                        "cloud-sprites-create",
+                        fl!("settings-cloud-sprites-create"),
+                        create,
+                    )
+                    .debug_selector(|| "cloud-sprites-create".into())
+                    .when(create, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.create_sprite(cx)))
+                    }),
                 ),
             );
         if let Some(message) = &card.message {
             new = new.child(div().min_w_0().child(message.clone()));
         }
         let mut devices = self
-            .control_card("Sprites devices")
+            .cloud_card(fl!("settings-cloud-sprites-devices"))
             .debug_selector(|| "cloud-sprites-devices".into())
-            .child(self.control_note(
-                "Remove forgets a sprite and leaves it at Fly. To delete one, use Remove device… in its sidebar menu, which first checks it for unpushed work.",
-            ));
+            .child(self.control_note(fl!("settings-cloud-sprites-devices-note")));
         if card.devices().is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         for (index, device) in card.devices().iter().enumerate() {
             devices = devices.child(self.cloud_device_row(

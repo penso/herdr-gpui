@@ -36,6 +36,7 @@ mod notices;
 mod observed_status;
 mod observer_program;
 mod overlay;
+mod pasted;
 mod prepared;
 mod questions;
 mod recall;

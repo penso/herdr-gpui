@@ -27,7 +27,10 @@ fn style_of(line: &Line<'_>, needle: &str) -> Style {
 #[test]
 fn inline_marks_are_drawn_not_shown() {
     let lines = render("Run `just ci`, then **push** to [the PR](https://x/1).", 80);
-    assert_eq!(text(&lines[0]), "  Run just ci, then push to the PR.");
+    assert_eq!(
+        text(&lines[0]),
+        "  Run just ci, then push to the PR (https://x/1)."
+    );
     assert_eq!(style_of(&lines[0], "just ci").fg, Some(Color::Cyan));
     assert!(
         style_of(&lines[0], "push")
@@ -102,4 +105,20 @@ fn no_row_is_wider_than_asked() {
 #[test]
 fn tabs_become_spaces() {
     assert_eq!(text(&render("a\tb", 40)[0]), "  a    b");
+}
+
+#[test]
+fn a_link_keeps_its_address_readable() {
+    let lines = render(
+        "See [the PR](https://example.com/123) and [https://a.b](https://a.b).",
+        80,
+    );
+    assert_eq!(
+        text(&lines[0]),
+        "  See the PR (https://example.com/123) and https://a.b."
+    );
+    assert_eq!(
+        style_of(&lines[0], "(https://example.com/123)").fg,
+        Some(Color::DarkGray)
+    );
 }

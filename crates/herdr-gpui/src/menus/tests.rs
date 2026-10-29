@@ -428,5 +428,6 @@ fn hide_and_minimize_are_macos_only() {
 /// View > Tab Layout lists every tab layout and checks the one in use.
 mod tab_layout;
 
+mod en_xa;
 mod pseudo_locales;
 mod slow_animations;

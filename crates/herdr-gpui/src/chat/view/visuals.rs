@@ -169,9 +169,9 @@ impl HerdrWindow {
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(
                         MouseButton::Left,
-                        cx.listener(move |this, _: &MouseUpEvent, _, cx| {
+                        cx.listener(move |this, _: &MouseUpEvent, window, cx| {
                             cx.stop_propagation();
-                            this.open_chat_viewer(&pane_id, id, cx);
+                            this.open_chat_viewer(&pane_id, id, window, cx);
                         }),
                     );
                 match frame {

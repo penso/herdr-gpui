@@ -1,8 +1,10 @@
 //! Theme > Window and Terminal padding: what shows behind the main window,
 //! and the space between each terminal and the edges of its tab group.
+// i18n: migrated
 use super::{SettingsWindow, on_value, ui};
 use crate::{
     config::{Axis, Side, preferences::Preference},
+    i18n::{self, fl},
     settings_window::inputs::NumberField,
 };
 use gpui::{prelude::*, *};
@@ -15,16 +17,33 @@ pub(in crate::settings_window) const PADDING_SIDES: [(Axis, Side); 4] = [
     (Axis::Y, Side::End),
 ];
 
-/// The row id, the number field's id and the title of one padded side.
+/// The row id, the number field's id and the message titling one padded
+/// side.
 pub(in crate::settings_window) fn padding_ids(
     axis: Axis,
     side: Side,
 ) -> (&'static str, &'static str, &'static str) {
     match (axis, side) {
-        (Axis::X, Side::Start) => ("theme-padding-left", "terminal-padding-left", "Left"),
-        (Axis::X, Side::End) => ("theme-padding-right", "terminal-padding-right", "Right"),
-        (Axis::Y, Side::Start) => ("theme-padding-top", "terminal-padding-top", "Top"),
-        (Axis::Y, Side::End) => ("theme-padding-bottom", "terminal-padding-bottom", "Bottom"),
+        (Axis::X, Side::Start) => (
+            "theme-padding-left",
+            "terminal-padding-left",
+            "settings-theme-padding-left",
+        ),
+        (Axis::X, Side::End) => (
+            "theme-padding-right",
+            "terminal-padding-right",
+            "settings-theme-padding-right",
+        ),
+        (Axis::Y, Side::Start) => (
+            "theme-padding-top",
+            "terminal-padding-top",
+            "settings-theme-padding-top",
+        ),
+        (Axis::Y, Side::End) => (
+            "theme-padding-bottom",
+            "terminal-padding-bottom",
+            "settings-theme-padding-bottom",
+        ),
     }
 }
 
@@ -35,13 +54,21 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(
-                ui::section(theme, "Window", Some(ui::Source::HerdrUi))
-                    .debug_selector(|| "settings-window-section".into()),
+                ui::section(
+                    theme,
+                    &fl!("settings-theme-section-window"),
+                    Some(ui::Source::HerdrUi),
+                )
+                .debug_selector(|| "settings-window-section".into()),
             )
             .child(self.render_backdrop_controls(cx))
             .child(
-                ui::section(theme, "Terminal padding", Some(ui::Source::HerdrUi))
-                    .debug_selector(|| "settings-terminal-padding".into()),
+                ui::section(
+                    theme,
+                    &fl!("settings-theme-section-padding"),
+                    Some(ui::Source::HerdrUi),
+                )
+                .debug_selector(|| "settings-terminal-padding".into()),
             )
             .children(PADDING_SIDES.map(|(axis, side)| self.padding_row(axis, side, cx)))
     }
@@ -51,11 +78,9 @@ impl SettingsWindow {
         let (row, _, title) = padding_ids(axis, side);
         let value = self.number_value(field, self.config.terminal_padding.axis(axis).side(side));
         let view = cx.entity().downgrade();
-        ui::row(&self.theme, row, title)
+        ui::row(&self.theme, row, i18n::message(title, &[]))
             .when(axis == Axis::X && side == Side::Start, |row| {
-                row.description(
-                    "Beside the sidebar. A deprecated sidebar_gap stands in while unset.",
-                )
+                row.description(fl!("settings-theme-padding-left-hint"))
             })
             .control(ui::number(
                 &self.theme,
@@ -63,7 +88,7 @@ impl SettingsWindow {
                     id: field.selector(),
                     value,
                     range: field.range(),
-                    unit: "px",
+                    unit: ui::Unit::Pixels,
                     look: ui::Look::Slider,
                     enabled: true,
                 },

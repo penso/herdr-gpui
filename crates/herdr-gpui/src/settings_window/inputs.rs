@@ -1,5 +1,6 @@
 //! Transient input state the pages share: the open dropdown, the number field
 //! being typed into, and the root key routing for both.
+// i18n: migrated
 use super::{
     SettingsWindow,
     pages::{Spacing, padding_ids, size_control},

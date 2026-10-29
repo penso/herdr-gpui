@@ -2,6 +2,7 @@
 //! there, a build running now with its progress, and **Log**, **Build now**,
 //! and **Reset**. A watcher follows the shared build registry, so a build
 //! started by a dispatch or another window shows here as it runs.
+// i18n: migrated
 
 use super::super::SettingsWindow;
 use crate::cloud::{
@@ -12,7 +13,7 @@ use crate::cloud::{
     },
     worker::{self, Worker},
 };
-use crate::fonts::StyledFont;
+use crate::{fonts::StyledFont, i18n::fl};
 use gpui::{prelude::*, *};
 use std::time::Duration;
 
@@ -143,11 +144,13 @@ impl SettingsWindow {
         });
         self.sandbox_images.message = match started {
             Ok(Ok(())) => None,
-            Ok(Err(error)) => Some(format!(
-                "{}: {error} Open {} in a window to build its image.",
-                entry.project.label, entry.origin.path
+            Ok(Err(error)) => Some(fl!(
+                "settings-cloud-image-build-error",
+                project = entry.project.label.clone(),
+                error = error.to_string(),
+                path = entry.origin.path.clone()
             )),
-            Err(_) => Some("Open a main Herdr window to build images.".into()),
+            Err(_) => Some(fl!("settings-cloud-image-no-window")),
         };
         cx.notify();
     }
@@ -182,7 +185,7 @@ impl SettingsWindow {
             Ok(reset) => self.sandbox_images.reset = Some(reset),
             Err(_) => {
                 self.sandbox_images.message =
-                    Some(crate::cloud::Error::Worker("image reset").to_string());
+                    Some(crate::cloud::Error::Worker("image reset").to_string()); // i18n: data
             }
         }
         cx.notify();
@@ -195,13 +198,10 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let images = &self.sandbox_images;
-        let noun = crate::cloud::noun(provider);
         let mut card = self
-            .control_card("Images")
+            .cloud_card(fl!("settings-cloud-images"))
             .debug_selector(|| "cloud-images".into())
-            .child(self.control_note(format!(
-                "Each project's image, built from its .herdr/sandbox/Dockerfile or dev container with Herdr added. A new {noun} for a project starts from its image, and a changed recipe builds a new one. Build ahead from a workspace's menu with Build sandbox images."
-            )));
+            .child(self.control_note(fl!("settings-cloud-images-note", provider = provider.key())));
         let mut rows: Vec<(String, String)> = images
             .projects
             .iter()
@@ -218,7 +218,7 @@ impl SettingsWindow {
             }
         }
         if rows.is_empty() {
-            card = card.child(self.control_note("None yet."));
+            card = card.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         let busy = images.reset.is_some();
         for (index, (project_id, label)) in rows.into_iter().enumerate() {
@@ -251,20 +251,23 @@ impl SettingsWindow {
             .and_then(|entry| entry.images.iter().find(|image| image.provider == provider));
         let (status, log): (String, Vec<String>) = match (running, image) {
             (Some(running), _) => (
-                running.progress.text(),
+                progress_text(&running.progress),
                 running.log.iter().cloned().collect(),
             ),
             (None, Some(image)) => match &image.outcome {
                 Outcome::Ready { reference } => (
-                    format!(
-                        "Ready · {} · built {}",
-                        short(reference),
-                        ago(image.finished_at)
+                    fl!(
+                        "settings-cloud-image-ready",
+                        image = short(reference),
+                        built = ago(image.finished_at)
                     ),
                     Vec::new(),
                 ),
                 Outcome::Failed { log } => (
-                    format!("Build failed {}", ago(image.finished_at)),
+                    fl!(
+                        "settings-cloud-image-failed",
+                        built = ago(image.finished_at)
+                    ),
                     log.clone(),
                 ),
             },
@@ -278,7 +281,11 @@ impl SettingsWindow {
         let log_button = self
             .cloud_button(
                 SharedString::from(format!("cloud-image-log-{index}")),
-                if log_open { "Hide log" } else { "Log" },
+                if log_open {
+                    fl!("settings-cloud-image-hide-log")
+                } else {
+                    fl!("settings-cloud-image-log")
+                },
                 !log.is_empty(),
             )
             .debug_selector(move || format!("cloud-image-log-{index}"))
@@ -293,7 +300,7 @@ impl SettingsWindow {
         let build = self
             .cloud_button(
                 SharedString::from(format!("cloud-image-build-{index}")),
-                "Build now",
+                fl!("settings-cloud-image-build"),
                 idle,
             )
             .debug_selector(move || format!("cloud-image-build-{index}"))
@@ -306,7 +313,11 @@ impl SettingsWindow {
         let reset = self
             .cloud_button(
                 SharedString::from(format!("cloud-image-reset-{index}")),
-                if confirming { "Delete image" } else { "Reset" },
+                if confirming {
+                    fl!("settings-cloud-image-delete")
+                } else {
+                    fl!("settings-cloud-image-reset")
+                },
                 idle && image.is_some(),
             )
             .debug_selector(move || format!("cloud-image-reset-{index}"))
@@ -355,9 +366,7 @@ impl SettingsWindow {
             ));
         }
         if confirming {
-            row = row.child(self.control_note(
-                "Deletes the image here; the next new machine for this project builds it again. Click Delete image to confirm.",
-            ));
+            row = row.child(self.control_note(fl!("settings-cloud-image-reset-confirm")));
         }
         if log_open {
             let shown = log.len().saturating_sub(LOG_SHOWN);
@@ -385,14 +394,28 @@ fn short(reference: &str) -> &str {
     reference.rsplit([':', '-']).next().unwrap_or(reference)
 }
 
-/// When something happened, in words: "just now", "5 minutes ago".
+/// A build's status line: the step, then what the builder said, which is
+/// its own output and shown as it is.
+fn progress_text(progress: &crate::cloud::image::Progress) -> String {
+    match progress.step {
+        Some((step, total)) => fl!(
+            "settings-cloud-image-step",
+            step = step,
+            total = total,
+            status = progress.status.clone()
+        ),
+        None => progress.status.clone(),
+    }
+}
+
+/// When something happened, in words: "just now", "5 min ago".
 fn ago(seconds: u64) -> String {
     let elapsed = catalog::now().saturating_sub(seconds);
     match elapsed {
-        0..60 => "just now".into(),
-        60..3600 => format!("{} min ago", elapsed / 60),
-        3600..86_400 => format!("{} h ago", elapsed / 3600),
-        _ => format!("{} days ago", elapsed / 86_400),
+        0..60 => fl!("settings-cloud-ago-now"),
+        60..3600 => fl!("settings-cloud-ago-minutes", count = elapsed / 60),
+        3600..86_400 => fl!("settings-cloud-ago-hours", count = elapsed / 3600),
+        _ => fl!("settings-cloud-ago-days", count = elapsed / 86_400),
     }
 }
 

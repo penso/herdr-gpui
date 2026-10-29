@@ -236,18 +236,20 @@ fn the_switch_row_says_how_the_daemon_stands() {
     );
     assert_eq!(
         health_line(&Health::Running(status()), false),
-        "Running on port 7443 \u{b7} 2 devices, 1 connected"
+        "Running on port \u{2068}7443\u{2069} \u{b7} \u{2068}\u{2068}2\u{2069} devices\u{2069}, \
+         \u{2068}1\u{2069} connected"
     );
     let mut alone = status();
     alone.herdr = false;
     alone.devices = 1;
     assert_eq!(
         health_line(&Health::Running(alone), false),
-        "Running on port 7443 \u{b7} 1 device, 1 connected \u{b7} Herdr is not running"
+        "Running on port \u{2068}7443\u{2069} \u{b7} \u{2068}\u{2068}1\u{2069} device\u{2069}, \
+         \u{2068}1\u{2069} connected \u{b7} Herdr is not running"
     );
     assert_eq!(
         health_line(&Health::NotRunning("refused".into()), false),
-        "Not running: refused"
+        "Not running: \u{2068}refused\u{2069}"
     );
 }
 

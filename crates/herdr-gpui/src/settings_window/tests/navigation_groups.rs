@@ -29,10 +29,7 @@ fn navigation_lists_every_section_under_its_group(cx: &mut TestAppContext) {
     }
     for group in Group::ALL {
         let label = cx
-            .debug_bounds(leak(format!(
-                "settings-group-{}",
-                group.label().to_lowercase()
-            )))
+            .debug_bounds(leak(format!("settings-group-{}", group.slug())))
             .unwrap_or_else(|| panic!("missing group {group:?}"));
         assert!(
             label.top() >= last_bottom,

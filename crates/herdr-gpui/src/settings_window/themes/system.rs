@@ -5,13 +5,14 @@ use super::{Choice, FOLLOW, Scope, SettingsWindow};
 use crate::{
     config::{Theme, ThemeName},
     contrast::{Contrast, luminance},
+    i18n::fl,
 };
 use gpui::{Context, ScrollStrategy};
 
 /// What a theme is paired with when following starts: the current theme
 /// keeps the side its background suits, and these fill the other.
-const LIGHT_PAIR: &str = "Catppuccin Latte";
-const DARK_PAIR: &str = "Catppuccin Mocha";
+const LIGHT_PAIR: &str = "Catppuccin Latte"; // i18n: data
+const DARK_PAIR: &str = "Catppuccin Mocha"; // i18n: data
 
 impl SettingsWindow {
     /// The theme value the next choice builds on: an unsaved draft, else the
@@ -189,7 +190,10 @@ impl SettingsWindow {
                 let (value, theme) = match result {
                     Ok(loaded) => loaded,
                     Err(error) => {
-                        this.error = Some(format!("Apply system appearance: {error}"));
+                        this.error = Some(fl!(
+                            "settings-error-system-appearance",
+                            error = error.to_string()
+                        ));
                         cx.notify();
                         return;
                     }

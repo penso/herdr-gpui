@@ -6,6 +6,8 @@ use super::{
 use crate::config::DaytonaConfig;
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
+mod messages;
+
 fn open(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestContext) {
     open_with_main(cx).0
 }

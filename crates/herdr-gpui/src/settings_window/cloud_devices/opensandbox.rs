@@ -3,6 +3,7 @@
 //! credential store. Creating a sandbox hands a job to the main window, which shows progress in
 //! the device picker and a toast when it is ready. Account reads and removals
 //! run through `cloud::worker`, never on the UI thread.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
@@ -15,6 +16,7 @@ use crate::{
     },
     config::{Config, OpenSandboxFields},
     github::Store,
+    i18n::{self, fl},
     opensandbox::{
         Settings,
         setup::{self, AddRequest, Key as Token, Overview},
@@ -35,12 +37,19 @@ enum Account {
     Known(Overview),
 }
 
-/// The editable `[opensandbox]` keys, in display order, with labels and hints.
+/// The editable `[opensandbox]` keys, in display order, with their labels'
+/// message IDs and their defaults as hints.
 const FIELDS: [(&str, &str); 4] = [
-    ("Server URL", crate::opensandbox::DEFAULT_API_URL),
-    ("Image", "buildpack-deps:bookworm"),
-    ("CPU", "2"),
-    ("Memory", "4Gi"),
+    (
+        "settings-cloud-opensandbox-url",
+        crate::opensandbox::DEFAULT_API_URL,
+    ),
+    (
+        "settings-cloud-opensandbox-image",
+        "buildpack-deps:bookworm",
+    ),
+    ("settings-cloud-opensandbox-cpu", "2"),
+    ("settings-cloud-opensandbox-memory", "4Gi"),
 ];
 
 pub(in crate::settings_window) struct OpenSandboxCard {
@@ -80,9 +89,23 @@ impl OpenSandboxCard {
     ) -> Self {
         let loaded = loaded(config);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
-        let token = input("OpenSandbox API key", "", config, theme, cx);
+        let fields = std::array::from_fn(|index| {
+            let placeholder = FIELDS[index].1;
+            input(
+                move || placeholder.to_owned(),
+                texts[index],
+                config,
+                theme,
+                cx,
+            )
+        });
+        let token = input(
+            || fl!("settings-cloud-opensandbox-key-placeholder"),
+            "",
+            config,
+            theme,
+            cx,
+        );
         token.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
@@ -149,6 +172,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "opensandbox_worker", error_kind = ?error.kind(), "Could not start the OpenSandbox settings worker");
                 if let Some(card) = &mut self.opensandbox_card {
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -261,9 +285,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.opensandbox_card {
             card.message = Some(match started {
-                Ok(Ok(())) => format!("Creating {name}. The device picker shows its progress."),
+                Ok(Ok(())) => fl!("settings-cloud-creating", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a sandbox.".into(),
+                Err(_) => fl!("settings-cloud-no-window-sandbox"),
             });
         }
         cx.notify();
@@ -288,19 +312,21 @@ impl SettingsWindow {
         let configured = self.opensandbox_settings().is_some();
         let (status, token) = match &card.account {
             _ if !configured => (
-                "Not configured. Check the server URL, add its API key, then save.".to_owned(),
+                fl!("settings-cloud-opensandbox-not-configured"),
                 Token::Missing,
             ),
-            Account::Checking => ("Checking…".to_owned(), Token::Missing),
+            Account::Checking => (fl!("settings-cloud-checking"), Token::Missing),
             Account::Known(overview) => (
                 match (&overview.key, &overview.sandboxes) {
-                    (Token::Missing, _) => "No API key saved.".to_owned(),
-                    (_, Some(Ok(count))) => format!(
-                        "Connected. The server has {count} sandbox{} made here.",
-                        if *count == 1 { "" } else { "es" }
+                    (Token::Missing, _) => fl!("settings-cloud-key-missing"),
+                    (_, Some(Ok(count))) => {
+                        fl!("settings-cloud-opensandbox-sandboxes", count = *count)
+                    }
+                    (_, Some(Err(error))) => fl!(
+                        "settings-cloud-opensandbox-unusable",
+                        error = error.to_string()
                     ),
-                    (_, Some(Err(error))) => format!("The server could not be used: {error}"),
-                    (_, None) => "Checking…".to_owned(),
+                    (_, None) => fl!("settings-cloud-checking"),
                 },
                 overview.key,
             ),
@@ -308,19 +334,23 @@ impl SettingsWindow {
         let usable = matches!(&card.account, Account::Known(overview)
             if matches!(overview.sandboxes, Some(Ok(_))));
         let token_note = match token {
-            Token::Environment => "Set by HERDR_OPENSANDBOX_API_KEY, which takes precedence.",
-            Token::Saved => "Saved. Type a new key to replace it.",
-            Token::Missing => "Not saved yet. It is the server's `api_key` in its sandbox.toml.",
+            Token::Environment => fl!("settings-cloud-opensandbox-key-environment"),
+            Token::Saved => fl!("settings-cloud-key-saved"),
+            Token::Missing => fl!("settings-cloud-opensandbox-key-missing"),
         };
         let account = self
-            .control_card("OpenSandbox (experimental)")
-            .debug_selector(|| "cloud-opensandbox-card".into())
-            .child(self.control_note(
-                "Create sandboxes on your own OpenSandbox server and use them as devices. Herdr reaches each one through its execd stream, relayed by this app; the API key never leaves this computer.",
+            .cloud_card(fl!(
+                "settings-cloud-experimental",
+                provider = crate::cloud::name(CloudProvider::OpenSandbox)
             ))
+            .debug_selector(|| "cloud-opensandbox-card".into())
+            .child(self.control_note(fl!("settings-cloud-opensandbox-note")))
             .child(div().min_w_0().child(status))
-            .child(self.cloud_field(FIELDS[0].0, card.fields[0].clone().into()))
-            .child(self.cloud_field("API key", card.token.clone().into()))
+            .child(self.cloud_field(
+                i18n::message(FIELDS[0].0, &[]),
+                card.fields[0].clone().into(),
+            ))
+            .child(self.cloud_field(fl!("settings-cloud-api-key"), card.token.clone().into()))
             .child(
                 div()
                     .flex()
@@ -331,21 +361,28 @@ impl SettingsWindow {
                     .child(self.control_note(token_note))
                     .when(token == Token::Saved, |row| {
                         row.child(
-                            self.cloud_button("cloud-opensandbox-forget-key", "Forget key", ready)
-                                .when(ready, |button| {
-                                    button.on_click(
-                                        cx.listener(|this, _, _, cx| this.forget_opensandbox_key(cx)),
-                                    )
-                                }),
+                            self.cloud_button(
+                                "cloud-opensandbox-forget-key",
+                                fl!("settings-cloud-forget-key"),
+                                ready,
+                            )
+                            .when(ready, |button| {
+                                button.on_click(
+                                    cx.listener(|this, _, _, cx| this.forget_opensandbox_key(cx)),
+                                )
+                            }),
                         )
                     }),
             )
             .children((1..FIELDS.len()).map(|index| {
-                self.cloud_field(FIELDS[index].0, card.fields[index].clone().into())
+                self.cloud_field(
+                    i18n::message(FIELDS[index].0, &[]),
+                    card.fields[index].clone().into(),
+                )
             }))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-opensandbox-save", "Save", ready)
+                    self.cloud_button("cloud-opensandbox-save", fl!("settings-cloud-save"), ready)
                         .debug_selector(|| "cloud-opensandbox-save".into())
                         .when(ready, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| this.save_opensandbox(cx)))
@@ -354,15 +391,13 @@ impl SettingsWindow {
             );
         let create = ready && usable && crate::cloud::unavailable().is_none();
         let mut new = self
-            .control_card("New sandbox")
+            .cloud_card(fl!("settings-cloud-new-sandbox"))
             .debug_selector(|| "cloud-opensandbox-new".into())
-            .child(self.control_note(
-                "Creates a sandbox with a generated name and no expiry, keeps Herdr's server running there, and adds it as a device.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-opensandbox-new-note")))
             .child(
                 self.control_switch(
                     "cloud-opensandbox-install",
-                    "Install Herdr in it when missing",
+                    fl!("settings-cloud-install-herdr-in-it"),
                     card.install,
                     ready,
                 )
@@ -388,24 +423,26 @@ impl SettingsWindow {
             ))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-opensandbox-create", "Create sandbox", create)
-                        .debug_selector(|| "cloud-opensandbox-create".into())
-                        .when(create, |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| this.create_opensandbox(cx)))
-                        }),
+                    self.cloud_button(
+                        "cloud-opensandbox-create",
+                        fl!("settings-cloud-create-sandbox"),
+                        create,
+                    )
+                    .debug_selector(|| "cloud-opensandbox-create".into())
+                    .when(create, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.create_opensandbox(cx)))
+                    }),
                 ),
             );
         if let Some(message) = &card.message {
             new = new.child(div().min_w_0().child(message.clone()));
         }
         let mut devices = self
-            .control_card("OpenSandbox devices")
+            .cloud_card(fl!("settings-cloud-opensandbox-devices"))
             .debug_selector(|| "cloud-opensandbox-devices".into())
-            .child(self.control_note(
-                "Remove forgets a sandbox and leaves it on the server. To delete one, use Remove device… in its sidebar menu, which first checks it for unpushed work.",
-            ));
+            .child(self.control_note(fl!("settings-cloud-opensandbox-devices-note")));
         if card.devices().is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         for (index, device) in card.devices().iter().enumerate() {
             devices = devices.child(self.cloud_device_row(

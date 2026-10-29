@@ -3,10 +3,11 @@
 //! main window, which shows progress in the device picker and a toast when it
 //! is ready. Engine reads, stops, and removals run through `cloud::worker`,
 //! never on the UI thread.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
-    follow_config, input,
+    Hint, follow_config, input,
 };
 use crate::{
     cloud::{
@@ -18,22 +19,33 @@ use crate::{
         Settings,
         setup::{self, AddRequest, Device, Overview, State},
     },
+    i18n::{self, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 
-/// The editable `[container]` keys, in display order, with labels and hints.
-const FIELDS: [(&str, &str); 5] = [
+/// The editable `[container]` keys, in display order, with their labels'
+/// message IDs and hints.
+const FIELDS: [(&str, Hint); 5] = [
     (
-        "Engine",
-        "docker or podman; the first one installed if empty",
+        "settings-cloud-container-engine",
+        Hint::Message("settings-cloud-container-engine-placeholder"),
     ),
-    ("Image", setup::DEFAULT_IMAGE),
-    ("CPUs", setup::DEFAULT_CPUS),
-    ("Memory", setup::DEFAULT_MEMORY),
     (
-        "Auto-stop",
-        "never; or 30m, 2h: stop once no agent has worked that long",
+        "settings-cloud-container-image",
+        Hint::Value(setup::DEFAULT_IMAGE),
+    ),
+    (
+        "settings-cloud-container-cpus",
+        Hint::Value(setup::DEFAULT_CPUS),
+    ),
+    (
+        "settings-cloud-container-memory",
+        Hint::Value(setup::DEFAULT_MEMORY),
+    ),
+    (
+        "settings-cloud-container-auto-stop",
+        Hint::Message("settings-cloud-container-auto-stop-placeholder"),
     ),
 ];
 
@@ -67,8 +79,10 @@ impl ContainerCard {
     ) -> Self {
         let loaded = ContainerFields::from_config(&config.container);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
+        let fields = std::array::from_fn(|index| {
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
+        });
         Self {
             fields,
             loaded,
@@ -111,13 +125,14 @@ fn texts(values: &ContainerFields) -> [&str; 5] {
     ]
 }
 
-/// What the row says about a container's state.
-fn state_text(state: Option<State>) -> &'static str {
+/// What the row says about a container: its engine and its state.
+fn state_text(engine: &str, state: Option<State>) -> String {
+    let engine = engine.to_owned();
     match state {
-        Some(State::Running) => "running",
-        Some(State::Stopped) => "stopped",
-        Some(State::Missing) => "missing from the engine",
-        None => "engine not reachable",
+        Some(State::Running) => fl!("settings-cloud-container-running", engine = engine),
+        Some(State::Stopped) => fl!("settings-cloud-container-stopped", engine = engine),
+        Some(State::Missing) => fl!("settings-cloud-container-missing", engine = engine),
+        None => fl!("settings-cloud-container-unreachable", engine = engine),
     }
 }
 
@@ -156,6 +171,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "container_worker", error_kind = ?error.kind(), "Could not start the container settings worker");
                 if let Some(card) = &mut self.container_card {
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -281,9 +297,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.container_card {
             card.message = Some(match started {
-                Ok(Ok(())) => format!("Creating {name}. The device picker shows its progress."),
+                Ok(Ok(())) => fl!("settings-cloud-creating", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a container.".into(),
+                Err(_) => fl!("settings-cloud-container-no-window"),
             });
         }
         cx.notify();
@@ -306,8 +322,12 @@ impl SettingsWindow {
         };
         let ready = !self.busy();
         let status = match card.overview.as_ref().map(|overview| &overview.engine) {
-            None => "Checking for Docker or Podman…".to_owned(),
-            Some(Ok((engine, version))) => format!("{} {version} is running.", engine.name()),
+            None => fl!("settings-cloud-container-checking"),
+            Some(Ok((engine, version))) => fl!(
+                "settings-cloud-container-engine-running",
+                engine = engine.name(),
+                version = version.clone()
+            ),
             Some(Err(error)) => error.clone(),
         };
         let usable = card
@@ -315,18 +335,18 @@ impl SettingsWindow {
             .as_ref()
             .is_some_and(|overview| overview.engine.is_ok());
         let mut engine = self
-            .control_card("Container")
+            .cloud_card(crate::cloud::name(CloudProvider::Container).to_owned())
             .debug_selector(|| "cloud-container-card".into())
-            .child(self.control_note(
-                "Make containers on this computer's Docker or Podman engine and use them as devices. Each has its own home volume, CPU, memory, and process limits, and runs agents as an unprivileged user without access to this computer's files. Containers share this computer's kernel: for code you do not trust, use a VM provider instead.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-container-note")))
             .child(div().min_w_0().child(status));
         for (index, (label, _)) in FIELDS.iter().enumerate() {
-            engine = engine.child(self.cloud_field(label, card.fields[index].clone().into()));
+            engine = engine.child(
+                self.cloud_field(i18n::message(label, &[]), card.fields[index].clone().into()),
+            );
         }
         engine = engine.child(
             div().flex().justify_end().child(
-                self.cloud_button("cloud-container-save", "Save", ready)
+                self.cloud_button("cloud-container-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-container-save".into())
                     .when(ready, |button| {
                         button.on_click(cx.listener(|this, _, _, cx| this.save_container(cx)))
@@ -335,15 +355,13 @@ impl SettingsWindow {
         );
         let create = ready && usable && crate::cloud::unavailable().is_none();
         let mut new = self
-            .control_card("New container")
+            .cloud_card(fl!("settings-cloud-container-new"))
             .debug_selector(|| "cloud-container-new".into())
-            .child(self.control_note(
-                "Creates a container with a generated name, pulling the image first if needed, and adds it as a device once Herdr runs in it.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-container-new-note")))
             .child(
                 self.control_switch(
                     "cloud-container-install",
-                    "Install Herdr in it",
+                    fl!("settings-cloud-container-install"),
                     card.install,
                     ready,
                 )
@@ -369,24 +387,26 @@ impl SettingsWindow {
             ))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-container-create", "Create container", create)
-                        .debug_selector(|| "cloud-container-create".into())
-                        .when(create, |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| this.create_container(cx)))
-                        }),
+                    self.cloud_button(
+                        "cloud-container-create",
+                        fl!("settings-cloud-container-create"),
+                        create,
+                    )
+                    .debug_selector(|| "cloud-container-create".into())
+                    .when(create, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.create_container(cx)))
+                    }),
                 ),
             );
         if let Some(message) = &card.message {
             new = new.child(div().min_w_0().child(message.clone()));
         }
         let mut devices = self
-            .control_card("Containers")
+            .cloud_card(fl!("settings-cloud-container-devices"))
             .debug_selector(|| "cloud-container-devices".into())
-            .child(self.control_note(
-                "Remove forgets a container and leaves it on the engine. To delete one with its files, use Remove device… in its sidebar menu, which first checks it for unpushed work.",
-            ));
+            .child(self.control_note(fl!("settings-cloud-container-devices-note")));
         if card.devices().is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         for (index, device) in card.devices().iter().enumerate() {
             let running = device.state == Some(State::Running);
@@ -394,7 +414,7 @@ impl SettingsWindow {
             let stop = self
                 .cloud_button(
                     SharedString::from(format!("cloud-container-stop-{index}")),
-                    "Stop",
+                    fl!("settings-cloud-container-stop"),
                     ready && running,
                 )
                 .debug_selector(move || format!("cloud-container-stop-{index}"))
@@ -407,7 +427,7 @@ impl SettingsWindow {
             devices = devices.child(self.cloud_device_row_with(
                 index,
                 &device.saved,
-                format!("{} · {}", device.saved.account, state_text(device.state)),
+                state_text(&device.saved.account, device.state),
                 ready,
                 Self::forget_container_device,
                 [stop],
@@ -420,11 +440,9 @@ impl SettingsWindow {
             .map_or(&[][..], |overview| &overview.unsaved);
         let unsaved = (!unsaved.is_empty()).then(|| {
             let mut list = self
-                .control_card("Not saved here")
+                .cloud_card(fl!("settings-cloud-container-unsaved"))
                 .debug_selector(|| "cloud-container-unsaved".into())
-                .child(self.control_note(
-                    "Herdr UI made these containers but has no device for them, such as after quitting while one was made. Add one to use it, or delete it afterwards from its sidebar menu.",
-                ));
+                .child(self.control_note(fl!("settings-cloud-container-unsaved-note")));
             for (index, name) in unsaved.iter().enumerate() {
                 let id = name.clone();
                 list = list.child(
@@ -437,7 +455,7 @@ impl SettingsWindow {
                         .child(
                             self.cloud_button(
                                 SharedString::from(format!("cloud-container-adopt-{index}")),
-                                "Add",
+                                fl!("settings-cloud-container-adopt"),
                                 ready,
                             )
                             .debug_selector(move || format!("cloud-container-adopt-{index}"))

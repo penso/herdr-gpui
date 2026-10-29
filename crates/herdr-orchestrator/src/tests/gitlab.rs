@@ -1,7 +1,7 @@
 use super::*;
 use crate::gitlab::{
-    self, Api, Credential, IssueNode, MAX_OPEN, Scheme, environment_token, full, issues_url,
-    parse_cli, retry_after, status_error,
+    self, Api, Credential, IssueNode, Listed, MAX_OPEN, Scheme, environment_token, full,
+    issues_url, parse_cli, retry_after, status_error,
 };
 use crate::service::retry_wait;
 use chrono::TimeDelta;

@@ -1,9 +1,11 @@
 //! Tabs & panes: tab layout and bar, closing confirmations, pane focus and
 //! session restore.
+// i18n: migrated
 use super::{SettingsWindow, on_value, ui};
 use crate::{
     config::{TabLayoutMode, preferences::Preference},
     herdr_settings::{Edit, TabBarPosition},
+    i18n::fl,
     settings_window::remote_history::HostState,
 };
 use gpui::{prelude::*, *};
@@ -24,10 +26,14 @@ impl SettingsWindow {
         let mut page = div()
             .flex()
             .flex_col()
-            .child(ui::section(theme, "Layout", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-tabs-section-layout"),
+                None,
+            ))
             .child(
-                ui::row(theme, "tabs-layout", "Tab layout")
-                    .description("How tab strips draw their tabs. Also under View > Tab Layout.")
+                ui::row(theme, "tabs-layout", fl!("settings-tabs-layout"))
+                    .description(fl!("settings-tabs-layout-description"))
                     .control(ui::segmented(
                         theme,
                         "tabs-layout-control",
@@ -39,39 +45,55 @@ impl SettingsWindow {
                         }),
                     )),
             )
-            .child(ui::section(theme, "Tab bar", Some(ui::Source::Herdr)))
+            .child(ui::section(
+                theme,
+                &fl!("settings-tabs-section-tab-bar"),
+                Some(ui::Source::Herdr),
+            ))
             .child(
-                self.gate_shared(ui::row(theme, "tabs-position", "Position"))
-                    .control(ui::segmented(
-                        theme,
-                        "tabs-position-control",
-                        &[
-                            (TabBarPosition::Top, "Top"),
-                            (TabBarPosition::Bottom, "Bottom"),
-                        ],
-                        position,
+                self.gate_shared(ui::row(
+                    theme,
+                    "tabs-position",
+                    fl!("settings-tabs-position"),
+                ))
+                .control(ui::segmented(
+                    theme,
+                    "tabs-position-control",
+                    &[
+                        (TabBarPosition::Top, fl!("settings-tabs-position-top")),
+                        (TabBarPosition::Bottom, fl!("settings-tabs-position-bottom")),
+                    ],
+                    position,
+                    ready,
+                    on_value(cx, |this, choice, _, cx| {
+                        this.save_shared(Edit::TabBarPosition(choice), cx)
+                    }),
+                )),
+            )
+            .child(
+                self.gate_shared(ui::row(
+                    theme,
+                    "tabs-hide-single",
+                    fl!("settings-tabs-hide-single"),
+                ))
+                .switch(
+                    ui::toggle(theme, "tabs-hide-single-toggle", hide, ready).when(
                         ready,
-                        on_value(cx, |this, choice, _, cx| {
-                            this.save_shared(Edit::TabBarPosition(choice), cx)
-                        }),
-                    )),
-            )
-            .child(
-                self.gate_shared(ui::row(theme, "tabs-hide-single", "Hide with a single tab"))
-                    .switch(
-                        ui::toggle(theme, "tabs-hide-single-toggle", hide, ready).when(
-                            ready,
-                            |toggle| {
-                                toggle.on_click(cx.listener(move |this, _, _, cx| {
-                                    this.save_shared(Edit::HideSingleTabBar(!hide), cx)
-                                }))
-                            },
-                        ),
+                        |toggle| {
+                            toggle.on_click(cx.listener(move |this, _, _, cx| {
+                                this.save_shared(Edit::HideSingleTabBar(!hide), cx)
+                            }))
+                        },
                     ),
+                ),
             )
-            .child(ui::section(theme, "Closing", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-tabs-section-closing"),
+                None,
+            ))
             .child(
-                ui::row(theme, "tabs-confirm-tab", "Confirm before closing a tab").switch(
+                ui::row(theme, "tabs-confirm-tab", fl!("settings-tabs-confirm-tab")).switch(
                     self.preference_toggle(
                         "tabs-confirm-tab-toggle",
                         self.config.confirm_close_tab,
@@ -81,20 +103,23 @@ impl SettingsWindow {
                 ),
             )
             .child(
-                ui::row(theme, "tabs-confirm-pane", "Confirm before closing a pane").switch(
-                    self.preference_toggle(
-                        "tabs-confirm-pane-toggle",
-                        self.config.confirm_close_pane,
-                        Preference::ConfirmClosePane(!self.config.confirm_close_pane),
-                        cx,
-                    ),
-                ),
+                ui::row(
+                    theme,
+                    "tabs-confirm-pane",
+                    fl!("settings-tabs-confirm-pane"),
+                )
+                .switch(self.preference_toggle(
+                    "tabs-confirm-pane-toggle",
+                    self.config.confirm_close_pane,
+                    Preference::ConfirmClosePane(!self.config.confirm_close_pane),
+                    cx,
+                )),
             )
             .child(
                 ui::row(
                     theme,
                     "tabs-confirm-workspace",
-                    "Confirm before closing a workspace",
+                    fl!("settings-tabs-confirm-workspace"),
                 )
                 .switch(self.preference_toggle(
                     "tabs-confirm-workspace-toggle",
@@ -103,30 +128,39 @@ impl SettingsWindow {
                     cx,
                 )),
             )
-            .child(ui::section(theme, "Panes", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-tabs-section-panes"),
+                None,
+            ))
             .child(
-                ui::row(theme, "tabs-focus-follows-mouse", "Focus follows mouse")
-                    .description("The pointer chooses the active pane within a split terminal tab.")
-                    .switch(self.preference_toggle(
-                        "tabs-focus-follows-mouse-toggle",
-                        self.config.focus_follows_mouse,
-                        Preference::FocusFollowsMouse(!self.config.focus_follows_mouse),
-                        cx,
-                    )),
+                ui::row(
+                    theme,
+                    "tabs-focus-follows-mouse",
+                    fl!("settings-tabs-focus-follows-mouse"),
+                )
+                .description(fl!("settings-tabs-focus-follows-mouse-description"))
+                .switch(self.preference_toggle(
+                    "tabs-focus-follows-mouse-toggle",
+                    self.config.focus_follows_mouse,
+                    Preference::FocusFollowsMouse(!self.config.focus_follows_mouse),
+                    cx,
+                )),
             )
-            .child(ui::section(theme, "Session restore", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-tabs-section-session-restore"),
+                None,
+            ))
             .child(
                 self.gate_shared(
                     ui::row(
                         theme,
                         "tabs-pane-history",
-                        "Restore scrollback after Herdr restarts",
+                        fl!("settings-tabs-pane-history"),
                     )
                     .tag(ui::Source::Herdr)
-                    .description(
-                        "Experimental. Herdr saves pane output to session-history.json and \
-                         replays it when the daemon restarts.",
-                    ),
+                    .description(fl!("settings-tabs-pane-history-description")),
                 )
                 .switch(
                     ui::toggle(theme, "tabs-pane-history-toggle", history, ready).when(
@@ -148,12 +182,12 @@ impl SettingsWindow {
             let enabled = open && settled;
             let target = host.target.clone();
             let note = match &host.state {
-                HostState::Loading => "Reading host config\u{2026}".to_owned(),
-                HostState::Saving(_) => "Saving host config\u{2026}".to_owned(),
+                HostState::Loading => fl!("settings-tabs-host-loading"),
+                HostState::Saving(_) => fl!("settings-tabs-host-saving"),
                 HostState::Failed(error) => {
-                    format!("{error}. Reload configuration to try again.")
+                    fl!("settings-tabs-host-failed", error = error.to_string())
                 }
-                HostState::Ready(_) => "Each SSH host keeps its own setting.".to_owned(),
+                HostState::Ready(_) => fl!("settings-tabs-host-ready"),
             };
             let id = format!("tabs-pane-history-host-{index}");
             page = page.child(

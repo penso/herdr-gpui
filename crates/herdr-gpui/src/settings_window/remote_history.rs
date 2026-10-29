@@ -1,6 +1,7 @@
 //! Herdr's pane history switch on each connected SSH host. Every host's
 //! daemon reads its own config, so each switch reads and writes that host's
 //! file over SSH on a background worker, independently of local saves.
+// i18n: migrated
 
 use super::SettingsWindow;
 use crate::herdr_settings::RemotePaneHistory;
@@ -297,7 +298,12 @@ fn queue_reload(
                     failure.get_or_insert(error);
                 }
             }
-            failure.map(|error| format!("Saved; host daemon reload not queued: {error}"))
+            failure.map(|error| {
+                crate::i18n::fl!(
+                    "settings-remote-history-reload-failed",
+                    error = error.to_string()
+                )
+            })
         })
         .ok()
         .flatten()

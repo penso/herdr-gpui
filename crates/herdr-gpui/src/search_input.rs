@@ -17,6 +17,10 @@ pub struct Changed;
 pub struct SearchInput {
     pub focus: FocusHandle,
     placeholder: String,
+    /// Formats the placeholder in the current locale, so a field built
+    /// before a language change shows the new language's hint.
+    localized: Option<Box<dyn Fn() -> String>>,
+    _locale: gpui::Subscription,
     /// What a screen reader calls the field when its placeholder does not
     /// name it, as when a caption beside the field does.
     label: Option<SharedString>,
@@ -147,6 +151,12 @@ impl SearchInput {
         Self {
             focus: cx.focus_handle(),
             placeholder: "Search themes...".into(),
+            localized: None,
+            _locale: cx.observe_global::<crate::i18n::CurrentLocale>(|this, cx| {
+                if let Some(placeholder) = this.localized.as_ref().map(|localized| localized()) {
+                    this.show_placeholder(placeholder, cx);
+                }
+            }),
             label: None,
             edit: Editing::default(),
             font: Config::default().ui,
@@ -224,11 +234,28 @@ impl SearchInput {
     }
 
     /// Unchanged is a no-op, so the owner may set it from its own render.
+    /// The text stays as given when the locale changes, as an example path
+    /// or token does.
     pub fn set_placeholder(&mut self, value: &str, cx: &mut Context<Self>) {
-        if self.placeholder == value {
-            return;
+        self.localized = None;
+        if self.placeholder != value {
+            self.show_placeholder(value.into(), cx);
         }
-        self.placeholder = value.into();
+    }
+
+    /// Shows what `placeholder` formats now, and formats it again whenever
+    /// the locale changes.
+    pub(crate) fn set_placeholder_with(
+        &mut self,
+        placeholder: impl Fn() -> String + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_placeholder(placeholder(), cx);
+        self.localized = Some(Box::new(placeholder));
+    }
+
+    fn show_placeholder(&mut self, placeholder: String, cx: &mut Context<Self>) {
+        self.placeholder = placeholder;
         self.layout = None;
         cx.notify();
     }
@@ -797,6 +824,7 @@ mod tests {
     use super::*;
 
     mod completion;
+    mod placeholder;
     mod word_keys;
 
     #[test]

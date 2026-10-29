@@ -1,12 +1,13 @@
 //! Settings > Theme > Window backdrop: Solid, Translucent, or Picture,
 //! each with only its own controls below. Settings and dialogs stay opaque
 //! whatever is chosen.
+// i18n: migrated
 use super::*;
 use crate::config::{
     Backdrop, Material, Theme,
     backdrop::{Edit, IMAGE_OPACITY},
 };
-use crate::settings_window::ui;
+use crate::{i18n::fl, settings_window::ui};
 
 mod ruler;
 
@@ -33,11 +34,20 @@ impl Mode {
         }
     }
 
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::Solid => "Solid",
-            Self::Translucent => "Translucent",
-            Self::Picture => "Picture",
+            Self::Solid => fl!("settings-theme-backdrop-solid"),
+            Self::Translucent => fl!("settings-theme-backdrop-translucent"),
+            Self::Picture => fl!("settings-theme-backdrop-picture"),
+        }
+    }
+
+    /// The line under the Backdrop row while this mode is chosen.
+    fn description(self) -> String {
+        match self {
+            Self::Solid => fl!("settings-theme-backdrop-solid-hint"),
+            Self::Translucent => fl!("settings-theme-backdrop-translucent-hint"),
+            Self::Picture => fl!("settings-theme-backdrop-picture-hint"),
         }
     }
 
@@ -146,25 +156,39 @@ impl SettingsWindow {
                     .flex_col()
                     .child(self.backdrop_ruler(cx))
                     .child(
-                        self.control_switch("settings-backdrop-blur", "Blur behind", blur, true)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.save_backdrop(vec![Edit::Blur(!blur)], cx);
-                            })),
+                        self.control_switch(
+                            "settings-backdrop-blur",
+                            fl!("settings-theme-backdrop-blur"),
+                            blur,
+                            true,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.save_backdrop(vec![Edit::Blur(!blur)], cx);
+                        })),
                     )
                     // Only Windows 11 has a second material to choose.
                     .when(blur && offers_materials(), |details| {
                         let mica = backdrop.material == Material::Mica;
-                        let next = if mica { Material::Acrylic } else { Material::Mica };
+                        let next = if mica {
+                            Material::Acrylic
+                        } else {
+                            Material::Mica
+                        };
                         details
                             .child(
-                                self.control_switch("settings-backdrop-mica", "Mica", mica, true)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                self.control_switch(
+                                    "settings-backdrop-mica",
+                                    fl!("settings-theme-backdrop-mica"),
+                                    mica,
+                                    true,
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
                                         this.save_backdrop(vec![Edit::Material(next)], cx);
-                                    })),
+                                    },
+                                )),
                             )
-                            .child(self.control_note(
-                                "Mica tints the window with the wallpaper rather than the windows behind it.",
-                            ))
+                            .child(self.control_note(fl!("settings-theme-backdrop-mica-hint")))
                     })
             }
             Mode::Picture => div()
@@ -173,18 +197,18 @@ impl SettingsWindow {
                 .child(self.backdrop_picture_row(cx))
                 .child(self.backdrop_ruler(cx)),
         };
-        let description = match current {
-            Mode::Solid => "The window paints as it always has.",
-            Mode::Translucent => "Colors a program chooses, popups, and dialogs stay opaque.",
-            Mode::Picture => {
-                "The window stays opaque over the picture; lower opacity shows more of it."
-            }
-        };
         div()
             .debug_selector(|| "settings-backdrop".into())
             .flex()
             .flex_col()
-            .child(ui::row(&self.theme, "theme-backdrop", "Backdrop").description(description))
+            .child(
+                ui::row(
+                    &self.theme,
+                    "theme-backdrop",
+                    fl!("settings-theme-backdrop"),
+                )
+                .description(current.description()),
+            )
             .child(tiles.py(px(10.)))
             .child(details)
     }
@@ -261,7 +285,7 @@ impl SettingsWindow {
                     .into_owned()
             })
             .unwrap_or_default();
-        let link = |id: &'static str, label: &'static str, color: u32| {
+        let link = |id: &'static str, label: String, color: u32| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -276,7 +300,11 @@ impl SettingsWindow {
             .justify_between()
             .gap(px(12.))
             .py(px(8.))
-            .child(div().flex_none().child("Picture"))
+            .child(
+                div()
+                    .flex_none()
+                    .child(fl!("settings-theme-backdrop-picture")),
+            )
             .child(
                 div()
                     .flex()
@@ -285,14 +313,17 @@ impl SettingsWindow {
                     .min_w_0()
                     .child(div().min_w_0().truncate().child(name))
                     .child(
-                        link("settings-backdrop-change", "Change", theme.muted).on_click(
-                            cx.listener(|this, _, _, cx| this.choose_backdrop_picture(cx)),
-                        ),
+                        link(
+                            "settings-backdrop-change",
+                            fl!("settings-theme-backdrop-change"),
+                            theme.muted,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| this.choose_backdrop_picture(cx))),
                     )
                     .child(
                         link(
                             "settings-backdrop-remove",
-                            "Remove",
+                            fl!("settings-theme-backdrop-remove"),
                             theme.ink(theme.palette[1]),
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -318,7 +349,7 @@ impl SettingsWindow {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some("Choose".into()),
+            prompt: Some(fl!("settings-theme-backdrop-choose").into()),
         });
         // An opaque background would hide the picture just chosen.
         let opaque = !self.config.backdrop.translucent();

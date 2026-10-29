@@ -1,9 +1,14 @@
 //! Notifications: delivery, in-app toasts, and sound.
-use super::{SettingsWindow, TOAST_POSITIONS, on_off, on_value, ui};
+// i18n: migrated
+use super::{
+    SettingsWindow, TOAST_POSITIONS, on_off, on_off_choices, on_value, position_name,
+    position_names, ui,
+};
 use crate::settings_window::inputs::{DropdownField, NumberField};
 use crate::{
     config::preferences::Preference,
     herdr_settings::{Edit, ToastDelivery},
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 
@@ -17,37 +22,48 @@ impl SettingsWindow {
         let position = overrides
             .position()
             .and_then(|p| TOAST_POSITIONS.iter().position(|(c, _)| *c == p));
-        let position_names = TOAST_POSITIONS.map(|(_, name)| name);
+        let position_names = position_names(&TOAST_POSITIONS);
         let base_position = shared.map_or(
             crate::config::NotificationConfig::default().position,
             |shared| shared.toast_position,
         );
-        let base_position = TOAST_POSITIONS
-            .iter()
-            .find_map(|(p, name)| (*p == base_position).then_some(*name))
-            .unwrap_or_default();
+        let base_position = position_name(&TOAST_POSITIONS, &base_position);
         let sound = shared.is_some_and(|shared| shared.sound_enabled);
         let finished = self.config.notifications.finished;
         let source_alive = self.source.upgrade().is_some();
         div()
             .flex()
             .flex_col()
-            .child(ui::section(theme, "Delivery", Some(ui::Source::Herdr)))
+            .child(ui::section(
+                theme,
+                &fl!("settings-notifications-section-delivery"),
+                Some(ui::Source::Herdr),
+            ))
             .child(
                 self.gate_shared(
-                    ui::row(theme, "notif-delivery", "Deliver agent notifications").description(
-                        "Herdr shows them in-app. System uses OS notifications; clicking one \
-                         opens its pane. Terminal is for other clients only.",
-                    ),
+                    ui::row(theme, "notif-delivery", fl!("settings-notif-delivery"))
+                        .description(fl!("settings-notif-delivery-description")),
                 )
                 .control(ui::segmented(
                     theme,
                     "notif-delivery-control",
                     &[
-                        (ToastDelivery::Off, "Off"),
-                        (ToastDelivery::Herdr, "Herdr"),
-                        (ToastDelivery::Terminal, "Terminal"),
-                        (ToastDelivery::System, "System"),
+                        (
+                            ToastDelivery::Off,
+                            fl!("settings-notifications-delivery-off"),
+                        ),
+                        (
+                            ToastDelivery::Herdr,
+                            fl!("settings-notifications-delivery-herdr"),
+                        ),
+                        (
+                            ToastDelivery::Terminal,
+                            fl!("settings-notifications-delivery-terminal"),
+                        ),
+                        (
+                            ToastDelivery::System,
+                            fl!("settings-notifications-delivery-system"),
+                        ),
                     ],
                     shared.map(|shared| shared.toast_delivery),
                     ready,
@@ -57,12 +73,9 @@ impl SettingsWindow {
                 )),
             )
             .child(
-                ui::row(theme, "notif-finished", "Finished notifications")
+                ui::row(theme, "notif-finished", fl!("settings-notif-finished"))
                     .tag(ui::Source::HerdrUi)
-                    .description(
-                        "Off drops the notice at the end of each agent turn, in-app and from \
-                         the system; \u{201c}needs attention\u{201d} still shows.",
-                    )
+                    .description(fl!("settings-notifications-finished-description"))
                     .switch(self.preference_toggle(
                         "notif-finished-toggle",
                         finished,
@@ -72,58 +85,61 @@ impl SettingsWindow {
             )
             .child(ui::section(
                 theme,
-                "In-app toasts",
+                &fl!("settings-notifications-section-toasts"),
                 Some(ui::Source::HerdrUi),
             ))
             .child(
-                ui::row(theme, "notif-show", "Show toasts").control(self.override_dropdown(
-                    DropdownField::ToastEnabled,
-                    on_off(shared_enabled),
-                    &["On", "Off"],
-                    overrides.enabled().map(|on| usize::from(!on)),
-                    cx,
-                )),
+                ui::row(theme, "notif-show", fl!("settings-notif-show")).control(
+                    self.override_dropdown(
+                        DropdownField::ToastEnabled,
+                        &on_off(shared_enabled),
+                        &on_off_choices(),
+                        overrides.enabled().map(|on| usize::from(!on)),
+                        cx,
+                    ),
+                ),
             )
             .child(self.delay_row(cx))
             .child(
-                ui::row(theme, "notif-position", "Position")
-                    .description(
-                        "Controls show effective values; a managed-file override still \
-                         takes precedence.",
-                    )
+                ui::row(theme, "notif-position", fl!("settings-notif-position"))
+                    .description(fl!("settings-notifications-position-description"))
                     .control(self.override_dropdown(
                         DropdownField::ToastPosition,
-                        base_position,
+                        &base_position,
                         &position_names,
                         position,
                         cx,
                     )),
             )
-            .child(ui::section(theme, "Sound", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-notifications-section-sound"),
+                None,
+            ))
             .child(
                 self.gate_shared(
-                    ui::row(theme, "notif-sound", "Play agent sounds")
+                    ui::row(theme, "notif-sound", fl!("settings-notif-sound"))
                         .tag(ui::Source::Herdr)
                         .description(if source_alive {
-                            "Uses Herdr's sound paths and per-agent overrides. Missing custom \
-                             sounds fall back to bundled sounds."
+                            fl!("settings-notifications-sound-description")
                         } else {
-                            "Uses Herdr's sound paths and per-agent overrides. Missing custom \
-                             sounds fall back to bundled sounds. Open a main Herdr window to \
-                             preview audio."
+                            fl!("settings-notifications-sound-description-no-window")
                         }),
                 )
                 .control(
-                    ui::button(theme, "notif-sound-test", "Test", source_alive).when(
+                    ui::button(
+                        theme,
+                        "notif-sound-test",
+                        fl!("settings-notifications-sound-test"),
                         source_alive,
-                        |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(source) = this.source.upgrade() {
-                                    source.read(cx).sound.preview();
-                                }
-                            }))
-                        },
-                    ),
+                    )
+                    .when(source_alive, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(source) = this.source.upgrade() {
+                                source.read(cx).sound.preview();
+                            }
+                        }))
+                    }),
                 )
                 .switch(
                     ui::toggle(theme, "notif-sound-toggle", sound, ready).when(ready, |toggle| {
@@ -145,18 +161,15 @@ impl SettingsWindow {
         });
         let value = self.config.notifications.delay_seconds as f32;
         let view = cx.entity().downgrade();
-        ui::row(&self.theme, "notif-delay", "Delay")
-            .description(
-                "Wait before a toast appears, so quick turns stay quiet. Controls show \
-                 effective values; a managed-file override still takes precedence.",
-            )
+        ui::row(&self.theme, "notif-delay", fl!("settings-notif-delay"))
+            .description(fl!("settings-notifications-delay-description"))
             .control(ui::number(
                 &self.theme,
                 ui::Number {
                     id: NumberField::ToastDelay.selector(),
                     value,
                     range: NumberField::ToastDelay.range(),
-                    unit: "s",
+                    unit: ui::Unit::Seconds,
                     look: ui::Look::Steppers,
                     enabled: true,
                 },
@@ -170,11 +183,15 @@ impl SettingsWindow {
             ))
             .when(overridden, |row| {
                 row.control(
-                    ui::button(&self.theme, "notif-delay-reset", "Reset", true).on_click(
-                        cx.listener(|this, _, _, cx| {
-                            this.save_preference(Preference::NotificationDelay(None), cx)
-                        }),
-                    ),
+                    ui::button(
+                        &self.theme,
+                        "notif-delay-reset",
+                        fl!("settings-notifications-delay-reset"),
+                        true,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.save_preference(Preference::NotificationDelay(None), cx)
+                    })),
                 )
             })
     }
@@ -191,16 +208,16 @@ impl SettingsWindow {
             f32::from(self.config.sound.volume),
         );
         let view = cx.entity().downgrade();
-        ui::row(&self.theme, "notif-volume", "Volume")
+        ui::row(&self.theme, "notif-volume", fl!("settings-notif-volume"))
             .tag(ui::Source::HerdrUi)
-            .description("Sounds and Test play at this level, even when sounds are off.")
+            .description(fl!("settings-notif-volume-description"))
             .control(ui::number(
                 &self.theme,
                 ui::Number {
                     id: NumberField::SoundVolume.selector(),
                     value,
                     range: NumberField::SoundVolume.range(),
-                    unit: "%",
+                    unit: ui::Unit::Percent,
                     look: ui::Look::Slider,
                     enabled: true,
                 },

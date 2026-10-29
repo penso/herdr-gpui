@@ -369,7 +369,7 @@ impl OrchestratorView {
             .detail
             .as_ref()
             .and_then(|detail| self.item(&detail.key))
-            .and_then(|item| item.pull_request.as_ref())
+            .and_then(|item| item.github_pull_request())
             .map(|pr| pr.number);
         if let (Some(number), Some(service)) = (number, self.service()) {
             service.load_pull_request(number);
@@ -658,7 +658,7 @@ impl OrchestratorView {
         let Some(item) = self.item(&key) else {
             return;
         };
-        let pull_request = item.pull_request.is_some();
+        let pull_request = item.github_pull_request().is_some();
         self.detail = Some(Detail {
             key,
             tab: if pull_request {
@@ -805,7 +805,7 @@ impl OrchestratorView {
                 let index = event.keystroke.key.parse::<usize>().unwrap_or(1) - 1;
                 let pull_request = self
                     .item(&detail.key)
-                    .is_some_and(|item| item.pull_request.is_some());
+                    .is_some_and(|item| item.github_pull_request().is_some());
                 let tabs = DetailTab::tabs(pull_request);
                 let mut detail = detail.clone();
                 detail.tab = tabs[index.min(tabs.len() - 1)];

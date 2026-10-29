@@ -1,13 +1,6 @@
 use super::*;
 use crate::controls::COMMANDS;
 
-fn takes(id: &str) -> Option<&'static [&'static str]> {
-    MESSAGES
-        .iter()
-        .find(|(message, _)| *message == id)
-        .map(|(_, variables)| *variables)
-}
-
 /// Catalog commands name their messages as data, which `fl!` cannot check.
 #[test]
 fn every_catalog_command_names_an_english_message_with_its_arguments() {

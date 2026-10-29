@@ -1,10 +1,11 @@
 //! The Boat tab of Settings > Cloud devices. Account fields save to `[boat]`;
 //! its API key saves to the credential store. API reads and removals stay off
 //! the UI thread, and creation jobs belong to the main window.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
-    follow_config, input,
+    Hint, follow_config, input,
 };
 use crate::{
     boat::{
@@ -17,31 +18,41 @@ use crate::{
     },
     config::{BoatFields, Config},
     github::Store,
+    i18n::{self, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 use secrecy::SecretString;
 
-const FIELDS: [(&str, &str); 5] = [
-    ("API URL", crate::boat::DEFAULT_API_URL),
+/// Each field's label, as a message ID, and placeholder.
+const FIELDS: [(&str, Hint); 5] = [
     (
-        "Organization",
-        "Optional; the active personal or organization wallet if empty",
+        "settings-cloud-boat-api-url",
+        Hint::Value(crate::boat::DEFAULT_API_URL),
     ),
-    ("Machine type", "Optional: small, default, large, or xlarge"),
     (
-        "Environment",
-        "Optional; the account's default environment if empty",
+        "settings-cloud-boat-organization",
+        Hint::Message("settings-cloud-boat-organization-placeholder"),
     ),
-    ("Auto-stop after", "never, or 1–2592000 seconds"),
+    (
+        "settings-cloud-boat-machine-type",
+        Hint::Message("settings-cloud-boat-machine-type-placeholder"),
+    ),
+    (
+        "settings-cloud-boat-environment",
+        Hint::Message("settings-cloud-boat-environment-placeholder"),
+    ),
+    (
+        "settings-cloud-boat-auto-stop",
+        Hint::Message("settings-cloud-boat-auto-stop-placeholder"),
+    ),
 ];
 
 fn sandbox_status(count: SandboxCount) -> String {
     match count {
-        SandboxCount::Exact(1) => "Connected. The key sees 1 sandbox.".into(),
-        SandboxCount::Exact(count) => format!("Connected. The key sees {count} sandboxes."),
+        SandboxCount::Exact(count) => fl!("settings-cloud-boat-sandboxes", count = count),
         SandboxCount::AtLeast(count) => {
-            format!("Connected. The key sees {count} or more sandboxes.")
+            fl!("settings-cloud-boat-sandboxes-at-least", count = count)
         }
     }
 }
@@ -72,9 +83,12 @@ impl BoatCard {
     ) -> Self {
         let loaded = loaded(config);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
-        let key = input("boat_…", "", config, theme, cx);
+        let fields = std::array::from_fn(|index| {
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
+        });
+        // A Boat key's prefix.
+        let key = input(|| "boat_…".to_owned(), "", config, theme, cx); // i18n: data
         key.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
@@ -185,6 +199,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "boat_worker", error_kind = ?error.kind(), "Could not start Boat settings worker");
                 if let Some(card) = &mut self.boat_card {
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -333,11 +348,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.boat_card {
             card.message = Some(match started {
-                Ok(Ok(())) => {
-                    format!("Setting up {name}. The device picker shows its progress.")
-                }
+                Ok(Ok(())) => fl!("settings-cloud-setting-up", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to set up a sandbox.".into(),
+                Err(_) => fl!("settings-cloud-no-window-sandbox"),
             });
         }
         cx.notify();
@@ -364,17 +377,21 @@ impl SettingsWindow {
         let configured = self.boat_settings().is_some();
         let (status, key) = match &card.account {
             _ if !configured => (
-                "Not configured. Check the API URL, add an API key, then save.".to_owned(),
+                fl!("settings-cloud-boat-not-configured"),
                 Some(Key::Missing),
             ),
-            Account::Checking => ("Checking…".to_owned(), Some(Key::Missing)),
+            Account::Checking => (fl!("settings-cloud-checking"), Some(Key::Missing)),
             Account::Known(overview) => (
                 match (&overview.key, &overview.sandboxes) {
-                    (Err(error), _) => format!("The API key could not be read: {error}"),
-                    (Ok(Key::Missing), _) => "No API key saved.".to_owned(),
+                    (Err(error), _) => {
+                        fl!("settings-cloud-key-unreadable", error = error.to_string())
+                    }
+                    (Ok(Key::Missing), _) => fl!("settings-cloud-key-missing"),
                     (_, Some(Ok(count))) => sandbox_status(*count),
-                    (_, Some(Err(error))) => format!("The API key could not be used: {error}"),
-                    (_, None) => "Checking…".to_owned(),
+                    (_, Some(Err(error))) => {
+                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                    }
+                    (_, None) => fl!("settings-cloud-checking"),
                 },
                 overview.key.as_ref().ok().copied(),
             ),
@@ -382,23 +399,23 @@ impl SettingsWindow {
         let usable = matches!(&card.account, Account::Known(overview)
             if matches!(overview.sandboxes, Some(Ok(_))));
         let key_note = match key {
-            Some(Key::Environment) => "Set by HERDR_BOAT_API_KEY, which takes precedence.",
-            Some(Key::Saved) => "Saved. Type a new key to replace it.",
-            Some(Key::Missing) => "Not saved yet. Create one in the Boat dashboard under API Keys.",
-            None => "Credential storage is unavailable. Saved devices can still be removed.",
+            Some(Key::Environment) => fl!("settings-cloud-boat-key-environment"),
+            Some(Key::Saved) => fl!("settings-cloud-key-saved"),
+            Some(Key::Missing) => fl!("settings-cloud-boat-key-missing"),
+            None => fl!("settings-cloud-key-store-unavailable"),
         };
         let mut account = self
-            .control_card("Boat")
+            .cloud_card(crate::cloud::name(CloudProvider::Boat).to_owned())
             .debug_selector(|| "cloud-boat-card".into())
-            .child(self.control_note(
-                "Create Boat sandboxes and use them as devices. Herdr authorizes a GUI-owned SSH key and pins each machine's host key from Boat's authenticated API.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-boat-note")))
             .child(div().min_w_0().child(status));
         for (index, (label, _)) in FIELDS.iter().enumerate() {
-            account = account.child(self.cloud_field(label, card.fields[index].clone().into()));
+            account = account.child(
+                self.cloud_field(i18n::message(label, &[]), card.fields[index].clone().into()),
+            );
             if index == 0 {
                 account = account
-                    .child(self.cloud_field("API key", card.key.clone().into()))
+                    .child(self.cloud_field(fl!("settings-cloud-api-key"), card.key.clone().into()))
                     .child(
                         div()
                             .flex()
@@ -406,26 +423,28 @@ impl SettingsWindow {
                             .items_center()
                             .justify_between()
                             .gap(px(12.))
-                            .child(self.control_note(key_note))
+                            .child(self.control_note(key_note.clone()))
                             .when(key == Some(Key::Saved), |row| {
                                 row.child(
-                                    self.cloud_button("cloud-boat-forget-key", "Forget key", ready)
-                                        .when(ready, |button| {
-                                            button.on_click(cx.listener(|this, _, _, cx| {
-                                                this.forget_boat_key(cx)
-                                            }))
-                                        }),
+                                    self.cloud_button(
+                                        "cloud-boat-forget-key",
+                                        fl!("settings-cloud-forget-key"),
+                                        ready,
+                                    )
+                                    .when(ready, |button| {
+                                        button.on_click(
+                                            cx.listener(|this, _, _, cx| this.forget_boat_key(cx)),
+                                        )
+                                    }),
                                 )
                             }),
                     );
             }
         }
-        account = account.child(self.control_note(
-            "Use never to disable auto-stop: billing continues until you stop the sandbox in Boat. A number sets a fixed deadline, even during SSH work (trials require 1–7200 seconds). Applies on create and resume. For a running device, save then use Finish setup to extend from now or disable auto-stop.",
-        ));
+        account = account.child(self.control_note(fl!("settings-cloud-boat-auto-stop-note")));
         account = account.child(
             div().flex().justify_end().child(
-                self.cloud_button("cloud-boat-save", "Save", ready)
+                self.cloud_button("cloud-boat-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-boat-save".into())
                     .when(ready, |button| {
                         button.on_click(cx.listener(|this, _, _, cx| this.save_boat(cx)))
@@ -447,20 +466,18 @@ impl SettingsWindow {
         };
         let create = setup && (usable || pending.is_some());
         let create_label = if pending.is_some() {
-            "Recover creation"
+            fl!("settings-cloud-boat-recover")
         } else {
-            "Create sandbox"
+            fl!("settings-cloud-create-sandbox")
         };
         let mut sandboxes = self
-            .control_card("New sandbox")
+            .cloud_card(fl!("settings-cloud-new-sandbox"))
             .debug_selector(|| "cloud-boat-new".into())
-            .child(self.control_note(
-                "Creates a sandbox with a generated name. Its device is saved before setup so an interruption can be retried without creating another sandbox.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-boat-new-note")))
             .child(
                 self.control_switch(
                     "cloud-boat-install",
-                    "Install Herdr in it when missing",
+                    fl!("settings-cloud-install-herdr-in-it"),
                     card.install,
                     ready,
                 )
@@ -501,9 +518,9 @@ impl SettingsWindow {
         if let Account::Known(overview) = &card.account {
             match &overview.pending {
                 Ok(Some(name)) => {
-                    sandboxes = sandboxes.child(self.control_note(format!(
-                        "Pending creation: {name}. Recover creation reuses the original request and options, even after restarting. Recovery expires after 23 hours; it never silently creates a replacement.",
-                    )));
+                    sandboxes = sandboxes.child(
+                        self.control_note(fl!("settings-cloud-boat-pending", name = name.clone())),
+                    );
                 }
                 Err(error) => sandboxes = sandboxes.child(self.control_note(error.to_string())),
                 Ok(None) => {}
@@ -511,26 +528,32 @@ impl SettingsWindow {
             if !matches!(&overview.pending, Ok(None)) {
                 let enabled = ready && !running;
                 let forget_label = if card.confirm_forget {
-                    "I checked Boat; forget request"
+                    fl!("settings-cloud-boat-forget-pending-confirm")
                 } else {
-                    "Forget pending request…"
+                    fl!("settings-cloud-boat-forget-pending")
                 };
                 sandboxes = sandboxes
-                    .when(card.confirm_forget, |card| card.child(self.control_note(
-                        "Check the Boat dashboard first: the original sandbox may exist and still be billed. Forgetting only removes this local request. Creating again can create a second sandbox.",
-                    )))
-                    .child(self.cloud_button("cloud-boat-forget-pending", forget_label, enabled)
-                        .when(enabled, |button| button.on_click(cx.listener(|this, _, _, cx| this.forget_boat_pending(cx)))));
+                    .when(card.confirm_forget, |card| {
+                        card.child(
+                            self.control_note(fl!("settings-cloud-boat-forget-pending-warning")),
+                        )
+                    })
+                    .child(
+                        self.cloud_button("cloud-boat-forget-pending", forget_label, enabled)
+                            .when(enabled, |button| {
+                                button.on_click(
+                                    cx.listener(|this, _, _, cx| this.forget_boat_pending(cx)),
+                                )
+                            }),
+                    );
             }
         }
         let mut devices = self
-            .control_card("Boat devices")
+            .cloud_card(fl!("settings-cloud-boat-devices"))
             .debug_selector(|| "cloud-boat-devices".into())
-            .child(self.control_note(
-                "Finish setup reuses the sandbox and applies Auto-stop after from now, extending a timed deadline or disabling it. The installation switch above also applies here; the setup script does not run again.",
-            ));
+            .child(self.control_note(fl!("settings-cloud-boat-devices-note")));
         if card.devices().is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         for (index, device) in card.devices().iter().enumerate() {
             let saved = device.clone();
@@ -547,7 +570,7 @@ impl SettingsWindow {
                 .child(
                     self.cloud_button(
                         SharedString::from(format!("cloud-boat-finish-{index}")),
-                        "Finish setup",
+                        fl!("settings-cloud-finish-setup"),
                         setup,
                     )
                     .debug_selector(move || format!("cloud-boat-finish-{index}"))

@@ -1,4 +1,5 @@
 //! Prepared controls for the standalone window; persistence belongs to its serial save path.
+// i18n: migrated
 pub(super) mod backdrop;
 pub(super) mod chat_env;
 pub(super) mod code;
@@ -8,7 +9,7 @@ pub(super) mod indicators;
 pub(super) mod plugins;
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 pub(super) use fonts::native_probe;
-pub(super) use fonts::{face_font, family_label};
+pub(super) use fonts::{face_font, face_message, family_label};
 pub(super) mod preferences;
 pub(super) mod px0;
 
@@ -20,11 +21,12 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// Each face, with the message naming it.
 pub(in crate::settings_window) const FACES: [(FontFace, &str); 4] = [
-    (FontFace::Terminal, "Terminal"),
-    (FontFace::Sidebar, "Sidebar"),
-    (FontFace::Tabs, "Tabs"),
-    (FontFace::Ui, "Interface"),
+    (FontFace::Terminal, face_message(FontFace::Terminal)),
+    (FontFace::Sidebar, face_message(FontFace::Sidebar)),
+    (FontFace::Tabs, face_message(FontFace::Tabs)),
+    (FontFace::Ui, face_message(FontFace::Ui)),
 ];
 
 pub(super) struct Controls {
@@ -55,7 +57,7 @@ impl Controls {
     pub(super) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search installed fonts...", cx)
+            input.set_placeholder_with(|| crate::i18n::fl!("settings-fonts-search-placeholder"), cx)
         });
         let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {
             this.controls.filtered = filter_fonts(&this.controls.names, search.read(cx).text());
@@ -65,7 +67,10 @@ impl Controls {
         });
         let integration_search = cx.new(SearchInput::new);
         integration_search.update(cx, |input, cx| {
-            input.set_placeholder("Search integrations by name or ID...", cx)
+            input.set_placeholder_with(
+                || crate::i18n::fl!("settings-integrations-search-placeholder"),
+                cx,
+            )
         });
         let integration_changed = cx.subscribe(&integration_search, |this, _, _: &Changed, cx| {
             this.body_scroll.set_offset(Point::default());
@@ -91,7 +96,12 @@ impl Controls {
             saving_sizes: Vec::new(),
             local_path: Config::local_path()
                 .map(|path| path.display().to_string())
-                .unwrap_or_else(|error| format!("Unavailable ({error})")),
+                .unwrap_or_else(|error| {
+                    crate::i18n::fl!(
+                        "settings-configuration-path-unavailable",
+                        error = error.to_string()
+                    )
+                }),
             local_file: Config::local_path().ok(),
             ruler: backdrop::Ruler::default(),
             _search_changed: subscription,

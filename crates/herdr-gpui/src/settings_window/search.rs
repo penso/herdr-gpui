@@ -1,7 +1,8 @@
 //! Searching the Settings: the query in the section list's box swaps the body
 //! for a list of matching rows, and picking one opens its page at that row.
+// i18n: migrated
 use super::{SettingsWindow, catalog, ui};
-use crate::config::ThemeName;
+use crate::{config::ThemeName, i18n::fl};
 use gpui::{prelude::*, *};
 use std::collections::HashMap;
 
@@ -139,7 +140,7 @@ impl SettingsWindow {
             return div()
                 .debug_selector(|| "settings-search-empty".into())
                 .text_color(rgb(theme.subtext()))
-                .child("No settings match.");
+                .child(fl!("settings-search-empty"));
         }
         div().flex().flex_col().children(
             results
@@ -149,10 +150,15 @@ impl SettingsWindow {
                 .enumerate()
                 .map(|(n, (index, entry))| {
                     let id = format!("settings-search-result-{n}");
-                    let title = format!("{} \u{203a} {}", entry.section.label(), entry.title);
+                    let title = fl!(
+                        "settings-search-result",
+                        section = entry.section.label(),
+                        title = entry.title()
+                    );
+                    let description = entry.description();
                     let mut row = ui::row(theme, id.clone(), title.clone());
-                    if !entry.description.is_empty() {
-                        row = row.description(entry.description);
+                    if !description.is_empty() {
+                        row = row.description(description.clone());
                     }
                     row.control(
                         div()
@@ -164,8 +170,8 @@ impl SettingsWindow {
                     .id(ElementId::Name(id.into()))
                     .role(Role::Button)
                     .aria_label(title)
-                    .when(!entry.description.is_empty(), |row| {
-                        row.aria_description(entry.description)
+                    .when(!description.is_empty(), |row| {
+                        row.aria_description(description)
                     })
                     .cursor_pointer()
                     .hover(|row| row.bg(rgb(theme.active)))

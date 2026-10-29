@@ -1,12 +1,13 @@
 //! Form pieces for the pages that hold forms rather than setting rows (Code,
 //! Plugins, Cloud devices): a titled block under the shared section heading,
 //! and a labelled switch row. Both follow the row system's look.
+// i18n: migrated
 use super::*;
 use crate::settings_window::ui;
 
 impl SettingsWindow {
     /// A block of form content under a section heading; no card frame.
-    pub(in crate::settings_window) fn control_card(&self, title: &'static str) -> Div {
+    pub(in crate::settings_window) fn control_card(&self, title: &str) -> Div {
         div()
             .flex()
             .flex_col()

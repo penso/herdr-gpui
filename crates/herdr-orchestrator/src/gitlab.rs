@@ -1,6 +1,7 @@
-//! A GitLab project's open issues, read through GitLab's REST API in
-//! agent-launcher's GitLab row format: `native_id` is the issue's project
-//! `iid`. Every sync is a complete listing, so it may replace the cache.
+//! A GitLab project's open issues and merge requests, read through GitLab's
+//! REST API in agent-launcher's GitLab row format: `native_id` is the issue's
+//! project `iid`, and `pr/<iid>` a merge request's, as GitHub's pull requests
+//! are keyed. Every sync is a complete listing, so it may replace the cache.
 //!
 //! The token comes from the `GITLAB_TOKEN` (or `GITLAB_ACCESS_TOKEN`) a local
 //! checkout's `.envrc` sets (`envrc`), else from the login shell's for the
@@ -14,13 +15,16 @@
 
 pub mod account;
 pub mod envrc;
+pub mod merge_request;
 pub mod oauth;
 pub mod saved;
+
+pub use merge_request::MergeRequestNode;
 
 use super::{Activity, Checkpoint, Item, ItemKey, Provider, SourceKey};
 use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 use std::{
     collections::HashSet,
     ffi::OsString,
@@ -32,11 +36,12 @@ use zeroize::Zeroizing;
 pub mod cli_hosts;
 
 const PAGE: usize = 100;
-/// The most open issues one sync reads. A project with more is shown but
-/// not cached, since a capped listing is no full sync.
+/// The most open issues, and as many merge requests, one sync reads. A
+/// project with more is shown but not cached, since a capped listing is no
+/// full sync.
 pub const MAX_OPEN: usize = 2_000;
 const TIMEOUT: Duration = Duration::from_secs(30);
-/// One page of 100 issues, descriptions included.
+/// One page of 100 issues or merge requests, descriptions included.
 const LIMIT: u64 = 4 * 1024 * 1024;
 const CLI_TIMEOUT: Duration = Duration::from_secs(10);
 /// A token is at most a few hundred bytes; the rest is room for warnings.
@@ -344,8 +349,8 @@ impl<'a> Credential<'a> {
     }
 }
 
-/// Lists `source`'s open issues from `api`, reading GitLab as `token` when
-/// given and the scheme keeps it private. `previous` keeps
+/// Lists `source`'s open issues and merge requests from `api`, reading GitLab
+/// as `token` when given and the scheme keeps it private. `previous` keeps
 /// agent-launcher's markers, which herdr-gpui never adds.
 pub fn sync(
     (source, api): (&SourceKey, &Api),
@@ -356,19 +361,48 @@ pub fn sync(
 ) -> super::Result<Listing> {
     let agent = agent(TIMEOUT);
     let credential = Credential::new(api.scheme, token);
-    let mut fetch = |after| {
+    let mut listing = full(
+        source,
+        previous.cloned().unwrap_or_default(),
+        &mut |after| {
+            if cancelled() {
+                return Err(super::Error::Cancelled);
+            }
+            Ok(fetch_page(
+                &agent,
+                (source, api),
+                credential,
+                after,
+                cooldown,
+            )?)
+        },
+    )?;
+    let (merge_requests, complete) = list(source, &mut |after| {
         if cancelled() {
             return Err(super::Error::Cancelled);
         }
-        Ok(fetch_page(
+        Ok(fetch_page::<MergeRequestNode>(
             &agent,
             (source, api),
             credential,
             after,
             cooldown,
         )?)
-    };
-    full(source, previous.cloned().unwrap_or_default(), &mut fetch)
+    })?;
+    listing.items.extend(merge_requests);
+    listing.complete &= complete;
+    Ok(listing)
+}
+
+/// A kind of item GitLab lists a page at a time, from a project's
+/// collection of that name.
+pub trait Listed: DeserializeOwned {
+    /// The collection's path after `/projects/:id/`.
+    const COLLECTION: &'static str;
+
+    fn iid(&self) -> u64;
+    fn created_at(&self) -> DateTime<Utc>;
+    fn into_item(self, source: &SourceKey) -> Item;
 }
 
 /// Reads every open issue, oldest first, each page continuing from the
@@ -383,30 +417,7 @@ pub fn full(
     fetch: &mut impl FnMut(Option<DateTime<Utc>>) -> super::Result<Vec<IssueNode>>,
 ) -> super::Result<Listing> {
     let started = Utc::now();
-    let mut items = Vec::new();
-    let mut seen = HashSet::new();
-    let mut complete = true;
-    let mut after = None;
-    loop {
-        let page = fetch(after)?;
-        let more = page.len() >= PAGE;
-        let last = page.last().map(|node| node.created_at);
-        let before = items.len();
-        items.extend(
-            page.into_iter()
-                .filter(|node| seen.insert(node.iid))
-                .map(|node| node.into_item(source)),
-        );
-        if !more {
-            break;
-        }
-        // A page of issues all created at one instant cannot be passed.
-        if items.len() >= MAX_OPEN || items.len() == before {
-            complete = false;
-            break;
-        }
-        after = last;
-    }
+    let (items, complete) = list(source, fetch)?;
     Ok(Listing {
         items,
         checkpoint: Checkpoint {
@@ -420,8 +431,54 @@ pub fn full(
     })
 }
 
+/// Every item of kind `N`, oldest first as [`full`] reads them, and whether
+/// the listing is complete.
+pub fn list<N: Listed>(
+    source: &SourceKey,
+    fetch: &mut impl FnMut(Option<DateTime<Utc>>) -> super::Result<Vec<N>>,
+) -> super::Result<(Vec<Item>, bool)> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+    let mut after = None;
+    loop {
+        let page = fetch(after)?;
+        let more = page.len() >= PAGE;
+        let last = page.last().map(Listed::created_at);
+        let before = items.len();
+        items.extend(
+            page.into_iter()
+                .filter(|node| seen.insert(node.iid()))
+                .map(|node| node.into_item(source)),
+        );
+        if !more {
+            return Ok((items, true));
+        }
+        // A page all created at one instant cannot be passed.
+        if items.len() >= MAX_OPEN || items.len() == before {
+            return Ok((items, false));
+        }
+        after = last;
+    }
+}
+
 /// The API address of `source`'s open issues created at or after `after`.
 pub fn issues_url(
+    project: (&SourceKey, &Api),
+    after: Option<DateTime<Utc>>,
+) -> Result<url::Url, Error> {
+    listing_url::<IssueNode>(project, after)
+}
+
+/// The API address of `source`'s open merge requests created at or after
+/// `after`.
+pub fn merge_requests_url(
+    project: (&SourceKey, &Api),
+    after: Option<DateTime<Utc>>,
+) -> Result<url::Url, Error> {
+    listing_url::<MergeRequestNode>(project, after)
+}
+
+fn listing_url<N: Listed>(
     (source, api): (&SourceKey, &Api),
     after: Option<DateTime<Utc>>,
 ) -> Result<url::Url, Error> {
@@ -432,7 +489,7 @@ pub fn issues_url(
     url.path_segments_mut()
         .map_err(|()| invalid())?
         .push(&source.repository)
-        .push("issues");
+        .push(N::COLLECTION);
     let mut query = url.query_pairs_mut();
     query
         .append_pair("state", "opened")
@@ -441,7 +498,7 @@ pub fn issues_url(
         .append_pair("sort", "asc")
         .append_pair("per_page", &PAGE.to_string());
     if let Some(after) = after {
-        // Truncating to milliseconds moves the bound earlier, never past an issue.
+        // Truncating to milliseconds moves the bound earlier, never past an item.
         query.append_pair(
             "created_after",
             &after.to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -451,15 +508,15 @@ pub fn issues_url(
     Ok(url)
 }
 
-fn fetch_page(
+fn fetch_page<N: Listed>(
     agent: &ureq::Agent,
     (source, api): (&SourceKey, &Api),
     credential: Credential<'_>,
     after: Option<DateTime<Utc>>,
     cooldown: &mut Option<Duration>,
-) -> Result<Vec<IssueNode>, Error> {
+) -> Result<Vec<N>, Error> {
     let mut request = agent
-        .get(issues_url((source, api), after)?.as_str())
+        .get(listing_url::<N>((source, api), after)?.as_str())
         .header("User-Agent", "Herdr-GPUI")
         .header("Accept", "application/json");
     if let Credential::Token(token) = credential {
@@ -476,7 +533,8 @@ fn fetch_page(
             category = "orchestrator_gitlab",
             status,
             host = api.host.as_str(),
-            "GitLab refused an issue listing"
+            collection = N::COLLECTION,
+            "GitLab refused a listing"
         );
         return Err(status_error(status, &source.repository, credential));
     }
@@ -679,8 +737,18 @@ pub struct IssueNode {
     user_notes_count: Option<u64>,
 }
 
-impl IssueNode {
-    pub fn into_item(self, source: &SourceKey) -> Item {
+impl Listed for IssueNode {
+    const COLLECTION: &'static str = "issues";
+
+    fn iid(&self) -> u64 {
+        self.iid
+    }
+
+    fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    fn into_item(self, source: &SourceKey) -> Item {
         Item {
             key: ItemKey {
                 source: source.clone(),

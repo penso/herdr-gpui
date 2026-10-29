@@ -1,6 +1,7 @@
 //! A number with typed entry, and -/+ steppers and an optional drag slider
 //! unless it is a bare field.
 use crate::config::{Theme, corners};
+use crate::i18n::fl;
 use crate::search_input::SearchInput;
 use gpui::{prelude::*, *};
 use std::{cell::Cell, ops::RangeInclusive, rc::Rc};
@@ -32,9 +33,30 @@ pub(in crate::settings_window) struct Number {
     pub id: &'static str,
     pub value: f32,
     pub range: RangeInclusive<f32>,
-    pub unit: &'static str,
+    pub unit: Unit,
     pub look: Look,
     pub enabled: bool,
+}
+
+/// What the value counts, written after it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::settings_window) enum Unit {
+    /// A bare count, with nothing after it.
+    None,
+    Percent,
+    Pixels,
+    Seconds,
+}
+
+impl Unit {
+    fn label(self) -> String {
+        match self {
+            Self::None => String::new(),
+            Self::Percent => fl!("settings-unit-percent"),
+            Self::Pixels => fl!("settings-unit-pixels"),
+            Self::Seconds => fl!("settings-unit-seconds"),
+        }
+    }
 }
 
 /// What surrounds the typed value.
@@ -225,7 +247,7 @@ pub(in crate::settings_window) fn number(
             div()
                 .pr(px(6.))
                 .text_color(rgb(theme.muted))
-                .child(spec.unit),
+                .child(spec.unit.label()),
         )
         .when(steppers, |field| {
             field
@@ -244,10 +266,10 @@ pub(in crate::settings_window) fn number(
             div()
                 .text_size(px(10.))
                 .text_color(rgb(theme.muted))
-                .child(format!(
-                    "{} to {}",
-                    *range.start() as i32,
-                    *range.end() as i32
+                .child(fl!(
+                    "settings-number-range",
+                    min = *range.start() as i32,
+                    max = *range.end() as i32
                 )),
         )
     })

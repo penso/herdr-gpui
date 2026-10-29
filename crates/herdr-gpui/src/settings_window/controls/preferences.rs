@@ -1,3 +1,5 @@
+//! Typed preference saves and switches, and the Integrations page.
+// i18n: migrated
 use super::*;
 use crate::config::preferences::Preference;
 
@@ -67,10 +69,21 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let query = self.controls.integration_search.read(cx).text().to_owned();
-        div().debug_selector(|| "integrations-search".into()).flex().flex_col().gap(px(16.))
+        div()
+            .debug_selector(|| "integrations-search".into())
+            .flex()
+            .flex_col()
+            .gap(px(16.))
             .child(self.controls.integration_search.clone())
-            .child(self.source.update(cx, |source, cx| source.render_filtered_integrations(&query, cx))
-                .unwrap_or_else(|_| div().child("Open a session window to manage agent integrations. Herdr UI settings remain available.")))
+            .child(
+                self.source
+                    .update(cx, |source, cx| {
+                        source.render_filtered_integrations(&query, cx)
+                    })
+                    .unwrap_or_else(|_| {
+                        div().child(crate::i18n::fl!("settings-integrations-no-window"))
+                    }),
+            )
     }
 
     /// A switch that saves `edit` when clicked; saves refuse to overlap, so a

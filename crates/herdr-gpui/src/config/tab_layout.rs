@@ -34,7 +34,12 @@ macro_rules! tab_layouts {
             }
 
             /// How menus title it.
-            pub const fn label(self) -> &'static str {
+            pub fn label(self) -> String {
+                crate::i18n::message(self.message(), &[])
+            }
+
+            /// The message naming it.
+            pub const fn message(self) -> &'static str {
                 match self {
                     $(Self::$variant => $label,)+
                 }
@@ -46,23 +51,23 @@ macro_rules! tab_layouts {
 tab_layouts! {
     /// Even cells divided by a rule, the chosen one washed in the accent.
     #[default]
-    Classic => "classic", "Classic";
+    Classic => "classic", "tab-layout-classic";
     /// Rounded pills on the strip, led by what runs in them, the status
     /// after the title giving way to the close button under the pointer.
-    Pills => "pills", "Pills";
+    Pills => "pills", "tab-layout-pills";
     /// Bare titles; the chosen tab stands in an outlined pill with its
     /// close button.
-    Outline => "outline", "Outline";
+    Outline => "outline", "tab-layout-outline";
     /// Flat titles without fills; the chosen tab carries a bar along its foot.
-    Underline => "underline", "Underline";
+    Underline => "underline", "tab-layout-underline";
     /// Browser-like: the chosen tab is a raised card joined to what it shows.
-    Cards => "cards", "Cards";
+    Cards => "cards", "tab-layout-cards";
     /// The chosen tab's body flares into the content below through curved
     /// shoulders and slides between tabs; the content sits in an inset card.
-    Curved => "curved", "Curved";
+    Curved => "curved", "tab-layout-curved";
     /// Icons only, with the status on each icon's corner; the chosen tab
     /// names itself.
-    Compact => "compact", "Compact";
+    Compact => "compact", "tab-layout-compact";
 }
 
 impl TryFrom<&str> for TabLayoutMode {

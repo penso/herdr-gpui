@@ -3,10 +3,11 @@
 //! no bounds are passed around and it paints above the page.
 use crate::{
     config::{Theme, corners},
+    i18n::fl,
     settings_window::inputs::DropdownField,
 };
 use gpui::{prelude::*, *};
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, ops::Range, rc::Rc};
 
 thread_local! {
     /// Dropdowns whose list was open when the button went down; the click that
@@ -78,12 +79,23 @@ pub(in crate::settings_window) fn dropdown(
     let on_dismiss = Rc::new(on_dismiss);
     let dismiss_button = on_dismiss.clone();
     let dismiss_list = on_dismiss;
-    let prefix = "Use Herdr setting · ";
-    let label_el = match label.strip_prefix(prefix).filter(|_| shared_prefix) {
-        Some(rest) => div()
-            .flex()
-            .child(div().text_color(rgb(theme.muted)).child(prefix))
-            .child(rest.to_string()),
+    let label_el = match follow_herdr_value(&label).filter(|_| shared_prefix) {
+        // One line, so the words around Herdr's value stay a single message.
+        Some(value) => {
+            let muted = HighlightStyle {
+                color: Some(rgb(theme.muted).into()),
+                ..Default::default()
+            };
+            let around = [0..value.start, value.end..label.len()];
+            div().child(
+                StyledText::new(label.clone()).with_highlights(
+                    around
+                        .into_iter()
+                        .filter(|range| !range.is_empty())
+                        .map(|range| (range, muted)),
+                ),
+            )
+        }
         None => div().child(label.clone()),
     };
     div()
@@ -184,6 +196,18 @@ pub(in crate::settings_window) fn popover_list(
                 .on_click(move |_, window, cx| on_pick(index, window, cx))
                 .child(option.clone())
         }))
+}
+
+/// Where Herdr's value sits in a label that follows Herdr
+/// (`settings-use-herdr`), so the button can mute the words around it.
+fn follow_herdr_value(label: &str) -> Option<Range<usize>> {
+    // Formatted around a character no value holds, the message shows where
+    // the value goes in any language.
+    const MARK: &str = "\u{0}";
+    let template = fl!("settings-use-herdr", value = MARK);
+    let (before, after) = template.split_once(MARK)?;
+    label.strip_prefix(before)?.strip_suffix(after)?;
+    Some(before.len()..label.len() - after.len())
 }
 
 #[cfg(test)]

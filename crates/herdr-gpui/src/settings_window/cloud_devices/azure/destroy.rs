@@ -7,13 +7,14 @@
 //! card's job, never cancel it. Closing Settings does cancel it; the device
 //! stays saved until Azure has deleted it, so Destroy can simply run again.
 
-use super::{super::super::SettingsWindow, Account, AzureCard};
+use super::{super::super::SettingsWindow, Account, AzureCard, machine_kind};
 use crate::{
     azure::{destroy::Stage, machine::Machine},
     cloud::{
         SavedDevice,
         worker::{self, Worker},
     },
+    i18n::fl,
     progress::{self, Progress},
 };
 use gpui::{prelude::*, *};
@@ -39,12 +40,24 @@ pub(super) enum Outcome {
     Failed(String),
 }
 
-pub(super) fn status(stage: Option<Stage>) -> (&'static str, Progress) {
+pub(super) fn status(stage: Option<Stage>) -> (String, Progress) {
     match stage {
-        None => ("Contacting Azure…", Progress::Busy),
-        Some(Stage::Vm) => ("Deleting the VM and its disk…", Progress::Working(0.3)),
-        Some(Stage::Leftovers) => ("Deleting its network and IP…", Progress::Working(0.7)),
-        Some(Stage::Sandbox) => ("Deleting the sandbox…", Progress::Working(0.5)),
+        None => (
+            fl!("settings-cloud-azure-destroy-contacting"),
+            Progress::Busy,
+        ),
+        Some(Stage::Vm) => (
+            fl!("settings-cloud-azure-destroy-vm"),
+            Progress::Working(0.3),
+        ),
+        Some(Stage::Leftovers) => (
+            fl!("settings-cloud-azure-destroy-leftovers"),
+            Progress::Working(0.7),
+        ),
+        Some(Stage::Sandbox) => (
+            fl!("settings-cloud-azure-destroy-sandbox"),
+            Progress::Working(0.5),
+        ),
     }
 }
 
@@ -115,7 +128,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "azure_worker", error_kind = ?error.kind(), "Could not start Azure destroy worker");
                 card.outcome = Some(Outcome::Failed(
-                    crate::cloud::Error::Worker("destroy").to_string(),
+                    crate::cloud::Error::Worker("destroy").to_string(), // i18n: data
                 ));
             }
         }
@@ -142,7 +155,11 @@ impl SettingsWindow {
                 card.destroying = None;
                 card.outcome = Some(match result {
                     Ok(()) => Outcome::Destroyed(label),
-                    Err(error) => Outcome::Failed(format!("Could not delete {label}: {error}")),
+                    Err(error) => Outcome::Failed(fl!(
+                        "settings-cloud-delete-failed",
+                        name = label,
+                        error = error.to_string()
+                    )),
                 });
                 self.refresh_azure(cx);
             }
@@ -166,11 +183,11 @@ impl SettingsWindow {
         if card.confirm_destroy.as_deref() == Some(&device.id) {
             let saved = device.clone();
             let forgotten = device.id.clone();
-            let noun = Machine::parse(&device.id).noun();
+            let kind = machine_kind(&device.id);
             return vec![
                 self.cloud_button(
                     SharedString::from(format!("cloud-azure-remove-{index}")),
-                    "Remove from Herdr only",
+                    fl!("settings-cloud-remove-from-herdr"),
                     ready,
                 )
                 .debug_selector(move || format!("cloud-azure-remove-{index}"))
@@ -183,7 +200,7 @@ impl SettingsWindow {
                 .into_any_element(),
                 self.cloud_button(
                     SharedString::from(format!("cloud-azure-destroy-cancel-{index}")),
-                    "Cancel",
+                    fl!("settings-cloud-cancel"),
                     true,
                 )
                 .debug_selector(move || format!("cloud-azure-destroy-cancel-{index}"))
@@ -191,7 +208,7 @@ impl SettingsWindow {
                 .into_any_element(),
                 self.cloud_button(
                     SharedString::from(format!("cloud-azure-destroy-confirm-{index}")),
-                    format!("Delete {noun}"),
+                    fl!("settings-cloud-azure-delete", kind = kind),
                     enabled,
                 )
                 .text_color(danger)
@@ -208,7 +225,7 @@ impl SettingsWindow {
         vec![
             self.cloud_button(
                 SharedString::from(format!("cloud-azure-destroy-{index}")),
-                "Remove…",
+                fl!("settings-cloud-remove-ask"),
                 enabled,
             )
             .text_color(danger)
@@ -227,15 +244,14 @@ impl SettingsWindow {
     pub(super) fn azure_destroy_detail(&self, device: &SavedDevice) -> Option<Div> {
         let card = self.azure_card.as_ref()?;
         if card.confirm_destroy.as_deref() == Some(&device.id) {
-            let what = match Machine::parse(&device.id) {
-                Machine::Vm(name) => {
-                    format!("the VM {name} with its disk, public IP, and network")
-                }
-                Machine::Sandbox(_) => format!("the sandbox {}", device.label),
+            let warning = match Machine::parse(&device.id) {
+                Machine::Vm(name) => fl!("settings-cloud-azure-delete-vm-warning", name = name),
+                Machine::Sandbox(_) => fl!(
+                    "settings-cloud-azure-delete-sandbox-warning",
+                    name = device.label.clone()
+                ),
             };
-            return Some(div().child(self.control_note(format!(
-                "Delete removes {what} at Azure as well as here. Its files are not kept, and this cannot be undone. Remove from Herdr only leaves it at Azure, still billing."
-            ))));
+            return Some(div().child(self.control_note(warning)));
         }
         let job = card.destroying.as_ref().filter(|job| job.id == device.id)?;
         let (text, progress) = status(job.stage);
@@ -273,7 +289,7 @@ impl SettingsWindow {
         Some(match outcome {
             Outcome::Destroyed(label) => div()
                 .debug_selector(|| "cloud-azure-destroyed".into())
-                .child(format!("Deleted {label}.")),
+                .child(fl!("settings-cloud-deleted", name = label.clone())),
             Outcome::Failed(message) => div()
                 .debug_selector(|| "cloud-azure-destroy-failed".into())
                 .text_color(crate::menu::danger(&self.theme))

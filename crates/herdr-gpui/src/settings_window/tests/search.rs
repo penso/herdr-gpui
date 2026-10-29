@@ -198,3 +198,23 @@ fn search_offers_the_editing_row_only_while_following_a_pair(cx: &mut TestAppCon
         assert!(side(view), "a following pair does");
     });
 }
+
+/// The catalog names its rows' messages as data, which `fl!` cannot check.
+#[test]
+fn every_catalog_row_names_english_messages_without_arguments() {
+    let none: &[&str] = &[];
+    for entry in catalog::CATALOG {
+        assert_eq!(crate::i18n::takes(entry.title), Some(none), "{}", entry.id);
+        if !entry.description.is_empty() {
+            assert_eq!(
+                crate::i18n::takes(entry.description),
+                Some(none),
+                "{}",
+                entry.id
+            );
+        }
+    }
+    for section in Section::ALL {
+        assert_eq!(crate::i18n::takes(section.message()), Some(none));
+    }
+}

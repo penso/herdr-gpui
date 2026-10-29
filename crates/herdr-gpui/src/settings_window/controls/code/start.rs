@@ -5,7 +5,7 @@
 use super::*;
 use crate::code_server::{
     Launcher, Startup,
-    launcher::{self, Cli, LICENSE_TERMS, LICENSE_URL, PRIVACY_URL},
+    launcher::{self, Cli, LICENSE_URL, PRIVACY_URL},
 };
 
 impl SettingsWindow {
@@ -46,7 +46,7 @@ impl SettingsWindow {
     pub(super) fn render_code_mode(&self, mode: Option<CodeMode>, cx: &mut Context<Self>) -> Div {
         let cli = Launcher::cli(cx);
         let can_start = crate::browser::EMBEDDED && matches!(cli, Some(Cli::Found(_)));
-        let choice = |id: &'static str, label: &'static str, choice: CodeMode, enabled: bool| {
+        let choice = |id: &'static str, label: String, choice: CodeMode, enabled: bool| {
             self.control_choice(id, label, mode == Some(choice), enabled)
                 .debug_selector(move || id.into())
                 .when(enabled, |button| {
@@ -56,21 +56,14 @@ impl SettingsWindow {
                 })
         };
         let note = match cli {
-            _ if !crate::browser::EMBEDDED => {
-                Some("This build shows no pages, so it starts no VS Code.".into())
+            _ if !crate::browser::EMBEDDED => fl!("settings-code-no-pages"),
+            Some(Cli::Unknown | Cli::Finding) => fl!("settings-code-finding"),
+            Some(Cli::Found(program)) => {
+                fl!("settings-code-found", path = program.display().to_string())
             }
-            Some(Cli::Unknown | Cli::Finding) => Some("Looking for VS Code\u{2026}".into()),
-            Some(Cli::Found(program)) => Some(SharedString::from(format!(
-                "VS Code: {}",
-                program.display()
-            ))),
-            Some(Cli::Missing) | None => Some(
-                "VS Code was not found on your PATH or in Applications. Install it to have \
-                 the app start it, or use the address of a server you run."
-                    .into(),
-            ),
+            Some(Cli::Missing) | None => fl!("settings-code-missing"),
         };
-        self.control_card("VS Code")
+        self.control_card(&fl!("settings-code-vscode"))
             .relative()
             .debug_selector(|| "code-mode".into())
             .child(crate::settings_window::search::track_bounds(
@@ -83,40 +76,40 @@ impl SettingsWindow {
                     .gap(px(12.))
                     .child(choice(
                         "settings-code-start",
-                        "Start VS Code automatically",
+                        fl!("settings-code-start"),
                         CodeMode::Start,
                         can_start,
                     ))
                     .child(choice(
                         "settings-code-address",
-                        "Use an address",
+                        fl!("settings-code-address"),
                         CodeMode::Address,
                         true,
                     )),
             )
-            .children(note.map(|note| self.control_note(note)))
+            .child(self.control_note(note))
     }
 
     /// The server the app starts: its license until accepted, then how it is.
     pub(super) fn render_code_start(&self, cx: &mut Context<Self>) -> Div {
-        let card = self.control_card("Server").child(self.control_note(
-            "The app runs `code serve-web` on 127.0.0.1 when a VS Code tab first needs it, \
-             and stops it when it quits.",
-        ));
+        let card = self
+            .control_card(&fl!("settings-code-server"))
+            .child(self.control_note(fl!("settings-code-start-note")));
         match Launcher::startup(cx, &self.config.code) {
             Startup::Consent => card.child(self.render_code_license(cx)),
-            Startup::Idle => card.child(self.control_note("Not started yet.")),
-            Startup::Starting { .. } => card
-                .child(self.control_note("Starting VS Code\u{2026} (the first run downloads it)")),
+            Startup::Idle => card.child(self.control_note(fl!("settings-code-idle"))),
+            Startup::Starting { .. } => {
+                card.child(self.control_note(fl!("settings-code-starting")))
+            }
             Startup::Ready { url } => card.child(self.render_code_state(
                 "icons/pass.svg",
                 self.theme.palette[2],
-                format!("Running on {}", url.address()).into(),
+                fl!("settings-code-running", address = url.address().to_string()).into(),
             )),
             Startup::Failed { error, .. } => card.child(self.render_code_state(
                 "icons/error.svg",
                 self.theme.palette[1],
-                format!("{error} Retrying\u{2026}").into(),
+                fl!("settings-code-failed", error = error.to_string()).into(),
             )),
             // The mode card says why.
             Startup::Address | Startup::Finding | Startup::Missing => card,
@@ -125,7 +118,7 @@ impl SettingsWindow {
 
     /// The terms to accept before the app may start VS Code.
     fn render_code_license(&self, cx: &mut Context<Self>) -> Div {
-        let link = |id: &'static str, label: &'static str, url: &'static str| {
+        let link = |id: &'static str, label: String, url: &'static str| {
             div()
                 .id(id)
                 .text_color(crate::menu::accent(&self.theme))
@@ -135,7 +128,12 @@ impl SettingsWindow {
                 .child(label)
         };
         let accept = self
-            .control_choice("settings-code-accept", "Accept and start", false, true)
+            .control_choice(
+                "settings-code-accept",
+                fl!("settings-code-accept"),
+                false,
+                true,
+            )
             .debug_selector(|| "settings-code-accept".into())
             .flex_none()
             .on_click(cx.listener(|this, _, _, cx| this.accept_code_license(cx)));
@@ -144,7 +142,7 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(div().min_w_0().child(LICENSE_TERMS))
+            .child(div().min_w_0().child(fl!("settings-code-license-terms")))
             .child(
                 div()
                     .flex()
@@ -152,12 +150,12 @@ impl SettingsWindow {
                     .gap(px(16.))
                     .child(link(
                         "settings-code-license-link",
-                        "License Terms",
+                        fl!("settings-code-license-link"),
                         LICENSE_URL,
                     ))
                     .child(link(
                         "settings-code-privacy-link",
-                        "Privacy Statement",
+                        fl!("settings-code-privacy-link"),
                         PRIVACY_URL,
                     )),
             )

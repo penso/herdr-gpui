@@ -210,10 +210,17 @@ fn host_rows_merge_configured_and_connected_hosts(cx: &mut TestAppContext) {
     assert_eq!(
         rows,
         vec![
-            (label, None, "Connected, no colour set."),
-            ("Archive".into(), Some(0x112233), "Not connected."),
+            (label, None, "settings-sidebar-host-uncoloured"),
+            (
+                "Archive".into(),
+                Some(0x112233),
+                "settings-sidebar-host-offline"
+            ),
         ]
     );
+    for (.., hint) in rows {
+        assert!(crate::i18n::takes(hint).is_some(), "{hint}");
+    }
 }
 
 #[gpui::test]

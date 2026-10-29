@@ -245,7 +245,7 @@ fn shared_rows_say_why_they_are_disabled(cx: &mut TestAppContext) {
     } else {
         // Elsewhere Herdr's file cannot be written, so loading it changes
         // nothing: the rows keep the platform's reason over their description.
-        assert_eq!(gate, Some(pages::SHARED_READ_ONLY));
+        assert_eq!(gate, Some(crate::i18n::fl!("settings-shared-read-only")));
         assert!(cx.debug_bounds("tabs-position-reason").is_some());
         assert!(cx.debug_bounds("tabs-pane-history-reason").is_some());
         assert!(cx.debug_bounds("tabs-pane-history-description").is_none());

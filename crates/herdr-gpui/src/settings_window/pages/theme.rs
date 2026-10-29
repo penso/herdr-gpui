@@ -1,10 +1,12 @@
 //! Theme: appearance mode, the library to browse, the card grid whose hover
 //! previews the theme in the real Herdr windows, then the window backdrop and
 //! terminal padding.
+// i18n: migrated
 use super::{SettingsWindow, on_value, ui};
 use crate::{
     config::{Config, ThemeName},
     contrast::{Contrast, luminance},
+    i18n::fl,
     settings_window::themes::{Choice, FOLLOW, Scope},
 };
 use gpui::{prelude::*, *};
@@ -21,6 +23,16 @@ enum Library {
     All,
     Ghostty,
     Herdr,
+}
+
+/// How the page shows a theme value: [`FOLLOW`] is a config value, shown
+/// as a message; every other name is data.
+pub(in crate::settings_window) fn display_name(name: &str) -> String {
+    if name == FOLLOW {
+        fl!("settings-theme-follow-herdr")
+    } else {
+        name.to_owned()
+    }
 }
 
 /// The saved theme as a file on disk, when it is one.
@@ -56,12 +68,20 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .min_w_0()
-            .child(ui::section(theme, "Mode", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-theme-section-mode"),
+                None,
+            ))
             .child(mode_row)
             .children(side_row)
             .child(follow_row)
             .child(contrast_row)
-            .child(ui::section(theme, "Themes", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-theme-section-themes"),
+                None,
+            ))
             .child(source_row)
             .child(div().mt(px(8.)).child(search))
             .children(open_file)
@@ -97,15 +117,15 @@ impl SettingsWindow {
         } else {
             Mode::Dark
         };
-        ui::row(&self.theme, "theme-mode", "Appearance")
-            .description("Light, dark, or follow the system. Pick a theme below to change it.")
+        ui::row(&self.theme, "theme-mode", fl!("settings-theme-mode"))
+            .description(fl!("settings-theme-mode-hint"))
             .control(ui::segmented(
                 &self.theme,
                 "theme-mode-control",
                 &[
-                    (Mode::Light, "Light"),
-                    (Mode::Dark, "Dark"),
-                    (Mode::System, "System"),
+                    (Mode::Light, fl!("settings-theme-light")),
+                    (Mode::Dark, fl!("settings-theme-dark")),
+                    (Mode::System, fl!("settings-theme-system")),
                 ],
                 Some(selected),
                 true,
@@ -125,16 +145,19 @@ impl SettingsWindow {
     fn theme_side_row(&self, cx: &mut Context<Self>) -> Option<ui::Row> {
         let value = self.drafted_theme();
         ThemeName::follows_system(value).then(|| {
-            ui::row(&self.theme, "theme-side", "Editing")
-                .description(format!(
-                    "Which side of the pair the themes below change. Light: {} \u{b7} Dark: {}",
-                    ThemeName::side(value, true),
-                    ThemeName::side(value, false)
+            ui::row(&self.theme, "theme-side", fl!("settings-theme-side"))
+                .description(fl!(
+                    "settings-theme-side-hint",
+                    light = display_name(ThemeName::side(value, true)),
+                    dark = display_name(ThemeName::side(value, false)),
                 ))
                 .control(ui::segmented(
                     &self.theme,
                     "theme-side-control",
-                    &[(true, "Light"), (false, "Dark")],
+                    &[
+                        (true, fl!("settings-theme-light")),
+                        (false, fl!("settings-theme-dark")),
+                    ],
                     Some(self.themes.editing_light),
                     true,
                     on_value(cx, |this, light, window, cx| {
@@ -148,9 +171,9 @@ impl SettingsWindow {
 
     fn theme_follow_row(&self, cx: &mut Context<Self>) -> ui::Row {
         let following = self.config.theme == FOLLOW;
-        ui::row(&self.theme, "theme-follow", "Follow Herdr's theme")
+        ui::row(&self.theme, "theme-follow", fl!("settings-theme-follow"))
             .tag(ui::Source::Herdr)
-            .description("Use the theme set in Herdr's own config instead of a GUI choice.")
+            .description(fl!("settings-theme-follow-description"))
             .switch(
                 ui::toggle(&self.theme, "theme-follow-toggle", following, true).on_click(
                     cx.listener(move |this, _, _, cx| {
@@ -158,7 +181,7 @@ impl SettingsWindow {
                             this.themes
                                 .choice()
                                 .filter(|choice| choice.scope == Scope::App)
-                                .map_or_else(|| "Default".to_owned(), |choice| choice.name)
+                                .map_or_else(|| "Default".to_owned(), |choice| choice.name) // i18n: data
                         } else {
                             FOLLOW.to_owned()
                         };
@@ -176,20 +199,24 @@ impl SettingsWindow {
 
     fn theme_contrast_row(&self, cx: &mut Context<Self>) -> ui::Row {
         let high = self.config.contrast == Contrast::High;
-        ui::row(&self.theme, "theme-contrast", "High contrast")
-            .description("Raise text and marker contrast on every theme.")
-            .switch(
-                ui::toggle(&self.theme, "theme-contrast-toggle", high, true).on_click(cx.listener(
-                    move |this, _, _, cx| {
-                        let contrast = if high {
-                            Contrast::Standard
-                        } else {
-                            Contrast::High
-                        };
-                        this.save_native(move || Config::save_contrast(contrast), cx);
-                    },
-                )),
-            )
+        ui::row(
+            &self.theme,
+            "theme-contrast",
+            fl!("settings-theme-contrast"),
+        )
+        .description(fl!("settings-theme-contrast-description"))
+        .switch(
+            ui::toggle(&self.theme, "theme-contrast-toggle", high, true).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    let contrast = if high {
+                        Contrast::Standard
+                    } else {
+                        Contrast::High
+                    };
+                    this.save_native(move || Config::save_contrast(contrast), cx);
+                },
+            )),
+        )
     }
 
     fn theme_source_row(&self, cx: &mut Context<Self>) -> ui::Row {
@@ -199,19 +226,19 @@ impl SettingsWindow {
             (false, _) => Library::Herdr,
         };
         let note = if Scope::Herdr.editable() {
-            "Ghostty themes apply to this app; Herdr themes are shared."
+            fl!("settings-theme-source-description")
         } else {
-            "Herdr's themes are read-only on this platform."
+            fl!("settings-theme-library-read-only")
         };
-        ui::row(&self.theme, "theme-source", "Source")
+        ui::row(&self.theme, "theme-source", fl!("settings-theme-source"))
             .description(note)
             .control(ui::segmented(
                 &self.theme,
                 "theme-source-control",
                 &[
-                    (Library::All, "All"),
-                    (Library::Ghostty, "Ghostty"),
-                    (Library::Herdr, "Herdr"),
+                    (Library::All, fl!("settings-theme-library-all")),
+                    (Library::Ghostty, fl!("settings-theme-library-ghostty")),
+                    (Library::Herdr, fl!("settings-theme-library-herdr")),
                 ],
                 Some(selected),
                 true,
@@ -232,11 +259,19 @@ impl SettingsWindow {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn theme_open_file(&self, cx: &mut Context<Self>) -> Option<Div> {
         let path = theme_file(self.edited_theme())?;
-        Some(div().mt(px(8.)).flex().child(
-            ui::button(&self.theme, "theme-open-file", "Open theme file", true).on_click(
-                cx.listener(move |_, _, _, cx| super::open_path(false, path.clone(), cx)),
+        Some(
+            div().mt(px(8.)).flex().child(
+                ui::button(
+                    &self.theme,
+                    "theme-open-file",
+                    fl!("settings-theme-open-file"),
+                    true,
+                )
+                .on_click(
+                    cx.listener(move |_, _, _, cx| super::open_path(false, path.clone(), cx)),
+                ),
             ),
-        ))
+        )
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]

@@ -7,8 +7,12 @@ fn every_listed_feature_reads_its_own_key() -> anyhow::Result<()> {
     let keys: HashSet<_> = Feature::ALL.iter().map(|feature| feature.key()).collect();
     assert_eq!(keys.len(), Feature::ALL.len());
     for &feature in Feature::ALL {
-        assert!(!feature.label().is_empty());
-        assert!(!feature.description().is_empty());
+        let none: &[&str] = &[];
+        assert_eq!(crate::i18n::takes(feature.message()), Some(none));
+        assert_eq!(
+            crate::i18n::takes(feature.description_message()),
+            Some(none)
+        );
         assert!(!Features::default().enabled(feature));
         let config = Config::parse(&format!("[features]\n{} = true", feature.key()))?;
         for &other in Feature::ALL {

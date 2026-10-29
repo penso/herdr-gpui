@@ -74,7 +74,7 @@ impl HerdrWindow {
                         .rich_paragraph(*kind, *indent, content, index, &mut context)
                         .into_any_element(),
                     Block::Math { id, source } => {
-                        let formula = self.rich_math(*id, source, visuals, false);
+                        let formula = self.rich_math(*id, source, visuals, false, size);
                         let formula = match selection.fragment(Cell::block(index)) {
                             Some(fragment) => fragment.atomic(formula, &self.theme, context.cx),
                             None => formula,
@@ -258,7 +258,7 @@ impl HerdrWindow {
                     }
                 }
                 Inline::Math { id, source } => {
-                    let formula = self.rich_math(*id, source, context.visuals, true);
+                    let formula = self.rich_math(*id, source, context.visuals, true, context.size);
                     let formula = match &fragment {
                         Some(fragment) => fragment.range(offset..offset + source.len()).atomic(
                             formula,
@@ -285,7 +285,16 @@ impl HerdrWindow {
             .children(children)
     }
 
-    fn rich_math(&self, id: VisualId, source: &str, visuals: &Visuals, inline: bool) -> Div {
+    /// A formula, drawn for the chat's text and scaled to `size`, the text
+    /// it sits in, so a quieter message keeps its formulas in proportion.
+    fn rich_math(
+        &self,
+        id: VisualId,
+        source: &str,
+        visuals: &Visuals,
+        inline: bool,
+        size: f32,
+    ) -> Div {
         // Math textures use the theme's ink. Keep that surface behind them
         // when a layout supplies a different message fill, without re-rasterizing.
         let backdrop = layout_for(self.config.chat.layout).backdrop(&self.chat_look());
@@ -321,11 +330,14 @@ impl HerdrWindow {
                 fallback
             });
         };
+        // The texture is drawn for the chat's text size.
+        let scale = size / self.chat_text_size();
+        let (width, height) = (drawn.width * scale, drawn.height * scale);
         // The zero-width text establishes a text baseline inside the math
         // atom; the picture is positioned against its measured TeX baseline.
         ground(if inline {
-            let text_baseline = self.chat_text_size() * 0.8;
-            let baseline = drawn.baseline.unwrap_or(drawn.height);
+            let text_baseline = size * 0.8;
+            let baseline = drawn.baseline.unwrap_or(drawn.height) * scale;
             let top = (text_baseline - baseline).max(0.);
             let before = (baseline - text_baseline).max(0.);
             div()
@@ -333,18 +345,16 @@ impl HerdrWindow {
                 .flex_none()
                 .relative()
                 .max_w_full()
-                .w(px(drawn.width))
-                .h(px(
-                    (drawn.height + top).max(self.chat_text_size() * 1.4 + before)
-                ))
+                .w(px(width))
+                .h(px((height + top).max(size * 1.4 + before)))
                 .child(div().pt(px(before)).child("\u{200b}"))
                 .child(
                     img(drawn.texture.clone())
                         .absolute()
                         .top(px(top))
                         .left(px(0.))
-                        .w(px(drawn.width))
-                        .h(px(drawn.height))
+                        .w(px(width))
+                        .h(px(height))
                         .max_w_full()
                         .object_fit(ObjectFit::Contain),
                 )
@@ -356,8 +366,8 @@ impl HerdrWindow {
                 .py(px(8.))
                 .child(
                     img(drawn.texture.clone())
-                        .w(px(drawn.width))
-                        .h(px(drawn.height))
+                        .w(px(width))
+                        .h(px(height))
                         .max_w_full()
                         .object_fit(ObjectFit::Contain),
                 )

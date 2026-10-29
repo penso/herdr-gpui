@@ -183,7 +183,8 @@ impl SettingsWindow {
                 .flex()
                 .items_center()
                 .gap(px(3.))
-                .child(div().text_size(px(10.)).child("Aa"))
+                // A glyph sample, the same in every language.
+                .child(div().text_size(px(10.)).child("Aa")) // i18n: data
                 .children(
                     theme.palette[..8]
                         .iter()
@@ -194,9 +195,9 @@ impl SettingsWindow {
                 .text_color(rgb(self.theme.subtext()))
                 .text_size(px(10.))
                 .child(if palette.is_some() {
-                    "Unavailable"
+                    fl!("settings-theme-thumbnail-unavailable")
                 } else {
-                    "Loading..."
+                    fl!("settings-theme-thumbnail-loading")
                 }),
         }
     }

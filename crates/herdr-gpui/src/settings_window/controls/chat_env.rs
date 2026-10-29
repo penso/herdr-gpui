@@ -1,8 +1,12 @@
 //! The chats' extra environment on the General page, shown while ACP chats
 //! are on. Like px0's address, an edit stays in the field until Apply, and
 //! saving goes through the window's serial persistence path.
+// i18n: migrated
 use super::*;
-use crate::config::chat::{env_text, parse_env};
+use crate::{
+    config::chat::{env_text, parse_env},
+    i18n::fl,
+};
 
 #[derive(Default)]
 pub(in crate::settings_window) struct ChatEnvSettings {
@@ -37,6 +41,7 @@ impl SettingsWindow {
             self.chat_env.shown = saved;
         }
         input.update(cx, |input, cx| {
+            // i18n: data
             input.set_placeholder("GH_HOST=mycompany.ghe.com ANTHROPIC_BASE_URL=https://…", cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
@@ -96,19 +101,26 @@ impl SettingsWindow {
             return None;
         }
         Some(
-            self.control_card("Chat environment")
-                .child(self.control_note("Variables a new chat's tab starts with, here or on an SSH host, such as GH_HOST for GitHub Enterprise or ANTHROPIC_BASE_URL for a company gateway. They are stored in plain text, so keep tokens in your shell or the agent's own sign-in."))
+            self.control_card(&fl!("settings-integrations-chat-env"))
+                .child(self.control_note(fl!("settings-integrations-chat-env-note")))
                 .children(self.chat_env.input.as_ref().map(|input| {
-                    div().debug_selector(|| "settings-chat-env".into()).child(input.clone())
+                    div()
+                        .debug_selector(|| "settings-chat-env".into())
+                        .child(input.clone())
                 }))
                 .when(self.chat_env.invalid, |card| {
-                    card.child(self.control_note("Use NAME=value pairs separated by spaces, with a value in double quotes when it has spaces. HERDR_ACP is set by the app."))
+                    card.child(self.control_note(fl!("settings-integrations-chat-env-invalid")))
                 })
                 .child(
-                    self.control_choice("settings-chat-env-apply", "Apply environment", false, !self.busy())
-                        .when(!self.busy(), |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| this.apply_chat_env(cx)))
-                        }),
+                    self.control_choice(
+                        "settings-chat-env-apply",
+                        fl!("settings-integrations-chat-env-apply"),
+                        false,
+                        !self.busy(),
+                    )
+                    .when(!self.busy(), |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.apply_chat_env(cx)))
+                    }),
                 ),
         )
     }

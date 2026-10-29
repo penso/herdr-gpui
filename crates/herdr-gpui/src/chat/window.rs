@@ -268,6 +268,9 @@ impl HerdrWindow {
             return None;
         }
         let pane = self.chats.pane(pane_id)?;
+        if let Some(focus) = pane.viewer.as_ref().and_then(|viewer| viewer.open_focus()) {
+            return Some(focus.clone());
+        }
         if pane.reading(window) {
             return pane.text_focus.clone();
         }
@@ -502,12 +505,14 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // A picture shown large takes Escape before anything under it.
-        if event.keystroke.key == "escape"
-            && !event.keystroke.modifiers.modified()
-            && self.close_chat_viewer(pane_id, cx)
-        {
+        // A picture shown large takes the keyboard: Escape closes it, and
+        // nothing typed reaches the composer hidden behind it.
+        if self.chat_viewer_open(pane_id) {
+            if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                self.close_chat_viewer(pane_id, window, cx);
+            }
             cx.stop_propagation();
+            window.prevent_default();
             return;
         }
         if self.chat_reader_key(pane_id, event, window, cx) {
@@ -606,6 +611,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Nothing pastes into the composer hidden behind a picture.
+        if self.chat_viewer_open(pane_id) {
+            return true;
+        }
         if self.chat_reader_focused(pane_id, window) {
             return true;
         }

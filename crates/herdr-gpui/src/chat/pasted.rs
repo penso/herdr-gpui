@@ -18,7 +18,9 @@ use std::{
 
 impl HerdrWindow {
     /// Saves `image` off the UI thread, then adds the file to the next
-    /// prompt of the chat over `pane_id`.
+    /// prompt of the chat over `pane_id`. Until it is saved the picture is
+    /// pending, so a prompt sent meanwhile waits for it, and it joins only
+    /// the conversation it was pasted into.
     pub(super) fn attach_chat_image(
         &mut self,
         pane_id: &str,
@@ -26,19 +28,38 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(pane) = self.chats.pane_mut(pane_id) else {
+            return;
+        };
+        pane.uploading += 1;
+        let target = pane.target.clone();
+        let cursor = pane.session.since();
         let save = cx.background_spawn(async move { save(Source::Clipboard(image)) });
         let pane_id = pane_id.to_owned();
         cx.spawn_in(window, async move |this, cx| {
             let saved = save.await;
-            let _ = this.update_in(cx, |this, window, cx| match saved {
-                Ok(path) => this.attach_chat_files(&pane_id, vec![path], window, cx),
-                Err(error) => {
-                    let Some(pane) = this.chats.pane_mut(&pane_id) else {
-                        return;
-                    };
-                    pane.error = Some(format!("Image not attached: {error}"));
+            let _ = this.update_in(cx, |this, window, cx| {
+                let Some(pane) = this
+                    .chats
+                    .pane_mut(&pane_id)
+                    .filter(|pane| pane.target == target)
+                else {
+                    return;
+                };
+                pane.uploading = pane.uploading.saturating_sub(1);
+                if !pane.is_current(&target, cursor) {
+                    // Another conversation took the pane; the picture was
+                    // for the one that left.
                     this.redraw_terminal(cx);
-                    cx.notify();
+                    return;
+                }
+                match saved {
+                    Ok(path) => this.attach_chat_files(&pane_id, vec![path], window, cx),
+                    Err(error) => {
+                        pane.error = Some(format!("Image not attached: {error}"));
+                        this.redraw_terminal(cx);
+                        cx.notify();
+                    }
                 }
             });
         })

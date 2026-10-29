@@ -1,7 +1,8 @@
 //! px0 shares the Code settings page. Explicit Apply keeps unfinished edits
 //! local; saving goes through the settings window's serial persistence path.
+// i18n: migrated
 use super::*;
-use crate::browser::WebUrl;
+use crate::{browser::WebUrl, i18n::fl};
 
 #[derive(Default)]
 pub(in crate::settings_window) struct Px0Settings {
@@ -36,7 +37,15 @@ impl SettingsWindow {
             self.px0.shown = saved.to_owned();
         }
         input.update(cx, |input, cx| {
-            input.set_placeholder("Automatic, or http://127.0.0.1:7777/", cx);
+            input.set_placeholder_with(
+                || {
+                    fl!(
+                        "settings-code-px0-placeholder",
+                        example = "http://127.0.0.1:7777/"
+                    )
+                },
+                cx,
+            );
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
     }
@@ -91,11 +100,26 @@ impl SettingsWindow {
     }
 
     pub(in crate::settings_window) fn render_px0_controls(&self, cx: &mut Context<Self>) -> Div {
-        self.control_card("px0")
-            .child(self.control_note("Leave the address empty to discover a local workbench or start installed px0 when a tab opens. Set an address to attach to a workbench you run yourself."))
-            .children(self.px0.input.as_ref().map(|input| div().debug_selector(|| "settings-px0-url".into()).child(input.clone())))
-            .when(self.px0.invalid, |card| card.child(self.control_note("Use a loopback HTTP workbench address without credentials, query or fragment.")))
-            .child(self.control_choice("settings-px0-apply", "Apply px0 address", false, !self.busy())
-                .when(!self.busy(), |button| button.on_click(cx.listener(|this, _, _, cx| this.apply_px0_address(cx)))))
+        self.control_card(&fl!("settings-code-px0"))
+            .child(self.control_note(fl!("settings-code-px0-note")))
+            .children(self.px0.input.as_ref().map(|input| {
+                div()
+                    .debug_selector(|| "settings-px0-url".into())
+                    .child(input.clone())
+            }))
+            .when(self.px0.invalid, |card| {
+                card.child(self.control_note(fl!("settings-code-px0-invalid")))
+            })
+            .child(
+                self.control_choice(
+                    "settings-px0-apply",
+                    fl!("settings-code-px0-apply"),
+                    false,
+                    !self.busy(),
+                )
+                .when(!self.busy(), |button| {
+                    button.on_click(cx.listener(|this, _, _, cx| this.apply_px0_address(cx)))
+                }),
+            )
     }
 }

@@ -13,6 +13,7 @@ use crate::{
         worker::{self, Worker},
     },
     coder::setup::{self, Session, Stage},
+    i18n::fl,
     progress::{self, Progress},
 };
 use gpui::{prelude::*, *};
@@ -38,15 +39,24 @@ pub(super) enum Outcome {
     Failed(String),
 }
 
-pub(super) fn status(stage: Option<Stage>) -> (&'static str, Progress) {
+pub(super) fn status(stage: Option<Stage>) -> (String, Progress) {
     match stage {
-        None => ("Contacting Coder…", Progress::Busy),
+        None => (
+            fl!("settings-cloud-coder-destroy-contacting"),
+            Progress::Busy,
+        ),
         Some(Stage::Waiting) => (
-            "Waiting for the workspace's current build to finish…",
+            fl!("settings-cloud-coder-destroy-waiting"),
             Progress::Working(0.15),
         ),
-        Some(Stage::Queued) => ("Queued at Coder…", Progress::Working(0.4)),
-        Some(Stage::Deleting) => ("Deleting the workspace…", Progress::Working(0.7)),
+        Some(Stage::Queued) => (
+            fl!("settings-cloud-coder-destroy-queued"),
+            Progress::Working(0.4),
+        ),
+        Some(Stage::Deleting) => (
+            fl!("settings-cloud-coder-destroy-deleting"),
+            Progress::Working(0.7),
+        ),
     }
 }
 
@@ -120,7 +130,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder destroy worker");
                 card.outcome = Some(Outcome::Failed(
-                    crate::coder::Error::Worker("destroy").to_string(),
+                    crate::coder::Error::Worker("destroy").to_string(), // i18n: data
                 ));
             }
         }
@@ -141,7 +151,11 @@ impl SettingsWindow {
                 card.destroying = None;
                 card.outcome = Some(match result {
                     Ok(()) => Outcome::Destroyed(label),
-                    Err(error) => Outcome::Failed(format!("Could not destroy {label}: {error}")),
+                    Err(error) => Outcome::Failed(fl!(
+                        "settings-cloud-coder-destroy-failed",
+                        name = label,
+                        error = error.to_string()
+                    )),
                 });
                 self.refresh_cloud(cx);
             }
@@ -166,7 +180,7 @@ impl SettingsWindow {
             return vec![
                 self.cloud_button(
                     SharedString::from(format!("cloud-coder-destroy-cancel-{index}")),
-                    "Cancel",
+                    fl!("settings-cloud-cancel"),
                     true,
                 )
                 .debug_selector(move || format!("cloud-coder-destroy-cancel-{index}"))
@@ -174,7 +188,7 @@ impl SettingsWindow {
                 .into_any_element(),
                 self.cloud_button(
                     SharedString::from(format!("cloud-coder-destroy-confirm-{index}")),
-                    "Destroy workspace",
+                    fl!("settings-cloud-coder-destroy-confirm"),
                     enabled,
                 )
                 .text_color(danger)
@@ -191,7 +205,7 @@ impl SettingsWindow {
         vec![
             self.cloud_button(
                 SharedString::from(format!("cloud-coder-destroy-{index}")),
-                "Destroy…",
+                fl!("settings-cloud-coder-destroy"),
                 enabled,
             )
             .text_color(danger)
@@ -208,9 +222,9 @@ impl SettingsWindow {
     pub(super) fn coder_destroy_detail(&self, device: &SavedDevice) -> Option<Div> {
         let card = self.coder_card.as_ref()?;
         if card.confirm_destroy.as_deref() == Some(&device.id) {
-            return Some(div().child(self.control_note(format!(
-                "Destroy deletes the workspace {} and its disk at Coder, and removes it here. This cannot be undone.",
-                device.machine
+            return Some(div().child(self.control_note(fl!(
+                "settings-cloud-coder-destroy-warning",
+                workspace = device.machine.clone()
             ))));
         }
         let job = card.destroying.as_ref().filter(|job| job.id == device.id)?;
@@ -249,7 +263,7 @@ impl SettingsWindow {
         Some(match outcome {
             Outcome::Destroyed(label) => div()
                 .debug_selector(|| "cloud-coder-destroyed".into())
-                .child(format!("Destroyed {label}.")),
+                .child(fl!("settings-cloud-coder-destroyed", name = label.clone())),
             Outcome::Failed(message) => div()
                 .debug_selector(|| "cloud-coder-destroy-failed".into())
                 .text_color(crate::menu::danger(&self.theme))

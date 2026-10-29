@@ -213,7 +213,7 @@ impl ChatPane {
     }
 
     /// Every handle through which the chat holds the keyboard: its composer,
-    /// its inert mirror focus, and its selectable text.
+    /// its inert mirror focus, its selectable text, and a picture shown large.
     pub(crate) fn focus_handles<'a>(
         &'a self,
         cx: &'a App,
@@ -223,6 +223,7 @@ impl ChatPane {
             .map(|input| input.read(cx).focus.clone())
             .chain(self.read_only_focus.iter().cloned())
             .chain(self.text_focus.iter().cloned())
+            .chain(self.viewer.iter().map(|viewer| viewer.focus().clone()))
     }
 
     /// Whether the user is reading, with the keyboard on the chat's text.

@@ -3,12 +3,13 @@
 //! credential store. Sign-in, status, and device removal run through
 //! `cloud::worker`, never on the UI thread; destroying a device's workspace
 //! lives in `destroy`.
+// i18n: migrated
 
 mod destroy;
 
 use super::{
     super::{Section, SettingsWindow},
-    follow_config, input,
+    Hint, follow_config, input,
 };
 use crate::{
     cloud::{
@@ -21,6 +22,7 @@ use crate::{
     },
     config::{CoderConfig, CoderFields, Config},
     github::Store,
+    i18n::{self, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -28,17 +30,33 @@ use secrecy::SecretString;
 
 const SECRET_VARIABLE: &str = "HERDR_CODER_OAUTH_CLIENT_SECRET";
 
-/// The editable `[coder]` keys, in display order, with their labels and hints.
-const FIELDS: [(&str, &str); 6] = [
-    ("Deployment URL", "https://coder.example.com"),
-    ("OAuth client ID", "The OAuth2 app's client ID"),
-    ("Redirect URI", "http://127.0.0.1:47823/callback"),
+/// The editable `[coder]` keys, in display order, with their labels' message
+/// IDs and hints.
+const FIELDS: [(&str, Hint); 6] = [
     (
-        "Organization",
-        "Optional; your default organization if empty",
+        "settings-cloud-coder-url",
+        Hint::Value("https://coder.example.com"),
     ),
-    ("Workspace name prefix", "Optional; herdr if empty"),
-    ("coder CLI", "Optional; found on PATH if empty"),
+    (
+        "settings-cloud-coder-client-id",
+        Hint::Message("settings-cloud-coder-client-id-placeholder"),
+    ),
+    (
+        "settings-cloud-coder-redirect",
+        Hint::Value("http://127.0.0.1:47823/callback"),
+    ),
+    (
+        "settings-cloud-coder-organization",
+        Hint::Message("settings-cloud-coder-organization-placeholder"),
+    ),
+    (
+        "settings-cloud-coder-prefix",
+        Hint::Message("settings-cloud-coder-prefix-placeholder"),
+    ),
+    (
+        "settings-cloud-coder-cli",
+        Hint::Message("settings-cloud-coder-cli-placeholder"),
+    ),
 ];
 
 enum Update {
@@ -80,9 +98,11 @@ impl CoderCard {
     ) -> Self {
         let loaded = CoderFields::from_config(&config.coder);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
-        let secret = input("", "", config, theme, cx);
+        let fields = std::array::from_fn(|index| {
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
+        });
+        let secret = input(String::new, "", config, theme, cx);
         secret.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
@@ -125,11 +145,11 @@ fn texts(values: &CoderFields) -> [&str; 6] {
 }
 
 /// Where the client secret in use comes from, before Settings' own store.
-fn configured_secret(config: &CoderConfig) -> Option<&'static str> {
+fn configured_secret(config: &CoderConfig) -> Option<String> {
     if std::env::var_os(SECRET_VARIABLE).is_some() {
-        Some("Set by HERDR_CODER_OAUTH_CLIENT_SECRET, which takes precedence.")
+        Some(fl!("settings-cloud-coder-secret-environment"))
     } else if config.oauth_client_secret.is_some() {
-        Some("Set by [coder] oauth_client_secret in the config file, which takes precedence.")
+        Some(fl!("settings-cloud-coder-secret-config"))
     } else {
         None
     }
@@ -172,6 +192,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder settings worker");
                 if let Some(cloud) = &mut self.coder_card {
+                    // i18n: data
                     cloud.message = Some(crate::coder::Error::Worker("settings").to_string());
                 }
             }
@@ -216,7 +237,7 @@ impl SettingsWindow {
                 cloud.message = Some(error.to_string());
             }
             Update::Opened(url) => {
-                cloud.message = Some("Finish signing in in your browser…".into());
+                cloud.message = Some(fl!("settings-cloud-coder-finish-in-browser"));
                 cx.open_url(&url);
             }
             Update::SignedIn(result) | Update::Done(result) => {
@@ -316,36 +337,32 @@ impl SettingsWindow {
         let ready = !self.busy();
         let configured = self.coder_settings().is_some();
         let (account, action) = match &cloud.account {
-            _ if !configured => (
-                "Not configured. Enter the deployment and its OAuth app, then save.".to_owned(),
-                None,
-            ),
-            Account::Checking => ("Checking…".to_owned(), None),
-            Account::SigningIn => ("Waiting for the browser…".to_owned(), None),
-            Account::Known(Session::SignedOut) => ("Not signed in".to_owned(), Some(true)),
-            Account::Known(Session::SignedIn { user }) => {
-                (format!("Signed in as {user}"), Some(false))
+            _ if !configured => (fl!("settings-cloud-coder-not-configured"), None),
+            Account::Checking => (fl!("settings-cloud-checking"), None),
+            Account::SigningIn => (fl!("settings-cloud-coder-waiting-for-browser"), None),
+            Account::Known(Session::SignedOut) => {
+                (fl!("settings-cloud-coder-not-signed-in"), Some(true))
             }
+            Account::Known(Session::SignedIn { user }) => (
+                fl!("settings-cloud-coder-signed-in-as", user = user.clone()),
+                Some(false),
+            ),
             Account::Known(Session::Unreadable { reason }) => (
-                format!("Signed in; the account could not be read: {reason}"),
+                fl!("settings-cloud-coder-unreadable", reason = reason.clone()),
                 Some(false),
             ),
         };
-        let secret_note = configured_secret(&self.config.coder)
-            .map(str::to_owned)
-            .unwrap_or_else(|| {
-                if cloud.secret_saved {
-                    "Saved. Type a new secret to replace it.".into()
-                } else {
-                    "Not saved yet. Coder requires it to sign in.".into()
-                }
-            });
+        let secret_note = configured_secret(&self.config.coder).unwrap_or_else(|| {
+            if cloud.secret_saved {
+                fl!("settings-cloud-coder-secret-saved")
+            } else {
+                fl!("settings-cloud-coder-secret-missing")
+            }
+        });
         let mut card = self
-            .control_card("Coder")
+            .cloud_card(crate::cloud::name(crate::cloud::CloudProvider::Coder).to_owned())
             .debug_selector(|| "cloud-coder-card".into())
-            .child(self.control_note(
-                "Create Coder workspaces from the device picker and use them as devices. Register an OAuth2 app in Coder with the redirect URI below; the deployment must enable the oauth2 experiment.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-coder-note")))
             .child(
                 div()
                     .flex()
@@ -358,25 +375,41 @@ impl SettingsWindow {
                         // Only a settled account line offers an action.
                         let enabled = ready && matches!(cloud.account, Account::Known(_));
                         row.child(if sign_in {
-                            self.cloud_button("cloud-coder-sign-in", "Sign in", enabled)
-                                .debug_selector(|| "cloud-coder-sign-in".into())
-                                .when(enabled, |button| {
-                                    button.on_click(cx.listener(|this, _, _, cx| this.cloud_sign_in(cx)))
-                                })
+                            self.cloud_button(
+                                "cloud-coder-sign-in",
+                                fl!("settings-cloud-coder-sign-in"),
+                                enabled,
+                            )
+                            .debug_selector(|| "cloud-coder-sign-in".into())
+                            .when(enabled, |button| {
+                                button
+                                    .on_click(cx.listener(|this, _, _, cx| this.cloud_sign_in(cx)))
+                            })
                         } else {
-                            self.cloud_button("cloud-coder-sign-out", "Sign out", enabled)
-                                .debug_selector(|| "cloud-coder-sign-out".into())
-                                .when(enabled, |button| {
-                                    button.on_click(cx.listener(|this, _, _, cx| this.cloud_sign_out(cx)))
-                                })
+                            self.cloud_button(
+                                "cloud-coder-sign-out",
+                                fl!("settings-cloud-coder-sign-out"),
+                                enabled,
+                            )
+                            .debug_selector(|| "cloud-coder-sign-out".into())
+                            .when(enabled, |button| {
+                                button
+                                    .on_click(cx.listener(|this, _, _, cx| this.cloud_sign_out(cx)))
+                            })
                         })
                     }),
             );
         for (index, (label, _)) in FIELDS.iter().enumerate() {
-            card = card.child(self.cloud_field(label, cloud.fields[index].clone().into()));
+            card = card.child(self.cloud_field(
+                i18n::message(label, &[]),
+                cloud.fields[index].clone().into(),
+            ));
             if index == 1 {
                 card = card
-                    .child(self.cloud_field("OAuth client secret", cloud.secret.clone().into()))
+                    .child(self.cloud_field(
+                        fl!("settings-cloud-coder-secret"),
+                        cloud.secret.clone().into(),
+                    ))
                     .child(
                         div()
                             .flex()
@@ -389,7 +422,7 @@ impl SettingsWindow {
                                 row.child(
                                     self.cloud_button(
                                         "cloud-coder-clear-secret",
-                                        "Forget secret",
+                                        fl!("settings-cloud-coder-forget-secret"),
                                         ready,
                                     )
                                     .when(ready, |button| {
@@ -406,7 +439,7 @@ impl SettingsWindow {
         }
         card = card.child(
             div().flex().justify_end().child(
-                self.cloud_button("cloud-coder-save", "Save", ready)
+                self.cloud_button("cloud-coder-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-coder-save".into())
                     .when(ready, |button| {
                         button.on_click(cx.listener(|this, _, _, cx| this.save_cloud(cx)))
@@ -421,15 +454,12 @@ impl SettingsWindow {
             );
         }
         let mut devices = self
-            .control_card("Coder devices")
+            .cloud_card(fl!("settings-cloud-coder-devices"))
             .debug_selector(|| "cloud-coder-devices".into());
         if cloud.devices.is_empty() {
-            devices =
-                devices.child(self.control_note("None yet. Add one from Coder in Add Device…."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-coder-none-yet")));
         } else {
-            devices = devices.child(self.control_note(
-                "Remove takes a device off this list and leaves its workspace running in Coder. Destroy deletes the workspace at Coder.",
-            ));
+            devices = devices.child(self.control_note(fl!("settings-cloud-coder-remove-note")));
         }
         if let Some(outcome) = self.coder_destroy_outcome() {
             devices = devices.child(outcome);

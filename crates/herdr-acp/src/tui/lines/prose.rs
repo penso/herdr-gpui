@@ -133,9 +133,14 @@ fn inline(text: &str, base: Style, out: &mut Vec<(char, Style)>) {
             continue;
         }
         if ch == '['
-            && let Some((label, tail)) = link(rest)
+            && let Some((label, target, tail)) = link(rest)
         {
             inline(label, base.add_modifier(Modifier::UNDERLINED), out);
+            // The terminal cannot open it, so the address stays readable.
+            if !target.is_empty() && target != label {
+                let quiet = base.fg(Color::DarkGray);
+                out.extend(format!(" ({target})").chars().map(|ch| (ch, quiet)));
+            }
             rest = tail;
             continue;
         }
@@ -144,9 +149,9 @@ fn inline(text: &str, base: Style, out: &mut Vec<(char, Style)>) {
     }
 }
 
-/// A `[label](target)` at the start of `text`: its label and what follows.
-/// The target is dropped; the terminal cannot open it.
-fn link(text: &str) -> Option<(&str, &str)> {
+/// A `[label](target)` at the start of `text`: its label, its target, and
+/// what follows.
+fn link(text: &str) -> Option<(&str, &str, &str)> {
     let close = text.find("](")?;
     let label = &text[1..close];
     if label.is_empty() || label.contains('[') {
@@ -154,7 +159,7 @@ fn link(text: &str) -> Option<(&str, &str)> {
     }
     let after = &text[close + 2..];
     let end = after.find(')')?;
-    Some((label, &after[end + 1..]))
+    Some((label, after[..end].trim(), &after[end + 1..]))
 }
 
 /// Breaks styled characters into rows of at most `width` columns, at

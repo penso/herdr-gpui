@@ -1,5 +1,7 @@
 //! Configuration: the files behind these settings, and reload.
+// i18n: migrated
 use super::{SettingsWindow, ui};
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use std::path::PathBuf;
 
@@ -42,29 +44,33 @@ impl SettingsWindow {
         div()
             .flex()
             .flex_col()
-            .child(ui::section(theme, "Files", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-configuration-section-files"),
+                None,
+            ))
             .child(self.file_row(
                 "config-local",
-                "Herdr UI settings",
+                fl!("settings-config-local"),
                 ui::Source::HerdrUi,
                 self.controls.local_path.clone(),
                 self.controls.local_file.clone(),
             ))
             .child(self.gate_shared(self.file_row(
                 "config-shared",
-                "Herdr configuration",
+                fl!("settings-config-shared"),
                 ui::Source::Herdr,
                 shared_path.as_ref().map_or_else(
-                    || "Unavailable".to_owned(),
+                    || fl!("settings-configuration-unavailable"),
                     |path| path.display().to_string(),
                 ),
                 shared_path.clone(),
             )))
             .child(
-                ui::row(theme, "config-reload", "Reload configuration")
-                    .description("Re-reads both files. Does not restart the daemon.")
+                ui::row(theme, "config-reload", fl!("settings-config-reload"))
+                    .description(fl!("settings-config-reload-description"))
                     .control(
-                        ui::button(theme, "config-reload-button", "Reload", true)
+                        ui::button(theme, "config-reload-button", fl!("settings-reload"), true)
                             .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                     ),
             )
@@ -73,7 +79,7 @@ impl SettingsWindow {
     fn file_row_base(
         &self,
         id: &'static str,
-        title: &'static str,
+        title: String,
         source: ui::Source,
         path: String,
     ) -> ui::Row {
@@ -87,7 +93,7 @@ impl SettingsWindow {
     fn file_row(
         &self,
         id: &'static str,
-        title: &'static str,
+        title: String,
         source: ui::Source,
         text: String,
         file: Option<PathBuf>,
@@ -103,7 +109,10 @@ impl SettingsWindow {
         id: &'static str,
         file: Option<PathBuf>,
     ) -> ui::Row {
-        for (suffix, label, reveal) in [("reveal", "Reveal", true), ("open", "Open", false)] {
+        for (suffix, label, reveal) in [
+            ("reveal", fl!("settings-configuration-reveal"), true),
+            ("open", fl!("settings-configuration-open"), false),
+        ] {
             let enabled = file.is_some();
             let file = file.clone();
             row = row.control(

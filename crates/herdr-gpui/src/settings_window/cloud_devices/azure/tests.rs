@@ -1,6 +1,7 @@
 use super::{Account, AzureConfig, AzureFields, SignIn, sign_in};
 
 mod destroy;
+mod messages;
 
 fn fields(subscription: &str, client: &str) -> AzureFields {
     AzureFields {

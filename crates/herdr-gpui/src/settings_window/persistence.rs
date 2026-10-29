@@ -1,9 +1,11 @@
 //! Loading and saving preferences off the UI thread, then reconciling the result,
 //! including the config watcher and the saves that finish when the app quits.
+// i18n: migrated
 use super::{Section, SettingsWindow, layouts, themes};
 use crate::{
     config::{Config, FontFace, Theme},
     herdr_settings::{self, Edit},
+    i18n::fl,
 };
 use gpui::*;
 
@@ -214,6 +216,7 @@ impl SettingsWindow {
             let (shared, error, theme) = match herdr_settings::Settings::load() {
                 Ok(shared) => {
                     config.apply_shared_notifications(&shared);
+                    // i18n: data
                     let theme = if config.theme == "Follow Herdr" {
                         shared.theme(light)?.styled_for(&config)
                     } else {
@@ -221,10 +224,11 @@ impl SettingsWindow {
                     };
                     (Some(shared), None, theme)
                 }
+                // i18n: data
                 Err(error) if config.theme == "Follow Herdr" => return Err(error),
                 Err(error) => (
                     None,
-                    Some(format!("Load Herdr settings: {error}")),
+                    Some(fl!("settings-error-load-herdr", error = error.to_string())),
                     config.theme(light)?,
                 ),
             };
@@ -276,9 +280,7 @@ impl SettingsWindow {
                 }
             }
             Err(error) => {
-                self.error = Some(format!(
-                    "Could not reload settings; keeping current preferences: {error}"
-                ))
+                self.error = Some(fl!("settings-error-reload", error = error.to_string()))
             }
         }
         // Appearance may have changed while the loader was running. Resolve
@@ -463,13 +465,13 @@ impl SettingsWindow {
                 if !this.saving {
                     this.status = match (saved.is_ok(), reloaded) {
                         (true, true) => None,
-                        (true, false) => Some("Saved; could not reload current preferences".into()),
-                        (false, true) => Some("Save failed; reloaded current preferences".into()),
-                        (false, false) => Some("Save failed; reload before editing again".into()),
+                        (true, false) => Some(fl!("settings-saved-unreloaded")),
+                        (false, true) => Some(fl!("settings-save-failed-reloaded")),
+                        (false, false) => Some(fl!("settings-save-failed")),
                     };
                 }
                 if let Err(error) = &saved {
-                    this.error = Some(format!("Save settings: {error}"));
+                    this.error = Some(fl!("settings-error-save", error = error.to_string()));
                 }
                 let _ = this.source.update(cx, |source, _| {
                     // The source's guarded file watcher owns applying changes.
@@ -485,7 +487,10 @@ impl SettingsWindow {
                             && let Err(error) = endpoint.reload_config()
                             && !this.saving
                         {
-                            this.status = Some(format!("Saved; daemon reload not queued: {error}"));
+                            this.status = Some(fl!(
+                                "settings-saved-daemon-unqueued",
+                                error = error.to_string()
+                            ));
                         }
                     }
                 });

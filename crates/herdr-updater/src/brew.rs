@@ -459,9 +459,10 @@ fn schedule_relaunch(
         .arg(bundle)
         .arg(bundle_id)
         .arg(limit.as_secs().to_string())
+        // The app `open` starts inherits this environment and passes it to
+        // the Herdr server and its panes, so it must not carry a locale.
         .env_clear()
         .env("PATH", search_path)
-        .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

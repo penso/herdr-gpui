@@ -8,6 +8,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 use std::path::PathBuf;
 
 mod cross_window_jobs;
+mod messages;
 
 fn open(
     cx: &mut TestAppContext,
@@ -130,7 +131,10 @@ fn setup_without_a_usable_key_starts_nothing(cx: &mut TestAppContext) {
             view.generate_railway_key(cx);
         })
     });
-    assert_eq!(message(cx), crate::railway::NAME_RULE);
+    assert_eq!(
+        message(cx),
+        crate::i18n::fl!("settings-cloud-railway-name-rule")
+    );
     view.read_with(cx, |view, _| {
         assert!(view.railway_card.as_ref().unwrap().job.is_none());
     });

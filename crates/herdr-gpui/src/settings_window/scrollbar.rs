@@ -2,6 +2,7 @@
 //! edge of a pane whose content runs past it, showing where the pane sits
 //! and how much of it shows, and dragging it. The size and travel are the
 //! tab strip's thumb math, turned on its side.
+// i18n: migrated
 use super::SettingsWindow;
 use crate::browser::Thumb;
 use gpui::{prelude::*, *};

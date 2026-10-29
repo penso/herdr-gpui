@@ -122,7 +122,12 @@ macro_rules! chat_layouts {
             }
 
             /// How the app titles it.
-            pub const fn label(self) -> &'static str {
+            pub fn label(self) -> String {
+                crate::i18n::message(self.message(), &[])
+            }
+
+            /// The message naming it.
+            pub const fn message(self) -> &'static str {
                 match self {
                     $(Self::$variant => $label,)+
                 }
@@ -135,26 +140,27 @@ chat_layouts! {
     /// Entries on a line down the left, an avatar where the speaker
     /// changes, and the settings inside the composer's card.
     #[default]
-    Timeline => "timeline", "Timeline";
+    Timeline => "timeline", "chat-layout-timeline";
     /// The user's messages in bubbles on the right and the agent's as
     /// plain text, with the settings under the composer, like Claude's app.
-    Bubbles => "bubbles", "Bubbles";
+    Bubbles => "bubbles", "chat-layout-bubbles";
     /// The terminal's font throughout, prompts marked `›`, the agent and
     /// its tools `⏺`, and a status line under the prompt, like Claude
     /// Code's own screen.
-    Terminal => "terminal", "Terminal";
+    Terminal => "terminal", "chat-layout-terminal";
     /// Each prompt as a heading with an accent bar, the reply as prose
     /// under it, and a quiet rule closing each turn.
-    Document => "document", "Document";
+    Document => "document", "chat-layout-document";
     /// Each turn in one card: the prompt on top, the reply under a
     /// hairline, how it ended at its foot.
-    Cards => "cards", "Cards";
+    Cards => "cards", "chat-layout-cards";
     /// Blue bubbles on the right for the user, gray ones on the left for
     /// the agent, each run ending in a tail, like Apple's Messages.
-    IMessage => "imessage", "iMessage";
-    /// The agent's prose alone at a book's measure, prompts and steps as
-    /// notes in the margin, and earlier turns muted, like iA Writer.
-    IA => "ia", "iA";
+    IMessage => "imessage", "chat-layout-imessage";
+    /// One column at a book's measure: prompts and steps as quiet notes
+    /// hung from a gutter mark, the agent's prose in full ink, and earlier
+    /// turns muted until pointed at, like iA Writer.
+    IA => "ia", "chat-layout-ia";
 }
 
 impl ChatLayoutMode {

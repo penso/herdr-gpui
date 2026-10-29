@@ -12,6 +12,8 @@
 mod check;
 mod current;
 #[cfg(test)]
+pub(crate) mod leak_tests;
+#[cfg(test)]
 mod tests;
 
 pub(crate) use check::check;
@@ -75,6 +77,16 @@ fn format(catalog: &Catalog, id: &str, args: &[(&str, FluentValue<'_>)]) -> Stri
         fluent.set(*name, value.clone());
     }
     catalog.text_with(id, &fluent)
+}
+
+/// The variables English message `id` takes, or `None` when there is no
+/// such message, for tests of tables that name messages as data.
+#[cfg(test)]
+pub(crate) fn takes(id: &str) -> Option<&'static [&'static str]> {
+    MESSAGES
+        .iter()
+        .find(|(message, _)| *message == id)
+        .map(|(_, variables)| *variables)
 }
 
 /// A catalog command's name in the current locale.

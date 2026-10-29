@@ -29,7 +29,12 @@ macro_rules! chat_launchers {
             }
 
             /// How Settings titles it.
-            pub const fn label(self) -> &'static str {
+            pub fn label(self) -> String {
+                crate::i18n::message(self.message(), &[])
+            }
+
+            /// The message naming it.
+            pub const fn message(self) -> &'static str {
                 match self {
                     $(Self::$variant => $label,)+
                 }
@@ -41,18 +46,18 @@ macro_rules! chat_launchers {
 chat_launchers! {
     /// The agents slide out beside "+" while the pointer is over it.
     #[default]
-    Plus => "plus", "On + hover";
+    Plus => "plus", "chat-launcher-plus";
     /// The agents stand right after "+".
-    Beside => "beside", "After +";
+    Beside => "beside", "chat-launcher-beside";
     /// The agents lead the strip, before its tabs.
-    Leading => "leading", "Before tabs";
+    Leading => "leading", "chat-launcher-leading";
     /// The agents stand at the strip's right end.
-    Trailing => "trailing", "Right end";
+    Trailing => "trailing", "chat-launcher-trailing";
     /// One button for the agent last started at the right end; the others
     /// slide out beside it while the pointer is over it.
-    Button => "button", "One button";
+    Button => "button", "chat-launcher-button";
     /// No agent buttons; chats start from the "…" menu.
-    Off => "off", "Off";
+    Off => "off", "chat-launcher-off";
 }
 
 impl<'de> Deserialize<'de> for ChatLauncher {

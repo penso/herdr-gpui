@@ -6,6 +6,7 @@
 //!
 //! Resolving the account may run `az`, which takes most of a second, so it
 //! happens on the card's worker and render reads only the cached result.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
@@ -24,6 +25,7 @@ use crate::{
     },
     config::{AzureConfig, AzureFields, Config},
     github::Store,
+    i18n::{self, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -37,19 +39,44 @@ mod sizes;
 /// The VM Size field's place in [`FIELDS`]; the size choices draw it.
 const VM_SIZE: usize = 3;
 
+/// Each field's label and placeholder, as message IDs.
 const FIELDS: [(&str, &str); 9] = [
-    ("Subscription ID", "Azure subscription UUID"),
-    ("Resource Group", "Default: herdr-devices"),
-    ("Location", "Default: centralus"),
-    ("VM Size", "Default: Standard_D2plds_v6"),
     (
-        "Auto-stop",
-        "never, or idle time before an idle VM is deleted (e.g. 30m, 1h, 2h)",
+        "settings-cloud-azure-subscription",
+        "settings-cloud-azure-subscription-placeholder",
     ),
-    ("Tenant ID", "Optional Service Principal tenant UUID"),
-    ("Sandbox Group", "Default: herdr-sandboxes"),
-    ("Sandbox Region", "Default: same as Location"),
-    ("Sandbox Image", "Public disk image. Default: ubuntu"),
+    (
+        "settings-cloud-azure-group",
+        "settings-cloud-azure-group-placeholder",
+    ),
+    (
+        "settings-cloud-azure-location",
+        "settings-cloud-azure-location-placeholder",
+    ),
+    (
+        "settings-cloud-azure-vm-size",
+        "settings-cloud-azure-vm-size-placeholder",
+    ),
+    (
+        "settings-cloud-azure-auto-stop",
+        "settings-cloud-azure-auto-stop-placeholder",
+    ),
+    (
+        "settings-cloud-azure-tenant",
+        "settings-cloud-azure-tenant-placeholder",
+    ),
+    (
+        "settings-cloud-azure-sandbox-group",
+        "settings-cloud-azure-sandbox-group-placeholder",
+    ),
+    (
+        "settings-cloud-azure-sandbox-region",
+        "settings-cloud-azure-sandbox-region-placeholder",
+    ),
+    (
+        "settings-cloud-azure-sandbox-image",
+        "settings-cloud-azure-sandbox-image-placeholder",
+    ),
 ];
 
 enum Update {
@@ -136,16 +163,30 @@ impl AzureCard {
     ) -> Self {
         let loaded = loaded(config);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
+        let fields = std::array::from_fn(|index| {
+            let id = FIELDS[index].1;
+            input(
+                move || i18n::message(id, &[]),
+                texts[index],
+                config,
+                theme,
+                cx,
+            )
+        });
         let client_id = input(
-            "Optional Service Principal application UUID",
+            || fl!("settings-cloud-azure-client-id-placeholder"),
             &loaded.client_id,
             config,
             theme,
             cx,
         );
-        let secret = input("Client secret (masked)", "", config, theme, cx);
+        let secret = input(
+            || fl!("settings-cloud-azure-secret-placeholder"),
+            "",
+            config,
+            theme,
+            cx,
+        );
         secret.update(cx, |input, cx| input.set_masked(true, cx));
 
         let sandbox_cpu = loaded.sandbox_cpu.clone();
@@ -334,6 +375,7 @@ impl SettingsWindow {
                 );
                 if let Some(card) = &mut self.azure_card {
                     card.refreshing = false;
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -416,11 +458,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.azure_card {
             card.message = Some(match started {
-                Ok(Ok(())) => {
-                    format!("Creating Azure VM {name}. The device picker shows its progress.")
-                }
+                Ok(Ok(())) => fl!("settings-cloud-azure-creating-vm", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a VM.".into(),
+                Err(_) => fl!("settings-cloud-azure-no-window-vm"),
             });
         }
         cx.notify();
@@ -450,11 +490,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.azure_card {
             card.message = Some(match started {
-                Ok(Ok(())) => {
-                    format!("Creating Azure sandbox {name}. The device picker shows its progress.")
-                }
+                Ok(Ok(())) => fl!("settings-cloud-azure-creating-sandbox", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a sandbox.".into(),
+                Err(_) => fl!("settings-cloud-azure-no-window-sandbox"),
             });
         }
         cx.notify();
@@ -488,7 +526,7 @@ impl SettingsWindow {
         ready: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        self.control_switch(id, "Install Herdr when missing", install, ready)
+        self.control_switch(id, fl!("settings-cloud-install-herdr"), install, ready)
             .when(ready, |row| {
                 row.on_click(cx.listener(|this, _, _, cx| {
                     if let Some(card) = &mut this.azure_card {
@@ -532,27 +570,19 @@ impl SettingsWindow {
         let status = match &card.account {
             Account::Unconfigured { az_available } => {
                 if *az_available {
-                    "Azure CLI (`az`) detected. Enter Subscription ID or click Save to use active CLI account."
-                        .to_owned()
+                    fl!("settings-cloud-azure-cli-detected")
                 } else {
-                    "Not configured. Enter a Subscription ID and credentials, then Save.".to_owned()
+                    fl!("settings-cloud-azure-not-configured")
                 }
             }
-            Account::Checking => "Checking…".to_owned(),
+            Account::Checking => fl!("settings-cloud-checking"),
             Account::Known { overview, .. } => match &overview.credential {
-                Ok(CredentialStatus::AzureCli) => {
-                    "Authenticated via active Azure CLI (`az`) account.".to_owned()
-                }
-                Ok(CredentialStatus::SavedSecret) => {
-                    "Authenticated via saved Service Principal client secret.".to_owned()
-                }
+                Ok(CredentialStatus::AzureCli) => fl!("settings-cloud-azure-signed-in-cli"),
+                Ok(CredentialStatus::SavedSecret) => fl!("settings-cloud-azure-signed-in-secret"),
                 Ok(CredentialStatus::EnvironmentSecret) => {
-                    "Authenticated via HERDR_AZURE_CLIENT_SECRET.".to_owned()
+                    fl!("settings-cloud-azure-signed-in-environment")
                 }
-                Ok(CredentialStatus::Missing) => {
-                    "Subscription configured. Add a client secret or log into `az` CLI to connect."
-                        .to_owned()
-                }
+                Ok(CredentialStatus::Missing) => fl!("settings-cloud-azure-credential-missing"),
                 Err(error) => error.to_string(),
             },
         };
@@ -561,12 +591,9 @@ impl SettingsWindow {
             ready && configured && !card.refreshing && crate::cloud::unavailable().is_none();
 
         let account = self
-            .control_card("Azure")
+            .cloud_card(crate::cloud::name(CloudProvider::Azure).to_owned())
             .debug_selector(|| "cloud-azure-card".into())
-            .child(self.control_note(
-                "VMs and Container Apps sandboxes in one Azure subscription, used as devices. \
-                 VMs are reached over SSH; sandboxes through the Azure data plane.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-azure-note")))
             .child(div().min_w_0().child(status))
             .children(
                 FIELDS
@@ -574,14 +601,23 @@ impl SettingsWindow {
                     .enumerate()
                     .filter(|(index, _)| *index != VM_SIZE)
                     .map(|(index, (label, _))| {
-                        self.cloud_field(label, card.fields[index].clone().into())
+                        self.cloud_field(
+                            i18n::message(label, &[]),
+                            card.fields[index].clone().into(),
+                        )
                     }),
             )
-            .child(self.cloud_field("Client ID", card.client_id.clone().into()))
-            .child(self.cloud_field("Client Secret", card.secret.clone().into()))
+            .child(self.cloud_field(
+                fl!("settings-cloud-azure-client-id"),
+                card.client_id.clone().into(),
+            ))
+            .child(self.cloud_field(
+                fl!("settings-cloud-azure-secret"),
+                card.secret.clone().into(),
+            ))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-azure-save", "Save", ready)
+                    self.cloud_button("cloud-azure-save", fl!("settings-cloud-save"), ready)
                         .when(ready, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| this.save_azure(cx)))
                         }),
@@ -592,22 +628,26 @@ impl SettingsWindow {
             });
 
         let vm = self
-            .control_card("New VM")
+            .cloud_card(fl!("settings-cloud-azure-new-vm"))
             .debug_selector(|| "cloud-azure-new-vm".into())
             .child(self.render_vm_sizes(card, cx))
             .child(self.azure_install_switch("cloud-azure-install", card.install, ready, cx))
             .children(self.azure_setup_switch("cloud-azure-vm-setup", card.setup, ready, cx))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-azure-create", "Create VM", create)
-                        .when(create, |button| {
-                            button.on_click(cx.listener(|this, _, _, cx| this.create_azure_vm(cx)))
-                        }),
+                    self.cloud_button(
+                        "cloud-azure-create",
+                        fl!("settings-cloud-azure-create-vm"),
+                        create,
+                    )
+                    .when(create, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.create_azure_vm(cx)))
+                    }),
                 ),
             );
 
         let sandbox = self
-            .control_card("New sandbox")
+            .cloud_card(fl!("settings-cloud-azure-new-sandbox"))
             .debug_selector(|| "cloud-azure-new-sandbox".into())
             .child(self.render_sandbox_sizes(card, cx))
             .child(self.azure_install_switch(
@@ -619,17 +659,19 @@ impl SettingsWindow {
             .children(self.azure_setup_switch("cloud-azure-sandbox-setup", card.setup, ready, cx))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-azure-create-sandbox", "Create sandbox", create)
-                        .when(create, |button| {
-                            button.on_click(
-                                cx.listener(|this, _, _, cx| this.create_azure_sandbox(cx)),
-                            )
-                        }),
+                    self.cloud_button(
+                        "cloud-azure-create-sandbox",
+                        fl!("settings-cloud-azure-create-sandbox"),
+                        create,
+                    )
+                    .when(create, |button| {
+                        button.on_click(cx.listener(|this, _, _, cx| this.create_azure_sandbox(cx)))
+                    }),
                 ),
             );
 
         let mut devices = self
-            .control_card("Azure devices")
+            .cloud_card(fl!("settings-cloud-azure-devices"))
             .debug_selector(|| "cloud-azure-devices".into());
         let creating = self.azure_job_rows(cx);
         // The last delete's outcome leads, so it reads before an empty list.
@@ -637,20 +679,22 @@ impl SettingsWindow {
             devices = devices.child(outcome);
         }
         if card.devices().is_empty() && creating.is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         } else if !card.devices().is_empty() {
-            devices = devices.child(self.control_note(
-                "Removing a device deletes it at Azure, with its disk and IP. Remove from Herdr \
-                 only, offered beside it, leaves it at Azure, still billing.",
-            ));
+            devices = devices.child(self.control_note(fl!("settings-cloud-azure-remove-note")));
         }
         devices = devices.children(creating);
         for (index, device) in card.devices().iter().enumerate() {
-            let noun = Machine::parse(&device.id).noun();
-            let group = card.device_group(device);
+            let kind = machine_kind(&device.id);
+            let group = card.device_group(device).to_owned();
             let detail = match card.device_size(&device.id) {
-                Some(size) => format!("{noun} · {size} in {group}"),
-                None => format!("{noun} in {group}"),
+                Some(size) => fl!(
+                    "settings-cloud-azure-device-size",
+                    kind = kind,
+                    size = size.to_owned(),
+                    group = group
+                ),
+                None => fl!("settings-cloud-azure-device", kind = kind, group = group),
             };
             let actions = self.azure_destroy_actions(
                 index,
@@ -672,6 +716,14 @@ impl SettingsWindow {
             .child(vm)
             .child(sandbox)
             .child(devices)
+    }
+}
+
+/// What kind of machine a device is, as the messages select on it.
+fn machine_kind(id: &str) -> &'static str {
+    match Machine::parse(id) {
+        Machine::Vm(_) => "vm",
+        Machine::Sandbox(_) => "sandbox",
     }
 }
 

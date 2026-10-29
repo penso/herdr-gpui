@@ -111,7 +111,8 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                     }
                 }
                 for inline in [false, true] {
-                    let mut panel = view.rich_math(math, "x", &visuals, inline);
+                    let mut panel =
+                        view.rich_math(math, "x", &visuals, inline, view.chat_text_size());
                     assert_eq!(
                         panel.style().background,
                         Some(rgb(view.theme.background).into())
@@ -139,7 +140,7 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 ink,
                 "other layouts retain theme ink"
             );
-            let mut math = view.rich_math(math, "x", &visuals, true);
+            let mut math = view.rich_math(math, "x", &visuals, true, view.chat_text_size());
             assert!(
                 math.style().background.is_none(),
                 "other layouts need no panel"

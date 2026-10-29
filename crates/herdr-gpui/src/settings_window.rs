@@ -1,4 +1,5 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
+// i18n: migrated
 mod catalog;
 #[cfg(feature = "cloud")]
 mod cloud_devices;
@@ -42,6 +43,7 @@ use crate::{
     config::{Config, Theme, corners, mix},
     fonts::StyledFont,
     herdr_settings,
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 
@@ -109,7 +111,7 @@ fn open_with(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(680.), px(560.))),
-            titlebar: Some(crate::titlebar::options("Settings")),
+            titlebar: Some(crate::titlebar::options(&fl!("settings-title"))),
             app_owns_titlebar_drag: cfg!(target_os = "macos"),
             ..Default::default()
         },
@@ -304,7 +306,9 @@ impl SettingsWindow {
             }
         });
         let nav_search = cx.new(crate::search_input::SearchInput::new);
-        nav_search.update(cx, |input, cx| input.set_placeholder("Search settings", cx));
+        nav_search.update(cx, |input, cx| {
+            input.set_placeholder_with(|| fl!("settings-search-placeholder"), cx)
+        });
         let search_changed = cx.subscribe(
             &nav_search,
             |this, input, _: &crate::search_input::Changed, cx| {
@@ -488,7 +492,7 @@ impl SettingsWindow {
     }
 
     fn sync_appearance(&mut self, cx: &mut Context<Self>) {
-        if self.config.theme == "Follow Herdr"
+        if self.config.theme == themes::FOLLOW
             && self.theme_intent.is_none()
             && let Some(shared) = &self.shared
         {
@@ -498,7 +502,12 @@ impl SettingsWindow {
             );
             match shared.theme(light) {
                 Ok(theme) => self.theme = theme.styled_for(&self.config),
-                Err(error) => self.error = Some(format!("Apply system appearance: {error}")),
+                Err(error) => {
+                    self.error = Some(fl!(
+                        "settings-error-system-appearance",
+                        error = error.to_string()
+                    ));
+                }
             }
         }
         // The theme browser owns its unsaved preview; changing system chrome
@@ -611,7 +620,7 @@ impl SettingsWindow {
             return true;
         }
         self.closing = Some(window.window_handle());
-        self.status = Some("Finishing preferences before closing...".into());
+        self.status = Some(fl!("settings-finishing"));
         self.theme_load_failed = false;
         self.drive_theme_intent(cx);
         false
@@ -720,6 +729,11 @@ impl Render for SettingsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.caption.sync(window, &self.theme);
         let searching = self.search_results.clone();
+        let heading = if searching.is_some() {
+            fl!("settings-results")
+        } else {
+            self.section.label()
+        };
         let content = match &searching {
             Some(_) => self.render_search_results(cx),
             None => match self.section {
@@ -785,11 +799,7 @@ impl Render for SettingsWindow {
                             .id("settings-body")
                             .debug_selector(|| "settings-body".into())
                             .role(Role::TabPanel)
-                            .aria_label(if searching.is_some() {
-                                "Results"
-                            } else {
-                                self.section.label()
-                            })
+                            .aria_label(heading.clone())
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
@@ -801,11 +811,7 @@ impl Render for SettingsWindow {
                                     .text_size(px(18.))
                                     .line_height(px(26.))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child(if searching.is_some() {
-                                        "Results"
-                                    } else {
-                                        self.section.label()
-                                    }),
+                                    .child(heading),
                             )
                             .child(div().mb(px(16.)).when_some(
                                 self.section.lead().filter(|_| searching.is_none()),

@@ -3,6 +3,7 @@
 //! device after asking here. Settings save through the window's serial
 //! path; the daemon's status comes from [`Supervisor`], which polls it often
 //! while this page holds a lease.
+// i18n: migrated
 
 use super::{SettingsWindow, on_value, ui};
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
         preferences::Preference,
         remote::{Bind, Certificate, Edit, Privacy},
     },
+    i18n::fl,
     remote::{Health, Supervisor, supervisor::Lease},
     search_input::SearchInput,
     settings_window::{
@@ -76,7 +78,7 @@ pub(in crate::settings_window) fn bind_choices(bind: Bind, health: &Health) -> V
 
 fn bind_label(bind: Bind) -> String {
     match bind {
-        Bind::All => "All interfaces".to_owned(),
+        Bind::All => fl!("settings-remote-bind-all"),
         Bind::Address(address) => address.to_string(),
     }
 }
@@ -84,30 +86,27 @@ fn bind_label(bind: Bind) -> String {
 /// One line about the daemon, for the switch's row.
 pub(in crate::settings_window) fn health_line(health: &Health, busy: bool) -> String {
     if busy {
-        return "Updating the service\u{2026}".to_owned();
+        return fl!("settings-remote-health-updating");
     }
     match health {
-        Health::Off => "Off. Turning it on installs a user service that serves your chats over \
-                        HTTPS on your network, and over Tailscale when it runs."
-            .to_owned(),
-        Health::Unknown => "Starting\u{2026}".to_owned(),
-        Health::Running(status) => {
-            let devices = match status.devices {
-                1 => "1 device".to_owned(),
-                count => format!("{count} devices"),
-            };
-            let mut line = format!(
-                "Running on port {} \u{b7} {devices}, {} connected",
-                status.port, status.connected
-            );
-            if !status.herdr {
-                line.push_str(" \u{b7} Herdr is not running");
-            }
-            line
-        }
-        Health::NotRunning(reason) => format!(
-            "Not running: {}",
-            crate::notifications::safe_text(reason, 200)
+        Health::Off => fl!("settings-remote-health-off"),
+        Health::Unknown => fl!("settings-remote-health-starting"),
+        // The port is data, shown as its digits without grouping.
+        Health::Running(status) if status.herdr => fl!(
+            "settings-remote-health-running",
+            port = status.port.to_string(),
+            devices = status.devices,
+            connected = status.connected,
+        ),
+        Health::Running(status) => fl!(
+            "settings-remote-health-running-alone",
+            port = status.port.to_string(),
+            devices = status.devices,
+            connected = status.connected,
+        ),
+        Health::NotRunning(reason) => fl!(
+            "settings-remote-health-not-running",
+            reason = crate::notifications::safe_text(reason, 200),
         ),
     }
 }
@@ -127,6 +126,7 @@ impl SettingsWindow {
             }
             Certificate::Own => Default::default(),
         };
+        // The placeholders are example paths, the same in every language.
         let field = |text: String, placeholder: &'static str, cx: &mut Context<Self>| {
             let input = cx.new(SearchInput::new);
             input.update(cx, |input, cx| {
@@ -197,7 +197,10 @@ impl SettingsWindow {
         Supervisor::revoke(cx, device, move |result, cx| {
             let _ = view.update(cx, |view, cx| {
                 if let Err(error) = result {
-                    view.error = Some(format!("Could not revoke the device: {error}"));
+                    view.error = Some(fl!(
+                        "settings-remote-revoke-failed",
+                        error = error.to_string()
+                    ));
                 }
                 cx.notify();
             });
@@ -228,11 +231,11 @@ impl SettingsWindow {
             _ => None,
         };
         let enabled = remote.enabled;
-        let mut switch_row = ui::row(theme, "remote-enabled", "Remote control")
+        let mut switch_row = ui::row(theme, "remote-enabled", fl!("settings-remote-enabled"))
             .description(match &failure {
-                Some(error) => format!(
-                    "Could not change the service: {}",
-                    crate::notifications::safe_text(&error.to_string(), 300)
+                Some(error) => fl!(
+                    "settings-remote-service-failed",
+                    error = crate::notifications::safe_text(&error.to_string(), 300),
                 ),
                 None => health_line(&health, busy),
             })
@@ -244,37 +247,36 @@ impl SettingsWindow {
             ));
         if failure.is_some() {
             switch_row = switch_row.control(
-                ui::button(theme, "remote-retry", "Retry", !busy)
+                ui::button(theme, "remote-retry", fl!("settings-remote-retry"), !busy)
                     .on_click(cx.listener(|_, _, _, cx| Supervisor::retry(cx))),
             );
         }
         let files = self.remote.files || matches!(remote.certificate, Certificate::Files { .. });
         let certificate_note = match (files, status) {
-            (true, _) => "Your certificate and key, such as for your own domain.".to_owned(),
-            (false, Some(status)) if !status.fingerprint.is_empty() => format!(
-                "The daemon's own certificate authority, trusted once on the phone. CA SHA-256 {}",
-                crate::notifications::safe_text(&status.fingerprint, 200)
+            (true, _) => fl!("settings-remote-certificate-files-note"),
+            (false, Some(status)) if !status.fingerprint.is_empty() => fl!(
+                "settings-remote-certificate-fingerprint",
+                fingerprint = crate::notifications::safe_text(&status.fingerprint, 200),
             ),
-            (false, _) => "The daemon's own certificate authority, trusted once on the phone. \
-                           Its fingerprint shows while it runs."
-                .to_owned(),
+            (false, _) => fl!("settings-remote-certificate-own-note"),
         };
         div()
             .flex()
             .flex_col()
             .child(self.remote_pair_card(enabled, cx))
-            .child(ui::section(theme, "Service", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-remote-section-service"),
+                None,
+            ))
             .child(switch_row)
             .child(
                 ui::row(
                     theme,
                     "remote-keep-running",
-                    "Keep running when Herdr UI quits",
+                    fl!("settings-remote-keep-running"),
                 )
-                .description(
-                    "Phones keep working and notifications keep coming. Pairing a new \
-                         device still needs Herdr UI.",
-                )
+                .description(fl!("settings-remote-keep-running-note"))
                 .switch(self.preference_toggle(
                     "remote-keep-running-toggle",
                     remote.keep_running,
@@ -283,86 +285,115 @@ impl SettingsWindow {
                 )),
             )
             .child(
-                ui::row(theme, "remote-restart", "Restart the daemon")
-                    .description(
-                        "Starts it again from the binary beside Herdr UI, as after an update. \
-                         Phones reconnect on their own.",
-                    )
+                ui::row(theme, "remote-restart", fl!("settings-remote-restart"))
+                    .description(fl!("settings-remote-restart-note"))
                     .control(
-                        ui::button(theme, "remote-restart-button", "Restart", enabled && !busy)
-                            .when(enabled && !busy, |button| {
-                                button.on_click(cx.listener(|_, _, _, cx| {
-                                    Supervisor::restart(cx);
-                                }))
-                            }),
+                        ui::button(
+                            theme,
+                            "remote-restart-button",
+                            fl!("settings-remote-restart-button"),
+                            enabled && !busy,
+                        )
+                        .when(enabled && !busy, |button| {
+                            button.on_click(cx.listener(|_, _, _, cx| {
+                                Supervisor::restart(cx);
+                            }))
+                        }),
                     ),
             )
-            .child(ui::section(theme, "Connection", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-remote-section-connection"),
+                None,
+            ))
             .child(self.remote_number_row(
                 NumberField::RemotePort,
-                ("remote-port", "Port"),
-                "The HTTPS port phones connect to.",
+                ("remote-port", fl!("settings-remote-port")),
+                fl!("settings-remote-port-description"),
                 f32::from(remote.port),
                 cx,
             ))
             .child(self.remote_bind_row(&health, cx))
             .child(
-                ui::row(theme, "remote-addresses", "Addresses").description(match status {
-                    Some(status) if !status.addresses.is_empty() => {
-                        crate::remote::addresses(&status.addresses)
-                    }
-                    Some(_) => "No network address found.".to_owned(),
-                    None => "Shown while remote control runs.".to_owned(),
-                }),
+                ui::row(theme, "remote-addresses", fl!("settings-remote-addresses")).description(
+                    match status {
+                        Some(status) if !status.addresses.is_empty() => {
+                            crate::remote::addresses(&status.addresses)
+                        }
+                        Some(_) => fl!("settings-remote-addresses-none"),
+                        None => fl!("settings-remote-while-running"),
+                    },
+                ),
             )
             .child(
-                ui::row(theme, "remote-certificate", "Certificate")
-                    .description(certificate_note)
-                    .control(ui::segmented(
-                        theme,
-                        "remote-certificate-control",
-                        &[(false, "Own CA"), (true, "My files")],
-                        Some(files),
-                        !self.busy(),
-                        on_value(cx, |this, files: bool, _, cx| {
-                            this.remote.files = files;
-                            if !files {
-                                this.save_remote(Edit::Certificate(Certificate::Own), cx);
-                            }
-                            cx.notify();
-                        }),
-                    )),
+                ui::row(
+                    theme,
+                    "remote-certificate",
+                    fl!("settings-remote-certificate"),
+                )
+                .description(certificate_note)
+                .control(ui::segmented(
+                    theme,
+                    "remote-certificate-control",
+                    &[
+                        (false, fl!("settings-remote-certificate-own")),
+                        (true, fl!("settings-remote-certificate-files")),
+                    ],
+                    Some(files),
+                    !self.busy(),
+                    on_value(cx, |this, files: bool, _, cx| {
+                        this.remote.files = files;
+                        if !files {
+                            this.save_remote(Edit::Certificate(Certificate::Own), cx);
+                        }
+                        cx.notify();
+                    }),
+                )),
             )
             .when(files, |page| page.child(self.remote_files(cx)))
-            .child(ui::section(theme, "Notifications", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-remote-section-notifications"),
+                None,
+            ))
             .child(
-                ui::row(theme, "remote-notifications", "Notification text")
-                    .description(
-                        "Generic says which chat needs you without its text; Excerpt adds a \
-                         short excerpt of the message.",
-                    )
-                    .control(ui::segmented(
-                        theme,
-                        "remote-notifications-control",
-                        &[(Privacy::Generic, "Generic"), (Privacy::Excerpt, "Excerpt")],
-                        Some(remote.notifications),
-                        !self.busy(),
-                        on_value(cx, |this, privacy, _, cx| {
-                            this.save_remote(Edit::Notifications(privacy), cx)
-                        }),
-                    )),
+                ui::row(
+                    theme,
+                    "remote-notifications",
+                    fl!("settings-remote-notifications"),
+                )
+                .description(fl!("settings-remote-notifications-note"))
+                .control(ui::segmented(
+                    theme,
+                    "remote-notifications-control",
+                    &[
+                        (Privacy::Generic, fl!("settings-remote-privacy-generic")),
+                        (Privacy::Excerpt, fl!("settings-remote-privacy-excerpt")),
+                    ],
+                    Some(remote.notifications),
+                    !self.busy(),
+                    on_value(cx, |this, privacy, _, cx| {
+                        this.save_remote(Edit::Notifications(privacy), cx)
+                    }),
+                )),
             )
-            .child(ui::section(theme, "Devices", None))
+            .child(ui::section(
+                theme,
+                &fl!("settings-remote-section-devices"),
+                None,
+            ))
             .child(
-                ui::row(theme, "remote-idle", "Forget idle devices after")
-                    .description(
-                        "A device that has not connected for this long is forgotten and must \
-                         pair again.",
-                    )
+                ui::row(theme, "remote-idle", fl!("settings-remote-idle"))
+                    .description(fl!("settings-remote-idle-note"))
                     .control(ui::segmented(
                         theme,
                         "remote-idle-control",
-                        &[(1, "1 day"), (7, "1 week"), (30, "1 month"), (0, "Never")],
+                        &[
+                            (1, fl!("settings-remote-idle-day")),
+                            (7, fl!("settings-remote-idle-week")),
+                            (30, fl!("settings-remote-idle-month")),
+                            (0, fl!("settings-remote-idle-never")),
+                        ],
                         Some(remote.device_idle_days),
                         !self.busy(),
                         on_value(cx, |this, days, _, cx| {
@@ -379,25 +410,16 @@ impl SettingsWindow {
         let theme = &self.theme;
         let connected = Supervisor::connected(cx);
         let note = match (enabled, connected) {
-            (false, _) => {
-                "Turn remote control on, then scan a code with the phone's camera.".to_owned()
-            }
-            (true, 0) => {
-                "Scan a code with the phone's camera, then approve the phone here.".to_owned()
-            }
-            (true, 1) => {
-                "1 phone connected. Scan a code with another phone's camera to add it.".to_owned()
-            }
-            (true, count) => format!(
-                "{count} phones connected. Scan a code with another phone's camera to add it."
-            ),
+            (false, _) => fl!("settings-remote-pair-off"),
+            (true, 0) => fl!("settings-remote-pair-ready"),
+            (true, count) => fl!("settings-remote-pair-connected", count = count),
         };
         let fill = theme.primary();
         let button = div()
             .id("remote-pair-button")
             .debug_selector(|| "remote-pair-button".into())
             .role(Role::Button)
-            .aria_label("Pair a phone");
+            .aria_label(fl!("settings-remote-pair-card"));
         let button = crate::accessibility::disabled(button, !enabled)
             .flex_none()
             .whitespace_nowrap()
@@ -413,7 +435,7 @@ impl SettingsWindow {
                     .on_click(cx.listener(|this, _, _, cx| this.pair_remote(cx)))
             })
             .when(!enabled, |button| button.opacity(0.5))
-            .child("Pair a phone\u{2026}");
+            .child(fl!("settings-remote-pair-button"));
         div()
             .id("remote-pair-card")
             .debug_selector(|| "remote-pair-card".into())
@@ -441,7 +463,7 @@ impl SettingsWindow {
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Pair a phone"),
+                            .child(fl!("settings-remote-pair-card")),
                     )
                     .child(div().text_color(rgb(theme.subtext())).child(note)),
             )
@@ -451,8 +473,8 @@ impl SettingsWindow {
     fn remote_number_row(
         &self,
         field: NumberField,
-        (id, title): (&'static str, &'static str),
-        description: &'static str,
+        (id, title): (&'static str, String),
+        description: String,
         value: f32,
         cx: &mut Context<Self>,
     ) -> ui::Row {
@@ -468,7 +490,7 @@ impl SettingsWindow {
                     id: field.selector(),
                     value,
                     range: field.range(),
-                    unit: "",
+                    unit: ui::Unit::None,
                     look: ui::Look::Field,
                     enabled: true,
                 },
@@ -496,8 +518,8 @@ impl SettingsWindow {
             .collect();
         let view = cx.entity().downgrade();
         let (opener, picker, dismisser) = (view.clone(), view.clone(), view);
-        ui::row(&self.theme, "remote-bind", "Listen on")
-            .description("Every interface, or only one network's address.")
+        ui::row(&self.theme, "remote-bind", fl!("settings-remote-bind"))
+            .description(fl!("settings-remote-bind-description"))
             .control(ui::dropdown(
                 &self.theme,
                 field.selector(),
@@ -524,32 +546,39 @@ impl SettingsWindow {
     }
 
     fn remote_files(&self, cx: &mut Context<Self>) -> Div {
-        let field =
-            |label: &'static str, selector: &'static str, input: &Option<Entity<SearchInput>>| {
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(div().w(px(80.)).flex_none().child(label))
-                    .children(input.as_ref().map(|input| {
-                        div()
-                            .debug_selector(move || selector.into())
-                            .flex_1()
-                            .min_w_0()
-                            .child(input.clone())
-                    }))
-            };
-        self.control_card("remote-files")
-            .child(field("Certificate", "remote-cert-path", &self.remote.cert))
-            .child(field("Private key", "remote-key-path", &self.remote.key))
+        let field = |label: String, selector: &'static str, input: &Option<Entity<SearchInput>>| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(div().w(px(80.)).flex_none().child(label))
+                .children(input.as_ref().map(|input| {
+                    div()
+                        .debug_selector(move || selector.into())
+                        .flex_1()
+                        .min_w_0()
+                        .child(input.clone())
+                }))
+        };
+        self.control_card(&fl!("settings-remote-files"))
+            .child(field(
+                fl!("settings-remote-files-certificate"),
+                "remote-cert-path",
+                &self.remote.cert,
+            ))
+            .child(field(
+                fl!("settings-remote-files-key"),
+                "remote-key-path",
+                &self.remote.key,
+            ))
             .when(self.remote.invalid, |card| {
-                card.child(self.control_note("Give both files as absolute paths."))
+                card.child(self.control_note(fl!("settings-remote-files-invalid")))
             })
             .child(
                 ui::button(
                     &self.theme,
                     "remote-files-apply",
-                    "Use these files",
+                    fl!("settings-remote-files-apply"),
                     !self.busy(),
                 )
                 .when(!self.busy(), |button| {
@@ -574,7 +603,7 @@ impl SettingsWindow {
                     .role(Role::Button)
                     .px(px(8.))
                     .cursor_pointer()
-                    .child("Cancel")
+                    .child(fl!("settings-remote-device-cancel"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.remote.revoking = None;
                         cx.notify();
@@ -585,7 +614,7 @@ impl SettingsWindow {
                     crate::notifications::safe_text(&device.name, 64),
                 )
                 .description(if asking {
-                    "Revoke it? Its sessions end and its notifications stop at once.".to_owned()
+                    fl!("settings-remote-device-revoke-ask")
                 } else {
                     device_line(device, now)
                 })
@@ -595,7 +624,11 @@ impl SettingsWindow {
                         .id(("remote-device-revoke", index))
                         .debug_selector(move || format!("remote-device-{index}-revoke"))
                         .role(Role::Button)
-                        .aria_label(if asking { "Confirm revoke" } else { "Revoke" })
+                        .aria_label(if asking {
+                            fl!("settings-remote-device-revoke-confirm")
+                        } else {
+                            fl!("settings-remote-device-revoke")
+                        })
                         .px(px(10.))
                         .py(px(3.))
                         .rounded(px(crate::config::corners::CONTROL))
@@ -604,7 +637,11 @@ impl SettingsWindow {
                         .text_color(crate::menu::danger(theme))
                         .cursor_pointer()
                         .hover(|button| button.bg(rgb(theme.active)))
-                        .child(if asking { "Revoke" } else { "Revoke\u{2026}" })
+                        .child(if asking {
+                            fl!("settings-remote-device-revoke")
+                        } else {
+                            fl!("settings-remote-device-revoke-open")
+                        })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.revoke_remote_device(id.clone(), cx)
                         })),
@@ -612,22 +649,24 @@ impl SettingsWindow {
                 .into_any_element()
             });
         let summary = match (self.config.remote.enabled, devices.len()) {
-            (false, _) => "Shown while remote control runs.".to_owned(),
-            (true, 0) => "No device is paired yet.".to_owned(),
-            (true, 1) => "1 device can control your chats.".to_owned(),
-            (true, count) => format!("{count} devices can control your chats."),
+            (false, _) => fl!("settings-remote-while-running"),
+            (true, 0) => fl!("settings-remote-devices-none"),
+            (true, count) => fl!("settings-remote-devices-count", count = count),
         };
         div()
             .flex()
             .flex_col()
-            .child(ui::row(theme, "remote-devices", "Paired devices").description(summary))
+            .child(
+                ui::row(theme, "remote-devices", fl!("settings-remote-devices"))
+                    .description(summary),
+            )
             .children(rows)
     }
 
     /// Opens the pairing dialog in the window these settings came from.
     fn pair_remote(&mut self, cx: &mut Context<Self>) {
         let Some(source) = self.source.upgrade() else {
-            self.error = Some("Open a Herdr UI window to pair a device.".into());
+            self.error = Some(fl!("settings-remote-pair-no-window"));
             cx.notify();
             return;
         };
@@ -642,7 +681,7 @@ impl SettingsWindow {
                 }
                 window.activate_window();
                 if !view.open_remote_pairing(window, cx) {
-                    view.local_error = Some("Close the open dialog, then pair the device.".into());
+                    view.local_error = Some(fl!("settings-remote-pair-dialog-open"));
                     cx.notify();
                 }
             });

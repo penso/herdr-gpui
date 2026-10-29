@@ -122,7 +122,7 @@ fn references_and_times_read_short() {
     assert_eq!(short("herdr-app-0123:abcdef012345"), "abcdef012345");
     assert_eq!(short("herdr-app-0123-abcdef012345"), "abcdef012345");
     assert_eq!(ago(catalog::now()), "just now");
-    assert_eq!(ago(catalog::now() - 120), "2 min ago");
-    assert_eq!(ago(catalog::now() - 7200), "2 h ago");
+    assert_eq!(ago(catalog::now() - 120), "\u{2068}2\u{2069} min ago");
+    assert_eq!(ago(catalog::now() - 7200), "\u{2068}2\u{2069} h ago");
     assert!(ago(0).ends_with("days ago"));
 }

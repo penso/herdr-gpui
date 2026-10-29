@@ -2,6 +2,7 @@
 //! app uses as devices. Each provider's card keeps its own fields and account
 //! state; this section only switches between them, so another provider adds a
 //! tab and a card.
+// i18n: migrated
 
 #[cfg(feature = "azure")]
 mod azure;
@@ -46,6 +47,7 @@ use super::SettingsWindow;
 use crate::{
     cloud::CloudProvider,
     config::{Config, corners},
+    i18n::fl,
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -82,7 +84,7 @@ pub(super) fn first_tab() -> CloudProvider {
 
 /// A card's text input, styled like the rest of Settings.
 fn input(
-    placeholder: &str,
+    placeholder: impl Fn() -> String + 'static,
     text: &str,
     config: &Config,
     theme: &crate::config::Theme,
@@ -91,12 +93,41 @@ fn input(
     let input = cx.new(SearchInput::new);
     input.update(cx, |input, cx| {
         input.set_appearance(config.ui.clone(), theme.clone(), cx);
-        input.set_placeholder(placeholder, cx);
+        input.set_placeholder_with(placeholder, cx);
         if !text.is_empty() {
             input.set_text_selected(text, cx);
         }
     });
     input
+}
+
+/// A field's placeholder: a message, or a value shown as it is, such as a
+/// default URL or image.
+#[cfg(any(
+    feature = "boat",
+    feature = "coder",
+    feature = "container",
+    feature = "daytona"
+))]
+#[derive(Clone, Copy, Debug)]
+enum Hint {
+    Message(&'static str),
+    Value(&'static str),
+}
+
+#[cfg(any(
+    feature = "boat",
+    feature = "coder",
+    feature = "container",
+    feature = "daytona"
+))]
+impl Hint {
+    fn text(self) -> String {
+        match self {
+            Self::Message(id) => crate::i18n::message(id, &[]),
+            Self::Value(value) => value.to_owned(),
+        }
+    }
 }
 
 /// Follow a reloaded config in a card's inputs: a field still showing what
@@ -272,10 +303,8 @@ impl SettingsWindow {
             .gap(px(16.))
             .min_w_0()
             .child(super::search::track_bounds("cloud-accounts".into()))
-            .when_some(crate::cloud::unavailable(), |section, reason| {
-                section.child(self.control_note(format!(
-                    "{reason} Accounts can still be edited here for other systems."
-                )))
+            .when(crate::cloud::unavailable().is_some(), |section| {
+                section.child(self.control_note(fl!("settings-cloud-unavailable")))
             })
             .child(self.render_cloud_setup(cx))
             .when(CloudProvider::ALL.len() > 1, |section| {
@@ -309,14 +338,24 @@ impl SettingsWindow {
             .child(label.into())
     }
 
+    /// A card with a translated `title`.
+    fn cloud_card(&self, title: String) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .min_w_0()
+            .child(super::ui::section(&self.theme, &title, None))
+    }
+
     /// A label over its input; the input draws its own field.
-    fn cloud_field(&self, label: &'static str, input: AnyView) -> Div {
+    fn cloud_field(&self, label: impl Into<SharedString>, input: AnyView) -> Div {
         div()
             .flex()
             .flex_col()
             .gap(px(6.))
             .min_w_0()
-            .child(div().text_color(rgb(self.theme.muted)).child(label))
+            .child(div().text_color(rgb(self.theme.muted)).child(label.into()))
             .child(input)
     }
 
@@ -369,7 +408,7 @@ impl SettingsWindow {
         let remove = self
             .cloud_button(
                 SharedString::from(format!("cloud-{key}-remove-{index}")),
-                "Remove",
+                fl!("settings-cloud-remove"),
                 ready,
             )
             .debug_selector(move || format!("cloud-{key}-remove-{index}"))
@@ -423,3 +462,6 @@ impl SettingsWindow {
             )
     }
 }
+
+#[cfg(test)]
+mod tests;

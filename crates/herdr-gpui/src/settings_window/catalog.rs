@@ -1,13 +1,17 @@
 //! Every Settings row, in page order, so search can find it from any page.
 //! Ids are the rows' own selectors; a test renders each page and checks they
-//! still exist.
+//! still exist. Titles and descriptions are message IDs in `settings.ftl`,
+//! which the pages show the rows by too.
+// i18n: migrated
 use super::Section;
-use crate::config::Feature;
+use crate::{config::Feature, i18n};
 
 pub(super) struct Entry {
     pub section: Section,
     pub id: &'static str,
+    /// The message naming the row.
     pub title: &'static str,
+    /// The message describing it, or empty when it has none.
     pub description: &'static str,
     /// When the page renders this row; search offers it only then.
     pub availability: Availability,
@@ -24,6 +28,18 @@ pub(super) enum Availability {
 }
 
 impl Entry {
+    pub(super) fn title(&self) -> String {
+        i18n::message(self.title, &[])
+    }
+
+    /// The description in the current locale, empty when the row has none.
+    pub(super) fn description(&self) -> String {
+        if self.description.is_empty() {
+            return String::new();
+        }
+        i18n::message(self.description, &[])
+    }
+
     const fn only(self, availability: Availability) -> Self {
         Self {
             availability,
@@ -52,8 +68,8 @@ const fn feature(feature: Feature) -> Entry {
     entry(
         Section::General,
         feature.setting_id(),
-        feature.label(),
-        feature.description(),
+        feature.message(),
+        feature.description_message(),
     )
 }
 
@@ -61,233 +77,257 @@ pub(super) const CATALOG: &[Entry] = &[
     entry(
         Section::Theme,
         "theme-mode",
-        "Appearance",
-        "Pick a theme for light and dark, or follow the system.",
+        "settings-theme-mode",
+        "settings-theme-mode-description",
     ),
     entry(
         Section::Theme,
         "theme-side",
-        "Editing",
-        "Which side of the pair the themes below change.",
+        "settings-theme-side",
+        "settings-theme-side-description",
     )
     .only(Availability::FollowingSystemTheme),
     entry(
         Section::Theme,
         "theme-follow",
-        "Follow Herdr's theme",
-        "Use the theme set in Herdr's own config instead of a GUI choice.",
+        "settings-theme-follow",
+        "settings-theme-follow-description",
     ),
     entry(
         Section::Theme,
         "theme-contrast",
-        "High contrast",
-        "Raise text and marker contrast on every theme.",
+        "settings-theme-contrast",
+        "settings-theme-contrast-description",
     ),
     entry(
         Section::Theme,
         "theme-source",
-        "Source",
-        "Ghostty themes apply to this app; Herdr themes are shared.",
+        "settings-theme-source",
+        "settings-theme-source-description",
     ),
     entry(
         Section::Theme,
         "theme-backdrop",
-        "Backdrop",
-        "What shows behind the main window: solid, translucent or a picture.",
+        "settings-theme-backdrop",
+        "settings-theme-backdrop-description",
     ),
     entry(
         Section::Theme,
         "theme-padding-left",
-        "Left",
-        "Terminal padding beside the sidebar.",
+        "settings-theme-padding-left",
+        "settings-theme-padding-left-description",
     ),
     entry(
         Section::Theme,
         "theme-padding-right",
-        "Right",
-        "Terminal padding on the right.",
+        "settings-theme-padding-right",
+        "settings-theme-padding-right-description",
     ),
     entry(
         Section::Theme,
         "theme-padding-top",
-        "Top",
-        "Terminal padding above the terminal.",
+        "settings-theme-padding-top",
+        "settings-theme-padding-top-description",
     ),
     entry(
         Section::Theme,
         "theme-padding-bottom",
-        "Bottom",
-        "Terminal padding below the terminal.",
+        "settings-theme-padding-bottom",
+        "settings-theme-padding-bottom-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-layout",
-        "Layout preset",
-        "Row shape and density; spacing below starts from the preset.",
+        "settings-sidebar-layout",
+        "settings-sidebar-layout-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-select",
-        "Selection marks",
-        "What selecting a workspace highlights beyond its own row.",
+        "settings-sidebar-select",
+        "settings-sidebar-select-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-device-footer",
-        "Device footer",
-        "The device picker and its buttons. Auto shows it with two or more devices.",
+        "settings-sidebar-device-footer",
+        "settings-sidebar-device-footer-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-change-counts",
-        "Change counts",
-        "The +added/-deleted lines under a worktree: its pull request's, or its uncommitted \
-         changes against HEAD.",
+        "settings-sidebar-change-counts",
+        "settings-sidebar-change-counts-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-show-agents",
-        "Show agents",
-        "List running agents in the sidebar.",
+        "settings-sidebar-show-agents",
+        "settings-sidebar-show-agents-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-agents-placement",
-        "Agents placement",
-        "Their own section below the workspaces, or under the workspace each one runs in.",
+        "settings-sidebar-agents-placement",
+        "settings-sidebar-agents-placement-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-show-agents-header",
-        "Show agents header",
-        "The Agents title row with the sort toggle.",
+        "settings-sidebar-show-agents-header",
+        "settings-sidebar-show-agents-header-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-show-search",
-        "Show search",
-        "The search field above the workspaces.",
+        "settings-sidebar-show-search",
+        "settings-sidebar-show-search-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-repository-icons",
-        "Show repository icons",
-        "The repository owner's avatar at the start of each workspace row.",
+        "settings-sidebar-repository-icons",
+        "settings-sidebar-repository-icons-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-device-icons",
-        "Show device icons",
-        "A mark before each device's name: this machine, a cloud provider or SSH.",
+        "settings-sidebar-device-icons",
+        "settings-sidebar-device-icons-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-gpu-load",
-        "Show GPU and video memory",
-        "Each host's GPU busy share and VRAM on a line under its CPU and memory, or a GPU gauge after its name in compact layouts. Off by default.",
+        "settings-sidebar-gpu-load",
+        "settings-sidebar-gpu-load-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-indent",
-        "Indent",
-        "Pixels each nesting level steps in.",
+        "settings-sidebar-indent",
+        "settings-sidebar-indent-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-row-padding",
-        "Row padding",
-        "Vertical padding around a row's text. No effect on card layouts.",
+        "settings-sidebar-row-padding",
+        "settings-sidebar-row-padding-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-row-gap",
-        "Row gap",
-        "Space between a row's status dot and its label.",
+        "settings-sidebar-row-gap",
+        "settings-sidebar-row-gap-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-host-gap",
-        "Host gap",
-        "Space between a host header's parts.",
+        "settings-sidebar-host-gap",
+        "settings-sidebar-host-gap-description",
     ),
     entry(
         Section::Sidebar,
         "sidebar-host-colours",
-        "Host colours",
-        "Tint a host's header, workspaces, worktrees and agents.",
+        "settings-sidebar-host-colours",
+        "settings-sidebar-host-colours-description",
     ),
     entry(
         Section::Indicators,
         "indicators-edge-rail",
-        "Edge rail",
-        "A bar on the leading edge of each working, blocked, or done row, whichever icons you pick.",
+        "settings-indicators-edge-rail",
+        "settings-indicators-edge-rail-description",
     ),
     entry(
         Section::Indicators,
         "indicators-sets",
-        "Icons",
-        "Dots, Solid, Outline, Tiles, Wave, Braille or Orca status icons. Working always moves.",
+        "settings-indicators-sets",
+        "settings-indicators-sets-description",
     ),
-    entry(Section::Fonts, "fonts-terminal", "Terminal", ""),
-    entry(Section::Fonts, "fonts-sidebar", "Sidebar", ""),
-    entry(Section::Fonts, "fonts-tabs", "Tabs", ""),
-    entry(Section::Fonts, "fonts-ui", "Interface", ""),
-    entry(Section::Fonts, "fonts-all-row", "All faces", ""),
+    entry(
+        Section::Fonts,
+        "fonts-terminal",
+        "settings-fonts-terminal",
+        "",
+    ),
+    entry(
+        Section::Fonts,
+        "fonts-sidebar",
+        "settings-fonts-sidebar",
+        "",
+    ),
+    entry(Section::Fonts, "fonts-tabs", "settings-fonts-tabs", ""),
+    entry(Section::Fonts, "fonts-ui", "settings-fonts-ui", ""),
+    entry(
+        Section::Fonts,
+        "fonts-all-row",
+        "settings-fonts-all-row",
+        "",
+    ),
     entry(
         Section::StatusBar,
         "status-usage",
-        "Usage",
-        "Plan usage for signed-in AI services, detailed or compact.",
+        "settings-status-usage",
+        "settings-status-usage-description",
     ),
     entry(
         Section::StatusBar,
         "status-system-load",
-        "CPU and memory",
-        "Hiding CPU and memory also removes them from sidebar host rows.",
+        "settings-status-system-load",
+        "settings-status-system-load-description",
     ),
     entry(
         Section::StatusBar,
         "status-gpu",
-        "GPU and video memory",
-        "The selected host's GPU busy share and VRAM, from nvidia-smi, the amdgpu driver, or ioreg on a Mac. Off by default.",
+        "settings-status-gpu",
+        "settings-status-gpu-description",
     ),
     entry(
         Section::StatusBar,
         "status-network-quality",
-        "Network latency and loss",
-        "Times one TCP connect to 1.1.1.1:443 every 15 seconds from this machine, about a megabyte a day.",
+        "settings-status-network-quality",
+        "settings-status-network-quality-description",
     ),
     entry(
         Section::StatusBar,
         "status-keep-awake",
-        "Keep awake",
-        "The cup keeps the machine from sleeping. System only lets the display sleep and lock, like caffeinate -i. A cup already on keeps its scope until it is turned off and on again.",
+        "settings-status-keep-awake",
+        "settings-status-keep-awake-description",
     ),
-    entry(Section::StatusBar, "status-theme", "Theme", ""),
-    entry(Section::StatusBar, "status-shortcuts", "Shortcuts", ""),
+    entry(
+        Section::StatusBar,
+        "status-theme",
+        "settings-status-theme",
+        "",
+    ),
+    entry(
+        Section::StatusBar,
+        "status-shortcuts",
+        "settings-status-shortcuts",
+        "",
+    ),
     entry(
         Section::StatusBar,
         "status-report-issue",
-        "Report issue",
+        "settings-status-report-issue",
         "",
     ),
     entry(
         Section::General,
         "general-ports",
-        "Show listening ports",
-        "Port chips on workspaces with a dev server.",
+        "settings-general-ports",
+        "settings-general-ports-description",
     ),
     entry(
         Section::General,
         "general-checkpoints",
-        "Checkpoint agent turns",
-        "Snapshot the worktree after each agent turn.",
+        "settings-general-checkpoints",
+        "settings-general-checkpoints-description",
     ),
     entry(
         Section::General,
         "general-smooth-scroll",
-        "Smooth scrolling",
-        "Scroll terminal history between rows; off steps whole rows.",
+        "settings-general-smooth-scroll",
+        "settings-general-smooth-scroll-description",
     ),
     // One per `[features]` flag; a test checks none is missing.
     // keep-sorted start
@@ -298,235 +338,246 @@ pub(super) const CATALOG: &[Entry] = &[
     entry(
         Section::General,
         "general-copy-on-select",
-        "Copy on select",
-        "Off: \u{2318}C / Ctrl-C copies the highlighted selection.",
+        "settings-general-copy-on-select",
+        "settings-general-copy-on-select-description",
     ),
     entry(
         Section::General,
         "general-copied-toast",
-        "Copied notification",
+        "settings-general-copied-toast",
         "",
     ),
     entry(
         Section::General,
         "general-clipboard-position",
-        "Notification position",
+        "settings-general-clipboard-position",
         "",
     ),
     entry(
         Section::General,
         "general-merged-worktrees",
-        "Remove worktrees of merged PRs",
-        "Deletes a clean linked worktree and closes its workspace once its PR is merged. The focused workspace asks first.",
+        "settings-general-merged-worktrees",
+        "settings-general-merged-worktrees-description",
     ),
     entry(
         Section::General,
         "general-browser-skill",
-        "Teach local agents to use browser tabs",
-        "Installed in ~/.claude and ~/.agents, kept up to date.",
+        "settings-general-browser-skill",
+        "settings-general-browser-skill-description",
     ),
     entry(
         Section::General,
         "general-launch-at-login",
-        "Launch at login",
-        "Open Herdr UI when you sign in to Windows.",
+        "settings-general-launch-at-login",
+        "settings-general-launch-at-login-description",
     )
     .only(Availability::Windows),
     entry(
         Section::General,
         "general-update-beta",
-        "Install beta releases",
-        "Betas ship before they are promoted to stable. Turning this off never downgrades; Homebrew installations update in place while it is on.",
+        "settings-general-update-beta",
+        "settings-general-update-beta-description",
     ),
     entry(
         Section::Tabs,
         "tabs-layout",
-        "Tab layout",
-        "How tab strips draw their tabs. Also under View > Tab Layout.",
+        "settings-tabs-layout",
+        "settings-tabs-layout-description",
     ),
-    entry(Section::Tabs, "tabs-position", "Position", ""),
+    entry(Section::Tabs, "tabs-position", "settings-tabs-position", ""),
     entry(
         Section::Tabs,
         "tabs-hide-single",
-        "Hide with a single tab",
+        "settings-tabs-hide-single",
         "",
     ),
     entry(
         Section::Tabs,
         "tabs-confirm-tab",
-        "Confirm before closing a tab",
+        "settings-tabs-confirm-tab",
         "",
     ),
     entry(
         Section::Tabs,
         "tabs-confirm-pane",
-        "Confirm before closing a pane",
+        "settings-tabs-confirm-pane",
         "",
     ),
     entry(
         Section::Tabs,
         "tabs-confirm-workspace",
-        "Confirm before closing a workspace",
+        "settings-tabs-confirm-workspace",
         "",
     ),
     entry(
         Section::Tabs,
         "tabs-focus-follows-mouse",
-        "Focus follows mouse",
-        "The pointer chooses the active pane within a split terminal tab.",
+        "settings-tabs-focus-follows-mouse",
+        "settings-tabs-focus-follows-mouse-description",
     ),
     entry(
         Section::Tabs,
         "tabs-pane-history",
-        "Restore scrollback after Herdr restarts",
-        "Experimental. Herdr saves pane output to session-history.json and replays it when the daemon restarts.",
+        "settings-tabs-pane-history",
+        "settings-tabs-pane-history-description",
     ),
     entry(
         Section::Code,
         "code-mode",
-        "VS Code server",
-        "Start VS Code automatically, or use the address of a server you run.",
+        "settings-code-mode",
+        "settings-code-mode-description",
     ),
     entry(
         Section::Notifications,
         "notif-delivery",
-        "Deliver agent notifications",
-        "Herdr shows them in-app. System uses OS notifications; clicking one opens its pane. Terminal is for other clients only.",
+        "settings-notif-delivery",
+        "settings-notif-delivery-description",
     ),
     entry(
         Section::Notifications,
         "notif-finished",
-        "Finished notifications",
-        "Off drops the notice at the end of each agent turn; needs attention still shows.",
+        "settings-notif-finished",
+        "settings-notif-finished-description",
     ),
-    entry(Section::Notifications, "notif-show", "Show toasts", ""),
+    entry(
+        Section::Notifications,
+        "notif-show",
+        "settings-notif-show",
+        "",
+    ),
     entry(
         Section::Notifications,
         "notif-delay",
-        "Delay",
-        "Wait before a toast appears, so quick turns stay quiet.",
+        "settings-notif-delay",
+        "settings-notif-delay-description",
     ),
-    entry(Section::Notifications, "notif-position", "Position", ""),
+    entry(
+        Section::Notifications,
+        "notif-position",
+        "settings-notif-position",
+        "",
+    ),
     entry(
         Section::Notifications,
         "notif-sound",
-        "Play agent sounds",
-        "Uses Herdr's sound paths and per-agent overrides.",
+        "settings-notif-sound",
+        "settings-notif-sound-description",
     ),
     entry(
         Section::Notifications,
         "notif-volume",
-        "Volume",
-        "Sounds and Test play at this level, even when sounds are off.",
+        "settings-notif-volume",
+        "settings-notif-volume-description",
     ),
     entry(
         Section::Integrations,
         "integrations-search",
-        "Integrations",
-        "Agents Herdr can launch and track.",
+        "settings-integrations-search",
+        "settings-integrations-search-description",
     ),
     entry(
         Section::Plugins,
         "plugins-values",
-        "Sidebar values",
-        "Show a value a plugin reports as its own sidebar row.",
+        "settings-plugins-values",
+        "settings-plugins-values-description",
     ),
     #[cfg(feature = "cloud")]
     entry(
         Section::CloudDevices,
         "cloud-accounts",
-        "Cloud accounts",
-        "Accounts for each cloud provider, and the machines saved as devices.",
+        "settings-cloud-accounts",
+        "settings-cloud-accounts-description",
     ),
     #[cfg(feature = "cloud")]
     entry(
         Section::CloudDevices,
         "cloud-setup",
-        "New device setup",
-        "Agents such as Claude Code, Codex, Gemini CLI, or OpenCode, and a setup script, installed when a new cloud device first connects.",
+        "settings-cloud-setup",
+        "settings-cloud-setup-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-enabled",
-        "Remote control",
-        "Serve your chats to paired phones over HTTPS, as a user service.",
+        "settings-remote-enabled",
+        "settings-remote-enabled-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-keep-running",
-        "Keep running when Herdr UI quits",
-        "Phones keep working and notifications keep coming after the app quits.",
+        "settings-remote-keep-running",
+        "settings-remote-keep-running-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-port",
-        "Port",
-        "The HTTPS port phones connect to.",
+        "settings-remote-port",
+        "settings-remote-port-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-bind",
-        "Listen on",
-        "Every interface, or only one network's address.",
+        "settings-remote-bind",
+        "settings-remote-bind-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-addresses",
-        "Addresses",
-        "The addresses phones reach this computer at: the LAN, and Tailscale when it runs.",
+        "settings-remote-addresses",
+        "settings-remote-addresses-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-certificate",
-        "Certificate",
-        "The daemon's own certificate authority and its fingerprint, or your own files.",
+        "settings-remote-certificate",
+        "settings-remote-certificate-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-notifications",
-        "Notification text",
-        "Whether phone notifications include a short excerpt of the message.",
+        "settings-remote-notifications",
+        "settings-remote-notifications-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-idle",
-        "Forget idle devices after",
-        "A day, a week, a month, or never: how long a paired device may stay away.",
+        "settings-remote-idle",
+        "settings-remote-idle-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-pair-card",
-        "Pair a phone",
-        "Show a QR code to scan with a phone, then approve it.",
+        "settings-remote-pair-card",
+        "settings-remote-pair-card-description",
     ),
     entry(
         Section::RemoteControl,
         "remote-devices",
-        "Paired devices",
-        "Devices that can control your chats, with when each was last seen. Revoke one here.",
+        "settings-remote-devices",
+        "settings-remote-devices-description",
     ),
     entry(
         Section::Configuration,
         "config-local",
-        "Herdr UI settings",
-        "The file holding Herdr UI's own settings on this machine.",
+        "settings-config-local",
+        "settings-config-local-description",
     ),
     entry(
         Section::Configuration,
         "config-shared",
-        "Herdr configuration",
-        "Herdr's configuration file, which its terminal client reads too.",
+        "settings-config-shared",
+        "settings-config-shared-description",
     ),
     entry(
         Section::Configuration,
         "config-reload",
-        "Reload configuration",
-        "Re-reads both files. Does not restart the daemon.",
+        "settings-config-reload",
+        "settings-config-reload-description",
     ),
 ];
 
 /// Indices into [`CATALOG`] of the entries whose title, description or page
-/// name contains `query`, ignoring case, in catalog order.
+/// name contains `query`, ignoring case, in catalog order. Each is matched in
+/// the current locale and in English, as the palette matches commands.
 pub(super) fn search(query: &str) -> Vec<usize> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
@@ -536,8 +587,10 @@ pub(super) fn search(query: &str) -> Vec<usize> {
         .iter()
         .enumerate()
         .filter(|(_, entry)| {
-            [entry.title, entry.description, entry.section.label()]
+            [entry.title, entry.description, entry.section.message()]
                 .iter()
+                .filter(|id| !id.is_empty())
+                .flat_map(|id| [i18n::message(id, &[]), i18n::english(id, &[])])
                 .any(|text| text.to_lowercase().contains(&query))
         })
         .map(|(index, _)| index)

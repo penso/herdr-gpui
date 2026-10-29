@@ -227,7 +227,7 @@ async fn run(handle: WindowHandle<HerdrWindow>, options: Options, cx: &mut Async
         }
     }
     if options.view {
-        handle.update(cx, |view, _, cx| {
+        handle.update(cx, |view, window, cx| {
             let picture = view.chats.pane(PANE).and_then(|pane| {
                 pane.session
                     .transcript()
@@ -242,7 +242,7 @@ async fn run(handle: WindowHandle<HerdrWindow>, options: Options, cx: &mut Async
                     })
             });
             if let Some(picture) = picture {
-                view.open_chat_viewer(PANE, picture, cx);
+                view.open_chat_viewer(PANE, picture, window, cx);
             }
         })?;
         // Past the viewer's motion, so the capture shows it in place.

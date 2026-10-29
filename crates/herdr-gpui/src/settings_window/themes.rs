@@ -1,9 +1,11 @@
 //! Search-only samples and explicit app-wide theme intents. Disk work stays off the UI thread.
+// i18n: migrated
 use super::SettingsWindow;
 use crate::{
     config::{Config, Theme, ThemeName},
     contrast::Contrast,
     herdr_settings::{self, Edit},
+    i18n::fl,
     search_input::{Changed, SearchInput},
 };
 use gpui::{prelude::*, *};
@@ -11,7 +13,9 @@ mod appearance;
 mod grid;
 mod system;
 
-pub(super) const FOLLOW: &str = "Follow Herdr";
+/// The theme value that uses Herdr's own theme. A config value, not text:
+/// the page shows `settings-theme-follow-herdr` for it.
+pub(super) const FOLLOW: &str = "Follow Herdr"; // i18n: data
 const ROW_HEIGHT: f32 = 80.;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -146,7 +150,11 @@ pub(super) struct ThemeBrowser {
 
 impl ThemeBrowser {
     pub(super) fn new(cx: &mut Context<SettingsWindow>) -> Self {
-        let search = cx.new(SearchInput::new);
+        let search = cx.new(|cx| {
+            let mut input = SearchInput::new(cx);
+            input.set_placeholder_with(|| fl!("settings-theme-search-placeholder"), cx);
+            input
+        });
         let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {
             let query = search.read(cx).text().to_owned();
             if query == this.themes.query {
@@ -358,7 +366,7 @@ impl SettingsWindow {
             return;
         }
         if !choice.scope.editable() {
-            self.status = Some("Herdr's themes are read-only on this platform. Choose This app or Follow Herdr instead.".into());
+            self.status = Some(fl!("settings-theme-read-only"));
             cx.notify();
             return;
         }
@@ -453,7 +461,10 @@ impl SettingsWindow {
                                 this.theme_load_failed = true;
                                 this.closing = None;
                                 this.flushing = false;
-                                this.error = Some(format!("Load theme: {error}"));
+                                this.error = Some(fl!(
+                                    "settings-theme-error-load",
+                                    error = error.to_string()
+                                ));
                             }
                         }
                     }

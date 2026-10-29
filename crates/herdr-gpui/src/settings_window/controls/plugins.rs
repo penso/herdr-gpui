@@ -1,10 +1,12 @@
 //! Settings > Plugins: the values hosts' plugins report, a switch per value
 //! that edits the shared `[ui.sidebar]` rows, and a preview of those rows.
+// i18n: migrated
 use super::*;
 use crate::{
     config::{SidebarScope, Theme, mix},
     fonts::StyledFont,
     herdr_settings::Edit,
+    i18n::fl,
     plugin_values::{
         HostReport, PreviewPart, PreviewRole, PreviewSource, SidebarValue, preview_agent,
         preview_space, sidebar_values,
@@ -15,13 +17,6 @@ use crate::{
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
-
-const CONFIG_NOTE: &str = "A shown value becomes its own row in [ui.sidebar] of your Herdr \
-config, so the terminal app shows it too.";
-
-/// What Herdr's endpoint cannot do yet, so the section never implies otherwise.
-const LIMITS: &str = "Herdr doesn't yet let this app list, enable, or disable plugins or read \
-their logs; use `herdr plugin` on the host. Nothing is installed from here.";
 
 const STATUS: &str = "state_text";
 
@@ -37,7 +32,7 @@ impl Plugins {
     pub(in crate::settings_window) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search plugin values...", cx)
+            input.set_placeholder_with(|| fl!("settings-plugins-search-placeholder"), cx)
         });
         let changed = cx.subscribe(&search, |this, _, _: &Changed, cx| {
             this.body_scroll.set_offset(Point::default());
@@ -58,22 +53,36 @@ impl Plugins {
     }
 }
 
-fn scope_label(scope: SidebarScope) -> &'static str {
+fn scope_label(scope: SidebarScope) -> String {
     match scope {
-        SidebarScope::Agents => "Agents",
-        SidebarScope::Spaces => "Workspaces",
+        SidebarScope::Agents => fl!("settings-plugins-scope-agents"),
+        SidebarScope::Spaces => fl!("settings-plugins-scope-spaces"),
     }
 }
 
 fn detail(value: &SidebarValue) -> String {
+    let scope = scope_label(value.scope);
     match &value.sample {
-        Some(sample) => format!(
-            "{} \u{b7} \u{201c}{sample}\u{201d} \u{b7} {}",
-            scope_label(value.scope),
-            value.hosts.join(", ")
+        Some(sample) => fl!(
+            "settings-plugins-detail",
+            scope = scope,
+            sample = sample.as_str(),
+            hosts = value.hosts.join(", "),
         ),
-        None => format!("{} \u{b7} not reported", scope_label(value.scope)),
+        None => fl!("settings-plugins-detail-missing", scope = scope),
     }
+}
+
+/// Whether `query`, already lowercased, finds the status labels row by
+/// its title in the current language or in English.
+fn status_labels_match(query: &str) -> bool {
+    query.is_empty()
+        || [
+            fl!("settings-plugins-status-labels"),
+            crate::i18n::english("settings-plugins-status-labels", &[]),
+        ]
+        .iter()
+        .any(|title| title.to_lowercase().contains(query))
 }
 
 impl SettingsWindow {
@@ -91,13 +100,11 @@ impl SettingsWindow {
             ))
             .child(self.plugins.search.clone());
         let Some(source) = self.source.upgrade() else {
-            return body.child(self.control_note(
-                "Open a session window to see what your plugins report. Herdr UI settings remain available.",
-            ));
+            return body.child(self.control_note(fl!("settings-plugins-no-window")));
         };
         let reports = source.read(cx).plugin_reports();
         body.child(self.render_sidebar_values(&reports, &query, cx))
-            .child(self.control_note(LIMITS))
+            .child(self.control_note(fl!("settings-plugins-limits")))
     }
 
     fn render_sidebar_values(
@@ -113,13 +120,13 @@ impl SettingsWindow {
             .iter()
             .find_map(|report| report.label_sample.as_deref());
         let mut card = self
-            .control_card("Sidebar values")
-            .child(self.control_note(CONFIG_NOTE));
+            .control_card(&fl!("settings-plugins-values"))
+            .child(self.control_note(fl!("settings-plugins-config-note")));
         if !ready {
             card = card.child(self.control_note(if !cfg!(unix) {
-                "Herdr's settings are read-only on this platform."
+                fl!("settings-plugins-read-only")
             } else {
-                "Herdr's settings are unavailable. Reload to retry."
+                fl!("settings-plugins-unavailable")
             }));
         }
         card = card.child(self.rows_mode(cx));
@@ -134,17 +141,19 @@ impl SettingsWindow {
             .flex_shrink(1.)
             .flex_basis(px(240.))
             .min_w_0();
-        if query.is_empty() || "status labels".contains(query) {
+        if status_labels_match(query) {
             let labelled: usize = reports.iter().map(|report| report.labelled_agents).sum();
             let detail = match label_sample {
-                Some(sample) => format!(
-                    "Agents \u{b7} {labelled} name their own status, such as \u{201c}{sample}\u{201d}"
+                Some(sample) => fl!(
+                    "settings-plugins-status-labels-detail",
+                    count = labelled,
+                    sample = sample,
                 ),
-                None => "Agents".to_owned(),
+                None => fl!("settings-plugins-scope-agents"),
             };
             let title = div()
                 .font_weight(FontWeight::SEMIBOLD)
-                .child("Status labels");
+                .child(fl!("settings-plugins-status-labels"));
             list = list.child(self.value_switch(
                 SidebarScope::Agents,
                 STATUS,
@@ -175,9 +184,9 @@ impl SettingsWindow {
         }
         if matched == 0 {
             list = list.child(self.control_note(if values.is_empty() {
-                "No plugin or hook reports custom values on a connected host yet."
+                fl!("settings-plugins-none")
             } else {
-                "No matching values."
+                fl!("settings-plugins-no-match")
             }));
         }
         let source = PreviewSource {
@@ -269,13 +278,11 @@ impl SettingsWindow {
                 .flex()
                 .flex_col()
                 .gap(px(4.))
-                .child(self.control_note(
-                    "This app draws its own sidebar rows ([usage] inline = false), so these switches only change the terminal app.",
-                ))
+                .child(self.control_note(fl!("settings-plugins-native-rows")))
                 .child(
                     self.control_switch(
                         "plugin-use-herdr-rows",
-                        "Use Herdr's sidebar rows in this app",
+                        fl!("settings-plugins-use-herdr-rows"),
                         false,
                         true,
                     )
@@ -291,9 +298,9 @@ impl SettingsWindow {
         if layout.agents == crate::config::AgentLayout::default()
             && layout.spaces == crate::config::SpaceLayout::default()
         {
-            return div().debug_selector(|| "plugin-rows-default".into()).child(self.control_note(
-                "The sidebar uses this app's own rows while Herdr's are the defaults. Showing a value switches it to Herdr's configured rows, in your row style; the preview shows how they look.",
-            ));
+            return div()
+                .debug_selector(|| "plugin-rows-default".into())
+                .child(self.control_note(fl!("settings-plugins-default-rows")));
         }
         div()
     }
@@ -331,7 +338,11 @@ impl SettingsWindow {
             .border_color(rgb(theme.active))
             .text_font(font)
             .text_size(px(font.size))
-            .child(div().text_color(rgb(theme.muted)).child("Preview"))
+            .child(
+                div()
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("settings-plugins-preview")),
+            )
             .child(block(preview_space(&layout.spaces, source), false))
             .child(block(preview_agent(&layout.agents, source), true))
     }

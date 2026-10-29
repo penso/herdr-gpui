@@ -3,10 +3,11 @@
 //! Creating a sandbox hands a job to the main window, which shows progress in
 //! the device picker and a toast when it is ready. Account reads and removals
 //! run through `cloud::worker`, never on the UI thread.
+// i18n: migrated
 
 use super::{
     super::{Section, SettingsWindow},
-    follow_config, input,
+    Hint, follow_config, input,
 };
 use crate::{
     cloud::{
@@ -19,20 +20,31 @@ use crate::{
         setup::{self, AddRequest, Key, Overview},
     },
     github::Store,
+    i18n::{self, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
 use secrecy::SecretString;
 
-/// The editable `[daytona]` keys, in display order, with their labels and hints.
-const FIELDS: [(&str, &str); 4] = [
-    ("API URL", crate::daytona::DEFAULT_API_URL),
+/// The editable `[daytona]` keys, in display order, with their labels'
+/// message IDs and hints.
+const FIELDS: [(&str, Hint); 4] = [
     (
-        "Organization ID",
-        "Optional; the key's default organization if empty",
+        "settings-cloud-daytona-api-url",
+        Hint::Value(crate::daytona::DEFAULT_API_URL),
     ),
-    ("Region", "Optional; Daytona's default region if empty"),
-    ("Snapshot", "Optional; Daytona's default snapshot if empty"),
+    (
+        "settings-cloud-daytona-organization",
+        Hint::Message("settings-cloud-daytona-organization-placeholder"),
+    ),
+    (
+        "settings-cloud-daytona-region",
+        Hint::Message("settings-cloud-daytona-region-placeholder"),
+    ),
+    (
+        "settings-cloud-daytona-snapshot",
+        Hint::Message("settings-cloud-daytona-snapshot-placeholder"),
+    ),
 ];
 
 enum Update {
@@ -68,9 +80,12 @@ impl DaytonaCard {
     ) -> Self {
         let loaded = loaded(config);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
-        let key = input("dtn_…", "", config, theme, cx);
+        let fields = std::array::from_fn(|index| {
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
+        });
+        // A Daytona key's prefix.
+        let key = input(|| "dtn_…".to_owned(), "", config, theme, cx); // i18n: data
         key.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
@@ -157,6 +172,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "daytona_worker", error_kind = ?error.kind(), "Could not start Daytona settings worker");
                 if let Some(card) = &mut self.daytona_card {
+                    // i18n: data
                     card.message = Some(crate::cloud::Error::Worker("settings").to_string());
                 }
             }
@@ -270,11 +286,9 @@ impl SettingsWindow {
         });
         if let Some(card) = &mut self.daytona_card {
             card.message = Some(match started {
-                Ok(Ok(())) => {
-                    format!("Creating {name}. The device picker shows its progress.")
-                }
+                Ok(Ok(())) => fl!("settings-cloud-creating", name = name),
                 Ok(Err(error)) => error.to_string(),
-                Err(_) => "Open a main Herdr window to create a sandbox.".into(),
+                Err(_) => fl!("settings-cloud-no-window-sandbox"),
             });
         }
         cx.notify();
@@ -298,20 +312,18 @@ impl SettingsWindow {
         let ready = !self.busy();
         let configured = self.daytona_settings().is_some();
         let (status, key) = match &card.account {
-            _ if !configured => (
-                "Not configured. Check the API URL, add an API key, then save.".to_owned(),
-                Key::Missing,
-            ),
-            Account::Checking => ("Checking…".to_owned(), Key::Missing),
+            _ if !configured => (fl!("settings-cloud-daytona-not-configured"), Key::Missing),
+            Account::Checking => (fl!("settings-cloud-checking"), Key::Missing),
             Account::Known(overview) => (
                 match (&overview.key, &overview.sandboxes) {
-                    (Key::Missing, _) => "No API key saved.".to_owned(),
-                    (_, Some(Ok(count))) => format!(
-                        "Connected. The key sees {count} sandbox{}.",
-                        if *count == 1 { "" } else { "es" }
-                    ),
-                    (_, Some(Err(error))) => format!("The API key could not be used: {error}"),
-                    (_, None) => "Checking…".to_owned(),
+                    (Key::Missing, _) => fl!("settings-cloud-key-missing"),
+                    (_, Some(Ok(count))) => {
+                        fl!("settings-cloud-daytona-sandboxes", count = *count)
+                    }
+                    (_, Some(Err(error))) => {
+                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                    }
+                    (_, None) => fl!("settings-cloud-checking"),
                 },
                 overview.key,
             ),
@@ -319,22 +331,22 @@ impl SettingsWindow {
         let usable = matches!(&card.account, Account::Known(overview)
             if matches!(overview.sandboxes, Some(Ok(_))));
         let key_note = match key {
-            Key::Environment => "Set by HERDR_DAYTONA_API_KEY, which takes precedence.",
-            Key::Saved => "Saved. Type a new key to replace it.",
-            Key::Missing => "Not saved yet. Create one in the Daytona dashboard under API Keys.",
+            Key::Environment => fl!("settings-cloud-daytona-key-environment"),
+            Key::Saved => fl!("settings-cloud-key-saved"),
+            Key::Missing => fl!("settings-cloud-daytona-key-missing"),
         };
         let mut account = self
-            .control_card("Daytona")
+            .cloud_card(crate::cloud::name(CloudProvider::Daytona).to_owned())
             .debug_selector(|| "cloud-daytona-card".into())
-            .child(self.control_note(
-                "Create Daytona sandboxes and use them as devices. Herdr reaches each one through Daytona's SSH gateway with a short-lived token; the API key never leaves this computer.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-daytona-note")))
             .child(div().min_w_0().child(status));
         for (index, (label, _)) in FIELDS.iter().enumerate() {
-            account = account.child(self.cloud_field(label, card.fields[index].clone().into()));
+            account = account.child(
+                self.cloud_field(i18n::message(label, &[]), card.fields[index].clone().into()),
+            );
             if index == 0 {
                 account = account
-                    .child(self.cloud_field("API key", card.key.clone().into()))
+                    .child(self.cloud_field(fl!("settings-cloud-api-key"), card.key.clone().into()))
                     .child(
                         div()
                             .flex()
@@ -342,12 +354,12 @@ impl SettingsWindow {
                             .items_center()
                             .justify_between()
                             .gap(px(12.))
-                            .child(self.control_note(key_note))
+                            .child(self.control_note(key_note.clone()))
                             .when(key == Key::Saved, |row| {
                                 row.child(
                                     self.cloud_button(
                                         "cloud-daytona-forget-key",
-                                        "Forget key",
+                                        fl!("settings-cloud-forget-key"),
                                         ready,
                                     )
                                     .when(ready, |button| {
@@ -364,7 +376,7 @@ impl SettingsWindow {
         }
         account = account.child(
             div().flex().justify_end().child(
-                self.cloud_button("cloud-daytona-save", "Save", ready)
+                self.cloud_button("cloud-daytona-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-daytona-save".into())
                     .when(ready, |button| {
                         button.on_click(cx.listener(|this, _, _, cx| this.save_daytona(cx)))
@@ -373,15 +385,13 @@ impl SettingsWindow {
         );
         let create = ready && usable && crate::cloud::unavailable().is_none();
         let mut sandboxes = self
-            .control_card("New sandbox")
+            .cloud_card(fl!("settings-cloud-new-sandbox"))
             .debug_selector(|| "cloud-daytona-new".into())
-            .child(self.control_note(
-                "Creates a sandbox with a generated name and adds it as a device once it is ready.",
-            ))
+            .child(self.control_note(fl!("settings-cloud-daytona-new-note")))
             .child(
                 self.control_switch(
                     "cloud-daytona-install",
-                    "Install Herdr in it when missing",
+                    fl!("settings-cloud-install-herdr-in-it"),
                     card.install,
                     ready,
                 )
@@ -407,23 +417,26 @@ impl SettingsWindow {
             ))
             .child(
                 div().flex().justify_end().child(
-                    self.cloud_button("cloud-daytona-create", "Create sandbox", create)
-                        .debug_selector(|| "cloud-daytona-create".into())
-                        .when(create, |button| {
-                            button.on_click(
-                                cx.listener(|this, _, _, cx| this.create_daytona_sandbox(cx)),
-                            )
-                        }),
+                    self.cloud_button(
+                        "cloud-daytona-create",
+                        fl!("settings-cloud-create-sandbox"),
+                        create,
+                    )
+                    .debug_selector(|| "cloud-daytona-create".into())
+                    .when(create, |button| {
+                        button
+                            .on_click(cx.listener(|this, _, _, cx| this.create_daytona_sandbox(cx)))
+                    }),
                 ),
             );
         if let Some(message) = &card.message {
             sandboxes = sandboxes.child(div().min_w_0().child(message.clone()));
         }
         let mut devices = self
-            .control_card("Daytona devices")
+            .cloud_card(fl!("settings-cloud-daytona-devices"))
             .debug_selector(|| "cloud-daytona-devices".into());
         if card.devices().is_empty() {
-            devices = devices.child(self.control_note("None yet."));
+            devices = devices.child(self.control_note(fl!("settings-cloud-none-yet")));
         }
         for (index, device) in card.devices().iter().enumerate() {
             devices = devices.child(self.cloud_device_row(

@@ -29,8 +29,7 @@ impl OrchestratorView {
     pub(super) fn open_pull_request(&self) -> Option<&PullRequest> {
         let number = self
             .item(&self.detail.as_ref()?.key)?
-            .pull_request
-            .as_ref()?
+            .github_pull_request()?
             .number;
         let lookup = self.snapshot().pull_request.as_ref()?;
         if lookup.number != number {

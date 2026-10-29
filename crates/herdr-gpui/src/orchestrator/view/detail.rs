@@ -6,7 +6,7 @@
 use super::{
     Detail, DetailTab, Event, OrchestratorView,
     dispatch::Confirm,
-    list::source_mark,
+    list::{source_icon, source_mark},
     look::{BLUE, CYAN, age, agent_icon},
     rows::Tab,
     rows::{RunRow, Runs},
@@ -44,7 +44,7 @@ impl OrchestratorView {
                 .flex()
                 .flex_col()
                 .gap_4()
-                .when(item.pull_request.is_none(), |el| {
+                .when(item.github_pull_request().is_none(), |el| {
                     el.child(self.render_status_box(&item, &runs, &item_runs, cx))
                 })
                 .child(self.render_meta(&item))
@@ -98,7 +98,7 @@ impl OrchestratorView {
             .and_then(|info| info.remote.as_ref())
             .map(|remote| remote.source.repository.clone())
             .unwrap_or_else(|| item.key.source.repository.clone());
-        let pull_request = item.pull_request.is_some();
+        let pull_request = item.github_pull_request().is_some();
         div()
             .flex_none()
             .flex()
@@ -146,6 +146,7 @@ impl OrchestratorView {
                             "orchestrator-detail-{}",
                             tab.label()
                         )))
+                        .debug_selector(move || format!("orchestrator-tab-{}", tab.label()))
                         .pb_2()
                         .border_b_2()
                         .border_color(rgb(if on {
@@ -330,7 +331,7 @@ impl OrchestratorView {
             .child(
                 step(
                     "orchestrator-crumb-repo",
-                    "icons/github.svg",
+                    source_icon(item.key.source.provider),
                     repo.to_owned(),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {

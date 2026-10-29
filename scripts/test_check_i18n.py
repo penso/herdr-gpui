@@ -150,5 +150,67 @@ class CheckTests(unittest.TestCase):
         self.assertIn(f"{french}: menu-gone has no en-US message", errors)
 
 
+class MigratedTests(unittest.TestCase):
+    ROOT = Path("crates/app/src/menu.rs")
+
+    def errors(self, sources: dict[Path, str]) -> list[str]:
+        errors = []
+        for path in sorted(check_i18n.migrated(sources)):
+            errors.extend(check_i18n.shown_english(path, sources[path]))
+        return errors
+
+    def test_unmarked_modules_are_not_checked(self) -> None:
+        self.assertEqual(self.errors({self.ROOT: 'label("Quit Herdr")'}), [])
+
+    def test_a_marked_module_and_its_directory_reject_english(self) -> None:
+        sources = {
+            self.ROOT: '// i18n: migrated\nlabel("Quit Herdr");\nfl!("menu-quit")',
+            Path("crates/app/src/menu/row.rs"): 'let a = "open the file";\nlet b = "x-y";',
+            Path("crates/app/src/menu/tests/row.rs"): 'label("Quit")',
+            Path("crates/app/src/other.rs"): 'label("Quit")',
+        }
+        self.assertEqual(
+            self.errors(sources),
+            [
+                'crates/app/src/menu/row.rs:1: "open the file" is not a message',
+                'crates/app/src/menu.rs:2: "Quit Herdr" is not a message',
+            ],
+        )
+
+    def test_logs_attributes_and_data_are_allowed(self) -> None:
+        source = (
+            "// i18n: migrated\n"
+            '#[error("Could not read {path}")]\n'
+            'tracing::warn!(\n    "Unable to open {}",\n    path,\n);\n'
+            'write!(f, "Could not save")?;\n'
+            'value.expect("Present in tests");\n'
+            '.key_context("SettingsWindow")\n'
+            'let font = "SF Mono"; // i18n: data\n'
+            "// i18n: data\n"
+            'let theme = "Catppuccin Mocha";\n'
+            "// Comments say \"Quit Herdr\".\n"
+            "let c = '\"'; let lifetime: &'static str = \"ok\";\n"
+            'let shown = format!("Open {name}");\n'
+        )
+        self.assertEqual(
+            self.errors({self.ROOT: source}),
+            ['crates/app/src/menu.rs:15: "Open {name}" is not a message'],
+        )
+
+    def test_placeholders_and_raw_strings(self) -> None:
+        source = '// i18n: migrated\nformat!("{Name} {count}");\nlet r = r#"Raw text"#;\n'
+        self.assertEqual(
+            self.errors({self.ROOT: source}),
+            ['crates/app/src/menu.rs:3: "Raw text" is not a message'],
+        )
+
+    def test_unicode_names(self) -> None:
+        source = '// i18n: migrated\nlet café = 1;\nnaïve::größe!("Open file");\n'
+        self.assertEqual(
+            self.errors({self.ROOT: source}),
+            ['crates/app/src/menu.rs:3: "Open file" is not a message'],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

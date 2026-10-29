@@ -93,9 +93,19 @@ impl HerdrWindow {
                 }))
         };
         let copying = (chat.uploading > 0).then(|| {
-            let host = match &chat.target.route {
-                super::super::Route::Ssh(host) => crate::notifications::safe_text(host, 80),
-                super::super::Route::Local => String::new(),
+            // On this machine only a pasted picture is ever pending.
+            let label = match &chat.target.route {
+                super::super::Route::Ssh(host) => {
+                    let host = crate::notifications::safe_text(host, 80);
+                    match chat.uploading {
+                        1 => format!("Copying a file to {host}\u{2026}"),
+                        count => format!("Copying {count} files to {host}\u{2026}"),
+                    }
+                }
+                super::super::Route::Local => match chat.uploading {
+                    1 => "Preparing a picture\u{2026}".to_owned(),
+                    count => format!("Preparing {count} pictures\u{2026}"),
+                },
             };
             div()
                 .debug_selector(|| "chat-uploading".into())
@@ -107,10 +117,7 @@ impl HerdrWindow {
                 .bg(rgb(theme.active))
                 .text_size(small)
                 .text_color(rgb(theme.subtext()))
-                .child(match chat.uploading {
-                    1 => format!("Copying a file to {host}\u{2026}"),
-                    count => format!("Copying {count} files to {host}\u{2026}"),
-                })
+                .child(label)
         });
         let chips = (!chat.attachments.is_empty() || copying.is_some()).then(|| {
             div()

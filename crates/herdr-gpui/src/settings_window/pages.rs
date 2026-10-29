@@ -13,6 +13,7 @@ mod theme;
 mod window;
 
 use super::{SettingsWindow, inputs::DropdownField, ui};
+use crate::i18n::{self, fl};
 pub(super) use fonts::size_control;
 use gpui::{prelude::*, *};
 pub(super) use sidebar::Spacing;
@@ -21,15 +22,11 @@ pub(super) use window::padding_ids;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(in crate::settings_window) use configuration::open_path;
 
-pub(in crate::settings_window) const SHARED_READ_ONLY: &str =
-    "Herdr's settings are read-only on this platform.";
-const SHARED_UNAVAILABLE: &str = "Herdr's settings are unavailable. Reload to retry.";
-
 /// The text on an override dropdown: the local choice, or what Herdr says.
 pub(super) fn override_label(shared_value: &str, local: Option<&str>) -> String {
     match local {
         Some(choice) => choice.to_owned(),
-        None => format!("Use Herdr setting \u{b7} {shared_value}"),
+        None => fl!("settings-use-herdr", value = shared_value),
     }
 }
 
@@ -44,11 +41,11 @@ impl SettingsWindow {
     }
 
     /// Why rows that edit Herdr's shared file are disabled, if they are.
-    pub(in crate::settings_window) fn shared_gate(&self) -> Option<&'static str> {
+    pub(in crate::settings_window) fn shared_gate(&self) -> Option<String> {
         if !cfg!(unix) {
-            Some(SHARED_READ_ONLY)
+            Some(fl!("settings-shared-read-only"))
         } else if self.shared.is_none() {
-            Some(SHARED_UNAVAILABLE)
+            Some(fl!("settings-shared-unavailable"))
         } else {
             None
         }
@@ -60,13 +57,16 @@ impl SettingsWindow {
         &self,
         field: DropdownField,
         shared_value: &str,
-        choices: &[&str],
+        choices: &[String],
         local: Option<usize>,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let label = override_label(shared_value, local.and_then(|i| choices.get(i).copied()));
+        let label = override_label(
+            shared_value,
+            local.and_then(|i| choices.get(i)).map(String::as_str),
+        );
         let options: Vec<SharedString> = std::iter::once(override_label(shared_value, None))
-            .chain(choices.iter().map(|choice| (*choice).to_owned()))
+            .chain(choices.iter().cloned())
             .map(SharedString::from)
             .collect();
         let selected = local.map_or(0, |index| index + 1);
@@ -109,29 +109,57 @@ fn on_value<T: 'static>(
     }
 }
 
+/// The clipboard notification's positions, each with its message.
 pub(super) const CLIPBOARD_POSITIONS: [(crate::config::ClipboardToastPosition, &str); 6] = {
     use crate::config::ClipboardToastPosition as P;
     [
-        (P::TopLeft, "Top left"),
-        (P::TopCenter, "Top center"),
-        (P::TopRight, "Top right"),
-        (P::BottomLeft, "Bottom left"),
-        (P::BottomCenter, "Bottom center"),
-        (P::BottomRight, "Bottom right"),
+        (P::TopLeft, "settings-position-top-left"),
+        (P::TopCenter, "settings-position-top-center"),
+        (P::TopRight, "settings-position-top-right"),
+        (P::BottomLeft, "settings-position-bottom-left"),
+        (P::BottomCenter, "settings-position-bottom-center"),
+        (P::BottomRight, "settings-position-bottom-right"),
     ]
 };
 
+/// Herdr's toast positions, each with its message.
 pub(super) const TOAST_POSITIONS: [(herdr_client::protocol::ToastHerdrPosition, &str); 4] = {
     use herdr_client::protocol::ToastHerdrPosition as P;
     [
-        (P::TopLeft, "Top left"),
-        (P::TopRight, "Top right"),
-        (P::BottomLeft, "Bottom left"),
-        (P::BottomRight, "Bottom right"),
+        (P::TopLeft, "settings-position-top-left"),
+        (P::TopRight, "settings-position-top-right"),
+        (P::BottomLeft, "settings-position-bottom-left"),
+        (P::BottomRight, "settings-position-bottom-right"),
     ]
 };
 
+/// The names of `positions`, in order, for an override dropdown.
+fn position_names<T>(positions: &[(T, &str)]) -> Vec<String> {
+    positions
+        .iter()
+        .map(|(_, id)| i18n::message(id, &[]))
+        .collect()
+}
+
+/// The name of `position` among `positions`, or nothing when it is missing.
+fn position_name<T: PartialEq>(positions: &[(T, &str)], position: &T) -> String {
+    positions
+        .iter()
+        .find(|(p, _)| p == position)
+        .map(|(_, id)| i18n::message(id, &[]))
+        .unwrap_or_default()
+}
+
 /// "On" or "Off" for a boolean override dropdown.
-pub(super) fn on_off(value: bool) -> &'static str {
-    if value { "On" } else { "Off" }
+fn on_off(value: bool) -> String {
+    if value {
+        fl!("settings-on")
+    } else {
+        fl!("settings-off")
+    }
+}
+
+/// The choices of a boolean override dropdown, on first.
+fn on_off_choices() -> [String; 2] {
+    [on_off(true), on_off(false)]
 }
