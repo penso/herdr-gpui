@@ -10,7 +10,7 @@
 //! does not know are skipped, and `herdr-acp claude --acp` keeps the ACP
 //! adapter for when a Claude Code release changes them.
 
-mod background;
+pub(crate) mod background;
 mod bridge;
 mod permission;
 mod settings;

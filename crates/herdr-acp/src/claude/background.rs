@@ -26,7 +26,7 @@ struct Track {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Background {
+pub(crate) struct Background {
     /// Calls whose activity still runs, by call id.
     running: HashMap<String, Track>,
     /// The call each task id belongs to.
@@ -37,12 +37,12 @@ pub(super) struct Background {
 }
 
 /// A report about a call other than the one whose message carried it.
-pub(super) type Elsewhere = (String, Report);
+pub(crate) type Elsewhere = (String, Report);
 
 impl Background {
     /// The tag a new call starts with, for a sub-agent's step when `parent`
     /// names the sub-agent.
-    pub(super) fn started(
+    pub(crate) fn started(
         &mut self,
         call: &str,
         name: &str,
@@ -83,7 +83,7 @@ impl Background {
 
     /// What the result of `call` (a call to `name`) says: about its own
     /// activity, and about the activity of the call it stopped or polled.
-    pub(super) fn result(
+    pub(crate) fn result(
         &mut self,
         call: &str,
         name: &str,
@@ -149,7 +149,7 @@ impl Background {
 
     /// Claude Code says a task started; the call it names is now known by
     /// its task id too.
-    pub(super) fn task_started(&mut self, task: &str, call: Option<&str>) {
+    pub(crate) fn task_started(&mut self, task: &str, call: Option<&str>) {
         if let Some(call) = call.filter(|call| self.running.contains_key(*call)) {
             self.detach(call, task.to_owned());
         }
@@ -157,7 +157,7 @@ impl Background {
 
     /// A task notification: the task `task`, or the call `call`, ended with
     /// `status`.
-    pub(super) fn notified(
+    pub(crate) fn notified(
         &mut self,
         task: &str,
         call: Option<&str>,
@@ -178,7 +178,7 @@ impl Background {
 
     /// The turn ended: what still waited for its own result was stopped
     /// with it. Detached work runs on.
-    pub(super) fn turn_ended(&mut self) -> Vec<Elsewhere> {
+    pub(crate) fn turn_ended(&mut self) -> Vec<Elsewhere> {
         let stopped: Vec<String> = self
             .running
             .iter()
@@ -261,7 +261,7 @@ fn state(status: &str) -> Option<ActivityState> {
 /// A notification in the `<task-notification>` envelope Claude Code sends
 /// the model: the task id, the call when it names one, the status, and the
 /// summary. Only these display fields are read; nothing in it is followed.
-pub(super) fn task_notification(text: &str) -> Option<(&str, Option<&str>, &str, Option<&str>)> {
+pub(crate) fn task_notification(text: &str) -> Option<(&str, Option<&str>, &str, Option<&str>)> {
     let inner = text
         .trim()
         .strip_prefix("<task-notification>")?

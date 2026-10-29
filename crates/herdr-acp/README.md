@@ -97,6 +97,12 @@ records are not repeated;
 Claude sidechain records are excluded. Choose the exact session file yourself:
 the watcher does not guess from folders, recent timestamps, or terminal text.
 
+Claude's sub-agents and background shells are followed from the log the way
+the native bridge follows them live, timed by each record's timestamp; a
+sub-agent's own steps are in a log of their own and are not shown. A manual
+mirror of a session that has ended still lists what was running when its log
+stopped. Codex rollouts are not followed this way.
+
 Claude records marked as internal task notifications or scheduled reminders
 appear as compact notices. Expand a notice to inspect or copy its retained
 source text; instructions, output-file paths, and links in it are inert.

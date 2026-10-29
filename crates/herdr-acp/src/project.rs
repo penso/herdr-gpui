@@ -25,7 +25,7 @@ const TRUNCATED: &str = "\n… (truncated)";
 /// update its activity's detail.
 pub(crate) const MAX_STEPS: usize = 64;
 
-mod activity;
+pub(crate) mod activity;
 mod claude_code;
 pub(crate) use activity::{Report, Tag, kill_all};
 
