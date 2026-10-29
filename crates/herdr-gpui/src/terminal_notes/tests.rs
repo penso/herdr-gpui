@@ -61,3 +61,11 @@ fn a_quoted_line_of_combining_marks_stays_bounded() {
     assert!(quote.chars().count() <= MAX_QUOTED_LINE_CHARS + 1);
     assert!(quote.ends_with('\u{2026}'));
 }
+
+#[test]
+fn a_long_blank_comment_says_nothing() {
+    assert_eq!(
+        Note::new(None, "api / server", "quote", &" ".repeat(8001)),
+        None
+    );
+}

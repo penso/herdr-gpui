@@ -78,3 +78,9 @@ fn one_line_keeps_words_apart_and_bounds_mark_runs() {
     assert!(line.chars().count() <= 1201, "{}", line.chars().count());
     assert!(line.ends_with(ELLIPSIS));
 }
+
+#[test]
+fn a_long_blank_line_stays_empty() {
+    assert_eq!(one_line(&" ".repeat(8001), 2000), "");
+    assert_eq!(one_line(&"\n\t ".repeat(400), 100), "");
+}

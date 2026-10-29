@@ -52,10 +52,17 @@ pub(crate) fn one_line(text: &str, limit: usize) -> String {
             }
         })
         .collect();
-    let text = crate::notifications::safe_text(&spaced, budget);
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut line = ellipsize(&text, limit).into_owned();
-    if bounded.is_some() && !line.ends_with(ELLIPSIS) {
+    let safe = crate::notifications::safe_text(&spaced, budget);
+    let joined = safe.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut line = ellipsize(&joined, limit).into_owned();
+    // Text that was all breaks and controls stays empty, so a blank note is
+    // still refused as saying nothing; text whose first character alone is
+    // over the budget still shows that something was cut.
+    let blank = || {
+        text.trim_matches(|c: char| c.is_whitespace() || c.is_control())
+            .is_empty()
+    };
+    if bounded.is_some() && !line.ends_with(ELLIPSIS) && !(line.is_empty() && blank()) {
         line.push(ELLIPSIS);
     }
     line
