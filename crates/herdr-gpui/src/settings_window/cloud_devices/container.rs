@@ -80,7 +80,8 @@ impl ContainerCard {
         let loaded = ContainerFields::from_config(&config.container);
         let texts = texts(&loaded);
         let fields = std::array::from_fn(|index| {
-            input(&FIELDS[index].1.text(), texts[index], config, theme, cx)
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
         });
         Self {
             fields,

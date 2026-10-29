@@ -152,7 +152,7 @@ impl ThemeBrowser {
     pub(super) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder(&fl!("settings-theme-search-placeholder"), cx);
+            input.set_placeholder_with(|| fl!("settings-theme-search-placeholder"), cx);
             input
         });
         let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {

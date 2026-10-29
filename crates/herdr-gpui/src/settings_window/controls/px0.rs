@@ -37,11 +37,13 @@ impl SettingsWindow {
             self.px0.shown = saved.to_owned();
         }
         input.update(cx, |input, cx| {
-            input.set_placeholder(
-                &fl!(
-                    "settings-code-px0-placeholder",
-                    example = "http://127.0.0.1:7777/"
-                ),
+            input.set_placeholder_with(
+                || {
+                    fl!(
+                        "settings-code-px0-placeholder",
+                        example = "http://127.0.0.1:7777/"
+                    )
+                },
                 cx,
             );
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);

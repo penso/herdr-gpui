@@ -81,10 +81,11 @@ impl DaytonaCard {
         let loaded = loaded(config);
         let texts = texts(&loaded);
         let fields = std::array::from_fn(|index| {
-            input(&FIELDS[index].1.text(), texts[index], config, theme, cx)
+            let hint = FIELDS[index].1;
+            input(move || hint.text(), texts[index], config, theme, cx)
         });
         // A Daytona key's prefix.
-        let key = input("dtn_…", "", config, theme, cx); // i18n: data
+        let key = input(|| "dtn_…".to_owned(), "", config, theme, cx); // i18n: data
         key.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,

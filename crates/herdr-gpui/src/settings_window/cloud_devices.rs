@@ -84,7 +84,7 @@ pub(super) fn first_tab() -> CloudProvider {
 
 /// A card's text input, styled like the rest of Settings.
 fn input(
-    placeholder: &str,
+    placeholder: impl Fn() -> String + 'static,
     text: &str,
     config: &Config,
     theme: &crate::config::Theme,
@@ -93,7 +93,7 @@ fn input(
     let input = cx.new(SearchInput::new);
     input.update(cx, |input, cx| {
         input.set_appearance(config.ui.clone(), theme.clone(), cx);
-        input.set_placeholder(placeholder, cx);
+        input.set_placeholder_with(placeholder, cx);
         if !text.is_empty() {
             input.set_text_selected(text, cx);
         }

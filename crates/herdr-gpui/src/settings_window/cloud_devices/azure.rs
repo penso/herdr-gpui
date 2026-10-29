@@ -164,18 +164,24 @@ impl AzureCard {
         let loaded = loaded(config);
         let texts = texts(&loaded);
         let fields = std::array::from_fn(|index| {
-            let placeholder = i18n::message(FIELDS[index].1, &[]);
-            input(&placeholder, texts[index], config, theme, cx)
+            let id = FIELDS[index].1;
+            input(
+                move || i18n::message(id, &[]),
+                texts[index],
+                config,
+                theme,
+                cx,
+            )
         });
         let client_id = input(
-            &fl!("settings-cloud-azure-client-id-placeholder"),
+            || fl!("settings-cloud-azure-client-id-placeholder"),
             &loaded.client_id,
             config,
             theme,
             cx,
         );
         let secret = input(
-            &fl!("settings-cloud-azure-secret-placeholder"),
+            || fl!("settings-cloud-azure-secret-placeholder"),
             "",
             config,
             theme,

@@ -61,8 +61,21 @@ impl RailwayCard {
     ) -> Self {
         Self {
             // An example path.
-            path: input("/Users/you/.ssh/id_ed25519", "", config, theme, cx), // i18n: data
-            name: input("herdr-railway", "herdr-railway", config, theme, cx),
+            path: input(
+                // i18n: data
+                || "/Users/you/.ssh/id_ed25519".to_owned(),
+                "",
+                config,
+                theme,
+                cx,
+            ),
+            name: input(
+                || "herdr-railway".to_owned(),
+                "herdr-railway",
+                config,
+                theme,
+                cx,
+            ),
             source: KeySource::Generate,
             install: true,
             setup: true,

@@ -57,7 +57,7 @@ impl Controls {
     pub(super) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder(&crate::i18n::fl!("settings-fonts-search-placeholder"), cx)
+            input.set_placeholder_with(|| crate::i18n::fl!("settings-fonts-search-placeholder"), cx)
         });
         let subscription = cx.subscribe(&search, |this, search, _: &Changed, cx| {
             this.controls.filtered = filter_fonts(&this.controls.names, search.read(cx).text());
@@ -67,8 +67,8 @@ impl Controls {
         });
         let integration_search = cx.new(SearchInput::new);
         integration_search.update(cx, |input, cx| {
-            input.set_placeholder(
-                &crate::i18n::fl!("settings-integrations-search-placeholder"),
+            input.set_placeholder_with(
+                || crate::i18n::fl!("settings-integrations-search-placeholder"),
                 cx,
             )
         });

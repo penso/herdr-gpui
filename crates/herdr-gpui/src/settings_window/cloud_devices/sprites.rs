@@ -69,14 +69,14 @@ impl SpritesCard {
     ) -> Self {
         let loaded = loaded(config);
         let api_url = [input(
-            crate::sprites::DEFAULT_API_URL,
+            || crate::sprites::DEFAULT_API_URL.to_owned(),
             &loaded.api_url,
             config,
             theme,
             cx,
         )];
         let token = input(
-            &fl!("settings-cloud-sprites-token-placeholder"),
+            || fl!("settings-cloud-sprites-token-placeholder"),
             "",
             config,
             theme,

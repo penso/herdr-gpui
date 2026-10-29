@@ -32,7 +32,7 @@ impl Plugins {
     pub(in crate::settings_window) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder(&fl!("settings-plugins-search-placeholder"), cx)
+            input.set_placeholder_with(|| fl!("settings-plugins-search-placeholder"), cx)
         });
         let changed = cx.subscribe(&search, |this, _, _: &Changed, cx| {
             this.body_scroll.set_offset(Point::default());

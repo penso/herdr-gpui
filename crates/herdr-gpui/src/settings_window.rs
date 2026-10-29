@@ -307,7 +307,7 @@ impl SettingsWindow {
         });
         let nav_search = cx.new(crate::search_input::SearchInput::new);
         nav_search.update(cx, |input, cx| {
-            input.set_placeholder(&fl!("settings-search-placeholder"), cx)
+            input.set_placeholder_with(|| fl!("settings-search-placeholder"), cx)
         });
         let search_changed = cx.subscribe(
             &nav_search,

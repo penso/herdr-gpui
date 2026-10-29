@@ -89,10 +89,18 @@ impl OpenSandboxCard {
     ) -> Self {
         let loaded = loaded(config);
         let texts = texts(&loaded);
-        let fields =
-            std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
+        let fields = std::array::from_fn(|index| {
+            let placeholder = FIELDS[index].1;
+            input(
+                move || placeholder.to_owned(),
+                texts[index],
+                config,
+                theme,
+                cx,
+            )
+        });
         let token = input(
-            &fl!("settings-cloud-opensandbox-key-placeholder"),
+            || fl!("settings-cloud-opensandbox-key-placeholder"),
             "",
             config,
             theme,
