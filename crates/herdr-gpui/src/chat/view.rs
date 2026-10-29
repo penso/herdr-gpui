@@ -13,6 +13,7 @@ mod layout;
 mod panels;
 mod rail;
 mod rich;
+pub(crate) mod running;
 pub(crate) mod selection;
 mod settings;
 mod summary;
@@ -391,7 +392,11 @@ impl HerdrWindow {
                                 |view| view.child(chat.glide.watch(&chat.list)),
                             )
                             .children(
-                                self.render_chat_working(chat)
+                                self.render_chat_working(chat, cx)
+                                    .map(|content| self.chat_column(content)),
+                            )
+                            .children(
+                                self.render_chat_running_table(chat)
                                     .map(|content| self.chat_column(content)),
                             )
                             .children(
@@ -418,10 +423,13 @@ impl HerdrWindow {
             .into_any_element()
     }
 
-    /// The layout's sign that the agent is working on a turn.
-    fn render_chat_working(&self, chat: &ChatPane) -> Option<Div> {
+    /// The layout's sign that the agent is working on a turn, with what it
+    /// left running said after it.
+    fn render_chat_working(&self, chat: &ChatPane, cx: &mut Context<Self>) -> Option<Div> {
         let working = working::Working::of(chat.session.transcript(), super::now_ms());
-        layout::layout_for(self.config.chat.layout).working(working.as_ref(), &self.chat_look())
+        let row = layout::layout_for(self.config.chat.layout)
+            .working(working.as_ref(), &self.chat_look());
+        self.render_chat_running_row(chat, row, working.is_none(), cx)
     }
 
     /// The chat's background where no page shows: on macOS, where a page
