@@ -7,8 +7,8 @@
 
 use super::{Error, Result};
 use herdr_chat_protocol::{
-    ClientKind, ClientMessage, Command, CommandId, Cursor, ServerMessage, Transcript, VERSION,
-    read_frame, write_frame,
+    ClientKind, ClientMessage, Command, CommandId, Cursor, REVISION, ServerMessage, Transcript,
+    VERSION, read_frame, write_frame,
 };
 use herdr_client::private_endpoint::{Closer, Connection};
 use std::{
@@ -261,6 +261,7 @@ impl Chat {
         let (sender, queued) = mpsc::sync_channel(MAX_COMMANDS);
         let hello = ClientMessage::Hello {
             client: ClientKind::Remote,
+            revision: REVISION,
             since,
             version: VERSION,
         };

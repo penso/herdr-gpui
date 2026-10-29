@@ -234,6 +234,7 @@ fn send(stream: &mut Peer, message: &ServerMessage) {
 fn hello(since: Option<Cursor>) -> ClientMessage {
     ClientMessage::Hello {
         client: herdr_chat_protocol::ClientKind::Gui,
+        revision: herdr_chat_protocol::REVISION,
         since,
         version: VERSION,
     }

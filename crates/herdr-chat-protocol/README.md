@@ -63,6 +63,12 @@ then either the changes after that cursor or a `Snapshot`, then every change as
 it happens. The cursor's epoch changes whenever the program starts or reloads
 its session, so a cursor from an earlier run always gets a snapshot.
 
+`Hello` also carries the `REVISION` the client reads: additions within one
+protocol version that an older client could not decode. Revision 1 adds
+`Change::Activity`. A client that sends no revision always starts from a
+snapshot, and each change it could not read reaches it as `Change::Clients`
+with the count it already holds, so its cursor still moves one step at a time.
+
 Clients send `Command`s with a client-chosen `CommandId`; the program answers
 each once with `Ack`, and a command resent with an id it already handled is
 acknowledged again without running twice. An `Ack` means the program accepted

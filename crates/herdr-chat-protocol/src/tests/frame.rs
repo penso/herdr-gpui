@@ -74,6 +74,7 @@ fn reads_survive_short_reads() {
     }
     let message = ClientMessage::Hello {
         client: ClientKind::Gui,
+        revision: REVISION,
         since: None,
         version: VERSION,
     };
