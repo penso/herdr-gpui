@@ -6,12 +6,13 @@ use std::collections::{HashMap, HashSet};
 use acp::v1 as wire;
 use serde_json::{Value, json};
 
-use super::{permission, settings, settings::Settings, tools};
+use super::{background, background::Background, permission, settings, settings::Settings, tools};
 use crate::{
     harness::{
         Out, Translator, out,
         out::{failure, reply, to_value},
     },
+    project::Tag,
     rpc::Inbound,
 };
 
@@ -44,6 +45,7 @@ enum Handshake {
 #[derive(Debug)]
 pub(super) struct Bridge {
     asks: HashMap<i64, permission::Ask>,
+    background: Background,
     calls: HashMap<String, Call>,
     controls: HashMap<String, Control>,
     handshake: Handshake,
@@ -66,6 +68,7 @@ impl Bridge {
     pub(super) fn new(session: String) -> Self {
         Self {
             asks: HashMap::new(),
+            background: Background::default(),
             calls: HashMap::new(),
             controls: HashMap::new(),
             handshake: Handshake::Waiting,
@@ -110,12 +113,12 @@ impl Translator for Bridge {
 
     fn on_harness(&mut self, message: &Value) -> Vec<Out> {
         let field = |key: &str| message.get(key).and_then(Value::as_str);
-        // A subagent's own messages stay inside its call.
-        if message
-            .get("parent_tool_use_id")
-            .is_some_and(|id| !id.is_null())
-        {
-            return Vec::new();
+        // A sub-agent's own steps show under its call; its prose stays
+        // inside it.
+        match message.get("parent_tool_use_id") {
+            Some(Value::String(parent)) => return self.subagent(message, parent),
+            None | Some(Value::Null) => {}
+            Some(_) => return Vec::new(),
         }
         match field("type") {
             Some("control_response") => self.control_response(message.get("response")),
@@ -126,7 +129,7 @@ impl Translator for Bridge {
                 .map(|event| self.stream(event))
                 .unwrap_or_default(),
             Some("assistant") => self.assistant(message.get("message")),
-            Some("user") => self.user(message.get("message")),
+            Some("user") => self.user(message),
             Some("result") => self.result(message),
             _ => Vec::new(),
         }
@@ -368,6 +371,21 @@ impl Bridge {
             }
             Some("status") => self.mode_seen(field("permissionMode")),
             Some("commands_changed") => self.commands(message.get("commands")),
+            Some("task_started") => {
+                if let Some(task) = field("task_id") {
+                    self.background.task_started(task, field("tool_use_id"));
+                }
+                Vec::new()
+            }
+            Some("task_notification") => field("task_id")
+                .zip(field("status"))
+                .and_then(|(task, status)| {
+                    self.background
+                        .notified(task, field("tool_use_id"), status, field("summary"))
+                })
+                .map(|elsewhere| self.reported(elsewhere))
+                .into_iter()
+                .collect(),
             Some("compact_boundary") => {
                 vec![self.update(wire::SessionUpdate::Notice(wire::Notice::new(
                     wire::NoticeSeverity::Info,
@@ -477,36 +495,82 @@ impl Bridge {
                 Some("thinking") if !streamed => {
                     outs.extend(text("thinking").map(|text| self.chunk(true, text, id.clone())));
                 }
-                Some("tool_use") => {
-                    let (Some(call), Some(name)) = (text("id"), text("name")) else {
-                        continue;
-                    };
-                    let input = block.get("input").cloned().unwrap_or(Value::Null);
-                    let hidden = name == tools::TODOS;
-                    self.calls.insert(
-                        call.to_owned(),
-                        Call {
-                            hidden,
-                            name: name.to_owned(),
-                        },
-                    );
-                    outs.push(self.update(if hidden {
-                        wire::SessionUpdate::Plan(tools::plan(&input))
-                    } else {
-                        wire::SessionUpdate::ToolCall(tools::call(call, name, &input))
-                    }));
-                }
+                Some("tool_use") => outs.extend(self.tool_use(block, None)),
                 _ => {}
             }
         }
         outs
     }
 
-    fn user(&mut self, message: Option<&Value>) -> Vec<Out> {
-        let Some(message) = message else {
+    /// A call as it starts: the plan for the to-do list, else a card,
+    /// tagged with the sub-agent it is a step of and the activity it starts.
+    fn tool_use(&mut self, block: &Value, parent: Option<&str>) -> Option<Out> {
+        let text = |key: &str| block.get(key).and_then(Value::as_str);
+        let (call, name) = (text("id")?, text("name")?);
+        let input = block.get("input").cloned().unwrap_or(Value::Null);
+        let hidden = name == tools::TODOS;
+        // A sub-agent's own to-do list is not the conversation's plan.
+        if hidden && parent.is_some() {
+            return None;
+        }
+        self.calls.insert(
+            call.to_owned(),
+            Call {
+                hidden,
+                name: name.to_owned(),
+            },
+        );
+        if hidden {
+            return Some(self.update(wire::SessionUpdate::Plan(tools::plan(&input))));
+        }
+        let tag = self.background.started(call, name, &input, parent);
+        let mut tool_call = tools::call(call, name, &input);
+        if tag != Tag::default() {
+            tool_call = tool_call.meta(tag.meta());
+        }
+        Some(self.update(wire::SessionUpdate::ToolCall(tool_call)))
+    }
+
+    /// A message of the sub-agent `parent`: its calls and their results.
+    fn subagent(&mut self, message: &Value, parent: &str) -> Vec<Out> {
+        match message.get("type").and_then(Value::as_str) {
+            Some("assistant") => {
+                let Some(inner) = message.get("message") else {
+                    return Vec::new();
+                };
+                let uses: Vec<Value> = blocks(inner)
+                    .filter(|block| block.get("type").and_then(Value::as_str) == Some("tool_use"))
+                    .cloned()
+                    .collect();
+                uses.iter()
+                    .filter_map(|block| self.tool_use(block, Some(parent)))
+                    .collect()
+            }
+            Some("user") => self.results(message),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The update that says how another call's activity stands.
+    fn reported(&self, (call, report): background::Elsewhere) -> Out {
+        let update = wire::ToolCallUpdate::new(call, wire::ToolCallUpdateFields::new())
+            .meta(Tag::activity(report).meta());
+        self.update(wire::SessionUpdate::ToolCallUpdate(update))
+    }
+
+    fn user(&mut self, envelope: &Value) -> Vec<Out> {
+        let Some(message) = envelope.get("message") else {
             return Vec::new();
         };
         if let Some(text) = message.get("content").and_then(Value::as_str) {
+            if let Some((task, call, status, summary)) = background::task_notification(text) {
+                return self
+                    .background
+                    .notified(task, call, status, summary)
+                    .map(|elsewhere| self.reported(elsewhere))
+                    .into_iter()
+                    .collect();
+            }
             return local_output(text)
                 .map(|output| {
                     self.update(wire::SessionUpdate::Notice(wire::Notice::new(
@@ -517,6 +581,20 @@ impl Bridge {
                 .into_iter()
                 .collect();
         }
+        self.results(envelope)
+    }
+
+    /// The tool results in a user message, and what they say about
+    /// sub-agents and background shells.
+    fn results(&mut self, envelope: &Value) -> Vec<Out> {
+        let Some(message) = envelope.get("message") else {
+            return Vec::new();
+        };
+        let results = blocks(message)
+            .filter(|block| block.get("type").and_then(Value::as_str) == Some("tool_result"))
+            .count();
+        // Claude Code's structured result belongs to the message's one result.
+        let structured = envelope.get("tool_use_result").filter(|_| results == 1);
         let mut outs = Vec::new();
         for block in blocks(message) {
             if block.get("type").and_then(Value::as_str) != Some("tool_result") {
@@ -530,16 +608,23 @@ impl Bridge {
             };
             let failed = block.get("is_error").and_then(Value::as_bool) == Some(true);
             let output = block.get("content").unwrap_or(&Value::Null);
+            let name = call.name.clone();
+            let (report, elsewhere) = self
+                .background
+                .result(id, &name, failed, output, structured);
             let fields = wire::ToolCallUpdateFields::new()
                 .status(Some(if failed {
                     wire::ToolCallStatus::Failed
                 } else {
                     wire::ToolCallStatus::Completed
                 }))
-                .content(tools::result(&call.name, output, failed));
-            outs.push(self.update(wire::SessionUpdate::ToolCallUpdate(
-                wire::ToolCallUpdate::new(id.to_owned(), fields),
-            )));
+                .content(tools::result(&name, output, failed));
+            let mut update = wire::ToolCallUpdate::new(id.to_owned(), fields);
+            if let Some(report) = report {
+                update = update.meta(Tag::activity(report).meta());
+            }
+            outs.push(self.update(wire::SessionUpdate::ToolCallUpdate(update)));
+            outs.extend(elsewhere.map(|elsewhere| self.reported(elsewhere)));
         }
         outs
     }
@@ -567,6 +652,12 @@ impl Bridge {
             (false, subtype) => Err(error_text(message, subtype)),
         };
         self.interrupted = false;
+        let stopped = self.background.turn_ended();
+        outs.extend(
+            stopped
+                .into_iter()
+                .map(|elsewhere| self.reported(elsewhere)),
+        );
         self.calls.clear();
         self.streamed.clear();
         self.message = None;

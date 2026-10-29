@@ -14,9 +14,20 @@ use herdr_chat_protocol::{
     TurnSummary, Usage,
 };
 
+/// Sub-agents whose step counts are kept before forgetting those that left
+/// the transcript's activities.
+const MAX_ACTIVITIES_TRACKED: usize = 2 * herdr_chat_protocol::MAX_ACTIVITIES;
+
 /// The most text one entry keeps; later chunks are dropped.
 pub(crate) const MAX_ENTRY_TEXT: usize = 256 * 1024;
 const TRUNCATED: &str = "\n… (truncated)";
+/// The most steps of one sub-agent the transcript shows; later ones only
+/// update its activity's detail.
+pub(crate) const MAX_STEPS: usize = 64;
+
+mod activity;
+mod claude_code;
+pub(crate) use activity::{Report, Tag, kill_all};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Stream {
@@ -36,6 +47,8 @@ struct Open {
 pub(crate) struct Projector {
     next: u64,
     open: Option<Open>,
+    /// How many steps each sub-agent has shown, by its call id.
+    steps: HashMap<String, usize>,
     tools: HashMap<String, EntryId>,
 }
 
@@ -212,10 +225,79 @@ impl Projector {
         self.tools.retain(|_, id| *id >= before);
     }
 
+    /// Records a call a bridge may have tagged, with the activity it starts
+    /// or reports and its sub-agent's latest step.
+    fn tagged(
+        &mut self,
+        transcript: &Transcript,
+        call_id: &str,
+        tag: &Tag,
+        now: u64,
+        update: impl FnOnce(&mut Tool),
+    ) -> Vec<Change> {
+        let mut changes = Vec::new();
+        let shown = self.tools.contains_key(call_id);
+        let step = tag.parent.as_deref().filter(|_| !shown);
+        let mut tool = None;
+        if step.is_none_or(|parent| self.admit(transcript, parent)) {
+            let change = self.tool(transcript, call_id, |tool| {
+                update(tool);
+                tag.mark(tool);
+            });
+            if let Change::Push { entry } | Change::Replace { entry } = &change
+                && let EntryKind::Tool(found) = &entry.kind
+            {
+                tool = Some(found.clone());
+            }
+            changes.push(change);
+        } else {
+            // Past the cap, a step only names what its sub-agent does now.
+            let mut found = Tool {
+                call_id: call_id.to_owned(),
+                content: Vec::new(),
+                kind: ToolKind::Other,
+                locations: Vec::new(),
+                parent: None,
+                status: ToolStatus::Pending,
+                title: call_id.to_owned(),
+            };
+            update(&mut found);
+            tool = Some(found);
+        }
+        let Some(tool) = tool else {
+            return changes;
+        };
+        if let Some(report) = tag.activity.clone() {
+            changes.extend(activity::record(
+                transcript,
+                call_id,
+                &tool.title,
+                report,
+                now,
+            ));
+        }
+        if let Some(parent) = &tag.parent {
+            changes.extend(activity::step(transcript, parent, &tool.title));
+        }
+        changes
+    }
+
+    /// Whether a new step of the sub-agent `parent` still shows as a call.
+    fn admit(&mut self, transcript: &Transcript, parent: &str) -> bool {
+        if self.steps.len() > MAX_ACTIVITIES_TRACKED {
+            self.steps
+                .retain(|call, _| transcript.activity(call).is_some());
+        }
+        let count = self.steps.entry(parent.to_owned()).or_default();
+        *count += 1;
+        *count <= MAX_STEPS
+    }
+
     pub(crate) fn update(
         &mut self,
         transcript: &Transcript,
         update: wire::SessionUpdate,
+        now: u64,
     ) -> Vec<Change> {
         use wire::SessionUpdate as U;
         let change = match update {
@@ -224,13 +306,40 @@ impl Projector {
             U::AgentThoughtChunk(chunk) => self.chunk(transcript, Stream::Thought, chunk),
             U::ToolCall(call) => {
                 let call_id = call.tool_call_id.0.to_string();
-                Some(self.tool(transcript, &call_id, |tool| apply_call(tool, call)))
+                let tag = Tag::read(call.meta.as_ref()).or_else(|| {
+                    claude_code::tag(call.meta.as_ref(), call.raw_input.as_ref(), None)
+                });
+                return self.tagged(transcript, &call_id, &tag, now, |tool| {
+                    apply_call(tool, call);
+                });
             }
             U::ToolCallUpdate(update) => {
                 let call_id = update.tool_call_id.0.to_string();
-                Some(self.tool(transcript, &call_id, |tool| {
+                let tag = Tag::read(update.meta.as_ref()).or_else(|| {
+                    claude_code::tag(
+                        update.meta.as_ref(),
+                        update.fields.raw_input.as_ref(),
+                        update.fields.status,
+                    )
+                });
+                // A call no longer shown, or never shown, only reports how
+                // its activity ended; it does not come back as a bare card.
+                let shown = self
+                    .tools
+                    .get(&call_id)
+                    .is_some_and(|id| transcript.entry(*id).is_some());
+                if !shown
+                    && let Some(report) = tag.activity.clone()
+                    && let Some(known) = transcript.activity(&call_id)
+                {
+                    let label = known.label.clone();
+                    return activity::record(transcript, &call_id, &label, report, now)
+                        .into_iter()
+                        .collect();
+                }
+                return self.tagged(transcript, &call_id, &tag, now, |tool| {
                     apply_fields(tool, update.fields);
-                }))
+                });
             }
             U::Plan(plan) => Some(Change::Plan {
                 plan: plan.entries.into_iter().map(plan_entry).collect(),
