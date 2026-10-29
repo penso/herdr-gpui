@@ -3,15 +3,19 @@
 //! its settings page probe the server over plain HTTP first. Blocking: run it
 //! off the UI thread.
 //!
-//! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
-//! command, [`token`] keeps the connection token, [`supervisor`] runs the
-//! child process, and [`launcher`] ties them to the windows and the config.
+//! The submodules start such a server for VS Code tabs: [`cli`] finds VS
+//! Code's command, or VSCodium's, [`token`] keeps the connection token,
+//! [`supervisor`] runs the child process, and [`launcher`] ties them to the
+//! windows and the config.
 mod cli;
 mod error;
 pub(crate) mod launcher;
 pub(crate) mod supervisor;
 mod token;
 
+#[cfg(test)]
+pub(crate) use cli::{Install, VSCODIUM};
+pub(crate) use cli::{VS_CODE, product_names};
 pub use error::Error;
 pub(crate) use launcher::{Launcher, Startup};
 

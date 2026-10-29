@@ -391,14 +391,22 @@ fn row_full(frame: &FrameData, row: u16, end: u16) -> bool {
 }
 
 /// The schemes read from plain text. Any other is plain text.
-const PLAIN_SCHEMES: [&str; 5] = ["http://", "https://", "file://", "mailto:", "vscode:"];
+const PLAIN_SCHEMES: &[&str] = &[
+    "http://",
+    "https://",
+    "file://",
+    "mailto:",
+    "vscode:",
+    "vscodium:",
+];
 
 /// Where an address with one of the plain schemes starts in `text`, in
 /// order. A scheme counts only at the start of a word, except the web's,
 /// which are read wherever they stand.
 fn address_starts(text: &str) -> Vec<(usize, &'static str)> {
     let mut starts: Vec<_> = PLAIN_SCHEMES
-        .into_iter()
+        .iter()
+        .copied()
         .flat_map(|scheme| {
             text.match_indices(scheme)
                 .map(move |(start, _)| (start, scheme))

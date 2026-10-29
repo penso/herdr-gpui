@@ -4,8 +4,9 @@
 //! this page shows what it last reported.
 use super::*;
 use crate::code_server::{
-    Launcher, Startup,
+    Launcher, Startup, VS_CODE,
     launcher::{self, Cli, LICENSE_URL, PRIVACY_URL},
+    product_names,
 };
 
 impl SettingsWindow {
@@ -57,11 +58,15 @@ impl SettingsWindow {
         };
         let note = match cli {
             _ if !crate::browser::EMBEDDED => fl!("settings-code-no-pages"),
-            Some(Cli::Unknown | Cli::Finding) => fl!("settings-code-finding"),
-            Some(Cli::Found(program)) => {
-                fl!("settings-code-found", path = program.display().to_string())
+            Some(Cli::Unknown | Cli::Finding) => {
+                fl!("settings-code-finding", editors = product_names())
             }
-            Some(Cli::Missing) | None => fl!("settings-code-missing"),
+            Some(Cli::Found(install)) => fl!(
+                "settings-code-found",
+                editor = install.product().name(),
+                path = install.program().display().to_string()
+            ),
+            Some(Cli::Missing) | None => fl!("settings-code-missing", editors = product_names()),
         };
         self.control_card(&fl!("settings-code-vscode"))
             .relative()
@@ -92,14 +97,15 @@ impl SettingsWindow {
 
     /// The server the app starts: its license until accepted, then how it is.
     pub(super) fn render_code_start(&self, cx: &mut Context<Self>) -> Div {
+        let editor = Launcher::product(cx).map_or(VS_CODE.name(), |product| product.name());
         let card = self
             .control_card(&fl!("settings-code-server"))
-            .child(self.control_note(fl!("settings-code-start-note")));
+            .child(self.control_note(fl!("settings-code-start-note", editor = editor)));
         match Launcher::startup(cx, &self.config.code) {
             Startup::Consent => card.child(self.render_code_license(cx)),
             Startup::Idle => card.child(self.control_note(fl!("settings-code-idle"))),
             Startup::Starting { .. } => {
-                card.child(self.control_note(fl!("settings-code-starting")))
+                card.child(self.control_note(fl!("settings-code-starting", editor = editor)))
             }
             Startup::Ready { url } => card.child(self.render_code_state(
                 "icons/pass.svg",

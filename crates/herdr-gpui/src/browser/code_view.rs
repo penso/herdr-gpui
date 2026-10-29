@@ -3,7 +3,7 @@
 use super::code::Reach;
 use crate::{
     HerdrWindow,
-    code_server::{Launcher, Startup},
+    code_server::{Launcher, Startup, VS_CODE, product_names},
 };
 use gpui::{prelude::*, *};
 
@@ -16,6 +16,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let startup = Launcher::startup(cx, &self.config.code);
+        let editor = Launcher::product(cx).map_or(VS_CODE.name(), |product| product.name());
         let text: SharedString = if !super::EMBEDDED {
             "This build cannot show pages in the window.".into()
         } else if let Some(message) = failure {
@@ -25,13 +26,16 @@ impl HerdrWindow {
                 Startup::Address if self.config.code.url.is_none() => {
                     "Set the VS Code server in Settings to show VS Code here.".into()
                 }
-                Startup::Finding => "Looking for VS Code\u{2026}".into(),
-                Startup::Missing => "VS Code is not installed. Install it, or set the address \
-                                     of a server you run in Settings."
-                    .into(),
+                Startup::Finding => format!("Looking for {}\u{2026}", product_names()).into(),
+                Startup::Missing => format!(
+                    "{} is not installed. Install one, or set the address of a server you \
+                     run in Settings.",
+                    product_names()
+                )
+                .into(),
                 Startup::Consent => return self.render_code_consent(cx),
                 Startup::Idle | Startup::Starting { .. } => {
-                    "Starting VS Code\u{2026} (the first run downloads it)".into()
+                    format!("Starting {editor}\u{2026} (the first run downloads it)").into()
                 }
                 Startup::Failed { error, .. } => {
                     return self.render_code_unreachable(error.to_string().into());

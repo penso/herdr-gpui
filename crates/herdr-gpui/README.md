@@ -2554,7 +2554,7 @@ modifier over text says that you mean to use it as a link, and only then is
 the text verified:
 
 - **An address** is verified when it is well formed. Plain text is read as one
-  for `http://`, `https://`, `mailto:`, and `vscode:`; any other scheme there
+  for `http://`, `https://`, `mailto:`, `vscode:`, and `vscodium:`; any other scheme there
   is plain text.
 - **A file path** is verified when the file or folder exists, which the app
   checks in the background. Any printed word may be one, such as
@@ -2573,7 +2573,7 @@ click that opens it is the one that never left the half-cell it pressed in.
 An explicit hyperlink shows the hand cursor whenever the modifier is held, and
 its dashes turn solid once its target is verified:
 
-- **A web, `mailto:`, or `vscode:` address** opens: web addresses in your
+- **A web, `mailto:`, `vscode:`, or `vscodium:` address** opens: web addresses in your
   default browser, the others in the application registered for them.
 - **An address with any other scheme** first shows the whole address and asks
   whether to open it, because terminal output is untrusted and such an address
@@ -3324,23 +3324,30 @@ nothing to what that server serves.
 
 **Settings > Code** chooses where that server comes from.
 
-**Start VS Code automatically**, the default once VS Code is found, has the
-app run the server itself. It looks for VS Code's `code` command on your
-login shell's `PATH`, then, on macOS, in
-`/Applications/Visual Studio Code.app`, and runs the `code-tunnel` program
-beside it, which is what `code serve-web` runs:
+**Start VS Code automatically**, the default once VS Code or
+[VSCodium](https://vscodium.com/) is found, has the app run the server itself.
+It looks for VS Code's `code` command on your login shell's `PATH`, then, on
+macOS, in `/Applications/Visual Studio Code.app`; without VS Code, it looks
+for VSCodium's `codium` the same way, in `/Applications/VSCodium.app`. It runs
+the `code-tunnel` (or `codium-tunnel`) program beside that command, which is
+what `code serve-web` runs:
 
 ```sh
 code-tunnel serve-web --host 127.0.0.1 --port <port> \
   --connection-token-file <state>/vscode-token --accept-server-license-terms
 ```
 
-- The server is Microsoft software under the
+- VS Code wins when both are installed; there is no setting to choose. Other
+  forks are not looked for: one works only if it ships `serve-web` and hosts
+  the server build that command downloads, and each is added once someone
+  has checked an install of it. Settings > Code names the editor it found.
+- VS Code's server is Microsoft software under the
   [VS Code Server License Terms](https://aka.ms/vscode-server-license). The
   app never accepts them for you: the VS Code tab and the settings page show them
   with **Accept and start**, and only after that does the app pass
   `--accept-server-license-terms`. The acceptance is saved as
-  `license_accepted = true` under `[code]`.
+  `license_accepted = true` under `[code]`. VSCodium's server is MIT-licensed
+  with no terms to accept, so it starts without that step.
 - It starts the first time a VS Code tab needs a page, never before, and says "Starting VS Code… (the first run downloads it)"
   until VS Code answers: the first start downloads the server build.
 - The port is picked once and saved as `port` under `[code]`, since VS Code

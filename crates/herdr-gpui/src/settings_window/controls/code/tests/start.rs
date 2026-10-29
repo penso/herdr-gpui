@@ -1,6 +1,6 @@
 use super::*;
 use crate::code_server::{
-    Launcher,
+    Install, Launcher, VS_CODE, VSCODIUM,
     launcher::Cli,
     supervisor::{Address, Report, Status},
 };
@@ -41,7 +41,7 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
 }
 
 fn found() -> Cli {
-    Cli::Found("/Applications/code-tunnel".into())
+    Cli::Found(Install::new(&VS_CODE, "/Applications/code-tunnel"))
 }
 
 #[gpui::test]
@@ -166,4 +166,18 @@ fn choices_made_during_another_save_are_saved_after_it(cx: &mut TestAppContext) 
         edits.lock().unwrap().as_slice(),
         [CodeEdit::Mode(CodeMode::Start), CodeEdit::AcceptLicense]
     );
+}
+
+#[gpui::test]
+fn a_found_vscodium_is_named_and_asks_for_no_license(cx: &mut TestAppContext) {
+    let codium = Cli::Found(Install::new(
+        &VSCODIUM,
+        "/Applications/VSCodium.app/Contents/Resources/app/bin/codium-tunnel",
+    ));
+    let (view, cx, _) = start_page(cx, codium);
+    view.read_with(cx, |view, cx| {
+        assert_eq!(view.code_mode(cx), Some(CodeMode::Start));
+    });
+    assert!(cx.debug_bounds("settings-code-start").is_some());
+    assert!(cx.debug_bounds("settings-code-license").is_none());
 }
