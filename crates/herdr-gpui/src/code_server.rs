@@ -14,7 +14,10 @@ pub(crate) mod supervisor;
 mod token;
 
 #[cfg(test)]
-pub(crate) use cli::{Install, VSCODIUM};
+pub(crate) use cli::VSCODIUM;
+// Only the tests of builds that show pages name an install.
+#[cfg(all(test, any(target_os = "macos", windows)))]
+pub(crate) use cli::Install;
 pub(crate) use cli::{VS_CODE, product_names};
 pub use error::Error;
 pub(crate) use launcher::{Launcher, Startup};
