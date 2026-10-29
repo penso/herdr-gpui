@@ -129,6 +129,10 @@ class Literal:
     around: list[str]
 
 
+# A name or path. `\w` is Unicode-aware, as Rust identifiers are.
+WORD = re.compile(r"\w+(?:::\w+)*!?")
+
+
 def literals(source: str) -> list[Literal]:
     """The string literals in Rust `source`, skipping comments and chars."""
     found: list[Literal] = []
@@ -178,11 +182,10 @@ def literals(source: str) -> list[Literal]:
             i += char.end() if char else 1
             name = ""
             continue
-        if ch.isalnum() or ch == "_":
-            word = re.match(r"[A-Za-z0-9_]+(?:::[A-Za-z0-9_]+)*!?", source[i:])
-            assert word
+        word = WORD.match(source, i) if ch.isalnum() or ch == "_" else None
+        if word:
             name = word.group(0)
-            i += word.end()
+            i = word.end()
             continue
         if ch in "([{":
             stack.append("#" if ch == "[" and source[i - 1 : i] == "#" else name)

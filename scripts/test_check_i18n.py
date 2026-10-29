@@ -204,6 +204,13 @@ class MigratedTests(unittest.TestCase):
             ['crates/app/src/menu.rs:3: "Raw text" is not a message'],
         )
 
+    def test_unicode_names(self) -> None:
+        source = '// i18n: migrated\nlet café = 1;\nnaïve::größe!("Open file");\n'
+        self.assertEqual(
+            self.errors({self.ROOT: source}),
+            ['crates/app/src/menu.rs:3: "Open file" is not a message'],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
