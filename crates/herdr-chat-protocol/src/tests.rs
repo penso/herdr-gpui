@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod activities;
 mod agents;
 mod assist;
 mod auto_accept;
@@ -36,6 +37,7 @@ fn tool(id: u64, status: ToolStatus) -> Entry {
             content: Vec::new(),
             kind: ToolKind::Execute,
             locations: Vec::new(),
+            parent: None,
             status,
             title: "cargo test".to_owned(),
         }),

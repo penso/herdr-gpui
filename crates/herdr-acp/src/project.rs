@@ -194,6 +194,7 @@ impl Projector {
             content: Vec::new(),
             kind: ToolKind::Other,
             locations: Vec::new(),
+            parent: None,
             status: ToolStatus::Pending,
             title: call_id.to_owned(),
         };

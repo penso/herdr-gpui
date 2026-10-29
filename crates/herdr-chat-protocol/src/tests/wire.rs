@@ -72,6 +72,7 @@ fn a_snapshot_round_trips_every_entry_kind() {
                 ],
                 kind: ToolKind::Edit,
                 locations: vec!["/x".to_owned()],
+                parent: None,
                 status: ToolStatus::Completed,
                 title: "Edit x".to_owned(),
             }),

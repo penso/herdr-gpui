@@ -33,6 +33,7 @@ fn tool_kind(kind: ToolKind) -> &'static str {
         ToolKind::Search => "Search",
         ToolKind::Execute => "Run",
         ToolKind::Think => "Think",
+        ToolKind::Subagent => "Agent",
         ToolKind::Fetch => "Fetch",
         ToolKind::SwitchMode => "Mode",
         ToolKind::Other => "Tool",

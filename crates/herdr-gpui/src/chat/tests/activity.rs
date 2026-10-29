@@ -24,6 +24,7 @@ fn tools_start_folded_and_toggle_their_complete_output(cx: &mut TestAppContext) 
                     }],
                     kind: ToolKind::Execute,
                     locations: Vec::new(),
+                    parent: None,
                     status: ToolStatus::Completed,
                     title: "Read complete output".into(),
                 }),

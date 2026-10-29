@@ -725,6 +725,7 @@ fn tool_entries() -> Vec<Entry> {
             content,
             kind,
             locations: locations.iter().map(|path| (*path).to_owned()).collect(),
+            parent: None,
             status,
             title: title.into(),
         }),
