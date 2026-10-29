@@ -293,6 +293,8 @@ fn entry_view(entry: &Entry, focus: bool) -> Markup {
             img class={ "rounded-xl max-h-80 " @if *author == Author::User { "self-end" } }
                 src={ "data:" (image.kind.mime()) ";base64," (image.data) } alt="Picture";
         },
+        // A sub-agent's own steps stay inside its call.
+        EntryKind::Tool(tool) if tool.parent.is_some() => html! {},
         EntryKind::Tool(tool) => tool_view(tool),
         EntryKind::Turn(summary) => html! {
             div class="text-[11px] text-faint text-center border-t border-dashed border-line pt-1.5" { (summary.describe()) }

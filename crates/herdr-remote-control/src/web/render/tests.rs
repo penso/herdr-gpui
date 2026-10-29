@@ -20,6 +20,7 @@ mod picker;
 mod preview;
 mod search;
 mod settings;
+mod steps;
 mod terminal_paste;
 mod terminal_view;
 mod turn_patch;

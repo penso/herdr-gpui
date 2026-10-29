@@ -5,6 +5,7 @@ use herdr_chat_protocol::{EntryId, ToolKind};
 use super::*;
 
 mod images;
+mod steps;
 mod tools;
 
 fn plain(lines: &[Line<'_>]) -> Vec<String> {
