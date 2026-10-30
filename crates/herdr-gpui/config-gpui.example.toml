@@ -348,7 +348,8 @@ project_roots = []
 # device. Anyone who can intercept the connection to one can impersonate it.
 # Only for hosts that keep no key, such as `coder config-ssh`'s `*.coder`
 # aliases (`UserKnownHostsFile=/dev/null`). Add Device's "Skip host key
-# verification" box adds the target; adding it again unticked removes it.
+# verification" box adds the target. To verify a host again, delete its
+# target here, or remove the device and add it again with the box clear.
 # [ssh]
 # skip_host_key_verification = ["dev.workspace.user.coder"]
 

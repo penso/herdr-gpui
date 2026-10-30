@@ -483,10 +483,17 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
         Lane::Bulk => "Compression=no",
     };
     let mut args = vec!["-N".to_owned(), "-T".to_owned()];
+    // The user's host key choice comes first, so it wins over the default.
+    args.extend(
+        crate::ssh::HostKeys::of(target)
+            .options()
+            .iter()
+            .map(|&option| option.to_owned()),
+    );
     for option in [
         "BatchMode=yes",
         "NumberOfPasswordPrompts=0",
-        crate::ssh::HostKeys::of(target).checking(),
+        "StrictHostKeyChecking=yes",
         "ConnectTimeout=10",
         "ConnectionAttempts=1",
         "ServerAliveInterval=15",

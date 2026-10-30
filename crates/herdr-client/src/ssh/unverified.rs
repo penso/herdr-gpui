@@ -54,16 +54,6 @@ impl HostKeys {
             ],
         }
     }
-
-    /// The option for a connection built without [`super::POLICY`]: the
-    /// shared and forward masters, which only Unix has.
-    #[cfg(unix)]
-    pub(crate) fn checking(self) -> &'static str {
-        match self {
-            Self::Verify => "StrictHostKeyChecking=yes",
-            Self::Skip => "StrictHostKeyChecking=no",
-        }
-    }
 }
 
 /// Replace the targets whose host keys are not verified. Targets beyond
@@ -74,7 +64,14 @@ where
     I::Item: Into<String>,
 {
     let targets = bounded(targets);
-    *HOSTS.write().unwrap_or_else(PoisonError::into_inner) = targets;
+    let previous = std::mem::replace(
+        &mut *HOSTS.write().unwrap_or_else(PoisonError::into_inner),
+        targets.clone(),
+    );
+    // Retired after the list's lock is released; the registry takes its own.
+    for target in previous.symmetric_difference(&targets) {
+        super::mux::host_keys_changed(target);
+    }
 }
 
 fn bounded<I>(targets: I) -> BTreeSet<String>
@@ -91,15 +88,16 @@ where
 
 /// Record the user's choice for one target, effective for the next `ssh`.
 pub fn set_host_keys(target: &str, keys: HostKeys) {
-    let mut hosts = HOSTS.write().unwrap_or_else(PoisonError::into_inner);
-    match keys {
-        HostKeys::Skip if hosts.len() < MAX_UNVERIFIED_HOSTS => {
-            hosts.insert(target.to_owned());
+    let changed = {
+        let mut hosts = HOSTS.write().unwrap_or_else(PoisonError::into_inner);
+        match keys {
+            HostKeys::Skip if hosts.len() < MAX_UNVERIFIED_HOSTS => hosts.insert(target.to_owned()),
+            HostKeys::Skip => false,
+            HostKeys::Verify => hosts.remove(target),
         }
-        HostKeys::Skip => {}
-        HostKeys::Verify => {
-            hosts.remove(target);
-        }
+    };
+    if changed {
+        super::mux::host_keys_changed(target);
     }
 }
 
