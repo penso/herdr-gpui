@@ -13,6 +13,7 @@ mod close_window;
 mod detach;
 mod padding;
 mod report_issue;
+mod en_xa;
 mod rtl;
 mod sound_volume;
 

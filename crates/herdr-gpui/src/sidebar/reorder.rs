@@ -16,6 +16,7 @@ use crate::{
     HerdrWindow,
     reorder::{LIFT_DELAY, LIFT_DISTANCE, SETTLE_TIMEOUT, SLIDE, Slide, slot_for},
 };
+use crate::i18n::fl;
 use gpui::{Context, Pixels, Point, Task};
 use herdr_client::{
     protocol::ClientShellWorkspace,
@@ -389,7 +390,12 @@ impl HerdrWindow {
                 });
                 self.workspace_drag = Some(drag);
             }
-            Err(error) => self.local_error = Some(format!("Workspace move not sent: {error}")),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "sidebar-workspace-move-not-sent",
+                    error = error.to_string()
+                ));
+            }
         }
         true
     }
