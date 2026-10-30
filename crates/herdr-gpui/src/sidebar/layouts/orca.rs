@@ -15,6 +15,7 @@ use super::{
     parts::{self, Line, glyph_at, wash},
 };
 use crate::config::Theme;
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
@@ -42,15 +43,15 @@ fn card(
         .debug_selector(|| format!("row-{key}"))
         .relative()
         .flex_none()
-        .ml(px(MARGIN + indent))
-        .mr(px(MARGIN))
+        .ms(px(MARGIN + indent))
+        .me(px(MARGIN))
         .rounded(px(radius))
         .border_1()
         .border_color(rgba(0))
         .when(state.selected, |card| {
             card.border_color(wash(theme.foreground, 0x2e))
         })
-        .flex()
+        .row()
         .gap(px(GAP))
         .px(px(GAP))
         .cursor_pointer();

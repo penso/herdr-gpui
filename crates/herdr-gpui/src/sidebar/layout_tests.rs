@@ -83,6 +83,8 @@ mod repository_icons;
 #[cfg(test)]
 mod row_drag;
 #[cfg(test)]
+mod rtl_layouts;
+#[cfg(test)]
 mod search;
 #[cfg(test)]
 mod selection_scroll;

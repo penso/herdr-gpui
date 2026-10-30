@@ -15,6 +15,7 @@ use super::super::{
     tokens::ResolvedToken,
 };
 use crate::config::{FontConfig, Theme};
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 use std::borrow::Cow;
@@ -237,7 +238,7 @@ impl<'a> Line<'a> {
         let line = div()
             .w(px(self.width))
             .flex_none()
-            .flex()
+            .row()
             .items_center()
             .gap(px(self.gap))
             .overflow_hidden();
@@ -400,7 +401,7 @@ pub(super) fn counts(key: &str, counts: &Counts, glyph: f32, colors: (u32, u32))
 pub(super) fn pr_number(key: &str, pr: &PrBadge, size: f32, glyph: f32) -> (f32, Div) {
     let element = div()
         .debug_selector(|| format!("pr-{key}"))
-        .flex()
+        .row()
         .items_center()
         .gap(px(3.))
         .text_color(rgb(pr.color))

@@ -14,6 +14,7 @@ use super::{
     parts::{self, Line},
 };
 use crate::config::Theme;
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 pub(in super::super) struct Minimal;
@@ -45,8 +46,8 @@ fn shell(
         .h(px(look.row_height(
             line_height(cx.font) * lines.unwrap_or(1) as f32,
         )))
-        .pl(px(look.content_x() + indent))
-        .flex()
+        .ps(px(look.content_x() + indent))
+        .row()
         .items_center()
         .cursor_pointer()
         .map(|row| look.mark(row, key, (state, cx.mark), cx.theme))

@@ -18,6 +18,7 @@ use super::{
     parts::{self, Line, glyph_at, wash},
 };
 use crate::config::{StatusIcons, Theme};
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
@@ -77,10 +78,10 @@ fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContex
         .relative()
         .w_full()
         .flex_none()
-        .flex()
+        .row()
         .items_center()
         .py(px(gap))
-        .pl(px(cx.look.content_x() + indent))
+        .ps(px(cx.look.content_x() + indent))
         .cursor_pointer();
     let row = cx.mark.apply(row, key, &cx.look);
     parts::mark(
@@ -96,11 +97,11 @@ fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContex
             div()
                 .debug_selector(|| format!("highlight-{key}"))
                 .absolute()
-                .left_0()
+                .inset_s(px(0.))
                 .top_0()
                 .bottom_0()
                 .w(px(STRIPE))
-                .rounded_r(px(STRIPE))
+                .rounded_e(px(STRIPE))
                 .bg(rgb(theme.foreground)),
         )
     })
@@ -133,7 +134,7 @@ fn slot(
                 .debug_selector(|| format!("dot-{key}"))
                 .absolute()
                 .top_0()
-                .right_0()
+                .inset_e(px(0.))
                 .size(px(diameter + 2.))
                 .flex()
                 .items_center()
@@ -156,7 +157,7 @@ fn slot(
                 .debug_selector(|| format!("dot-{key}"))
                 .absolute()
                 .top_0()
-                .right_0()
+                .inset_e(px(0.))
                 .size(px(diameter))
                 .rounded_full()
                 .bg(rgb(theme.sidebar_background()))
@@ -172,7 +173,7 @@ fn slot(
             .debug_selector(|| format!("dot-{key}"))
             .absolute()
             .top_0()
-            .right_0()
+            .inset_e(px(0.))
             .size(px(diameter))
             .rounded_full()
             .border_1()

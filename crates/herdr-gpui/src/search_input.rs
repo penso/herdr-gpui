@@ -576,6 +576,18 @@ impl EntityInputHandler for SearchInput {
     ) -> Option<Bounds<Pixels>> {
         let line = self.layout.as_ref()?;
         let bounds = self.bounds?;
+        // An empty field's layout is the placeholder's, which can read the
+        // other way: the input method's box is the caret where text starts.
+        if self.text().is_empty() {
+            let x = match crate::direction::is_rtl() {
+                false => bounds.left(),
+                true => (bounds.right() - px(1.)).max(bounds.left()),
+            };
+            return Some(Bounds::from_corners(
+                point(x, bounds.top()),
+                point(x, bounds.bottom()),
+            ));
+        }
         let range = byte_range(self.text(), range);
         let extent = line.extent(self.shown(range.start)..self.shown(range.end));
         let x = |x| {
@@ -800,8 +812,10 @@ impl Render for SearchInput {
                                 input.scroll = px(0.);
                             }
                             // Right to left, a line that fits sets against
-                            // the field's right, its start.
-                            if rtl && line.width < visible_width {
+                            // the field's right, its start, and so does a
+                            // placeholder however long, so the caret after
+                            // it stays at that edge.
+                            if rtl && (input.text().is_empty() || line.width < visible_width) {
                                 input.scroll = line.width - visible_width;
                             }
                             let origin = point(bounds.left() - input.scroll, bounds.top());
@@ -855,6 +869,7 @@ mod tests {
     mod completion;
     mod composition;
     mod placeholder;
+    mod rtl_caret;
     mod word_keys;
 
     #[test]
