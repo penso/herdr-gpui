@@ -32,7 +32,17 @@ fn a_code_tab_shows_only_translated_text_under_en_xa() {
             data.extend(text.outline.iter().map(|entry| entry.name.clone()));
         });
         data.push("lib.rs".into());
-        data.push(path.display().to_string());
-        assert_translated("code tab", &recorder.take(), &data);
+        // The header truncates the path to its width, so it may show only
+        // a piece of it, such as the drive letter of a Windows temp path.
+        let shown_path = path.display().to_string();
+        let shown: Vec<String> = recorder
+            .take()
+            .into_iter()
+            .filter(|line| {
+                let piece = line.trim().trim_end_matches('\u{2026}');
+                piece.is_empty() || !shown_path.contains(piece)
+            })
+            .collect();
+        assert_translated("code tab", &shown, &data);
     });
 }

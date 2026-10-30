@@ -1,16 +1,32 @@
 //! The `en-XA` leak test (`crate::i18n::leak_tests`) for App Updates in
-//! each state: versions and the release notes, which come from GitHub, are
-//! data.
+//! each state: versions, the release notes, which come from GitHub, and the
+//! lines a package manager prints are data.
 #![allow(clippy::unwrap_used)]
 
 use crate::i18n::leak_tests::{assert_translated, draw, under_en_xa};
-use crate::updater::{PREVIEW_NOTES, State};
+use crate::updater::{PREVIEW_NOTES, Progress, State};
 use crate::{APP_VERSION, release_notes};
 use gpui::{px, size};
 
+/// A line Homebrew or a system package printed.
+const OUTPUT: &str = "==> Downloading herdr-gpui";
+
 fn states() -> Vec<State> {
     let version = || "9999.0.0".to_owned();
-    vec![
+    let upgrading = [
+        Progress::Approve,
+        Progress::Asking,
+        Progress::Checking,
+        Progress::Homebrew(OUTPUT.into()),
+        Progress::Package(OUTPUT.into()),
+        Progress::Preparing,
+        Progress::Refreshing,
+        Progress::Retrying,
+        Progress::Starting,
+    ]
+    .into_iter()
+    .map(|detail| State::Upgrading { detail });
+    let mut states = vec![
         State::Disabled("Local builds never check.".into()),
         State::Idle,
         State::Checking,
@@ -36,7 +52,9 @@ fn states() -> Vec<State> {
         State::Restart { version: version() },
         State::Restarting,
         State::Cancelling,
-    ]
+    ];
+    states.extend(upgrading);
+    states
 }
 
 #[test]
@@ -46,7 +64,11 @@ fn every_update_state_shows_only_translated_text_under_en_xa() {
             .into_iter()
             .map(|line| line.text)
             .collect();
-        data.extend([APP_VERSION.to_owned(), "9999.0.0".to_owned()]);
+        data.extend([
+            APP_VERSION.to_owned(),
+            "9999.0.0".to_owned(),
+            OUTPUT.to_owned(),
+        ]);
         for state in states() {
             let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
             cx.simulate_resize(size(px(1200.), px(1600.)));

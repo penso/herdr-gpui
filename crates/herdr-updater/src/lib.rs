@@ -8,9 +8,11 @@
 
 mod channel;
 mod error;
+mod progress;
 pub use channel::UpdateChannel;
 pub use error::{Error, Result};
 pub use error::{quota_exhausted, rate_limit_reset, retry_hint};
+pub use progress::Progress;
 #[cfg(unix)]
 mod brew;
 #[cfg(unix)]
@@ -90,7 +92,7 @@ pub enum State {
         notes: String,
     },
     Upgrading {
-        detail: String,
+        detail: Progress,
     },
     Restart {
         version: String,
@@ -387,7 +389,7 @@ impl Updater {
             self.send(
                 Operation::Install,
                 State::Upgrading {
-                    detail: "Preparing installation...".into(),
+                    detail: Progress::Preparing,
                 },
             );
         }
@@ -398,7 +400,7 @@ impl Updater {
             self.send(
                 Operation::Upgrade,
                 State::Upgrading {
-                    detail: "Starting Homebrew...".into(),
+                    detail: Progress::Starting,
                 },
             );
         }
@@ -685,14 +687,7 @@ fn worker(
                     &offer.manifest.version,
                     &cancelled,
                     |detail| {
-                        publish(
-                            &mailbox,
-                            generation,
-                            State::Upgrading {
-                                detail: format!("Homebrew: {detail}"),
-                            },
-                            None,
-                        );
+                        publish(&mailbox, generation, State::Upgrading { detail }, None);
                     },
                 )
                 .map(|version| {

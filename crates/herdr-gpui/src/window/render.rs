@@ -862,7 +862,7 @@ impl Render for HerdrWindow {
                 |this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
                     this.open_update_progress_preview(
                         crate::updater::State::Upgrading {
-                            detail: "Refreshing Homebrew metadata with brew update...".into(),
+                            detail: crate::updater::Progress::Refreshing,
                         },
                         window,
                         cx,

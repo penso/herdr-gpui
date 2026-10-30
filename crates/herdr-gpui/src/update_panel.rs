@@ -160,6 +160,23 @@ fn update_progress(state: &State, accent: Hsla, track: Hsla) -> Option<Div> {
     ))
 }
 
+/// What an upgrade is doing: the updater's own steps are messages, and a
+/// line the package manager printed is data.
+fn step(progress: &crate::updater::Progress) -> String {
+    use crate::updater::Progress;
+    match progress {
+        Progress::Approve => fl!("update-panel-step-approve"),
+        Progress::Asking => fl!("update-panel-step-asking"),
+        Progress::Checking => fl!("update-panel-step-checking"),
+        Progress::Homebrew(line) => fl!("update-panel-step-homebrew", line = line.as_str()),
+        Progress::Package(line) => line.clone(),
+        Progress::Preparing => fl!("update-panel-step-preparing"),
+        Progress::Refreshing => fl!("update-panel-step-refreshing"),
+        Progress::Retrying => fl!("update-panel-step-retrying"),
+        Progress::Starting => fl!("update-panel-step-starting"),
+    }
+}
+
 /// Decimal megabytes with one place, as browsers and Finder show downloads.
 fn megabytes(bytes: u64) -> String {
     let amount = format!("{:.1}", bytes as f64 / 1_000_000.);
@@ -278,7 +295,7 @@ impl HerdrWindow {
             State::Installing => (fl!("update-panel-installing"), Some(UpdateAction::Cancel)),
             State::Homebrew { .. } => (fl!("update-panel-homebrew"), Some(UpdateAction::Upgrade)),
             State::Upgrading { detail } => (
-                detail.clone(),
+                step(detail),
                 // Homebrew is never interrupted mid-upgrade: see updater::cancel.
                 None,
             ),
