@@ -1,6 +1,7 @@
 //! The `en-XA` leak test for plan usage: the status bar's segments, the
-//! panel a segment opens (with a report, waiting on the Keychain, and
-//! asking to be set up), and the activity bar's Usage section.
+//! panel a segment opens (with a report and claude-swap's other accounts,
+//! OpenAI's daily spend, waiting on the Keychain, and asking to be set up),
+//! and the activity bar's Usage section.
 use super::*;
 use crate::{
     config::status_bar::Detail,
@@ -12,7 +13,10 @@ use crate::{
     usage::{Access, Host, Usage},
 };
 use gpui::{VisualTestContext, point, px, size};
-use herdr_usage::model::{Balance, Unit};
+use herdr_usage::{
+    details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily},
+    model::{Balance, Unit},
+};
 use std::time::{Duration, SystemTime};
 
 /// Draws the whole window again: a view's own notify does not redraw a
@@ -20,6 +24,18 @@ use std::time::{Duration, SystemTime};
 fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     cx.run_until_parked();
+}
+
+/// What a step newly drew, without the cuts of lines drawn whole in this
+/// step or an earlier one: GPUI shapes a line once and reuses it, so the
+/// whole of a cut it measures again may be in `seen` alone.
+fn fresh(seen: &mut Vec<String>, drawn: Vec<String>) -> Vec<String> {
+    let kept = uncut(seen.iter().chain(&drawn).cloned().collect());
+    seen.extend(drawn.iter().cloned());
+    drawn
+        .into_iter()
+        .filter(|line| kept.contains(line))
+        .collect()
 }
 
 const HOUR: Duration = Duration::from_secs(3600);
@@ -60,12 +76,40 @@ fn configurable() -> Provider {
         .unwrap()
 }
 
+/// claude-swap's other accounts: one in rotation, one held out with an
+/// expired token, and one held out and fine.
+fn others() -> Vec<ClaudeAccount> {
+    let account = |email: &str, disabled, status| ClaudeAccount {
+        email: email.into(),
+        alias: None,
+        disabled,
+        status,
+        stale: false,
+        windows: vec![Window::new(Kind::Weekly, 30., None, None)],
+    };
+    vec![
+        account("one@example.com", false, ClaudeAccountStatus::Ok),
+        account("two@example.com", true, ClaudeAccountStatus::TokenExpired),
+        account("three@example.com", true, ClaudeAccountStatus::Ok),
+    ]
+}
+
 fn readings() -> Vec<Reading> {
     let claude = provider("claude");
+    let openai = provider("openai");
+    let daily = OpenaiDaily {
+        days: vec![("Oct 28".into(), 1.5), ("Oct 29".into(), 3.25)],
+    };
     vec![
         Reading {
             provider: claude,
-            report: Some(full(claude)),
+            report: Some(full(claude).with_detail(others())),
+            error: None,
+            access: None,
+        },
+        Reading {
+            provider: openai,
+            report: Some(full(openai).with_detail(daily)),
             error: None,
             access: None,
         },
@@ -100,6 +144,11 @@ fn data(readings: &[Reading], host: &str) -> Vec<String> {
         "Pro".into(),
         "Opus".into(),
         "Credits".into(),
+        "one@example.com".into(),
+        "two@example.com".into(),
+        "three@example.com".into(),
+        "Oct 28".into(),
+        "Oct 29".into(),
     ];
     for reading in readings {
         let meta = reading.provider.service().meta();
@@ -137,7 +186,7 @@ fn usage_shows_only_messages_and_what_services_report() {
         let data = data(&readings, &host);
         // The window around usage is other modules' text.
         draw(cx);
-        recorder.take();
+        let mut seen = recorder.take();
 
         cx.update(|_, cx| {
             view.update(cx, |view, cx| {
@@ -146,7 +195,11 @@ fn usage_shows_only_messages_and_what_services_report() {
             })
         });
         draw(cx);
-        assert_translated("status bar usage", &uncut(recorder.take()), &data);
+        assert_translated(
+            "status bar usage",
+            &fresh(&mut seen, recorder.take()),
+            &data,
+        );
 
         for reading in &readings {
             let provider = reading.provider;
@@ -158,7 +211,7 @@ fn usage_shows_only_messages_and_what_services_report() {
             draw(cx);
             assert_translated(
                 &format!("usage panel for {}", provider.id()),
-                &uncut(recorder.take()),
+                &fresh(&mut seen, recorder.take()),
                 &data,
             );
         }
@@ -170,6 +223,6 @@ fn usage_shows_only_messages_and_what_services_report() {
             })
         });
         draw(cx);
-        assert_translated("Usage section", &uncut(recorder.take()), &data);
+        assert_translated("Usage section", &fresh(&mut seen, recorder.take()), &data);
     });
 }

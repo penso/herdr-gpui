@@ -63,3 +63,37 @@ fn balances_read_their_total() {
     let budget = dollars.out_of(50.);
     assert_eq!(plain(text::balance(&budget)), budget.text());
 }
+
+#[test]
+fn other_accounts_read_as_claude_swap_notes_them() {
+    use herdr_usage::details::{ClaudeAccount, ClaudeAccountStatus as Status};
+    for status in [
+        Status::Ok,
+        Status::TokenExpired,
+        Status::ApiKey,
+        Status::KeychainUnavailable,
+        Status::ReloginRequired,
+        Status::ForeignCredential,
+        Status::NoCredentials,
+        Status::Unavailable,
+        Status::Unknown,
+    ] {
+        for (stale, disabled) in [(false, false), (true, false), (false, true), (true, true)] {
+            let account = ClaudeAccount {
+                email: "one@example.com".into(),
+                alias: None,
+                disabled,
+                status,
+                stale,
+                windows: Vec::new(),
+            };
+            let english = account
+                .note()
+                .into_iter()
+                .chain(disabled.then_some("disabled"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            assert_eq!(plain(super::super::details::note(&account)), english);
+        }
+    }
+}

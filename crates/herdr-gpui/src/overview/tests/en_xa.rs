@@ -1,6 +1,6 @@
 //! The `en-XA` leak test for the Overview: the empty page, the list with
-//! its stats, actions, and snooze menu, the folded shelves opened, and the
-//! host column.
+//! its stats, actions, and snooze menu, the Snoozed, Settled, and Closed
+//! shelves opened, and the host column.
 use super::page::{draw, row, window};
 use crate::{
     i18n::leak_tests::{assert_translated, uncut, under_en_xa},
@@ -98,5 +98,17 @@ fn the_overview_shows_only_messages_and_its_agents() {
             &uncut(recorder.take()),
             &data,
         );
+
+        // A closed agent waits under Closed, with Reopen and Forget.
+        super::closed_page::close_working(&view, cx);
+        cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.overview.menu = None;
+                view.overview.closed_open = true;
+                cx.notify();
+            })
+        });
+        draw(cx);
+        assert_translated("Overview Closed shelf", &uncut(recorder.take()), &data);
     });
 }
