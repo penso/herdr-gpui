@@ -15,9 +15,11 @@ mod credentials;
 mod github;
 mod orchestrator;
 mod protocol;
+mod remote_control;
 mod root;
 #[cfg(test)]
 pub(crate) mod tests;
+mod updater;
 mod usage;
 mod vcs;
 
@@ -112,8 +114,5 @@ english! {
     herdr_remote::opensandbox::Error,
     #[cfg(feature = "sprites")]
     herdr_remote::sprites::Error,
-    herdr_remote_control::app::Error,
-    herdr_remote_control::control::Error,
-    herdr_updater::Error,
     // keep-sorted end
 }
