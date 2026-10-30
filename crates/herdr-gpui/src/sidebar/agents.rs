@@ -536,7 +536,7 @@ fn drawn_mark(icons: StatusIcons, status: AgentStatus, size: f32, color: u32) ->
 }
 
 /// The daemon's name for a status, which keys an integration's
-/// `state_labels`.
+/// `state_labels` and what sidebar rules on `state_text` match.
 pub(crate) fn status_key(status: AgentStatus) -> &'static str {
     match status {
         AgentStatus::Working => "working", // i18n: data
@@ -548,8 +548,8 @@ pub(crate) fn status_key(status: AgentStatus) -> &'static str {
 }
 
 /// The word the daemon's `state_text` token shows for a status when its
-/// sidebar config asks for it. In English, lowercase, matching the daemon's
-/// status names and what the terminal client prints.
+/// sidebar config asks for it, in the app's language. Rules match
+/// [`status_key`] instead, so they hold in every language.
 pub(crate) fn status_text(status: AgentStatus) -> String {
     match status {
         AgentStatus::Working => fl!("sidebar-status-working"),

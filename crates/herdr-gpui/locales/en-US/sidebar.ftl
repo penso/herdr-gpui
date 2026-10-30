@@ -57,14 +57,28 @@ sidebar-rail-host = { $host }: { $text }
 sidebar-rail-collapsed = { $host } (collapsed)
 
 # The tooltip on the mark before a device's name: where it runs and how it
-# is reached. $provider is a cloud provider's name and $noun what it calls
-# its machines ("workspace", "sandbox").
+# is reached. $provider is a cloud provider's name. $noun is a key naming
+# what the provider calls its machines; translate each variant, not the keys.
 sidebar-origin-local = This machine
 sidebar-origin-ssh = SSH host
 sidebar-origin-tailscale = Tailscale host over SSH
 sidebar-origin-wsl = WSL distribution
-sidebar-origin-cloud = { $provider } { $noun }
-sidebar-origin-cloud-ssh = { $provider } { $noun } over SSH
+sidebar-origin-cloud = { $provider } { $noun ->
+        [VM] VM
+        [container] container
+        [sandbox] sandbox
+        [sprite] sprite
+        [workspace] workspace
+       *[machine] machine
+    }
+sidebar-origin-cloud-ssh = { $provider } { $noun ->
+        [VM] VM
+        [container] container
+        [sandbox] sandbox
+        [sprite] sprite
+        [workspace] workspace
+       *[machine] machine
+    } over SSH
 
 # $error is why the daemon refused to reorder the workspaces.
 sidebar-workspace-move-not-sent = Workspace move not sent: { $error }

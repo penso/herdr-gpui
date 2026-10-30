@@ -9,26 +9,61 @@ use crate::i18n::leak_tests::{Recorder, assert_translated, draw, under_en_xa};
 use crate::sidebar::layout_tests::{SidebarFixture, full_draw};
 use crate::state::ConnectionStatus;
 use gpui::{AppContext as _, Entity, VisualTestContext, px, size};
+use herdr_client::protocol::ClientShellSnapshot;
 
-/// Every string the snapshot holds: workspace, branch, tab, and agent names.
-fn snapshot_text(value: &serde_json::Value, text: &mut Vec<String>) {
-    match value {
-        serde_json::Value::String(string) => text.push(string.clone()),
-        serde_json::Value::Array(values) => values.iter().for_each(|v| snapshot_text(v, text)),
-        serde_json::Value::Object(map) => map.values().for_each(|v| snapshot_text(v, text)),
-        _ => {}
+/// What the search surface types into the sidebar's field.
+const QUERY: &str = "sidebar";
+
+/// The names the snapshot gives the window to show: workspaces, their
+/// branches and repositories, tabs, panes, and agents. A linked worktree's
+/// row names it by its branch's last segment.
+fn snapshot_names(snapshot: &ClientShellSnapshot) -> Vec<String> {
+    let mut names = Vec::new();
+    for workspace in &snapshot.workspaces {
+        names.push(workspace.label.clone());
+        names.extend(
+            workspace
+                .worktree
+                .iter()
+                .map(|worktree| worktree.label.clone()),
+        );
+        if let Some(branch) = &workspace.branch {
+            names.push(branch.clone());
+            names.extend(branch.rsplit('/').next().map(str::to_owned));
+        }
     }
+    for tab in &snapshot.tabs {
+        names.push(herdr_client::text::tab_label(snapshot, tab).to_owned());
+    }
+    names.extend(snapshot.panes.iter().filter_map(|pane| pane.label.clone()));
+    for agent in &snapshot.agents {
+        names.extend(
+            [
+                &agent.name,
+                &agent.display_agent,
+                &agent.agent,
+                &agent.title,
+            ]
+            .into_iter()
+            .flatten()
+            .cloned(),
+        );
+    }
+    names
 }
 
 /// The lines in `shown` that are data rather than messages: the snapshot's
-/// names, whole or cut short with an ellipsis, the app's version, the build's
+/// names, whole, cut short with an ellipsis, or measured a character at a
+/// time, the search query, the app's version, the build's
 /// branch on the worktree banner, each endpoint's label, and what is drawn
 /// only to be measured.
 fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
-    let mut names = Vec::new();
-    if let Some(snapshot) = view.live.snapshot.as_deref() {
-        snapshot_text(&serde_json::to_value(snapshot).unwrap(), &mut names);
-    }
+    let mut names = view
+        .live
+        .snapshot
+        .as_deref()
+        .map(snapshot_names)
+        .unwrap_or_default();
     names.extend(view.endpoints.iter().map(|endpoint| endpoint.label.clone()));
     names.push(herdr_updater::APP_VERSION.to_owned());
     names.push(env!("HERDR_BUILD_BRANCH").to_owned());
@@ -40,8 +75,14 @@ fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
         .iter()
         .map(|line| line.trim())
         .filter(|line| {
-            let cut = line.trim_end_matches('…');
-            names.iter().any(|name| name.contains(cut))
+            // The search field echoes the query as it is typed.
+            QUERY.starts_with(line)
+                || names.iter().any(|name| match line.strip_suffix('…') {
+                    Some(cut) => name.starts_with(cut),
+                    // Truncation measures a name one character at a time.
+                    None if line.chars().count() == 1 => name.contains(line),
+                    None => name == line,
+                })
         })
         .map(str::to_owned)
         .collect()
@@ -93,7 +134,7 @@ fn the_main_window_draws_only_messages() {
             full_draw(window, cx).clear(cx);
         });
         recorder.take();
-        cx.simulate_input("sidebar");
+        cx.simulate_input(QUERY);
         cx.run_until_parked();
         check("Search results", &view, cx, recorder);
 

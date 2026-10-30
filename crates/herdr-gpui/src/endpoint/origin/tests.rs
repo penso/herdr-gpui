@@ -148,3 +148,22 @@ fn host_names_drop_user_port_scheme_and_brackets() {
     assert_eq!(host_name("[::1]:22"), "::1");
     assert_eq!(host_name("fe80::1"), "fe80::1");
 }
+
+/// Each provider's noun is a key the catalog selects a translated word by,
+/// so every key needs its own variant rather than the fallback's `machine`.
+#[cfg(feature = "cloud")]
+#[test]
+fn every_cloud_noun_has_its_own_translation() {
+    for &provider in crate::cloud::CloudProvider::ALL {
+        let noun = crate::cloud::noun(provider);
+        let text = Origin::Cloud {
+            provider,
+            ssh: false,
+        }
+        .describe();
+        assert!(
+            text.ends_with(&format!(" \u{2068}{noun}\u{2069}")),
+            "{provider:?}: {text}"
+        );
+    }
+}

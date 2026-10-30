@@ -68,7 +68,8 @@ impl Origin {
         }
     }
 
-    /// What the mark stands for, as its tooltip says it.
+    /// What the mark stands for, as its tooltip says it. A cloud provider's
+    /// noun is a key the message selects its translated word by.
     pub(crate) fn describe(self) -> String {
         match self {
             Self::Local => fl!("sidebar-origin-local"),
