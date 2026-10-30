@@ -14,11 +14,16 @@ fn a_target_is_verified_unless_the_user_skipped_it() {
 #[test]
 fn skipping_overrides_the_strict_policy_and_reads_no_known_hosts() {
     assert!(HostKeys::Verify.options().is_empty());
-    assert_eq!(HostKeys::Verify.checking(), "StrictHostKeyChecking=yes");
     let options = HostKeys::Skip.options();
     assert!(options.contains(&"StrictHostKeyChecking=no"));
     assert!(options.contains(&"UserKnownHostsFile=/dev/null"));
     assert!(options.contains(&"GlobalKnownHostsFile=/dev/null"));
+}
+
+#[cfg(unix)]
+#[test]
+fn masters_check_keys_as_the_target_was_chosen() {
+    assert_eq!(HostKeys::Verify.checking(), "StrictHostKeyChecking=yes");
     assert_eq!(HostKeys::Skip.checking(), "StrictHostKeyChecking=no");
 }
 

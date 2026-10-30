@@ -55,7 +55,9 @@ impl HostKeys {
         }
     }
 
-    /// The option for a connection built without [`super::POLICY`].
+    /// The option for a connection built without [`super::POLICY`]: the
+    /// shared and forward masters, which only Unix has.
+    #[cfg(unix)]
     pub(crate) fn checking(self) -> &'static str {
         match self {
             Self::Verify => "StrictHostKeyChecking=yes",
