@@ -8,8 +8,12 @@ use std::fmt::Display;
 mod client;
 mod control;
 mod credentials;
+mod github;
+mod orchestrator;
 mod protocol;
 mod root;
+mod usage;
+mod vcs;
 
 /// Fluent's isolation marks around each placeable, which `Display` lacks.
 const ISOLATION: [char; 2] = ['\u{2068}', '\u{2069}'];

@@ -12,10 +12,14 @@
 mod client;
 mod control;
 mod credentials;
+mod github;
+mod orchestrator;
 mod protocol;
 mod root;
 #[cfg(test)]
 pub(crate) mod tests;
+mod usage;
+mod vcs;
 
 use std::sync::Arc;
 
@@ -95,8 +99,6 @@ english! {
     crate::window::wsl_drop::Error,
     crate::worktree_identity::Error,
     crate::worktree_scripts::Error,
-    herdr_github::Error,
-    herdr_orchestrator::Error,
     #[cfg(feature = "azure")]
     herdr_remote::azure::Error,
     #[cfg(feature = "boat")]
@@ -113,7 +115,5 @@ english! {
     herdr_remote_control::app::Error,
     herdr_remote_control::control::Error,
     herdr_updater::Error,
-    herdr_usage::Error,
-    herdr_vcs::Error,
     // keep-sorted end
 }
