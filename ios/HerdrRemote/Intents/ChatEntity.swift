@@ -10,10 +10,10 @@ struct ChatEntity: AppEntity, IndexedEntity {
 
     /// `device|pane`, as `WidgetSummary.Chat.id`.
     let id: String
-    let title: String
-    let computer: String
+    private(set) var title: String
+    private(set) var computer: String
     let computerId: String
-    let workspace: String
+    private(set) var workspace: String
     let device: String
     let pane: String
     let needsYou: Bool
@@ -29,6 +29,15 @@ struct ChatEntity: AppEntity, IndexedEntity {
         needsYou = chat.needsYou
     }
 
+    /// `chat` without its title, computer, or workspace, for while the
+    /// app lock hides them: a saved shortcut still finds and opens it.
+    init(hiding chat: WidgetSummary.Chat) {
+        self.init(chat)
+        title = "Chat"
+        computer = ""
+        workspace = ""
+    }
+
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
             title: "\(title)",
@@ -40,20 +49,26 @@ struct ChatEntity: AppEntity, IndexedEntity {
     var route: Route { .chat(PaneKey(device: device, pane: pane), title: title) }
 }
 
+/// While the app lock is on (Settings > Privacy), Siri, Shortcuts, and
+/// Spotlight get no chat names: nothing is suggested or searched, and a
+/// chat named by id comes back without its title.
 struct ChatQuery: EntityStringQuery {
     func entities(for identifiers: [ChatEntity.ID]) async throws -> [ChatEntity] {
         let wanted = Set(identifiers)
-        return WidgetSummary.load().chats.filter { wanted.contains($0.id) }.map(ChatEntity.init)
+        let chats = WidgetSummary.load().chats.filter { wanted.contains($0.id) }
+        return AppLock.isOn ? chats.map { ChatEntity(hiding: $0) } : chats.map { ChatEntity($0) }
     }
 
     func entities(matching string: String) async throws -> [ChatEntity] {
-        WidgetSummary.load().ranked
+        guard !AppLock.isOn else { return [] }
+        return WidgetSummary.load().ranked
             .filter { $0.title.localizedCaseInsensitiveContains(string) || $0.workspace.localizedCaseInsensitiveContains(string) }
-            .map(ChatEntity.init)
+            .map { ChatEntity($0) }
     }
 
     func suggestedEntities() async throws -> [ChatEntity] {
-        WidgetSummary.load().ranked.prefix(12).map(ChatEntity.init)
+        guard !AppLock.isOn else { return [] }
+        return WidgetSummary.load().ranked.prefix(12).map { ChatEntity($0) }
     }
 }
 
@@ -64,10 +79,12 @@ final class SpotlightChats {
     private var indexed: [String: String] = [:]
 
     func update(_ summary: WidgetSummary) {
-        let current = Dictionary(summary.chats.map { ($0.id, "\($0.title)|\($0.computer)|\($0.workspace)") }, uniquingKeysWith: { first, _ in first })
+        // The app lock hides chat names from Spotlight too.
+        let chats = AppLock.isOn ? [] : summary.chats
+        let current = Dictionary(chats.map { ($0.id, "\($0.title)|\($0.computer)|\($0.workspace)") }, uniquingKeysWith: { first, _ in first })
         guard current != indexed else { return }
         let gone = Set(indexed.keys).subtracting(current.keys)
-        let changed = summary.chats.filter { indexed[$0.id] != current[$0.id] }.map(ChatEntity.init)
+        let changed = chats.filter { indexed[$0.id] != current[$0.id] }.map { ChatEntity($0) }
         indexed = current
         Task {
             let index = CSSearchableIndex.default()

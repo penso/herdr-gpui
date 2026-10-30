@@ -23,9 +23,12 @@ struct WhatNeedsMeIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<[ChatEntity]> {
         let summary = WidgetSummary.load()
         let waiting = summary.chats.filter(\.needsYou)
-        // On a locked phone Siri says counts only, never chat titles.
-        guard await UIApplication.shared.isProtectedDataAvailable else {
-            let dialog: IntentDialog = waiting.isEmpty ? "Nothing needs you." : "\(waiting.count) chat\(waiting.count == 1 ? "" : "s") need\(waiting.count == 1 ? "s" : "") you. Unlock to see which."
+        // On a locked phone, or with the app lock on, Siri says counts
+        // only, never chat titles.
+        let hidden = AppLock.isOn
+        guard await UIApplication.shared.isProtectedDataAvailable, !hidden else {
+            let unlock = hidden ? "Open Herdr Remote to see which." : "Unlock to see which."
+            let dialog: IntentDialog = waiting.isEmpty ? "Nothing needs you." : "\(waiting.count) chat\(waiting.count == 1 ? "" : "s") need\(waiting.count == 1 ? "s" : "") you. \(unlock)"
             return .result(value: [], dialog: dialog)
         }
         let dialog: IntentDialog = switch waiting.count {
@@ -33,7 +36,7 @@ struct WhatNeedsMeIntent: AppIntent {
         case 1: "\(waiting[0].title) on \(waiting[0].computer) needs you."
         default: "\(waiting.count) chats need you: \(waiting.prefix(3).map(\.title).joined(separator: ", "))."
         }
-        return .result(value: waiting.map(ChatEntity.init), dialog: dialog)
+        return .result(value: waiting.map { ChatEntity($0) }, dialog: dialog)
     }
 }
 
