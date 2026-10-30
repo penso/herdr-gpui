@@ -49,16 +49,24 @@ impl SearchInput {
                 self.replace_text_in_range(None, "", window, cx);
             }
             "k" => {
-                let end = self.edit.text.len();
-                if self.edit.cursor < end {
+                // A selection is cut as it stands; otherwise the line's rest.
+                let mut cut = self.edit.selection();
+                if cut.is_empty() {
+                    cut = self.edit.cursor..self.edit.text.len();
+                }
+                if !cut.is_empty() {
                     // A masked secret is never kept to put back elsewhere.
                     if !self.masked {
-                        self.killed = self.edit.text[self.edit.cursor..].to_owned();
+                        self.killed = self.edit.text[cut.clone()].to_owned();
                     }
-                    self.edit.select_to(end, true);
+                    self.edit.anchor = cut.start;
+                    self.edit.cursor = cut.end;
                     self.replace_text_in_range(None, "", window, cx);
                 }
             }
+            // With nothing cut yet, a selection stays rather than being
+            // replaced by nothing.
+            "y" if self.killed.is_empty() => {}
             "y" => {
                 let killed = self.killed.clone();
                 self.replace_text_in_range(None, &killed, window, cx);

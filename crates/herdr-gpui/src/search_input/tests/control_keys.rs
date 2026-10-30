@@ -70,3 +70,27 @@ fn a_masked_secret_is_not_kept_to_put_back(cx: &mut gpui::TestAppContext) {
     cx.simulate_keystrokes("ctrl-a ctrl-k ctrl-y");
     assert_eq!(edit(&input, cx), (String::new(), 0..0));
 }
+
+#[gpui::test]
+fn ctrl_k_cuts_a_selection_and_ctrl_y_puts_it_all_back(cx: &mut gpui::TestAppContext) {
+    let (input, cx) = field("abcdef", cx);
+    input.update(cx, |input, _| {
+        input.edit.select_to(1, false);
+        input.edit.select_to(3, true);
+    });
+    cx.simulate_keystrokes("ctrl-k");
+    assert_eq!(edit(&input, cx), ("adef".into(), 1..1));
+    cx.simulate_keystrokes("ctrl-y");
+    assert_eq!(edit(&input, cx), ("abcdef".into(), 3..3));
+}
+
+#[gpui::test]
+fn ctrl_y_before_any_cut_keeps_the_selection(cx: &mut gpui::TestAppContext) {
+    let (input, cx) = field("keep", cx);
+    input.update(cx, |input, _| {
+        input.edit.select_to(0, false);
+        input.edit.select_to(4, true);
+    });
+    cx.simulate_keystrokes("ctrl-y");
+    assert_eq!(edit(&input, cx), ("keep".into(), 0..4));
+}
