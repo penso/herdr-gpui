@@ -111,18 +111,6 @@ impl Step {
             Self::InstallingHerdr => 0.85,
         }
     }
-
-    pub fn text(&self) -> String {
-        match self {
-            Self::Creating => "Creating…".into(),
-            Self::Connecting => "Connecting…".into(),
-            Self::Starting => "Starting…".into(),
-            Self::Building(status) => format!("Building ({status})…"),
-            Self::CheckingHerdr => "Checking for Herdr…".into(),
-            Self::Image(progress) => format!("Building the image: {}", progress.text()),
-            Self::InstallingHerdr => "Installing Herdr…".into(),
-        }
-    }
 }
 
 /// Finish a machine the provider has just made with `finish`, and delete it

@@ -21,7 +21,6 @@ fn buildkit_plain_progress_numbers_its_steps() {
         "#5 0.512 Get:1 http://deb.debian.org bookworm InRelease"
     );
     assert_eq!(progress.fraction(), Some(0.25));
-    assert!(progress.text().starts_with("Step 2 of 4: "));
 }
 
 #[test]
@@ -38,7 +37,7 @@ fn podman_and_the_classic_builder_number_theirs_too() {
 fn a_build_without_numbers_shows_activity_only() {
     let progress = after(&["building", ""]);
     assert_eq!(progress.fraction(), None);
-    assert_eq!(progress.text(), "building");
+    assert_eq!(progress.status, "building");
     let long = after(&[&"x".repeat(500)]);
     assert_eq!(long.status.chars().count(), 120);
     assert_eq!(

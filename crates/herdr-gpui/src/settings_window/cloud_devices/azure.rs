@@ -96,7 +96,7 @@ enum Account {
         /// What sizes cost in the saved regions; `None` when unreadable.
         catalog: Option<Box<crate::azure::sizes::Catalog>>,
         /// Each saved device's size, by device ID.
-        sizes: HashMap<String, String>,
+        sizes: HashMap<String, crate::azure::sizes::DeviceSize>,
     },
 }
 
@@ -227,9 +227,9 @@ impl AzureCard {
         }
     }
 
-    fn device_size(&self, id: &str) -> Option<&str> {
+    fn device_size(&self, id: &str) -> Option<String> {
         match &self.account {
-            Account::Known { sizes, .. } => sizes.get(id).map(String::as_str),
+            Account::Known { sizes, .. } => sizes.get(id).map(sizes::device_size),
             Account::Checking | Account::Unconfigured { .. } => None,
         }
     }
@@ -692,7 +692,7 @@ impl SettingsWindow {
                 Some(size) => fl!(
                     "settings-cloud-azure-device-size",
                     kind = kind,
-                    size = size.to_owned(),
+                    size = size,
                     group = group
                 ),
                 None => fl!("settings-cloud-azure-device", kind = kind, group = group),

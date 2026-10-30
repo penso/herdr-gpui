@@ -5,7 +5,7 @@
 use super::Page;
 use crate::{
     HerdrWindow,
-    checkpoint::{Checkout, Listing, age, host_for},
+    checkpoint::{Checkout, Listing, host_for},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -124,7 +124,7 @@ impl HerdrWindow {
                     line(format!(
                         "Restore \u{201c}{}\u{201d} from {}?",
                         checkpoint.label,
-                        age(checkpoint.created, now)
+                        crate::ago::text(crate::ago::since(checkpoint.created, now))
                     ))
                     .font_weight(FontWeight::SEMIBOLD),
                 )
