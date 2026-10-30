@@ -11,12 +11,13 @@ use super::{
     page::{Found, Loaded, Opened, Page},
     section::{ago, severity_color},
 };
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     config::{corners, mix},
     orchestrator::Look,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
 
@@ -55,8 +56,8 @@ impl<'a, T> Read<'a, T> {
     /// What stands in for the text not read.
     pub(super) fn waiting(self, look: &Look) -> Div {
         look.muted(match self {
-            Self::Failed => "Not read from GitHub.",
-            Self::Reading | Self::Done(_) => "Reading from GitHub…",
+            Self::Failed => fl!("security-not-read"),
+            Self::Reading | Self::Done(_) => fl!("security-reading"),
         })
     }
 }
@@ -147,13 +148,13 @@ impl HerdrWindow {
         let (lead, list, last, url) = match found {
             Found::Alert(repo, alert) => (
                 "icons/shield.svg",
-                "Dependabot",
+                fl!("security-dependabot"),
                 format!("#{}", alert.number),
                 Some(repo.alert_url(alert)),
             ),
             Found::Report(repo, report) => (
                 "icons/lock.svg",
-                "Private reports",
+                fl!("security-private-reports"),
                 report.advisory.clone(),
                 repo.report_url(report),
             ),
@@ -171,9 +172,9 @@ impl HerdrWindow {
                     "security-page-list",
                     "icons/panel-left.svg",
                     if self.security.list_hidden() {
-                        "Show the list"
+                        fl!("security-show-list")
                     } else {
-                        "Hide the list"
+                        fl!("security-hide-list")
                     },
                 )
                 .debug_selector(|| "security-page-list".into())
@@ -198,27 +199,47 @@ impl HerdrWindow {
             .gap_1()
             .text_size(look.small())
             .text_color(rgb(theme.muted))
-            .children(at.map(|at| div().pr_1().child(format!("{} of {}", at + 1, items.len()))))
+            .children(at.map(|at| {
+                div()
+                    .pr_1()
+                    .child(fl!("security-position", at = at + 1, count = items.len()))
+            }))
             .child(
-                look.icon_button("security-page-previous", "icons/chevron-up.svg", "Previous")
-                    .on_click(cx.listener(|this, _, _, cx| this.step_security_item(-1, cx))),
+                look.icon_button(
+                    "security-page-previous",
+                    "icons/chevron-up.svg",
+                    fl!("security-previous"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.step_security_item(-1, cx))),
             )
             .child(
-                look.icon_button("security-page-next", "icons/chevron-down.svg", "Next")
-                    .on_click(cx.listener(|this, _, _, cx| this.step_security_item(1, cx))),
+                look.icon_button(
+                    "security-page-next",
+                    "icons/chevron-down.svg",
+                    fl!("security-next"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.step_security_item(1, cx))),
             )
             .when_some(url, |el, url| {
                 el.child(
-                    look.icon_button("security-page-web", "icons/external.svg", "Open on GitHub")
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_security_page(&url, window, cx);
-                        })),
+                    look.icon_button(
+                        "security-page-web",
+                        "icons/external.svg",
+                        fl!("security-open-on-github"),
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_security_page(&url, window, cx);
+                    })),
                 )
             })
             .child(
-                look.icon_button("security-page-close", "icons/close.svg", "Close")
-                    .debug_selector(|| "security-page-close".into())
-                    .on_click(cx.listener(|this, _, _, cx| this.close_security_item(cx))),
+                look.icon_button(
+                    "security-page-close",
+                    "icons/close.svg",
+                    fl!("security-close"),
+                )
+                .debug_selector(|| "security-page-close".into())
+                .on_click(cx.listener(|this, _, _, cx| this.close_security_item(cx))),
             );
         let (tags, title) = match found {
             Found::Alert(_, alert) => (
@@ -229,10 +250,10 @@ impl HerdrWindow {
                     .gap_2()
                     .child(tag(
                         look,
-                        alert.severity.label(),
+                        alert.severity.text(),
                         severity_color(theme, alert.severity),
                     ))
-                    .child(tag(look, "Open", look.hue(2)))
+                    .child(tag(look, fl!("security-tag-open"), look.hue(2)))
                     .child(
                         look.mono(alert.package.clone())
                             .font_weight(FontWeight::SEMIBOLD),
@@ -249,12 +270,12 @@ impl HerdrWindow {
                     .child(match report.severity {
                         Some(severity) => tag(
                             look,
-                            format!("{} · reporter's rating", severity.label()),
+                            fl!("security-reporter-rating", severity = severity.name()),
                             severity_color(theme, severity),
                         ),
-                        None => tag(look, "Unrated", theme.muted),
+                        None => tag(look, fl!("security-unrated"), theme.muted),
                     })
-                    .child(tag(look, "Triage", look.hue(3)))
+                    .child(tag(look, fl!("security-tag-triage"), look.hue(3)))
                     .child(look.icon("icons/user.svg", 12., theme.muted))
                     .child(
                         look.muted(
@@ -275,8 +296,8 @@ impl HerdrWindow {
             .children(opened.item.tabs().iter().map(|&tab| {
                 let on = tab == current;
                 div()
-                    .id(tab.label())
-                    .debug_selector(move || format!("security-tab-{}", tab.label()))
+                    .id(tab.id())
+                    .debug_selector(move || format!("security-tab-{}", tab.id()))
                     .pb_2()
                     .border_b_2()
                     .border_color(rgb(if on {
@@ -332,10 +353,10 @@ impl HerdrWindow {
                     .gap_2()
                     .text_color(rgb(look.hue(3)))
                     .child(look.icon("icons/error.svg", 13., look.hue(3)))
-                    .child(format!("GitHub would not give this page: {error}")),
+                    .child(fl!("security-page-failed", error = error)),
             )
             .child(
-                look.button("security-page-retry", "Try again", false)
+                look.button("security-page-retry", fl!("security-try-again"), false)
                     .on_click(cx.listener(|this, _, _, cx| this.retry_security_page(cx))),
             )
     }
@@ -383,7 +404,7 @@ pub(super) fn callout(
 }
 
 /// Label and value rows in one surface, for a page beside the list.
-pub(super) fn facts_list(look: &Look, rows: Vec<(&'static str, AnyElement)>) -> Div {
+pub(super) fn facts_list(look: &Look, rows: Vec<(String, AnyElement)>) -> Div {
     div()
         .debug_selector(|| "security-facts".into())
         .px_3()
@@ -411,7 +432,7 @@ pub(super) fn facts_list(look: &Look, rows: Vec<(&'static str, AnyElement)>) -> 
 }
 
 /// The same facts as a column beside the page's text, once it is wide.
-pub(super) fn facts_column(look: &Look, rows: Vec<(&'static str, AnyElement)>) -> Div {
+pub(super) fn facts_column(look: &Look, rows: Vec<(String, AnyElement)>) -> Div {
     div()
         .debug_selector(|| "security-facts-column".into())
         .flex_none()
@@ -443,7 +464,7 @@ pub(super) fn arrange(
     look: &Look,
     wide: bool,
     lead: Option<Div>,
-    facts: Vec<(&'static str, AnyElement)>,
+    facts: Vec<(String, AnyElement)>,
     text: Div,
 ) -> Div {
     if wide {
@@ -481,14 +502,20 @@ pub(super) fn body(
 ) -> Div {
     match lines {
         None => waiting,
-        Some([]) => look.muted("No description."),
+        Some([]) => look.muted(fl!("security-no-description")),
         Some(lines) => crate::release_notes::render(id, lines, &look.theme, &look.mono),
     }
 }
 
 /// "Oct 14, 2026 · 5 h ago".
 pub(super) fn date(at: DateTime<Utc>) -> String {
-    format!("{} · {}", at.format("%b %-d, %Y"), since(at))
+    fl!(
+        "security-date",
+        month = at.month(),
+        day = at.day(),
+        year = at.year(),
+        ago = since(at)
+    )
 }
 
 pub(super) fn since(at: DateTime<Utc>) -> String {
@@ -496,7 +523,7 @@ pub(super) fn since(at: DateTime<Utc>) -> String {
         .duration_since(at.into())
         .unwrap_or_default();
     if elapsed.as_secs() >= 48 * 3600 {
-        format!("{} days ago", elapsed.as_secs() / 86_400)
+        fl!("security-ago-days", days = elapsed.as_secs() / 86_400)
     } else {
         ago(elapsed)
     }
@@ -504,8 +531,12 @@ pub(super) fn since(at: DateTime<Utc>) -> String {
 
 pub(super) fn severity_text(look: &Look, severity: Severity, cvss: Option<f64>) -> AnyElement {
     let text = match cvss {
-        Some(score) => format!("{} · CVSS {score:.1}", severity.label()),
-        None => severity.label().to_owned(),
+        Some(score) => fl!(
+            "security-severity-cvss",
+            severity = severity.name(),
+            score = format!("{score:.1}")
+        ),
+        None => severity.text(),
     };
     div()
         .text_color(rgb(severity_color(&look.theme, severity)))
