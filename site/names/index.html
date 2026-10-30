@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Name the Herdr client</title>
-<meta name="description" content="Fourteen names and twelve icon sketches for the native Herdr client. Vote in the polls on X.">
+<meta name="description" content="Fourteen names and ten icon sketches for the native Herdr client. Vote in the polls on X.">
 <link rel="canonical" href="https://herdrui.dev/names/">
 <link rel="icon" type="image/png" href="../assets/herdr-ui-icon-badge.png">
 <meta name="theme-color" content="#eef0ec">
@@ -17,12 +17,12 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Fourteen name ideas for the Herdr client beside six of the twelve app icon sketches.">
+<meta property="og:image:alt" content="Fourteen name ideas for the Herdr client beside six of the ten app icon sketches.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Name the Herdr client">
 <meta name="twitter:description" content="Shep, Kelpie, Puli, Drover, Bellwether… Fourteen new names for the Herdr client. See them, then vote.">
 <meta name="twitter:image" content="https://herdrui.dev/assets/names-card.png">
-<meta name="twitter:image:alt" content="Fourteen name ideas for the Herdr client beside six of the twelve app icon sketches.">
+<meta name="twitter:image:alt" content="Fourteen name ideas for the Herdr client beside six of the ten app icon sketches.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -158,7 +158,7 @@ footer p { margin: 0; }
   <section class="ballot" aria-labelledby="icons-title">
     <div class="section-head">
       <h2 id="icons-title">Icons <span class="when">Poll comes next</span></h2>
-      <p>Each sketch is shown large, then at 48, 32 and 16 px, the sizes it shrinks to in the Dock, menus and Finder lists. Any of them can go with any name. There are twelve, so they'll go to three polls of four, then a final.</p>
+      <p>Each sketch is shown large, then at 48, 32 and 16 px, the sizes it shrinks to in the Dock, menus and Finder lists. Any of them can go with any name. There are ten, so they'll go to three polls of three or four, then a final.</p>
     </div>
     <div class="grid" id="icons"></div>
   </section>
@@ -293,12 +293,6 @@ const PAW = `<g fill="#fff8f0">${PAW_SHAPE}</g>`;
 const paw = (x, y, size, turn, fill) =>
   `<g fill="${fill}" transform="translate(${x} ${y}) rotate(${turn}) scale(${size}) translate(-50 -55)">${PAW_SHAPE}</g>`;
 
-// The paw as a neon outline on a night sky.
-const NEON_PAW = (id) => `
-  <defs><filter id="${id}f" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.4"/></filter></defs>
-  <g fill="none" stroke="#7fe3ff" stroke-width="4.5" stroke-linejoin="round" filter="url(#${id}f)" opacity="0.9">${PAW_SHAPE}</g>
-  <g fill="none" stroke="#e6fbff" stroke-width="3.5" stroke-linejoin="round">${PAW_SHAPE}</g>`;
-
 // Tracks across the tile: a dog that has been everywhere.
 const PAW_TRAIL = [[28, 78, -15], [52, 64, 25], [44, 38, -15], [70, 22, 25]]
   .map(([x, y, turn]) => paw(x, y, 0.3, turn + 20, "#2b2622")).join("");
@@ -308,15 +302,6 @@ const PAW_WINDOW = `
   <rect x="14" y="20" width="72" height="62" rx="9" fill="#1f2427"/>
   <circle cx="24" cy="29" r="2.8" fill="#ff6159"/><circle cx="32" cy="29" r="2.8" fill="#ffbd2e"/><circle cx="40" cy="29" r="2.8" fill="#28c941"/>
   ${paw(50, 58, 0.58, 0, "#f39a5a")}`;
-
-// A brass tag on a red collar, the paw stamped into it.
-const DOG_TAG = (id) => `
-  <defs><linearGradient id="${id}b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbe7ad"/><stop offset="0.55" stop-color="#e2ad4f"/><stop offset="1" stop-color="#a86f22"/></linearGradient></defs>
-  <path d="M-4 14 Q50 40 104 14" fill="none" stroke="#c8402f" stroke-width="12"/>
-  <circle cx="50" cy="33" r="6" fill="none" stroke="#d9dde2" stroke-width="3.5"/>
-  <circle cx="50" cy="62" r="25" fill="url(#${id}b)"/>
-  <circle cx="50" cy="62" r="20.5" fill="none" stroke="#fff3cf" stroke-width="1.5" opacity="0.7"/>
-  ${paw(50, 63, 0.42, 0, "#8a5a1c")}`;
 
 // One of the flock instead of the dog.
 const SHEEP = `
@@ -341,10 +326,8 @@ const ICONS = [
   { title: "Clay companion", style: "Soft 3D", body: "A border collie's face, rounded and warm. Unmistakably a mascot.", draw: tile(grad("#f4e3c6", "#d9bc95"), CLAY_DOG, "rgba(120,90,50,0.25)") },
   { title: "Good dog, bold lines", style: "Hand-drawn", body: "The same dog in thick ink on yellow, mid-wink. Reads well at 16 px.", draw: tile(grad("#f1d877", "#e5c457"), INK_DOG, "rgba(0,0,0,0.12)") },
   { title: "Paw print", style: "Bold mark", body: "Just the dog's mark, white on orange. The simplest shape here, and the clearest in a menu bar.", draw: tile(grad("#f39a5a", "#d65f2a"), PAW, "rgba(0,0,0,0.12)") },
-  { title: "Night paw", style: "Neon", body: "The paw as a glowing outline on a night-blue tile. Calm in a dark Dock.", draw: tile(grad("#1f2c4f", "#0d1428"), NEON_PAW, "rgba(255,255,255,0.1)") },
   { title: "Paw in a window", style: "App window", body: "The orange paw inside a dark window with its three title-bar dots: a dog that lives on your desktop.", draw: tile(grad("#f0f2f5", "#c9d0d9"), PAW_WINDOW, "rgba(0,0,0,0.14)") },
   { title: "Paw trail", style: "Tracks", body: "Four prints crossing a cream tile, like the dog's been out to every machine and back.", draw: tile(grad("#f6efe2", "#e2d5bd"), PAW_TRAIL, "rgba(120,90,50,0.22)") },
-  { title: "Dog tag", style: "Enamel object", body: "A brass tag on a red collar with the paw stamped into it. The dog's name goes on the back.", draw: tile(grad("#2f6b8f", "#1a4460"), DOG_TAG, "rgba(255,255,255,0.1)") },
   { title: "The outrun", style: "Flat geometric", body: "The flock as five dots and the dog's wide arc around them: your agents, and the app keeping them together.", draw: tile(grad("#3f6b4a", "#24402c"), OUTRUN, "rgba(255,255,255,0.08)") },
   { title: "Pocket whistle", style: "Enamel object", body: "The shepherd's whistle instead of a dog: how you call the flock in.", draw: tile(grad("#46796a", "#27463d"), WHISTLE(BRASS), "rgba(255,255,255,0.08)") },
   { title: "Bellwether's bell", style: "Enamel object", body: "The bell the lead sheep wears, so you always hear where the flock is. Like a notification, but older.", draw: tile(grad("#cf4b3d", "#8f2a22"), BELL, "rgba(0,0,0,0.15)") },
