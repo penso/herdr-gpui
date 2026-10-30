@@ -1,18 +1,20 @@
 //! Notifications for the native app, sealed to the device
 //! (`docs/ios-app-plan.md`, "Notifications, exactly"). APNs sees only a
-//! cover ("Herdr", "New activity"), the chat's pane as the thread, and the
-//! badge; the app's Notification Service Extension opens `sealed` and
-//! shows what is inside, with answer buttons for a permission request.
+//! cover ("Herdr", "New activity") and the chat's pane as the thread; the
+//! app's Notification Service Extension opens `sealed` and shows what is
+//! inside, with answer buttons for a permission request. The badge travels
+//! sealed too: it is this computer's count, and a phone paired with several
+//! shows their sum, so APNs must not set it alone.
 //!
 //! ```json
 //! { "aps": { "alert": { "title": "Herdr", "body": "New activity" },
 //!            "mutable-content": 1, "thread-id": "w1:p2",
-//!            "interruption-level": "time-sensitive", "badge": 1, "sound": "default" },
+//!            "interruption-level": "time-sensitive", "sound": "default" },
 //!   "sealed": "BASE64URL" }
 //! ```
 //!
 //! A clear (the question was answered elsewhere) is a background push,
-//! `{"aps": {"content-available": 1, "badge": 0}, "sealed": "…"}`, whose
+//! `{"aps": {"content-available": 1}, "sealed": "…"}`, whose
 //! sealed `clear` tells the app to remove the chat's notifications.
 
 use super::{
@@ -109,7 +111,6 @@ struct Aps<'a> {
     thread_id: Option<&'a str>,
     #[serde(rename = "interruption-level", skip_serializing_if = "Option::is_none")]
     interruption_level: Option<&'static str>,
-    badge: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     sound: Option<&'static str>,
 }
@@ -166,7 +167,6 @@ fn outer(sealed: &Sealed, seal: &impl Fn(&[u8]) -> Result<Vec<u8>>) -> Result<Ve
             content_available: Some(1),
             thread_id: None,
             interruption_level: None,
-            badge: sealed.badge,
             sound: None,
         }
     } else {
@@ -183,7 +183,6 @@ fn outer(sealed: &Sealed, seal: &impl Fn(&[u8]) -> Result<Vec<u8>>) -> Result<Ve
             } else {
                 "active"
             }),
-            badge: sealed.badge,
             sound: Some("default"),
         }
     };

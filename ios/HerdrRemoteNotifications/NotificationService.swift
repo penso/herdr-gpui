@@ -24,7 +24,11 @@ final class NotificationService: UNNotificationServiceExtension {
         content.title = alert.title
         content.body = alert.body
         content.threadIdentifier = alert.pane
-        if let badge = alert.badge { content.badge = NSNumber(value: badge) }
+        // The count is this computer's; the badge is every computer's.
+        if let badge = alert.badge {
+            let total = BadgeCounts.update(badge, for: alert.computer, in: UserDefaults(suiteName: "group.so.pen.herdr.remote"))
+            content.badge = NSNumber(value: total)
+        }
         var info = content.userInfo
         info["sealed"] = nil
         // The computer whose key opened it, which actions then reach.

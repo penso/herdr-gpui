@@ -113,7 +113,6 @@ fn a_question_shows_only_a_cover_to_apns() {
             "mutable-content": 1,
             "thread-id": "w1:p2",
             "interruption-level": "time-sensitive",
-            "badge": 2,
             "sound": "default",
         })
     );
@@ -166,8 +165,10 @@ fn a_clear_is_a_silent_background_push() {
     assert_eq!(push.push_type, PushType::Background);
     assert_eq!(push.priority, Priority::Low);
     let payload = json(&push.body);
-    assert_eq!(payload["aps"], json!({"content-available": 1, "badge": 0}));
+    // The badge is this computer's count alone, so only the app sets it.
+    assert_eq!(payload["aps"], json!({"content-available": 1}));
     let opened = json(&open(payload["sealed"].as_str().unwrap()));
+    assert_eq!(opened["badge"], 0);
     assert_eq!(opened["clear"], true);
     assert_eq!(opened["pane"], "w1:p2");
 }

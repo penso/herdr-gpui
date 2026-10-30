@@ -175,6 +175,20 @@ final class Fleet {
 
     var waiting: Int { machines.reduce(0) { $0 + ($1.home?.waiting ?? 0) } }
 
+    /// Records each computer's waiting count where pushes find it, so a
+    /// push from one computer adds to the others' counts rather than
+    /// replacing them; the badge to show.
+    func recordBadge() -> Int {
+        let defaults = UserDefaults(suiteName: "group.so.pen.herdr.remote")
+        var counts = BadgeCounts.load(from: defaults)
+        for machine in machines {
+            if let home = machine.home { counts.set(home.waiting, for: machine.computer.fingerprint.hex) }
+        }
+        counts.keep(only: Set(machines.map(\.computer.fingerprint.hex)))
+        counts.save(to: defaults)
+        return counts.total
+    }
+
     /// Writes what widgets, Controls, Siri, Spotlight, and the share
     /// extension show, and reloads the widgets when it changed.
     func publishSummary() {

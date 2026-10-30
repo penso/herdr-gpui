@@ -5,7 +5,6 @@
         "body": "New activity",
         "title": "Herdr"
       },
-      "badge": 2,
       "interruption-level": "time-sensitive",
       "mutable-content": 1,
       "sound": "default",

@@ -63,7 +63,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
             let gone = shown.filter { $0.request.content.threadIdentifier == alert.pane }.map(\.request.identifier)
             center.removeDeliveredNotifications(withIdentifiers: gone)
         }
-        if let badge = alert.badge { try? await center.setBadgeCount(badge) }
+        if let badge = alert.badge {
+            let total = BadgeCounts.update(badge, for: alert.computer, in: UserDefaults(suiteName: "group.so.pen.herdr.remote"))
+            try? await center.setBadgeCount(total)
+        }
         return .newData
     }
 

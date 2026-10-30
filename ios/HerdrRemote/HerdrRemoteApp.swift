@@ -18,10 +18,10 @@ struct HerdrRemoteApp: App {
                 .modifier(AppLock())
                 .onOpenURL { model.open($0) }
                 .task { model.tokens.start() }
-                .onChange(of: model.fleet.waiting, initial: true) { _, waiting in
+                .onChange(of: model.fleet.waiting, initial: true) { _, _ in
                     // While the app is in front, the badge follows the live
-                    // count; pushes set it otherwise.
-                    if phase == .active { UNUserNotificationCenter.current().setBadgeCount(waiting) }
+                    // counts; pushes set it otherwise, from the same counts.
+                    if phase == .active { UNUserNotificationCenter.current().setBadgeCount(model.fleet.recordBadge()) }
                 }
                 .onChange(of: phase, initial: true) { _, phase in
                     switch phase {

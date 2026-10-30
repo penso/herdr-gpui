@@ -435,12 +435,13 @@ question, 5 otherwise:
 ```json
 { "aps": { "alert": { "title": "Herdr", "body": "New activity" },
            "mutable-content": 1, "thread-id": "w1:p2",
-           "interruption-level": "time-sensitive", "badge": 2, "sound": "default" },
+           "interruption-level": "time-sensitive", "sound": "default" },
   "sealed": "BASE64URL" }
 ```
 
-`interruption-level` is `active` for anything but a question. `badge` is the
-questions waiting across every chat.
+`interruption-level` is `active` for anything but a question. The badge is
+not in `aps`: each computer knows only its own questions, so it travels
+sealed and the app shows the sum over every paired computer.
 
 **`sealed`** is `seal.rs`'s format to `notify_key`:
 `ephemeral point (65) || nonce (12) || AES-256-GCM || tag`, keyed by HKDF over
@@ -456,6 +457,8 @@ field order:
 ```
 
 - `kind` is `question`, `turn_ended`, or `error`.
+- `badge` is the questions waiting across this computer's chats. The app
+  keeps the last count from each computer and sets the badge to their sum.
 - `permission` appears only for a permission request, with at most four
   options in the agent's order.
 - The privacy setting decides what `body` quotes.
@@ -465,7 +468,7 @@ field order:
 `background`, priority 5:
 
 ```json
-{ "aps": { "content-available": 1, "badge": 0 }, "sealed": "…" }
+{ "aps": { "content-available": 1 }, "sealed": "…" }
 ```
 
 Its plaintext has `"clear": true`, and the app removes the chat's
