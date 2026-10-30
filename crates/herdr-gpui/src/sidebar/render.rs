@@ -733,11 +733,12 @@ impl HerdrWindow {
                             .or(tree_search.then_some(super::search::Heading::DeviceTree))
                             .and_then(|heading| self.search_heading(heading, look, window, cx))
                             .unwrap_or_else(|| {
-                                if devices {
-                                    header("devices", &fl!("sidebar-header-devices"), font, theme, look)
+                                let (key, label) = if devices {
+                                    ("devices", fl!("sidebar-header-devices"))
                                 } else {
-                                    header("spaces", &fl!("sidebar-header-spaces"), font, theme, look)
-                                }
+                                    ("spaces", fl!("sidebar-header-spaces"))
+                                };
+                                header(key, &label, font, theme, look)
                             }),
                     )
                     // The wrapper clips the pinned header as the next host's
@@ -771,7 +772,9 @@ impl HerdrWindow {
                             .child(
                                 div()
                                     .id("new-workspace")
-                                    .map(|button| self.sidebar_button(button, fl!("sidebar-new-workspace")))
+                                    .map(|button| {
+                                        self.sidebar_button(button, fl!("sidebar-new-workspace"))
+                                    })
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(rgb(theme.foreground)))
                                     .child(fl!("sidebar-new"))
@@ -783,7 +786,9 @@ impl HerdrWindow {
                                 div()
                                     .id("sidebar-menu")
                                     .debug_selector(|| "sidebar-menu".into())
-                                    .map(|button| self.sidebar_button(button, fl!("sidebar-menu-label")))
+                                    .map(|button| {
+                                        self.sidebar_button(button, fl!("sidebar-menu-label"))
+                                    })
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(rgb(theme.foreground)))
                                     .child(label_text(&fl!("sidebar-menu")))
@@ -840,9 +845,15 @@ impl HerdrWindow {
                             // rows, so the header stays to say so.
                             .when(self.config.show_agents_header || filtered, |section| {
                                 section.child(
-                                    header("agents", &fl!("sidebar-header-agents"), font, theme, look)
-                                        .justify_between()
-                                        .child(agents_sort(self, cx)),
+                                    header(
+                                        "agents",
+                                        &fl!("sidebar-header-agents"),
+                                        font,
+                                        theme,
+                                        look,
+                                    )
+                                    .justify_between()
+                                    .child(agents_sort(self, cx)),
                                 )
                             })
                             .child(agents),

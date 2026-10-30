@@ -36,8 +36,7 @@ fn header_bounds_above_body_in_windowed_and_fullscreen(cx: &mut TestAppContext) 
             );
             // Signing in swaps the placeholder for the avatar, which sits
             // inside the same hit target rather than filling it.
-            let view =
-                cx.update(|window, _| window.root::<crate::HerdrWindow>().unwrap().unwrap());
+            let view = cx.update(|window, _| window.root::<crate::HerdrWindow>().unwrap().unwrap());
             cx.update(|_, cx| {
                 view.update(cx, |view, cx| {
                     view.menu.github = crate::github::Auth::connected_fixture();

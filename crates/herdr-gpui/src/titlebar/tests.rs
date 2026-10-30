@@ -16,8 +16,7 @@ pub(crate) fn header_window(
 ) -> crate::HerdrWindow {
     let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
     view.settings.shared = Some(
-        crate::herdr_settings::Settings::parse_text("[ui]\ntab_bar_position = 'bottom'")
-            .unwrap(),
+        crate::herdr_settings::Settings::parse_text("[ui]\ntab_bar_position = 'bottom'").unwrap(),
     );
     view
 }
@@ -44,9 +43,7 @@ fn sidebar_button_collapses_and_reopens_without_moving(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
-fn account_icon_keeps_the_same_bounds_when_signed_out_failed_or_connected(
-    cx: &mut TestAppContext,
-) {
+fn account_icon_keeps_the_same_bounds_when_signed_out_failed_or_connected(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(header_window);
     for width in [1200., 360.] {
         cx.simulate_resize(size(px(width), px(400.)));

@@ -20,8 +20,8 @@ use super::{
     workspaces::workspace_label,
 };
 use crate::direction::Logical;
-use crate::notification_mutes::{Daemon, Silenced};
 use crate::i18n::fl;
+use crate::notification_mutes::{Daemon, Silenced};
 use crate::{
     Command, HerdrWindow, NavigationTarget,
     config::{FontConfig, Theme},

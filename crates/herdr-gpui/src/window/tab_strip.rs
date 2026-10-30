@@ -258,7 +258,7 @@ impl HerdrWindow {
                     })
                     .role(Role::Tab)
                     .aria_label(if muted {
-                        format!("{label}, notifications muted")
+                        fl!("tab-strip-muted", label = label)
                     } else {
                         label.to_owned()
                     })
@@ -666,9 +666,10 @@ impl HerdrWindow {
             // A terminal group whose connection has not shown its tab yet.
             Shown::Terminal => ("".into(), fl!("tab-strip-opening")),
             // What a group without tabs says, where its tab would show.
-            Shown::Empty if self.is_split() && self.group_tabs(slot.id, cx).is_empty() => {
-                (fl!("tab-strip-no-tabs").into(), fl!("tab-strip-no-tabs-hint"))
-            }
+            Shown::Empty if self.is_split() && self.group_tabs(slot.id, cx).is_empty() => (
+                fl!("tab-strip-no-tabs").into(),
+                fl!("tab-strip-no-tabs-hint"),
+            ),
             Shown::Page(_) | Shown::Empty => ("".into(), fl!("tab-strip-nothing")),
         };
         let elsewhere = matches!(shown, Shown::Elsewhere(_));

@@ -51,19 +51,14 @@ impl HerdrWindow {
             .shadow_lg()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-            .child(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .truncate()
-                    .child({
-                        let host = safe_text(&endpoint.label, 80);
-                        if removing {
-                            fl!("window-removing", host = host)
-                        } else {
-                            fl!("window-reconnecting", host = host)
-                        }
-                    }),
-            )
+            .child(div().font_weight(FontWeight::SEMIBOLD).truncate().child({
+                let host = safe_text(&endpoint.label, 80);
+                if removing {
+                    fl!("window-removing", host = host)
+                } else {
+                    fl!("window-reconnecting", host = host)
+                }
+            }))
             .children(reason.map(|reason| {
                 div()
                     .debug_selector(|| "reconnecting-reason".into())

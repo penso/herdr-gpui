@@ -217,12 +217,11 @@ fn render_controls(
                     "window-minimize",
                     "icons/window-minimize.svg",
                     fl!("titlebar-minimize"),
-                ).on_click(
-                    |_, window, cx| {
-                        cx.stop_propagation();
-                        window.minimize_window();
-                    },
-                ),
+                )
+                .on_click(|_, window, cx| {
+                    cx.stop_propagation();
+                    window.minimize_window();
+                }),
             )
         })
         .when(buttons.maximize, |bar| {
@@ -239,10 +238,12 @@ fn render_controls(
             )
         })
         .child(
-            button("window-close", "icons/close.svg", fl!("titlebar-close")).on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                close(window, cx);
-            }),
+            button("window-close", "icons/close.svg", fl!("titlebar-close")).on_click(
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    close(window, cx);
+                },
+            ),
         )
         .into_any_element()
 }

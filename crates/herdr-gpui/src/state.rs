@@ -1,8 +1,8 @@
+use crate::i18n::fl;
 use herdr_client::{
     ClientEvent, Method, SurfaceImages,
     protocol::{ClientShellSnapshot, PaneSurfaceFrame, ServerMessage},
 };
-use crate::i18n::fl;
 use std::sync::Arc;
 
 mod agent_recency;

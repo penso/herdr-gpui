@@ -17,3 +17,5 @@ tab-strip-show-here = Show Here
 tab-strip-no-tabs = No tabs
 tab-strip-no-tabs-hint = Open a terminal tab with "+", or another kind of tab from the "⋯" menu.
 tab-strip-nothing = Nothing to show.
+# A muted tab's name for screen readers.
+tab-strip-muted = { $label }, notifications muted

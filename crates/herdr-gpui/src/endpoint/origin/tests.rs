@@ -66,7 +66,10 @@ fn coder_config_ssh_hosts_and_saved_workspaces_are_coder() {
     assert_eq!(ssh("main.herdr-1.fabienpenso-microsoft.coder"), over_ssh);
     assert_eq!(ssh("me@workspace.owner.CODER"), over_ssh);
     assert_eq!(ssh("coder.example.com"), Origin::Ssh);
-    assert_eq!(over_ssh.describe(), "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069} over SSH");
+    assert_eq!(
+        over_ssh.describe(),
+        "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069} over SSH"
+    );
     assert_eq!(over_ssh.icon(), "icons/cloud/coder.svg");
 
     let saved = Origin::of(&ConnectTarget::Cloud {
@@ -83,7 +86,10 @@ fn coder_config_ssh_hosts_and_saved_workspaces_are_coder() {
             ssh: false,
         }
     );
-    assert_eq!(saved.describe(), "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069}");
+    assert_eq!(
+        saved.describe(),
+        "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069}"
+    );
 }
 
 #[cfg(feature = "azure")]
@@ -105,7 +111,10 @@ fn azure_cloud_device_origin_and_icon() {
             ssh: false,
         }
     );
-    assert_eq!(saved.describe(), "\u{2068}Azure\u{2069} \u{2068}machine\u{2069}");
+    assert_eq!(
+        saved.describe(),
+        "\u{2068}Azure\u{2069} \u{2068}machine\u{2069}"
+    );
     assert_eq!(saved.icon(), "icons/cloud/azure.svg");
     assert!(
         crate::icons::Icons

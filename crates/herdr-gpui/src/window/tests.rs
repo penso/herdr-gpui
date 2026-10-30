@@ -11,9 +11,9 @@ use std::sync::Arc;
 mod backdrop;
 mod close_window;
 mod detach;
+mod en_xa;
 mod padding;
 mod report_issue;
-mod en_xa;
 mod rtl;
 mod sound_volume;
 

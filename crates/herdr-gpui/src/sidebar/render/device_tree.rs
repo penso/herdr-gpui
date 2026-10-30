@@ -3,11 +3,11 @@
 //! list. The headers are the spaces list's own, so folding, menus, and the
 //! pinned header work as in every other layout.
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     sidebar::{Indicators, agents::sorted_agents, cell::RowContext, layout::SidebarLook, wash},
 };
-use crate::i18n::fl;
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {

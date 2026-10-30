@@ -76,13 +76,19 @@ impl Origin {
             Self::Tailscale => fl!("sidebar-origin-tailscale"),
             Self::Wsl => fl!("sidebar-origin-wsl"),
             #[cfg(feature = "cloud")]
-            Self::Cloud { provider, ssh: false } => fl!(
+            Self::Cloud {
+                provider,
+                ssh: false,
+            } => fl!(
                 "sidebar-origin-cloud",
                 provider = crate::cloud::name(provider),
                 noun = crate::cloud::noun(provider)
             ),
             #[cfg(feature = "cloud")]
-            Self::Cloud { provider, ssh: true } => fl!(
+            Self::Cloud {
+                provider,
+                ssh: true,
+            } => fl!(
                 "sidebar-origin-cloud-ssh",
                 provider = crate::cloud::name(provider),
                 noun = crate::cloud::noun(provider)
