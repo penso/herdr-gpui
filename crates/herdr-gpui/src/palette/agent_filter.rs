@@ -4,7 +4,7 @@
 //! a terminal without an agent has none and only passes [`AgentFilter::All`].
 
 use super::{Entry, Filter, Selection, search};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{Context, Keystroke, Modifiers};
 use herdr_client::protocol::AgentStatus;
 use std::collections::{BTreeMap, HashMap};
@@ -28,13 +28,24 @@ impl AgentFilter {
         Self::Done,
     ];
 
-    pub(super) fn label(self) -> &'static str {
+    /// The chip's name in test selectors, the same in every language.
+    pub(super) fn name(self) -> &'static str {
         match self {
-            Self::All => "All agents",
-            Self::Blocked => "Blocked",
-            Self::Working => "Working",
-            Self::Idle => "Idle",
-            Self::Done => "Done",
+            Self::All => "all-agents",
+            Self::Blocked => "blocked",
+            Self::Working => "working",
+            Self::Idle => "idle",
+            Self::Done => "done",
+        }
+    }
+
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::All => fl!("palette-go-to-filter-all"),
+            Self::Blocked => fl!("palette-go-to-filter-blocked"),
+            Self::Working => fl!("palette-go-to-filter-working"),
+            Self::Idle => fl!("palette-go-to-filter-idle"),
+            Self::Done => fl!("palette-go-to-filter-done"),
         }
     }
 

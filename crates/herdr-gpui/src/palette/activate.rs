@@ -56,7 +56,7 @@ impl HerdrWindow {
         };
         if !self.menu_target_current() {
             if let Some(palette) = &mut self.menu.palette {
-                palette.error = Some("The selected connection changed. Reopen the palette.".into());
+                palette.error = Some(crate::i18n::fl!("palette-go-to-connection-changed"));
             }
             cx.notify();
             return;
@@ -64,6 +64,11 @@ impl HerdrWindow {
         if let Action::Native(command) = action {
             self.dismiss_menu(window, cx);
             self.command(command, window, cx);
+            return;
+        }
+        if let Action::Mod { name, id } = action {
+            self.dismiss_menu(window, cx);
+            self.send_to_mod(&name, herdr_mods::Data::String(format!("command:{id}")), cx);
             return;
         }
         if let Action::Project(project) = action {
@@ -127,7 +132,8 @@ impl HerdrWindow {
                 | Action::Go { .. }
                 | Action::Project(_)
                 | Action::NewProject(_)
-                | Action::Note { .. } => unreachable!(),
+                | Action::Note { .. }
+                | Action::Mod { .. } => unreachable!(),
             }
         })();
         match result {

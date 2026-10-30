@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -21,6 +21,9 @@ expect_used = "deny"
 unwrap_used = "deny"
 
 [workspace.dependencies]
+# The terminal emulator behind herdr-core terminals, which arrive as raw bytes;
+# Zed's fork, the revision Arbor runs.
+alacritty_terminal   = "0.25.1"
 url = "2"
 # ACP wire types for herdr-acp; its own transport, so no async runtime.
 acp                  = { default-features = false, package = "agent-client-protocol-schema", version = "1.12" }
@@ -78,18 +81,23 @@ gix                  = { default-features = false, features = ["sha1"], version 
 wry                  = { package = "lb-wry", version = "=0.53.3" }
 # Reports only by default; the daemon turns on the Luau engine.
 herdr-automation     = { default-features = false, path = "crates/herdr-automation" }
+herdr-backend        = { path = "crates/herdr-backend" }
 herdr-chat-protocol  = { path = "crates/herdr-chat-protocol" }
 herdr-client         = { path = "crates/herdr-client" }
 herdr-commands       = { path = "crates/herdr-commands" }
 herdr-control-protocol = { path = "crates/herdr-control-protocol" }
+herdr-core-client    = { path = "crates/herdr-core-client" }
 herdr-credentials    = { path = "crates/herdr-credentials" }
 herdr-diagnostics    = { path = "crates/herdr-diagnostics" }
 herdr-github         = { path = "crates/herdr-github" }
 herdr-i18n           = { path = "crates/herdr-i18n" }
+herdr-luau           = { path = "crates/herdr-luau" }
+herdr-mods           = { path = "crates/herdr-mods" }
 herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }
 herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
+herdr-terminal       = { path = "crates/herdr-terminal" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }

@@ -38,3 +38,4 @@ fn windows_socket_path_connects_and_exchanges_bytes() {
 
 mod access;
 mod deadlines;
+mod owned;

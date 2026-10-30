@@ -5,6 +5,7 @@
 //! over SSH, through the same host scripts Teleport uses. The CLI's exit and
 //! envelope are authoritative; the snapshot that follows shows the result.
 
+use crate::i18n::fl;
 use crate::teleport::Host;
 use herdr_client::protocol::{ClientShellSnapshot, ClientShellWorkspace};
 use serde::Deserialize;
@@ -64,7 +65,7 @@ pub(crate) fn choices(snapshot: &ClientShellSnapshot, tab_id: &str) -> Vec<Choic
                     workspace_id: workspace.workspace_id.clone(),
                 },
                 workspace: Some(workspace.label.clone()),
-                place: "New Tab".into(),
+                place: fl!("pane-menu-new-tab"),
             });
         }
     }
@@ -81,7 +82,7 @@ pub(crate) fn workspace_choices(snapshot: &ClientShellSnapshot, workspace_id: &s
     std::iter::once(Choice {
         destination: Destination::NewWorkspace,
         workspace: None,
-        place: "New Workspace".into(),
+        place: fl!("pane-menu-new-workspace"),
     })
     .chain(
         order

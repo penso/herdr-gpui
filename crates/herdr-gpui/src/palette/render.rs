@@ -103,12 +103,7 @@ impl HerdrWindow {
             .children(AgentFilter::ALL.into_iter().map(|filter| {
                 div()
                     .id(("palette-agent-filter", filter as usize))
-                    .debug_selector(move || {
-                        format!(
-                            "palette-agent-filter-{}",
-                            filter.label().to_lowercase().replace(' ', "-")
-                        )
-                    })
+                    .debug_selector(move || format!("palette-agent-filter-{}", filter.name()))
                     .px_2()
                     .py_1()
                     .rounded(px(crate::config::corners::CONTROL))
@@ -286,7 +281,7 @@ impl HerdrWindow {
                                 .border_1()
                                 .border_color(rgb(theme.active))
                                 .text_color(rgb(theme.muted))
-                                .child(format!("Last seen {age}")),
+                                .child(fl!("palette-go-to-last-seen", age = age)),
                         )
                     })
             }
