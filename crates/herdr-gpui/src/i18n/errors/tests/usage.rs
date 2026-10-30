@@ -50,5 +50,5 @@ fn every_variant_has_a_message() {
         }),
     );
     assert_localized(&errors);
-    assert_verbatim(&[Error::Client(herdr_client::Error::Disconnected)]);
+    assert_localized(&[Error::Client(herdr_client::Error::Disconnected)]);
 }

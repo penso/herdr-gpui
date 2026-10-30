@@ -30,8 +30,7 @@ impl Localize for Error {
             // The parser's diagnostic is redacted, as `Display` redacts it.
             Self::Json(_) => fl!("error-github-json"),
             Self::Network(error) => fl!("error-github-network", error = error.to_string()),
-            // `herdr_client`'s own words for a missing home or config root.
-            Self::Path(error) => error.to_string(),
+            Self::Path(error) => error.localize(),
             Self::PrActions(error) => error.localize(),
             Self::PullRequest(error) => error.localize(),
             Self::Query => fl!("error-github-query"),

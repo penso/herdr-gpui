@@ -7,6 +7,16 @@ mod sessions;
 mod ssh;
 mod wsl;
 
+/// A missing home or config root, in the root error's words.
+impl Localize for herdr_client::local_path::PathError {
+    fn localize(&self) -> String {
+        match self {
+            Self::MissingHome => fl!("error-missing-home"),
+            Self::RelativeConfigRoot => fl!("error-relative-config-root"),
+        }
+    }
+}
+
 use super::Localize;
 use crate::i18n::fl;
 use herdr_client::{Error, MIN_HERDR_VERSION, protocol::endpoint::ENDPOINT_PROTOCOL_GENERATION};

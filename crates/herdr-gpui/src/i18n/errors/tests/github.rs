@@ -47,7 +47,7 @@ fn every_variant_has_a_message() {
     }));
     errors.extend(["authentication", "list", "profile", "upload"].map(Error::Worker));
     assert_localized(&errors);
-    assert_verbatim(&[
+    assert_localized(&[
         Error::Client(herdr_client::Error::Disconnected),
         Error::Credentials(herdr_credentials::Error::Permissions),
         Error::Path(herdr_client::local_path::PathError::MissingHome),

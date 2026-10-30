@@ -39,5 +39,5 @@ fn every_variant_has_a_message() {
 
 #[test]
 fn the_bridge_shows_the_client_error() {
-    assert_delegated(&[Error::Bridge(client())]);
+    assert_localized(&[Error::Bridge(client())]);
 }

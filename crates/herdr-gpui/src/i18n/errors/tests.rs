@@ -9,6 +9,7 @@ mod client;
 mod control;
 mod credentials;
 mod github;
+mod notification_mutes;
 mod orchestrator;
 mod protocol;
 mod remote;

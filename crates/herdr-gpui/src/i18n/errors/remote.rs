@@ -48,8 +48,7 @@ impl Localize for Error {
             Self::Io(error) => error.to_string(),
             Self::Json(error) => error.to_string(),
             Self::NoConfig => fl!("error-remote-no-config"),
-            // herdr-client's `PathError` has no mapping of its own yet.
-            Self::Path(error) => error.to_string(),
+            Self::Path(error) => error.localize(),
             Self::PreferencesPath => fl!("error-remote-preferences-path"),
             #[cfg(feature = "cloud")]
             Self::Provider(error) => error.localize(),

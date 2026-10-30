@@ -130,6 +130,7 @@ impl Localize for Error {
                 fl!("error-not-a-git-repository", path = path(dir))
             }
             Self::NotConnected => fl!("error-not-connected"),
+            Self::NotificationMutes(error) => error.localize(),
             Self::NotInCheckout => fl!("error-not-in-checkout"),
             Self::OrchestratorItems(error) => {
                 fl!("error-orchestrator-items", error = error.localize())

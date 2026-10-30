@@ -50,20 +50,9 @@ fn header() -> ureq::http::header::InvalidHeaderValue {
     ureq::http::HeaderValue::from_str("\n").unwrap_err()
 }
 
-/// A whole message that is another crate's error, which may still show
-/// its English `Display` until its own mapping lands: the English must be
-/// that error's, whatever the other locales show.
-fn assert_delegated<E: Localize + Display>(errors: &[E]) {
-    for error in errors {
-        crate::i18n::show(&Locale::FALLBACK);
-        let english = error.localize().replace(ISOLATION, "");
-        assert_eq!(english, error.to_string());
-    }
-}
-
 #[test]
 fn wrapped_errors_delegate() {
-    assert_delegated(&[
+    assert_localized(&[
         Error::Client(client()),
         Error::Credentials(herdr_credentials::Error::Io(io())),
     ]);
@@ -94,6 +83,8 @@ fn system_text_is_shown_as_it_is() {
         Error::Config("an unknown loader failure".into()),
         Error::Io(io()),
         Error::Json(json()),
-        Error::Path(herdr_client::local_path::PathError::MissingHome),
     ]);
+    assert_localized(&[Error::Path(
+        herdr_client::local_path::PathError::MissingHome,
+    )]);
 }

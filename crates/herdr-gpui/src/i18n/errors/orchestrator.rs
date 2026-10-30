@@ -78,8 +78,7 @@ impl Localize for Error {
             Self::NotWebAddress => fl!("error-orchestrator-not-web-address"),
             Self::HostNotShown => fl!("error-orchestrator-host-not-shown"),
             Self::HostCannotTake => fl!("error-orchestrator-host-cannot-take"),
-            // `herdr_remote::teleport::Error` has no mapping of its own yet.
-            Self::Teleport(error) => fl!("error-orchestrator-teleport", error = error.to_string()),
+            Self::Teleport(error) => fl!("error-orchestrator-teleport", error = error.localize()),
             Self::PullRequestChanged => fl!("error-orchestrator-pull-request-changed"),
         }
     }
@@ -185,11 +184,10 @@ impl Localize for gitlab::Error {
                 limit = gitlab::saved::MAX_HOSTS
             ),
             Self::Record => fl!("error-orchestrator-gitlab-record"),
-            // `herdr_client`'s own words for a missing home or config root.
             Self::Directory(error) => {
                 fl!(
                     "error-orchestrator-gitlab-directory",
-                    error = error.to_string()
+                    error = error.localize()
                 )
             }
             #[cfg(target_os = "linux")]
