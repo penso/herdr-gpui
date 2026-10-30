@@ -84,9 +84,10 @@ pub use sessions::{
 pub use ssh::mux::Lane as SshLane;
 pub use ssh::{Bridge, SshChannel, connect_command, script_command, shared_script_command};
 pub use ssh::{
-    Destination, FORWARD_READY, HostKeyFingerprint, HostKeyScan, HostProbe, NewHostKey, SshFailure,
-    forward_command, probe_host, remote_config_value, remote_origin_url, resolve_destination,
-    scan_host_key, trust_host_key,
+    Destination, FORWARD_READY, HostKeyFingerprint, HostKeyScan, HostKeys, HostProbe,
+    MAX_UNVERIFIED_HOSTS, NewHostKey, SshFailure, forward_command, probe_host, probe_host_with,
+    remote_config_value, remote_origin_url, resolve_destination, scan_host_key, set_host_keys,
+    set_unverified_hosts, trust_host_key,
 };
 pub use surface_images::{
     MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGES, MAX_PLACEMENTS, SurfaceImage, SurfaceImages,

@@ -24,6 +24,7 @@ mod daytona;
 mod devices;
 mod edit;
 mod error;
+pub(crate) mod favorite_themes;
 mod features;
 mod files;
 mod font_weight;
@@ -41,6 +42,7 @@ pub(crate) use herdr_remote_control::app::config as remote;
 pub(crate) mod sidebar;
 mod sidebar_style;
 mod sprites;
+pub(crate) mod ssh_hosts;
 pub(crate) mod status_bar;
 mod status_icons;
 pub(crate) mod tab_layout;
@@ -124,6 +126,7 @@ pub(crate) use sidebar::{
 };
 pub(crate) use sidebar_style::{ChangeCounts, DeviceFooter};
 pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
+pub use ssh_hosts::SshConfig;
 pub use status_bar::StatusBar;
 pub use status_icons::StatusIcons;
 use std::{
@@ -199,6 +202,8 @@ pub struct Config {
     pub edge_rail: bool,
     /// How the editor starts; the pane's `$VISUAL` or `$EDITOR` when unset.
     pub(crate) editor_command: Option<crate::editor::EditorCommand>,
+    /// Themes starred in the Color Scheme picker, which lists them first.
+    pub favorite_themes: Vec<String>,
     pub features: Features,
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
@@ -283,6 +288,8 @@ pub struct Config {
     pub sound: SoundConfig,
     /// The Fly Sprites account whose sprites are devices.
     pub sprites: SpritesConfig,
+    /// SSH hosts whose host keys the user chose not to verify.
+    pub ssh: SshConfig,
     /// Which status bar items show, and how compactly.
     pub status_bar: StatusBar,
     /// The set agent status is drawn with.
@@ -413,6 +420,7 @@ impl Default for Config {
             devices: BTreeMap::new(),
             edge_rail: false,
             editor_command: None,
+            favorite_themes: Vec::new(),
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
@@ -454,6 +462,7 @@ impl Default for Config {
             smooth_scroll: true,
             sound: SoundConfig::default(),
             sprites: SpritesConfig::default(),
+            ssh: SshConfig::default(),
             status_bar: StatusBar::default(),
             status_icons: StatusIcons::default(),
             tab_layout: TabLayoutMode::default(),
@@ -500,6 +509,7 @@ struct Settings {
     devices: BTreeMap<String, DeviceSettings>,
     edge_rail: Option<bool>,
     editor_command: Option<crate::editor::EditorCommand>,
+    favorite_themes: Vec<String>,
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
@@ -534,6 +544,7 @@ struct Settings {
     smooth_scroll: Option<bool>,
     sound: SoundConfig,
     sprites: SpritesConfig,
+    ssh: SshConfig,
     status_bar: StatusBar,
     status_icons: Option<status_icons::SavedIcons>,
     tab_layout: TabLayoutMode,
@@ -823,6 +834,12 @@ impl Config {
         #[cfg(feature = "sprites")]
         settings.sprites.settings_with(|_| None)?;
         config.sprites = settings.sprites;
+        config.favorite_themes = settings.favorite_themes;
+        // A hand-edited list may name a theme twice; it is starred once.
+        let mut starred = std::collections::HashSet::new();
+        config
+            .favorite_themes
+            .retain(|name| starred.insert(name.clone()));
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
         config.notifications = settings
@@ -889,6 +906,8 @@ impl Config {
         config.mods = settings.mods;
         config.status_bar = settings.status_bar;
         config.tab_layout = settings.tab_layout;
+        settings.ssh.check()?;
+        config.ssh = settings.ssh;
         let (status_icons, legacy_rail) = status_icons::SavedIcons::resolve(settings.status_icons);
         config.status_icons = status_icons;
         config.edge_rail = settings.edge_rail.unwrap_or(legacy_rail);

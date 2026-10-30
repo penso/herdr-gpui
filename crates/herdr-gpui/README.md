@@ -280,7 +280,17 @@ its own form, so switching between them keeps what was typed. **Ctrl-Tab** and
 rail shows only the logos.
 
 The SSH form accepts an SSH target, label, and optional remote session (default:
-`default`). Herdr's `machine add` saves a new profile every time and takes no
+`default`). **Skip host key verification (dangerous)**, off by default,
+connects without checking the host's key, now and on every later connection:
+the app passes `StrictHostKeyChecking=no` and reads no known hosts file for
+that target. It is for hosts that keep no key to check, such as the `*.coder`
+aliases `coder config-ssh` writes with `UserKnownHostsFile=/dev/null`, which
+otherwise fail the app's strict check. The choice is saved before the device,
+under `[ssh] skip_host_key_verification` in the local config, by target.
+Removing the device keeps it there. To verify the host again, delete the
+target from that list (connections opened without checking take no new
+commands once it is gone), or remove the device and add it again with the
+box clear. Herdr's `machine add` saves a new profile every time and takes no
 lock, so the dialog keeps a host from being saved twice itself. A host counts as
 already saved when a profile with the same session reaches the same user, host
 name, and port as `ssh -G` resolves them, so an SSH alias, `user@address`, and
@@ -3779,6 +3789,12 @@ Ctrl+Shift+U is left unbound for
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
+  The star at a row's end pins that theme above the rest, searches included;
+  clicking it again unpins it. Starring neither previews nor applies a theme.
+  The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
+  reloading the window, so the theme being previewed stays on screen. Each
+  star is applied to the list the file holds when it is written, so stars
+  made in another window's picker stay.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /

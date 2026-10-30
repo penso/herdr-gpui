@@ -26,6 +26,8 @@ pub enum Error {
     InvalidDeviceId(String),
     #[error("devices and each devices.<id> must be tables")]
     InvalidDevicesTable,
+    #[error("favorite_themes must be a list of theme names")]
+    InvalidFavoriteThemes,
     #[error("{0}.size must be finite and between 8 and 48 logical pixels")]
     InvalidFontSize(&'static str),
     #[error("{0}.weight must be a weight name such as \"medium\" or a number from 100 to 900")]
