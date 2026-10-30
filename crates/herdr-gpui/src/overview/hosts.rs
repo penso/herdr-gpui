@@ -328,7 +328,8 @@ fn meter(look: &Look, label: String, percent: Option<f32>, warn: f32) -> Div {
         .flex()
         .items_center()
         .gap_2()
-        .child(div().w(px(30.)).child(look.mono(label)))
+        // At least the width of the English abbreviations; longer ones push the bar.
+        .child(div().flex_none().min_w(px(30.)).child(look.mono(label)))
         .child(
             div()
                 .w(px(METER))
