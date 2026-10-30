@@ -9,21 +9,55 @@
 //! messages, and the app's feature modules are migrated on their own.
 // i18n: migrated
 
+mod automations;
+mod backdrop;
+mod caffeine;
+mod chat;
 mod client;
+mod clipboard;
+#[cfg(feature = "cloud")]
+mod cloud_batch;
+mod cloud_setup;
+mod code_server;
+mod config;
 mod control;
 mod credentials;
+mod daemon;
+mod devices;
+mod dispatch;
+mod editor;
+mod file_drop;
 mod github;
+mod keymap;
+#[cfg(windows)]
+mod launch_at_login;
+mod listening_ports;
 mod notification_mutes;
 mod orchestrator;
+mod overview;
+mod palette;
+mod pane_carry;
+mod pane_move;
+mod port_forward;
+mod processes;
 mod protocol;
+mod px0;
 mod remote;
 mod remote_control;
+mod review;
 mod root;
+#[cfg(unix)]
+mod setup_relay;
+mod sound;
+mod system_load;
 #[cfg(test)]
 pub(crate) mod tests;
 mod updater;
 mod usage;
 mod vcs;
+mod worktree_identity;
+mod worktree_scripts;
+mod wsl_drop;
 
 use std::sync::Arc;
 
@@ -49,59 +83,4 @@ impl<T: Localize + ?Sized> Localize for Arc<T> {
     fn localize(&self) -> String {
         (**self).localize()
     }
-}
-
-/// Errors not mapped yet show their English `Display` until their own
-/// file lands (docs/i18n.md, What is left).
-macro_rules! english {
-    ($($(#[$meta:meta])* $error:ty),* $(,)?) => {
-        $($(#[$meta])*
-        impl Localize for $error {
-            fn localize(&self) -> String {
-                self.to_string()
-            }
-        })*
-    };
-}
-
-english! {
-    // keep-sorted start
-    crate::automations::Error,
-    crate::backdrop::Error,
-    crate::caffeine::Error,
-    crate::chat::Error,
-    #[cfg(feature = "cloud")]
-    crate::cloud::batch::Error,
-    crate::cloud_setup::Error,
-    crate::code_server::Error,
-    crate::config::Error,
-    crate::config::tab_layout::Error,
-    crate::daemon::Error,
-    crate::dispatch::Error,
-    crate::editor::Error,
-    crate::keymap::daemon::Error,
-    crate::keymap::Error,
-    #[cfg(windows)]
-    crate::launch_at_login::Error,
-    crate::listening_ports::Error,
-    crate::listening_ports::tunnel::Error,
-    crate::menu::devices::Error,
-    crate::overview::Error,
-    crate::palette::Error,
-    crate::pane_menu::carry::Refusal,
-    crate::pane_move::Error,
-    crate::port_forward::Error,
-    crate::processes::Error,
-    crate::px0::Error,
-    crate::review::Error,
-    #[cfg(unix)]
-    crate::setup_relay::Error,
-    crate::sound::Error,
-    crate::system_load::Error,
-    crate::window::clipboard::Error,
-    crate::window::file_drop::Error,
-    crate::window::wsl_drop::Error,
-    crate::worktree_identity::Error,
-    crate::worktree_scripts::Error,
-    // keep-sorted end
 }
