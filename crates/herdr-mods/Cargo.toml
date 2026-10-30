@@ -1,0 +1,25 @@
+# Mods for Herdr UI (`docs/mods-plan.md`): the manifest, the sources and the
+# hash approval pins, the element tree a mod draws, the state it reads, and
+# the sandboxed runtime. No GPUI; the app runs mods on worker threads.
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-mods"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+herdr-commands.workspace = true
+herdr-luau.workspace     = true
+mlua.workspace           = true
+serde.workspace          = true
+sha2.workspace           = true
+thiserror.workspace      = true
+toml.workspace           = true
+
+[dev-dependencies]
+tempfile.workspace = true

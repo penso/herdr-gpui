@@ -14,6 +14,9 @@ const SKILL: &str = include_str!("../../../skills/herdr-gpui-browser/SKILL.md");
 /// How agents write automations, installed beside the browser skill.
 const AUTOMATIONS: &str = include_str!("../../../skills/herdr-automations/SKILL.md");
 const AUTOMATIONS_NAME: &str = "herdr-automations";
+/// How agents write mods for this app, installed beside the browser skill.
+const MODS: &str = include_str!("../../../skills/herdr-mods/SKILL.md");
+const MODS_NAME: &str = "herdr-mods";
 /// Marks a skill file this app manages.
 const MARKER: &str = "<!-- herdr-gpui-managed-skill v1";
 const NAME: &str = "herdr-gpui-browser";
@@ -86,6 +89,14 @@ pub(crate) fn automations_text(executable: Option<&Path>) -> String {
     escape_description(text)
 }
 
+/// The mods skill, naming this executable in its commands.
+pub(crate) fn mods_text(executable: Option<&Path>) -> String {
+    if executable.and_then(Path::to_str).is_none() {
+        return MODS.to_owned();
+    }
+    escape_description(MODS.replace("herdr-gpui ", &format!("{} ", command(executable))))
+}
+
 /// The frontmatter's description is a double-quoted YAML scalar, where a
 /// Windows path's backslashes would read as escapes such as `\U`.
 fn escape_description(text: String) -> String {
@@ -125,11 +136,13 @@ pub(crate) fn install(home: &Path, text: &str) -> crate::Result<Vec<PathBuf>> {
             source: std::io::ErrorKind::NotFound.into(),
         });
     }
+    let executable = executable();
     place(
         home,
         AUTOMATIONS_NAME,
-        &automations_text(executable().as_deref()),
+        &automations_text(executable.as_deref()),
     )?;
+    place(home, MODS_NAME, &mods_text(executable.as_deref()))?;
     Ok(placed)
 }
 
@@ -163,7 +176,7 @@ fn place(home: &Path, name: &str, text: &str) -> crate::Result<Vec<PathBuf>> {
 pub(crate) fn remove(home: &Path) -> crate::Result<Vec<PathBuf>> {
     let mut removed = Vec::new();
     for root in ROOTS.map(|root| home.join(root)) {
-        for name in [NAME, AUTOMATIONS_NAME] {
+        for name in [NAME, AUTOMATIONS_NAME, MODS_NAME] {
             let path = file(&root, name);
             let Ok(current) = std::fs::read_to_string(&path) else {
                 continue;
@@ -396,6 +409,7 @@ mod tests {
     fn the_skill_description_is_a_quoted_scalar() {
         assert!(!description(SKILL).contains('"'));
         assert!(!description(AUTOMATIONS).contains('"'));
+        assert!(!description(MODS).contains('"'));
     }
 
     #[test]
@@ -457,16 +471,18 @@ mod tests {
         assert_eq!(placed.len(), 1);
         let automations = file(&home.path().join(".claude"), AUTOMATIONS_NAME);
         assert!(managed(&std::fs::read_to_string(&automations).unwrap()));
+        let mods = file(&home.path().join(".claude"), MODS_NAME);
+        assert!(managed(&std::fs::read_to_string(&mods).unwrap()));
         let removed = remove(home.path()).unwrap();
-        assert_eq!(removed.len(), 2);
-        assert!(!automations.exists());
+        assert!(removed.contains(&automations) && removed.contains(&mods));
+        assert!(!automations.exists() && !mods.exists());
     }
 
     /// The Agent Skills format caps a description at 1,024 characters, and
     /// agents such as Pi refuse a skill over it.
     #[test]
     fn the_skill_description_fits_the_agent_skills_limit() {
-        for skill in [SKILL, AUTOMATIONS] {
+        for skill in [SKILL, AUTOMATIONS, MODS] {
             let length = description(skill).chars().count();
             assert!((1..=1024).contains(&length), "{length} characters");
         }

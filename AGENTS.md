@@ -41,6 +41,8 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 | `crates/herdr-i18n` | The languages the app shows (`docs/i18n.md`): `Locale`, `Direction`, the `language` setting and its negotiation with an `en-US` fallback, the Fluent catalog, and the `en-XA`/`en-XB` pseudo-locales; no GPUI (the app embeds `crates/herdr-gpui/locales`, keeps the current locale, and checks `fl!`) |
 | `crates/herdr-gpui-launcher` | Windows-only windowed launcher that starts `herdr-gpui.exe` without a console window; std plus `MessageBoxW` for start failures |
 | `crates/herdr-automation` | Automation scripts (`docs/automations.md`): the sandboxed Luau state, the step catalog, schedules, caps, and the plan a person approves; no GPUI or runtime |
+| `crates/herdr-luau` | The sandboxed Luau state automations and mods share: safe libraries, memory and interrupt budgets, sealed globals, and the `Policy` each user removes beyond them; no GPUI |
+| `crates/herdr-mods` | Mods (`docs/mods-plan.md`): the `mod.toml` manifest, a mod's sources and the hash approval pins, the element tree a view returns, the state mods read, effects, and the sandboxed runtime; no GPUI (the app runs mods on worker threads and draws their trees) |
 | `crates/herdr-automate` | The automation daemon and its command line: schedules approved scripts per host, runs their steps through the `herdr` CLI, keeps state in SQLite, and answers `--json` reports for Herdr UI |
 | `crates/embed-resource` | No-op stand-in for GPUI's `embed-resource` build dependency, patched in so GPUI embeds no Windows manifest beside `crates/herdr-gpui/windows.manifest`; not a production crate |
 | `crates/test-support/sandbox.rs` | Shared isolated process setup for opt-in integration tests; not a production crate |

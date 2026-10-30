@@ -1,0 +1,8 @@
+# An example activity bar app: copy this folder to <config>/herdr/gpui-mods/dashboard.
+name = "dashboard"
+api = 1
+commands = [{ id = "refresh", title = "Mark the dashboard as reviewed" }]
+
+[activity]
+title = "Dashboard"
+icon = "icon.svg"

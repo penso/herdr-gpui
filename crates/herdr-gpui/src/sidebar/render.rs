@@ -844,6 +844,7 @@ impl HerdrWindow {
                             .child(agents),
                     )
             })
+            .children(self.render_mod_sidebar_sections(cx))
             .map(|sidebar| {
                 if self.device_footer_shown() {
                     sidebar.child(self.render_device_footer(cx))

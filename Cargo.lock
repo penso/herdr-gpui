@@ -4790,6 +4790,7 @@ dependencies = [
 name = "herdr-automation"
 version = "0.1.0"
 dependencies = [
+ "herdr-luau",
  "jiff",
  "mlua",
  "serde",
@@ -4935,6 +4936,7 @@ dependencies = [
  "herdr-diagnostics",
  "herdr-github",
  "herdr-i18n",
+ "herdr-mods",
  "herdr-orchestrator",
  "herdr-remote",
  "herdr-remote-control",
@@ -5018,6 +5020,28 @@ dependencies = [
  "sys-locale",
  "thiserror 2.0.21",
  "unic-langid",
+]
+
+[[package]]
+name = "herdr-luau"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "herdr-mods"
+version = "0.1.0"
+dependencies = [
+ "herdr-commands",
+ "herdr-luau",
+ "mlua",
+ "serde",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
 ]
 
 [[package]]

@@ -92,6 +92,7 @@ mod menus;
 mod merged_cleanup;
 #[cfg(feature = "mockup")]
 mod mockup;
+mod mods;
 mod motion;
 mod navigation;
 mod network_quality;

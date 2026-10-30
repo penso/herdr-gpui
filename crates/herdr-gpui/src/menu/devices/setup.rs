@@ -4,7 +4,7 @@
 //! shows (see `setup_relay`), so no remote installer policy is duplicated here.
 use super::Error;
 use crate::Result;
-use herdr_client::{Destination, HostProbe, SavedHost};
+use herdr_client::{Destination, HostKeys, HostProbe, SavedHost};
 use std::{
     io::Read,
     process::{Command, ExitStatus, Stdio},
@@ -261,6 +261,7 @@ pub(super) struct Request {
     target: String,
     label: String,
     session: String,
+    host_keys: HostKeys,
 }
 
 impl Request {
@@ -303,7 +304,12 @@ impl Request {
             target: target.into(),
             label,
             session: session.into(),
+            host_keys: HostKeys::Verify,
         })
+    }
+
+    pub(super) fn with_host_keys(self, host_keys: HostKeys) -> Self {
+        Self { host_keys, ..self }
     }
 
     pub(super) fn target(&self) -> &str {
@@ -322,7 +328,21 @@ impl Request {
 
     /// Blocks on SSH: call it from the background executor.
     pub(super) fn probe(&self) -> Result<HostProbe> {
-        Ok(herdr_client::probe_host(&self.target, &self.session)?)
+        Ok(herdr_client::probe_host_with(
+            &self.target,
+            &self.session,
+            self.host_keys,
+        )?)
+    }
+
+    /// Save the form's host key choice for the target, before the device is
+    /// saved, so the device's first connection already follows it. A target
+    /// that was never skipped leaves the settings untouched.
+    fn remember_host_keys(&self) -> Result<()> {
+        if self.host_keys == HostKeys::Verify && HostKeys::of(&self.target) == HostKeys::Verify {
+            return Ok(());
+        }
+        crate::config::Config::save_host_keys(&self.target, self.host_keys)
     }
 
     fn arguments(&self) -> [&str; 7] {
@@ -419,6 +439,7 @@ pub(super) struct TerminalSetup {
 /// call it from the background executor. Stdin is closed, so any approval the
 /// CLI would need fails instead of waiting for input nobody can see.
 pub(super) fn save(request: &Request, claim: &Claim) -> Result<SaveOutcome> {
+    request.remember_host_keys()?;
     let result = save_with(
         crate::daemon::executable(),
         request,
@@ -680,6 +701,7 @@ impl TerminalSetup {
 /// the file system: call it off the UI thread.
 #[cfg(unix)]
 pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<TerminalSetup> {
+    request.remember_host_keys()?;
     let app = std::env::current_exe()?;
     let dir = crate::preferences::state_dir()
         .ok_or(Error::SetupInput("Herdr UI has no state directory."))?;

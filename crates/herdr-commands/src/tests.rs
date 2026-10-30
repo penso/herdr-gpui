@@ -95,6 +95,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (AgentNumber(9), &[]),
         (ToggleSidebar, &["cmd-b"]),
         (ToggleStatusBar, &["cmd-alt-b"]),
+        (ToggleModPanel, &[]),
         (FocusNextRegion, &["cmd-f6"]),
         (FocusPreviousRegion, &["cmd-shift-f6"]),
         (ToggleZenMode, &["ctrl-cmd-z"]),

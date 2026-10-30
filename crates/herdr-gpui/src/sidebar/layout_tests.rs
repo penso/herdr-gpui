@@ -59,6 +59,8 @@ mod listening_ports;
 #[cfg(test)]
 mod local_counts_chip;
 #[cfg(test)]
+mod mod_places;
+#[cfg(test)]
 mod mutes;
 #[cfg(test)]
 mod nested_agents;
@@ -575,6 +577,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         app_update_notes_scroll: gpui::ScrollHandle::new(),
         removal: None,
         merged_cleanup: Default::default(),
+        mod_panel_width: crate::panel_resize::MOD_PANEL,
+        mods: Default::default(),
         #[cfg(feature = "integration-test")]
         navigations: Default::default(),
         worktree_script: None,

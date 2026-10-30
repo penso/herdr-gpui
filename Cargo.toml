@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -86,6 +86,8 @@ herdr-credentials    = { path = "crates/herdr-credentials" }
 herdr-diagnostics    = { path = "crates/herdr-diagnostics" }
 herdr-github         = { path = "crates/herdr-github" }
 herdr-i18n           = { path = "crates/herdr-i18n" }
+herdr-luau           = { path = "crates/herdr-luau" }
+herdr-mods           = { path = "crates/herdr-mods" }
 herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }

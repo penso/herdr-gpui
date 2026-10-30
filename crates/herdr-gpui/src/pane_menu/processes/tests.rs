@@ -36,9 +36,9 @@ fn numbers_and_reports_read_as_sentences() {
     assert_eq!(cpu_text(Some(0.04)), "0.0%");
     assert_eq!(cpu_text(Some(9.94)), "9.9%");
     assert_eq!(cpu_text(Some(250.4)), "250%");
-    assert_eq!(memory_text(512 << 10), "0.5 MB");
-    assert_eq!(memory_text(300 << 20), "300 MB");
-    assert_eq!(memory_text(3 << 30), "3.0 GB");
+    assert_eq!(memory_text(512 << 10), "\u{2068}0.5\u{2069} MB");
+    assert_eq!(memory_text(300 << 20), "\u{2068}300\u{2069} MB");
+    assert_eq!(memory_text(3 << 30), "\u{2068}3.0\u{2069} GB");
     let at = |pid| Identity { pid, started: 1 };
     assert_eq!(
         report(&[
@@ -48,8 +48,8 @@ fn numbers_and_reports_read_as_sentences() {
             (at(4), Outcome::Refused(Refusal::Elsewhere)),
             (at(5), Outcome::Failed),
         ]),
-        "Asked 2 processes to quit. 1 had already exited. \
-         1 no longer under this pane, left running. 1 could not be signalled."
+        "Asked \u{2068}2\u{2069} processes to quit. \u{2068}1\u{2069} had already exited. \
+         \u{2068}1\u{2069} no longer under this pane, left running. \u{2068}1\u{2069} could not be signalled."
     );
 }
 
@@ -161,7 +161,7 @@ fn choosing_confirming_and_ending_exact_processes(cx: &mut TestAppContext) {
         let processes = v.menu.pane.as_ref().unwrap().processes.as_ref().unwrap();
         assert_eq!(
             processes.report.as_deref(),
-            Some("Asked 1 process to quit.")
+            Some("Asked \u{2068}1\u{2069} process to quit.")
         );
         assert!(!processes.ending);
     });
