@@ -79,7 +79,9 @@ struct WorkspaceScreen: View {
     /// on an agent opens the form with a first prompt.
     private func launcher(_ workspace: Home.Workspace, online: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("New tab").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 6)
+            Text("New tab").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 18)
+            // More agents than fit scroll sideways inside the card, inset
+            // from its rounded edges, never past them.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     tile("Terminal", id: Self.terminal) {
@@ -101,10 +103,11 @@ struct WorkspaceScreen: View {
                     }
                 }
             }
-            .scrollClipDisabled()
+            .contentMargins(.horizontal, 12, for: .scrollContent)
         }
         .disabled(!online || starting != nil)
-        .padding(12)
+        .padding(.vertical, 12)
+        .clipShape(.rect(cornerRadius: 26))
         .glassEffect(.regular, in: .rect(cornerRadius: 26))
         .padding(.horizontal, 16)
     }
@@ -115,7 +118,7 @@ struct WorkspaceScreen: View {
                 if starting == id { ProgressView().frame(width: 30, height: 30) } else { icon() }
                 Text(name).font(.caption2.weight(.medium)).lineLimit(1)
             }
-            .frame(minWidth: 64)
+            .frame(width: 58)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New \(name) tab")
