@@ -23,7 +23,10 @@ final class ShareViewController: UIViewController {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(host.view)
         host.didMove(toParent: self)
-        Task { await model.load() }
+        Task {
+            guard await model.unlock() else { return }
+            await model.load()
+        }
     }
 }
 
@@ -33,7 +36,10 @@ final class ShareModel {
     var text = ""
     var pictures: [UIImage] = []
     var chat: WidgetSummary.Chat?
-    let chats = WidgetSummary.load().ranked
+    /// Empty until the owner is confirmed: chat titles, computers, and
+    /// workspaces are what the app lock hides.
+    private(set) var chats: [WidgetSummary.Chat] = []
+    private(set) var unlocked = false
     var problem: String?
     var sending = false
     private let items: [NSExtensionItem]
@@ -42,7 +48,21 @@ final class ShareModel {
     init(items: [NSExtensionItem], finish: @escaping (Bool) -> Void) {
         self.items = items
         self.finish = finish
+    }
+
+    /// Asks for Face ID or the passcode when the app is locked (Settings >
+    /// Privacy), before anything about the chats shows; then lists them.
+    /// A refusal closes the sheet.
+    func unlock() async -> Bool {
+        if UserDefaults(suiteName: "group.so.pen.herdr.remote")?.bool(forKey: "requireFaceID") == true,
+           !((try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Send to Herdr")) ?? false) {
+            finish(false)
+            return false
+        }
+        chats = WidgetSummary.load().ranked
         chat = chats.first
+        unlocked = true
+        return true
     }
 
     /// Reads the shared text, link, and pictures.
@@ -75,18 +95,12 @@ final class ShareModel {
     }
 
     func send() {
-        guard let chat else { return }
+        guard unlocked, let chat else { return }
         let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let jpegs = pictures.compactMap { PreparedImage($0)?.jpeg }
         guard !prompt.isEmpty || !jpegs.isEmpty else { return }
         sending = true
         Task {
-            // The app lock (Settings > Privacy) covers sending from here too.
-            if UserDefaults(suiteName: "group.so.pen.herdr.remote")?.bool(forKey: "requireFaceID") == true,
-               !((try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Send to Herdr")) ?? false) {
-                sending = false
-                return
-            }
             do {
                 try await BackgroundCommands.sendPrompt(prompt, pictures: jpegs, computer: chat.computerId, pane: chat.pane)
                 finish(true)
@@ -106,7 +120,9 @@ struct ShareView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if model.chats.isEmpty {
+                if !model.unlocked {
+                    Section { ProgressView().frame(maxWidth: .infinity) }
+                } else if model.chats.isEmpty {
                     Section {
                         Text("Open Herdr Remote once with a computer connected, so its chats are listed here.")
                             .foregroundStyle(.secondary)
