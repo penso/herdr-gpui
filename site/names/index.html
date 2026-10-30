@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Name the Herdr client</title>
-<meta name="description" content="Fourteen names and ten icon sketches for the native Herdr client. Vote in the polls on X.">
+<meta name="description" content="Fourteen names and thirteen icon sketches for the native Herdr client. Vote in the polls on X.">
 <link rel="canonical" href="https://herdrui.dev/names/">
 <link rel="icon" type="image/png" href="../assets/herdr-ui-icon-badge.png">
 <meta name="theme-color" content="#eef0ec">
@@ -17,12 +17,12 @@
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Fourteen name ideas for the Herdr client beside six of the ten app icon sketches.">
+<meta property="og:image:alt" content="Fourteen name ideas for the Herdr client beside six of the thirteen app icon sketches.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Name the Herdr client">
 <meta name="twitter:description" content="Shep, Kelpie, Puli, Drover, Bellwether… Fourteen new names for the Herdr client. See them, then vote.">
 <meta name="twitter:image" content="https://herdrui.dev/assets/names-card.png">
-<meta name="twitter:image:alt" content="Fourteen name ideas for the Herdr client beside six of the ten app icon sketches.">
+<meta name="twitter:image:alt" content="Fourteen name ideas for the Herdr client beside six of the thirteen app icon sketches.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -158,7 +158,7 @@ footer p { margin: 0; }
   <section class="ballot" aria-labelledby="icons-title">
     <div class="section-head">
       <h2 id="icons-title">Icons <span class="when">Poll comes next</span></h2>
-      <p>Each sketch is shown large, then at 48, 32 and 16 px, the sizes it shrinks to in the Dock, menus and Finder lists. Any of them can go with any name. There are ten, so they'll go to three polls of three or four, then a final.</p>
+      <p>Each sketch is shown large, then at 48, 32 and 16 px, the sizes it shrinks to in the Dock, menus and Finder lists. Any of them can go with any name. There are thirteen, so they'll go to four polls of three or four, then a final.</p>
     </div>
     <div class="grid" id="icons"></div>
   </section>
@@ -317,6 +317,32 @@ const SHEEP = `
   <circle cx="44" cy="57.6" r="1.9" fill="#111"/><circle cx="57" cy="57.6" r="1.9" fill="#111"/>
   <path d="M46 71 C48 73 52 73 54 71" fill="none" stroke="#6d6a70" stroke-width="2" stroke-linecap="round"/>`;
 
+// A drover's wide-brimmed hat, dusty from the road.
+const DROVER_HAT = `
+  <ellipse cx="50" cy="73" rx="34" ry="4" fill="#6b4320" opacity="0.22"/>
+  <path d="M29 60 C28 37 35 20 50 20 C65 20 72 37 71 60 Z" fill="#6a4529"/>
+  <path d="M43 22 C47 30 53 30 57 22" fill="none" stroke="#4d301b" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="29.5" y="47" width="41" height="8" fill="#2c1b10"/>
+  <path d="M12 64 C12 56 30 54 50 54 C70 54 88 56 88 64 C88 70 72 66 50 66 C28 66 12 70 12 64Z" fill="#7a5132"/>
+  <path d="M18 62 C26 58 74 58 82 62" fill="none" stroke="#9a6c46" stroke-width="2" stroke-linecap="round"/>`;
+
+// A round dry-stone sheepfold from above, gate open, the flock inside.
+const FOLD = `
+  <path d="M59.6 78.3 A28 28 0 1 0 40.4 78.3" fill="none" stroke="#5b6b4c" stroke-width="12" stroke-linecap="round" opacity="0.35"/>
+  <path d="M59.6 78.3 A28 28 0 1 0 40.4 78.3" fill="none" stroke="#d8cfbb" stroke-width="9" stroke-dasharray="7 2.2" stroke-linecap="round"/>
+  <g fill="#fbf8f1"><circle cx="42" cy="45" r="6.5"/><circle cx="57" cy="43" r="6.5"/><circle cx="48" cy="58" r="6.5"/><circle cx="62" cy="57" r="6.5"/></g>`;
+
+// A post-and-rail fence across a green field under the sky.
+const PADDOCK = `
+  <rect width="100" height="58" fill="#bfe2f0"/>
+  <path d="M0 58 C30 52 70 54 100 58 V100 H0Z" fill="#7cbd68"/>
+  <path d="M0 74 C30 70 70 72 100 76 V100 H0Z" fill="#69a957"/>
+  <circle cx="76" cy="24" r="8" fill="#fff3c4"/>
+  <g fill="#8a5a33">
+    <rect x="18" y="44" width="8" height="38" rx="1.5"/><rect x="46" y="44" width="8" height="38" rx="1.5"/><rect x="74" y="44" width="8" height="38" rx="1.5"/>
+  </g>
+  <g fill="#a8744a"><rect x="4" y="50" width="92" height="6" rx="2"/><rect x="4" y="64" width="92" height="6" rx="2"/></g>`;
+
 // A shepherd's crook beside a terminal cursor.
 const CROOK = `
   <path d="M42 84 L42 38 C42 23 55 16 64 22 C71 27 69 37 61 39" fill="none" stroke="#efe7d2" stroke-width="7.5" stroke-linecap="round"/>
@@ -332,6 +358,9 @@ const ICONS = [
   { title: "Pocket whistle", style: "Enamel object", body: "The shepherd's whistle instead of a dog: how you call the flock in.", draw: tile(grad("#46796a", "#27463d"), WHISTLE(BRASS), "rgba(255,255,255,0.08)") },
   { title: "Bellwether's bell", style: "Enamel object", body: "The bell the lead sheep wears, so you always hear where the flock is. Like a notification, but older.", draw: tile(grad("#cf4b3d", "#8f2a22"), BELL, "rgba(0,0,0,0.15)") },
   { title: "One of the flock", style: "Soft flat", body: "A woolly sheep instead of the dog: the app as one of your agents, looking back at you.", draw: tile(grad("#9bd0ae", "#5e9c78"), SHEEP, "rgba(0,0,0,0.12)") },
+  { title: "Drover's hat", style: "Object", body: "The wide-brimmed hat of someone who walks herds across the country. For <em>Drover</em>.", draw: tile(grad("#ecc993", "#c98f4f"), DROVER_HAT, "rgba(90,50,20,0.22)") },
+  { title: "The fold", style: "Flat, from above", body: "A round stone sheepfold with its gate open and the flock inside. For <em>Fold</em>.", draw: tile(grad("#a9d18e", "#6fa35a"), FOLD, "rgba(0,0,0,0.12)") },
+  { title: "Paddock fence", style: "Little scene", body: "A post-and-rail fence across a green field on a sunny day. For <em>Paddock</em>.", draw: tile(flat("#bfe2f0"), PADDOCK, "rgba(0,0,0,0.12)") },
   { title: "Crook and cursor", style: "Terminal", body: "A shepherd's crook beside a blinking block cursor: herding, in a terminal.", draw: tile(grad("#2d3238", "#15181c"), CROOK, "rgba(255,255,255,0.1)") },
 ];
 
