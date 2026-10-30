@@ -3,6 +3,7 @@
 //! clicking an agent shows its pane.
 
 use super::{Device, Link, view::Look};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{Slot, TabId},
@@ -13,19 +14,31 @@ use herdr_client::protocol::AgentStatus;
 use std::collections::HashSet;
 
 const DEVICE_MIN: f32 = 180.;
-/// Every column but the device's, which takes the rest.
+/// Every column but the device's, which takes the rest, by the message
+/// heading it; the last, the row's chevron, has none.
 pub(super) const COLUMNS: &[(&str, f32)] = &[
-    ("Agents", 230.),
-    ("CPU", 84.),
-    ("Memory", 84.),
-    ("GPU", 84.),
-    ("VRAM", 84.),
-    ("Disk free", 96.),
-    ("Uptime", 76.),
+    ("devices-overview-column-agents", 230.),
+    ("devices-overview-column-cpu", 84.),
+    ("devices-overview-column-memory", 84.),
+    ("devices-overview-column-gpu", 84.),
+    ("devices-overview-column-vram", 84.),
+    ("devices-overview-column-disk", 96.),
+    ("devices-overview-column-uptime", 76.),
     ("", 12.),
 ];
 /// The columns shown while GPUs are read (`Config::gpu_sampled`).
-const GPU_COLUMNS: [&str; 2] = ["GPU", "VRAM"];
+const GPU_COLUMNS: [&str; 2] = [
+    "devices-overview-column-gpu",
+    "devices-overview-column-vram",
+];
+
+/// A column's heading in the shown language.
+fn heading(id: &str) -> String {
+    if id.is_empty() {
+        return String::new();
+    }
+    crate::i18n::message(id, &[])
+}
 
 /// Whether a load column is drawn: the GPU's only while `show_gpu_load` is on.
 fn shown(name: &str, gpu: bool) -> bool {
@@ -105,11 +118,11 @@ pub(super) fn devices(
 ) -> Div {
     let theme = look.theme;
     let header = cells(
-        "Device",
-        COLUMNS[0].0,
+        fl!("devices-overview-column-device"),
+        heading(COLUMNS[0].0),
         COLUMNS[1..]
             .iter()
-            .map(|(label, _)| label.into_any_element()),
+            .map(|(id, _)| heading(id).into_any_element()),
         gpu_shown,
         slot.selector("devices-load-header"),
     )
@@ -215,7 +228,7 @@ pub(super) fn devices(
                 div()
                     .p_4()
                     .text_color(rgb(theme.muted))
-                    .child("No device, agent or workspace matches the search."),
+                    .child(fl!("devices-overview-no-match")),
             )
         })
 }
@@ -239,8 +252,8 @@ fn agent_list(look: &Look, device: &Device, slot: Slot, cx: &mut Context<HerdrWi
                 .pt_2()
                 .text_color(rgb(theme.muted))
                 .child(match device.link {
-                    Link::Online => "No agents on this device.",
-                    _ => "Not connected, so its agents are unknown.",
+                    Link::Online => fl!("devices-overview-device-no-agents"),
+                    _ => fl!("devices-overview-device-unknown"),
                 }),
         );
     }
@@ -334,11 +347,15 @@ fn agents(look: &Look, device: &Device) -> Div {
     let theme = look.theme;
     let tally = device.tally;
     let text = match device.link {
-        Link::Offline => "Offline".to_owned(),
-        Link::Connecting => "Connecting".to_owned(),
-        Link::Disabled => "Disabled".to_owned(),
-        Link::Online if tally.total() == 0 => "No agents".to_owned(),
-        Link::Online => format!("{}/{} working", tally.working, tally.total()),
+        Link::Offline => fl!("devices-overview-offline"),
+        Link::Connecting => fl!("devices-overview-connecting"),
+        Link::Disabled => fl!("devices-overview-disabled"),
+        Link::Online if tally.total() == 0 => fl!("devices-overview-no-agents"),
+        Link::Online => fl!(
+            "devices-overview-agents-working",
+            working = tally.working,
+            total = tally.total()
+        ),
     };
     let blocked = look.status(AgentStatus::Blocked);
     div()
@@ -364,7 +381,10 @@ fn agents(look: &Look, device: &Device) -> Div {
                     .bg(rgb(crate::config::mix(theme.background, blocked, 18)))
                     .text_color(rgb(blocked))
                     .text_size(look.small())
-                    .child(format!("{} blocked", tally.blocked)),
+                    .child(fl!(
+                        "devices-overview-agents-blocked",
+                        count = tally.blocked
+                    )),
             )
         })
 }

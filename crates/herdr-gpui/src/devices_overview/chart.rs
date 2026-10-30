@@ -8,6 +8,7 @@ use super::{
     history::{Counts, History, STEPS},
     view::Look,
 };
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{Slot, TabId},
@@ -89,13 +90,13 @@ pub(super) fn activity(
             div()
                 .text_size(look.small())
                 .text_color(rgb(theme.subtext()))
-                .child("working now"),
+                .child(fl!("devices-overview-working-now")),
         )
         .child(
             div()
                 .text_size(look.small())
                 .text_color(rgb(theme.muted))
-                .child(format!("peak {peak} in 2 h")),
+                .child(fl!("devices-overview-peak", peak = peak)),
         );
     let toggle = div()
         .id(SharedString::from(slot.selector("devices-lanes-toggle")))
@@ -111,9 +112,9 @@ pub(super) fn activity(
         .text_color(rgb(theme.subtext()))
         .hover(|style| style.bg(rgb(theme.active)))
         .child(if lanes {
-            "Hide devices"
+            fl!("devices-overview-hide-devices")
         } else {
-            "View all devices"
+            fl!("devices-overview-view-devices")
         })
         .child(
             svg()
@@ -131,10 +132,14 @@ pub(super) fn activity(
                 cx.notify();
             }
         }));
-    let axis = div()
-        .flex()
-        .justify_between()
-        .children(["2 h ago", "1 h ago", "now"].map(|label| look.mono(label)));
+    let axis = div().flex().justify_between().children(
+        [
+            fl!("devices-overview-axis-two-hours"),
+            fl!("devices-overview-axis-hour"),
+            fl!("devices-overview-axis-now"),
+        ]
+        .map(|label| look.mono(label)),
+    );
     look.panel()
         .debug_selector(move || slot.selector("devices-activity"))
         .p_3()
@@ -150,9 +155,9 @@ pub(super) fn activity(
                 .child(
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Agent activity"),
+                        .child(fl!("devices-overview-activity")),
                 )
-                .child(look.mono("last 2 h"))
+                .child(look.mono(fl!("devices-overview-last-hours")))
                 .child(div().flex_1())
                 .child(look.legend()),
         )
@@ -181,12 +186,14 @@ pub(super) fn activity(
                             ),
                         lane_canvas(padded(lane), working, blocked, theme),
                         Some(look.mono(match device.link {
-                            super::Link::Online => {
-                                format!("{}/{} now", device.tally.working, device.tally.total())
-                            }
-                            super::Link::Connecting => "connecting".into(),
-                            super::Link::Offline => "offline".into(),
-                            super::Link::Disabled => "disabled".into(),
+                            super::Link::Online => fl!(
+                                "devices-overview-lane-now",
+                                working = device.tally.working,
+                                total = device.tally.total()
+                            ),
+                            super::Link::Connecting => fl!("devices-overview-lane-connecting"),
+                            super::Link::Offline => fl!("devices-overview-lane-offline"),
+                            super::Link::Disabled => fl!("devices-overview-lane-disabled"),
                         })),
                     )
                 }))

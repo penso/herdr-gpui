@@ -3,7 +3,10 @@
 //! lays out a report's shared fields; a provider's own `render` may compose
 //! the same pieces around its detail.
 
-use super::model::{Balance, Pace, Report, Section, Severity, Window as Limit, countdown};
+use super::{
+    model::{Balance, Pace, Report, Section, Severity, Window as Limit},
+    text,
+};
 use crate::config::Theme;
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
@@ -68,13 +71,13 @@ impl Ui {
                     .flex()
                     .justify_between()
                     .gap(px(8.))
-                    .child(self.heading(format!("{} {}% left", limit.kind.title(), limit.left())))
+                    .child(self.heading(text::left_heading(limit)))
                     .children(limit.resets_in(self.now).map(|left| {
                         div()
                             .flex_none()
                             .text_size(self.small())
                             .text_color(self.muted())
-                            .child(format!("Resets in {}", countdown(left)))
+                            .child(text::resets_in(left))
                     })),
             )
             .child(self.bar(100. - limit.used, limit.used, pace))
@@ -82,7 +85,7 @@ impl Ui {
                 div()
                     .text_size(self.small())
                     .text_color(self.muted())
-                    .child(pace.describe(limit.used))
+                    .child(text::pace(&pace, limit.used))
             }))
             .into_any_element()
     }
@@ -99,7 +102,7 @@ impl Ui {
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(balance.text()),
+                            .child(text::balance(balance)),
                     );
                 match balance.total.filter(|total| *total > 0.) {
                     Some(total) => {
