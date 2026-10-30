@@ -271,6 +271,9 @@ pub enum ErrorCode {
     Unsupported,
     /// Nearby pairing needs the pairing dialog open on the computer.
     NoPairing,
+    /// The daemon could not write its state; nothing changed, and the
+    /// same request may succeed later.
+    Unsaved,
     #[serde(other)]
     Other,
 }

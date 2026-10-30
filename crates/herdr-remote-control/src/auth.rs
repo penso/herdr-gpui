@@ -145,6 +145,7 @@ impl From<&Error> for control::ErrorCode {
             Error::UnknownDevice => Self::UnknownDevice,
             Error::NotClaimed => Self::NotClaimed,
             Error::NoPairing => Self::NoPairing,
+            Error::Encode(_) | Error::Store { .. } => Self::Unsaved,
             _ => Self::Other,
         }
     }

@@ -15,6 +15,11 @@ use std::{collections::HashSet, sync::atomic::AtomicBool};
 /// How often the host list is sent again unchanged, for a daemon that
 /// restarted between polls, and the revocations owed are asked for.
 const RESEND: Duration = Duration::from_secs(60);
+/// How long a host's answer is offered again to a daemon that could not
+/// record it, doubling from the first wait to the longest.
+const REPORT_FIRST_WAIT: Duration = Duration::from_secs(2);
+const REPORT_LONGEST_WAIT: Duration = Duration::from_secs(60);
+const REPORT_ATTEMPTS: u32 = 30;
 
 /// The supervisor's host state.
 #[derive(Debug, Default)]
@@ -220,17 +225,29 @@ impl Supervisor {
                 .and_then(|dir| Apns::read(&dir));
             links::pair(&job, &AtomicBool::new(false))
         });
+        let executor = cx.background_executor().clone();
         cx.spawn(async move |cx| {
             let outcome = task.await;
             let (device, host) = key.clone();
-            let _ = client
-                .request(Request::HostPaired {
-                    device,
-                    host,
-                    public_key: Some(public_key),
-                    outcome,
-                })
-                .await;
+            let request = Request::HostPaired {
+                device,
+                host,
+                public_key: Some(public_key),
+                outcome,
+            };
+            // The host holds the phone's key now: an answer the daemon did
+            // not record is a device nobody could revoke later, so it is
+            // offered again while the daemon cannot save or be reached.
+            let mut wait = REPORT_FIRST_WAIT;
+            for attempt in 1..=REPORT_ATTEMPTS {
+                let answer = client.request(request.clone()).await;
+                if !retry_report(&answer) {
+                    break;
+                }
+                tracing::info!(attempt, "Remote control did not record a host's answer yet");
+                executor.timer(wait).await;
+                wait = (wait * 2).min(REPORT_LONGEST_WAIT);
+            }
             cx.update(|cx| {
                 cx.global_mut::<Self>().links.running.remove(&key);
                 Self::refresh(cx);
@@ -267,6 +284,16 @@ impl Supervisor {
             });
         })
         .detach();
+    }
+}
+
+/// Whether a host's answer should be offered again: the daemon was not
+/// reached, or could not save it. A refusal stands.
+fn retry_report(answer: &Result<Response, control::Error>) -> bool {
+    match answer {
+        Ok(_) => false,
+        Err(control::Error::Daemon { code, .. }) => *code == control::ErrorCode::Unsaved,
+        Err(_) => true,
     }
 }
 

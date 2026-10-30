@@ -84,3 +84,20 @@ fn a_revocation_whose_save_failed_is_saved_by_the_retry() {
     };
     assert_eq!(super::auth(dir.path()).host_revokes(), vec![owed]);
 }
+
+#[test]
+fn a_failed_save_tells_herdr_ui_to_try_again() {
+    let error = Error::Store {
+        operation: StoreOperation::Replace,
+        path: "devices.json".into(),
+        source: std::io::ErrorKind::PermissionDenied.into(),
+    };
+    assert_eq!(
+        control::ErrorCode::from(&error),
+        control::ErrorCode::Unsaved
+    );
+    assert_eq!(
+        control::ErrorCode::from(&Error::Links(crate::auth::links::Error::NotPairing)),
+        control::ErrorCode::Other
+    );
+}

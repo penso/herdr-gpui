@@ -3,6 +3,8 @@
 
 use super::*;
 use gpui::TestAppContext;
+
+mod report;
 use herdr_remote_control::control::hosts::HostPairing;
 use std::sync::Mutex;
 
