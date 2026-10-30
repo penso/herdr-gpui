@@ -16,6 +16,11 @@ fn other_arch() -> &'static str {
 fn a_host_like_this_computer_gets_this_apps_own_build() {
     let own = PathBuf::from("/app/herdr-remote-control");
     for release in [false, true] {
+        // A Linux release's own build links glibc; the static one is sent
+        // instead (`a_linux_host_of_a_release_gets_the_static_build_...`).
+        if release && Platform::local().os == "linux" {
+            continue;
+        }
         assert_eq!(
             choose(&Platform::local(), release, Some(own.clone()), false),
             Some(Choice::Bundled(own.clone()))
@@ -25,11 +30,10 @@ fn a_host_like_this_computer_gets_this_apps_own_build() {
 
 #[test]
 fn a_linux_host_of_a_release_gets_the_static_build_for_its_architecture() {
+    // Even a host just like this computer, which may lack the glibc this
+    // app's own build links.
     for arch in ["x86_64", "aarch64"] {
         let linux = platform("linux", arch);
-        if linux == Platform::local() {
-            continue;
-        }
         assert_eq!(
             choose(&linux, true, Some("/app/own".into()), false),
             Some(Choice::Download(format!("{arch}-unknown-linux-musl")))

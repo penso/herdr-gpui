@@ -1,11 +1,14 @@
 //! Getting `herdr-remote-control` onto a host before a phone is enrolled
 //! there. The build comes from the first of these that fits the host:
-//! - this app's own, when the host is this kind of computer, or any Mac
-//!   when this is a release, whose build is universal;
 //! - for a Linux host and a release, the release's static build for the
 //!   host's architecture, checked against the release's signed host
 //!   manifest (`herdr_updater::download_host_build`) and kept in this
-//!   app's state, so each version downloads once;
+//!   app's state, so each version downloads once. It comes first even when
+//!   this computer runs Linux on the same architecture: this app's own
+//!   build links glibc, which Alpine or an older distribution lacks, and
+//!   `uname` cannot tell them apart;
+//! - this app's own, when the host is this kind of computer, or any Mac
+//!   when this is a release, whose build is universal;
 //! - for a development build, this checkout's source as it is, built on
 //!   the host with the host's own Rust toolchain.
 //!
@@ -56,18 +59,18 @@ pub(crate) fn choose(
     bundled: Option<PathBuf>,
     universal: bool,
 ) -> Option<Choice> {
+    if release && platform.os == "linux" {
+        let target = format!("{}-unknown-linux-musl", platform.arch);
+        if herdr_updater::HOST_TARGETS.contains(&target.as_str()) {
+            return Some(Choice::Download(target));
+        }
+    }
     let fits = |_: &PathBuf| {
         *platform == Platform::local()
             || (platform.os == "macos" && Platform::local().os == "macos" && universal)
     };
     if let Some(bundled) = bundled.filter(fits) {
         return Some(Choice::Bundled(bundled));
-    }
-    if release && platform.os == "linux" {
-        let target = format!("{}-unknown-linux-musl", platform.arch);
-        return herdr_updater::HOST_TARGETS
-            .contains(&target.as_str())
-            .then_some(Choice::Download(target));
     }
     (!release).then_some(Choice::Source)
 }
