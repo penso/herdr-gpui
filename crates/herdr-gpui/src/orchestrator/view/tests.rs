@@ -12,6 +12,7 @@ mod conversation_list;
 mod dialog;
 mod empty;
 mod failure_text;
+mod gitlab_merge_request;
 mod groups;
 mod list_switch;
 mod markdown;

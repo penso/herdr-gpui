@@ -339,7 +339,7 @@ fn working_output_cursor_does_not_hide_the_rich_conversation(cx: &mut TestAppCon
     });
     assert_eq!(cx.debug_bounds("chat-view").unwrap(), original);
     assert!(cx.debug_bounds("chat-terminal-input").is_some());
-    assert!(cx.debug_bounds("chat-cancel").is_none());
+    assert!(cx.debug_bounds("chat-stop").is_none());
 }
 
 #[gpui::test]

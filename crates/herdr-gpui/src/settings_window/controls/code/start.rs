@@ -7,6 +7,7 @@ use crate::code_server::{
     Launcher, Startup,
     launcher::{self, Cli, LICENSE_URL, PRIVACY_URL},
 };
+use crate::direction::Logical;
 
 impl SettingsWindow {
     /// The mode in effect, or `None` while VS Code is still being looked for.
@@ -71,7 +72,7 @@ impl SettingsWindow {
             ))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(12.))
                     .child(choice(
@@ -145,7 +146,7 @@ impl SettingsWindow {
             .child(div().min_w_0().child(fl!("settings-code-license-terms")))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(16.))
                     .child(link(
@@ -159,13 +160,13 @@ impl SettingsWindow {
                         PRIVACY_URL,
                     )),
             )
-            .child(div().flex().child(accept))
+            .child(div().row().child(accept))
     }
 
     fn render_code_state(&self, icon: &'static str, color: u32, text: SharedString) -> Div {
         div()
             .debug_selector(|| "settings-code-state".into())
-            .flex()
+            .row()
             .items_center()
             .gap(px(8.))
             .min_w_0()

@@ -8,6 +8,7 @@
 //! before, including toggles made while the chrome was hidden.
 
 use super::{Flash, HerdrWindow};
+use crate::direction::Logical;
 use crate::{
     browser::{Pick, Slot},
     config::ZenWidth,
@@ -76,8 +77,9 @@ impl ZenState {
 }
 
 /// `element`, `width` wide, in a box its own size that clips it, drawn
-/// further left as `shown` falls from 1 to 0.
-pub(crate) fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> Div {
+/// further toward the start, the left or in a right-to-left language the
+/// right, as `shown` falls from 1 to 0.
+pub(crate) fn slide_start(element: impl IntoElement, width: f32, shown: f32) -> Div {
     div()
         .relative()
         .flex_none()
@@ -89,7 +91,7 @@ pub(crate) fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> D
                 .absolute()
                 .top_0()
                 .bottom_0()
-                .left(px(-(1. - shown) * width))
+                .inset_s(px(-(1. - shown) * width))
                 .w(px(width))
                 .flex()
                 .child(element),
@@ -158,7 +160,7 @@ impl HerdrWindow {
             .sidebar_slide_shown()
             .filter(|_| !self.activity_bar_leads());
         match self.chrome_slide().map(|shown| shown.sidebar).or(toggled) {
-            Some(shown) => slide_left(column, width, shown).into_any_element(),
+            Some(shown) => slide_start(column, width, shown).into_any_element(),
             None => column,
         }
     }

@@ -7,6 +7,7 @@ use super::{
     super::{Section, SettingsWindow},
     Hint, follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     boat::{
         SandboxCount, Settings,
@@ -418,7 +419,7 @@ impl SettingsWindow {
                     .child(self.cloud_field(fl!("settings-cloud-api-key"), card.key.clone().into()))
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .flex_wrap()
                             .items_center()
                             .justify_between()
@@ -443,7 +444,7 @@ impl SettingsWindow {
         }
         account = account.child(self.control_note(fl!("settings-cloud-boat-auto-stop-note")));
         account = account.child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 self.cloud_button("cloud-boat-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-boat-save".into())
                     .when(ready, |button| {
@@ -502,7 +503,7 @@ impl SettingsWindow {
                 cx,
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button("cloud-boat-create", create_label, create)
                         .debug_selector(|| "cloud-boat-create".into())
                         .when(create, |button| {

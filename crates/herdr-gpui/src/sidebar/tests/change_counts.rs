@@ -27,7 +27,7 @@ fn counts(
         Some((cache, &crate::pull_request::View::default())),
         (Some(git), mode),
         (&marks, crate::endpoint::LOCAL),
-        None,
+        (None, false),
         &Theme::default(),
     )?
     .counts
@@ -77,7 +77,7 @@ fn a_row_shows_only_the_change_counts_the_setting_picks() {
             None,
             (git, ChangeCounts::Local),
             (&marks, crate::endpoint::LOCAL),
-            None,
+            (None, false),
             &Theme::default(),
         )
     };

@@ -2,7 +2,7 @@
 //! comes from the diff, so the prompt marks it as data, and inline code
 //! survives backticks in it.
 use super::diff::{Anchor, Side};
-use crate::notifications::safe_text;
+use crate::truncate::one_line;
 
 /// Queued notes at once, as for page annotations.
 pub(crate) const MAX_NOTES: usize = 50;
@@ -18,25 +18,10 @@ pub(crate) struct Note {
     pub sent: Option<crate::agent_notes::SendId>,
 }
 
-/// One line of text: no controls, no runs of whitespace, and bounded.
-fn line(text: &str, limit: usize) -> String {
-    let spaced: String = text
-        .chars()
-        .take(limit * 4)
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    let text = safe_text(&spaced, limit * 4);
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => format!("{}\u{2026}", &text[..end]),
-        None => text,
-    }
-}
-
 impl Note {
     /// A note saying `comment`, or `None` when it says nothing.
     pub(crate) fn new(anchor: Anchor, comment: &str) -> Option<Self> {
-        let comment = line(comment, MAX_COMMENT_CHARS);
+        let comment = one_line(comment, MAX_COMMENT_CHARS);
         (!comment.is_empty()).then_some(Self {
             anchor,
             comment,
@@ -99,7 +84,7 @@ pub(crate) fn prompt(checkout: &str, notes: &[Note]) -> String {
                     "\n{number}. On {} ({which})\n",
                     code(&format!("{path}:{line_number}"))
                 ));
-                let quoted = line(quoted, MAX_QUOTED_CHARS);
+                let quoted = one_line(quoted, MAX_QUOTED_CHARS);
                 if !quoted.is_empty() {
                     text.push_str(&format!("   Code: {}\n", code(&quoted)));
                 }

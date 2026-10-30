@@ -4,7 +4,7 @@
 
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, Lead, TabContext, TabFace, TabLayout,
-    TabShape, TabState, ZOOM_ICON, close_button, floating_new_tab, lead_mark, status_width,
+    TabShape, TabState, close_button, floating_new_tab, lead_mark, mute_mark, status_width,
     zoom_mark,
 };
 use crate::{
@@ -38,7 +38,7 @@ impl TabLayout for Underline {
     fn width(
         &self,
         title: f32,
-        TabShape { lead, zoomed, .. }: TabShape,
+        shape @ TabShape { lead, .. }: TabShape,
         font: &FontConfig,
         indicators: Indicators,
     ) -> f32 {
@@ -47,7 +47,7 @@ impl TabLayout for Underline {
             Lead::Status => status_width(lead, font, indicators).unwrap_or(0.) + GAP,
             Lead::Icon => ICON + GAP,
         };
-        let zoom = if zoomed { DOT_GAP + ZOOM_ICON } else { 0. };
+        let zoom = shape.marks_width();
         (PAD_LEFT + mark + title + zoom + GAP + CLOSE + PAD_RIGHT).max(crate::TAB_WIDTH)
     }
 
@@ -70,6 +70,7 @@ impl TabLayout for Underline {
             label,
             mark,
             zoomed,
+            muted,
             probe,
             close,
         } = face;
@@ -108,7 +109,8 @@ impl TabLayout for Underline {
                             .items_center()
                             .gap(px(DOT_GAP))
                             .child(label)
-                            .children(zoom_mark(zoomed, &probe, text, cx)),
+                            .children(zoom_mark(zoomed, &probe, text, cx))
+                            .children(mute_mark(muted, &probe, text, cx)),
                     )
                     .child(
                         div()

@@ -8,7 +8,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::{
-    HostProbe, Method, NewHostKey, SshFailure,
+    HostKeys, HostProbe, Method, NewHostKey, SshFailure,
     protocol::{ClientKeyCode, ClientKeyKind, ClientPaneInputEvent},
 };
 
@@ -35,6 +35,8 @@ pub(in crate::menu) struct Setup {
     /// its own, so a job finishing while another source shows stays here.
     pub(super) error: Option<String>,
     pub(super) suggestion_scroll: ScrollHandle,
+    /// Whether the host's key is checked; see `host_key_choice`.
+    pub(super) host_keys: HostKeys,
 }
 
 /// Where adding a device stands. Each step after `Form` belongs to the request
@@ -238,6 +240,7 @@ impl HerdrWindow {
             highlight: None,
             suggestion_scroll: ScrollHandle::new(),
             error: None,
+            host_keys: HostKeys::Verify,
         });
         self.menu.page = Some(Page::AddDevice);
         self.start_device_discovery(cx);
@@ -355,6 +358,7 @@ impl HerdrWindow {
                 body = body.child(self.render_device_suggestions(setup, discovery, cx));
             }
         }
+        body = body.child(self.render_host_key_choice(setup, cx));
         if let Some(error) = &setup.error {
             body = body.child(
                 div()
@@ -497,7 +501,8 @@ impl HerdrWindow {
             form.fields[0].read(cx).text(),
             form.fields[1].read(cx).text(),
             form.fields[2].read(cx).text(),
-        );
+        )
+        .map(|request| request.with_host_keys(form.host_keys));
         let request = match request.and_then(|request| {
             self.ensure_new_device(&request)?;
             Ok(request)

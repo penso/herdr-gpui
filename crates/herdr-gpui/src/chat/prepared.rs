@@ -204,6 +204,8 @@ pub(crate) struct Prepared {
     /// Files the transcript's tool calls changed, first change first, with
     /// their lines added and removed summed.
     changed: Vec<DiffSummary>,
+    /// Each sub-agent's steps, by its call id, in order.
+    steps: HashMap<String, Vec<EntryId>>,
     text: super::selection::Document,
     pub(crate) visuals: Visuals,
 }
@@ -228,6 +230,11 @@ impl Prepared {
 
     pub(crate) fn changed(&self) -> &[DiffSummary] {
         &self.changed
+    }
+
+    /// The steps the sub-agent of the call `call` took, in order.
+    pub(crate) fn steps(&self, call: &str) -> &[EntryId] {
+        self.steps.get(call).map_or(&[], Vec::as_slice)
     }
 
     pub(crate) fn text(&self) -> &super::selection::Document {
@@ -300,6 +307,14 @@ impl Prepared {
             self.bodies.insert(entry.id, (*revision, Rc::new(body)));
         }
         self.text.update(transcript, keys, &self.bodies);
+        self.steps.clear();
+        for entry in &transcript.entries {
+            if let EntryKind::Tool(tool) = &entry.kind
+                && let Some(parent) = &tool.parent
+            {
+                self.steps.entry(parent.clone()).or_default().push(entry.id);
+            }
+        }
         self.changed.clear();
         for entry in &transcript.entries {
             let Some((_, body)) = self.bodies.get(&entry.id) else {
@@ -334,6 +349,7 @@ impl Prepared {
     pub(crate) fn clear(&mut self) {
         self.bodies.clear();
         self.changed.clear();
+        self.steps.clear();
         self.text.clear();
         self.visuals.clear();
     }

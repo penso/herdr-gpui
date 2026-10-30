@@ -149,7 +149,8 @@ fn workspace_popover_header_and_right_click_retargeting(cx: &mut gpui::TestAppCo
         assert!(bounds.left() >= panel.left() && bounds.right() <= panel.right());
     }
     // Once an action opens a dialog, outside right-clicks only dismiss it.
-    cx.simulate_keystrokes("down enter");
+    // The first tile's, past the header's mute toggle.
+    cx.simulate_keystrokes("down down enter");
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     let row = cx.debug_bounds("row-herdr").unwrap();
     let position = point(px(5.), row.center().y);

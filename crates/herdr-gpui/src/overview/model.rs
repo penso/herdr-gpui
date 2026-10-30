@@ -4,7 +4,12 @@
 //! sections once the user's marks sort them.
 
 use super::marks::{Hold, Marks};
-use crate::{endpoint::Endpoint, orchestrator::ViewId, state::LiveState};
+use crate::{
+    endpoint::Endpoint,
+    notification_mutes::{Daemon, Mutes},
+    orchestrator::ViewId,
+    state::LiveState,
+};
 use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::SystemTime};
@@ -131,6 +136,9 @@ pub(crate) struct Row {
     pub since: Option<SystemTime>,
     pub pr: Option<Pr>,
     pub open: Open,
+    /// The agent's workspace or tab is muted: listed, but counting for
+    /// nothing in the activity bar.
+    pub muted: bool,
 }
 
 /// When each agent entered its state. The daemon reports the order of
@@ -212,6 +220,7 @@ pub(crate) fn agent_rows(
     live: &LiveState,
     since: &Since,
     pr: impl Fn(&str, &str) -> Option<Pr>,
+    mutes: Option<&Mutes>,
 ) -> Vec<Row> {
     if !endpoint.enabled || !live.status.is_connected() {
         return Vec::new();
@@ -219,6 +228,9 @@ pub(crate) fn agent_rows(
     let Some(snapshot) = live.snapshot.as_deref() else {
         return Vec::new();
     };
+    let silenced = mutes
+        .map(|mutes| mutes.silenced(&Daemon::of(endpoint), snapshot))
+        .unwrap_or_default();
     snapshot
         .agents
         .iter()
@@ -260,6 +272,11 @@ pub(crate) fn agent_rows(
                     tab: agent.tab_id.clone(),
                     workspace: agent.workspace_id.clone(),
                 },
+                muted: silenced.notice(
+                    Some(&agent.workspace_id),
+                    Some(&agent.tab_id),
+                    Some(&agent.pane_id),
+                ),
             }
         })
         .collect()
@@ -312,24 +329,23 @@ impl Sections {
             && self.settled.is_empty()
     }
 
-    /// What the activity bar counts: rows that need the user and are not
-    /// held.
+    /// The rows the activity bar counts: those that need the user and are
+    /// neither held nor muted.
+    fn counted(&self) -> impl Iterator<Item = &Row> {
+        self.needs
+            .iter()
+            .chain(self.pinned.iter().filter(|row| row.state.needs_you()))
+            .filter(|row| !row.muted)
+    }
+
+    /// What the activity bar counts.
     pub(crate) fn needing(&self) -> usize {
-        self.needs.len()
-            + self
-                .pinned
-                .iter()
-                .filter(|row| row.state.needs_you())
-                .count()
+        self.counted().count()
     }
 
     /// When the latest of the rows [`Self::needing`] counts entered its
     /// state.
     pub(crate) fn needing_since(&self) -> Option<SystemTime> {
-        self.needs
-            .iter()
-            .chain(self.pinned.iter().filter(|row| row.state.needs_you()))
-            .filter_map(|row| row.since)
-            .max()
+        self.counted().filter_map(|row| row.since).max()
     }
 }

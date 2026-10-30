@@ -1,7 +1,8 @@
-//! Font faces, their configured overrides and sizes, and the icon-font cascade.
+//! Font faces, their configured overrides and sizes, and the icon-font and
+//! CJK cascades.
 use super::Error;
 use super::{
-    Config,
+    Config, cjk_fonts,
     font_weight::{self, MissingWeight},
 };
 use crate::Result;
@@ -427,6 +428,8 @@ impl Config {
         I: IntoIterator<Item = String>,
     {
         self.replace_undrawable_fonts(super::bitmap_fonts::is_undrawable);
+        let cjk_script =
+            cjk_fonts::preferred_script(&self.language, &herdr_i18n::system_languages());
         let terminal_detects = self.terminal.fallbacks.is_none();
         let configured = [&self.sidebar, &self.tabs, &self.terminal, &self.ui];
         let requested: BTreeSet<&str> = configured
@@ -463,13 +466,20 @@ impl Config {
         let [_, _, terminal, _] = &faces;
         let terminal_draws_icons =
             draws_icons(&terminal.family) && !self.missing_fonts.contains(&terminal.family);
+        let cjk = cjk_fonts::cjk_fallbacks(cjk_fonts::PLATFORM_CJK_FONTS, cjk_script, &installed);
         let detected = symbol_fallbacks(installed);
         // Only the terminal draws prompts; an explicit `fallback`, even `[]`,
         // is a choice the user already made.
         self.icon_font_missing = detected.is_empty() && terminal_detects && !terminal_draws_icons;
-        for face in faces {
+        let [sidebar, tabs, terminal, ui] = faces;
+        if terminal.fallbacks.is_none() {
+            terminal.fallbacks = Some(detected.clone());
+        }
+        // Icons first, so a CJK family that also maps the Private Use Area
+        // never draws a prompt icon.
+        for face in [sidebar, tabs, ui] {
             if face.fallbacks.is_none() {
-                face.fallbacks = Some(detected.clone());
+                face.fallbacks = Some(detected.iter().chain(&cjk).cloned().collect());
             }
         }
     }

@@ -50,6 +50,7 @@ fn tool(title: &str, status: ToolStatus) -> EntryKind {
         content: Vec::new(),
         kind: ToolKind::Execute,
         locations: Vec::new(),
+        parent: None,
         status,
         title: title.to_owned(),
     })

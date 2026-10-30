@@ -138,3 +138,97 @@ fn an_agent_with_its_own_bypass_mode_has_no_shield(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("chat-setting-mode").is_some());
     assert!(cx.debug_bounds("chat-auto-accept").is_none());
 }
+
+#[gpui::test]
+fn files_dropped_on_the_chat_become_attachments(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, idle(), cx);
+    // The chat covers the terminal's own drop handler, so the drop has to
+    // reach the chat through real event dispatch, not a direct call.
+    let at = cx.debug_bounds("chat-view").unwrap().center();
+    let shot = PathBuf::from("/work/shot.png");
+    cx.simulate_event(gpui::FileDropEvent::Entered {
+        position: at,
+        paths: gpui::ExternalPaths(std::iter::once(shot.clone()).collect()),
+    });
+    cx.simulate_event(gpui::FileDropEvent::Submit { position: at });
+    poll(&view, &program, cx);
+    let attachments = view.read_with(cx, |view, _| {
+        view.chats.panes().next().unwrap().attachments.clone()
+    });
+    assert_eq!(attachments, vec![shot]);
+    assert!(cx.debug_bounds("chat-attachment-0").is_some());
+}
+
+fn paste_key() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "cmd-v"
+    } else {
+        "ctrl-shift-v"
+    }
+}
+
+fn attachments(
+    view: &gpui::Entity<crate::HerdrWindow>,
+    cx: &mut gpui::VisualTestContext,
+) -> Vec<PathBuf> {
+    view.read_with(cx, |view, _| {
+        view.chats.panes().next().unwrap().attachments.clone()
+    })
+}
+
+#[gpui::test]
+fn copied_files_paste_as_attachments_not_their_names(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut stream = attach_with(&view, &program, idle(), cx);
+    let shot = PathBuf::from("/work/shot.png");
+    cx.write_to_clipboard(gpui::ClipboardItem {
+        entries: vec![
+            gpui::ClipboardEntry::ExternalPaths(gpui::ExternalPaths(
+                std::iter::once(shot.clone()).collect(),
+            )),
+            gpui::ClipboardEntry::String(gpui::ClipboardString::new("shot.png".into())),
+        ],
+    });
+    cx.simulate_keystrokes(paste_key());
+    poll(&view, &program, cx);
+    assert_eq!(attachments(&view, cx), vec![shot.clone()]);
+    let send = cx.debug_bounds("chat-send").unwrap();
+    cx.simulate_click(send.center(), Modifiers::default());
+    assert_eq!(
+        next_command(&mut stream),
+        Command::Prompt {
+            text: String::new(),
+            attachments: vec![Attachment {
+                path: "/work/shot.png".into()
+            }],
+        }
+    );
+}
+
+#[gpui::test]
+fn a_copied_screenshot_pastes_as_an_attached_file(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, idle(), cx);
+    // PNG bytes within the upload limit pass through undecoded; unique bytes
+    // keep this test's file apart from any other run's.
+    let bytes = format!("screenshot {:?}", std::time::SystemTime::now()).into_bytes();
+    cx.write_to_clipboard(gpui::ClipboardItem::new_image(&gpui::Image::from_bytes(
+        gpui::ImageFormat::Png,
+        bytes.clone(),
+    )));
+    cx.simulate_keystrokes(paste_key());
+    cx.run_until_parked();
+    poll(&view, &program, cx);
+    let attached = attachments(&view, cx);
+    let [file] = attached.as_slice() else {
+        panic!("one attachment, got {attached:?}");
+    };
+    assert_eq!(file.extension().unwrap(), "png");
+    assert_eq!(std::fs::read(file).unwrap(), bytes);
+    assert!(cx.debug_bounds("chat-attachment-0").is_some());
+    std::fs::remove_file(file).unwrap();
+}

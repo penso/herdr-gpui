@@ -104,6 +104,17 @@ pub(crate) enum ChatInput {
     Terminal,
 }
 
+/// The composer's round button.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SendButton {
+    /// Nothing to send: shown, but does nothing.
+    Off,
+    /// Sends the prompt, queued behind a running turn.
+    Send,
+    /// Cancels the running turn.
+    Stop,
+}
+
 pub(crate) struct ChatPane {
     /// Files the next prompt carries, in the order they were added.
     pub(crate) attachments: Vec<std::path::PathBuf>,
@@ -143,7 +154,12 @@ pub(crate) struct ChatPane {
     /// A read-only overlay owns the keyboard without installing an input handler.
     pub(crate) read_only_focus: Option<FocusHandle>,
     retry_at: Option<Instant>,
+    /// Whether the table of running sub-agents and shells is open.
+    pub(crate) running: crate::motion::Toggle,
     pub(crate) selection: super::selection::Selection,
+    /// What the composer's round button does; the poll keeps it current as
+    /// the composer changes, since typing does not redraw the window.
+    pub(crate) send: SendButton,
     pub(crate) session: Session,
     pub(crate) target: Target,
     /// Expose more of an existing agent's original editor and dialogs inline.
@@ -153,11 +169,29 @@ pub(crate) struct ChatPane {
     pub(crate) text_geometry: super::view::selection::Geometry,
     /// Files being copied to the chat's SSH host to attach there.
     pub(crate) uploading: usize,
+    /// The picture shown large over the chat, while one is.
+    pub(crate) viewer: Option<super::view::viewer::Viewer>,
     /// Interactive message state, scoped to this pane and transcript revision.
     pub(crate) widgets: super::widgets::State,
 }
 
 impl ChatPane {
+    /// What the composer's round button does with `text` on its editable
+    /// line: as in the phone app, it stops a running turn while nothing is
+    /// written or attached, and sends only once something is.
+    pub(crate) fn send_button(&self, text: &str) -> SendButton {
+        let drafted = !text.trim().is_empty()
+            || self.draft.iter().any(|line| !line.trim().is_empty())
+            || !self.attachments.is_empty()
+            || self.uploading > 0;
+        let status = &self.session.transcript().status;
+        match (drafted, status) {
+            (false, herdr_chat_protocol::Status::Working) => SendButton::Stop,
+            (true, status) if status.accepts_prompts() => SendButton::Send,
+            _ => SendButton::Off,
+        }
+    }
+
     /// Whether a callback made for `target` at `cursor` still applies: the
     /// same binding and the same transcript epoch, not a replacement session.
     pub(crate) fn is_current(&self, target: &Target, cursor: Option<Cursor>) -> bool {
@@ -179,7 +213,7 @@ impl ChatPane {
     }
 
     /// Every handle through which the chat holds the keyboard: its composer,
-    /// its inert mirror focus, and its selectable text.
+    /// its inert mirror focus, its selectable text, and a picture shown large.
     pub(crate) fn focus_handles<'a>(
         &'a self,
         cx: &'a App,
@@ -189,6 +223,7 @@ impl ChatPane {
             .map(|input| input.read(cx).focus.clone())
             .chain(self.read_only_focus.iter().cloned())
             .chain(self.text_focus.iter().cloned())
+            .chain(self.viewer.iter().map(|viewer| viewer.focus().clone()))
     }
 
     /// Whether the user is reading, with the keyboard on the chat's text.
@@ -230,7 +265,9 @@ impl ChatPane {
             rail: true,
             read_only_focus: None,
             retry_at: None,
+            running: Default::default(),
             selection: Default::default(),
+            send: SendButton::Off,
             session: Session::default(),
             target,
             terminal_size: Default::default(),
@@ -238,6 +275,7 @@ impl ChatPane {
             text_focus: None,
             text_geometry: Default::default(),
             uploading: 0,
+            viewer: None,
             widgets: Default::default(),
         }
     }

@@ -2,6 +2,7 @@
 //! that edits the shared `[ui.sidebar]` rows, and a preview of those rows.
 // i18n: migrated
 use super::*;
+use crate::direction::Logical;
 use crate::{
     config::{SidebarScope, Theme, mix},
     fonts::StyledFont,
@@ -196,7 +197,7 @@ impl SettingsWindow {
         };
         card.child(
             div()
-                .flex()
+                .row()
                 .flex_wrap()
                 .items_start()
                 .gap(px(20.))
@@ -221,7 +222,7 @@ impl SettingsWindow {
         let row = div()
             .id(ElementId::Name(id.into()))
             .debug_selector(move || selector)
-            .flex()
+            .row()
             .items_center()
             .justify_between()
             .gap(px(12.))
@@ -349,7 +350,7 @@ impl SettingsWindow {
 
     fn preview_row(&self, row: Vec<PreviewPart>) -> Div {
         let theme = &self.theme;
-        let mut line = div().flex().items_center().gap(px(6.)).min_w_0();
+        let mut line = div().row().items_center().gap(px(6.)).min_w_0();
         for part in row {
             line = line.child(match part {
                 PreviewPart::StateIcon => div()

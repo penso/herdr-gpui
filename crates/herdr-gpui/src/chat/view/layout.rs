@@ -10,6 +10,7 @@
 mod bubbles;
 mod cards;
 mod document;
+mod ia;
 mod imessage;
 mod terminal;
 mod timeline;
@@ -52,6 +53,8 @@ pub(super) struct Row<'a> {
     pub(super) agent: &'a str,
     /// The entry is the last while a turn runs, so it may still grow.
     pub(super) live: bool,
+    /// The entry belongs to the turn since the user's latest prompt.
+    pub(super) current: bool,
     pub(super) content: Div,
 }
 
@@ -135,6 +138,17 @@ pub(super) trait ChatLayout {
         div().h(px(18.)).flex().child(button)
     }
 
+    /// Whether a folded tool call previews its files and first output
+    /// lines under its title: by default it does.
+    fn tool_preview(&self) -> bool {
+        true
+    }
+
+    /// The size the user's prompts are set at: by default the chat's text.
+    fn prompt_text(&self, look: &Look<'_>) -> f32 {
+        look.text
+    }
+
     /// The color an agent message's prose is drawn in: by default the
     /// theme's foreground. `None` keeps the color the row gives it.
     fn prose(&self, look: &Look<'_>) -> Option<u32> {
@@ -154,12 +168,12 @@ pub(super) trait ChatLayout {
         None
     }
 
-    /// What shows under the conversation for whether the agent is working
-    /// on a turn: by default nothing, as the header already says so. A row
-    /// it draws keeps its height either way, so the list above it does not
-    /// change size as turns start and end.
-    fn working(&self, _working: bool, _look: &Look<'_>) -> Option<Div> {
-        None
+    /// What shows under the conversation while the agent works on a turn:
+    /// by default a pulsing dot, what it is doing, and how long the turn
+    /// has run. A row it draws keeps its height either way, so the list
+    /// above it does not change size as turns start and end.
+    fn working(&self, working: Option<&super::working::Working>, look: &Look<'_>) -> Option<Div> {
+        Some(super::working::row(working, look))
     }
 
     /// How a turn ended, from its description: by default a quiet rule
@@ -187,6 +201,7 @@ pub(super) fn layout_for(mode: ChatLayoutMode) -> &'static dyn ChatLayout {
         ChatLayoutMode::Document => &document::Document,
         ChatLayoutMode::Cards => &cards::Cards,
         ChatLayoutMode::IMessage => &imessage::IMessage,
+        ChatLayoutMode::IA => &ia::IA,
     }
 }
 

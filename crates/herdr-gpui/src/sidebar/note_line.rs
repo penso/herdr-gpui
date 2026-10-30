@@ -3,6 +3,7 @@
 
 use super::{label_text, line_height};
 use crate::config::{FontConfig, Theme};
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 /// One truncated line in the note mark's hue, starting at `padding.0` and
@@ -21,13 +22,13 @@ pub(super) fn element(
         .debug_selector(move || selector)
         .h(px(line_height(font)))
         .flex_none()
-        .flex()
+        .row()
         .items_center()
         .gap(px(4.))
         .w_full()
         .min_w_0()
-        .pl(px(padding.0))
-        .pr(px(padding.1))
+        .ps(px(padding.0))
+        .pe(px(padding.1))
         .text_size(px(size))
         .text_color(rgb(theme.ink(theme.palette[4])))
         .cursor_pointer()

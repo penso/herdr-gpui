@@ -41,7 +41,7 @@ agent-launcher wrote it and check that migration keeps its rows.
 | --- | --- |
 | `model.rs`, `location.rs`, `store.rs` | Records in the database's shapes, its path, and SQLite access. |
 | `repo.rs` | Finding a checkout's repository, main checkout, Beads, and remote on its host. |
-| `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, with a full listing again every 30 minutes; GitLab lists its open issues in full on every sync. |
+| `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, with a full listing again every 30 minutes; GitLab lists its open issues and merge requests in full on every sync. |
 | `review.rs` | Each open pull request's review decision, review requests, and checks, read after every GitHub sync and kept in the database, so a restart shows the last ones until the first sync. |
 | `service.rs` | The worker thread per open view: sync, reload, and the action queue. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
@@ -87,7 +87,14 @@ it has no Stop, Send, or Remove, since no application owns it.
 `gitlab.rs` lists a GitLab project's open issues through the REST API
 (`/api/v4/projects/<escaped path>/issues`), on gitlab.com or a self-managed
 host, in agent-launcher's GitLab row format: `native_id` is the issue's
-project `iid`. The API is reached over HTTPS, or over HTTP when the remote's
+project `iid`. Its open merge requests (`.../merge_requests?state=opened`, read
+the same way, with the same token) join them as pull requests, keyed `pr/<iid>`
+and shown as `!<iid>`, with their source and target branches and draft state.
+A refused merge request listing fails the sync and preserves the cached
+items. Merge requests are read-only: the status, conversation, checks, merge,
+and `gh` review pages are GitHub's, so a merge request has none of them and
+opens on its description. GitLab's account identity is not yet used for the
+Mine filter. The branch-aware titlebar card remains GitHub-only. The API is reached over HTTPS, or over HTTP when the remote's
 own URL is `http://`; the shared source key names only the host, so the scheme
 is read from the remote each time.
 

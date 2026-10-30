@@ -30,12 +30,30 @@ fn local_peer_warning_becomes_a_toast_even_when_notifications_are_off() {
         enabled: false,
         ..Default::default()
     };
-    crate::notifications::tick(&mut endpoints, 0, config, true, true, None, Instant::now());
+    crate::notifications::tick(
+        &mut endpoints,
+        0,
+        config,
+        None,
+        true,
+        true,
+        None,
+        Instant::now(),
+    );
     assert!(
         !endpoints[0].toasts.entries[0].1.visible,
         "wait for open menus"
     );
-    crate::notifications::tick(&mut endpoints, 0, config, false, true, None, Instant::now());
+    crate::notifications::tick(
+        &mut endpoints,
+        0,
+        config,
+        None,
+        false,
+        true,
+        None,
+        Instant::now(),
+    );
     assert!(endpoints[0].toasts.entries[0].1.visible);
     endpoints[0].stop();
     assert!(endpoints[0].toasts.entries.is_empty());

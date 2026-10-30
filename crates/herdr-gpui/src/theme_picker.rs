@@ -10,6 +10,14 @@ pub(super) struct ThemePicker {
     pub search: Entity<SearchInput>,
     names: Vec<String>,
     pub(super) filtered: Vec<String>,
+    /// How many rows of `filtered` are starred themes, which lead the list.
+    favorites: usize,
+    // One favorites write at a time, so a quick run of stars cannot land
+    // out of order; stars clicked meanwhile wait in `favorite_edits`.
+    favorites_saving: bool,
+    favorite_edits: Vec<crate::config::favorite_themes::FavoriteEdit>,
+    /// The last favorites write's failure, until a later one succeeds.
+    favorites_error: Option<String>,
     selected: usize,
     scroll: UniformListScrollHandle,
     error: Option<String>,
@@ -30,17 +38,26 @@ pub(super) struct ThemePicker {
 }
 
 impl ThemePicker {
-    fn filter(&mut self, query: &str) {
+    fn filter(&mut self, query: &str, favorites: &[String]) {
         self.query = query.to_owned();
-        let query = query.trim().to_lowercase();
-        self.filtered = self
+        self.group(favorites);
+        self.selected = 0;
+        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+    }
+
+    /// Lists the themes matching the query, starred ones first, each group
+    /// in catalog order.
+    fn group(&mut self, favorites: &[String]) {
+        let query = self.query.trim().to_lowercase();
+        let (mut filtered, rest): (Vec<_>, Vec<_>) = self
             .names
             .iter()
             .filter(|name| name.to_lowercase().contains(&query))
             .cloned()
-            .collect();
-        self.selected = 0;
-        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+            .partition(|name| favorites.contains(name));
+        self.favorites = filtered.len();
+        filtered.extend(rest);
+        self.filtered = filtered;
     }
 }
 
@@ -67,7 +84,7 @@ impl HerdrWindow {
                         if picker.accepting || picker.query == search.read(cx).text() {
                             return;
                         }
-                        picker.filter(search.read(cx).text());
+                        picker.filter(search.read(cx).text(), &this.config.favorite_themes);
                     }
                     this.preview_picker_selection(cx);
                 },
@@ -76,6 +93,10 @@ impl HerdrWindow {
                 search,
                 names: Vec::new(),
                 filtered: Vec::new(),
+                favorites: 0,
+                favorites_saving: false,
+                favorite_edits: Vec::new(),
+                favorites_error: None,
                 selected: 0,
                 scroll: UniformListScrollHandle::new(),
                 error: None,
@@ -110,7 +131,7 @@ impl HerdrWindow {
             picker.names.push(current.to_owned());
         }
         picker.names.sort();
-        picker.filter("");
+        picker.filter("", &self.config.favorite_themes);
         picker.selected = picker
             .filtered
             .iter()
@@ -171,7 +192,7 @@ impl HerdrWindow {
                 }
                 let selected = picker.filtered.get(picker.selected).cloned();
                 picker.names = names;
-                picker.filter(picker.search.read(cx).text());
+                picker.filter(picker.search.read(cx).text(), &self.config.favorite_themes);
                 if let Some(index) = picker
                     .filtered
                     .iter()
@@ -494,6 +515,11 @@ impl HerdrWindow {
                                             &this.config.theme,
                                             crate::app::light_appearance(cx),
                                         );
+                                    let favorite = index < picker.favorites;
+                                    // A rule closes the starred group when
+                                    // other themes follow it.
+                                    let last_favorite = index + 1 == picker.favorites
+                                        && picker.favorites < picker.filtered.len();
                                     div()
                                         .id(index)
                                         .debug_selector(move || format!("theme-row-{index}"))
@@ -506,6 +532,12 @@ impl HerdrWindow {
                                         .gap(px(8.))
                                         .cursor_pointer()
                                         .when(selected, |row| row.bg(rgb(this.theme.active)))
+                                        // Dimmed text colour, so the rule
+                                        // still shows on a selected row.
+                                        .when(last_favorite, |row| {
+                                            row.border_b_1()
+                                                .border_color(rgba((this.theme.muted << 8) | 0x80))
+                                        })
                                         .hover(|s| s.bg(rgb(this.theme.active)))
                                         .child(
                                             div()
@@ -521,6 +553,16 @@ impl HerdrWindow {
                                                     .text_color(rgb(this.theme.muted))
                                                     .child("Current"),
                                             )
+                                        })
+                                        // The outline shows on the row under
+                                        // the pointer or keys; a star stays.
+                                        .when(favorite || selected, |row| {
+                                            row.child(this.favorite_star(
+                                                index,
+                                                &name,
+                                                favorite,
+                                                cx,
+                                            ))
                                         })
                                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                                             if *hovered {
@@ -559,16 +601,19 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(if picker.saving {
                         "Saving theme... Please wait.".to_owned()
-                    } else if let Some(error) = &picker.error {
+                    } else if let Some(error) = picker.error.as_ref().or(picker.favorites_error.as_ref()) {
                         error.clone()
                     } else if picker.accepting {
                         "Loading theme... Esc to cancel.".to_owned()
                     } else {
-                        "Hover or Up / Down to preview. Enter or click a theme to save.".to_owned()
+                        "Hover or Up / Down to preview. Enter or click a theme to save. Star a theme to keep it at the top."
+                            .to_owned()
                     }),
             )
     }
 }
+
+mod favorites;
 
 #[cfg(test)]
 mod tests;

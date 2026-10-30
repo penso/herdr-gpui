@@ -14,6 +14,7 @@ mod boat_rail;
 #[cfg(feature = "cloud")]
 mod cloud_providers;
 mod host_key;
+mod host_key_choice;
 mod key_login;
 mod local_network;
 #[cfg(feature = "cloud")]
@@ -64,6 +65,7 @@ fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) 
         highlight: None,
         suggestion_scroll: gpui::ScrollHandle::new(),
         error: None,
+        host_keys: herdr_client::HostKeys::Verify,
     });
     view.menu.page = Some(Page::AddDevice);
 }

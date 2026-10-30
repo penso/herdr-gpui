@@ -10,6 +10,7 @@ use std::ops::Range;
 
 mod code;
 mod links;
+mod rhythm;
 
 use super::{
     copy,
@@ -23,6 +24,8 @@ struct RichContext<'a, 'b, 'c> {
     visuals: &'a Visuals,
     links: Links,
     selection: &'a Scope<'a>,
+    /// The text's size: the chat's, or a layout's for a quieter voice.
+    size: f32,
     cx: &'b mut Context<'c, HerdrWindow>,
 }
 
@@ -33,6 +36,7 @@ impl HerdrWindow {
         blocks: &[Block],
         visuals: &Visuals,
         selection: &Scope<'_>,
+        size: f32,
         cx: &mut Context<Self>,
     ) -> Div {
         let links = Links::new(self, pane_id, cx);
@@ -42,18 +46,22 @@ impl HerdrWindow {
             visuals,
             links,
             selection,
+            size,
             cx,
         };
+        // A reading width the user chose is followed as set; at the default,
+        // prose keeps to a book's measure inside the wider column.
+        let measure = (self.config.chat.max_width == crate::config::chat::DEFAULT_MAX_WIDTH)
+            .then_some(size * rhythm::MEASURE);
         div()
             .flex()
             .flex_col()
-            .gap(px(12.))
             .min_w_0()
             .when(
                 self.config.chat.layout != ChatLayoutMode::Terminal,
                 |view| view.text_font(&self.config.ui),
             )
-            .text_size(px(self.chat_text_size()))
+            .text_size(px(size))
             .when_some(layout.prose(&look), |view, ink| view.text_color(rgb(ink)))
             .line_height(relative(1.6))
             .children(blocks.iter().enumerate().map(|(index, block)| {
@@ -66,7 +74,7 @@ impl HerdrWindow {
                         .rich_paragraph(*kind, *indent, content, index, &mut context)
                         .into_any_element(),
                     Block::Math { id, source } => {
-                        let formula = self.rich_math(*id, source, visuals, false);
+                        let formula = self.rich_math(*id, source, visuals, false, size);
                         let formula = match selection.fragment(Cell::block(index)) {
                             Some(fragment) => fragment.atomic(formula, &self.theme, context.cx),
                             None => formula,
@@ -90,7 +98,16 @@ impl HerdrWindow {
                         .rich_table(align, rows, index, &mut context)
                         .into_any_element(),
                 };
-                div().id(("rich-block", index)).min_w_0().child(element)
+                let previous = index.checked_sub(1).and_then(|before| blocks.get(before));
+                div()
+                    .id(("rich-block", index))
+                    .min_w_0()
+                    .pt(px(size * rhythm::space_before(previous, block)))
+                    .when_some(
+                        measure.filter(|_| rhythm::is_prose(block)),
+                        |row, measure| row.max_w(px(measure)),
+                    )
+                    .child(element)
             }))
     }
 
@@ -109,10 +126,8 @@ impl HerdrWindow {
         let row = row
             .when_some(heading(kind), |row, level| {
                 row.font_weight(FontWeight::SEMIBOLD)
-                    .text_size(px(self.chat_text_size() * heading_scale(level)))
+                    .text_size(px(context.size * rhythm::heading_scale(level)))
                     .line_height(relative(1.3))
-                    .pt(px(10.))
-                    .pb(px(2.))
             })
             .when(kind == Kind::Quote, |row| {
                 row.pl(px(10.))
@@ -243,7 +258,7 @@ impl HerdrWindow {
                     }
                 }
                 Inline::Math { id, source } => {
-                    let formula = self.rich_math(*id, source, context.visuals, true);
+                    let formula = self.rich_math(*id, source, context.visuals, true, context.size);
                     let formula = match &fragment {
                         Some(fragment) => fragment.range(offset..offset + source.len()).atomic(
                             formula,
@@ -270,7 +285,16 @@ impl HerdrWindow {
             .children(children)
     }
 
-    fn rich_math(&self, id: VisualId, source: &str, visuals: &Visuals, inline: bool) -> Div {
+    /// A formula, drawn for the chat's text and scaled to `size`, the text
+    /// it sits in, so a quieter message keeps its formulas in proportion.
+    fn rich_math(
+        &self,
+        id: VisualId,
+        source: &str,
+        visuals: &Visuals,
+        inline: bool,
+        size: f32,
+    ) -> Div {
         // Math textures use the theme's ink. Keep that surface behind them
         // when a layout supplies a different message fill, without re-rasterizing.
         let backdrop = layout_for(self.config.chat.layout).backdrop(&self.chat_look());
@@ -306,11 +330,14 @@ impl HerdrWindow {
                 fallback
             });
         };
+        // The texture is drawn for the chat's text size.
+        let scale = size / self.chat_text_size();
+        let (width, height) = (drawn.width * scale, drawn.height * scale);
         // The zero-width text establishes a text baseline inside the math
         // atom; the picture is positioned against its measured TeX baseline.
         ground(if inline {
-            let text_baseline = self.chat_text_size() * 0.8;
-            let baseline = drawn.baseline.unwrap_or(drawn.height);
+            let text_baseline = size * 0.8;
+            let baseline = drawn.baseline.unwrap_or(drawn.height) * scale;
             let top = (text_baseline - baseline).max(0.);
             let before = (baseline - text_baseline).max(0.);
             div()
@@ -318,18 +345,16 @@ impl HerdrWindow {
                 .flex_none()
                 .relative()
                 .max_w_full()
-                .w(px(drawn.width))
-                .h(px(
-                    (drawn.height + top).max(self.chat_text_size() * 1.4 + before)
-                ))
+                .w(px(width))
+                .h(px((height + top).max(size * 1.4 + before)))
                 .child(div().pt(px(before)).child("\u{200b}"))
                 .child(
                     img(drawn.texture.clone())
                         .absolute()
                         .top(px(top))
                         .left(px(0.))
-                        .w(px(drawn.width))
-                        .h(px(drawn.height))
+                        .w(px(width))
+                        .h(px(height))
                         .max_w_full()
                         .object_fit(ObjectFit::Contain),
                 )
@@ -341,8 +366,8 @@ impl HerdrWindow {
                 .py(px(8.))
                 .child(
                     img(drawn.texture.clone())
-                        .w(px(drawn.width))
-                        .h(px(drawn.height))
+                        .w(px(width))
+                        .h(px(height))
                         .max_w_full()
                         .object_fit(ObjectFit::Contain),
                 )
@@ -464,15 +489,6 @@ fn heading(kind: Kind) -> Option<HeadingLevel> {
     match kind {
         Kind::Heading(level) => Some(level),
         _ => None,
-    }
-}
-
-fn heading_scale(level: HeadingLevel) -> f32 {
-    match level {
-        HeadingLevel::H1 => 1.65,
-        HeadingLevel::H2 => 1.4,
-        HeadingLevel::H3 => 1.2,
-        _ => 1.05,
     }
 }
 

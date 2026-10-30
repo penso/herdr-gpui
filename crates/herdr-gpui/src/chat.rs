@@ -22,6 +22,7 @@ mod harnesses;
 mod link;
 mod list;
 mod page;
+mod pasted;
 mod prepared;
 #[cfg(feature = "integration-test")]
 pub(crate) mod preview;
@@ -97,6 +98,8 @@ pub enum Error {
     NotAttached,
     #[error("the chat view fell behind the program")]
     Overflow,
+    #[error(transparent)]
+    Pasted(#[from] pasted::Error),
     #[error("could not read from the chat program")]
     Read(#[source] herdr_chat_protocol::Error),
     #[error("This is a read-only transcript; use the agent's terminal to reply")]

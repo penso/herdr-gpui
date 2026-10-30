@@ -158,10 +158,11 @@ pub(crate) fn scope(endpoint: &crate::endpoint::Endpoint) -> Scope {
 }
 
 /// Page titles run long; a tab shows the start of one, like a web browser.
+/// The budget is in columns, so a CJK title is cut about as wide.
 pub(super) fn tab_label(title: &str) -> SharedString {
-    const MAX_CHARS: usize = 28;
-    match title.char_indices().nth(MAX_CHARS) {
-        Some((end, _)) => format!("{}\u{2026}", title[..end].trim_end()).into(),
+    const MAX_COLUMNS: usize = 28;
+    match crate::truncate::cut_width(title, MAX_COLUMNS) {
+        Some(kept) => format!("{}{}", kept.trim_end(), crate::truncate::ELLIPSIS).into(),
         None => title.to_owned().into(),
     }
 }

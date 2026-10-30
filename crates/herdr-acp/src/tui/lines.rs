@@ -9,8 +9,12 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
+mod prose;
+
 /// Tool output lines shown under a call.
-const TOOL_LINES: usize = 6;
+const TOOL_LINES: usize = 4;
+/// Lines of a tool's title, such as a long command, before it is cut.
+const TITLE_LINES: usize = 2;
 /// Thought lines shown before the rest is folded.
 const THOUGHT_LINES: usize = 4;
 
@@ -91,6 +95,13 @@ fn prefixed(
 
 /// The lines for one entry, followed by a blank separator line.
 pub(crate) fn entry(entry: &Entry, width: usize) -> Vec<Line<'static>> {
+    // A sub-agent's own steps show under its call in Herdr UI; here the call
+    // alone stands for them.
+    if let EntryKind::Tool(tool) = &entry.kind
+        && tool.parent.is_some()
+    {
+        return Vec::new();
+    }
     let mut lines = Vec::new();
     match &entry.kind {
         EntryKind::User { text, .. } => {
@@ -158,7 +169,7 @@ pub(crate) fn entry(entry: &Entry, width: usize) -> Vec<Line<'static>> {
     lines
 }
 
-/// Agent text with fenced code set apart; the rest is shown as written.
+/// Agent text with fenced code set apart and the rest drawn as prose.
 fn agent_text(lines: &mut Vec<Line<'static>>, text: &str, width: usize) {
     let mut code = false;
     for raw in text.trim_end().split('\n') {
@@ -170,13 +181,11 @@ fn agent_text(lines: &mut Vec<Line<'static>>, text: &str, width: usize) {
             ));
             continue;
         }
-        let style = if code {
-            Style::default().fg(Color::Green)
-        } else if raw.starts_with('#') {
-            Style::default().add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
+        if !code {
+            prose::prose(lines, raw, width);
+            continue;
+        }
+        let style = Style::default().fg(Color::Green);
         for line in wrap(raw, width.saturating_sub(2)) {
             lines.push(Line::styled(format!("  {line}"), style));
         }
@@ -190,15 +199,38 @@ fn tool_lines(lines: &mut Vec<Line<'static>>, tool: &Tool, width: usize) {
         ToolStatus::Completed => ("✓", Color::Green),
         ToolStatus::Failed => ("✗", Color::Red),
     };
-    let title = wrap(&tool.title, width.saturating_sub(2));
+    // The call is context for the reply, so it stays quiet: its status mark
+    // keeps its color, and a long command is cut rather than filling rows.
+    let dim = Style::default().fg(Color::DarkGray);
+    let title = tool.title.trim();
+    let title = title
+        .strip_prefix('`')
+        .and_then(|inner| inner.strip_suffix('`'))
+        .filter(|inner| !inner.contains('`'))
+        .unwrap_or(title);
+    let mut title = wrap(title, width.saturating_sub(2));
+    if title.len() > TITLE_LINES {
+        title.truncate(TITLE_LINES);
+        if let Some(last) = title.last_mut() {
+            let room = width.saturating_sub(3);
+            while last
+                .chars()
+                .map(|ch| ch.width().unwrap_or(0))
+                .sum::<usize>()
+                > room
+            {
+                last.pop();
+            }
+            last.push('…');
+        }
+    }
     for (index, line) in title.into_iter().enumerate() {
         let lead = if index == 0 { mark } else { " " };
         lines.push(Line::from(vec![
             Span::styled(format!("{lead} "), Style::default().fg(color)),
-            Span::styled(line, Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(line, dim),
         ]));
     }
-    let dim = Style::default().fg(Color::DarkGray);
     for location in tool.locations.iter().take(3) {
         lines.push(Line::styled(format!("  {location}"), dim));
     }

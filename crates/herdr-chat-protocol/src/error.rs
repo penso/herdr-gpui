@@ -6,6 +6,10 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{} activities already run", crate::MAX_ACTIVITIES)]
+    ActivityLimit,
+    #[error("an activity's text exceeds {} bytes", crate::MAX_ACTIVITY_TEXT)]
+    ActivityText,
     #[error("permission request {0:?} is already pending")]
     DuplicatePermission(PermissionId),
     #[error("chat frame is empty")]

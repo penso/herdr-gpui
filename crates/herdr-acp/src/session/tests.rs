@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use super::*;
 use crate::rpc::{Inbound, Outbox};
 
+mod activities;
 mod attach;
 mod attachments;
 mod auto_accept;

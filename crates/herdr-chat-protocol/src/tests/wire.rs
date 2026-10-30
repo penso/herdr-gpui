@@ -6,12 +6,16 @@ use super::*;
 fn messages_use_stable_tagged_json() {
     let hello = ClientMessage::Hello {
         client: ClientKind::Gui,
+        revision: REVISION,
         since: None,
         version: VERSION,
     };
     assert_eq!(
         serde_json::to_value(&hello).unwrap(),
-        json!({"type": "hello", "client": "gui", "since": null, "version": VERSION})
+        json!({
+            "type": "hello", "client": "gui", "revision": REVISION, "since": null,
+            "version": VERSION,
+        })
     );
     let answer = Command::Answer {
         option: "allow".to_owned(),
@@ -72,6 +76,7 @@ fn a_snapshot_round_trips_every_entry_kind() {
                 ],
                 kind: ToolKind::Edit,
                 locations: vec!["/x".to_owned()],
+                parent: None,
                 status: ToolStatus::Completed,
                 title: "Edit x".to_owned(),
             }),

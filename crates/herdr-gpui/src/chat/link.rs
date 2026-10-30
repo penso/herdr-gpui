@@ -11,7 +11,7 @@
 
 use super::{Error, MAX_EVENTS, MAX_PENDING, Result};
 use herdr_chat_protocol::{
-    ClientKind, ClientMessage, Cursor, ServerMessage, VERSION, read_frame, write_frame,
+    ClientKind, ClientMessage, Cursor, REVISION, ServerMessage, VERSION, read_frame, write_frame,
 };
 use herdr_client::private_endpoint::Connection;
 use std::{
@@ -255,6 +255,7 @@ fn run(
     socket.attach(&closer);
     let hello = ClientMessage::Hello {
         client: ClientKind::Gui,
+        revision: REVISION,
         since,
         version: VERSION,
     };

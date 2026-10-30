@@ -1,38 +1,90 @@
 //! A deduplicated attention count across all windows, with a QA preview: the
-//! Dock badge on macOS and the taskbar overlay on Windows.
+//! Dock badge on macOS and the taskbar overlay on Windows. Agents in a
+//! workspace or tab the user muted are not counted.
 
-use crate::endpoint::Endpoint;
-use gpui::{App, Global, WindowId};
+use crate::{
+    endpoint::Endpoint,
+    notification_mutes::{Daemon, Mutes, Silenced},
+};
+use gpui::{App, BorrowAppContext, Global, WindowId};
 use herdr_client::ConnectTarget;
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
+/// One snapshot a window counts, and its agents the user muted.
+struct Shown {
+    host: Option<String>,
+    snapshot: Arc<ClientShellSnapshot>,
+    /// Panes whose workspace or tab is muted: they never need attention here.
+    silent: HashSet<String>,
+}
 
 #[derive(Default)]
 struct Contribution {
-    snapshots: Vec<(Option<String>, Arc<ClientShellSnapshot>)>,
+    snapshots: Vec<Shown>,
+    /// The mutes' revision the silent panes were found under.
+    mutes: u64,
 }
 
 impl Contribution {
+    /// Takes the window's `snapshots`, each with its host and the endpoint
+    /// it came from, under the app's `mutes`, empty or not: lifting the
+    /// last mute is a change too. Returns whether the count may have
+    /// changed.
     fn update<'a>(
         &mut self,
-        snapshots: impl Iterator<Item = (Option<&'a str>, &'a Arc<ClientShellSnapshot>)> + Clone,
+        snapshots: impl Iterator<Item = (Option<&'a str>, &'a Arc<ClientShellSnapshot>, &'a Endpoint)>
+        + Clone,
+        mutes: Option<&Mutes>,
     ) -> bool {
+        let revision = mutes.map_or(0, Mutes::revision);
         // Surface-only updates keep the same Arc. Do not rescan agents every tick.
-        if self
-            .snapshots
-            .iter()
-            .map(|(host, snapshot)| (host.as_deref(), Arc::as_ptr(snapshot)))
-            .eq(snapshots
-                .clone()
-                .map(|(host, snapshot)| (host, Arc::as_ptr(snapshot))))
+        if self.mutes == revision
+            && self
+                .snapshots
+                .iter()
+                .map(|shown| (shown.host.as_deref(), Arc::as_ptr(&shown.snapshot)))
+                .eq(snapshots
+                    .clone()
+                    .map(|(host, snapshot, _)| (host, Arc::as_ptr(snapshot))))
         {
             return false;
         }
+        self.mutes = revision;
         self.snapshots = snapshots
-            .map(|(host, snapshot)| (host.map(str::to_owned), snapshot.clone()))
+            .map(|(host, snapshot, endpoint)| Shown {
+                host: host.map(str::to_owned),
+                snapshot: Arc::clone(snapshot),
+                silent: mutes
+                    .filter(|mutes| !mutes.is_empty())
+                    .map(|mutes| silent(&mutes.silenced(&Daemon::of(endpoint), snapshot), snapshot))
+                    .unwrap_or_default(),
+            })
             .collect();
         true
     }
+}
+
+/// The panes of `snapshot`'s agents that `silenced` keeps quiet.
+fn silent(silenced: &Silenced<'_>, snapshot: &ClientShellSnapshot) -> HashSet<String> {
+    if silenced.is_empty() {
+        return HashSet::new();
+    }
+    snapshot
+        .agents
+        .iter()
+        .filter(|agent| {
+            silenced.notice(
+                Some(&agent.workspace_id),
+                Some(&agent.tab_id),
+                Some(&agent.pane_id),
+            )
+        })
+        .map(|agent| agent.pane_id.clone())
+        .collect()
 }
 
 #[derive(Default)]
@@ -50,10 +102,16 @@ impl Badge {
         // Snapshot revisions are client-local. Agent state sequences are shared;
         // for the same sequence, an acknowledgement wins over a stale Done dot.
         let mut agents = HashMap::new();
-        for (host, snapshot) in self.windows.values().flat_map(|window| &window.snapshots) {
+        for Shown {
+            host,
+            snapshot,
+            silent,
+        } in self.windows.values().flat_map(|window| &window.snapshots)
+        {
             for agent in &snapshot.agents {
                 let attention =
-                    matches!(agent.agent_status, AgentStatus::Done | AgentStatus::Blocked);
+                    matches!(agent.agent_status, AgentStatus::Done | AgentStatus::Blocked)
+                        && !silent.contains(&agent.pane_id);
                 let current = agents
                     .entry((
                         host.as_deref(),
@@ -107,27 +165,33 @@ pub(super) fn install(cx: &mut App) {
 }
 
 pub(super) fn sync(window: WindowId, endpoints: &[Endpoint], cx: &mut App) {
-    let badge = cx.default_global::<Badge>();
-    let changed = badge.windows.entry(window).or_default().update(
-        endpoints
-            .iter()
-            .filter(|endpoint| endpoint.enabled && endpoint.live.status.is_connected())
-            .filter_map(|endpoint| {
-                let host = match &endpoint.connection.target {
-                    ConnectTarget::Ssh { target, .. } => Some(target.as_str()),
-                    ConnectTarget::Wsl { distro, .. } => Some(distro.as_str()),
-                    _ => None,
-                };
-                endpoint
-                    .live
-                    .snapshot
-                    .as_ref()
-                    .map(|snapshot| (host, snapshot))
-            }),
-    );
-    if changed {
-        badge.publish();
-    }
+    let shown = endpoints
+        .iter()
+        .filter(|endpoint| endpoint.enabled && endpoint.live.status.is_connected())
+        .filter_map(|endpoint| {
+            let host = match &endpoint.connection.target {
+                ConnectTarget::Ssh { target, .. } => Some(target.as_str()),
+                ConnectTarget::Wsl { distro, .. } => Some(distro.as_str()),
+                _ => None,
+            };
+            endpoint
+                .live
+                .snapshot
+                .as_ref()
+                .map(|snapshot| (host, snapshot, endpoint))
+        });
+    cx.default_global::<Badge>();
+    // Leased out of the app, so the mutes can be read beside it.
+    cx.update_global::<Badge, _>(|badge, cx| {
+        let changed = badge
+            .windows
+            .entry(window)
+            .or_default()
+            .update(shown, Mutes::of(cx));
+        if changed {
+            badge.publish();
+        }
+    });
 }
 
 #[cfg(all(not(test), target_os = "macos"))]

@@ -151,6 +151,11 @@ pub(crate) enum WorkspaceMenuAction {
     /// Build the repository's sandbox images ahead of a dispatch.
     #[cfg(feature = "cloud")]
     SandboxImages,
+    /// Silence the workspace's notifications, or let them through again.
+    /// Drawn as the toggle in the popover's header rather than as a row, and
+    /// applied at once: the mute belongs to this client, never the daemon.
+    Mute,
+    Unmute,
 }
 
 impl Page {
@@ -197,6 +202,12 @@ impl Page {
 }
 
 impl WorkspaceMenuAction {
+    /// Whether the popover draws the action in its header, not with the
+    /// tiles and rows.
+    pub(crate) fn in_header(self) -> bool {
+        matches!(self, Self::Mute | Self::Unmute)
+    }
+
     /// Embedded icon for the row, so each action is recognizable before reading.
     /// The pull request section draws its own header rather than a menu row.
     pub(crate) fn icon(self) -> Option<&'static str> {
@@ -222,6 +233,8 @@ impl WorkspaceMenuAction {
             Self::SandboxImages => "icons/cloud/container.svg",
             Self::Script(crate::worktree_scripts::ScriptKind::Setup) => "icons/refresh.svg",
             Self::Script(_) => "icons/play.svg",
+            Self::Mute => crate::icons::MUTED,
+            Self::Unmute => "icons/bell.svg",
             Self::PullRequest => return None,
         })
     }

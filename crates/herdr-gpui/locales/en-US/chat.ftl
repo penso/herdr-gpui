@@ -6,6 +6,7 @@ chat-layout-terminal = Terminal
 chat-layout-document = Document
 chat-layout-cards = Cards
 chat-layout-imessage = iMessage
+chat-layout-ia = iA
 chat-launcher-plus = On + hover
 chat-launcher-beside = After +
 chat-launcher-leading = Before tabs

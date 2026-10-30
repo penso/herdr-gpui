@@ -34,6 +34,7 @@ impl HerdrWindow {
         entry: EntryId,
         parts: &[Part],
         visuals: &Visuals,
+        size: f32,
         cx: &mut Context<Self>,
     ) -> Div {
         div()
@@ -55,7 +56,7 @@ impl HerdrWindow {
                     Part::Rich(blocks) => {
                         match self.chat_text_scope(pane_id, entry, Region::Body(index)) {
                             Some(scope) => self
-                                .render_chat_rich(pane_id, blocks, visuals, &scope, cx)
+                                .render_chat_rich(pane_id, blocks, visuals, &scope, size, cx)
                                 .into_any_element(),
                             None => div().into_any_element(),
                         }
@@ -63,7 +64,9 @@ impl HerdrWindow {
                     Part::Widget(document) => self
                         .render_chat_widget(pane_id, entry, index, document, cx)
                         .into_any_element(),
-                    Part::Diagram(id, code) => self.render_chat_diagram(*id, code, visuals),
+                    Part::Diagram(id, code) => {
+                        self.render_chat_diagram(pane_id, *id, code, visuals, cx)
+                    }
                     Part::Html { page } => self.render_chat_html(pane_id, entry, index, page, cx),
                     Part::Picture { alt } => self.render_chat_picture_caption(alt),
                     Part::Remote { id, url, alt } => self.render_chat_remote_picture(
@@ -75,20 +78,29 @@ impl HerdrWindow {
     }
 
     /// A picture the user or the agent put in the conversation.
-    pub(super) fn render_chat_image(&self, author: Author, id: VisualId, visuals: &Visuals) -> Div {
+    pub(super) fn render_chat_image(
+        &self,
+        pane_id: &str,
+        author: Author,
+        id: VisualId,
+        visuals: &Visuals,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let row = div().flex().min_w_0();
         let row = match author {
             Author::User => row.justify_end(),
             Author::Agent => row,
         };
-        row.child(self.render_chat_visual(id, visuals, Frame::Image))
+        row.child(self.render_chat_visual(pane_id, id, visuals, Frame::Image, cx))
     }
 
     fn render_chat_diagram(
         &self,
+        pane_id: &str,
         id: VisualId,
         code: &[release_notes::Line],
         visuals: &Visuals,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         if let Shown::Failed(error) = visuals.shown(id) {
             // The source stays readable when it cannot be drawn.
@@ -110,13 +122,20 @@ impl HerdrWindow {
                 )
                 .into_any_element();
         }
-        self.render_chat_visual(id, visuals, Frame::Diagram)
+        self.render_chat_visual(pane_id, id, visuals, Frame::Diagram, cx)
             .into_any_element()
     }
 
     /// A visual at its own size, narrowed to fit, or a placeholder while it
-    /// is prepared.
-    pub(super) fn render_chat_visual(&self, id: VisualId, visuals: &Visuals, frame: Frame) -> Div {
+    /// is prepared. Once drawn, a click shows it large.
+    pub(super) fn render_chat_visual(
+        &self,
+        pane_id: &str,
+        id: VisualId,
+        visuals: &Visuals,
+        frame: Frame,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let theme = &self.theme;
         let widest = match frame {
             Frame::Diagram | Frame::Image => IMAGE_WIDTH,
@@ -144,6 +163,17 @@ impl HerdrWindow {
                     .h(px(height))
                     .max_w_full()
                     .object_fit(ObjectFit::Contain);
+                let pane_id = pane_id.to_owned();
+                let boxed = boxed
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |this, _: &MouseUpEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.open_chat_viewer(&pane_id, id, window, cx);
+                        }),
+                    );
                 match frame {
                     Frame::Diagram => boxed.p(px(8.)).bg(rgb(theme.background)).child(picture),
                     Frame::Image | Frame::ToolImage => boxed.child(picture),

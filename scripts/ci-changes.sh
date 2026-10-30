@@ -44,7 +44,7 @@ code=$(changed \
   ':(exclude).github/workflows/site.yml')
 windows_package=$(changed \
   scripts/release/package-windows.py scripts/release/windows-installer.py \
-  scripts/release/herdr-gpui.iss site/install.ps1 \
+  scripts/release/herdr-gpui.iss scripts/release/installer site/install.ps1 \
   crates/herdr-gpui-launcher crates/herdr-gpui/src/main.rs \
   crates/herdr-gpui/build.rs crates/herdr-gpui/windows_resource.rs \
   assets/icons/Herdr.ico assets/icons/Herdr-worktree.ico assets/icons/windows \

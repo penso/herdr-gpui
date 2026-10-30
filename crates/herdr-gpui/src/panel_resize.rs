@@ -21,6 +21,17 @@ pub(crate) enum Side {
     Right,
 }
 
+impl Side {
+    /// Where a panel that leads its content sits: the left, or in a
+    /// right-to-left language the right.
+    pub(crate) fn start() -> Self {
+        match crate::direction::is_rtl() {
+            false => Self::Left,
+            true => Self::Right,
+        }
+    }
+}
+
 /// The panel a drag resizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PanelDrag {
@@ -36,10 +47,14 @@ pub(crate) enum PanelDrag {
     DiffSides,
     /// The review's list of changed files.
     ReviewFiles,
+    /// The panel of mod sections on the window's right.
+    ModPanel,
 }
 
 /// The notes panel beside a review or an annotated page.
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
+/// The panel of mod sections on the window's right.
+pub(crate) const MOD_PANEL: PanelWidth = PanelWidth::new(300., 220.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
 /// The settings window's section list.
@@ -189,6 +204,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((&mut self.review_files_width, Side::Left)),
+            PanelDrag::ModPanel => Some((&mut self.mod_panel_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }
@@ -200,6 +216,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((self.review_files_width, Side::Left)),
+            PanelDrag::ModPanel => Some((self.mod_panel_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }

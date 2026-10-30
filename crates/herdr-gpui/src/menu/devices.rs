@@ -11,6 +11,7 @@ pub(crate) use add_device::enter;
 mod discover;
 mod error;
 mod host_key;
+mod host_key_choice;
 mod host_menu;
 mod local_network;
 pub(super) mod rail;

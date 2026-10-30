@@ -47,8 +47,18 @@ pub(crate) enum Lead {
 pub(crate) struct TabShape {
     pub(crate) lead: Lead,
     pub(crate) zoomed: bool,
+    /// The user muted the tab's notifications, or its workspace's.
+    pub(crate) muted: bool,
     /// A layout may name only the chosen tab.
     pub(crate) selected: bool,
+}
+
+impl TabShape {
+    /// How wide the marks after the title draw: Herdr's zoom, then this
+    /// client's mute, each `DOT_GAP` after what precedes it.
+    pub(crate) fn marks_width(self) -> f32 {
+        (usize::from(self.zoomed) + usize::from(self.muted)) as f32 * (DOT_GAP + ZOOM_ICON)
+    }
 }
 
 /// What leads a tab's title.
@@ -104,6 +114,14 @@ impl Probe {
         move || slot.selector(&name)
     }
 
+    fn muted(&self, slot: Slot) -> impl Fn() -> String + 'static {
+        let name = match self {
+            Self::Herdr(id) => format!("tab-muted-{id}"),
+            Self::Page(id) => format!("browser-tab-muted-{id}"),
+        };
+        move || slot.selector(&name)
+    }
+
     fn favicon(&self, slot: Slot) -> impl Fn() -> String + 'static {
         let name = match self {
             Self::Herdr(id) => format!("tab-favicon-{id}"),
@@ -147,6 +165,8 @@ pub(crate) struct TabFace {
     pub(crate) mark: Mark,
     /// Herdr's zoom: one pane fills the tab, the rest are hidden behind it.
     pub(crate) zoomed: bool,
+    /// The user muted the tab's notifications, or its workspace's.
+    pub(crate) muted: bool,
     pub(crate) probe: Probe,
     pub(crate) close: Box<ClickHandler>,
 }
@@ -406,6 +426,28 @@ fn zoom_mark(zoomed: bool, probe: &Probe, text: u32, cx: &TabContext<'_>) -> Opt
     })
 }
 
+/// The mark after a muted tab's title, beside the zoom mark and as large.
+fn mute_mark(muted: bool, probe: &Probe, text: u32, cx: &TabContext<'_>) -> Option<Svg> {
+    muted.then(|| {
+        svg()
+            .path(crate::icons::MUTED)
+            .debug_selector(probe.muted(cx.slot))
+            .flex_none()
+            .size(px(ZOOM_ICON))
+            .text_color(rgb(text))
+    })
+}
+
+/// A tooltip standing in for a tab's title: the title, and the mute its
+/// hidden mark would show.
+fn hint(label: SharedString, muted: bool) -> SharedString {
+    if muted {
+        format!("{label} (notifications muted)").into()
+    } else {
+        label
+    }
+}
+
 /// The close button, `size` square, whose press never reaches the tab.
 fn close_button(
     close: Box<ClickHandler>,
@@ -437,3 +479,6 @@ fn close_button(
             close(event, window, cx);
         })
 }
+
+#[cfg(test)]
+mod tests;

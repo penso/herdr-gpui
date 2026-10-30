@@ -3,6 +3,7 @@ use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{HerdrWindow, input::ViewInputHandler, words};
+use crate::caret::Carets;
 
 /// Rewrites an edit, given the text left of the range it replaces, the text
 /// typed, and the text right of the range: what to insert there, and how the
@@ -17,7 +18,8 @@ pub(super) struct DialogInput {
     pub reversed: bool,
     pub marked: Option<Range<usize>>,
     pub bounds: Bounds<Pixels>,
-    line: Option<ShapedLine>,
+    /// Where the last drawn text puts each caret.
+    carets: Option<Carets>,
     scroll: Pixels,
     /// Rewrites each edit. Composition is shown as typed and only its commit
     /// is rewritten, so the IME is never fought mid-word.
@@ -99,7 +101,17 @@ impl DialogInput {
         }
         self.text
             .replace_range(range.clone(), &format!("{text}{after}"));
-        let end = range.start + text.len();
+        let mut end = range.start + text.len();
+        if !marked {
+            // What was typed can join the cluster after it, as a letter typed
+            // before a combining accent does; the caret goes after the cluster.
+            end = self
+                .text
+                .grapheme_indices(true)
+                .map(|(i, _)| i)
+                .find(|i| *i >= end)
+                .unwrap_or(self.text.len());
+        }
         self.selection = if let Some(selected) = selected {
             let start = byte_offset(&text, selected.start);
             range.start + start..range.start + byte_offset(&text, selected.end).max(start)
@@ -108,7 +120,7 @@ impl DialogInput {
         };
         self.reversed = false;
         self.marked = (marked && !text.is_empty()).then_some(range.start..end);
-        self.line = None;
+        self.carets = None;
     }
 
     /// Ends a composition where it stands, as when the platform unmarks the
@@ -243,21 +255,20 @@ impl DialogInput {
     }
 
     pub fn index_at(&self, position: Point<Pixels>) -> Option<usize> {
-        self.line
+        self.carets
             .as_ref()
-            .map(|line| line.closest_index_for_x(position.x - self.bounds.left() + self.scroll))
+            .map(|carets| carets.index_at(position.x - self.bounds.left() + self.scroll))
     }
 
     pub fn range_bounds(&self, range: Range<usize>) -> Option<Bounds<Pixels>> {
         let range = self.range_from_utf16(range);
-        let line = self.line.as_ref()?;
-        let x = |index| {
-            (self.bounds.left() + line.x_for_index(index) - self.scroll)
-                .clamp(self.bounds.left(), self.bounds.right())
+        let extent = self.carets.as_ref()?.extent(range);
+        let x = |x| {
+            (self.bounds.left() + x - self.scroll).clamp(self.bounds.left(), self.bounds.right())
         };
         Some(Bounds::from_corners(
-            point(x(range.start), self.bounds.top()),
-            point(x(range.end), self.bounds.bottom()),
+            point(x(extent.start), self.bounds.top()),
+            point(x(extent.end), self.bounds.bottom()),
         ))
     }
 }
@@ -344,24 +355,33 @@ impl HerdrWindow {
                                 &[run],
                                 None,
                             );
-                            let caret = line.x_for_index(input.cursor());
+                            let carets = Carets::new(&input.text, &line);
+                            let caret = carets.x(input.cursor());
                             input.scroll = input
                                 .scroll
                                 .min(caret)
                                 .max(caret - bounds.size.width + px(2.))
                                 .max(px(0.));
+                            // Right to left, a line that fits sets against
+                            // the field's right, its start.
+                            let room = bounds.size.width - px(2.);
+                            if crate::direction::is_rtl() && line.width < room {
+                                input.scroll = line.width - room;
+                            }
                             let origin = bounds.origin - point(input.scroll, px(0.));
                             window.with_content_mask(Some(ContentMask { bounds }), |window| {
-                                let left = origin.x + line.x_for_index(input.selection.start);
-                                let right = origin.x + line.x_for_index(input.selection.end);
+                                // Across a change of direction, a selection
+                                // is a stretch on each side of it.
                                 if focused && !input.selection.is_empty() {
-                                    window.paint_quad(fill(
-                                        Bounds::from_corners(
-                                            point(left, bounds.top()),
-                                            point(right, bounds.bottom()),
-                                        ),
-                                        rgb(this.theme.muted),
-                                    ));
+                                    for span in carets.spans(input.selection.clone()) {
+                                        window.paint_quad(fill(
+                                            Bounds::from_corners(
+                                                point(origin.x + span.start, bounds.top()),
+                                                point(origin.x + span.end, bounds.bottom()),
+                                            ),
+                                            rgb(this.theme.muted),
+                                        ));
+                                    }
                                 }
                                 let _ = line.paint(
                                     origin,
@@ -380,25 +400,23 @@ impl HerdrWindow {
                                         rgb(this.theme.foreground),
                                     ));
                                 }
-                                if let Some(marked) = &input.marked {
+                                for span in input
+                                    .marked
+                                    .clone()
+                                    .map(|marked| carets.spans(marked))
+                                    .unwrap_or_default()
+                                {
                                     window.paint_quad(fill(
                                         Bounds::new(
-                                            point(
-                                                origin.x + line.x_for_index(marked.start),
-                                                bounds.bottom() - px(1.),
-                                            ),
-                                            size(
-                                                line.x_for_index(marked.end)
-                                                    - line.x_for_index(marked.start),
-                                                px(1.),
-                                            ),
+                                            point(origin.x + span.start, bounds.bottom() - px(1.)),
+                                            size(span.end - span.start, px(1.)),
                                         ),
                                         rgb(this.theme.foreground),
                                     ));
                                 }
                             });
                             input.bounds = bounds;
-                            input.line = Some(line);
+                            input.carets = Some(carets);
                         });
                     },
                 )
@@ -413,6 +431,7 @@ mod tests {
     use gpui::Keystroke;
 
     mod branch_format;
+    mod graphemes;
     mod word_keys;
 
     #[test]

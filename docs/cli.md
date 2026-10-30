@@ -172,7 +172,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `config reload` | Reread Herdr's config and this app's |
 | `theme [list]`, `theme set NAME` | The app theme. A device's terminal theme is `config set devices.ID.theme NAME`, with the ID from `host list` minus its `ssh:` prefix |
 | `font [list]`, `font set NAME`, `font reset` | |
-| `language [status]`, `language list`, `language set system\|TAG` | The language set and the locale Herdr UI shows, the languages there are, or save the `language` setting (a BCP 47 tag; `en-XA` and `en-XB` are pseudo-locales). Only `status` asks the app, and without it reports what it would show |
+| `language [status]`, `language list`, `language set system\|TAG` | The language set and the locale Herdr UI shows, the languages there are, each with its name in itself as Settings > General lists it, or save the `language` setting (a BCP 47 tag; `en-XA` and `en-XB` are pseudo-locales). Only `status` asks the app, and without it reports what it would show |
 | `keybinds [list]`, `keybinds check` | Shortcuts; custom Herdr commands this client cannot reach |
 | `caffeine [status]`, `caffeine on\|off\|toggle [--for 30m]` | Keep the machine awake |
 | `sound [list]`, `sound play [done\|request]`, `bell` | Sounds play at `sound.volume` percent (`config set sound.volume 30`) |
@@ -297,6 +297,28 @@ for `status`, where `status` is the daemon's own report, and
 ```sh
 herdr-gpui remote status --json
 herdr-gpui remote revoke d_6f1c
+```
+
+### Mods
+
+| Command | What it does |
+| --- | --- |
+| `mod [list]` | The mods the window runs: where each draws, its palette commands, and its last error. Exits 4 when there are none |
+| `mod reload NAME` | Read a mod's files again now, starting it over. Exits 5 when no mod of that name runs |
+| `mod open NAME` | Show a mod's activity bar app in the window's body. Exits 5 when no running mod of that name has one, 8 while the activity bar is off |
+| `mod panel [show\|hide\|toggle]` | The panel of mod sections on the window's right: whether it shows and which mods have a section, or show, hide, or toggle it (also the `toggle_mod_panel` command) |
+| `mod logs NAME [--lines N]` | The last lines (default 50, at most 200) the mod wrote with `herdr.log`. Exits 4 when there are none |
+| `mod check DIR` | Load a mod folder, run its `init` and `view` once against an empty state, and report what it draws. Runs here; Herdr UI need not run. Exits 1 with the error and its line when the mod is invalid |
+
+Mods are folders of sandboxed Luau in `<config>/herdr/gpui-mods/` that add
+status bar items, sidebar sections, and palette commands; saving a file
+reloads its mod. See [Mods](mods.md). `--json` gives `{"dir", "mods": [...]}`
+for `list`, each with `name`, `places`, `commands`, `drawn`, and `error`, and
+`{"name", "valid", "elements", "places", "hash", "log"}` for `check`.
+
+```sh
+herdr-gpui mod check ~/.config/herdr/gpui-mods/agents
+herdr-gpui mod logs agents --lines 20
 ```
 
 ### Events

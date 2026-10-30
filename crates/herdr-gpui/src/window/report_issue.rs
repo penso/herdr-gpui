@@ -284,12 +284,7 @@ pub(super) fn report_issue_url(
         serializer.append_pair("install_method", method);
     }
     if let Some(log) = logs {
-        let trimmed = log.trim();
-        let mut bounded: String = trimmed.chars().take(LOGS_LIMIT).collect();
-        if bounded.len() < trimmed.len() {
-            bounded.push('…');
-        }
-        serializer.append_pair("logs", &bounded);
+        serializer.append_pair("logs", &crate::truncate::ellipsize(log.trim(), LOGS_LIMIT));
     }
     format!(
         "https://github.com/penso/herdr-gpui/issues/new?{}",

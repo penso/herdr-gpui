@@ -1,7 +1,11 @@
 //! The window's periodic endpoint work: draining each connection, activating
 //! the selected surface, and probing sessions.
 use super::{ACTIVATION_TIMEOUT, LOCAL, Redraw};
-use crate::{HerdrWindow, avatars::Checkout};
+use crate::{
+    HerdrWindow,
+    avatars::Checkout,
+    notification_mutes::{Daemon, Mutes},
+};
 use gpui::{ClipboardItem, Context};
 use herdr_client::{ConnectTarget, RemoteHost};
 use std::time::Instant;
@@ -74,6 +78,21 @@ impl HerdrWindow {
         }
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
             let updated = endpoint.poll(Instant::now());
+            // Nothing to keep current, or to silence, while nothing is muted.
+            let muted = Mutes::any(cx)
+                .and(endpoint.live.latest_snapshot())
+                .filter(|_| endpoint.live.status.is_connected())
+                .cloned()
+                .map(|snapshot| (Daemon::of(endpoint), snapshot));
+            // Only a change touches the global, which every window observes.
+            if updated == Redraw::Window
+                && let Some((daemon, snapshot)) = &muted
+            {
+                let now = std::time::SystemTime::now();
+                if Mutes::any(cx).is_some_and(|mutes| !mutes.current(daemon, snapshot, now)) {
+                    Mutes::update(cx, |mutes| mutes.reconcile(daemon, snapshot, now));
+                }
+            }
             clipboard_writes.append(&mut endpoint.live.clipboard_writes);
             // Bells are a presentation effect: only the selected endpoint's
             // ring, as the TUI drops them from inactive endpoints.
@@ -82,11 +101,23 @@ impl HerdrWindow {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
+            let silenced = muted
+                .as_ref()
+                .zip(Mutes::any(cx))
+                .map(|((daemon, snapshot), mutes)| mutes.silenced(daemon, snapshot))
+                .unwrap_or_default();
             self.sound.poll(
                 &mut endpoint.sounds,
                 &mut endpoint.live,
                 index == self.selected_endpoint && self.active,
                 Instant::now(),
+                |event| {
+                    silenced.notice(
+                        event.workspace_id.as_deref(),
+                        event.tab_id.as_deref(),
+                        event.pane_id.as_deref(),
+                    )
+                },
             );
             changed = changed.max(updated);
             // An SSH device's avatar reads follow its connection, before any
@@ -155,6 +186,7 @@ impl HerdrWindow {
         if self.tick_toasts(
             self.menu.page.is_some() || self.toasts_hidden,
             Instant::now(),
+            cx,
         ) {
             changed = Redraw::Window;
         }

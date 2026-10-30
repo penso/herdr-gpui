@@ -232,7 +232,7 @@ fn hover_keys_search_preview_and_dismiss_restore_original(cx: &mut TestAppContex
         view.update(cx, |view, _| {
             let picker = view.menu.themes.as_mut().unwrap();
             picker.names = vec!["Default".into(), "Nord".into(), "Dracula".into()];
-            picker.filter("");
+            picker.filter("", &[]);
         });
         window.draw(cx).clear(cx);
     });
@@ -451,3 +451,5 @@ fn accept_completion_retains_preview_and_failure_remains_cancellable(cx: &mut Te
         })
     });
 }
+
+mod favorites;

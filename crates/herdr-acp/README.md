@@ -97,6 +97,12 @@ records are not repeated;
 Claude sidechain records are excluded. Choose the exact session file yourself:
 the watcher does not guess from folders, recent timestamps, or terminal text.
 
+Claude's sub-agents and background shells are followed from the log the way
+the native bridge follows them live, timed by each record's timestamp; a
+sub-agent's own steps are in a log of their own and are not shown. A manual
+mirror of a session that has ended still lists what was running when its log
+stopped. Codex rollouts are not followed this way.
+
 Claude records marked as internal task notifications or scheduled reminders
 appear as compact notices. Expand a notice to inspect or copy its retained
 source text; instructions, output-file paths, and links in it are inert.
@@ -231,6 +237,25 @@ session's earlier prompts, whichever client sent them.
   agents use their own tools; it answers only permission requests.
 - The transcript keeps at most 2,000 entries and 2 MiB of text, dropping the
   oldest, so a snapshot always fits one frame.
+- Sub-agents and background shells are listed as activities beside the
+  conversation (see the chat protocol's README), and a sub-agent's own calls
+  show under its call, at most 64 per sub-agent. The bridges know them:
+  - **Claude** (native): an `Agent` call is a sub-agent, ending with its
+    result, or, launched in the background, with Claude Code's task
+    notification for its agent id. A `Bash` call with `run_in_background`,
+    or one Claude Code moved to the background after a timeout, keeps running
+    past its turn until a task notification, a `TaskStop`, or a
+    `TaskOutput` result that reports an exit says how it ended.
+  - **Claude** through the ACP adapter: only sub-agents in the foreground and
+    their calls. The adapter drops Claude Code's task notifications, so the
+    end of background work cannot be known there and it stays an ordinary
+    card.
+  - **Codex**: a `spawnAgent` call is a sub-agent; its thread's calls show
+    under it, and it ends with its thread's turn, a collab call that reports
+    its state, or a `subAgentActivity` item. Codex does not say a command went
+    to the background: a command still running when its turn ends is listed
+    from then on, until it completes.
+  - Anything still running when the agent exits is marked as stopped.
 
 ## Limits
 

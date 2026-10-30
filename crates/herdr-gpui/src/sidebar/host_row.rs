@@ -11,6 +11,7 @@ use super::{
     sticky::{self, HostHeader},
     wash,
 };
+use crate::direction::Logical;
 use crate::{HerdrWindow, endpoint::Endpoint};
 use gpui::{prelude::*, *};
 
@@ -234,7 +235,7 @@ impl HerdrWindow {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(host_gap))
                     .child(
@@ -250,7 +251,7 @@ impl HerdrWindow {
                             .w(px(HOST_ARROW_WIDTH))
                             .flex_none()
                             .child(label_text(if endpoint.collapsed {
-                                "\u{25b8}"
+                                crate::direction::glyph("\u{25b8}")
                             } else {
                                 "\u{25be}"
                             }))
@@ -332,9 +333,9 @@ impl HerdrWindow {
                             "{prefix}host-load-{endpoint_id}"
                         )))
                         .h(px(line_height(font)))
-                        .flex()
+                        .row()
                         .items_center()
-                        .pl(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .ps(px(HOST_ARROW_WIDTH + host_gap + icon_room))
                         .overflow_hidden()
                         .child(crate::system_load::line(
                             reading,
@@ -353,9 +354,9 @@ impl HerdrWindow {
                         )))
                         .debug_selector(|| format!("{prefix}host-gpu-{endpoint_id}"))
                         .h(px(line_height(font)))
-                        .flex()
+                        .row()
                         .items_center()
-                        .pl(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .ps(px(HOST_ARROW_WIDTH + host_gap + icon_room))
                         .overflow_hidden()
                         .child(line)
                         .tooltip(crate::system_load::tooltip(reading, &host, theme)),
@@ -448,7 +449,12 @@ impl HerdrWindow {
             true,
             cx,
         );
-        Some(row.absolute().top(px(pinned.top)).left_0().right_0())
+        Some(
+            row.absolute()
+                .top(px(pinned.top))
+                .inset_s(px(0.))
+                .inset_e(px(0.)),
+        )
     }
 
     /// Moves the spaces list down when `row`, revealed last frame, landed

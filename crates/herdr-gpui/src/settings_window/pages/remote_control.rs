@@ -6,6 +6,7 @@
 // i18n: migrated
 
 use super::{SettingsWindow, on_value, ui};
+use crate::direction::Logical;
 use crate::{
     config::{
         preferences::Preference,
@@ -442,7 +443,7 @@ impl SettingsWindow {
             .mt(px(8.))
             .mb(px(4.))
             .p(px(12.))
-            .flex()
+            .row()
             .items_center()
             .gap(px(12.))
             .rounded(px(crate::config::corners::PANEL))
@@ -548,7 +549,7 @@ impl SettingsWindow {
     fn remote_files(&self, cx: &mut Context<Self>) -> Div {
         let field = |label: String, selector: &'static str, input: &Option<Entity<SearchInput>>| {
             div()
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(8.))
                 .child(div().w(px(80.)).flex_none().child(label))

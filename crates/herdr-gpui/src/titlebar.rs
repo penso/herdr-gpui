@@ -10,6 +10,7 @@ pub(crate) use decorations::controls;
 pub(crate) use decorations::frame;
 pub(crate) use decorations::show_controls;
 
+use crate::direction::Logical;
 use crate::{HerdrWindow, fonts::StyledFont, menu::Page};
 use gpui::{prelude::*, *};
 
@@ -85,11 +86,11 @@ impl HerdrWindow {
         Some(
             div()
                 .debug_selector(|| "titlebar-git-slot".into())
-                .flex()
+                .row()
                 .items_center()
                 .flex_none()
                 .h_full()
-                .pr(px(2.))
+                .pe(px(2.))
                 .gap(px(4.))
                 .text_font(font)
                 .text_size(px(font.size))
@@ -100,7 +101,7 @@ impl HerdrWindow {
                             div()
                                 .id("titlebar-git-pr-link")
                                 .debug_selector(|| "titlebar-git-pr-link".into())
-                                .flex()
+                                .row()
                                 .items_center()
                                 .gap(px(4.))
                                 .h(px(24.))
@@ -124,7 +125,7 @@ impl HerdrWindow {
                                 .child(
                                     div()
                                         .debug_selector(|| "titlebar-git-pr-lines".into())
-                                        .flex()
+                                        .row()
                                         .child(
                                             div()
                                                 .debug_selector(|| {
@@ -190,7 +191,7 @@ impl HerdrWindow {
                         .id("titlebar-git")
                         .debug_selector(|| "titlebar-git".into())
                         .relative()
-                        .flex()
+                        .row()
                         .items_center()
                         .gap(px(4.))
                         .h(px(24.))
@@ -250,14 +251,14 @@ impl HerdrWindow {
         // Finder and Files.
         let toggle = !self.activity_bar_leads();
         let leading = div()
-            .flex()
+            .row()
             .flex_none()
             .items_center()
             .h_full()
             .when(toggle, |leading| leading.child(self.sidebar_toggle(cx)))
             // No toggle precedes Back here, so its inset is not there to
             // complete the room before it.
-            .when(!toggle, |leading| leading.pl(px(SIDEBAR_TOGGLE_INSET)))
+            .when(!toggle, |leading| leading.ps(px(SIDEBAR_TOGGLE_INSET)))
             .when(
                 f32::from(window.viewport_size().width) >= NAVIGATION_MIN_WIDTH,
                 |leading| leading.child(self.navigation(cx)),
@@ -292,7 +293,7 @@ impl HerdrWindow {
             .flex_none()
             .self_center()
             .size(px(SIDEBAR_TOGGLE_SIZE))
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .rounded(px(crate::config::corners::CONTROL))
@@ -315,7 +316,7 @@ impl HerdrWindow {
             .and_then(|profile| self.menu.github_avatars.get(&profile.avatar_url));
         let attention = self.github_needs_attention() || self.orchestrator_gitlab_needs_sign_in(cx);
         div()
-            .flex()
+            .row()
             .flex_none()
             .items_center()
             .children(self.render_git_button(cx))
@@ -323,7 +324,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .debug_selector(|| "titlebar-account-slot".into())
-                    .flex()
+                    .row()
                     .items_center()
                     .justify_center()
                     .flex_none()
@@ -346,7 +347,7 @@ impl HerdrWindow {
                             })
                             .group("titlebar-account")
                             .debug_selector(|| "titlebar-avatar".into())
-                            .flex()
+                            .row()
                             .items_center()
                             .justify_center()
                             .relative()
@@ -368,7 +369,7 @@ impl HerdrWindow {
                             .child(
                                 div()
                                     .debug_selector(|| "titlebar-avatar-circle".into())
-                                    .flex()
+                                    .row()
                                     .items_center()
                                     .justify_center()
                                     .size(px(AVATAR))
@@ -403,7 +404,7 @@ impl HerdrWindow {
                                         .debug_selector(|| "titlebar-avatar-attention".into())
                                         .absolute()
                                         .top(px(3.))
-                                        .right(px(3.))
+                                        .inset_e(px(3.))
                                         .size(px(ATTENTION_DOT))
                                         .rounded_full()
                                         .border_2()
@@ -433,15 +434,24 @@ pub(super) fn render(
     leading: Option<AnyElement>,
     window: &Window,
 ) -> Stateful<Div> {
+    // AppKit keeps the traffic lights on the left whatever the app's own
+    // language, so a mirrored bar clears them on its end instead.
+    let rtl = crate::direction::is_rtl();
     let bar = div()
         .id("titlebar")
         .debug_selector(|| "titlebar".into())
-        .flex()
+        .row()
         .flex_none()
         .w_full()
         .h(px(HEIGHT))
         .bg(background)
-        .child(div().flex_none().w(px(LEADING)).h_full())
+        .when(rtl, |bar| bar.pl(px(LEADING)))
+        .child(
+            div()
+                .flex_none()
+                .w(px(if rtl { MARGIN } else { LEADING }))
+                .h_full(),
+        )
         .children(leading);
     movable(bar, window)
 }
@@ -528,7 +538,13 @@ pub(crate) fn zen_inset(ground: Hsla, window: &Window) -> Option<Stateful<Div>> 
 
 /// Room before the first control: macOS keeps it clear for the traffic
 /// lights, which every other platform draws elsewhere or not at all.
-const LEADING: f32 = if cfg!(target_os = "macos") { 80. } else { 8. };
+const LEADING: f32 = if cfg!(target_os = "macos") {
+    80.
+} else {
+    MARGIN
+};
+/// Room before the first control where nothing else needs clearing.
+const MARGIN: f32 = 8.;
 
 pub(super) fn options(title: &str) -> TitlebarOptions {
     TitlebarOptions {
@@ -547,11 +563,13 @@ pub(crate) fn sidebar_glyph(expanded: bool, theme: &crate::config::Theme) -> Div
         .border_1()
         .border_color(rgb(theme.foreground))
         .rounded(px(2.))
+        // The panel sits on the side the sidebar does.
+        .row()
         .child(
             div()
                 .w(px(5.))
                 .h_full()
-                .border_r_1()
+                .border_e(px(1.))
                 .border_color(rgb(theme.foreground))
                 .when(expanded, |bar| bar.bg(rgb(theme.foreground))),
         )

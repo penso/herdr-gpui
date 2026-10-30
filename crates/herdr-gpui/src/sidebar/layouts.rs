@@ -32,7 +32,11 @@ impl Fold {
             .text_color(rgb(muted))
             .hover(move |style| style.text_color(rgb(foreground)))
             .cursor_pointer()
-            .child(label_text(if collapsed { "\u{25b8}" } else { "\u{25be}" }))
+            .child(label_text(if collapsed {
+                crate::direction::glyph("\u{25b8}")
+            } else {
+                "\u{25be}"
+            }))
             .on_click(move |event, window, cx| {
                 cx.stop_propagation();
                 toggle(event, window, cx);

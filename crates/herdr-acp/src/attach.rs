@@ -21,6 +21,9 @@ use crate::{
     session::{Attach, ConnId, Input},
 };
 
+mod downgrade;
+pub(crate) use downgrade::Downgrade;
+
 /// Messages queued for one client before it counts as lagging.
 const CLIENT_QUEUE: usize = 4096;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -114,8 +117,19 @@ fn serve(connection: Connection, inputs: &Sender<Input>) -> Result<()> {
     reader.set_timeout(Some(HELLO_TIMEOUT))?;
     let mut reader = BufReader::new(reader);
     let mut writer = BufWriter::new(writer);
+    let mut downgrade;
     let since = match read_frame::<_, ClientMessage>(&mut reader) {
-        Ok(Some(ClientMessage::Hello { since, version, .. })) if version == VERSION => since,
+        Ok(Some(ClientMessage::Hello {
+            revision,
+            since,
+            version,
+            ..
+        })) if version == VERSION => {
+            downgrade = Downgrade::new(revision);
+            // An older client starts from a snapshot, which tells its
+            // downgrade what the client holds.
+            since.filter(|_| downgrade.current())
+        }
         Ok(Some(ClientMessage::Hello { .. })) => {
             let reason = ByeReason::Version { supported: VERSION };
             return Ok(write_frame(&mut writer, &ServerMessage::Bye { reason })?);
@@ -134,6 +148,9 @@ fn serve(connection: Connection, inputs: &Sender<Input>) -> Result<()> {
         .name("chat-writer".to_owned())
         .spawn(move || {
             for message in queue {
+                let Some(message) = downgrade.message(message) else {
+                    break;
+                };
                 if write_frame(&mut writer, &message).is_err() {
                     break;
                 }

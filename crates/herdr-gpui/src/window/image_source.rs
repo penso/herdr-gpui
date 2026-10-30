@@ -25,7 +25,7 @@ pub(super) const MAX_IMAGE_INPUT_BYTES: usize = 128 * 1024 * 1024;
 const MAX_DECODE_PIXELS: u64 = 64 * 1024 * 1024;
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
-pub(super) struct PreparedImage {
+pub(crate) struct PreparedImage {
     pub extension: &'static str,
     pub bytes: Vec<u8>,
     /// True when recompressed or downscaled, rather than passed through unchanged.
@@ -43,7 +43,7 @@ impl std::fmt::Debug for PreparedImage {
 }
 
 // Deliberately no Debug: neither local paths nor clipboard bytes belong in logs.
-pub(super) enum Source {
+pub(crate) enum Source {
     File {
         path: PathBuf,
         extension: &'static str,

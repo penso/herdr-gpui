@@ -254,7 +254,8 @@ fn read_page(path: &Path) -> std::io::Result<Vec<u8>> {
 /// Writes a page to `index.html` in a folder of its own, named by what it
 /// holds, and returns the file. Blocks, so it runs off the UI thread.
 fn write_page(html: &[u8]) -> std::io::Result<PathBuf> {
-    let root = pages_root().ok_or_else(|| std::io::Error::other("no folder for pages"))?;
+    let root =
+        private_folder("pages").ok_or_else(|| std::io::Error::other("no folder for pages"))?;
     let mut hasher = DefaultHasher::new();
     html.hash(&mut hasher);
     let folder = root.join(format!("{:016x}", hasher.finish()));
@@ -265,29 +266,29 @@ fn write_page(html: &[u8]) -> std::io::Result<PathBuf> {
     Ok(file)
 }
 
-/// The per-user folder pages are written in. A local page may not be
-/// served from a folder with a hidden name in its path, so on macOS and
-/// Windows it is the user's own temporary folder.
+/// The per-user folder for chat files of one `kind`, such as pages. A local
+/// page may not be served from a folder with a hidden name in its path, so
+/// on macOS and Windows it is the user's own temporary folder.
 #[cfg(any(target_os = "macos", windows))]
-fn pages_root() -> Option<PathBuf> {
-    Some(std::env::temp_dir().join("herdr-chat-pages"))
+pub(super) fn private_folder(kind: &str) -> Option<PathBuf> {
+    Some(std::env::temp_dir().join(format!("herdr-chat-{kind}")))
 }
 
 /// Elsewhere `/tmp` is shared with other users, so the page goes in the
 /// user's runtime or cache folder.
 #[cfg(not(any(target_os = "macos", windows)))]
-fn pages_root() -> Option<PathBuf> {
+pub(super) fn private_folder(kind: &str) -> Option<PathBuf> {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .or_else(|| std::env::var_os("XDG_CACHE_HOME"))
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))?;
     base.is_absolute()
-        .then(|| base.join("herdr-gpui-chat-pages"))
+        .then(|| base.join(format!("herdr-gpui-chat-{kind}")))
 }
 
 /// Creates `path`, readable by this user alone where the platform says so.
-fn private_dir(path: &Path) -> std::io::Result<()> {
+pub(super) fn private_dir(path: &Path) -> std::io::Result<()> {
     let mut builder = std::fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]

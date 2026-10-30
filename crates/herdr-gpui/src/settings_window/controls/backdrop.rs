@@ -7,6 +7,7 @@ use crate::config::{
     Backdrop, Material, Theme,
     backdrop::{Edit, IMAGE_OPACITY},
 };
+use crate::direction::Logical;
 use crate::{i18n::fl, settings_window::ui};
 
 mod ruler;
@@ -91,7 +92,7 @@ fn miniature(theme: &Theme, alpha: f32) -> Div {
         .child(div().h(px(8.)).flex_none().bg(fill(theme.surface)))
         .child(
             div()
-                .flex()
+                .row()
                 .flex_1()
                 .child(div().w(px(28.)).h_full().bg(fill(theme.surface)))
                 .child(
@@ -117,7 +118,7 @@ fn behind(theme: &Theme, mode: Mode) -> Div {
         Mode::Solid => div().bg(rgb(theme.background)),
         // Stripes of the theme's hues read as "something behind".
         Mode::Translucent => div()
-            .flex()
+            .row()
             .children((1..=6).map(|hue| div().flex_1().h_full().bg(rgb(theme.palette[hue])))),
         Mode::Picture => div().bg(linear_gradient(
             135.,
@@ -143,7 +144,7 @@ impl SettingsWindow {
     ) -> Div {
         let backdrop = &self.config.backdrop;
         let current = Mode::of(backdrop);
-        let mut tiles = div().flex().flex_wrap().gap(px(10.));
+        let mut tiles = div().row().flex_wrap().gap(px(10.));
         for mode in [Mode::Solid, Mode::Translucent, Mode::Picture] {
             tiles = tiles.child(self.backdrop_tile(mode, current == mode, cx));
         }
@@ -250,7 +251,7 @@ impl SettingsWindow {
                         div()
                             .absolute()
                             .size_full()
-                            .flex()
+                            .row()
                             .items_center()
                             .justify_center()
                             .child(miniature(theme, alpha)),
@@ -295,7 +296,7 @@ impl SettingsWindow {
                 .child(label)
         };
         div()
-            .flex()
+            .row()
             .items_center()
             .justify_between()
             .gap(px(12.))
@@ -307,7 +308,7 @@ impl SettingsWindow {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(10.))
                     .min_w_0()

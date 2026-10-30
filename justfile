@@ -198,6 +198,9 @@ bundle profile="release" features="":
         codesign --force --sign - "$app/Contents/MacOS/herdr-core"
     fi
     cp assets/macos/Info.plist "$app/Contents/Info.plist"
+    for lproj in assets/macos/*.lproj; do
+        if [[ -d "$lproj" ]]; then cp -R "$lproj" "$app/Contents/Resources/"; fi
+    done
     # LaunchServices and the Dock cache icons by bundle ID, so every worktree
     # build sharing the release ID competed with the installed app's icon.
     plutil -replace CFBundleIdentifier -string so.pen.herdr-gpui.dev "$app/Contents/Info.plist"

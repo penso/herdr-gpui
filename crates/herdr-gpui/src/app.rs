@@ -408,6 +408,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::overview::Marks::default()
     };
+    // Nor with which workspaces and tabs the user muted.
+    let notification_mutes = if mode == LaunchMode::Normal {
+        crate::notification_mutes::Mutes::load()
+    } else {
+        crate::notification_mutes::Mutes::default()
+    };
     // Nor with the user's jump list, which they would replace.
     #[cfg(windows)]
     let jump_list = (mode == LaunchMode::Normal).then(crate::jump_list::JumpList::load);
@@ -443,6 +449,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             worktree_notes.install(cx);
             review_viewed.install(cx);
             overview_marks.install(cx);
+            notification_mutes.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);
             fan_out_journal.install(cx);
@@ -469,6 +476,11 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::cloud::install_idle_checks(cx);
             }
             cx.set_global(appearance.select(light_appearance(cx)));
+            // Only the user's own app follows their saved SSH host choices.
+            if mode == LaunchMode::Normal {
+                let ssh = cx.global::<InitialAppearance>().config.ssh.clone();
+                crate::config::ssh_hosts::install(&ssh, cx);
+            }
             let language = cx.global::<InitialAppearance>().config.language.clone();
             crate::i18n::install(&language, cx);
             app_icon::install();

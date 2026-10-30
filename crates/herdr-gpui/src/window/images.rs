@@ -101,7 +101,7 @@ impl HerdrWindow {
         self.endpoints[self.selected_endpoint]
             .toasts
             .receive([notice]);
-        self.tick_toasts(self.menu.page.is_some() || self.toasts_hidden, now);
+        self.tick_toasts(self.menu.page.is_some() || self.toasts_hidden, now, cx);
         cx.notify();
     }
 

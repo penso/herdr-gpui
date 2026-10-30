@@ -1,6 +1,7 @@
-//! The workspace popover: a header naming the workspace, a fixed grid of
-//! large action tiles, plain rows for the rarer actions, the destructive
-//! action set apart, and the pull request section below.
+//! The workspace popover: a header naming the workspace, with the toggle
+//! that mutes its notifications, a fixed grid of large action tiles, plain
+//! rows for the rarer actions, the destructive action set apart, and the pull
+//! request section below.
 
 use crate::{
     HerdrWindow,
@@ -83,7 +84,7 @@ impl Tile {
 }
 
 /// Lays `items` into the grid. Items no slot takes are returned in order,
-/// for the rows beneath it.
+/// for the rows beneath it, except what the header draws.
 pub(in crate::menu) fn layout(
     items: &[(WorkspaceMenuAction, &'static str)],
 ) -> ([Tile; 6], Vec<(WorkspaceMenuAction, &'static str)>) {
@@ -107,9 +108,10 @@ pub(in crate::menu) fn layout(
     let rest = items
         .iter()
         .filter(|(action, _)| {
-            !tiles
-                .iter()
-                .any(|tile| tile.enabled && tile.action == *action)
+            !action.in_header()
+                && !tiles
+                    .iter()
+                    .any(|tile| tile.enabled && tile.action == *action)
         })
         .copied()
         .collect();
@@ -124,8 +126,37 @@ impl HerdrWindow {
     ) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
+        let items = self.workspace_items();
         let mut panel = div().flex().flex_col();
         if let Some(target) = &self.menu.target {
+            let names = div()
+                .flex_1()
+                .min_w_0()
+                .child(
+                    div()
+                        .debug_selector(|| "workspace-menu-name".into())
+                        // Long names wrap: the header is the one place the
+                        // full name shows when the sidebar row cuts it off.
+                        .whitespace_normal()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(crate::sidebar::label_text(&target.label)),
+                )
+                .when_some(
+                    target
+                        .branch
+                        .as_deref()
+                        .filter(|branch| !branch.trim().is_empty()),
+                    |names, branch| {
+                        names.child(
+                            div()
+                                .debug_selector(|| "workspace-menu-branch".into())
+                                .truncate()
+                                .text_color(rgb(theme.muted))
+                                .text_size(px(font.size * 0.9))
+                                .child(crate::sidebar::label_text(branch)),
+                        )
+                    },
+                );
             panel = panel.child(
                 div()
                     .debug_selector(|| "workspace-menu-header".into())
@@ -134,34 +165,19 @@ impl HerdrWindow {
                     .mb(px(4.))
                     .border_b_1()
                     .border_color(rgb(theme.active))
-                    .child(
-                        div()
-                            .debug_selector(|| "workspace-menu-name".into())
-                            // Long names wrap: the header is the one place the
-                            // full name shows when the sidebar row cuts it off.
-                            .whitespace_normal()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(crate::sidebar::label_text(&target.label)),
-                    )
-                    .when_some(
-                        target
-                            .branch
-                            .as_deref()
-                            .filter(|branch| !branch.trim().is_empty()),
-                        |header, branch| {
-                            header.child(
-                                div()
-                                    .debug_selector(|| "workspace-menu-branch".into())
-                                    .truncate()
-                                    .text_color(rgb(theme.muted))
-                                    .text_size(px(font.size * 0.9))
-                                    .child(crate::sidebar::label_text(branch)),
-                            )
-                        },
+                    .flex()
+                    .items_start()
+                    .gap(px(8.))
+                    .child(names)
+                    .children(
+                        items
+                            .iter()
+                            .find(|(action, _)| action.in_header())
+                            .map(|&(action, label)| self.render_workspace_mute(action, label, cx)),
                     ),
             );
         }
-        let (tiles, rest) = layout(&self.workspace_items());
+        let (tiles, rest) = layout(&items);
         let mut grid = div()
             .debug_selector(|| "workspace-menu-tiles".into())
             .flex()
@@ -193,6 +209,68 @@ impl HerdrWindow {
             panel = panel.child(self.render_workspace_pr(pr_width, cx));
         }
         panel
+    }
+
+    /// The header's toggle for the workspace's notifications, `action` with
+    /// its menu `label`: what pressing it does, with the bell it leaves. In
+    /// the header, so muting adds no row that would push the pull request
+    /// card out of a short window; still first in the arrow keys' walk.
+    /// Muted, it keeps the accent, so the state reads at a glance.
+    pub(in crate::menu) fn render_workspace_mute(
+        &self,
+        action: WorkspaceMenuAction,
+        label: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let theme = &self.theme;
+        let muted = action == WorkspaceMenuAction::Unmute;
+        let selected = Some(action) == self.menu.workspace_selected;
+        let ink = if muted {
+            accent(theme)
+        } else {
+            rgb(theme.muted)
+        };
+        // One line of the header tall, so it never makes the header taller.
+        let line = self.config.ui.line_height();
+        div()
+            .id(label)
+            .debug_selector(move || format!("workspace-menu-{label}"))
+            .role(Role::Button)
+            .aria_label(label)
+            .when(selected, |toggle| toggle.aria_active_descendant())
+            .flex_none()
+            .h(px(line))
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .px(px(6.))
+            .rounded(px(crate::config::corners::CONTROL))
+            .border_1()
+            .border_color(Rgba { a: 0.5, ..ink })
+            .map(|toggle| match (selected, muted) {
+                (true, _) => toggle.bg(rgb(theme.active)),
+                (false, true) => toggle.bg(Rgba { a: 0.14, ..ink }),
+                (false, false) => toggle,
+            })
+            .text_color(ink)
+            .text_size(px((self.config.ui.size - 2.).max(8.)))
+            .cursor_pointer()
+            .on_hover(Self::workspace_hover(action, cx))
+            .when_some(action.icon(), |toggle, icon| {
+                toggle.child(
+                    svg()
+                        .path(icon)
+                        .size(px((line - 6.).clamp(8., ICON_SIZE - 4.)))
+                        .flex_none()
+                        .text_color(ink)
+                        .debug_selector(|| "workspace-menu-mute-icon".into()),
+                )
+            })
+            .child(if muted { "Unmute" } else { "Mute" })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.activate_workspace_menu(action, window, cx);
+            }))
     }
 
     /// Hover selects, as the arrow keys do, so both highlight the same item.

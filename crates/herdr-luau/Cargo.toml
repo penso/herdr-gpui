@@ -1,0 +1,16 @@
+# The sandboxed Luau state shared by automations and mods: the safe
+# libraries, memory and interrupt budgets, and sealed globals. No GPUI.
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-luau"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mlua.workspace      = true
+thiserror.workspace = true

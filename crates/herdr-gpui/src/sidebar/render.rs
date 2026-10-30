@@ -7,9 +7,7 @@ use super::{
     agents::Indicators,
     agents_sort,
     cell::{Cell, Fold, RowContext, RowData, WorkspaceRow, layout_for},
-    label_text,
-    layout::{self, SidebarLook},
-    line_height,
+    label_text, layout, line_height,
     reorder::{self, Plan},
     row::{RowIcon, RowLift, RowTree},
     sidebar_width, sticky,
@@ -17,18 +15,19 @@ use super::{
     visible_workspace_entries, wash,
     workspaces::{displayed_workspace_status, workspace_badge, workspace_label, workspace_note},
 };
+use crate::direction::Logical;
 use crate::{
-    Command, HerdrWindow, NavigationTarget,
-    avatars::Checkout,
-    config::{AgentsPlacement, FontConfig, Theme},
+    Command, HerdrWindow, NavigationTarget, avatars::Checkout, config::AgentsPlacement,
     fonts::StyledFont,
 };
 use gpui::{prelude::*, *};
 
 mod agent_rows;
 mod device_tree;
+mod header;
 mod nested_agents;
 
+pub(super) use header::header;
 pub(crate) use nested_agents::NestedReveal;
 
 impl HerdrWindow {
@@ -180,6 +179,7 @@ impl HerdrWindow {
             let Some(snapshot) = &live.snapshot else {
                 continue;
             };
+            let silenced = crate::notification_mutes::Mutes::silenced_in(cx, endpoint, snapshot);
             let pr_view = self.endpoint_pr_view(endpoint_index);
             let collapsed_repos = if endpoint_index == 0 {
                 &self.collapsed_repos
@@ -286,6 +286,7 @@ impl HerdrWindow {
                 } else {
                     workspace.agent_status
                 };
+                let muted = silenced.workspace(&workspace.workspace_id);
                 let lines = if spaces_custom {
                     tokens::space_rows(
                         &self.config.sidebar_layout.spaces,
@@ -374,8 +375,8 @@ impl HerdrWindow {
                             .flex_none()
                             .w_full()
                             .min_w_0()
-                            .pl(px(under_left))
-                            .pr(px(content_x))
+                            .ps(px(under_left))
+                            .pe(px(content_x))
                             .text_size(px((font.size * 0.85).round()))
                             .child(crate::listening_ports::chips(
                                 listed,
@@ -421,7 +422,7 @@ impl HerdrWindow {
                                 self.config.sidebar_style.change_counts,
                             ),
                             (&self.teleport_marks, &endpoint.id),
-                            note.as_deref(),
+                            (note.as_deref(), muted),
                             theme,
                         ),
                         removing: removing_row,
@@ -508,6 +509,7 @@ impl HerdrWindow {
                         label,
                         linked,
                         shown_status,
+                        muted,
                         row_cx.host,
                     );
                     self.workspace_item(row, name, selected && workspace.focused, folds, cx)
@@ -704,7 +706,7 @@ impl HerdrWindow {
             .line_height(px(line_height(font)))
             .text_color(rgb(theme.foreground))
             .bg(self.fill().panel(theme.sidebar_background()))
-            .border_r_1()
+            .border_e(px(1.))
             .border_color(rgb(theme.active))
             // Zero flex bases keep long workspace lists from displacing agents.
             .child(
@@ -756,7 +758,7 @@ impl HerdrWindow {
                             .flex_none()
                             .h(px(line_height(font) + 2. * layout.footer_padding()))
                             .px(px(content_x))
-                            .flex()
+                            .row()
                             .items_center()
                             // Menu hugs the sidebar's edge, as in the terminal client.
                             .justify_between()
@@ -843,6 +845,7 @@ impl HerdrWindow {
                             .children(self.core_sidebar_rows(cx)),
                     )
             })
+            .children(self.render_mod_sidebar_sections(cx))
             .map(|sidebar| {
                 if self.device_footer_shown() {
                     sidebar.child(self.render_device_footer(cx))
@@ -855,7 +858,7 @@ impl HerdrWindow {
                     .id("sidebar-resize")
                     .debug_selector(|| "sidebar-resize".into())
                     .absolute()
-                    .right_0()
+                    .inset_e(px(0.))
                     .top_0()
                     .h_full()
                     .w(px(6.))
@@ -916,8 +919,12 @@ impl HerdrWindow {
                                         match drag {
                                             SidebarDrag::Width { start, width } => {
                                                 this.sidebar_width = Some(sidebar_width(
+                                                    // The edge is on the sidebar's end.
                                                     Some(
-                                                        width + f32::from(event.position.x) - start,
+                                                        width
+                                                            + crate::direction::toward_end(
+                                                                f32::from(event.position.x) - start,
+                                                            ),
                                                     ),
                                                     f32::from(window.viewport_size().width),
                                                 ));
@@ -970,26 +977,4 @@ impl HerdrWindow {
                 .size_full(),
             )
     }
-}
-
-pub(super) fn header(
-    label: &'static str,
-    font: &FontConfig,
-    theme: &Theme,
-    look: SidebarLook,
-) -> Div {
-    div()
-        .debug_selector(|| format!("header-{label}"))
-        .flex_none()
-        .h(px(line_height(font) + 2. * look.density.header_padding()))
-        .px(px(look.content_x()))
-        .flex()
-        .items_center()
-        .text_size(px(font.size))
-        .text_color(rgb(theme.muted))
-        .child(
-            div()
-                .debug_selector(|| format!("header-label-{label}"))
-                .child(label_text(&look.header_label(label))),
-        )
 }

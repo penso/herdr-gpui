@@ -26,7 +26,7 @@ impl HerdrWindow {
                 endpoint.toasts.enabled_since = Some(now);
             }
         }
-        self.tick_toasts(self.menu.page.is_some() || self.toasts_hidden, now);
+        self.tick_toasts(self.menu.page.is_some() || self.toasts_hidden, now, cx);
         cx.notify();
     }
 
@@ -229,6 +229,7 @@ impl HerdrWindow {
                         this.tick_toasts(
                             this.menu.page.is_some() || this.toasts_hidden,
                             std::time::Instant::now(),
+                            cx,
                         );
                         crate::log_window::set_appearance(&this.config, &this.theme, cx);
                         this.wheel = Default::default();
@@ -379,6 +380,7 @@ impl HerdrWindow {
                 | Command::OpenPx0
                 | Command::RemotePair
                 | Command::ToggleStatusBar
+                | Command::ToggleModPanel
                 | Command::FocusNextRegion
                 | Command::FocusPreviousRegion
                 | Command::ToggleZenMode

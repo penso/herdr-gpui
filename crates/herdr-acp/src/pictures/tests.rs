@@ -62,6 +62,7 @@ fn a_finished_tool_call_shows_the_pictures_it_names() {
         }],
         kind: ToolKind::Read,
         locations: vec!["shot.png:3".into(), "src/main.rs".into()],
+        parent: None,
         status: ToolStatus::InProgress,
         title: "Read shot.png".into(),
     };

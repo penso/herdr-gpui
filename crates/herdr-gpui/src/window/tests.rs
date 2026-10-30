@@ -13,6 +13,7 @@ mod close_window;
 mod detach;
 mod padding;
 mod report_issue;
+mod rtl;
 mod sound_volume;
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {

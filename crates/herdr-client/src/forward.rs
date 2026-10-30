@@ -315,7 +315,9 @@ fn system_port() -> Result<u16> {
 #[cfg(unix)]
 fn master_command(target: &str, socket: &Path) -> Command {
     let mut command = crate::environment::command("ssh");
+    // The user's host key choice comes first, so it wins over the default.
     command
+        .args(ssh::HostKeys::of(target).options())
         .args([
             "-N",
             "-T",

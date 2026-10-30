@@ -1,10 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use crossbeam_channel::Receiver;
-use herdr_chat_protocol::{ClientKind, Command, CommandId};
+use herdr_chat_protocol::{ClientKind, Command, CommandId, Cursor};
 use herdr_client::private_endpoint::{Reader, Writer};
 
 use super::*;
+
+mod revisions;
 
 const WAIT: Duration = Duration::from_secs(10);
 
@@ -47,11 +49,16 @@ fn connect(fixture: &Fixture) -> (Reader, Writer) {
 }
 
 fn hello(writer: &mut Writer, version: u32) {
+    greet(writer, version, herdr_chat_protocol::REVISION, None);
+}
+
+fn greet(writer: &mut Writer, version: u32, revision: u32, since: Option<Cursor>) {
     write_frame(
         writer,
         &ClientMessage::Hello {
             client: ClientKind::Gui,
-            since: None,
+            revision,
+            since,
             version,
         },
     )

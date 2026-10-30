@@ -303,10 +303,16 @@ impl Toasts {
 /// With system delivery, daemon notices that pass the same evidence and delay
 /// policy wait for [`take_system`] instead of the in-app queue. Like Herdr, the
 /// active tab suppresses them only while this window is `focused`.
+///
+/// A daemon notice about a workspace or tab the user muted is dropped at any
+/// stage short of being posted to the OS, so muting also takes away a toast
+/// already showing. One dropped while muted never comes back on unmuting.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn tick(
     endpoints: &mut [crate::endpoint::Endpoint],
     selected: usize,
     config: crate::config::NotificationConfig,
+    mutes: Option<&crate::notification_mutes::Mutes>,
     hidden: bool,
     focused: bool,
     pending_navigation: Option<u64>,
@@ -319,6 +325,12 @@ pub(crate) fn tick(
     let mut changed = false;
     for (index, endpoint) in endpoints.iter_mut().enumerate() {
         let snapshot = endpoint.live.latest_snapshot().map(std::sync::Arc::as_ref);
+        let silenced = snapshot
+            .zip(mutes)
+            .map(|(snapshot, mutes)| {
+                mutes.silenced(&crate::notification_mutes::Daemon::of(endpoint), snapshot)
+            })
+            .unwrap_or_default();
         endpoint.toasts.entries.retain_mut(|(id, n)| {
             let keep = (|| {
                 if !n.client_local
@@ -344,6 +356,16 @@ pub(crate) fn tick(
                 }
                 if n.posted {
                     return true;
+                }
+                if !n.client_local
+                    && !silenced.is_empty()
+                    && silenced.notice(
+                        n.workspace_id.as_deref(),
+                        n.tab_id.as_deref(),
+                        n.pane_id.as_deref(),
+                    )
+                {
+                    return false;
                 }
                 if n.visible {
                     let paused = hidden || (index == selected && pending_navigation == Some(*id));

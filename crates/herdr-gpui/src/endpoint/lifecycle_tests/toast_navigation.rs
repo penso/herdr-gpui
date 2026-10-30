@@ -46,7 +46,7 @@ fn toast_navigation_queues_typed_targets_and_fences_input(cx: &mut gpui::TestApp
                 window.focus(&view.focus, cx);
                 view.marked = "composition".into();
                 assert!(view.input_ready());
-                view.tick_toasts(false, Instant::now());
+                view.tick_toasts(false, Instant::now(), cx);
                 view.command(Command::OpenNotificationTarget, window, cx);
                 assert!(view.endpoints[1].toasts.entries.is_empty());
                 assert!(view.marked.is_empty());
@@ -117,11 +117,11 @@ fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
         !endpoint.toasts.entries.is_empty()
     });
     let now = Instant::now();
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         view.endpoints.push(endpoint);
         view.config.notifications.enabled = true;
         view.config.notifications.delay_seconds = 0;
-        view.tick_toasts(false, now);
+        view.tick_toasts(false, now, cx);
         assert!(!view.endpoints[1].toasts.entries[0].1.visible);
     });
     projection.revision += 1;
@@ -146,7 +146,7 @@ fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
                     .is_some_and(|s| s.revision == projection.revision)
             });
             // Staged metadata is evidence before its surface arrives.
-            view.tick_toasts(false, now + Duration::from_millis(50));
+            view.tick_toasts(false, now + Duration::from_millis(50), cx);
             assert!(view.endpoints[1].toasts.entries[0].1.visible);
             view.endpoints[1]
                 .connection
@@ -162,7 +162,7 @@ fn wire_completion_waits_for_evidence_then_command_uses_original_pane(
                     .as_ref()
                     .is_some_and(|s| s.revision == projection.revision)
             });
-            view.tick_toasts(false, now + Duration::from_millis(100));
+            view.tick_toasts(false, now + Duration::from_millis(100), cx);
             assert!(view.endpoints[1].toasts.entries[0].1.visible);
             // Select the already-active fixture surface without issuing unrelated activation requests.
             view.selected_endpoint = 1;
@@ -317,7 +317,7 @@ fn toast_queue_failure_retains_notice(cx: &mut gpui::TestAppContext) {
             .unwrap()
             .disconnect();
         assert!(view.input_ready());
-        view.tick_toasts(false, Instant::now());
+        view.tick_toasts(false, Instant::now(), cx);
         view.navigate_toast(0, cx);
         assert_eq!(view.endpoints[1].toasts.entries.len(), 1);
         assert!(view.local_error.is_some());

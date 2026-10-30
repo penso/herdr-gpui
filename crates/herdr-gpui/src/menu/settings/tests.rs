@@ -101,13 +101,13 @@ fn enabling_system_delivery_does_not_post_the_backlog(cx: &mut gpui::TestAppCont
         )
     });
     cx.run_until_parked();
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         assert_eq!(
             view.config.notifications.delivery(),
             NotificationDelivery::System
         );
         assert!(view.endpoints[0].toasts.enabled_since.is_some());
-        view.tick_toasts(false, Instant::now());
+        view.tick_toasts(false, Instant::now(), cx);
         assert!(take_system(&mut view.endpoints, view.config.notifications).is_empty());
         assert!(view.endpoints[0].toasts.entries.is_empty());
     });
@@ -124,7 +124,7 @@ fn notification_reload_retimes_pending_clears_disabled_and_keeps_failed_settings
     };
     use std::time::Instant;
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         view.config.terminal.size = 24.;
         view.config.notifications = NotificationConfig {
             enabled: true,
@@ -134,7 +134,7 @@ fn notification_reload_retimes_pending_clears_disabled_and_keeps_failed_settings
         view.endpoints[0]
             .toasts
             .receive([Notice::new(notification("pending"), Instant::now())]);
-        view.tick_toasts(false, Instant::now());
+        view.tick_toasts(false, Instant::now(), cx);
         assert!(!view.endpoints[0].toasts.entries[0].1.visible);
     });
     view.update(cx, |view, cx| {

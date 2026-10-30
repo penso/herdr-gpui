@@ -622,12 +622,16 @@ impl OrchestratorView {
 
 /// A backend's muted mark in a row.
 pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
-    let icon = match provider {
+    look.icon(source_icon(provider), 12., look.theme.muted)
+        .into_any_element()
+}
+
+pub(super) fn source_icon(provider: Provider) -> &'static str {
+    match provider {
         Provider::Github => "icons/github.svg",
         Provider::Beads => "icons/beads.svg",
         Provider::Gitlab => "icons/gitlab.svg",
-    };
-    look.icon(icon, 12., look.theme.muted).into_any_element()
+    }
 }
 
 /// A button small enough to sit in a row with room above and below.
@@ -741,7 +745,7 @@ fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
         .take(CHECK_PILLS)
         .map(|check| {
             let hue = check_hue(look, check.state);
-            let short: String = check.name.chars().take(4).collect();
+            let short = crate::truncate::cut_width(&check.name, 4).unwrap_or(&check.name);
             div()
                 .flex_none()
                 .px(px(4.))
@@ -749,7 +753,7 @@ fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
                 .bg(rgb(crate::config::mix(look.theme.background, hue, 18)))
                 .text_color(rgb(hue))
                 .text_size(look.tiny())
-                .child(short)
+                .child(short.to_owned())
         })
         .collect();
     if checks.len() > CHECK_PILLS {

@@ -281,7 +281,17 @@ its own form, so switching between them keeps what was typed. **Ctrl-Tab** and
 rail shows only the logos.
 
 The SSH form accepts an SSH target, label, and optional remote session (default:
-`default`). Herdr's `machine add` saves a new profile every time and takes no
+`default`). **Skip host key verification (dangerous)**, off by default,
+connects without checking the host's key, now and on every later connection:
+the app passes `StrictHostKeyChecking=no` and reads no known hosts file for
+that target. It is for hosts that keep no key to check, such as the `*.coder`
+aliases `coder config-ssh` writes with `UserKnownHostsFile=/dev/null`, which
+otherwise fail the app's strict check. The choice is saved before the device,
+under `[ssh] skip_host_key_verification` in the local config, by target.
+Removing the device keeps it there. To verify the host again, delete the
+target from that list (connections opened without checking take no new
+commands once it is gone), or remove the device and add it again with the
+box clear. Herdr's `machine add` saves a new profile every time and takes no
 lock, so the dialog keeps a host from being saved twice itself. A host counts as
 already saved when a profile with the same session reaches the same user, host
 name, and port as `ssh -G` resolves them, so an SSH alias, `user@address`, and
@@ -1255,6 +1265,39 @@ replay discarded notifications. Enabling establishes an arrival cutoff, so event
 already waiting in a connection inbox from the disabled period are discarded too.
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
+
+To quiet one workspace or tab instead of every notification, right-click it:
+the workspace menu's header has **Mute** (**Unmute** while it is muted), and
+the tab menu has **Mute Notifications**. Muting a workspace silences every tab
+in it, including tabs opened later; a tab can also be muted on its own, and
+while its workspace's mute covers it, its menu offers **Unmute Workspace**
+instead. Nothing from a muted workspace or tab asks for you: no toast, no OS
+notification, no notification sound, and its agents leave the Dock badge,
+the Windows taskbar overlay, and the Overview's count in the activity bar.
+Status dots and the Overview's rows still show what its agents do. A struck
+through bell marks the muted workspace's sidebar row and its place in the
+compact rail, each tab it silences, and its agents' Overview rows. Muting
+takes away a toast already showing, and notifications dropped while muted are
+not replayed on unmuting. An OS notification posted before the mute stays, and
+clicking it still opens its pane. Three things a mute does not hold back:
+notifications posted with `herdr notification show` and terminal bells
+(`[bell]`), which Herdr sends without the workspace or pane they came from,
+and the phone notifications of
+[remote control](../herdr-remote-control/README.md), which its own daemon
+sends.
+
+Mutes stay in this client, in `notification-mutes.json` in its state
+directory, and every window shows the same ones. A mute follows its workspace
+or tab by ID, so it survives a rename, and it is forgotten when the workspace
+or tab closes. A tab moved to another workspace, or reopened after closing,
+gets a new ID from Herdr and starts unmuted. Restarting the app keeps every
+mute. Restarting Herdr's daemon keeps the mutes of workspaces and tabs you
+named, which Herdr restores under the same ID and name; a new one you give
+the same name under the same ID takes the mute too, and shows the
+struck-through bell. The others are dropped: a daemon started afresh numbers
+its workspaces from the start again and names them after their folder, and
+tabs after their position, so the same ID and name can come back on new
+work.
 
 The sidebar button at the left of the titlebar hides or shows the sidebar.
 On Linux and Windows it stays in the same position when the sidebar collapses
@@ -3761,7 +3804,10 @@ Ctrl+Shift+U is left unbound for
   across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
-  `show_repository_icons = false` leaves both out.
+  `show_repository_icons = false` leaves both out. An owner's avatar is read
+  from `github.com/OWNER.png`, following its one redirect only to an account's
+  picture by ID on `avatars.githubusercontent.com`, so an organization whose
+  by-login picture is GitHub's default octocat shows its own.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour
   stale-while-refresh behavior; see [avatar caching](../../README.md#native-github-sign-in)
   for limits, location, and the startup authentication requirement. Neither cache
@@ -3779,6 +3825,12 @@ Ctrl+Shift+U is left unbound for
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
+  The star at a row's end pins that theme above the rest, searches included;
+  clicking it again unpins it. Starring neither previews nor applies a theme.
+  The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
+  reloading the window, so the theme being previewed stays on screen. Each
+  star is applied to the list the file holds when it is written, so stars
+  made in another window's picker stay.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /

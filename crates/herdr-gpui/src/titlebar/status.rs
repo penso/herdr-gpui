@@ -1,5 +1,6 @@
 //! Daemon status text in the native header.
 
+use crate::direction::Logical;
 use crate::{
     LiveState,
     config::{FontConfig, Theme},
@@ -65,9 +66,9 @@ pub(super) fn render(live: &LiveState, font: &FontConfig, theme: &Theme) -> Div 
     div()
         .debug_selector(|| "titlebar-status".into())
         .size_full()
-        .flex()
+        .row()
         .items_center()
-        .pr(px(8.))
+        .pe(px(8.))
         .overflow_hidden()
         .text_font(font)
         .text_size(px(font.size.min(20.)))

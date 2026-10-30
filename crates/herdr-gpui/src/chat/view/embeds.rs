@@ -208,7 +208,7 @@ impl HerdrWindow {
     ) -> AnyElement {
         if visuals.wants(id) {
             return self
-                .render_chat_visual(id, visuals, Frame::Image)
+                .render_chat_visual(pane_id, id, visuals, Frame::Image, cx)
                 .into_any_element();
         }
         let theme = &self.theme;

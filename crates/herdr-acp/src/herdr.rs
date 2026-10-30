@@ -154,12 +154,7 @@ fn run(
                 Activity::Working => "working",
                 Activity::Blocked => "blocked",
             };
-            let _ = call(
-                &target.socket,
-                "pane.report_agent",
-                json!({"pane_id": target.pane, "source": SOURCE, "agent": AGENT,
-                    "state": state, "seq": seq.next()}),
-            );
+            let _ = report_state(target, state, &mut seq);
             reported = true;
         }
         if reported && !announced && !closing {
@@ -224,6 +219,44 @@ fn run(
             return;
         }
     }
+}
+
+/// Reports the agent's `state`, taking the pane back when another source
+/// holds its session.
+///
+/// The agent inherits the pane's Herdr variables, so its own Herdr
+/// integration, such as Claude Code's `SessionStart` hook, can report a
+/// session for the pane. Herdr then answers this chat's reports with `ok` but
+/// ignores them, leaving the pane and its workspace at the last state it
+/// kept. Clearing this source's authority also drops that session, so the
+/// report sent again is the one Herdr keeps. The session is not one Herdr
+/// should resume either: resuming it would replace the chat with the agent's
+/// own terminal interface.
+fn report_state(target: &Target, state: &str, seq: &mut Sequence) -> Result<()> {
+    let report = |seq: u64| {
+        call(
+            &target.socket,
+            "pane.report_agent",
+            json!({"pane_id": target.pane, "source": SOURCE, "agent": AGENT,
+                "state": state, "seq": seq}),
+        )
+    };
+    report(seq.next())?;
+    let pane = call(&target.socket, "pane.get", json!({"pane_id": target.pane}))?;
+    let claimed = pane
+        .pointer("/pane/agent_session/source")
+        .and_then(Value::as_str)
+        .is_some_and(|source| source != SOURCE);
+    if !claimed {
+        return Ok(());
+    }
+    call(
+        &target.socket,
+        "pane.clear_agent_authority",
+        json!({"pane_id": target.pane, "source": SOURCE, "seq": seq.next()}),
+    )?;
+    report(seq.next())?;
+    Ok(())
 }
 
 /// Report sequence numbers that keep increasing across restarts in one pane,

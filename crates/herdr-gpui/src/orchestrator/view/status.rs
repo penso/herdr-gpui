@@ -34,7 +34,7 @@ impl OrchestratorView {
         let look = &self.look;
         let theme = &look.theme;
         let mut rows = Vec::new();
-        if item.pull_request.is_some() {
+        if item.github_pull_request().is_some() {
             match self.open_pull_request() {
                 Some(pr) => rows.extend(self.pull_request_rows(pr)),
                 None => rows.push(Row {
@@ -211,12 +211,15 @@ impl OrchestratorView {
         let look = &self.look;
         let writable = self.snapshot().access == Some(Access::ReadWrite);
         let pull_request = item.pull_request.is_some();
+        // A merge request has neither an agent to dispatch nor a `gh` review.
+        let reviewable = item.github_pull_request().is_some();
         let live = item_runs
             .first()
             .filter(|latest| runs.live(latest.run).is_some())
             .map(|latest| latest.run);
         let mergeable = self.mergeable();
-        if !writable && live.is_none() && !mergeable {
+        let has_write_action = writable && (!pull_request || reviewable);
+        if !has_write_action && live.is_none() && !mergeable {
             return None;
         }
         let key = item.key.canonical();
@@ -236,10 +239,11 @@ impl OrchestratorView {
                     })),
                 )
             })
-            .when(writable && pull_request, |el| {
+            .when(writable && reviewable, |el| {
                 let key = item.key.canonical();
                 el.child(
                     look.button("orchestrator-detail-review", "Review with agent", true)
+                        .debug_selector(|| "orchestrator-detail-review".into())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.open_review(key.clone(), window, cx);
                         })),

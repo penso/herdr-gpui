@@ -144,17 +144,25 @@ impl HerdrWindow {
                     continue;
                 }
             }
-            let composer = pane.composer.get_or_insert_with(|| {
-                changed = true;
-                cx.new(|cx| {
-                    let mut input = SearchInput::new(cx);
-                    input.set_frameless(cx);
-                    input
+            let composer = pane
+                .composer
+                .get_or_insert_with(|| {
+                    changed = true;
+                    cx.new(|cx| {
+                        let mut input = SearchInput::new(cx);
+                        input.set_frameless(cx);
+                        input
+                    })
                 })
-            });
+                .clone();
             let accepts = pane.session.transcript().status.accepts_prompts();
             // The selected command shows as ghost text after the typed name.
             let text = composer.read(cx).text().to_owned();
+            let send = pane.send_button(&text);
+            if pane.send != send {
+                pane.send = send;
+                changed = true;
+            }
             let found = assist::completions(pane.session.transcript(), &text);
             if pane.completion >= found.len() {
                 pane.completion = 0;
@@ -260,6 +268,9 @@ impl HerdrWindow {
             return None;
         }
         let pane = self.chats.pane(pane_id)?;
+        if let Some(focus) = pane.viewer.as_ref().and_then(|viewer| viewer.open_focus()) {
+            return Some(focus.clone());
+        }
         if pane.reading(window) {
             return pane.text_focus.clone();
         }
@@ -494,6 +505,16 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A picture shown large takes the keyboard: Escape closes it, and
+        // nothing typed reaches the composer hidden behind it.
+        if self.chat_viewer_open(pane_id) {
+            if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                self.close_chat_viewer(pane_id, window, cx);
+            }
+            cx.stop_propagation();
+            window.prevent_default();
+            return;
+        }
         if self.chat_reader_key(pane_id, event, window, cx) {
             return;
         }
@@ -590,6 +611,10 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Nothing pastes into the composer hidden behind a picture.
+        if self.chat_viewer_open(pane_id) {
+            return true;
+        }
         if self.chat_reader_focused(pane_id, window) {
             return true;
         }
@@ -613,8 +638,30 @@ impl HerdrWindow {
         if !input.read(cx).focus.is_focused(window) {
             return false;
         }
-        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(item) = cx.read_from_clipboard() else {
             return false;
+        };
+        // Files copied in a file manager carry their names as text too; they
+        // attach as a drop would instead.
+        if let Some(paths) = item.entries().iter().find_map(|entry| match entry {
+            ClipboardEntry::ExternalPaths(paths) if !paths.paths().is_empty() => {
+                Some(paths.paths().to_vec())
+            }
+            _ => None,
+        }) {
+            self.attach_chat_files(pane_id, paths, window, cx);
+            return true;
+        }
+        let Some(text) = item.text() else {
+            // A picture alone, such as a copied screenshot, attaches as a file.
+            let Some(image) = item.into_entries().find_map(|entry| match entry {
+                ClipboardEntry::Image(image) => Some(image),
+                _ => None,
+            }) else {
+                return false;
+            };
+            self.attach_chat_image(pane_id, image, window, cx);
+            return true;
         };
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
         if !text.contains('\n') {

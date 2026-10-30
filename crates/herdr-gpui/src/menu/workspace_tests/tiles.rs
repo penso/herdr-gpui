@@ -97,10 +97,17 @@ fn the_keyboard_walks_actions_in_the_order_they_are_drawn(cx: &mut gpui::TestApp
     });
     let items = cx.update(|_, cx| view.read(cx).workspace_items());
     let (tiles, rest) = layout(&items);
-    let drawn: Vec<_> = tiles
+    // The header's toggle, then the grid and the rows under it.
+    let drawn: Vec<_> = items
         .iter()
-        .filter(|tile| tile.enabled)
-        .map(|tile| (tile.action, tile.label))
+        .copied()
+        .filter(|(action, _)| action.in_header())
+        .chain(
+            tiles
+                .iter()
+                .filter(|tile| tile.enabled)
+                .map(|tile| (tile.action, tile.label)),
+        )
         .chain(rest)
         .collect();
     assert_eq!(drawn, items, "keyboard order must match the drawn order");

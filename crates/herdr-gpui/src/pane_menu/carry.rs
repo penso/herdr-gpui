@@ -6,6 +6,7 @@
 //! but never a move under way, which reports as a flash.
 
 use super::Target;
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -580,7 +581,7 @@ impl HerdrWindow {
             }
         };
         body.child(
-            div().flex().justify_end().pt(px(4.)).child(
+            div().row().justify_end().pt(px(4.)).child(
                 div()
                     .id("pane-carry-submit")
                     .debug_selector(|| "pane-carry-submit".into())

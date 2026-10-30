@@ -3,6 +3,7 @@ use crate::{
     browser::GroupId,
     controls::Command,
     menu::Page,
+    notification_mutes::Scope,
     pane_move::{self, Choice, Destination},
     search_input::SearchInput,
 };
@@ -98,6 +99,11 @@ enum Action {
     NewTab,
     Rename,
     MoveToWorkspace,
+    /// Silence this tab's notifications, or let them through again.
+    Mute,
+    Unmute,
+    /// The tab is silent because its workspace is muted: lift that.
+    UnmuteWorkspace,
     Close,
 }
 
@@ -107,6 +113,9 @@ impl Action {
             Self::NewTab => "New Tab",
             Self::Rename => "Rename",
             Self::MoveToWorkspace => "Move to Workspace\u{2026}",
+            Self::Mute => "Mute Notifications",
+            Self::Unmute => "Unmute Notifications",
+            Self::UnmuteWorkspace => "Unmute Workspace",
             Self::Close => "Close Tab",
         }
     }
@@ -122,15 +131,22 @@ const ACTIONS: [Action; 4] = [
 
 impl TabMenu {
     /// The rows this menu offers: moving to a workspace needs a host the
-    /// `herdr` CLI can run on and at least one pane in the tab.
+    /// `herdr` CLI can run on and at least one pane in the tab. This
+    /// client's mute row comes before closing, which stays last.
     fn actions(&self) -> Vec<Action> {
-        ACTIONS
+        let mut actions: Vec<_> = ACTIONS
             .into_iter()
             .filter(|action| match action {
                 Action::MoveToWorkspace => self.movable && !self.target.panes.is_empty(),
                 _ => true,
             })
-            .collect()
+            .collect();
+        let close = actions
+            .iter()
+            .position(|action| *action == Action::Close)
+            .unwrap_or(actions.len());
+        actions.insert(close, self.mute);
+        actions
     }
 
     /// How many rows the current page lists.
@@ -159,6 +175,9 @@ pub(super) struct TabMenu {
     /// The move picker's panel scroll, so a row the keyboard selects in a
     /// long list of workspaces scrolls into view.
     scroll: ScrollHandle,
+    /// The mute row, as the tab and its workspace were muted when the menu
+    /// opened.
+    mute: Action,
 }
 
 impl HerdrWindow {
@@ -183,6 +202,13 @@ impl HerdrWindow {
         }
         let connect = &self.endpoints[self.selected_endpoint].connection.target;
         let movable = pane_move::refusal(connect).is_none();
+        let mute = if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
+            Action::UnmuteWorkspace
+        } else if self.muted_on_selected(Scope::Tab, &target.tab, cx) {
+            Action::Unmute
+        } else {
+            Action::Mute
+        };
         self.menu.anchor = anchor;
         self.menu.page = Some(Page::Tab);
         self.menu.tab = Some(TabMenu {
@@ -195,6 +221,7 @@ impl HerdrWindow {
             movable,
             moving: None,
             scroll: ScrollHandle::new(),
+            mute,
         });
     }
 
@@ -263,6 +290,14 @@ impl HerdrWindow {
             }
             // As the tab's own close button: the close confirmation decides.
             Action::Close => self.open_tab_close(&target.tab, window, cx),
+            Action::Mute | Action::Unmute | Action::UnmuteWorkspace => {
+                let (scope, id) = match action {
+                    Action::UnmuteWorkspace => (Scope::Workspace, &target.workspace),
+                    _ => (Scope::Tab, &target.tab),
+                };
+                self.set_muted_on_selected(scope, id, &target.boot, action == Action::Mute, cx);
+                self.dismiss_menu(window, cx);
+            }
             Action::MoveToWorkspace => {
                 if let Some(tab) = &mut self.menu.tab {
                     tab.selected = None;

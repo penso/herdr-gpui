@@ -24,6 +24,7 @@ use super::{
 use crate::{HerdrWindow, config::ChatLayoutMode};
 
 mod input_resize;
+mod running;
 mod selection;
 
 const PANE: &str = "rich-chat-preview";
@@ -77,14 +78,24 @@ You can choose a layout using the **Bubbles** button in the header. See the [fea
 "#;
 
 struct Options {
+    /// Files on the next prompt, as chips in the composer.
+    attach: Vec<PathBuf>,
     case: String,
     capture: Option<PathBuf>,
+    /// Text in the composer's editable line.
+    draft: Option<String>,
+    /// A PNG the agent shows at the end of the conversation.
+    picture: Option<PathBuf>,
     hold: Duration,
     layout: ChatLayoutMode,
     light: bool,
     max_width: Option<u16>,
     narrow: bool,
     read_only: bool,
+    /// The agent's picture is shown large, as after a click on it.
+    view: bool,
+    /// The agent is mid-turn, so the composer's button can stop it.
+    working: bool,
 }
 
 impl Options {
@@ -107,10 +118,14 @@ impl Options {
                 | "conversation"
                 | "existing"
                 | "input-resize"
+                | "tools"
+                | "turns"
+                | "running"
+                | "running-open"
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, conversation, existing, input-resize, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, conversation, existing, input-resize, tools, turns, running, running-open, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -140,14 +155,21 @@ impl Options {
             bail!("preview reading width expects 0 or 320..=4000");
         }
         Ok(Self {
+            attach: std::env::var_os("HERDR_TEST_RICH_CHAT_ATTACH")
+                .map(|paths| std::env::split_paths(&paths).collect())
+                .unwrap_or_default(),
             case,
             capture: std::env::var_os("HERDR_TEST_RICH_CHAT_CAPTURE").map(PathBuf::from),
+            draft: std::env::var("HERDR_TEST_RICH_CHAT_DRAFT").ok(),
+            picture: std::env::var_os("HERDR_TEST_RICH_CHAT_PICTURE").map(PathBuf::from),
             hold: Duration::from_millis(hold),
             layout,
             max_width,
             light: std::env::var("HERDR_TEST_RICH_CHAT_THEME").as_deref() == Ok("light"),
             narrow: std::env::var("HERDR_TEST_RICH_CHAT_SIZE").as_deref() == Ok("narrow"),
             read_only: std::env::var_os("HERDR_TEST_RICH_CHAT_READ_ONLY").is_some(),
+            view: std::env::var_os("HERDR_TEST_RICH_CHAT_VIEW").is_some(),
+            working: std::env::var_os("HERDR_TEST_RICH_CHAT_WORKING").is_some(),
         })
     }
 }
@@ -181,6 +203,16 @@ async fn run(handle: WindowHandle<HerdrWindow>, options: Options, cx: &mut Async
         timer.timer(Duration::from_millis(100)).await;
         let ready = handle.update(cx, |view, window, cx| -> Result<bool> {
             fit_surface(view);
+            // The window's chat poll does not run here; apply its rule for
+            // the composer's button so the fixture draws what the app would.
+            if let Some(pane) = view.chats.pane_mut(PANE) {
+                let text = pane
+                    .composer
+                    .as_ref()
+                    .map(|input| input.read(cx).text().to_owned())
+                    .unwrap_or_default();
+                pane.send = pane.send_button(&text);
+            }
             view.prepare_chat_visuals(window, cx);
             cx.notify();
             visuals_ready(view)
@@ -193,6 +225,28 @@ async fn run(handle: WindowHandle<HerdrWindow>, options: Options, cx: &mut Async
         if Instant::now() >= deadline {
             bail!("rich-chat visual jobs did not finish within {WAIT:?}");
         }
+    }
+    if options.view {
+        handle.update(cx, |view, window, cx| {
+            let picture = view.chats.pane(PANE).and_then(|pane| {
+                pane.session
+                    .transcript()
+                    .entries
+                    .iter()
+                    .rev()
+                    .find_map(|entry| match &entry.kind {
+                        EntryKind::Image { image, .. } => {
+                            Some(super::visual::VisualId::of(&image.data))
+                        }
+                        _ => None,
+                    })
+            });
+            if let Some(picture) = picture {
+                view.open_chat_viewer(PANE, picture, window, cx);
+            }
+        })?;
+        // Past the viewer's motion, so the capture shows it in place.
+        timer.timer(crate::motion::ENTER * 3).await;
     }
     if options.case == "widgets-end" {
         handle.update(cx, |view, _, cx| {
@@ -325,7 +379,7 @@ fn install(
     };
     let existing = matches!(options.case.as_str(), "existing" | "input-resize");
     let mut transcript = Transcript {
-        agent: "Codex".into(), status: Status::Idle, read_only: options.read_only || existing,
+        agent: "Codex".into(), status: if options.working { Status::Working } else { Status::Idle }, read_only: options.read_only || existing,
         entries: vec![
             Entry { id: EntryId(1), kind: EntryKind::User { text: "Show the result with equations, clear formatting, and controls I can explore.".into(), files: 0 } },
             Entry { id: EntryId(2), kind: EntryKind::Agent { text: content } },
@@ -344,6 +398,47 @@ fn install(
     }
     if options.case == "questions" {
         transcript.entries = question_entries();
+    }
+    if options.working {
+        transcript.turn = Some(herdr_chat_protocol::Turn {
+            started_ms: super::now_ms().saturating_sub(12_000),
+        });
+    }
+    if options.case == "tools" {
+        transcript.entries = tool_entries();
+    }
+    if options.case.starts_with("running") {
+        transcript.entries = running::entries();
+        transcript.activities = running::activities(super::now_ms());
+    }
+    if options.case == "turns" {
+        transcript.entries = earlier_turns();
+        transcript
+            .entries
+            .extend(tool_entries().into_iter().map(|mut entry| {
+                entry.id = EntryId(entry.id.0 + 10);
+                entry
+            }));
+    }
+    if let Some(path) = &options.picture {
+        use base64::Engine as _;
+        let bytes = std::fs::read(path).context("reading the preview picture")?;
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let next = transcript
+            .entries
+            .iter()
+            .map(|entry| entry.id.0)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        transcript.entries.push(Entry {
+            id: EntryId(next),
+            kind: EntryKind::Image {
+                author: herdr_chat_protocol::Author::Agent,
+                image: herdr_chat_protocol::Image::new("image/png", data)
+                    .context("the preview picture is not a usable PNG")?,
+            },
+        });
     }
     if options.case == "selection" {
         transcript.entries = vec![Entry {
@@ -389,6 +484,19 @@ fn install(
     {
         pane.expanded.insert(EntryId(1));
     }
+    // The first sub-agent's steps and the table of what runs, open.
+    if options.case == "running-open"
+        && let Some(pane) = view.chats.pane_mut(PANE)
+    {
+        pane.expanded.insert(EntryId(3));
+        pane.running.set(true, crate::motion::now(), true);
+    }
+    // One call's output open, the rest folded, as a reader leaves them.
+    if options.case == "tools"
+        && let Some(pane) = view.chats.pane_mut(PANE)
+    {
+        pane.expanded.insert(EntryId(3));
+    }
     if !options.read_only && !existing {
         let font = view.config.ui.clone();
         let theme = view.theme.clone();
@@ -397,10 +505,14 @@ fn install(
             input.set_frameless(cx);
             input.set_appearance(font, theme, cx);
             input.set_placeholder("Preview only — no agent is connected", cx);
+            if let Some(draft) = &options.draft {
+                input.set_text_at(draft, draft.len(), cx);
+            }
             input
         });
         if let Some(pane) = view.chats.pane_mut(PANE) {
             pane.composer = Some(input);
+            pane.attachments = options.attach.clone();
         }
     }
     window.set_window_title("Herdr · Rich chat preview");
@@ -583,6 +695,113 @@ fn attachment_entries() -> Result<Vec<Entry>> {
             },
         },
     ])
+}
+
+/// Two finished exchanges before [`tool_entries`], for how a layout sets
+/// what is no longer current.
+fn earlier_turns() -> Vec<Entry> {
+    let user = |id, text: &str| Entry {
+        id: EntryId(id),
+        kind: EntryKind::User {
+            text: text.into(),
+            files: 0,
+        },
+    };
+    let agent = |id, text: &str| Entry {
+        id: EntryId(id),
+        kind: EntryKind::Agent { text: text.into() },
+    };
+    vec![
+        user(
+            1,
+            "I can't drag and drop a screenshot on this field in agent mode, is it supposed to work?",
+        ),
+        agent(
+            2,
+            "Yes, it is supposed to work. The chat view is drawn over the terminal and blocks the mouse, so the terminal's drop handler never ran. The chat now takes the drop itself.",
+        ),
+        user(3, "Copy the screenshot and paste it does not work either."),
+        agent(
+            4,
+            "The composer's paste only read text. A copied screenshot is now saved to a private file and attached, and copied Finder files attach instead of pasting their names.",
+        ),
+    ]
+}
+
+/// A turn that runs commands, reads and edits files, and fails a test
+/// before it answers, for the way tool calls and their output read.
+fn tool_entries() -> Vec<Entry> {
+    use herdr_chat_protocol::{Tool, ToolContent, ToolKind, ToolStatus};
+    let tool = |id, kind, status, title: &str, locations: &[&str], content| Entry {
+        id: EntryId(id),
+        kind: EntryKind::Tool(Tool {
+            call_id: format!("call-{id}"),
+            content,
+            kind,
+            locations: locations.iter().map(|path| (*path).to_owned()).collect(),
+            parent: None,
+            status,
+            title: title.into(),
+        }),
+    };
+    let text = |text: &str| vec![ToolContent::Text { text: text.into() }];
+    vec![
+        Entry {
+            id: EntryId(1),
+            kind: EntryKind::User {
+                text: "Why does the send button stay pink when the box is empty?".into(),
+                files: 0,
+            },
+        },
+        Entry {
+            id: EntryId(2),
+            kind: EntryKind::Agent {
+                text: "I'll check the composer's button state and run its tests.".into(),
+            },
+        },
+        tool(
+            3,
+            ToolKind::Execute,
+            ToolStatus::Completed,
+            "`cargo test -p herdr-gpui --bins chat::tests::stop`",
+            &[],
+            text("running 3 tests\ntest chat::tests::stop::the_send_button_stops_a_running_turn ... ok\ntest chat::tests::stop::a_written_prompt_turns_stop_back_into_send ... ok\ntest chat::tests::stop::send_stays_off_until_something_is_written ... FAILED\n\nfailures:\n    send button was Send, expected Off\n\ntest result: FAILED. 2 passed; 1 failed"),
+        ),
+        tool(
+            4,
+            ToolKind::Read,
+            ToolStatus::Completed,
+            "Read crates/herdr-gpui/src/chat/view/composer.rs",
+            &["crates/herdr-gpui/src/chat/view/composer.rs:191"],
+            text("let send = match chat.send {\n    SendButton::Stop => round(\"chat-stop\"),\n    SendButton::Send | SendButton::Off => round(\"chat-send\"),\n};"),
+        ),
+        tool(
+            5,
+            ToolKind::Edit,
+            ToolStatus::Completed,
+            "Edit crates/herdr-gpui/src/chat/chats.rs",
+            &["crates/herdr-gpui/src/chat/chats.rs:172"],
+            vec![ToolContent::Diff {
+                new: "let drafted = !text.trim().is_empty();".into(),
+                old: Some("let drafted = true;".into()),
+                path: "crates/herdr-gpui/src/chat/chats.rs".into(),
+            }],
+        ),
+        tool(
+            6,
+            ToolKind::Execute,
+            ToolStatus::Failed,
+            "`just lint-linux`",
+            &[],
+            text("error: Docker is not running"),
+        ),
+        Entry {
+            id: EntryId(7),
+            kind: EntryKind::Agent {
+                text: "Found it: the button counted the box as **written** even when it was empty, so `Send` stayed on. It now checks the text, and the stop test passes.\n\nThe Linux lint did not run because Docker is stopped; start it and run `just lint-linux` again.".into(),
+            },
+        },
+    ]
 }
 
 fn question_entries() -> Vec<Entry> {

@@ -8,6 +8,11 @@ use crate::{Attachment, Change, MAX_ATTACHMENTS, OptionValue, PermissionId, Tran
 /// The attach protocol version; a client and program must agree exactly.
 pub const VERSION: u32 = 1;
 
+/// Additions to [`VERSION`] a client declares it reads in its greeting:
+/// 1 is `Change::Activity`. A program sends a client of an earlier revision
+/// only what that client can decode.
+pub const REVISION: u32 = 1;
+
 /// The longest prompt a client may send, in bytes.
 pub const MAX_PROMPT_SIZE: usize = 256 * 1024;
 
@@ -62,6 +67,10 @@ pub enum ClientMessage {
     /// The first message on a connection.
     Hello {
         client: ClientKind,
+        /// The [`REVISION`] this client reads; 0 from clients that predate
+        /// revisions.
+        #[serde(default)]
+        revision: u32,
         /// The last cursor this client applied, to resume without a snapshot.
         #[serde(default)]
         since: Option<Cursor>,
