@@ -14,7 +14,7 @@ use crate::{
         SavedDevice,
         worker::{self, Worker},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     progress::{self, Progress},
 };
 use gpui::{prelude::*, *};
@@ -158,7 +158,7 @@ impl SettingsWindow {
                     Err(error) => Outcome::Failed(fl!(
                         "settings-cloud-delete-failed",
                         name = label,
-                        error = error.to_string()
+                        error = error.localize()
                     )),
                 });
                 self.refresh_azure(cx);

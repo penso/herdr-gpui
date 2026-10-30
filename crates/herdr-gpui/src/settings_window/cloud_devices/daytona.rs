@@ -21,7 +21,7 @@ use crate::{
         setup::{self, AddRequest, Key, Overview},
     },
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -322,7 +322,7 @@ impl SettingsWindow {
                         fl!("settings-cloud-daytona-sandboxes", count = *count)
                     }
                     (_, Some(Err(error))) => {
-                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                        fl!("settings-cloud-key-unusable", error = error.localize())
                     }
                     (_, None) => fl!("settings-cloud-checking"),
                 },

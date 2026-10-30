@@ -11,12 +11,14 @@
 
 mod check;
 mod current;
+pub(crate) mod errors;
 #[cfg(test)]
 pub(crate) mod leak_tests;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use check::check;
+pub(crate) use errors::Localize;
 pub(crate) use herdr_i18n::FluentValue;
 use herdr_i18n::{Catalog, Direction, FluentArgs, Language, Locale, Pseudo};
 use std::sync::LazyLock;

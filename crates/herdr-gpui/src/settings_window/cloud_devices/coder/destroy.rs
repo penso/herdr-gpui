@@ -13,7 +13,7 @@ use crate::{
         worker::{self, Worker},
     },
     coder::setup::{self, Session, Stage},
-    i18n::fl,
+    i18n::{Localize, fl},
     progress::{self, Progress},
 };
 use gpui::{prelude::*, *};
@@ -154,7 +154,7 @@ impl SettingsWindow {
                     Err(error) => Outcome::Failed(fl!(
                         "settings-cloud-coder-destroy-failed",
                         name = label,
-                        error = error.to_string()
+                        error = error.localize()
                     )),
                 });
                 self.refresh_cloud(cx);

@@ -17,7 +17,7 @@ use crate::{
     },
     config::{Config, OpenSandboxFields},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     opensandbox::{
         Settings,
         setup::{self, AddRequest, Key as Token, Overview},
@@ -325,7 +325,7 @@ impl SettingsWindow {
                     }
                     (_, Some(Err(error))) => fl!(
                         "settings-cloud-opensandbox-unusable",
-                        error = error.to_string()
+                        error = error.localize()
                     ),
                     (_, None) => fl!("settings-cloud-checking"),
                 },

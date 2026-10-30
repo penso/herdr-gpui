@@ -12,7 +12,7 @@ use crate::{
         preferences::Preference,
         remote::{Bind, Certificate, Edit, Privacy},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     remote::{Health, Supervisor, supervisor::Lease},
     search_input::SearchInput,
     settings_window::{
@@ -200,7 +200,7 @@ impl SettingsWindow {
                 if let Err(error) = result {
                     view.error = Some(fl!(
                         "settings-remote-revoke-failed",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
                 cx.notify();
