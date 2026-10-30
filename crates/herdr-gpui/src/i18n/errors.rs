@@ -96,7 +96,6 @@ english! {
     herdr_credentials::Error,
     herdr_github::Error,
     herdr_orchestrator::Error,
-    herdr_remote::Error,
     #[cfg(feature = "azure")]
     herdr_remote::azure::Error,
     #[cfg(feature = "boat")]
@@ -105,6 +104,7 @@ english! {
     herdr_remote::coder::Error,
     #[cfg(feature = "daytona")]
     herdr_remote::daytona::Error,
+    herdr_remote::Error,
     #[cfg(feature = "opensandbox")]
     herdr_remote::opensandbox::Error,
     #[cfg(feature = "sprites")]

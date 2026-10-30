@@ -142,11 +142,9 @@ impl Localize for Error {
             Self::PaneImageDecode(_) => fl!("error-pane-image-decode"),
             Self::PaneImageLimit => fl!("error-pane-image-limit"),
             Self::PaneMove(error) => error.localize(),
-            Self::Path { path: file, source } => fl!(
-                "error-path",
-                path = path(file),
-                error = source.localize()
-            ),
+            Self::Path { path: file, source } => {
+                fl!("error-path", path = path(file), error = source.localize())
+            }
             #[cfg(target_os = "macos")]
             Self::PopupOpener => fl!("error-popup-opener"),
             Self::PortForward(error) => error.localize(),

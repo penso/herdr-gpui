@@ -290,9 +290,7 @@ impl SettingsWindow {
                     source.read(cx).sound.set_volume(self.config.sound.volume);
                 }
             }
-            Err(error) => {
-                self.error = Some(fl!("settings-error-reload", error = error.localize()))
-            }
+            Err(error) => self.error = Some(fl!("settings-error-reload", error = error.localize())),
         }
         // Appearance may have changed while the loader was running. Resolve
         // Follow Herdr from the prepared snapshot against the current OS mode.
