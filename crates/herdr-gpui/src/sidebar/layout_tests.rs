@@ -59,6 +59,10 @@ mod listening_ports;
 #[cfg(test)]
 mod local_counts_chip;
 #[cfg(test)]
+mod mod_places;
+#[cfg(test)]
+mod mutes;
+#[cfg(test)]
 mod nested_agents;
 #[cfg(test)]
 mod other_device_prs;
@@ -82,6 +86,8 @@ mod probes;
 mod repository_icons;
 #[cfg(test)]
 mod row_drag;
+#[cfg(test)]
+mod rtl_layouts;
 #[cfg(test)]
 mod search;
 #[cfg(test)]
@@ -571,6 +577,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         app_update_notes_scroll: gpui::ScrollHandle::new(),
         removal: None,
         merged_cleanup: Default::default(),
+        mod_panel_width: crate::panel_resize::MOD_PANEL,
+        mods: Default::default(),
         #[cfg(feature = "integration-test")]
         navigations: Default::default(),
         worktree_script: None,
@@ -767,6 +775,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         surface_signal: cx.new(|_| crate::window::SurfaceSignal),
         _sidebar_invalidation: HerdrWindow::invalidate_sidebar(cx),
         _host_theme: HerdrWindow::observe_host_theme(cx),
+        _notification_mutes: HerdrWindow::observe_notification_mutes(cx),
         browser: crate::browser::Browser::new(cx),
         _browser_tabs: cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify()),
         _worktree_notes: HerdrWindow::observe_worktree_notes(window, cx),

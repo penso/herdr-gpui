@@ -22,7 +22,7 @@ fn newer_same_endpoint_navigation_cannot_replay_a_pending_toast(cx: &mut gpui::T
         view.selected_endpoint = 1;
         view.options = ConnectOptions::default();
         view.reset_selected(cx);
-        view.tick_toasts(false, Instant::now());
+        view.tick_toasts(false, Instant::now(), cx);
         let held = inbox.lock().unwrap();
         view.click_toast("ssh:toast", view.endpoints[1].generation, &inbox, 0, cx);
         assert_eq!(view.pending_toast, Some(0));
@@ -146,7 +146,7 @@ fn toast_handoff_retains_busy_validation_and_revalidates_before_queueing(
                 assert!(view.input_ready());
             }
             let inbox = view.endpoints[1].connection.inbox.clone();
-            view.tick_toasts(false, Instant::now());
+            view.tick_toasts(false, Instant::now(), cx);
             let held = busy_click.then(|| inbox.lock().unwrap());
             view.click_toast("ssh:toast", view.endpoints[1].generation, &inbox, 0, cx);
             drop(held);
@@ -247,14 +247,14 @@ fn accepted_toast_survives_expiry_but_not_invalidation(cx: &mut gpui::TestAppCon
             view.endpoints[0].detached = true;
             view.reset_selected(cx);
             view.endpoints.push(endpoint);
-            view.tick_toasts(false, Instant::now());
+            view.tick_toasts(false, Instant::now(), cx);
             let inbox = view.endpoints[1].connection.inbox.clone();
             view.click_toast("ssh:toast", view.endpoints[1].generation, &inbox, 0, cx);
             assert_eq!(view.pending_toast, Some(0));
             assert!(!view.input_ready());
             let after_expiry =
                 view.endpoints[1].toasts.entries[0].1.expires + Duration::from_secs(1);
-            view.tick_toasts(false, after_expiry);
+            view.tick_toasts(false, after_expiry, cx);
             assert_eq!(view.endpoints[1].toasts.entries.len(), 1);
             // An accepted intent also remains eligible between timer samples.
             view.endpoints[1].toasts.entries[0].1.expires = Instant::now();
@@ -360,7 +360,7 @@ fn toast_handoff_defers_a_contended_source_without_activating_destination(
         view.endpoints.extend([source, target]);
         view.selected_endpoint = 1;
         view.reset_selected(cx);
-        view.tick_toasts(false, Instant::now());
+        view.tick_toasts(false, Instant::now(), cx);
         view.click_toast(
             "ssh:target",
             view.endpoints[2].generation,

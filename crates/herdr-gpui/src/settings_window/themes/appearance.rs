@@ -1,5 +1,6 @@
 //! The theme search box, result count and card grid on the Theme page.
 use super::{ROW_HEIGHT, Scope, SettingsWindow, grid};
+use crate::direction::Logical;
 use crate::{
     config::{Theme, ThemeName, corners},
     herdr_settings,
@@ -95,7 +96,7 @@ impl SettingsWindow {
                                 cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
                                     this.schedule_grid_palettes(range.clone(), cx);
                                     range
-                                        .map(|row| div().h(px(ROW_HEIGHT)).w_full().flex().gap(px(6.)).children((0..this.themes.grid.columns).map(|column| {
+                                        .map(|row| div().h(px(ROW_HEIGHT)).w_full().row().gap(px(6.)).children((0..this.themes.grid.columns).map(|column| {
                                             let index = row * this.themes.grid.columns + column;
                                             if index >= this.themes.filtered.len() {
                                                 return div().flex_1().min_w_0().into_any_element();

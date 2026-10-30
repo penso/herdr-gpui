@@ -185,15 +185,16 @@ impl HerdrWindow {
         self.endpoints[self.selected_endpoint]
             .toasts
             .receive([notice]);
-        self.tick_toasts(false, Instant::now());
+        self.tick_toasts(false, Instant::now(), cx);
         cx.notify();
     }
 
-    pub(crate) fn tick_toasts(&mut self, hidden: bool, now: Instant) -> bool {
+    pub(crate) fn tick_toasts(&mut self, hidden: bool, now: Instant, cx: &App) -> bool {
         crate::notifications::tick(
             &mut self.endpoints,
             self.selected_endpoint,
             self.config.notifications,
+            crate::notification_mutes::Mutes::any(cx),
             hidden,
             self.active,
             self.pending_toast,
@@ -211,6 +212,7 @@ impl HerdrWindow {
         self.tick_toasts(
             self.menu.page.is_some() || self.toasts_hidden,
             Instant::now(),
+            cx,
         );
         // Hidden toasts keep their motion where it was: they come back as
         // they left once the menu closes or the window grows.

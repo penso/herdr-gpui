@@ -96,6 +96,7 @@ impl HerdrWindow {
         // Another window, or an agent, may open or close a tab.
         let browser_tabs = cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify());
         let worktree_notes = Self::observe_worktree_notes(window, cx);
+        let notification_mutes = Self::observe_notification_mutes(cx);
         let prefix_interceptor = Self::intercept_prefix(window, cx);
         let activation = cx.observe_window_activation(window, |this, window, cx| {
             this.active = window.is_window_active();
@@ -128,6 +129,7 @@ impl HerdrWindow {
             _appearance: appearance_change,
             _browser_tabs: browser_tabs,
             _host_theme: host_theme,
+            _notification_mutes: notification_mutes,
             _poll: poll,
             _prefix_interceptor: prefix_interceptor,
             _sidebar_invalidation: sidebar_invalidation,
@@ -216,6 +218,8 @@ impl HerdrWindow {
             marked_selection: None,
             menu,
             merged_cleanup: Default::default(),
+            mod_panel_width: crate::panel_resize::MOD_PANEL,
+            mods: Default::default(),
             #[cfg(feature = "integration-test")]
             navigations: Default::default(),
             network_quality_seen: 0,

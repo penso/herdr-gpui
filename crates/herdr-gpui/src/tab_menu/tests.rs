@@ -7,6 +7,7 @@ use std::sync::Arc;
 // Moves run POSIX host scripts and are never offered on other clients.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod moves;
+mod mute;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[gpui::test]
@@ -173,8 +174,13 @@ fn inactive_tab_menu_rename_composition_cancel_and_fences(cx: &mut TestAppContex
         });
         window.draw(cx).clear(cx);
     });
-    assert!(cx.debug_bounds("tab-menu-2").is_some());
-    assert!(cx.debug_bounds("tab-menu-3").is_none());
+    // One row per action the menu offers, and no more.
+    let rows = view.read_with(cx, |v, _| v.menu.tab.as_ref().unwrap().actions().len());
+    assert!(
+        cx.debug_bounds(format!("tab-menu-{}", rows - 1).leak())
+            .is_some()
+    );
+    assert!(cx.debug_bounds(format!("tab-menu-{rows}").leak()).is_none());
     let new_tab_row = cx.debug_bounds("tab-menu-0").unwrap();
     cx.simulate_mouse_move(new_tab_row.center(), None, Modifiers::default());
     assert_eq!(
@@ -239,14 +245,27 @@ fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
 }
 
-/// Right-clicks `tab`, then clicks the menu's `row`.
-fn choose(cx: &mut VisualTestContext, tab: &'static str, row: &'static str) {
+/// Right-clicks `tab`, then clicks the menu's row for `action`, wherever
+/// the menu lists it.
+fn choose(
+    view: &Entity<HerdrWindow>,
+    cx: &mut VisualTestContext,
+    tab: &'static str,
+    action: Action,
+) {
     draw(cx);
     let tab = cx.debug_bounds(tab).unwrap();
     cx.simulate_mouse_down(tab.center(), MouseButton::Right, Modifiers::default());
     cx.simulate_mouse_up(tab.center(), MouseButton::Right, Modifiers::default());
     draw(cx);
-    let row = cx.debug_bounds(row).unwrap();
+    let index = view.read_with(cx, |view, _| {
+        let actions = view.menu.tab.as_ref().unwrap().actions();
+        actions
+            .iter()
+            .position(|offered| *offered == action)
+            .unwrap()
+    });
+    let row = cx.debug_bounds(format!("tab-menu-{index}").leak()).unwrap();
     cx.simulate_click(row.center(), Modifiers::none());
     draw(cx);
 }
@@ -254,7 +273,7 @@ fn choose(cx: &mut VisualTestContext, tab: &'static str, row: &'static str) {
 #[gpui::test]
 fn close_tab_confirms_closing_that_tab_in_herdr(cx: &mut TestAppContext) {
     let (view, cx) = group_window(cx);
-    choose(cx, "tab-t1", "tab-menu-2");
+    choose(&view, cx, "tab-t1", Action::Close);
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ConfirmClose));
         let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -276,13 +295,13 @@ fn close_tab_in_a_split_confirms_closing_that_tab_in_herdr(cx: &mut TestAppConte
     draw(cx);
     let left = view.read_with(cx, |view, _| view.group_slots()[0].id);
     // New Tab opens in the group whose strip asked for it.
-    choose(cx, "tab-t0", "tab-menu-0");
+    choose(&view, cx, "tab-t0", Action::NewTab);
     view.read_with(cx, |view, _| {
         assert!(view.menu.page.is_none());
         assert_eq!(view.expected_new_tab_group(), Some(left));
     });
     // Close is the tab's own close, as without a split.
-    choose(cx, "tab-t1", "tab-menu-2");
+    choose(&view, cx, "tab-t1", Action::Close);
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ConfirmClose));
         let snapshot = view.live.snapshot.as_ref().unwrap();

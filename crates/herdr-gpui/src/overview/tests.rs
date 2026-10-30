@@ -5,6 +5,7 @@ mod closed;
 mod closed_page;
 mod hosts;
 mod marks;
+mod mutes;
 mod page;
 mod presets;
 mod sections;
@@ -39,6 +40,7 @@ fn row(agent: &str, state: State) -> Row {
             tab: "t0".into(),
             workspace: "w0".into(),
         },
+        muted: false,
     }
 }
 

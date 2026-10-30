@@ -71,6 +71,7 @@ fn every_layout_draws_its_tabs_as_wide_as_it_measures_them(cx: &mut TestAppConte
                     let shape = TabShape {
                         lead: herdr_mark(snapshot, tab).lead(),
                         zoomed: tab.zoomed,
+                        muted: false,
                         selected: tab.focused,
                     };
                     let label = SharedString::from(tab.label.clone());
@@ -83,6 +84,7 @@ fn every_layout_draws_its_tabs_as_wide_as_it_measures_them(cx: &mut TestAppConte
                 let shape = TabShape {
                     lead: Lead::Icon,
                     zoomed: false,
+                    muted: false,
                     selected: false,
                 };
                 let width = view.tab_width(&label, shape, indicators, window);

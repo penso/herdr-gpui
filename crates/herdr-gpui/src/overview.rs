@@ -116,7 +116,13 @@ impl HerdrWindow {
                         checks: pr.checks_outcome(),
                     })
             };
-            rows.extend(model::agent_rows(endpoint, live, &self.overview.since, pr));
+            rows.extend(model::agent_rows(
+                endpoint,
+                live,
+                &self.overview.since,
+                pr,
+                crate::notification_mutes::Mutes::any(cx),
+            ));
         }
         let mut runs = HashSet::new();
         for (tab, view) in self.orchestrator_views() {
@@ -164,6 +170,7 @@ impl HerdrWindow {
                         since: Some(run.updated_at.into()),
                         pr: None,
                         open: Open::Run(tab),
+                        muted: false,
                     });
                 }
             }

@@ -1,3 +1,4 @@
+use crate::direction::Logical;
 use crate::{
     HerdrWindow, close_modal::CloseConfirmation, menu::Page, pane_move::Destination,
     search_input::SearchInput,
@@ -682,7 +683,7 @@ impl HerdrWindow {
                         .debug_selector(move || format!("pane-menu-{index}"))
                         .min_h(px(self.config.ui.line_height() + 12.))
                         .px(px(8.))
-                        .flex()
+                        .row()
                         .items_center()
                         .cursor_pointer()
                         .when(pane.selected == Some(index), |row| {
@@ -728,7 +729,7 @@ impl HerdrWindow {
                     })
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .justify_end()
                             .gap(px(8.))
                             .child(

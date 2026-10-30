@@ -12,7 +12,7 @@ mod locale;
 mod negotiate;
 pub mod pseudo;
 
-pub use catalog::{Catalog, File};
+pub use catalog::{Catalog, ENDONYM, File};
 pub use cjk::CjkScript;
 pub use error::{Error, Result};
 pub use fluent::{FluentArgs, FluentValue};

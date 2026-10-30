@@ -11,6 +11,7 @@ use super::{
     super::{Section, SettingsWindow},
     Hint, follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         SavedDevice,
@@ -365,7 +366,7 @@ impl SettingsWindow {
             .child(self.control_note(fl!("settings-cloud-coder-note")))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
@@ -412,7 +413,7 @@ impl SettingsWindow {
                     ))
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .flex_wrap()
                             .items_center()
                             .justify_between()
@@ -438,7 +439,7 @@ impl SettingsWindow {
             }
         }
         card = card.child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 self.cloud_button("cloud-coder-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-coder-save".into())
                     .when(ready, |button| {

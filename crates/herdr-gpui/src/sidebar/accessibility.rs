@@ -48,19 +48,21 @@ impl HerdrWindow {
 }
 
 /// A workspace row: its label, whether it is a linked worktree, then its
-/// status. A row on another device names that device too, since the list is
-/// flat. The worktree is named whatever the sidebar draws, since its hue and
-/// glyph reach no screen reader.
+/// status and whether its notifications are muted. A row on another device
+/// names that device too, since the list is flat. The worktree is named
+/// whatever the sidebar draws, since its hue and glyph reach no screen reader.
 pub(super) fn workspace_name(
     label: &str,
     linked: bool,
     status: AgentStatus,
+    muted: bool,
     host: Option<&str>,
 ) -> String {
     join([
         Some(label),
         linked.then_some("linked worktree"),
         status_word(status),
+        muted.then_some("notifications muted"),
         host,
     ])
 }
@@ -123,16 +125,20 @@ mod tests {
     #[test]
     fn a_workspace_names_its_status_and_a_remote_device() {
         assert_eq!(
-            workspace_name("herdr", false, AgentStatus::Blocked, None),
+            workspace_name("herdr", false, AgentStatus::Blocked, false, None),
             "herdr, blocked"
         );
         assert_eq!(
-            workspace_name("herdr", false, AgentStatus::Unknown, Some("devbox")),
+            workspace_name("herdr", false, AgentStatus::Unknown, false, Some("devbox")),
             "herdr, devbox"
         );
         assert_eq!(
-            workspace_name("fix/rounding", true, AgentStatus::Working, None),
+            workspace_name("fix/rounding", true, AgentStatus::Working, false, None),
             "fix/rounding, linked worktree, working"
+        );
+        assert_eq!(
+            workspace_name("herdr", false, AgentStatus::Done, true, Some("devbox")),
+            "herdr, done, notifications muted, devbox"
         );
     }
 

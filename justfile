@@ -181,6 +181,9 @@ bundle profile="release" features="":
     xcrun swiftc -O -swift-version 6 macos/herdr-nearby/main.swift macos/herdr-nearby/Framing.swift \
         macos/herdr-nearby/Bonjour.swift -o "$app/Contents/MacOS/herdr-nearby"
     cp assets/macos/Info.plist "$app/Contents/Info.plist"
+    for lproj in assets/macos/*.lproj; do
+        if [[ -d "$lproj" ]]; then cp -R "$lproj" "$app/Contents/Resources/"; fi
+    done
     # LaunchServices and the Dock cache icons by bundle ID, so every worktree
     # build sharing the release ID competed with the installed app's icon.
     plutil -replace CFBundleIdentifier -string so.pen.herdr-gpui.dev "$app/Contents/Info.plist"

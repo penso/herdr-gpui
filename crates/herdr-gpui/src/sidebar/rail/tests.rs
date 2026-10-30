@@ -15,6 +15,7 @@ use gpui::{
 use herdr_client::ConnectTarget;
 use std::sync::Arc;
 
+mod mutes;
 mod omo;
 
 fn rail_window(

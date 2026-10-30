@@ -1255,6 +1255,39 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
+To quiet one workspace or tab instead of every notification, right-click it:
+the workspace menu's header has **Mute** (**Unmute** while it is muted), and
+the tab menu has **Mute Notifications**. Muting a workspace silences every tab
+in it, including tabs opened later; a tab can also be muted on its own, and
+while its workspace's mute covers it, its menu offers **Unmute Workspace**
+instead. Nothing from a muted workspace or tab asks for you: no toast, no OS
+notification, no notification sound, and its agents leave the Dock badge,
+the Windows taskbar overlay, and the Overview's count in the activity bar.
+Status dots and the Overview's rows still show what its agents do. A struck
+through bell marks the muted workspace's sidebar row and its place in the
+compact rail, each tab it silences, and its agents' Overview rows. Muting
+takes away a toast already showing, and notifications dropped while muted are
+not replayed on unmuting. An OS notification posted before the mute stays, and
+clicking it still opens its pane. Three things a mute does not hold back:
+notifications posted with `herdr notification show` and terminal bells
+(`[bell]`), which Herdr sends without the workspace or pane they came from,
+and the phone notifications of
+[remote control](../herdr-remote-control/README.md), which its own daemon
+sends.
+
+Mutes stay in this client, in `notification-mutes.json` in its state
+directory, and every window shows the same ones. A mute follows its workspace
+or tab by ID, so it survives a rename, and it is forgotten when the workspace
+or tab closes. A tab moved to another workspace, or reopened after closing,
+gets a new ID from Herdr and starts unmuted. Restarting the app keeps every
+mute. Restarting Herdr's daemon keeps the mutes of workspaces and tabs you
+named, which Herdr restores under the same ID and name; a new one you give
+the same name under the same ID takes the mute too, and shows the
+struck-through bell. The others are dropped: a daemon started afresh numbers
+its workspaces from the start again and names them after their folder, and
+tabs after their position, so the same ID and name can come back on new
+work.
+
 The sidebar button at the left of the titlebar hides or shows the sidebar.
 On Linux and Windows it stays in the same position when the sidebar collapses
 to a rail. The leftmost tab strip takes the button when the sidebar is hidden
@@ -3725,7 +3758,10 @@ Ctrl+Shift+U is left unbound for
   across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
-  `show_repository_icons = false` leaves both out.
+  `show_repository_icons = false` leaves both out. An owner's avatar is read
+  from `github.com/OWNER.png`, following its one redirect only to an account's
+  picture by ID on `avatars.githubusercontent.com`, so an organization whose
+  by-login picture is GitHub's default octocat shows its own.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour
   stale-while-refresh behavior; see [avatar caching](../../README.md#native-github-sign-in)
   for limits, location, and the startup authentication requirement. Neither cache

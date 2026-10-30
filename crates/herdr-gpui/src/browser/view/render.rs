@@ -66,6 +66,7 @@ impl HerdrWindow {
                     label: tab_label(&tab.title),
                     mark,
                     zoomed: false,
+                    muted: false,
                     probe: Probe::Page(id),
                     // Split, the page closes in its group alone.
                     close: Box::new(cx.listener(move |this, _, window, cx| {

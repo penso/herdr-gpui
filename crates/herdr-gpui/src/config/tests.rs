@@ -33,6 +33,7 @@ mod github;
 mod github_accounts;
 mod icon_font;
 mod keybindings;
+mod language;
 mod line_height;
 mod loading;
 mod lock_access;

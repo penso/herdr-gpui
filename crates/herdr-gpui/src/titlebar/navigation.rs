@@ -2,6 +2,7 @@
 //! own toolbars draw them. Only the look differs; every platform walks the
 //! same focus trail (`endpoint::history`).
 
+use crate::direction::Logical;
 use crate::{HerdrWindow, config::corners, endpoint::Step, titlebar::SIDEBAR_TOGGLE_INSET};
 use gpui::{prelude::*, *};
 
@@ -56,13 +57,15 @@ impl Style {
         LEADING_MARGIN + pair + NAVIGATION_MARGIN
     }
 
+    /// Back points to the start, the left or right to left the right, and
+    /// Forward to the end.
     fn icon(self, step: Step) -> &'static str {
-        match (self, step) {
+        crate::direction::icon(match (self, step) {
             (Self::Fluent, Step::Back) => "icons/arrow-left.svg",
             (Self::Fluent, Step::Forward) => "icons/arrow-right.svg",
-            // The chevron points right; Back turns it around.
+            // The chevron points to the end; Back turns it around.
             _ => "icons/chevron-right.svg",
-        }
+        })
     }
 }
 
@@ -99,7 +102,7 @@ impl HerdrWindow {
                 .when(enabled, |control| {
                     self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
                 })
-                .flex()
+                .row()
                 .flex_none()
                 .items_center()
                 .justify_center()
@@ -148,12 +151,12 @@ impl HerdrWindow {
         };
         let pair = div()
             .debug_selector(|| "titlebar-navigation".into())
-            .flex()
+            .row()
             .flex_none()
             .items_center()
             .self_center()
-            .ml(px(LEADING_MARGIN))
-            .mr(px(NAVIGATION_MARGIN));
+            .ms(px(LEADING_MARGIN))
+            .me(px(NAVIGATION_MARGIN));
         match style {
             Style::Segmented => pair
                 .rounded(px(style.button().1))

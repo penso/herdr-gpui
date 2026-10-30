@@ -152,10 +152,20 @@ impl HerdrWindow {
             ),
             &self.theme,
         );
+        // The tabs the user muted, or whose workspace they muted, read from
+        // a handle of their own so the strip can change below.
+        let shown = self.live.snapshot.clone();
+        let silenced = shown
+            .as_deref()
+            .map(|snapshot| {
+                let endpoint = &self.endpoints[self.selected_endpoint];
+                crate::notification_mutes::Mutes::silenced_in(cx, endpoint, snapshot)
+            })
+            .unwrap_or_default();
         // What the strip lists, measured, so the ones that just opened grow
         // in and the ones that just closed shrink out where they stood.
         let now = crate::motion::now();
-        let herdr: Vec<((Pick, SharedString), Lead, bool)> = self
+        let herdr: Vec<((Pick, SharedString), Lead, bool, bool)> = self
             .live
             .snapshot
             .as_ref()
@@ -174,6 +184,7 @@ impl HerdrWindow {
                             ),
                             herdr_mark(snapshot, t).lead(),
                             t.zoomed,
+                            silenced.tab(&t.tab_id),
                         )
                     })
                     .collect()
@@ -184,13 +195,14 @@ impl HerdrWindow {
             .chain(
                 self.browser_tab_labels(cx)
                     .into_iter()
-                    .map(|entry| (entry, Lead::Icon, false)),
+                    .map(|entry| (entry, Lead::Icon, false, false)),
             )
-            .filter(|((pick, _), _, _)| self.group_lists(slot.id, pick))
-            .map(|((tab, label), lead, zoomed)| {
+            .filter(|((pick, _), _, _, _)| self.group_lists(slot.id, pick))
+            .map(|((tab, label), lead, zoomed, muted)| {
                 let shape = TabShape {
                     lead,
                     zoomed,
+                    muted,
                     selected: pick.as_ref() == Some(&tab),
                 };
                 Listed {
@@ -238,6 +250,8 @@ impl HerdrWindow {
                 let context_id = id.clone();
                 let close_id = id.clone();
                 let selected = matches!(&pick, Some(Pick::Herdr(picked)) if *picked == id);
+                let muted = silenced.tab(&id);
+                let label = herdr_client::text::tab_label(snapshot, tab);
                 let base = div()
                     .id(SharedString::from(format!("tab-{id}")))
                     .debug_selector({
@@ -245,7 +259,11 @@ impl HerdrWindow {
                         move || slot.selector(&format!("tab-{id}"))
                     })
                     .role(Role::Tab)
-                    .aria_label(herdr_client::text::tab_label(snapshot, tab).to_owned())
+                    .aria_label(if muted {
+                        format!("{label}, notifications muted")
+                    } else {
+                        label.to_owned()
+                    })
                     .aria_selected(selected)
                     .map(|control| faces.stop(control));
                 let face = TabFace {
@@ -254,6 +272,7 @@ impl HerdrWindow {
                         .into(),
                     mark: herdr_mark(snapshot, tab),
                     zoomed: tab.zoomed,
+                    muted,
                     probe: Probe::Herdr(id.clone()),
                     close: Box::new(cx.listener(move |this, _, window, cx| {
                         this.close_strip_tab(Pick::Herdr(close_id.clone()), window, cx);

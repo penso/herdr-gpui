@@ -224,6 +224,7 @@ pub struct Config {
     pub(crate) missing_fonts: Vec<String>,
     /// The terminal's configured weight, when its family has no face at it.
     pub(crate) missing_weight: Option<font_weight::MissingWeight>,
+    pub mods: crate::mods::Config,
     pub(crate) notification_overrides: NotificationSettings,
     pub notifications: NotificationConfig,
     /// Where a link-modifier click on a printed file path opens it.
@@ -424,6 +425,7 @@ impl Default for Config {
             layout: Layout::default(),
             missing_fonts: Vec::new(),
             missing_weight: None,
+            mods: crate::mods::Config::default(),
             notification_overrides: NotificationSettings::default(),
             notifications: NotificationConfig::default(),
             open_files_in: FileTarget::default(),
@@ -506,6 +508,7 @@ struct Settings {
     keybindings: BTreeMap<String, Binding>,
     language: Option<herdr_i18n::Language>,
     layout: Layout,
+    mods: crate::mods::Config,
     notifications: NotificationSettings,
     open_files_in: FileTarget,
     open_links_in: LinkTarget,
@@ -587,6 +590,13 @@ impl Config {
 
     pub fn path() -> Result<PathBuf> {
         Ok(config_root()?.join("herdr/config-gpui.toml"))
+    }
+
+    /// Where mods live, one folder each (`docs/mods-plan.md`). Beside this
+    /// app's config rather than at Herdr's top level, so a folder Herdr adds
+    /// later cannot collide with it.
+    pub fn mods_dir() -> Result<PathBuf> {
+        Ok(config_root()?.join("herdr/gpui-mods"))
     }
 
     pub fn local_path() -> Result<PathBuf> {
@@ -875,6 +885,8 @@ impl Config {
             .unwrap_or(cfg!(target_os = "linux"));
         config.smooth_scroll = settings.smooth_scroll.unwrap_or(true);
         // keep-sorted end
+        settings.mods.validate()?;
+        config.mods = settings.mods;
         config.status_bar = settings.status_bar;
         config.tab_layout = settings.tab_layout;
         let (status_icons, legacy_rail) = status_icons::SavedIcons::resolve(settings.status_icons);

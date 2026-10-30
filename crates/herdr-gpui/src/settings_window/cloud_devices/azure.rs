@@ -12,6 +12,7 @@ use super::{
     super::{Section, SettingsWindow},
     follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     azure::{
         Settings,
@@ -616,7 +617,7 @@ impl SettingsWindow {
                 card.secret.clone().into(),
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button("cloud-azure-save", fl!("settings-cloud-save"), ready)
                         .when(ready, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| this.save_azure(cx)))
@@ -634,7 +635,7 @@ impl SettingsWindow {
             .child(self.azure_install_switch("cloud-azure-install", card.install, ready, cx))
             .children(self.azure_setup_switch("cloud-azure-vm-setup", card.setup, ready, cx))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-azure-create",
                         fl!("settings-cloud-azure-create-vm"),
@@ -658,7 +659,7 @@ impl SettingsWindow {
             ))
             .children(self.azure_setup_switch("cloud-azure-sandbox-setup", card.setup, ready, cx))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-azure-create-sandbox",
                         fl!("settings-cloud-azure-create-sandbox"),

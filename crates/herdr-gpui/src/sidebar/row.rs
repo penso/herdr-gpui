@@ -12,6 +12,7 @@ use super::{
     tokens::ResolvedToken,
 };
 use crate::config::{FontConfig, Theme};
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 use std::sync::Arc;
@@ -57,7 +58,7 @@ impl RowIcon {
         div()
             .debug_selector(|| format!("{probe}-{key}"))
             .absolute()
-            .left_0()
+            .inset_s(px(0.))
             .top(px((line_height(font) - 12.) / 2.))
             .size(px(12.))
             .flex_none()
@@ -180,7 +181,7 @@ pub(super) fn tree_lines(
     } else {
         snap(gutter.bottom())
     };
-    [
+    let lines = [
         Bounds::from_corners(
             point(x, snap(gutter.origin.y)),
             point(x + logical(weight), end),
@@ -189,7 +190,15 @@ pub(super) fn tree_lines(
             point(x, middle),
             point(snap(gutter.right()), middle + logical(weight)),
         ),
-    ]
+    ];
+    // Right to left, the leading edge is the gutter's right one.
+    if !crate::direction::is_rtl() {
+        return lines;
+    }
+    lines.map(|line| {
+        let left = snap(gutter.origin.x + gutter.right() - line.right());
+        Bounds::new(point(left, line.origin.y), line.size)
+    })
 }
 
 /// Where a guide's tick meets its row.
@@ -236,7 +245,7 @@ pub(super) fn guide(
         div()
             .debug_selector(move || format!("tree-{key}"))
             .absolute()
-            .left(px(x))
+            .inset_s(px(x))
             .w(px(width))
             .top_0()
             .bottom_0()
@@ -279,7 +288,7 @@ pub(super) fn trunk_below(
         div()
             .debug_selector(move || format!("trunk-{key}"))
             .absolute()
-            .left(px(x))
+            .inset_s(px(x))
             .w(px(width))
             .top_0()
             .bottom_0()
@@ -289,8 +298,11 @@ pub(super) fn trunk_below(
                     move |bounds, _, window, _| {
                         let scale = window.scale_factor();
                         let snap = |value: Pixels| px((f32::from(value) * scale).round() / scale);
-                        let x = snap(bounds.origin.x);
                         let weight = px(scale.round().max(1.) / scale);
+                        let x = match crate::direction::is_rtl() {
+                            false => snap(bounds.origin.x),
+                            true => snap(bounds.right()) - weight,
+                        };
                         let trunk = Bounds::from_corners(
                             point(x, snap(bounds.origin.y)),
                             point(x + weight, snap(bounds.bottom())),
@@ -367,14 +379,14 @@ fn place_line(
             line = line.child(
                 div()
                     .absolute()
-                    .left(px(x))
+                    .inset_s(px(x))
                     .w(px(gap))
                     .text_color(rgb(muted))
                     .child(label_text(separator)),
             );
             x += gap;
         }
-        line = line.child(cell.absolute().left(px(x)).w(px(advance)));
+        line = line.child(cell.absolute().inset_s(px(x)).w(px(advance)));
         x += advance;
     }
     line
@@ -561,9 +573,9 @@ pub(super) fn row(
         .min_w_0()
         .flex_none()
         .relative()
-        .pl(px(content_x + indent))
-        .pr(px(content_x))
-        .flex()
+        .ps(px(content_x + indent))
+        .pe(px(content_x))
+        .row()
         .items_start()
         .gap(px(gap))
         .py(px(content_top))
@@ -586,7 +598,7 @@ pub(super) fn row(
                         .w(px(indicators.width(font)))
                         .mt(px((line_height(font) - STATUS_WIDTH) / 2.))
                         .flex_none()
-                        .flex()
+                        .row()
                         .justify_center()
                         .child(removing_dot("worktree-removing", theme))
                 } else if let Some(token) = leading_icon {
@@ -645,7 +657,7 @@ pub(super) fn row(
                                         font,
                                     )
                                     .debug_selector(|| format!("name-{key}"))
-                                    .ml(px(name_reserve.min(label_width))),
+                                    .ms(px(name_reserve.min(label_width))),
                                 ),
                         )
                         .when(show_detail, |column| {
@@ -681,7 +693,7 @@ pub(super) fn row(
                                     .child(
                                         div()
                                             .debug_selector(|| format!("detail-{key}"))
-                                            .ml(px(detail_x))
+                                            .ms(px(detail_x))
                                             .w(px(detail_width))
                                             .truncate()
                                             .text_color(rgb(detail_color))
@@ -692,7 +704,7 @@ pub(super) fn row(
                                             div()
                                                 .absolute()
                                                 .top_0()
-                                                .left(px(detail_x + upstream_x))
+                                                .inset_s(px(detail_x + upstream_x))
                                                 .w(px((room - upstream_x).max(0.)))
                                                 .overflow_hidden()
                                                 .child(upstream.element(key, glyph, theme)),
@@ -709,7 +721,7 @@ pub(super) fn row(
                     .w(px(status_width))
                     .flex_none()
                     .h(px(line_height(font)))
-                    .flex()
+                    .row()
                     .items_center()
                     .overflow_hidden()
                     .text_color(rgb(status_color))
@@ -722,7 +734,7 @@ pub(super) fn row(
                     .w(px(upstream_width))
                     .flex_none()
                     .h(px(line_height(font)))
-                    .flex()
+                    .row()
                     .items_center()
                     .overflow_hidden()
                     .child(upstream.element(key, glyph, theme)),
@@ -737,8 +749,12 @@ pub(super) fn row(
             }
             // Only the first line holds its place in the flow; the wider counts
             // line hangs at the row's edge, beside the shortened detail line.
-            row.child(div().w(px(badge_first)).flex_none())
-                .child(element.absolute().top(px(content_top)).right(px(content_x)))
+            row.child(div().w(px(badge_first)).flex_none()).child(
+                element
+                    .absolute()
+                    .top(px(content_top))
+                    .inset_e(px(content_x)),
+            )
         })
 }
 
@@ -757,7 +773,7 @@ fn agent_mark(
     div()
         .debug_selector(|| format!("agent-icon-{key}"))
         .absolute()
-        .left_0()
+        .inset_s(px(0.))
         .top(px((line_height(font) - size) / 2.))
         .size(px(size))
         .child(icon.element(size, color))

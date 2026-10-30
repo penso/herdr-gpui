@@ -3,6 +3,7 @@
 //! at terminal output.
 
 use super::{STATUS_DOT_UNKNOWN, STATUS_WIDTH, first_text, label_text, line_height};
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     config::{FontConfig, StatusIcons, Theme},
@@ -336,11 +337,11 @@ impl Indicators {
             div()
                 .debug_selector(|| format!("rail-{key}"))
                 .absolute()
-                .left_0()
+                .inset_s(px(0.))
                 .top(relative(RAIL_INSET))
                 .bottom(relative(RAIL_INSET))
                 .w(px(RAIL_WIDTH))
-                .rounded_r(px(RAIL_WIDTH))
+                .rounded_e(px(RAIL_WIDTH))
                 .bg(rgb(self.color(status))),
         )
     }
@@ -396,7 +397,7 @@ pub(super) fn status_mark(
         .h(px(STATUS_WIDTH))
         .mt(px((line_height(font) - STATUS_WIDTH) / 2.))
         .flex_none()
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .when(status == AgentStatus::Working, |slot| {
@@ -457,7 +458,7 @@ fn spin(mark: Svg, id: &'static str, period_ms: u64) -> impl IntoElement {
 fn status_icon(status: AgentStatus, font: &FontConfig, indicators: Indicators, color: u32) -> Div {
     let (icons, fade) = (indicators.icons, indicators.fade());
     let size = icon_size(font);
-    let slot = div().flex_none().flex().items_center().justify_center();
+    let slot = div().flex_none().row().items_center().justify_center();
     if icons != StatusIcons::Tiles {
         return slot
             .size(px(size))

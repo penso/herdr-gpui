@@ -1,5 +1,6 @@
 //! The trailing badges a row reserves room for: its pull request, change
-//! counts, dirty, note, and teleported marks, and the upstream drift counts.
+//! counts, dirty, note, teleported, and muted marks, and the upstream drift
+//! counts.
 
 use super::label_text;
 use crate::{
@@ -21,9 +22,17 @@ pub(in crate::sidebar) struct RowBadge {
     /// note's own line under the row, which leads with the same icon, rather
     /// than squeeze their pull request number out of a narrow card.
     pub(in crate::sidebar) noted: bool,
+    /// The user muted the workspace's notifications.
+    pub(in crate::sidebar) muted: bool,
 }
 
 impl RowBadge {
+    /// Whether it says anything about the checkout, beyond the workspace's
+    /// mute, which card layouts put on the name's line instead.
+    pub(in crate::sidebar) fn checkout_marks(&self) -> bool {
+        self.pr.is_some() || self.counts.is_some() || self.dirty || self.teleported || self.noted
+    }
+
     pub(in crate::sidebar) fn lines(&self, layout: &SidebarMetrics) -> usize {
         1 + usize::from(self.counts.is_some() && layout.pr_counts())
     }
@@ -36,14 +45,18 @@ impl RowBadge {
         dirty: bool,
         teleported: bool,
         noted: bool,
+        muted: bool,
     ) -> Option<Self> {
-        (pr.is_some() || counts.is_some() || dirty || teleported || noted).then_some(Self {
-            pr,
-            counts,
-            dirty,
-            teleported,
-            noted,
-        })
+        (pr.is_some() || counts.is_some() || dirty || teleported || noted || muted).then_some(
+            Self {
+                pr,
+                counts,
+                dirty,
+                teleported,
+                noted,
+                muted,
+            },
+        )
     }
 
     /// The whole column's width: its first line or the counts line under
@@ -83,6 +96,7 @@ impl RowBadge {
             self.dirty && !self.chipped(layout),
             self.teleported,
             self.noted,
+            self.muted,
         ]
         .into_iter()
         .filter(|mark| *mark)
@@ -113,6 +127,7 @@ impl RowBadge {
             dirty,
             teleported,
             noted,
+            muted,
         } = self;
         div()
             .debug_selector(|| format!("pr-{key}"))
@@ -131,6 +146,12 @@ impl RowBadge {
                     .items_center()
                     .gap(px(glyph_width(font)))
                     .overflow_hidden()
+                    .when(muted, |line| {
+                        line.child(
+                            crate::icons::muted(theme, (line_height(font) * 0.75).round().min(15.))
+                                .debug_selector(|| format!("muted-{key}")),
+                        )
+                    })
                     // Uncommitted work, marked the way the titlebar
                     // button marks it.
                     .when(teleported, |line| {

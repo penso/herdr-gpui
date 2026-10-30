@@ -95,7 +95,7 @@ fn notices_judge_agents_by_metadata_that_waits_for_its_surface() {
         let mut endpoints = [endpoint];
         // Selected index 1 is no endpoint, so the focused tab suppresses nothing.
         for at in [now, now + Duration::from_secs(1)] {
-            crate::notifications::tick(&mut endpoints, 1, config, false, true, None, at);
+            crate::notifications::tick(&mut endpoints, 1, config, None, false, true, None, at);
         }
         let entries = &endpoints[0].toasts.entries;
         assert!(
@@ -118,6 +118,7 @@ fn notices_judge_agents_by_metadata_that_waits_for_its_surface() {
             &mut endpoints,
             1,
             config,
+            None,
             false,
             true,
             None,

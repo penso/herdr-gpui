@@ -2,7 +2,8 @@
 //! one washed in the accent while its group has the keyboard.
 
 use super::{
-    Lead, TabContext, TabFace, TabLayout, TabShape, TabState, close_button, lead_mark, zoom_mark,
+    Lead, TabContext, TabFace, TabLayout, TabShape, TabState, close_button, lead_mark, mute_mark,
+    zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme},
@@ -45,7 +46,7 @@ impl TabLayout for Classic {
     fn width(
         &self,
         title: f32,
-        TabShape { lead, zoomed, .. }: TabShape,
+        shape @ TabShape { lead, .. }: TabShape,
         font: &FontConfig,
         indicators: Indicators,
     ) -> f32 {
@@ -55,7 +56,7 @@ impl TabLayout for Classic {
             Lead::Status => indicators.width(font) + DOT_GAP,
             Lead::Icon => ICON + DOT_GAP,
         };
-        let zoom = if zoomed { DOT_GAP + ZOOM_ICON } else { 0. };
+        let zoom = shape.marks_width();
         (pad + mark + title + zoom + gap + CLOSE + PAD_RIGHT + RULE).max(crate::TAB_WIDTH)
     }
 
@@ -81,6 +82,7 @@ impl TabLayout for Classic {
             label,
             mark,
             zoomed,
+            muted,
             probe,
             close,
         } = face;
@@ -106,7 +108,8 @@ impl TabLayout for Classic {
                     .gap(px(DOT_GAP))
                     .children(lead_mark(&mark, &probe, ICON, text, cx))
                     .child(label)
-                    .children(zoom_mark(zoomed, &probe, text, cx)),
+                    .children(zoom_mark(zoomed, &probe, text, cx))
+                    .children(mute_mark(muted, &probe, text, cx)),
             )
             .child(close_button(close, &probe, CLOSE, text, cx))
     }

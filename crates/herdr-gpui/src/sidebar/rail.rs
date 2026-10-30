@@ -19,6 +19,8 @@ use super::{
     wash::HostMark,
     workspaces::workspace_label,
 };
+use crate::direction::Logical;
+use crate::notification_mutes::{Daemon, Silenced};
 use crate::{
     Command, HerdrWindow, NavigationTarget,
     config::{FontConfig, Theme},
@@ -27,7 +29,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{AgentStatus, ClientShellAgent};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 /// Wide enough for the shared mark grid: a two-digit workspace number, an
 /// agent icon, and a drawn status icon, plus even padding inside the highlight.
@@ -135,11 +137,28 @@ impl HerdrWindow {
         let theme = &self.theme;
         let hint = Hint::new(theme);
         let multi = self.endpoints.len() > 1;
+        // What each listed host's mutes silence. A muted workspace shows its
+        // mark in the icon column, which the rail then keeps for every row.
+        let mutes = crate::notification_mutes::Mutes::any(cx);
+        let silenced: HashMap<usize, Silenced<'_>> = self
+            .displayed_devices()
+            .into_iter()
+            .filter_map(|(index, endpoint)| {
+                let live = if index == self.selected_endpoint {
+                    &self.live
+                } else {
+                    &endpoint.live
+                };
+                let snapshot = live.snapshot.as_deref()?;
+                Some((index, mutes?.silenced(&Daemon::of(endpoint), snapshot)))
+            })
+            .collect();
+        let slot = multi || silenced.values().any(Silenced::any_workspace);
         // A large sidebar font would make the columns wider than the rail and
         // clip the status icons, so the rail steps the font down until they fit.
-        let fitted = rail_font(&self.config.sidebar, indicators, multi);
+        let fitted = rail_font(&self.config.sidebar, indicators, multi, slot);
         let font = &fitted;
-        let columns = rail_columns(font, indicators, multi);
+        let columns = rail_columns(font, indicators, multi, slot);
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
         let mut spaces = div()
             .id("rail-spaces")
@@ -186,7 +205,7 @@ impl HerdrWindow {
                                 .relative()
                                 .size(px(HOST_MARK))
                                 .flex_none()
-                                .flex()
+                                .row()
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(chrome.radius))
@@ -249,8 +268,11 @@ impl HerdrWindow {
                 let context_id = id.clone();
                 let focused = selected && workspace.focused;
                 let number = workspace.number.to_string();
+                let muted = silenced
+                    .get(&endpoint_index)
+                    .is_some_and(|silenced| silenced.workspace(&workspace.workspace_id));
                 let marks = div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(columns.gap))
                     .child(mark_slot(
@@ -265,7 +287,29 @@ impl HerdrWindow {
                         &number,
                     ))
                     .when_some(columns.icon, |marks, icon| {
-                        marks.child(div().flex_none().w(px(icon)).h(px(columns.height)))
+                        marks.child(
+                            div()
+                                .flex_none()
+                                .w(px(icon))
+                                .h(px(columns.height))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(muted, |slot| {
+                                    // The rail's rows name nothing for a screen
+                                    // reader, so the mark names itself.
+                                    slot.debug_selector(|| format!("rail-muted-{key}")).child(
+                                        crate::icons::spoken_muted(
+                                            SharedString::from(format!("rail-muted-mark-{key}")),
+                                            crate::icons::icon(
+                                                crate::icons::MUTED,
+                                                icon - 2.,
+                                                theme.subtext(),
+                                            ),
+                                        ),
+                                    )
+                                }),
+                        )
                     })
                     .child(dot_slot(
                         format!("rail-dot-{key}"),
@@ -293,7 +337,7 @@ impl HerdrWindow {
                         host,
                         workspace_label(workspace, indented),
                         None,
-                        status_word(workspace.agent_status),
+                        muted_word(status_word(workspace.agent_status), muted).as_deref(),
                     )))
                     .on_mouse_down(
                         MouseButton::Right,
@@ -375,7 +419,7 @@ impl HerdrWindow {
                     .flex_none()
                     .w(px(columns.badge))
                     .h(px(columns.height))
-                    .flex()
+                    .row()
                     .items_center()
                     .child(agent_icon(
                         format!("rail-agent-icon-{endpoint_id}-{id}"),
@@ -385,7 +429,7 @@ impl HerdrWindow {
                     ))
             };
             let marks = div()
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(columns.gap))
                 .child(badge)
@@ -396,6 +440,10 @@ impl HerdrWindow {
                         icon_color,
                         icon_path,
                     ))
+                })
+                // One host whose muted workspaces took the icon column.
+                .when_some(columns.icon.filter(|_| !multi), |marks, icon| {
+                    marks.child(div().flex_none().w(px(icon)).h(px(columns.height)))
                 })
                 .child(dot_slot(
                     format!("rail-dot-{key}"),
@@ -447,7 +495,7 @@ impl HerdrWindow {
             .line_height(px(line_height(font)))
             .text_color(rgb(theme.foreground))
             .bg(self.fill().panel(theme.sidebar_background()))
-            .border_r_1()
+            .border_e(px(1.))
             .border_color(rgb(theme.active))
             // No expand control of its own: the sidebar toggle is always on
             // screen, over the rail beside the activity bar, else in the
@@ -497,10 +545,11 @@ impl HerdrWindow {
     }
 }
 
-/// The columns a workspace badge and an agent row share. `icon` is set only
-/// when several hosts are listed: the agent row then has a host letter, and
-/// workspace rows keep an empty slot of the same width so the status dots
-/// stay in one column.
+/// The columns a workspace badge and an agent row share. `icon` is set when
+/// several hosts are listed: the agent row then has a host letter, and
+/// workspace rows keep a slot of the same width so the status dots stay in
+/// one column. A muted workspace draws its mark in that slot, so the rail
+/// keeps it for one host too while one is muted.
 #[derive(Clone, Copy)]
 struct Columns {
     badge: f32,
@@ -517,7 +566,7 @@ impl Columns {
     }
 }
 
-fn rail_columns(font: &FontConfig, indicators: Indicators, multi: bool) -> Columns {
+fn rail_columns(font: &FontConfig, indicators: Indicators, multi: bool, slot: bool) -> Columns {
     let glyph = glyph_width(font);
     let icon = AGENT_ICON.min(font.size + 1.);
     Columns {
@@ -525,7 +574,7 @@ fn rail_columns(font: &FontConfig, indicators: Indicators, multi: bool) -> Colum
         dot: indicators.width(font),
         gap: MARK_GAP,
         height: line_height(font).max(icon),
-        icon: multi.then_some(icon),
+        icon: slot.then_some(icon),
     }
 }
 
@@ -538,9 +587,9 @@ const RAIL_FONT_MIN: f32 = 8.;
 
 /// `font`, stepped down in half pixels until the column grid fits the rail.
 /// A font that already fits is returned as is.
-fn rail_font(font: &FontConfig, indicators: Indicators, multi: bool) -> FontConfig {
+fn rail_font(font: &FontConfig, indicators: Indicators, multi: bool, slot: bool) -> FontConfig {
     let mut fitted = font.clone();
-    while rail_columns(&fitted, indicators, multi).width() > RAIL_GRID
+    while rail_columns(&fitted, indicators, multi, slot).width() > RAIL_GRID
         && fitted.size > RAIL_FONT_MIN
     {
         fitted.size = (fitted.size - 0.5).max(RAIL_FONT_MIN);
@@ -580,7 +629,7 @@ fn aligned_row(
             .flex_none()
             .h(px(row_h))
             .w_full()
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .overflow_hidden(),
@@ -599,7 +648,7 @@ fn mark_slot(selector: String, width: f32, height: f32, color: u32, text: &str) 
         .flex_none()
         .w(px(width))
         .h(px(height))
-        .flex()
+        .row()
         .items_center()
         .text_color(rgb(color))
         .child(label_text(text))
@@ -610,7 +659,7 @@ fn agent_icon(selector: String, size: f32, color: u32, path: &'static str) -> Di
         .debug_selector(move || selector)
         .flex_none()
         .size(px(size))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .child(crate::icons::icon(path, size, color))
@@ -622,7 +671,7 @@ fn dot_slot(selector: String, width: f32, height: f32, mark: Div) -> Div {
         .flex_none()
         .w(px(width))
         .h(px(height))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .child(mark)
@@ -639,10 +688,10 @@ fn host_status(selector: String, color: u32, ring: u32, rail_width: f32) -> Div 
     div()
         .debug_selector(move || ring_selector)
         .absolute()
-        .right(px(host_status_right(rail_width, ring_size)))
+        .inset_e(px(host_status_right(rail_width, ring_size)))
         .bottom(px(HOST_BORDER))
         .size(px(ring_size))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .rounded_full()
@@ -679,7 +728,7 @@ fn host_header(font: &FontConfig, look: SidebarLook) -> Div {
         .flex_none()
         .h(px(look.row_height(line_height(font).max(HOST_MARK))))
         .w_full()
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .overflow_hidden()
@@ -724,7 +773,7 @@ fn rail_row(
             .relative()
             .flex_none()
             .h(px(look.row_height(line_height(font).max(HOST_MARK))))
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .overflow_hidden(),
@@ -752,7 +801,7 @@ fn indicator(status: AgentStatus, font: &FontConfig, indicators: Indicators) -> 
     div()
         .flex_none()
         .h(px(line_height(font)))
-        .flex()
+        .row()
         .items_center()
         .child(status_indicator(status, font, indicators))
 }
@@ -775,6 +824,15 @@ fn status_word(status: AgentStatus) -> Option<&'static str> {
 fn agent_status_word(agent: &ClientShellAgent) -> Option<Cow<'static, str>> {
     let word = state_label(agent, status_word(agent.agent_status).unwrap_or(""));
     (!word.is_empty()).then_some(word)
+}
+
+/// A workspace's status word, saying so when its notifications are muted.
+fn muted_word(status: Option<&str>, muted: bool) -> Option<Cow<'_, str>> {
+    match (status, muted) {
+        (status, false) => status.map(Cow::Borrowed),
+        (Some(status), true) => Some(format!("{status}, notifications muted").into()),
+        (None, true) => Some("notifications muted".into()),
+    }
 }
 
 /// A rail mark's tooltip: what the expanded row would have spelled out.

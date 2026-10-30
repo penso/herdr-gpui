@@ -4,6 +4,7 @@
 //! keeps what it last reported and what the user chose.
 
 use super::PaneMenu;
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -343,7 +344,7 @@ impl HerdrWindow {
         };
         let mut body = div().p(px(8.)).flex().flex_col().gap(px(8.)).child(
             div()
-                .flex()
+                .row()
                 .items_baseline()
                 .gap(px(8.))
                 .child(
@@ -392,7 +393,7 @@ impl HerdrWindow {
                             .debug_selector(move || format!("pane-process-{index}"))
                             .min_h(px(self.config.ui.line_height() + 8.))
                             .px(px(6.))
-                            .flex()
+                            .row()
                             .items_center()
                             .gap(px(8.))
                             .rounded(px(crate::config::corners::CONTROL))
@@ -425,8 +426,8 @@ impl HerdrWindow {
                                 div()
                                     .flex_1()
                                     .min_w_0()
-                                    .pl(px(12. * row.depth.min(8) as f32))
-                                    .flex()
+                                    .ps(px(12. * row.depth.min(8) as f32))
+                                    .row()
                                     .gap(px(6.))
                                     .overflow_hidden()
                                     .child(div().flex_none().child(row.entry.name.clone()))
@@ -450,7 +451,7 @@ impl HerdrWindow {
                                 div()
                                     .w(px(44.))
                                     .flex_none()
-                                    .text_right()
+                                    .text_end()
                                     .text_color(muted)
                                     .child(identity.pid.to_string()),
                             )
@@ -458,14 +459,14 @@ impl HerdrWindow {
                                 div()
                                     .w(px(48.))
                                     .flex_none()
-                                    .text_right()
+                                    .text_end()
                                     .child(cpu_text(row.entry.cpu)),
                             )
                             .child(
                                 div()
                                     .w(px(64.))
                                     .flex_none()
-                                    .text_right()
+                                    .text_end()
                                     .child(memory_text(row.entry.memory)),
                             ),
                     );
@@ -496,7 +497,7 @@ impl HerdrWindow {
             )
         })
         .child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 div()
                     .id("pane-processes-end")
                     .debug_selector(|| "pane-processes-end".into())
@@ -542,7 +543,7 @@ impl HerdrWindow {
             .child(div().flex().flex_col().children(processes.chosen_rows().map(
                 |row| {
                     div()
-                        .flex()
+                        .row()
                         .gap(px(8.))
                         .child(div().flex_none().child(row.entry.name.clone()))
                         .child(
@@ -558,7 +559,7 @@ impl HerdrWindow {
             ))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .justify_end()
                     .gap(px(8.))
                     .child(

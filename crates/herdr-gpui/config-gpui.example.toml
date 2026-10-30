@@ -731,6 +731,14 @@ size = 12
 # shortcuts = "label"
 # report_issue = "label"
 
+# Mods: sandboxed Luau folders in <config>/herdr/gpui-mods that add status
+# bar items, sidebar sections, and palette commands (docs/mods.md).
+# [mods]
+# false runs none.
+# enabled = true
+# Mods, by folder name, not to run.
+# disabled = []
+
 # Zen mode (View > Toggle Zen Mode, or `toggle_zen_mode`) hides the
 # header, sidebar, tab strips, status bar, and notices, and every group but
 # the one in use, for this window and session. Toasts and menus still show.

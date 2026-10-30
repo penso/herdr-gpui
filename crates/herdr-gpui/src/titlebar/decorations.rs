@@ -5,6 +5,7 @@
 //! Everywhere else the platform reports server decorations and nothing here
 //! draws.
 
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 /// The transparent band around a client-decorated window that holds its
@@ -160,8 +161,9 @@ impl Buttons {
     }
 }
 
-/// Minimize, maximize or restore, and close, at the right end of the title
-/// bar of a client-decorated window. `close` runs the window's own close
+/// Minimize, maximize or restore, and close, at the end of the title bar of
+/// a client-decorated window: the right, or the left right to left, as
+/// Windows puts its own. `close` runs the window's own close
 /// path, so a window that asks before closing still asks.
 pub(crate) fn controls(
     enabled: bool,
@@ -200,13 +202,13 @@ fn render_controls(
     };
     div()
         .debug_selector(|| "window-controls".into())
-        .flex()
+        .row()
         .flex_none()
         .items_center()
         .gap(px(4.))
-        .ml_auto()
-        .pl(px(4.))
-        .pr(px(6.))
+        .ms(auto())
+        .ps(px(4.))
+        .pe(px(6.))
         .h_full()
         .when(buttons.minimize, |bar| {
             bar.child(

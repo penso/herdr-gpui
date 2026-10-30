@@ -92,6 +92,7 @@ commands-toggle-annotate = Toggle Annotate
 commands-toggle-full-screen = Toggle Full Screen
 commands-toggle-sidebar = Toggle Sidebar
 commands-toggle-status-bar = Toggle Status Bar
+commands-toggle-mod-panel = Toggle Mod Panel
 commands-toggle-zen-mode = Toggle Zen Mode
 commands-toggle-zoom = Toggle Pane Zoom
 commands-workspace-picker = Go To

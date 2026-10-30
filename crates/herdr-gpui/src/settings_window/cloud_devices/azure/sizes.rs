@@ -12,6 +12,7 @@ use crate::azure::{
         ephemeral_placement, is_arm,
     },
 };
+use crate::direction::Logical;
 use crate::{config::Config, i18n::fl};
 use gpui::{prelude::*, *};
 
@@ -206,7 +207,7 @@ impl SettingsWindow {
             .child(self.control_note(note))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(8.))
                     .children(choices)
@@ -216,7 +217,7 @@ impl SettingsWindow {
                 section
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .items_center()
                             .gap(px(8.))
                             .min_w_0()
@@ -280,6 +281,6 @@ impl SettingsWindow {
             .gap(px(8.))
             .min_w_0()
             .child(self.control_note(note))
-            .child(div().flex().flex_wrap().gap(px(8.)).children(choices))
+            .child(div().row().flex_wrap().gap(px(8.)).children(choices))
     }
 }

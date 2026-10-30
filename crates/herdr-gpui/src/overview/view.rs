@@ -404,7 +404,10 @@ impl HerdrWindow {
                                     .font_weight(FontWeight::MEDIUM)
                                     .child(row.title.clone()),
                             )
-                            .when(woke, |title| title.child(tag(look, "Woke"))),
+                            .when(woke, |title| title.child(tag(look, "Woke")))
+                            .when(row.muted, |title| {
+                                title.child(muted_mark(row.key.selector(), theme))
+                            }),
                     )
                     .child(
                         div()
@@ -746,6 +749,17 @@ fn heading(look: &Look, label: &'static str, count: Option<usize>) -> Div {
         .when_some(count, |heading, count| {
             heading.child(div().text_color(rgb(theme.muted)).child(count.to_string()))
         })
+}
+
+/// The struck-through bell after a muted agent's title. The rows carry no
+/// accessible name of their own, so the mark names itself.
+pub(super) fn muted_mark(key: String, theme: &crate::config::Theme) -> Stateful<Div> {
+    let selector = format!("overview-muted-{key}");
+    crate::icons::spoken_muted(
+        SharedString::from(selector.clone()),
+        crate::icons::icon(crate::icons::MUTED, 12., theme.subtext()),
+    )
+    .debug_selector(move || selector.clone())
 }
 
 fn tag(look: &Look, text: &'static str) -> Div {

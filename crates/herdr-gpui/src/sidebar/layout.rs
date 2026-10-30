@@ -6,6 +6,7 @@ use super::{
     CHILD_INDENT, HOST_GAP, LABEL_GAP, ROW_PADDING, STATUS_WIDTH, cell::RowState, row::RowLift,
     wash::HostMark,
 };
+use crate::direction::Logical;
 use crate::{
     backdrop::Fill,
     config::{Density, LayoutMode, SidebarOverrides, Style, Theme},
@@ -349,8 +350,8 @@ impl SidebarLook {
         self.paint_highlight(
             div()
                 .absolute()
-                .left(inset)
-                .right(inset)
+                .inset_s(inset)
+                .inset_e(inset)
                 .top(edge)
                 .bottom(edge),
             key,
@@ -531,8 +532,8 @@ impl SidebarLook {
         div()
             .debug_selector(|| format!("highlight-{key}"))
             .absolute()
-            .left(inset)
-            .right(inset)
+            .inset_s(inset)
+            .inset_e(inset)
             .top(edge)
             .bottom(edge)
             .rounded(px(self.density.radius.max(LIFT_RADIUS)))

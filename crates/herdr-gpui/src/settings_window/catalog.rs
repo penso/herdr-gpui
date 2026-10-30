@@ -313,6 +313,12 @@ pub(super) const CATALOG: &[Entry] = &[
     ),
     entry(
         Section::General,
+        "general-language",
+        "settings-general-language",
+        "settings-general-language-description",
+    ),
+    entry(
+        Section::General,
         "general-ports",
         "settings-general-ports",
         "settings-general-ports-description",

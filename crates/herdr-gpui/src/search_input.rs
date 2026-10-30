@@ -5,10 +5,11 @@ use unicode_segmentation::UnicodeSegmentation;
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, KeyDownEvent, MouseButton, Pixels, Point, Role,
-    ShapedLine, SharedString, TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, canvas,
-    div, fill, point, prelude::*, px, rgb, size,
+    SharedString, TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, canvas, div, fill,
+    point, prelude::*, px, rgb, size,
 };
 
+use crate::caret::Carets;
 use crate::config::{Config, FontConfig, Theme};
 use crate::fonts::StyledFont;
 use crate::{actions, input::ViewInputHandler, words};
@@ -30,7 +31,8 @@ pub struct SearchInput {
     edit: Editing,
     font: FontConfig,
     theme: Theme,
-    layout: Option<ShapedLine>,
+    /// Where the last drawn line puts each caret.
+    layout: Option<Carets>,
     bounds: Option<Bounds<Pixels>>,
     scroll: Pixels,
     selecting: bool,
@@ -367,7 +369,7 @@ impl SearchInput {
         match (&self.layout, self.bounds) {
             (Some(line), Some(bounds)) if !self.edit.text.is_empty() => {
                 let index = line
-                    .closest_index_for_x(position.x - bounds.left() + self.scroll)
+                    .index_at(position.x - bounds.left() + self.scroll)
                     .min(self.shown(self.edit.text.len()));
                 if self.masked {
                     unmasked_offset(&self.edit.text, index)
@@ -586,15 +588,28 @@ impl EntityInputHandler for SearchInput {
     ) -> Option<Bounds<Pixels>> {
         let line = self.layout.as_ref()?;
         let bounds = self.bounds?;
+        // An empty field's layout is the placeholder's, which can read the
+        // other way: the input method's box is the caret where text starts.
+        if self.text().is_empty() {
+            let x = match crate::direction::is_rtl() {
+                false => bounds.left(),
+                true => (bounds.right() - px(1.)).max(bounds.left()),
+            };
+            return Some(Bounds::from_corners(
+                point(x, bounds.top()),
+                point(x, bounds.bottom()),
+            ));
+        }
         let range = byte_range(self.text(), range);
-        let x = |index| {
-            (bounds.left() + line.x_for_index(self.shown(index)) - self.scroll)
+        let extent = line.extent(self.shown(range.start)..self.shown(range.end));
+        let x = |x| {
+            (bounds.left() + x - self.scroll)
                 .max(bounds.left())
                 .min(bounds.right())
         };
         Some(Bounds::from_corners(
-            point(x(range.start), bounds.top()),
-            point(x(range.end), bounds.bottom()),
+            point(x(extent.start), bounds.top()),
+            point(x(extent.end), bounds.bottom()),
         ))
     }
 
@@ -791,7 +806,14 @@ impl Render for SearchInput {
                     move |bounds, line, window, cx| {
                         painter.update(cx, |input, cx| {
                             let visible_width = (bounds.size.width - px(1.)).max(px(0.));
-                            let caret = line.x_for_index(input.shown(input.edit.cursor));
+                            let carets = Carets::new(&line.text, &line);
+                            let rtl = crate::direction::is_rtl();
+                            // An empty field's caret waits where text starts.
+                            let caret = match (input.text().is_empty(), rtl) {
+                                (true, false) => px(0.),
+                                (true, true) => line.width,
+                                (false, _) => carets.x(input.shown(input.edit.cursor)),
+                            };
                             input.scroll = input
                                 .scroll
                                 .min((line.width - visible_width).max(px(0.)))
@@ -800,6 +822,13 @@ impl Render for SearchInput {
                                 .max(px(0.));
                             if input.text().is_empty() {
                                 input.scroll = px(0.);
+                            }
+                            // Right to left, a line that fits sets against
+                            // the field's right, its start, and so does a
+                            // placeholder however long, so the caret after
+                            // it stays at that edge.
+                            if rtl && (input.text().is_empty() || line.width < visible_width) {
+                                input.scroll = line.width - visible_width;
                             }
                             let origin = point(bounds.left() - input.scroll, bounds.top());
                             window.handle_input(
@@ -812,19 +841,15 @@ impl Render for SearchInput {
                                 let selection =
                                     input.shown(selection.start)..input.shown(selection.end);
                                 if input.focus.is_focused(window) && !selection.is_empty() {
-                                    window.paint_quad(fill(
-                                        Bounds::from_corners(
-                                            point(
-                                                origin.x + line.x_for_index(selection.start),
-                                                bounds.top(),
+                                    for span in carets.spans(selection) {
+                                        window.paint_quad(fill(
+                                            Bounds::from_corners(
+                                                point(origin.x + span.start, bounds.top()),
+                                                point(origin.x + span.end, bounds.bottom()),
                                             ),
-                                            point(
-                                                origin.x + line.x_for_index(selection.end),
-                                                bounds.bottom(),
-                                            ),
-                                        ),
-                                        rgb(input.theme.active),
-                                    ));
+                                            rgb(input.theme.active),
+                                        ));
+                                    }
                                 }
                                 let _ =
                                     line.paint(origin, height, TextAlign::Left, None, window, cx);
@@ -839,7 +864,7 @@ impl Render for SearchInput {
                                 }
                             });
                             input.bounds = Some(bounds);
-                            input.layout = Some(line);
+                            input.layout = Some(carets);
                         });
                     },
                 )
@@ -857,6 +882,7 @@ mod tests {
     mod composition;
     mod control_keys;
     mod placeholder;
+    mod rtl_caret;
     mod word_keys;
 
     #[test]

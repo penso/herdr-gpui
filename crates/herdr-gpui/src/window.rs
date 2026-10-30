@@ -23,7 +23,7 @@ mod find;
 mod flash;
 pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
-pub(crate) use zen::slide_left;
+pub(crate) use zen::slide_start;
 mod function_keys;
 pub(crate) mod image_source;
 mod images;
@@ -101,6 +101,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) _appearance: Subscription,
     pub(crate) _browser_tabs: Subscription,
     pub(crate) _host_theme: Subscription,
+    /// Another window may mute or unmute what this one shows.
+    pub(crate) _notification_mutes: Subscription,
     pub(crate) _poll: Task<()>,
     pub(crate) _prefix_interceptor: Subscription,
     pub(crate) _sidebar_invalidation: Subscription,
@@ -243,6 +245,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) menu: menu::MenuState,
     /// Removing worktrees whose pull request is merged, when enabled.
     pub(crate) merged_cleanup: crate::merged_cleanup::Cleanup,
+    /// The mod panel's width; see `crate::mods::panel`.
+    pub(crate) mod_panel_width: crate::panel_resize::PanelWidth,
+    pub(crate) mods: crate::mods::Mods,
     /// The focus changes asked of the daemon, for the native GUI harness.
     #[cfg(feature = "integration-test")]
     pub(crate) navigations: smoke::Navigations,
@@ -451,6 +456,12 @@ impl HerdrWindow {
         })
     }
 
+    /// Another window may mute or unmute a workspace or tab: redraw its
+    /// marks, and re-count the Dock badge on the next tick.
+    pub(crate) fn observe_notification_mutes(cx: &mut Context<Self>) -> Subscription {
+        cx.observe_global::<crate::notification_mutes::Mutes>(|_, cx| cx.notify())
+    }
+
     /// Theme and appearance changes all notify this view, so each one reaches
     /// the daemon without every place that sets a theme having to report it.
     pub(crate) fn observe_host_theme(cx: &mut Context<Self>) -> Subscription {
@@ -501,6 +512,9 @@ impl HerdrWindow {
         }
         if self.notes_width.chosen().is_none() {
             self.notes_width.restore(chrome.notes_width);
+        }
+        if self.mod_panel_width.chosen().is_none() {
+            self.mod_panel_width.restore(chrome.mod_panel_width);
         }
         if self.review_files_width.chosen().is_none() {
             self.review_files_width.restore(chrome.review_files_width);
@@ -677,6 +691,7 @@ impl HerdrWindow {
         if self.update_system_load() {
             cx.notify();
         }
+        self.poll_mods(window, cx);
         let network_quality = crate::network_quality::poll(self.config.show_network_quality, cx);
         if network_quality != self.network_quality_seen {
             self.network_quality_seen = network_quality;

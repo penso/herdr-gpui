@@ -201,6 +201,8 @@ pub enum Error {
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error(transparent)]
+    Mods(#[from] crate::mods::Error),
+    #[error(transparent)]
     Nearby(#[from] crate::remote::nearby::Error),
     #[error("No current daemon snapshot.")]
     NoSnapshot,
@@ -210,6 +212,8 @@ pub enum Error {
     NotAGitRepository { path: PathBuf },
     #[error("Not connected to a daemon.")]
     NotConnected,
+    #[error(transparent)]
+    NotificationMutes(#[from] crate::notification_mutes::Error),
     #[error("The current directory is not in a Git checkout.")]
     NotInCheckout,
     #[error("Could not read the orchestrator's database: {0}")]

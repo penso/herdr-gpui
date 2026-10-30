@@ -102,17 +102,23 @@ pub(super) fn visible_workspace_entries(
 /// for a row on another device: it only ever probes this machine's checkouts.
 /// `pr` pairs the PR cache with the view of the device the row is on, whether
 /// or not it is selected, and is `None` for a device whose pull requests are
-/// not looked up.
+/// not looked up. Any workspace, Git checkout or not, carries its muted mark.
 pub(super) fn workspace_badge(
     workspace: &ClientShellWorkspace,
     pr: Option<(&crate::pull_request::Cache, &crate::pull_request::View)>,
     git: (Option<&crate::git::Git>, ChangeCounts),
     marks: (&crate::teleport::Marks, &str),
-    note: Option<&str>,
+    (note, muted): (Option<&str>, bool),
     theme: &Theme,
 ) -> Option<RowBadge> {
-    let key = workspace.worktree.as_ref()?.key.as_str();
-    let branch = workspace.branch.as_deref()?;
+    let checkout = workspace
+        .worktree
+        .as_ref()
+        .map(|tree| tree.key.as_str())
+        .zip(workspace.branch.as_deref());
+    let Some((key, branch)) = checkout else {
+        return RowBadge::new(None, None, false, false, false, muted);
+    };
     let ((marks, endpoint), (git, counts)) = (marks, git);
     let pr = pr.and_then(|(cache, view)| cache.peek(view, key, branch));
     let counts = match counts {
@@ -131,6 +137,7 @@ pub(super) fn workspace_badge(
         git.and_then(|git| git.dirty(key, branch)).unwrap_or(false),
         marks.find(endpoint, key, branch).is_some(),
         note.is_some(),
+        muted,
     )
 }
 

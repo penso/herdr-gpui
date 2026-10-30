@@ -63,6 +63,7 @@ impl SettingsWindow {
                 &fl!("settings-general-section-interface"),
                 None,
             ))
+            .child(self.language_row(cx))
             .child(
                 ui::row(theme, "general-ports", fl!("settings-general-ports"))
                     .description(fl!("settings-general-ports-description"))

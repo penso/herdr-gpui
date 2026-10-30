@@ -86,6 +86,7 @@ fn shape(lead: Lead, zoomed: bool) -> TabShape {
     TabShape {
         lead,
         zoomed,
+        muted: false,
         selected: false,
     }
 }
@@ -656,6 +657,9 @@ mod divider;
 
 /// Every tab layout draws its tabs as wide as the strip measures them.
 mod layouts;
+
+/// Muted tabs carry their mark in every layout, inside their measured width.
+mod mutes;
 
 /// The curved layout's sliding body and the card it flows into.
 mod curved;

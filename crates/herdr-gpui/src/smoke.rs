@@ -32,6 +32,9 @@ mod clipboard;
 #[path = "smoke_input.rs"]
 mod input_shutdown;
 
+#[path = "smoke_bidi.rs"]
+mod bidi;
+
 #[path = "smoke_sidebar.rs"]
 mod sidebar_fixture;
 pub use sidebar_fixture::start_sidebar;

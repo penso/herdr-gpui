@@ -1,6 +1,7 @@
 //! Compact per-role controls and a root-level, transient family chooser.
 // i18n: migrated
 use super::*;
+use crate::direction::Logical;
 use crate::{
     config::FontConfig,
     fonts::StyledFont,
@@ -29,7 +30,7 @@ pub(in crate::settings_window) fn native_probe(id: impl Into<String>) -> impl In
     )
     .absolute()
     .top_0()
-    .left_0()
+    .inset_s(px(0.))
     .size_full()
 }
 
@@ -265,7 +266,7 @@ impl SettingsWindow {
         div()
             .id(id)
             .debug_selector(move || selector.clone())
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .h(px(28.))
@@ -364,8 +365,8 @@ impl SettingsWindow {
                 .absolute()
                 .top(px(36.))
                 .bottom(px(36.))
-                .left(px(184.))
-                .right_0()
+                .inset_s(px(184.))
+                .inset_e(px(0.))
                 .occlude()
                 .bg(rgb(self.theme.background).opacity(0.75))
                 .child(
@@ -385,8 +386,8 @@ impl SettingsWindow {
                     div()
                         .absolute()
                         .top(px(64.))
-                        .left(px(20.))
-                        .right(px(20.))
+                        .inset_s(px(20.))
+                        .inset_e(px(20.))
                         .occlude()
                         .id("settings-font-picker")
                         .debug_selector(|| "settings-font-picker".into())
@@ -409,7 +410,7 @@ impl SettingsWindow {
                         .shadow_lg()
                         .child(
                             div()
-                                .flex()
+                                .row()
                                 .items_center()
                                 .justify_between()
                                 .child(fl!("settings-fonts-picker-title", role = role))

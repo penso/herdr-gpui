@@ -12,6 +12,13 @@ settings-general-section-updates = Updates
 
 ## Rows.
 
+# The language picker's first choice. $language is the name, in itself, of
+# the language the system's preferences pick (English, עברית).
+settings-general-language-system = System ({ $language })
+# A tag the `language` setting names that has no messages. $tag is the BCP 47
+# tag (fr-CA); $language names, in itself, the language shown instead.
+settings-general-language-unavailable = { $tag }, shown in { $language }
+
 settings-general-window-controls = Show window controls
 settings-general-window-controls-description = Draw minimize, maximize, and close buttons in the menu bar. Disable server-side decorations in your window manager to avoid a double bar.
 settings-general-chat-layout = Chat layout

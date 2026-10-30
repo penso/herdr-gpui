@@ -4,7 +4,7 @@
 
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape,
-    TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, zoom_mark,
+    TabState, close_button, floating_new_tab, hint, kind_icon, mute_mark, status_mark, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, corners, mix},
@@ -38,11 +38,7 @@ impl TabLayout for Compact {
         if !shape.selected {
             return icon;
         }
-        let zoom = if shape.zoomed {
-            DOT_GAP + ZOOM_ICON
-        } else {
-            0.
-        };
+        let zoom = shape.marks_width();
         icon + GAP + title + zoom + GAP + CLOSE
     }
 
@@ -68,6 +64,7 @@ impl TabLayout for Compact {
             label,
             mark,
             zoomed,
+            muted,
             probe,
             close,
         } = face;
@@ -108,7 +105,8 @@ impl TabLayout for Compact {
                         .items_center()
                         .gap(px(DOT_GAP))
                         .child(label.clone())
-                        .children(zoom_mark(zoomed, &probe, text, cx)),
+                        .children(zoom_mark(zoomed, &probe, text, cx))
+                        .children(mute_mark(muted, &probe, text, cx)),
                 )
             })
             .children(status);
@@ -120,6 +118,7 @@ impl TabLayout for Compact {
             chip
         };
         let (foreground, surface) = (theme.foreground, theme.active);
+        let tooltip = hint(label, muted);
         base.px(px(MARGIN_X))
             .py(px(MARGIN_Y))
             .flex_none()
@@ -128,7 +127,7 @@ impl TabLayout for Compact {
             .when(!state.selected, |tab| {
                 tab.tooltip(move |_, cx| {
                     cx.new(|_| crate::menu::SettingsHint {
-                        text: label.clone(),
+                        text: tooltip.clone(),
                         foreground,
                         surface,
                     })

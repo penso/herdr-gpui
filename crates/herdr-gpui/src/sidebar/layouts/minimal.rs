@@ -14,6 +14,7 @@ use super::{
     parts::{self, Line},
 };
 use crate::config::Theme;
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 pub(in super::super) struct Minimal;
@@ -45,8 +46,8 @@ fn shell(
         .h(px(look.row_height(
             line_height(cx.font) * lines.unwrap_or(1) as f32,
         )))
-        .pl(px(look.content_x() + indent))
-        .flex()
+        .ps(px(look.content_x() + indent))
+        .row()
         .items_center()
         .cursor_pointer()
         .map(|row| look.mark(row, key, (state, cx.mark), cx.theme))
@@ -96,8 +97,10 @@ impl RowLayout for Minimal {
                 density.child_indent()
             };
         // Pull requests and uncommitted work stay off these rows, but a
-        // teleported checkout is a copy left behind, so it keeps its mark.
+        // teleported checkout is a copy left behind, so it keeps its mark,
+        // as a muted workspace keeps its own.
         let teleported = row.badge.as_ref().is_some_and(|badge| badge.teleported);
+        let muted = row.badge.as_ref().is_some_and(|badge| badge.muted);
         let mark = (line_height(cx.font) * 0.75).round().min(15.);
         let worktree = parts::worktree(row.label, &row.icon, mark);
         let status = row.status();
@@ -134,6 +137,12 @@ impl RowLayout for Minimal {
             )
         };
         let line = line
+            .when(muted, |line| {
+                line.fixed(
+                    mark,
+                    parts::first_line(mark, parts::muted(row.label, mark, theme), cx),
+                )
+            })
             .when(teleported, |line| {
                 line.fixed(
                     mark,

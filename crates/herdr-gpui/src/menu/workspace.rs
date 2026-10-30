@@ -34,6 +34,9 @@ pub(crate) struct WorkspaceTarget {
     pub(super) base: Option<String>,
     /// How worktree requests name the repository to the daemon.
     pub(super) source: Source,
+    /// Whether the user muted the workspace's notifications when the menu
+    /// opened, which picks what the toggle in its header does.
+    pub(super) muted: bool,
 }
 
 /// How a worktree request tells the daemon which repository it is for.
@@ -77,6 +80,7 @@ impl WorkspaceTarget {
             branch: workspace.branch.clone(),
             base: None,
             source: Source::of(workspace),
+            muted: false,
         }
     }
 
@@ -491,7 +495,11 @@ impl HerdrWindow {
             self.selection_epoch,
             self.endpoints[self.selected_endpoint].generation,
         );
-        self.menu.target = Some(WorkspaceTarget::new(snapshot, workspace));
+        let muted = self.muted_on_selected(crate::notification_mutes::Scope::Workspace, id, cx);
+        self.menu.target = Some(WorkspaceTarget {
+            muted,
+            ..WorkspaceTarget::new(snapshot, workspace)
+        });
         self.menu.anchor = anchor;
         self.menu.page = Some(Page::Workspace);
         self.refresh_workspace_pr();
@@ -589,14 +597,19 @@ impl HerdrWindow {
     }
 
     /// The actions this workspace offers, in the order the popover shows them
-    /// and arrow keys walk them: the tile grid row by row (work, then moving
-    /// or leaving), the plain rows, and the destructive action last.
+    /// and arrow keys walk them: the header's mute toggle, the tile grid row
+    /// by row (work, then moving or leaving), the plain rows, and the
+    /// destructive action last.
     pub(super) fn workspace_items(&self) -> Vec<(WorkspaceMenuAction, &'static str)> {
         use WorkspaceMenuAction::Dialog;
         let Some(target) = &self.menu.target else {
             return vec![];
         };
-        let mut items = Vec::new();
+        let mut items = vec![if target.muted {
+            (WorkspaceMenuAction::Unmute, "Unmute notifications")
+        } else {
+            (WorkspaceMenuAction::Mute, "Mute notifications")
+        }];
         if target.can_create() || self.linked_new_worktree_target().is_some() {
             items.push((Dialog(WorkspaceAction::NewWorktree), "New worktree"));
         }
@@ -847,6 +860,19 @@ impl HerdrWindow {
             WorkspaceMenuAction::Dialog(action) => self.open_workspace_dialog(action, window, cx),
             WorkspaceMenuAction::Collapse | WorkspaceMenuAction::Expand => {
                 self.toggle_selected_group(cx)
+            }
+            WorkspaceMenuAction::Mute | WorkspaceMenuAction::Unmute => {
+                if let Some(target) = &self.menu.target {
+                    let (id, boot) = (target.id.clone(), target.boot_id.clone());
+                    self.set_muted_on_selected(
+                        crate::notification_mutes::Scope::Workspace,
+                        &id,
+                        &boot,
+                        action == WorkspaceMenuAction::Mute,
+                        cx,
+                    );
+                }
+                self.dismiss_menu(window, cx);
             }
             WorkspaceMenuAction::PullRequest => self.open_workspace_pr(cx),
             WorkspaceMenuAction::Teleport => self.open_teleport(window, cx),

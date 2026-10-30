@@ -408,6 +408,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::overview::Marks::default()
     };
+    // Nor with which workspaces and tabs the user muted.
+    let notification_mutes = if mode == LaunchMode::Normal {
+        crate::notification_mutes::Mutes::load()
+    } else {
+        crate::notification_mutes::Mutes::default()
+    };
     // Nor with the user's jump list, which they would replace.
     #[cfg(windows)]
     let jump_list = (mode == LaunchMode::Normal).then(crate::jump_list::JumpList::load);
@@ -443,6 +449,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             worktree_notes.install(cx);
             review_viewed.install(cx);
             overview_marks.install(cx);
+            notification_mutes.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);
             fan_out_journal.install(cx);

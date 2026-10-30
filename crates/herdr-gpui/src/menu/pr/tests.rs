@@ -168,7 +168,7 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
             Some(WorkspaceMenuAction::PullRequest)
         )
     });
-    // Past the PR card, the arrows wrap to the first tile.
+    // Past the PR card, the arrows wrap to the top: the header's toggle.
     cx.simulate_keystrokes("down");
     cx.update(|_, cx| {
         let view = view.read(cx);
@@ -203,8 +203,13 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
     });
     // GPUI retains removed debug selectors; measure the remaining action panel.
     // Seven actions, in the tile grid and the rows below it, and the target
-    // header: no PR section or stale metadata.
-    let rows = cx.update(|_, cx| view.read(cx).workspace_menu_actions().len());
+    // header with its mute toggle: no PR section or stale metadata.
+    let rows = cx.update(|_, cx| {
+        let view = view.read(cx);
+        let actions = view.workspace_menu_actions();
+        assert!(actions[0].in_header());
+        actions.len() - 1
+    });
     assert_eq!(rows, 7);
     let panel = cx.debug_bounds("menu-panel").unwrap().size.height;
     let header = cx
