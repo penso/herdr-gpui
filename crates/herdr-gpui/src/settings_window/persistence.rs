@@ -257,6 +257,17 @@ impl SettingsWindow {
                 crate::caffeine::set_scope(loaded.config.status_bar.keep_awake_scope, cx);
                 // Settings may outlive every main window, whose reload also follows it.
                 crate::i18n::follow_config(&loaded.config.language, cx);
+                // The language list's choices follow the setting (a tag
+                // without messages is listed), so a list opened before the
+                // setting changed would pick by stale positions.
+                if loaded.config.language != self.config.language
+                    && self
+                        .dropdown
+                        .as_ref()
+                        .is_some_and(|open| open.field == super::inputs::DropdownField::Language)
+                {
+                    self.dropdown = None;
+                }
                 self.config = loaded.config;
                 if let Some(mode) = self.layout_intent {
                     self.config.layout.mode = mode;

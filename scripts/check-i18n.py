@@ -21,10 +21,11 @@ just above it.
 
 The platform files name the same languages as the app: the macOS bundle's
 `CFBundleLocalizations` lists every language directory, each of which
-names itself in `language-name`, and its development
-region is `en-US`, and each `assets/macos/<tag>.lproj`, installer
-`scripts/release/installer/<tag>.isl`, and desktop entry `Comment[tag]` is
-for one of them.
+names itself in `language-name`, and its development region is `en-US`;
+every language has an installer `scripts/release/installer/<tag>.isl` and a
+desktop entry `Comment[tag]` (the plain `Comment` is English); and each
+`assets/macos/<tag>.lproj`, which is optional, installer file, and
+`Comment[tag]` is for one of them.
 
     python3 scripts/check-i18n.py
 """
@@ -49,6 +50,7 @@ LOCALIZED_KEY = re.compile(r"^\w+\[([^\]]+)\]=", re.MULTILINE)
 # The message each language names itself by in the Settings language picker.
 ENDONYM = "language-name"
 INFO_PLIST = Path("assets/macos/Info.plist")
+INSTALLER = Path("scripts/release/installer")
 DESKTOP_ENTRY = Path("scripts/release/so.pen.herdr-gpui.desktop")
 MIGRATED = "// i18n: migrated"
 DATA = "// i18n: data"
@@ -354,9 +356,19 @@ def platform(files: list[Ftl], plist: dict, translations: list[Path], desktop: s
     for path in translations:
         if path.stem not in languages:
             errors.append(f"{path}: {path.stem} is not one of the app's languages")
+    installer = {path.stem for path in translations if path.suffix == ".isl"}
+    for language in sorted(languages - installer):
+        errors.append(f"{INSTALLER}/{language}.isl is missing: the installer has no {language} text")
+    # The plain Comment is the English one.
+    commented = {FALLBACK} if re.search(r"^Comment=", desktop, re.MULTILINE) else set()
     for tag in LOCALIZED_KEY.findall(desktop):
-        if tag.replace("_", "-") not in languages:
+        language = tag.replace("_", "-")
+        if language not in languages:
             errors.append(f"{DESKTOP_ENTRY}: [{tag}] is not one of the app's languages")
+        commented.add(language)
+    for language in sorted(languages - commented):
+        tag = language.replace("-", "_")
+        errors.append(f"{DESKTOP_ENTRY}: no Comment[{tag}] for {language}")
     return errors
 
 
@@ -381,7 +393,7 @@ def main() -> int:
     errors.extend(check(files, sources))
     translations = sorted(
         {path.parent for path in tracked("assets/macos/*.lproj/*")}
-        | set(tracked("scripts/release/installer/*.isl"))
+        | set(tracked(f"{INSTALLER}/*.isl"))
     )
     errors.extend(
         platform(

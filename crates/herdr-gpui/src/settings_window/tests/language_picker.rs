@@ -77,3 +77,41 @@ fn the_general_page_picks_a_language(cx: &mut TestAppContext) {
         Some(&Preference::Language(Language::Locale(Locale::FALLBACK)))
     );
 }
+
+/// The list's choices depend on the setting, so a reload that changes it
+/// closes an open list rather than let a stale position pick another
+/// language; a reload that keeps it leaves the list open.
+#[gpui::test]
+fn a_reload_that_changes_the_language_closes_the_list(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(skill_fixture);
+    let klingon = Language::Locale("tlh".parse().unwrap());
+    view.update(cx, |view, cx| {
+        view.config.language = klingon.clone();
+        view.section = Section::General;
+        cx.notify();
+    });
+    cx.simulate_resize(size(px(960.), px(2000.)));
+    draw(cx);
+    let button = cx
+        .debug_bounds("general-language-control")
+        .unwrap()
+        .center();
+    for (reloaded, open) in [(klingon.clone(), true), (Language::System, false)] {
+        if view.read_with(cx, |view, _| view.dropdown.is_none()) {
+            cx.simulate_click(button, Default::default());
+            cx.run_until_parked();
+            draw(cx);
+        }
+        assert!(view.read_with(cx, |view, _| view.dropdown.is_some()));
+        view.update(cx, |view, cx| {
+            let mut loaded = fixture();
+            loaded.config.language = reloaded.clone();
+            view.apply_loaded(Ok(loaded), cx);
+        });
+        assert_eq!(
+            view.read_with(cx, |view, _| view.dropdown.is_some()),
+            open,
+            "{reloaded}"
+        );
+    }
+}
