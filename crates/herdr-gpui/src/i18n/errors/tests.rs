@@ -5,10 +5,23 @@ use super::Localize;
 use herdr_i18n::{Locale, Pseudo};
 use std::fmt::Display;
 
+mod automations;
+mod backdrop;
+mod caffeine;
+mod chat;
 mod client;
+#[cfg(feature = "cloud")]
+mod cloud_batch;
+mod cloud_setup;
+mod code_server;
+mod config;
 mod control;
 mod credentials;
+mod daemon;
+mod dispatch;
+mod editor;
 mod github;
+mod keymap;
 mod notification_mutes;
 mod orchestrator;
 mod protocol;

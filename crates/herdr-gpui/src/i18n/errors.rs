@@ -9,10 +9,23 @@
 //! messages, and the app's feature modules are migrated on their own.
 // i18n: migrated
 
+mod automations;
+mod backdrop;
+mod caffeine;
+mod chat;
 mod client;
+#[cfg(feature = "cloud")]
+mod cloud_batch;
+mod cloud_setup;
+mod code_server;
+mod config;
 mod control;
 mod credentials;
+mod daemon;
+mod dispatch;
+mod editor;
 mod github;
+mod keymap;
 mod notification_mutes;
 mod orchestrator;
 mod protocol;
@@ -66,21 +79,6 @@ macro_rules! english {
 
 english! {
     // keep-sorted start
-    crate::automations::Error,
-    crate::backdrop::Error,
-    crate::caffeine::Error,
-    crate::chat::Error,
-    #[cfg(feature = "cloud")]
-    crate::cloud::batch::Error,
-    crate::cloud_setup::Error,
-    crate::code_server::Error,
-    crate::config::Error,
-    crate::config::tab_layout::Error,
-    crate::daemon::Error,
-    crate::dispatch::Error,
-    crate::editor::Error,
-    crate::keymap::daemon::Error,
-    crate::keymap::Error,
     #[cfg(windows)]
     crate::launch_at_login::Error,
     crate::listening_ports::Error,
