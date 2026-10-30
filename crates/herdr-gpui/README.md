@@ -3758,7 +3758,10 @@ Ctrl+Shift+U is left unbound for
   across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
-  `show_repository_icons = false` leaves both out.
+  `show_repository_icons = false` leaves both out. An owner's avatar is read
+  from `github.com/OWNER.png`, following its one redirect only to an account's
+  picture by ID on `avatars.githubusercontent.com`, so an organization whose
+  by-login picture is GitHub's default octocat shows its own.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour
   stale-while-refresh behavior; see [avatar caching](../../README.md#native-github-sign-in)
   for limits, location, and the startup authentication requirement. Neither cache
