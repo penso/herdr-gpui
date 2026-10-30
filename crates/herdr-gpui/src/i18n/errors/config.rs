@@ -78,9 +78,7 @@ impl Localize for Error {
                 fl!("error-config-too-many-font-fallbacks", table = *table)
             }
             Self::UnknownKeys(keys) => fl!("error-config-unknown-keys", keys = keys.join(", ")),
-            Self::UnknownLayout(name) => {
-                fl!("error-config-unknown-layout", name = format!("{name:?}"))
-            }
+            Self::UnknownLayout(n) => fl!("error-config-unknown-layout", name = format!("{n:?}")),
             // keep-sorted end
         }
     }
