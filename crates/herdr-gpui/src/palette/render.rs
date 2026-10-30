@@ -1,6 +1,7 @@
 //! The palette paints prepared entries; input and daemon operations live elsewhere.
 
 use super::{Action, AgentFilter, Filter, Palette, preview};
+use crate::direction::Logical;
 use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 
@@ -39,7 +40,7 @@ impl HerdrWindow {
                     .px(px(14.))
                     .pt(px(8.))
                     .pb(px(6.))
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(12.))
                     .text_color(rgb(theme.muted))
@@ -47,7 +48,7 @@ impl HerdrWindow {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .flex()
+                            .row()
                             .flex_wrap()
                             .gap(px(4.))
                             .children(Filter::ALL.into_iter().map(|filter| {
@@ -94,7 +95,7 @@ impl HerdrWindow {
     fn palette_agent_filters(&self, palette: &Palette, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         div()
-            .flex()
+            .row()
             .flex_wrap()
             .gap(px(6.))
             .pt(px(6.))
@@ -158,7 +159,7 @@ impl HerdrWindow {
             .w_full()
             .h(px(self.config.ui.line_height() * 2. + 20.))
             .px(px(16.))
-            .flex()
+            .row()
             .items_center()
             .gap(px(12.))
             .cursor_pointer()
@@ -172,7 +173,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .pl(px(16. * depth as f32))
+                    .ps(px(16. * depth as f32))
                     .child(
                         div()
                             .truncate()
@@ -243,7 +244,7 @@ impl HerdrWindow {
             .flex_1()
             .min_w_0()
             .overflow_hidden()
-            .border_l_1()
+            .border_s(px(1.))
             .border_color(rgb(theme.active));
         match self.palette_preview(palette) {
             Some(preview::Preview::Screen {
@@ -277,7 +278,7 @@ impl HerdrWindow {
                                 .debug_selector(|| "palette-preview-age".into())
                                 .absolute()
                                 .top(px(8.))
-                                .right(px(8.))
+                                .inset_e(px(8.))
                                 .px(px(8.))
                                 .py(px(2.))
                                 .rounded(px(4.))
@@ -302,7 +303,7 @@ impl HerdrWindow {
                 )
                 .children(facts.into_iter().map(|(name, value)| {
                     div()
-                        .flex()
+                        .row()
                         .gap(px(12.))
                         .child(
                             div()
@@ -383,7 +384,7 @@ impl HerdrWindow {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .flex()
+                    .row()
                     .when(palette.filtered.is_empty(), |body| {
                         body.child(
                             div()

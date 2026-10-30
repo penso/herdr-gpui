@@ -198,6 +198,7 @@ tracing              = "0.1"
 tungstenite          = { default-features = false, features = ["handshake"], version = "0.30" }
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
 unicode-normalization = "0.1.26"
+unicode-bidi         = "0.3.18"
 unicode-properties   = { version = "0.1.4", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1"
 unicode-width        = "0.2.2"

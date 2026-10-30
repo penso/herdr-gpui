@@ -2,6 +2,7 @@
 //! its items show and how compactly, so a crowded bar can give room back.
 
 use super::HerdrWindow;
+use crate::direction::Logical;
 use crate::{
     APP_VERSION,
     config::status_bar::{AwakeScope, Button},
@@ -45,7 +46,7 @@ impl HerdrWindow {
             }))
             .relative()
             .children(self.status_bar_probe())
-            .flex()
+            .row()
             .flex_none()
             .h(height)
             .overflow_hidden()
@@ -345,13 +346,13 @@ impl HerdrWindow {
                 button.aria_description("until agents finish")
             })
             .flex_none()
-            .flex()
+            .row()
             .items_center()
             .px_2()
             .h_full()
             .cursor_pointer()
             .hover(|s| s.bg(rgb(self.theme.active)))
-            .child(div().relative().flex().child(glyph(icon, color)).when(
+            .child(div().relative().row().child(glyph(icon, color)).when(
                 cup == Cup::On(Mode::UntilAgentsFinish),
                 // The dot marks a hold that ends on its own.
                 |cup| {
@@ -360,7 +361,7 @@ impl HerdrWindow {
                             .id("status-caffeine-until-agents")
                             .debug_selector(|| "status-caffeine-until-agents".into())
                             .absolute()
-                            .right(px(-1.))
+                            .inset_e(px(-1.))
                             .bottom(px(0.))
                             .size(px(6.))
                             .rounded_full()
@@ -410,7 +411,7 @@ impl HerdrWindow {
         div()
             .size(px(12.))
             .flex_none()
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .rounded_full()
@@ -442,7 +443,7 @@ impl HerdrWindow {
             .map(|control| {
                 self.chrome_stop(crate::window::chrome_focus::Region::StatusBar, control)
             })
-            .flex()
+            .row()
             .items_center()
             .gap(px(5.))
             .px_2()

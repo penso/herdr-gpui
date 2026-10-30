@@ -169,6 +169,20 @@ pub(crate) fn shown_pseudo() -> Option<Pseudo> {
     current::catalog()?.locale().pseudo()
 }
 
+/// Which way the windows lay their chrome out: the shown locale's
+/// direction, read where there is no app context, as [`shown_pseudo`] is.
+/// [`crate::direction`] mirrors layout by it.
+pub(crate) fn direction() -> Direction {
+    current::direction()
+}
+
+/// Shows `locale` on this test's thread with no app, for tests of text and
+/// layout outside a window.
+#[cfg(test)]
+pub(crate) fn show(locale: &Locale) {
+    current::replace(locale);
+}
+
 /// Picks the locale the setting asks for when the app starts, before any
 /// window or menu is built.
 pub(crate) fn install(language: &Language, cx: &mut gpui::App) {

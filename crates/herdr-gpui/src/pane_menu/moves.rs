@@ -4,6 +4,7 @@
 //! Herdr answers.
 
 use super::{Action, PaneMenu, Target};
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -56,7 +57,7 @@ impl PaneMenu {
 fn destination_label(index: usize, workspace: Option<String>, place: String) -> Div {
     // The label fills its row, so the tab's cap below is a share of the row:
     // sized to its text, a short workspace name would squeeze the tab.
-    let row = div().flex().flex_1().min_w(px(0.)).overflow_hidden();
+    let row = div().row().flex_1().min_w(px(0.)).overflow_hidden();
     let place = div()
         .debug_selector(move || format!("pane-move-place-{index}"))
         .min_w(px(0.))
@@ -72,7 +73,10 @@ fn destination_label(index: usize, workspace: Option<String>, place: String) -> 
             .truncate()
             .child(workspace),
     )
-    .child(div().flex_none().child("\u{a0}\u{203a}\u{a0}"))
+    .child(div().flex_none().child(format!(
+        "\u{a0}{}\u{a0}",
+        crate::direction::glyph("\u{203a}")
+    )))
     .child(place.flex_none().max_w(relative(0.6)))
 }
 
@@ -280,7 +284,7 @@ impl HerdrWindow {
                 .debug_selector(move || format!("pane-move-{index}"))
                 .min_h(px(self.config.ui.line_height() + 12.))
                 .px(px(8.))
-                .flex()
+                .row()
                 .items_center()
                 .overflow_hidden()
                 .cursor_pointer()

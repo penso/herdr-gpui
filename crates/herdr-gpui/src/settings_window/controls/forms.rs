@@ -3,6 +3,7 @@
 //! and a labelled switch row. Both follow the row system's look.
 // i18n: migrated
 use super::*;
+use crate::direction::Logical;
 use crate::settings_window::ui;
 
 impl SettingsWindow {
@@ -40,7 +41,7 @@ impl SettingsWindow {
                 Toggled::False
             });
         crate::accessibility::disabled(row, !enabled)
-            .flex()
+            .row()
             .items_center()
             .justify_between()
             .gap(px(12.))

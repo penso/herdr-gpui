@@ -9,6 +9,7 @@ use super::{
     super::{Section, SettingsWindow},
     follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         CloudProvider, SavedDevice,
@@ -323,7 +324,7 @@ impl SettingsWindow {
             ))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
@@ -345,7 +346,7 @@ impl SettingsWindow {
                     }),
             )
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button("cloud-sprites-save", fl!("settings-cloud-save"), ready)
                         .debug_selector(|| "cloud-sprites-save".into())
                         .when(ready, |button| {
@@ -386,7 +387,7 @@ impl SettingsWindow {
                 cx,
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-sprites-create",
                         fl!("settings-cloud-sprites-create"),

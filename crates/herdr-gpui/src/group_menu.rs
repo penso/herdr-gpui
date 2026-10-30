@@ -5,6 +5,7 @@
 //! and splitting it. A terminal tab comes from the group's "+". Closing a
 //! tab here is the tab's own close; closing the group closes no tab: its
 //! tabs go to the group that takes its room.
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     browser::{GroupId, Pick},
@@ -373,7 +374,7 @@ impl HerdrWindow {
                     })
                     .min_h(px(self.config.ui.line_height() + 12.))
                     .px(px(8.))
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(8.))
                     .cursor_pointer()

@@ -19,6 +19,7 @@ use super::{
     wash::HostMark,
     workspaces::workspace_label,
 };
+use crate::direction::Logical;
 use crate::{
     Command, HerdrWindow, NavigationTarget,
     config::{FontConfig, Theme},
@@ -186,7 +187,7 @@ impl HerdrWindow {
                                 .relative()
                                 .size(px(HOST_MARK))
                                 .flex_none()
-                                .flex()
+                                .row()
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(chrome.radius))
@@ -250,7 +251,7 @@ impl HerdrWindow {
                 let focused = selected && workspace.focused;
                 let number = workspace.number.to_string();
                 let marks = div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(columns.gap))
                     .child(mark_slot(
@@ -375,7 +376,7 @@ impl HerdrWindow {
                     .flex_none()
                     .w(px(columns.badge))
                     .h(px(columns.height))
-                    .flex()
+                    .row()
                     .items_center()
                     .child(agent_icon(
                         format!("rail-agent-icon-{endpoint_id}-{id}"),
@@ -385,7 +386,7 @@ impl HerdrWindow {
                     ))
             };
             let marks = div()
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(columns.gap))
                 .child(badge)
@@ -447,7 +448,7 @@ impl HerdrWindow {
             .line_height(px(line_height(font)))
             .text_color(rgb(theme.foreground))
             .bg(self.fill().panel(theme.sidebar_background()))
-            .border_r_1()
+            .border_e(px(1.))
             .border_color(rgb(theme.active))
             // No expand control of its own: the sidebar toggle is always on
             // screen, over the rail beside the activity bar, else in the
@@ -580,7 +581,7 @@ fn aligned_row(
             .flex_none()
             .h(px(row_h))
             .w_full()
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .overflow_hidden(),
@@ -599,7 +600,7 @@ fn mark_slot(selector: String, width: f32, height: f32, color: u32, text: &str) 
         .flex_none()
         .w(px(width))
         .h(px(height))
-        .flex()
+        .row()
         .items_center()
         .text_color(rgb(color))
         .child(label_text(text))
@@ -610,7 +611,7 @@ fn agent_icon(selector: String, size: f32, color: u32, path: &'static str) -> Di
         .debug_selector(move || selector)
         .flex_none()
         .size(px(size))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .child(crate::icons::icon(path, size, color))
@@ -622,7 +623,7 @@ fn dot_slot(selector: String, width: f32, height: f32, mark: Div) -> Div {
         .flex_none()
         .w(px(width))
         .h(px(height))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .child(mark)
@@ -639,10 +640,10 @@ fn host_status(selector: String, color: u32, ring: u32, rail_width: f32) -> Div 
     div()
         .debug_selector(move || ring_selector)
         .absolute()
-        .right(px(host_status_right(rail_width, ring_size)))
+        .inset_e(px(host_status_right(rail_width, ring_size)))
         .bottom(px(HOST_BORDER))
         .size(px(ring_size))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .rounded_full()
@@ -679,7 +680,7 @@ fn host_header(font: &FontConfig, look: SidebarLook) -> Div {
         .flex_none()
         .h(px(look.row_height(line_height(font).max(HOST_MARK))))
         .w_full()
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .overflow_hidden()
@@ -724,7 +725,7 @@ fn rail_row(
             .relative()
             .flex_none()
             .h(px(look.row_height(line_height(font).max(HOST_MARK))))
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .overflow_hidden(),
@@ -752,7 +753,7 @@ fn indicator(status: AgentStatus, font: &FontConfig, indicators: Indicators) -> 
     div()
         .flex_none()
         .h(px(line_height(font)))
-        .flex()
+        .row()
         .items_center()
         .child(status_indicator(status, font, indicators))
 }

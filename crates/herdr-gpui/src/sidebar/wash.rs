@@ -6,6 +6,7 @@
 
 use super::layout::SidebarLook;
 use crate::config::{SelectMode, SidebarStyle, Theme};
+use crate::direction::Logical;
 use gpui::{Div, InteractiveElement, ParentElement, Styled, div, px, rgba};
 
 /// Alpha of a host's colour over rows at rest: a tint, never a fill, so
@@ -120,8 +121,8 @@ fn layer(key: &str, wash: Wash, (inset, edge, radius): (f32, f32, f32)) -> Div {
     div()
         .debug_selector(|| format!("wash-{key}"))
         .absolute()
-        .left(px(inset))
-        .right(px(inset))
+        .inset_s(px(inset))
+        .inset_e(px(inset))
         .top(px(edge))
         .bottom(px(edge))
         .rounded(px(radius))

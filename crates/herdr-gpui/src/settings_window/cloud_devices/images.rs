@@ -13,6 +13,7 @@ use crate::cloud::{
     },
     worker::{self, Worker},
 };
+use crate::direction::Logical;
 use crate::{fonts::StyledFont, i18n::fl};
 use gpui::{prelude::*, *};
 use std::time::Duration;
@@ -328,7 +329,7 @@ impl SettingsWindow {
             });
         let mut row = div().flex().flex_col().gap(px(6.)).min_w_0().child(
             div()
-                .flex()
+                .row()
                 .items_center()
                 .justify_between()
                 .gap(px(12.))
@@ -346,7 +347,7 @@ impl SettingsWindow {
                 )
                 .child(
                     div()
-                        .flex()
+                        .row()
                         .gap(px(6.))
                         .child(log_button)
                         .child(build)

@@ -6,6 +6,7 @@ use super::{
     HerdrWindow, PressedLink,
     tab_strip::{Reach, native_page},
 };
+use crate::direction::Logical;
 use crate::{
     CheckForUpdates, Minimize, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
     ZoomWindow,
@@ -904,6 +905,9 @@ impl Render for HerdrWindow {
             .text_color(rgb(self.theme.foreground))
             .text_font(&self.config.ui)
             .text_size(px(self.config.ui.size))
+            // Text sets from the side it starts, the right in Hebrew; the
+            // terminal paints its own cells and never follows.
+            .text_start()
             .when(crate::menus::IN_WINDOW && !zen, |root| {
                 root.child(self.render_application_bar(window, cx))
             })
@@ -916,7 +920,9 @@ impl Render for HerdrWindow {
             .child(
                 div()
                     .debug_selector(|| "window-body".into())
-                    .flex()
+                    // The sidebar leads, on the right in a right-to-left
+                    // language; the terminal area beside it never mirrors.
+                    .row()
                     .flex_1()
                     .min_h_0()
                     .relative()

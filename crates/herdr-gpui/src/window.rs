@@ -23,7 +23,7 @@ mod find;
 mod flash;
 pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
-pub(crate) use zen::slide_left;
+pub(crate) use zen::slide_start;
 mod function_keys;
 pub(crate) mod image_source;
 mod images;

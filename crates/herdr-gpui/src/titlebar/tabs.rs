@@ -47,8 +47,14 @@ impl HerdrWindow {
     /// Whether the tab row stands in for the header: Herdr puts the tab bar
     /// at the top and the leftmost group shows its strip. Otherwise the
     /// window keeps the full-width header.
+    ///
+    /// Right to left, the window keeps the header: its controls mirror, but
+    /// tabs stay left to right with the panes under them, and one row cannot
+    /// read both ways.
     pub(crate) fn tabs_in_titlebar(&self, first: GroupId, cx: &App) -> bool {
-        self.tab_bar_position() == TabBarPosition::Top && !self.strip_hidden(first, cx)
+        self.tab_bar_position() == TabBarPosition::Top
+            && !self.strip_hidden(first, cx)
+            && !crate::direction::is_rtl()
     }
 
     /// Keep the toggle anchored in the sidebar whenever it fits. The rail has

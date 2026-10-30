@@ -21,6 +21,17 @@ pub(crate) enum Side {
     Right,
 }
 
+impl Side {
+    /// Where a panel that leads its content sits: the left, or in a
+    /// right-to-left language the right.
+    pub(crate) fn start() -> Self {
+        match crate::direction::is_rtl() {
+            false => Self::Left,
+            true => Self::Right,
+        }
+    }
+}
+
 /// The panel a drag resizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PanelDrag {

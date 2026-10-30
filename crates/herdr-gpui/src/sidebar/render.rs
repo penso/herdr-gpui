@@ -17,6 +17,7 @@ use super::{
     visible_workspace_entries, wash,
     workspaces::{displayed_workspace_status, workspace_badge, workspace_label, workspace_note},
 };
+use crate::direction::Logical;
 use crate::{
     Command, HerdrWindow, NavigationTarget,
     avatars::Checkout,
@@ -374,8 +375,8 @@ impl HerdrWindow {
                             .flex_none()
                             .w_full()
                             .min_w_0()
-                            .pl(px(under_left))
-                            .pr(px(content_x))
+                            .ps(px(under_left))
+                            .pe(px(content_x))
                             .text_size(px((font.size * 0.85).round()))
                             .child(crate::listening_ports::chips(
                                 listed,
@@ -704,7 +705,7 @@ impl HerdrWindow {
             .line_height(px(line_height(font)))
             .text_color(rgb(theme.foreground))
             .bg(self.fill().panel(theme.sidebar_background()))
-            .border_r_1()
+            .border_e(px(1.))
             .border_color(rgb(theme.active))
             // Zero flex bases keep long workspace lists from displacing agents.
             .child(
@@ -756,7 +757,7 @@ impl HerdrWindow {
                             .flex_none()
                             .h(px(line_height(font) + 2. * layout.footer_padding()))
                             .px(px(content_x))
-                            .flex()
+                            .row()
                             .items_center()
                             // Menu hugs the sidebar's edge, as in the terminal client.
                             .justify_between()
@@ -854,7 +855,7 @@ impl HerdrWindow {
                     .id("sidebar-resize")
                     .debug_selector(|| "sidebar-resize".into())
                     .absolute()
-                    .right_0()
+                    .inset_e(px(0.))
                     .top_0()
                     .h_full()
                     .w(px(6.))
@@ -915,8 +916,12 @@ impl HerdrWindow {
                                         match drag {
                                             SidebarDrag::Width { start, width } => {
                                                 this.sidebar_width = Some(sidebar_width(
+                                                    // The edge is on the sidebar's end.
                                                     Some(
-                                                        width + f32::from(event.position.x) - start,
+                                                        width
+                                                            + crate::direction::toward_end(
+                                                                f32::from(event.position.x) - start,
+                                                            ),
                                                     ),
                                                     f32::from(window.viewport_size().width),
                                                 ));
@@ -982,7 +987,7 @@ pub(super) fn header(
         .flex_none()
         .h(px(line_height(font) + 2. * look.density.header_padding()))
         .px(px(look.content_x()))
-        .flex()
+        .row()
         .items_center()
         .text_size(px(font.size))
         .text_color(rgb(theme.muted))

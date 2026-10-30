@@ -4,6 +4,7 @@
 //! callers own the row, its label, and its click handler.
 
 use crate::config::{Theme, corners};
+use crate::direction::Logical;
 use gpui::{Div, div, prelude::*, px, rgb, svg};
 
 /// The fill of a set mark and the ink drawn on it: the theme's primary color
@@ -68,8 +69,9 @@ pub(crate) fn radio(theme: &Theme, size: f32, selected: bool) -> Div {
         .when(!selected, |mark| mark.border_color(rgb(theme.muted)))
 }
 
-/// A pill track with a round thumb that sits right when on. `height` sets the
-/// scale; the track is about 1.6 times as wide.
+/// A pill track with a round thumb that sits at the end when on, the right
+/// or right to left the left. `height` sets the scale; the track is about
+/// 1.6 times as wide.
 pub(crate) fn switch(theme: &Theme, height: f32, on: bool) -> Div {
     let (track, thumb) = colors(theme, on);
     let inset = (height / 8.).round();
@@ -79,7 +81,7 @@ pub(crate) fn switch(theme: &Theme, height: f32, on: bool) -> Div {
         .flex_none()
         .rounded_full()
         .p(px(inset))
-        .flex()
+        .row()
         .items_center()
         .bg(rgb(track))
         .when(on, |track| track.justify_end())

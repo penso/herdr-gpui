@@ -9,6 +9,7 @@ use super::{
     super::{Section, SettingsWindow},
     Hint, follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         CloudProvider,
@@ -345,7 +346,7 @@ impl SettingsWindow {
             );
         }
         engine = engine.child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 self.cloud_button("cloud-container-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-container-save".into())
                     .when(ready, |button| {
@@ -386,7 +387,7 @@ impl SettingsWindow {
                 cx,
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-container-create",
                         fl!("settings-cloud-container-create"),
@@ -447,7 +448,7 @@ impl SettingsWindow {
                 let id = name.clone();
                 list = list.child(
                     div()
-                        .flex()
+                        .row()
                         .items_center()
                         .justify_between()
                         .gap(px(12.))

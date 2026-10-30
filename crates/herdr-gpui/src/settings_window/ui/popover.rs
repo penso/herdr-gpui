@@ -1,6 +1,7 @@
 //! Dropdown: a button that opens a floating option list beneath itself. The
 //! list renders inside the button's subtree via `deferred(anchored(..))`, so
 //! no bounds are passed around and it paints above the page.
+use crate::direction::Logical;
 use crate::{
     config::{Theme, corners},
     i18n::fl,
@@ -102,7 +103,7 @@ pub(in crate::settings_window) fn dropdown(
         .id(id)
         .debug_selector(move || id.to_string())
         .relative()
-        .flex()
+        .row()
         .items_center()
         .justify_between()
         .gap(px(8.))
@@ -165,7 +166,7 @@ pub(in crate::settings_window) fn popover_list(
         .debug_selector(move || format!("{id}-list"))
         .absolute()
         .top_full()
-        .left_0()
+        .inset_s(px(0.))
         .mt(px(4.))
         .min_w(px(180.))
         .max_h(px(260.))
