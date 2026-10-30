@@ -46,6 +46,10 @@ for executable in Herdr "${companions[@]}"; do
     chmod 755 "$app/Contents/MacOS/$executable"
 done
 cp "$release_root/assets/macos/Info.plist" "$app/Contents/Info.plist"
+# Each translation's InfoPlist.strings (docs/i18n.md); English is Info.plist itself.
+for lproj in "$release_root"/assets/macos/*.lproj; do
+    if [[ -d "$lproj" ]]; then cp -R "$lproj" "$app/Contents/Resources/"; fi
+done
 plutil -replace CFBundleShortVersionString -string "$1" "$app/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$1" "$app/Contents/Info.plist"
 plutil -insert LSMinimumSystemVersion -string 14.2 "$app/Contents/Info.plist"

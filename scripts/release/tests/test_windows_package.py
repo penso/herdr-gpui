@@ -2,6 +2,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -113,6 +114,22 @@ class InstallerTests(unittest.TestCase):
             with self.subTest(entry=entry), mock.patch.object(INSTALLER, "uninstall_entry", return_value=entry), \
                     self.assertRaises(ValueError):
                 INSTALLER.check_uninstall_entry(app)
+
+    def test_every_language_defines_the_installers_messages(self):
+        script = INSTALLER.SCRIPT.read_text()
+        used = set(re.findall(r"\{cm:(\w+)", script)) | set(re.findall(r"CustomMessage\('(\w+)'\)", script))
+        # Inno Setup's own messages, which compiler:Default.isl and its translations define.
+        used -= {"AdditionalIcons", "CreateDesktopIcon", "LaunchProgram"}
+        self.assertIn("AddToPath", used)
+        listed = re.findall(r'^Name: "\w+"; MessagesFile: "compiler:[^,"]+,(installer\\[^"]+\.isl)"$',
+                            script, re.MULTILINE)
+        files = sorted(INSTALLER.SCRIPT.parent.glob("installer/*.isl"))
+        self.assertEqual(sorted(name.replace("\\", "/") for name in listed),
+                         [f"installer/{path.name}" for path in files])
+        for path in files:
+            with self.subTest(path.name):
+                defined = set(re.findall(r"^(\w+)=", path.read_text(), re.MULTILINE))
+                self.assertEqual(defined, used)
 
     def test_the_inno_setup_pin_is_one_exact_release(self):
         self.assertRegex(INSTALLER.INNO_SHA256, r"^[0-9a-f]{64}$")

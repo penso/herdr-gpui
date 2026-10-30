@@ -112,6 +112,18 @@ pub(crate) fn available() -> Vec<Locale> {
     Catalog::available(FILES)
 }
 
+/// Each language with messages, named in itself, as [`available`] orders them.
+static ENDONYMS: LazyLock<Vec<(Locale, String)>> = LazyLock::new(|| Catalog::endonyms(FILES));
+
+/// What `locale` calls itself (`English`, `עברית`), or its tag when it has
+/// no messages of its own, whatever language the windows show.
+pub(crate) fn endonym(locale: &Locale) -> String {
+    ENDONYMS
+        .iter()
+        .find(|(candidate, _)| candidate == locale)
+        .map_or_else(|| locale.to_string(), |(_, name)| name.clone())
+}
+
 /// The locale every window shows, and what chose it.
 #[derive(Clone, Debug)]
 pub(crate) struct CurrentLocale {

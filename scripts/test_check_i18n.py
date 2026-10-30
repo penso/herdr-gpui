@@ -212,5 +212,32 @@ class MigratedTests(unittest.TestCase):
         )
 
 
+class PlatformTests(unittest.TestCase):
+    FILES = [
+        parse("language-name = English\n", Path("crates/app/locales/en-US/language.ftl"))[0],
+        parse("language-name = עברית\n", Path("crates/app/locales/he/language.ftl"))[0],
+    ]
+    PLIST = {"CFBundleDevelopmentRegion": "en-US", "CFBundleLocalizations": ["he", "en-US"]}
+
+    def test_files_naming_the_apps_languages_pass(self) -> None:
+        translations = [Path("assets/macos/he.lproj"), Path("scripts/release/installer/en-US.isl")]
+        desktop = "[Desktop Entry]\nComment=Client\nComment[he]=Klient\n"
+        self.assertEqual(
+            check_i18n.platform(self.FILES, self.PLIST, translations, desktop), []
+        )
+
+    def test_a_language_missing_or_extra_is_reported(self) -> None:
+        plist = {"CFBundleDevelopmentRegion": "en", "CFBundleLocalizations": ["en-US"]}
+        translations = [Path("scripts/release/installer/fr.isl")]
+        desktop = "Comment[pt_BR]=Cliente\n"
+        unnamed = parse("menu-quit = Quit\n", Path("crates/app/locales/fr/menu.ftl"))[0]
+        errors = check_i18n.platform([*self.FILES, unnamed], plist, translations, desktop)
+        self.assertEqual(len(errors), 4)
+        self.assertIn("fr does not name itself: add language-name", errors[0])
+        self.assertIn("CFBundleDevelopmentRegion must be en-US", errors[1])
+        self.assertIn("the app has ['en-US', 'fr', 'he']", errors[2])
+        self.assertIn("[pt_BR] is not one of the app's languages", errors[3])
+
+
 if __name__ == "__main__":
     unittest.main()

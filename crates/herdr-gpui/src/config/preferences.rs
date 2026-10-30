@@ -14,6 +14,8 @@ pub(crate) enum Preference {
     /// `[chat] max_width`: the reading column, or zero for full width.
     ChatMaxWidth(u16),
     ConfirmCloseTab(bool),
+    /// `language`: `system` or the BCP 47 tag the windows show.
+    Language(herdr_i18n::Language),
     ConfirmClosePane(bool),
     ConfirmCloseWorkspace(bool),
     RemoveMergedWorktrees(bool),
@@ -127,6 +129,9 @@ impl Config {
                 }
                 Preference::ConfirmCloseTab(value) => {
                     (None, "confirm_close_tab", Some(value.into()))
+                }
+                Preference::Language(language) => {
+                    (None, "language", Some(language.to_string().into()))
                 }
                 Preference::ConfirmClosePane(value) => {
                     (None, "confirm_close_pane", Some(value.into()))

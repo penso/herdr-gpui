@@ -13,6 +13,10 @@ pub struct File {
     pub source: &'static str,
 }
 
+/// The message each language's files name it by, in that language
+/// (`English`, `עברית`), so a picker reads in every language at once.
+pub const ENDONYM: &str = "language-name";
+
 /// i18n-embed looks for one `{language}/{domain}.ftl` per language; every
 /// feature file of that language answers for it.
 const DOMAIN: &str = "herdr";
@@ -112,6 +116,36 @@ impl Catalog {
             }
         }
         available
+    }
+
+    /// Each language with messages and its name for itself, in
+    /// [`available`](Self::available)'s order. A language whose files do not
+    /// name it, or do not load, goes by its tag.
+    pub fn endonyms(files: &[File]) -> Vec<(Locale, String)> {
+        Self::available(files)
+            .into_iter()
+            .map(|locale| {
+                let name = Self::new(files, locale.clone())
+                    .ok()
+                    .filter(|catalog| catalog.names_itself())
+                    .map(|catalog| {
+                        // A name, not a sentence: nothing to isolate.
+                        catalog.loader.set_use_isolating(false);
+                        catalog.text(ENDONYM)
+                    })
+                    .unwrap_or_else(|| locale.to_string());
+                (locale, name)
+            })
+            .collect()
+    }
+
+    /// Whether the locale's own files hold [`ENDONYM`], rather than the
+    /// fallback's English.
+    fn names_itself(&self) -> bool {
+        self.loader.with_message_iter(self.locale.id(), |messages| {
+            let mut messages = messages;
+            Iterator::any(&mut messages, |message| message.id.name == ENDONYM)
+        })
     }
 
     pub fn locale(&self) -> &Locale {
