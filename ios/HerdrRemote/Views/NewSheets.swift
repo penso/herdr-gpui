@@ -7,12 +7,14 @@ enum Creating: Identifiable, Hashable {
     /// as a new worktree of the checkout in `folder` when they came from
     /// its repository.
     case workspace(device: String?, folder: String? = nil)
-    case chat(device: String, workspace: String, label: String)
+    /// A chat in an existing workspace, with `agent` chosen when the
+    /// person picked one before asking for the form.
+    case chat(device: String, workspace: String, label: String, agent: String? = nil)
 
     var id: String {
         switch self {
         case let .workspace(device, folder): "workspace/\(device ?? "")/\(folder ?? "")"
-        case let .chat(device, workspace, _): "chat/\(device)/\(workspace)"
+        case let .chat(device, workspace, _, _): "chat/\(device)/\(workspace)"
         }
     }
 }
@@ -156,7 +158,7 @@ struct NewWorkspaceSheet: View {
                     try await client.createWorkspace(request, bearer: token)
                 }
                 dismiss()
-                if let pane = created.pane { model.pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title) }
+                model.opened(created, prompt: request.prompt, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -172,10 +174,17 @@ struct NewChatSheet: View {
     let workspace: String
     let label: String
     @State private var agents: [AgentChoice] = []
-    @State private var agent = "claude"
+    @State private var agent: String
     @State private var prompt = ""
     @State private var problem: String?
     @State private var creating = false
+
+    init(device: String, workspace: String, label: String, agent: String? = nil) {
+        self.device = device
+        self.workspace = workspace
+        self.label = label
+        _agent = State(initialValue: agent ?? "claude")
+    }
 
     var body: some View {
         NavigationStack {
@@ -220,7 +229,7 @@ struct NewChatSheet: View {
                     try await client.startChat(request, workspace: workspace, bearer: token)
                 }
                 dismiss()
-                if let pane = created.pane { model.pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title) }
+                model.opened(created, prompt: request.prompt, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -301,5 +310,22 @@ struct FolderPicker: View {
             }
         }
         .foregroundStyle(.primary)
+    }
+}
+
+extension AppModel {
+    /// Opens a chat just created. A first prompt that did not go, because
+    /// the agent was slow to start or refused it, waits in the chat's
+    /// composer, and the person is told rather than finding it gone.
+    func opened(_ created: Created, prompt: String, device: String, title: String) {
+        let unsent = !prompt.isEmpty && !created.prompted
+        if let pane = created.pane {
+            if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
+            pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
+        }
+        guard unsent else { return }
+        notice = created.pane == nil
+            ? "The chat started, but your first prompt was not sent. Open the chat from Home and send it again:\n\n\(prompt)"
+            : "The chat started, but your first prompt was not sent. It is in the chat's message box: send it when the agent is ready."
     }
 }

@@ -49,10 +49,14 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $pairing) { PairView() }
+        .alert("Not sent", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
+        } message: {
+            Text(model.notice ?? "")
+        }
         .sheet(item: Bindable(model).creating) { creating in
             switch creating {
             case let .workspace(device, folder): NewWorkspaceSheet(device: device, folder: folder)
-            case let .chat(device, workspace, label): NewChatSheet(device: device, workspace: workspace, label: label)
+            case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
         }
         .overlay(alignment: .bottom) {

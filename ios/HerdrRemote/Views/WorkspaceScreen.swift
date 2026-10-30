@@ -106,7 +106,7 @@ struct WorkspaceScreen: View {
                         }
                         .contextMenu {
                             Button("With a First Prompt…", systemImage: "text.bubble") {
-                                model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label)
+                                model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label, agent: agent.id)
                             }
                         }
                     }

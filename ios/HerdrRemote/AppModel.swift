@@ -34,6 +34,9 @@ final class AppModel {
     /// A tab to switch to, from a Control or an intent; the root view
     /// shows it and clears it.
     var pendingTab: RootTab?
+    /// Something to tell the person once, such as a first prompt that
+    /// did not go; the root view shows it and clears it.
+    var notice: String?
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
