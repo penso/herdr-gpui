@@ -9,7 +9,7 @@ use std::{
 };
 
 #[path = "../../test-support/executable.rs"]
-#[allow(clippy::disallowed_methods)]
+#[allow(clippy::disallowed_methods)] // Unix-only test fixture writer.
 mod executable;
 
 pub struct Fixture {

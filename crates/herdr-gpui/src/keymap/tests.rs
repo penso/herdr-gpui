@@ -473,13 +473,15 @@ fn default_pane_keys_follow_ghostty_on_macos() {
     assert!(
         DEFAULT_PANE_KEYS
             .iter()
-            .chain(PORTABLE_PANE_KEYS)
             .all(|(_, sent)| crate::terminal::reaches_pane(&keystroke(sent)))
     );
     let keymap = Keymap::default();
     assert_eq!(
-        keymap.pane_keys.len(),
-        if cfg!(target_os = "macos") { 6 } else { 1 }
+        keymap.pane_keys,
+        defaults
+            .clone()
+            .filter(|_| cfg!(target_os = "macos"))
+            .collect::<Vec<_>>()
     );
     // Defaults are replaced by keystroke, not spelling, or removed.
     let resolved = resolve_pane_keys(
