@@ -49,6 +49,7 @@ mod sidebar_search;
 mod sidebar_settings;
 mod sidebar_style;
 mod sound_volume;
+mod ssh_hosts;
 mod status_bar;
 mod status_bar_awake_scope;
 mod status_bar_gpu;

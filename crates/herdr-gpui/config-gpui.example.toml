@@ -344,6 +344,14 @@ project_roots = []
 # keybindings = "server"
 # theme = "Dracula"
 
+# SSH hosts whose host keys are never verified, by the target saved with the
+# device. Anyone who can intercept the connection to one can impersonate it.
+# Only for hosts that keep no key, such as `coder config-ssh`'s `*.coder`
+# aliases (`UserKnownHostsFile=/dev/null`). Add Device's "Skip host key
+# verification" box adds the target; adding it again unticked removes it.
+# [ssh]
+# skip_host_key_verification = ["dev.workspace.user.coder"]
+
 # Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.
 [sidebar]

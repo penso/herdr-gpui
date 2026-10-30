@@ -324,7 +324,7 @@ fn master_command(target: &str, socket: &Path) -> Command {
             "-o",
             "NumberOfPasswordPrompts=0",
             "-o",
-            "StrictHostKeyChecking=yes",
+            ssh::HostKeys::of(target).checking(),
             "-o",
             "ConnectTimeout=10",
             "-o",

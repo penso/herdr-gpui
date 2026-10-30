@@ -486,7 +486,7 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
     for option in [
         "BatchMode=yes",
         "NumberOfPasswordPrompts=0",
-        "StrictHostKeyChecking=yes",
+        crate::ssh::HostKeys::of(target).checking(),
         "ConnectTimeout=10",
         "ConnectionAttempts=1",
         "ServerAliveInterval=15",
@@ -513,7 +513,9 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
 /// master be gone by the time it runs, SSH connects directly instead.
 pub(super) fn channel_command(target: &str, remote_command: &str, socket: &Path) -> Command {
     let mut command = crate::environment::command("ssh");
+    // Should the master be gone, the direct connection keeps its host's choice.
     command
+        .args(crate::ssh::HostKeys::of(target).options())
         .arg("-o")
         .arg(control_path(socket))
         .args(crate::ssh::POLICY)
