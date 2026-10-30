@@ -27,7 +27,10 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::atomic::AtomicBool,
+    sync::{
+        Mutex, PoisonError,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -39,6 +42,21 @@ const BUILD_IDLE: Duration = Duration::from_secs(20 * 60);
 const BUILD_OUTPUT: u64 = 64 * 1024;
 /// The script's exit status when the host has no Rust toolchain.
 const NO_RUST_EXIT: i32 = 4;
+
+/// One download at a time: pairing a phone with two hosts of the same
+/// kind starts two jobs for the same build, and the second then finds it
+/// in place instead of racing the first.
+static DOWNLOADS: Mutex<()> = Mutex::new(());
+
+/// A name no other job in this process uses, for its temporary files.
+fn unique(stem: &str) -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    format!(
+        "{stem}-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
+}
 
 /// Where the build for a host comes from.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -146,6 +164,7 @@ fn download(target: &str, cancelled: &AtomicBool) -> Result<PathBuf, Error> {
         .join("host-builds")
         .join(crate::APP_VERSION);
     let path = dir.join(target);
+    let _one = DOWNLOADS.lock().unwrap_or_else(PoisonError::into_inner);
     if path.is_file() {
         return Ok(path);
     }
@@ -154,8 +173,7 @@ fn download(target: &str, cancelled: &AtomicBool) -> Result<PathBuf, Error> {
         source,
     };
     std::fs::create_dir_all(&dir).map_err(failed)?;
-    let part = dir.join(format!(".{target}.{}.part", std::process::id()));
-    let _ = std::fs::remove_file(&part);
+    let part = dir.join(format!(".{}.part", unique(target)));
     let downloaded =
         herdr_updater::download_host_build(target, &part, cancelled).map_err(|source| {
             Error::Download {
@@ -233,10 +251,9 @@ fn source_root() -> Option<PathBuf> {
 /// built in a temporary index, so the checkout's own index, stash, and
 /// working tree stay as they are.
 fn snapshot(root: &Path) -> Result<String, Error> {
-    let index = std::env::temp_dir().join(format!(
-        "herdr-remote-control-snapshot-{}.index",
-        std::process::id()
-    ));
+    // Its own index: two pairings may snapshot the checkout at once.
+    let index =
+        std::env::temp_dir().join(format!("{}.index", unique("herdr-remote-control-snapshot")));
     let git = |args: &[&str]| -> Result<String, Error> {
         let output = herdr_client::new_command("git")
             .arg("-C")
@@ -271,7 +288,10 @@ pub(crate) fn build_script(version: &str) -> String {
     format!(
         r#"version={version}
 cache="$HOME/.cache/{PROGRAM}"
-src="$cache/src"
+# Each build unpacks into its own folder: two phones pairing this host at
+# once must not unpack over each other. Cargo locks the shared target.
+src="$cache/src-$$"
+trap 'rm -rf "$src"' EXIT
 rm -rf "$src"
 mkdir -p "$src" "$cache/target"
 tar -xzf - -C "$src"
@@ -288,7 +308,6 @@ cp "$cache/target/release/{PROGRAM}" "$dir/.{PROGRAM}.part"
 chmod 755 "$dir/.{PROGRAM}.part"
 mv -f "$dir/.{PROGRAM}.part" "$dir/{PROGRAM}"
 ln -sfn "$dir/{PROGRAM}" "$HOME/.local/bin/{PROGRAM}"
-rm -rf "$src"
 "#,
         version = shell_quote(version),
     )
