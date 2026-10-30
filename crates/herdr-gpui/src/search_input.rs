@@ -12,6 +12,8 @@ use crate::config::{Config, FontConfig, Theme};
 use crate::fonts::StyledFont;
 use crate::{actions, input::ViewInputHandler, words};
 
+mod control_keys;
+
 pub struct Changed;
 
 pub struct SearchInput {
@@ -40,6 +42,9 @@ pub struct SearchInput {
     /// Text drawn dimmed after the caret, which the owner offers to complete
     /// what is typed; shown only while the caret ends the text.
     completion: Option<String>,
+    /// What Ctrl-K last cut, which Ctrl-Y puts back, kept apart from the
+    /// clipboard as in a native macOS field.
+    killed: String,
 }
 
 // Internal offsets are UTF-8 boundaries; only the platform input API uses UTF-16.
@@ -168,6 +173,7 @@ impl SearchInput {
             framed: true,
             masked: false,
             completion: None,
+            killed: String::new(),
         }
     }
 
@@ -363,6 +369,12 @@ impl SearchInput {
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
         if matches!(key, "up" | "down" | "enter" | "escape") {
+            return;
+        }
+        if self.control_key(key, modifiers, window, cx) {
+            cx.stop_propagation();
+            window.prevent_default();
+            cx.notify();
             return;
         }
         let edit = actions::edit_modifiers(modifiers) && matches!(key, "a" | "c" | "v" | "x");
@@ -824,6 +836,7 @@ mod tests {
     use super::*;
 
     mod completion;
+    mod control_keys;
     mod placeholder;
     mod word_keys;
 
