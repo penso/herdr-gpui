@@ -13,9 +13,11 @@ pub(super) struct ThemePicker {
     /// How many rows of `filtered` are starred themes, which lead the list.
     favorites: usize,
     // One favorites write at a time, so a quick run of stars cannot land
-    // out of order; `favorites_pending` asks for the latest list after it.
+    // out of order; stars clicked meanwhile wait in `favorite_edits`.
     favorites_saving: bool,
-    favorites_pending: bool,
+    favorite_edits: Vec<crate::config::favorite_themes::FavoriteEdit>,
+    /// The last favorites write's failure, until a later one succeeds.
+    favorites_error: Option<String>,
     selected: usize,
     scroll: UniformListScrollHandle,
     error: Option<String>,
@@ -93,7 +95,8 @@ impl HerdrWindow {
                 filtered: Vec::new(),
                 favorites: 0,
                 favorites_saving: false,
-                favorites_pending: false,
+                favorite_edits: Vec::new(),
+                favorites_error: None,
                 selected: 0,
                 scroll: UniformListScrollHandle::new(),
                 error: None,
@@ -598,7 +601,7 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(if picker.saving {
                         "Saving theme... Please wait.".to_owned()
-                    } else if let Some(error) = &picker.error {
+                    } else if let Some(error) = picker.error.as_ref().or(picker.favorites_error.as_ref()) {
                         error.clone()
                     } else if picker.accepting {
                         "Loading theme... Esc to cancel.".to_owned()

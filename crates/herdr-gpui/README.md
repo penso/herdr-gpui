@@ -3779,7 +3779,9 @@ Ctrl+Shift+U is left unbound for
   The star at a row's end pins that theme above the rest, searches included;
   clicking it again unpins it. Starring neither previews nor applies a theme.
   The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
-  reloading the window, so the theme being previewed stays on screen.
+  reloading the window, so the theme being previewed stays on screen. Each
+  star is applied to the list the file holds when it is written, so stars
+  made in another window's picker stay.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /

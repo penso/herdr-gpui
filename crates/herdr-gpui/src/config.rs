@@ -24,6 +24,7 @@ mod daytona;
 mod devices;
 mod edit;
 mod error;
+pub(crate) mod favorite_themes;
 mod features;
 mod files;
 mod font_weight;
