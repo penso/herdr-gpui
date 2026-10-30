@@ -238,7 +238,13 @@ impl HerdrWindow {
         if let Some(tab) = self.core_terminals.focus_wanted
             && self.core_pane_view(tab).is_some()
         {
-            self.focus_core_terminal(tab, window, cx);
+            // Focus the user gave something else while the pane waited, such
+            // as a picker's search field, is newer than the wish: keep it.
+            if keyboard_free(window.focused(cx).as_ref(), &self.focus) {
+                self.focus_core_terminal(tab, window, cx);
+            } else {
+                self.core_terminals.focus_wanted = None;
+            }
         }
         self.poll_core_fallback(cx);
         self.refresh_core_looks(cx);
@@ -366,4 +372,10 @@ impl HerdrWindow {
         }
         self.core_terminals.look = Some(look);
     }
+}
+
+/// Whether a pane waiting for the keyboard may take it: nothing holds it, or
+/// only the window itself does.
+fn keyboard_free(focused: Option<&FocusHandle>, window: &FocusHandle) -> bool {
+    focused.is_none_or(|focused| focused == window)
 }
