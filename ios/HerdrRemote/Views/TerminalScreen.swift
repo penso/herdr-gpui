@@ -398,7 +398,8 @@ struct TerminalScreen: View {
                 if let fill = runBackground(run) {
                     context.fill(Path(CGRect(x: x, y: 0, width: span, height: canvas.height)), with: .color(fill))
                 }
-                if run.text.contains(where: { block($0) != nil }) {
+                // Hidden text (SGR 8) keeps its cells but paints nothing.
+                if !run.hidden, run.text.contains(where: { block($0) != nil }) {
                     let ink = foreground(run)
                     for (index, character) in run.text.enumerated() {
                         guard let shape = block(character) else { continue }
