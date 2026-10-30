@@ -382,6 +382,9 @@ size = 12
 # the uncommitted-work probe's slow schedule: one checkout at a time, each at
 # most every 30 seconds while the window is active.
 # change_counts = "pr"
+# Status priority, highest first. Missing statuses follow in their default
+# order. The default is ["blocked", "done", "working", "idle"].
+# status_priority = ["blocked", "working", "done", "idle"]
 
 # The activity bar: an icon column at the window's left edge. Workspaces is
 # the sidebar beside the terminals; Orchestrator, Pull requests, and Issues

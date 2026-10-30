@@ -17,7 +17,7 @@ use super::{
     layout::{self, Highlight, SidebarLook},
     line_height, visible_workspace_entries,
     wash::HostMark,
-    workspaces::workspace_label,
+    workspaces::{rail_workspace_status, workspace_label},
 };
 use crate::direction::Logical;
 use crate::{
@@ -250,6 +250,13 @@ impl HerdrWindow {
                 let context_id = id.clone();
                 let focused = selected && workspace.focused;
                 let number = workspace.number.to_string();
+                let status = rail_workspace_status(
+                    &snapshot.workspaces,
+                    &snapshot.agents,
+                    workspace,
+                    collapsed_repos,
+                    &self.config.sidebar_style.status_priority,
+                );
                 let marks = div()
                     .row()
                     .items_center()
@@ -272,7 +279,7 @@ impl HerdrWindow {
                         format!("rail-dot-{key}"),
                         columns.dot,
                         columns.height,
-                        indicator(workspace.agent_status, font, indicators),
+                        indicator(status, font, indicators),
                     ));
                 spaces = spaces.child(
                     aligned_row(
@@ -294,7 +301,7 @@ impl HerdrWindow {
                         host,
                         workspace_label(workspace, indented),
                         None,
-                        status_word(workspace.agent_status),
+                        status_word(status),
                     )))
                     .on_mouse_down(
                         MouseButton::Right,

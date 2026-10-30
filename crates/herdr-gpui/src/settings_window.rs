@@ -183,6 +183,7 @@ struct SettingsWindow {
     launch_at_login: launch_at_login::LaunchAtLogin,
     error: Option<String>,
     status: Option<String>,
+    status_priority_focus: [FocusHandle; 8],
     focus: FocusHandle,
     body_scroll: ScrollHandle,
     /// The section list scrolls when the window is too short for it.
@@ -298,6 +299,7 @@ impl SettingsWindow {
                 .first()
                 .map(|endpoint| endpoint.connection.target.clone())
         });
+        let status_priority_focus = std::array::from_fn(|_| cx.focus_handle());
         let quit = cx.on_app_quit(|this, cx| {
             let task = this.shutdown(cx);
             async move {
@@ -343,6 +345,7 @@ impl SettingsWindow {
             launch_at_login: Default::default(),
             error: appearance.error,
             status: None,
+            status_priority_focus,
             focus: cx.focus_handle(),
             body_scroll: ScrollHandle::new(),
             navigation_scroll: ScrollHandle::new(),

@@ -5,7 +5,7 @@
 
 use super::{
     workspace_label,
-    workspaces::{workspace_entries, workspace_note},
+    workspaces::{workspace_entries, workspace_note, workspace_status},
 };
 use crate::{
     HerdrWindow, NavigationTarget,
@@ -14,7 +14,7 @@ use crate::{
 use gpui::{
     App, AppContext as _, Context, Entity, KeyDownEvent, ScrollHandle, Subscription, Window,
 };
-use herdr_client::protocol::{AgentStatus, ClientShellWorkspace};
+use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellWorkspace};
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -107,6 +107,8 @@ pub(super) struct Device<'a> {
     pub id: &'a str,
     pub label: &'a str,
     pub workspaces: &'a [ClientShellWorkspace],
+    pub agents: &'a [ClientShellAgent],
+    pub status_priority: &'a [AgentStatus],
     pub notes: Option<&'a crate::worktree_notes::Notes>,
 }
 
@@ -158,7 +160,11 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                     text: label.to_owned(),
                     range,
                     context: place(device, branch),
-                    status: Some(workspace.agent_status),
+                    status: Some(workspace_status(
+                        workspace,
+                        device.agents,
+                        device.status_priority,
+                    )),
                 });
             }
             if room(&branches)
@@ -170,7 +176,11 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                     text: branch.to_owned(),
                     range,
                     context: place(device, label),
-                    status: Some(workspace.agent_status),
+                    status: Some(workspace_status(
+                        workspace,
+                        device.agents,
+                        device.status_priority,
+                    )),
                 });
             }
             if room(&notes)
@@ -278,6 +288,11 @@ impl HerdrWindow {
                         .snapshot
                         .as_deref()
                         .map_or(&[], |snapshot| &snapshot.workspaces),
+                    agents: live
+                        .snapshot
+                        .as_deref()
+                        .map_or(&[], |snapshot| &snapshot.agents),
+                    status_priority: &self.config.sidebar_style.status_priority,
                     notes,
                 }
             })

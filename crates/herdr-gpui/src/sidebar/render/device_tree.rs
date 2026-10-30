@@ -83,7 +83,11 @@ impl HerdrWindow {
         };
         let mut count = 0;
         let mut focused = None;
-        for agent in sorted_agents(snapshot, self.agent_sort) {
+        for agent in sorted_agents(
+            snapshot,
+            self.agent_sort,
+            &self.config.sidebar_style.status_priority,
+        ) {
             // Configured `[sidebar_layout.agents]` rows apply here as in the
             // agents panel, gap included.
             let Some(lines) = self.configured_agent_lines(agent, snapshot, row_cx.host) else {

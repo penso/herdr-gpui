@@ -12,6 +12,8 @@ pub enum Error {
         #[source]
         source: Box<crate::Error>,
     },
+    #[error("sidebar.status_priority contains duplicate status {0:?}")]
+    DuplicateSidebarStatus(String),
     #[error("{0}.fallback families must not be empty")]
     EmptyFontFallback(&'static str),
     #[error("{0}.family must not be empty")]
@@ -38,6 +40,10 @@ pub enum Error {
     InvalidSidebarGap,
     #[error("sidebar.{key} must be finite and between 0 and {max} logical pixels")]
     InvalidSidebarMetric { key: &'static str, max: f32 },
+    #[error(
+        "sidebar.status_priority contains unknown status {0:?}; use blocked, working, done, or idle"
+    )]
+    InvalidSidebarStatus(String),
     #[error("sound.volume must be between 0 and 100")]
     InvalidSoundVolume,
     #[error(

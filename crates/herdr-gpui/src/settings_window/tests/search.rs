@@ -8,6 +8,12 @@ fn catalog_search_matches_title_description_and_page() {
     let hits = catalog::search("indent");
     assert_eq!(hits.len(), 1);
     assert_eq!(catalog::CATALOG[hits[0]].id, "sidebar-indent");
+    assert!(
+        catalog::search("status priority")
+            .iter()
+            .any(|&index| catalog::CATALOG[index].id == "sidebar-status-priority"),
+        "status priority row is searchable"
+    );
     assert!(catalog::search("TOAST").iter().all(|i| {
         matches!(
             catalog::CATALOG[*i].section,

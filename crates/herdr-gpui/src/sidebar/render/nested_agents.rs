@@ -71,9 +71,13 @@ impl HerdrWindow {
         let selected = index == self.selected_endpoint;
         let mut focused = None;
         let mut rows = Vec::new();
-        for agent in sorted_agents(snapshot, self.agent_sort)
-            .into_iter()
-            .filter(|agent| agent.workspace_id == workspace_id)
+        for agent in sorted_agents(
+            snapshot,
+            self.agent_sort,
+            &self.config.sidebar_style.status_priority,
+        )
+        .into_iter()
+        .filter(|agent| agent.workspace_id == workspace_id)
         {
             let Some(lines) = self.configured_agent_lines(agent, snapshot, None) else {
                 continue;

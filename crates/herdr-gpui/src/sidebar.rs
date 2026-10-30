@@ -4,6 +4,7 @@
 mod accessibility;
 mod activity;
 mod agents;
+pub(crate) use agents::status_style;
 mod animated;
 mod cell;
 mod device_drag;

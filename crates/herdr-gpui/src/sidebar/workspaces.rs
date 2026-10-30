@@ -14,7 +14,7 @@ use super::{
     row::{Counts, PrBadge, first_text},
 };
 use crate::config::{ChangeCounts, Theme};
-use herdr_client::protocol::{AgentStatus, ClientShellWorkspace};
+use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellWorkspace};
 use std::collections::{HashMap, HashSet};
 
 /// The repositories that form a group: those with at least one parent and at
@@ -158,18 +158,21 @@ pub(crate) fn workspace_label(workspace: &ClientShellWorkspace, indented: bool) 
 /// Collapsed groups show their most urgent member's status.
 pub(super) fn displayed_workspace_status(
     workspaces: &[ClientShellWorkspace],
+    agents: &[ClientShellAgent],
     workspace: &ClientShellWorkspace,
     collapsed: &HashSet<String>,
+    priority: &[AgentStatus],
 ) -> AgentStatus {
+    let status = workspace_status(workspace, agents, priority);
     let Some(worktree) = workspace
         .worktree
         .as_ref()
         .filter(|worktree| !worktree.is_linked_worktree)
     else {
-        return workspace.agent_status;
+        return status;
     };
     if !collapsed.contains(&worktree.key) {
-        return workspace.agent_status;
+        return status;
     }
     workspaces
         .iter()
@@ -179,7 +182,56 @@ pub(super) fn displayed_workspace_status(
                 .as_ref()
                 .is_some_and(|candidate| candidate.key == worktree.key)
         })
-        .map(|candidate| candidate.agent_status)
-        .max_by_key(|status| status_priority(*status))
+        .map(|candidate| workspace_status(candidate, agents, priority))
+        .max_by_key(|status| status_priority(*status, priority))
+        .unwrap_or(status)
+}
+
+/// The expanded sidebar keeps the base inline gate for the default order.
+/// A custom order uses agent statuses even when inline rows are hidden.
+pub(super) fn displayed_sidebar_workspace_status(
+    workspaces: &[ClientShellWorkspace],
+    agents: &[ClientShellAgent],
+    workspace: &ClientShellWorkspace,
+    collapsed: &HashSet<String>,
+    inline: bool,
+    priority: &[AgentStatus],
+) -> AgentStatus {
+    if !inline && priority == crate::config::DEFAULT_STATUS_PRIORITY {
+        return workspace.agent_status;
+    }
+    displayed_workspace_status(workspaces, agents, workspace, collapsed, priority)
+}
+
+/// The compact rail uses collapsed-group rollups only for custom orders.
+pub(super) fn rail_workspace_status(
+    workspaces: &[ClientShellWorkspace],
+    agents: &[ClientShellAgent],
+    workspace: &ClientShellWorkspace,
+    collapsed: &HashSet<String>,
+    priority: &[AgentStatus],
+) -> AgentStatus {
+    if priority != crate::config::DEFAULT_STATUS_PRIORITY {
+        displayed_workspace_status(workspaces, agents, workspace, collapsed, priority)
+    } else {
+        workspace.agent_status
+    }
+}
+
+/// The status a workspace shows. The default order keeps the daemon status;
+/// custom orders use this workspace's matching snapshot agents.
+pub(super) fn workspace_status(
+    workspace: &ClientShellWorkspace,
+    agents: &[ClientShellAgent],
+    priority: &[AgentStatus],
+) -> AgentStatus {
+    if priority == crate::config::DEFAULT_STATUS_PRIORITY {
+        return workspace.agent_status;
+    }
+    agents
+        .iter()
+        .filter(|agent| agent.workspace_id == workspace.workspace_id)
+        .map(|agent| agent.agent_status)
+        .max_by_key(|status| status_priority(*status, priority))
         .unwrap_or(workspace.agent_status)
 }

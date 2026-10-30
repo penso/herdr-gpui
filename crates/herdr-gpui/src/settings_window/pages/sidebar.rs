@@ -4,8 +4,8 @@
 use super::{SettingsWindow, on_value, ui};
 use crate::{
     config::{
-        AgentsPlacement, ChangeCounts, Config, DeviceFooter, LayoutMode, SelectMode,
-        SidebarOverrides, preferences::Preference,
+        AgentsPlacement, ChangeCounts, Config, DEFAULT_STATUS_PRIORITY, DeviceFooter, LayoutMode,
+        SelectMode, SidebarOverrides, preferences::Preference, status_name,
     },
     i18n::{self, fl},
     settings_window::{
@@ -16,6 +16,22 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use std::ops::RangeInclusive;
+
+fn status_label(status: herdr_client::protocol::AgentStatus) -> String {
+    match status {
+        herdr_client::protocol::AgentStatus::Blocked => {
+            fl!("settings-indicators-status-blocked")
+        }
+        herdr_client::protocol::AgentStatus::Working => {
+            fl!("settings-indicators-status-working")
+        }
+        herdr_client::protocol::AgentStatus::Done => fl!("settings-indicators-status-done"),
+        herdr_client::protocol::AgentStatus::Idle => fl!("settings-indicators-status-idle"),
+        herdr_client::protocol::AgentStatus::Unknown => {
+            fl!("settings-indicators-status-unknown")
+        }
+    }
+}
 
 /// The four spacing numbers the page edits. The old sidebar gap became the
 /// terminal's left padding, on the Theme page.
@@ -210,6 +226,7 @@ impl SettingsWindow {
                     })),
                 ),
             )
+            .child(self.status_priority_control(ready, cx))
             .child(
                 ui::row(theme, "sidebar-select", fl!("settings-sidebar-select"))
                     .description(fl!("settings-sidebar-select-description"))
@@ -471,6 +488,130 @@ impl SettingsWindow {
             super::super::native::SIDEBAR_PAGE,
         ));
         page
+    }
+
+    fn status_priority_control(&self, ready: bool, cx: &mut Context<Self>) -> ui::Row {
+        let theme = &self.theme;
+        let current = &self.config.sidebar_style.status_priority;
+        let rows = current.iter().enumerate().map(|(index, status)| {
+            let key = status_name(*status);
+            let label = status_label(*status);
+            let (_, _, color) = crate::sidebar::status_style(*status, theme);
+            div()
+                .id(ElementId::Name(
+                    format!("sidebar-status-priority-row-{key}").into(),
+                ))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .py(px(3.))
+                .child(div().w(px(8.)).h(px(8.)).rounded_full().bg(rgb(color)))
+                .child(div().flex_1().child(label))
+                .child(self.status_move_button(*status, true, index > 0, ready, cx))
+                .child(self.status_move_button(
+                    *status,
+                    false,
+                    index + 1 < current.len(),
+                    ready,
+                    cx,
+                ))
+        });
+        ui::row(
+            theme,
+            "sidebar-status-priority",
+            fl!("settings-sidebar-status-priority"),
+        )
+        .description(fl!("settings-sidebar-status-priority-description"))
+        .control(
+            div().flex().flex_col().gap(px(4.)).children(rows).child(
+                ui::button(
+                    theme,
+                    "sidebar-status-priority-reset",
+                    fl!("settings-sidebar-status-priority-reset"),
+                    ready && current.as_slice() != DEFAULT_STATUS_PRIORITY,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    let mut intent = SidebarIntent::of(&this.config);
+                    intent.style.status_priority = DEFAULT_STATUS_PRIORITY.to_vec();
+                    this.commit_sidebar(intent, cx);
+                })),
+            ),
+        )
+    }
+
+    fn status_move_button(
+        &self,
+        status: herdr_client::protocol::AgentStatus,
+        up: bool,
+        enabled: bool,
+        ready: bool,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let name = status_name(status);
+        let label = status_label(status);
+        let mut chars = label.chars();
+        let label = chars.next().map_or_else(String::new, |first| {
+            first.to_uppercase().collect::<String>() + chars.as_str()
+        });
+        let accessible_name = if up {
+            fl!(
+                "settings-sidebar-status-priority-move-up",
+                status = label.as_str()
+            )
+        } else {
+            fl!(
+                "settings-sidebar-status-priority-move-down",
+                status = label.as_str()
+            )
+        };
+        let status_index = match status {
+            herdr_client::protocol::AgentStatus::Blocked => 0,
+            herdr_client::protocol::AgentStatus::Working => 1,
+            herdr_client::protocol::AgentStatus::Done => 2,
+            herdr_client::protocol::AgentStatus::Idle => 3,
+            herdr_client::protocol::AgentStatus::Unknown => 4,
+        };
+        let Some(focus) = self
+            .status_priority_focus
+            .get(status_index * 2 + usize::from(!up))
+            .cloned()
+        else {
+            return ui::button(&self.theme, "sidebar-status-priority-invalid", "", false);
+        };
+        ui::button(
+            &self.theme,
+            format!(
+                "sidebar-status-priority-{}-{name}",
+                if up { "up" } else { "down" }
+            ),
+            if up { "↑" } else { "↓" },
+            ready && enabled,
+        )
+        .aria_label(accessible_name)
+        .track_focus(&focus)
+        .on_click(cx.listener(move |this, _, window, cx| {
+            window.focus(&focus, cx);
+            let mut intent = SidebarIntent::of(&this.config);
+            let Some(index) = intent
+                .style
+                .status_priority
+                .iter()
+                .position(|item| *item == status)
+            else {
+                return;
+            };
+            let target = if up {
+                index.checked_sub(1)
+            } else {
+                Some(index + 1)
+            };
+            if let Some(target) =
+                target.filter(|target| *target < intent.style.status_priority.len())
+            {
+                intent.style.status_priority.swap(index, target);
+                this.commit_sidebar(intent, cx);
+            }
+        }))
     }
 
     fn layout_dropdown(&self, ready: bool, cx: &mut Context<Self>) -> Stateful<Div> {

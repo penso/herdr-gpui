@@ -15,7 +15,9 @@ use super::{
     sidebar_width, sticky,
     tokens::{self, SpaceContext},
     visible_workspace_entries, wash,
-    workspaces::{displayed_workspace_status, workspace_badge, workspace_label, workspace_note},
+    workspaces::{
+        displayed_sidebar_workspace_status, workspace_badge, workspace_label, workspace_note,
+    },
 };
 use crate::direction::Logical;
 use crate::{
@@ -282,11 +284,14 @@ impl HerdrWindow {
                 });
                 let folds = fold.as_ref().map(|fold| fold.collapsed).zip(fold_toggle);
                 let label = workspace_label(workspace, indented);
-                let shown_status = if self.config.usage.inline {
-                    displayed_workspace_status(&snapshot.workspaces, workspace, collapsed_repos)
-                } else {
-                    workspace.agent_status
-                };
+                let shown_status = displayed_sidebar_workspace_status(
+                    &snapshot.workspaces,
+                    &snapshot.agents,
+                    workspace,
+                    collapsed_repos,
+                    self.config.usage.inline,
+                    &self.config.sidebar_style.status_priority,
+                );
                 let lines = if spaces_custom {
                     tokens::space_rows(
                         &self.config.sidebar_layout.spaces,
