@@ -98,14 +98,14 @@ fn failed_step(operation: &str) -> &'static str {
         "list working tree changes" => "list-working-tree", // i18n: data
         "prepare the remote pull request or issue checkout" => "prepare-remote-checkout", // i18n: data
         "push" => "push",
-        "read HEAD" => "read-head",                         // i18n: data
-        "read attributes" => "read-attributes",             // i18n: data
+        "read attributes" => "read-attributes", // i18n: data
+        "read HEAD" => "read-head",             // i18n: data
         "read the commit subject" => "read-commit-subject", // i18n: data
-        "read the new commit" => "read-new-commit",         // i18n: data
+        "read the new commit" => "read-new-commit", // i18n: data
         "read the remote's default branch" => "read-default-branch", // i18n: data
         "read working tree changes" => "read-working-tree-changes", // i18n: data
         "read working tree state" => "read-working-tree-state", // i18n: data
-        "stage changes" => "stage",                         // i18n: data
+        "stage changes" => "stage",             // i18n: data
         // keep-sorted end
         _ => "other",
     }

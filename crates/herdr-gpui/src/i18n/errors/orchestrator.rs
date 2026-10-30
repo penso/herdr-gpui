@@ -94,10 +94,10 @@ fn step(operation: &str) -> &'static str {
         "Naming the agent pane" => "name-pane",       // i18n: data
         "Naming the agent tab" => "name-tab",         // i18n: data
         "Opening the repository" => "open-repository", // i18n: data
+        "Reading bd's options" => "read-bd-options",  // i18n: data
         "Reading Beads blockers" => "read-beads-blockers", // i18n: data
         "Reading Beads" => "read-beads",              // i18n: data
         "Reading GitHub" => "read-github",            // i18n: data
-        "Reading bd's options" => "read-bd-options",  // i18n: data
         "Reading pull request checks" => "read-checks", // i18n: data
         "Reading the base commit" => "read-base-commit", // i18n: data
         "Reading the branches" => "read-branches",    // i18n: data
