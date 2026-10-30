@@ -20,7 +20,7 @@ struct IPadRoot: View {
     var body: some View {
         NavigationSplitView {
             AttentionList(selection: $selection, query: query)
-                .safeAreaInset(edge: .bottom) { ConnectionToast(pairing: $pairing) }
+                .connectionToast(pairing: $pairing)
                 .searchable(text: $query, placement: .sidebar, prompt: "Chats, messages, terminals")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -59,6 +59,7 @@ struct IPadRoot: View {
                 case .settings: SettingsView()
                 }
             }
+            .connectionToast(pairing: $pairing)
             .presentationSizing(.page)
         }
     }

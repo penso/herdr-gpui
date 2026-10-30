@@ -96,13 +96,16 @@ struct RootView: View {
                 NavigationStack(path: $homePath) {
                     HomeTab(pairing: $pairing).withRoutes()
                 }
+                .connectionToast(pairing: $pairing)
             }
             .badge(model.fleet.waiting)
             Tab("Workspaces", systemImage: "square.stack.3d.up", value: RootTab.workspaces) {
                 NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: $pairing).withRoutes() }
+                    .connectionToast(pairing: $pairing)
             }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
                 NavigationStack { SettingsView() }
+                    .connectionToast(pairing: $pairing)
             }
         }
     }

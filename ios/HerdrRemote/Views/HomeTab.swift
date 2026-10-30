@@ -8,7 +8,6 @@ struct HomeTab: View {
 
     var body: some View {
         ChatList()
-            .safeAreaInset(edge: .bottom) { ConnectionToast(pairing: $pairing) }
             .navigationBarTitleDisplayMode(.inline)
             .overlay {
                 if model.computers.isEmpty {

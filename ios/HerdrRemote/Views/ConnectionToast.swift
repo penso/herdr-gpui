@@ -123,3 +123,11 @@ struct ConnectionToast: View {
             : date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 }
+
+extension View {
+    /// Says at the bottom which computers are not live, on this view and
+    /// on every screen a navigation stack it wraps pushes.
+    func connectionToast(pairing: Binding<Bool>) -> some View {
+        safeAreaInset(edge: .bottom) { ConnectionToast(pairing: pairing) }
+    }
+}
