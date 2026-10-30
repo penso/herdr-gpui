@@ -15,6 +15,7 @@ mod credentials;
 mod github;
 mod orchestrator;
 mod protocol;
+mod remote;
 mod remote_control;
 mod root;
 #[cfg(test)]
@@ -101,18 +102,5 @@ english! {
     crate::window::wsl_drop::Error,
     crate::worktree_identity::Error,
     crate::worktree_scripts::Error,
-    #[cfg(feature = "azure")]
-    herdr_remote::azure::Error,
-    #[cfg(feature = "boat")]
-    herdr_remote::boat::Error,
-    #[cfg(feature = "coder")]
-    herdr_remote::coder::Error,
-    #[cfg(feature = "daytona")]
-    herdr_remote::daytona::Error,
-    herdr_remote::Error,
-    #[cfg(feature = "opensandbox")]
-    herdr_remote::opensandbox::Error,
-    #[cfg(feature = "sprites")]
-    herdr_remote::sprites::Error,
     // keep-sorted end
 }

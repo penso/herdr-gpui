@@ -11,6 +11,7 @@ mod credentials;
 mod github;
 mod orchestrator;
 mod protocol;
+mod remote;
 mod remote_control;
 mod root;
 mod updater;

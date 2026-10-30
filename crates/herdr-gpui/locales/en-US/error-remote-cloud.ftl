@@ -1,0 +1,48 @@
+# Failures every cloud provider shares: the saved cloud devices, sandbox
+# images built from a project's recipe, and the exec stream the app relays a
+# sandbox's shell through. $path is a file, $error is the system's text.
+
+error-remote-cloud-catalog = Could not update { $path }: { $error }
+error-remote-cloud-json = Invalid saved cloud devices.
+# $what names what was refused, such as cloud device or cloud target.
+error-remote-cloud-invalid = { $what } is not valid.
+error-remote-cloud-missing = The cloud device is no longer saved.
+error-remote-cloud-state-directory = No state directory for saved cloud devices.
+# $worker names the background worker that stopped.
+error-remote-cloud-worker = The cloud { $worker } worker stopped.
+error-remote-cloud-process = Could not run the command that reaches the machine.
+error-remote-cloud-cancelled = Cancelled.
+# $detail says why: the machine has no Herdr and installing is off, or the
+# installer's own output.
+error-remote-cloud-install = Installing Herdr failed: { $detail }
+error-remote-cloud-install-timeout = Installing Herdr did not finish within 5 minutes.
+error-remote-cloud-unavailable = Cloud devices are unavailable on Windows.
+
+error-remote-cloud-image-busy = Another build of this image is running; wait for it to finish.
+error-remote-cloud-image-cancelled = Cancelled.
+error-remote-cloud-image-catalog = Could not update { $path }: { $error }
+# $provider is a cloud provider's name, such as Daytona. COPY and ADD are
+# Dockerfile instructions.
+error-remote-cloud-image-context = { $provider } cannot copy files into an image yet: remove the recipe's COPY and ADD lines, or use a container.
+error-remote-cloud-image-devcontainer = The dev container definition is not valid JSON.
+# $field names what was refused, such as the dev container's image.
+error-remote-cloud-image-field = { $field } is not valid.
+error-remote-cloud-image-host = Could not read the project's recipe from its host.
+error-remote-cloud-image-json = Invalid sandbox image records.
+# $path is a file in the project, such as .devcontainer/Dockerfile.
+error-remote-cloud-image-missing = The recipe names { $path }, which the project does not have.
+error-remote-cloud-image-state-directory = No state directory for sandbox images.
+error-remote-cloud-image-too-large = The project's recipe has more files than an image build takes.
+error-remote-cloud-image-truncated = The project's recipe changed while it was being read; try again.
+error-remote-cloud-image-unknown = This app has no record of that project's image.
+# $feature is what the recipe uses, such as a dev container defined by
+# Docker Compose.
+error-remote-cloud-image-unsupported = This project's recipe uses { $feature }, which sandbox images do not support.
+
+error-remote-cloud-socket-url = The exec stream's address is not valid.
+error-remote-cloud-socket-connect = Could not reach the exec stream.
+error-remote-cloud-socket-tls = TLS setup for the exec stream failed.
+error-remote-cloud-socket-stream = The exec stream failed.
+error-remote-cloud-socket-header = Invalid exec stream header.
+error-remote-cloud-socket-header-name = Invalid exec stream header name.
+error-remote-cloud-socket-closed = The exec stream closed before the command finished.
