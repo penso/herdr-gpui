@@ -199,6 +199,8 @@ pub struct Config {
     pub edge_rail: bool,
     /// How the editor starts; the pane's `$VISUAL` or `$EDITOR` when unset.
     pub(crate) editor_command: Option<crate::editor::EditorCommand>,
+    /// Themes starred in the Color Scheme picker, which lists them first.
+    pub favorite_themes: Vec<String>,
     pub features: Features,
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
@@ -412,6 +414,7 @@ impl Default for Config {
             devices: BTreeMap::new(),
             edge_rail: false,
             editor_command: None,
+            favorite_themes: Vec::new(),
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
@@ -498,6 +501,7 @@ struct Settings {
     devices: BTreeMap<String, DeviceSettings>,
     edge_rail: Option<bool>,
     editor_command: Option<crate::editor::EditorCommand>,
+    favorite_themes: Vec<String>,
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
@@ -813,6 +817,12 @@ impl Config {
         #[cfg(feature = "sprites")]
         settings.sprites.settings_with(|_| None)?;
         config.sprites = settings.sprites;
+        config.favorite_themes = settings.favorite_themes;
+        // A hand-edited list may name a theme twice; it is starred once.
+        let mut starred = std::collections::HashSet::new();
+        config
+            .favorite_themes
+            .retain(|name| starred.insert(name.clone()));
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
         config.notifications = settings

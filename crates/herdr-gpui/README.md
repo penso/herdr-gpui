@@ -3776,6 +3776,10 @@ Ctrl+Shift+U is left unbound for
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
+  The star at a row's end pins that theme above the rest, searches included;
+  clicking it again unpins it. Starring neither previews nor applies a theme.
+  The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
+  reloading the window, so the theme being previewed stays on screen.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /

@@ -186,6 +186,10 @@ pub(super) fn note(theme: &crate::config::Theme, size: f32) -> gpui::Div {
         )
 }
 
+/// A theme the user starred, and the outline offering to star one.
+pub(crate) const STARRED: &str = "icons/star-full.svg";
+pub(crate) const UNSTARRED: &str = "icons/star.svg";
+
 /// The mark of a workspace or tab whose notifications the user muted.
 pub(crate) const MUTED: &str = "icons/bell-off.svg";
 
@@ -326,6 +330,8 @@ embedded_icons! {
     "settings.svg",
     "shield.svg",
     "split.svg",
+    "star-full.svg",
+    "star.svg",
     "status-bar.svg",
     "status-orbit.svg",
     "status-orca-blocked.svg",

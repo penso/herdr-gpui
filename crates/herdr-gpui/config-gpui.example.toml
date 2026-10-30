@@ -33,6 +33,9 @@
 # To follow the system light/dark appearance, name a theme for each side, as
 # Ghostty does: theme = "light:Catppuccin Latte,dark:Catppuccin Mocha"
 theme = "Default"
+# Themes starred in the Color Scheme picker, listed above the rest. The
+# picker's star button keeps this list in config-gpui.local.toml.
+# favorite_themes = ["Nord", "Catppuccin Mocha"]
 # How far the app's own colors (status dots, pull request badges, diff counts,
 # warnings, dim labels) stand off the sidebar and menus. "standard" moves a
 # color only when it would fall below 3:1, as pastels do on light themes.

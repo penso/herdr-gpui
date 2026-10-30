@@ -18,6 +18,9 @@ pub(crate) enum Preference {
     Language(herdr_i18n::Language),
     ConfirmClosePane(bool),
     ConfirmCloseWorkspace(bool),
+    /// `favorite_themes`: the themes starred in the Color Scheme picker. An
+    /// empty list removes the key.
+    FavoriteThemes(Vec<String>),
     RemoveMergedWorktrees(bool),
     ShowSystemLoad(bool),
     ShowNetworkQuality(bool),
@@ -139,6 +142,13 @@ impl Config {
                 Preference::ConfirmCloseWorkspace(value) => {
                     (None, "confirm_close_workspace", Some(value.into()))
                 }
+                Preference::FavoriteThemes(names) => (
+                    None,
+                    "favorite_themes",
+                    (!names.is_empty()).then(|| {
+                        toml_edit::Value::Array(names.iter().map(String::as_str).collect())
+                    }),
+                ),
                 Preference::RemoveMergedWorktrees(value) => {
                     (None, "remove_merged_worktrees", Some(value.into()))
                 }
