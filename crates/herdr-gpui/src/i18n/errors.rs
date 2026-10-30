@@ -9,6 +9,10 @@
 //! messages, and the app's feature modules are migrated on their own.
 // i18n: migrated
 
+mod client;
+mod control;
+mod credentials;
+mod protocol;
 mod root;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -91,9 +95,6 @@ english! {
     crate::window::wsl_drop::Error,
     crate::worktree_identity::Error,
     crate::worktree_scripts::Error,
-    herdr_client::Error,
-    herdr_control_protocol::Error,
-    herdr_credentials::Error,
     herdr_github::Error,
     herdr_orchestrator::Error,
     #[cfg(feature = "azure")]

@@ -5,6 +5,10 @@ use super::Localize;
 use herdr_i18n::{Locale, Pseudo};
 use std::fmt::Display;
 
+mod client;
+mod control;
+mod credentials;
+mod protocol;
 mod root;
 
 /// Fluent's isolation marks around each placeable, which `Display` lacks.
