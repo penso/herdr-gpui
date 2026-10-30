@@ -18,7 +18,6 @@ struct TerminalScreen: View {
     /// Pinch zoom over the size that fits the width.
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
-    @State private var actions = false
     @State private var picks: [PhotosPickerItem] = []
     @State private var choosingPhotos = false
     @State private var problem: String?
@@ -133,26 +132,39 @@ struct TerminalScreen: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { choosingPhotos = true } label: { Image(systemName: "photo") }
                     .accessibilityLabel("Send a picture")
-                Button { actions = true } label: { Image(systemName: "diamond.fill") }
-                    .accessibilityLabel("Herdr actions")
-            }
-        }
-        .confirmationDialog("Herdr", isPresented: $actions, titleVisibility: .hidden) {
-            Button("Split Right") { run(.splitRight) }
-            Button("Split Down") { run(.splitDown) }
-            Button(item?.terminal.zoomed == true ? "Unzoom" : "Zoom") { run(.zoom) }
-            Button("New Tab") { run(.newTab) }
-            Button("Rename Tab…") {
-                newName = item?.terminal.label ?? title
-                renaming = true
-            }
-            if let item {
-                Button("New Chat in \(item.workspace.label)") {
-                    model.creating = .chat(device: key.device, workspace: item.workspace.id, label: item.workspace.label)
+                // A menu grows out of the button it opens from; a
+                // confirmation dialog would float in the middle instead.
+                Menu {
+                    Section {
+                        Button("Split Right", systemImage: "rectangle.split.2x1") { run(.splitRight) }
+                        Button("Split Down", systemImage: "rectangle.split.1x2") { run(.splitDown) }
+                        if item?.terminal.zoomed == true {
+                            Button("Unzoom", systemImage: "arrow.down.right.and.arrow.up.left") { run(.zoom) }
+                        } else {
+                            Button("Zoom", systemImage: "arrow.up.left.and.arrow.down.right") { run(.zoom) }
+                        }
+                    }
+                    Section {
+                        Button("New Tab", systemImage: "plus") { run(.newTab) }
+                        Button("Rename Tab…", systemImage: "pencil") {
+                            newName = item?.terminal.label ?? title
+                            renaming = true
+                        }
+                        if let item {
+                            Button("New Chat in \(item.workspace.label)", systemImage: "bubble.left.and.text.bubble.right") {
+                                model.creating = .chat(device: key.device, workspace: item.workspace.id, label: item.workspace.label)
+                            }
+                        }
+                    }
+                    Section {
+                        Button("Close Pane", systemImage: "xmark.square", role: .destructive) { run(.closePane) }
+                        Button("Close Tab", systemImage: "xmark", role: .destructive) { run(.closeTab) }
+                    }
+                } label: {
+                    Image(systemName: "diamond.fill")
                 }
+                .accessibilityLabel("Herdr actions")
             }
-            Button("Close Pane", role: .destructive) { run(.closePane) }
-            Button("Close Tab", role: .destructive) { run(.closeTab) }
         }
         .alert("Rename Tab", isPresented: $renaming) {
             TextField("Name", text: $newName)
