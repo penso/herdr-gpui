@@ -13,7 +13,7 @@ fn host(id: &str, name: &str) -> Host {
     }
 }
 
-fn devbox() -> HostId {
+pub(super) fn devbox() -> HostId {
     HostId("ssh:devbox".into())
 }
 
@@ -21,7 +21,7 @@ fn gpu() -> HostId {
     HostId("ssh:gpu".into())
 }
 
-fn enrolled(device: &str) -> Enrolled {
+pub(super) fn enrolled(device: &str) -> Enrolled {
     Enrolled {
         device: DeviceId(device.into()),
         computer: "devbox".into(),
@@ -31,7 +31,7 @@ fn enrolled(device: &str) -> Enrolled {
 }
 
 /// An auth that knows two hosts and holds a phone allowed on `allowed`.
-fn paired(dir: &Path, allowed: &[HostId]) -> (Auth, DeviceId) {
+pub(super) fn paired(dir: &Path, allowed: &[HostId]) -> (Auth, DeviceId) {
     let mut auth = auth(dir);
     auth.set_hosts(vec![
         host("ssh:devbox", "devbox"),
@@ -58,7 +58,7 @@ fn paired(dir: &Path, allowed: &[HostId]) -> (Auth, DeviceId) {
     (auth, device)
 }
 
-fn state_of(auth: &mut Auth, device: &DeviceId, host: &HostId, now: u64) -> HostState {
+pub(super) fn state_of(auth: &mut Auth, device: &DeviceId, host: &HostId, now: u64) -> HostState {
     auth.host_links(device, now)
         .unwrap()
         .into_iter()
@@ -121,6 +121,7 @@ fn an_allowed_host_is_paired_through_herdr_ui() {
     auth.host_paired(
         &device,
         &devbox(),
+        None,
         HostOutcome::Paired(enrolled("d-host")),
         T0,
     )
@@ -147,6 +148,7 @@ fn pairing_a_paired_host_again_replaces_its_device() {
     auth.host_paired(
         &device,
         &devbox(),
+        None,
         HostOutcome::Paired(enrolled("d-old")),
         T0,
     )
@@ -168,7 +170,7 @@ fn a_host_not_allowed_asks_the_desktop_first() {
     let taken = auth.take_host_pairings(T0);
     assert!(taken[0].confirm);
     // The user declines: the host is offered again.
-    auth.host_paired(&device, &gpu(), HostOutcome::Denied, T0)
+    auth.host_paired(&device, &gpu(), None, HostOutcome::Denied, T0)
         .unwrap();
     assert_eq!(state_of(&mut auth, &device, &gpu(), T0), HostState::Offered);
 }
@@ -183,6 +185,7 @@ fn a_failure_is_shown_until_the_phone_retries() {
     auth.host_paired(
         &device,
         &devbox(),
+        None,
         HostOutcome::Failed {
             reason: "x".repeat(2000),
         },
@@ -217,6 +220,7 @@ fn work_herdr_ui_never_finishes_fails_and_untaken_work_lapses() {
         auth.host_paired(
             &device,
             &devbox(),
+            None,
             HostOutcome::Paired(enrolled("d")),
             later
         ),
@@ -270,7 +274,7 @@ fn an_answer_with_a_bad_enrollment_is_refused() {
     let mut bad = enrolled("d");
     bad.origins = vec!["https://x".into(); control::hosts::MAX_ORIGINS + 1];
     assert!(matches!(
-        auth.host_paired(&device, &devbox(), HostOutcome::Paired(bad), T0),
+        auth.host_paired(&device, &devbox(), None, HostOutcome::Paired(bad), T0),
         Err(Error::Links(crate::auth::links::Error::InvalidOutcome))
     ));
 }
@@ -285,6 +289,7 @@ fn revoking_a_phone_owes_its_hosts_a_revocation() {
     auth.host_paired(
         &device,
         &devbox(),
+        None,
         HostOutcome::Paired(enrolled("d-host")),
         T0,
     )
@@ -382,6 +387,7 @@ fn a_host_that_answers_after_the_phone_was_revoked_is_owed_a_revocation() {
         auth.host_paired(
             &device,
             &devbox(),
+            None,
             HostOutcome::Paired(enrolled("d-late")),
             T0
         ),
@@ -407,6 +413,7 @@ fn a_host_that_answers_after_its_request_timed_out_is_owed_a_revocation() {
         auth.host_paired(
             &device,
             &devbox(),
+            None,
             HostOutcome::Paired(enrolled("d-late")),
             late
         )
@@ -415,7 +422,7 @@ fn a_host_that_answers_after_its_request_timed_out_is_owed_a_revocation() {
     assert_eq!(auth.host_revokes().len(), 1);
     // A failure or a refusal that comes late owes nothing.
     assert!(
-        auth.host_paired(&device, &devbox(), HostOutcome::Denied, late)
+        auth.host_paired(&device, &devbox(), None, HostOutcome::Denied, late)
             .is_err()
     );
     assert_eq!(auth.host_revokes().len(), 1);

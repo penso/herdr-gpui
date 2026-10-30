@@ -231,25 +231,28 @@ impl Links {
     }
 
     /// Records how Herdr UI's attempt ended. A host the phone is paired
-    /// with now is kept on the device.
+    /// with now is kept on the device. With `public_key`, only the request
+    /// for that key takes it: an attempt that outlasted the phone's retry
+    /// must not answer the retry, whose key the phone now holds.
     pub(crate) fn finish(
         &mut self,
         devices: &mut Devices,
         device: &DeviceId,
         host: &HostId,
+        public_key: Option<&str>,
         outcome: HostOutcome,
         now_ms: u64,
     ) -> Result<()> {
         self.refresh(now_ms);
         let key = (device.clone(), host.clone());
-        let Some(ask) = self
-            .asks
-            .get_mut(&key)
-            .filter(|ask| ask.stage == Stage::Taken)
-        else {
+        let attempt = public_key.map(PublicKey::parse).transpose()?;
+        let Some(ask) = self.asks.get_mut(&key).filter(|ask| {
+            ask.stage == Stage::Taken && attempt.as_ref().is_none_or(|key| key == &ask.public_key)
+        }) else {
             // A host that took the phone after its request ended (the phone
-            // was revoked, or the request timed out) holds a device nobody
-            // will use: it is owed a revocation.
+            // was revoked, the request timed out, or the phone asked again
+            // with a new key) holds a device nobody will use: it is owed a
+            // revocation.
             if let HostOutcome::Paired(enrolled) = outcome
                 && enrolled.valid()
             {
@@ -313,21 +316,23 @@ impl Links {
         }))
     }
 
-    /// Adds revocations hosts are owed. Blocking when any is new.
+    /// Adds revocations hosts are owed. Blocking when any is new. A failed
+    /// write leaves them out, so the caller's retry adds and saves them
+    /// again instead of finding them in memory only.
     fn owe(&mut self, owed: impl IntoIterator<Item = HostRevoke>) -> Result<()> {
-        let before = self.revokes.len();
+        let mut revokes = self.revokes.clone();
         for revoke in owed {
-            if !self.revokes.contains(&revoke) {
-                self.revokes.push(revoke);
+            if !revokes.contains(&revoke) {
+                revokes.push(revoke);
             }
         }
-        if self.revokes.len() == before {
+        if revokes.len() == self.revokes.len() {
             return Ok(());
         }
         // The oldest go first when hosts stay out of reach for long.
-        let excess = self.revokes.len().saturating_sub(MAX_REVOKES);
-        self.revokes.drain(..excess);
-        self.save_revokes()
+        let excess = revokes.len().saturating_sub(MAX_REVOKES);
+        revokes.drain(..excess);
+        self.replace_revokes(revokes)
     }
 
     pub(crate) fn revokes(&self) -> Vec<HostRevoke> {
@@ -336,17 +341,21 @@ impl Links {
 
     /// A host no longer holds the device. Blocking.
     pub(crate) fn revoked(&mut self, revoke: &HostRevoke) -> Result<()> {
-        let before = self.revokes.len();
-        self.revokes.retain(|owed| owed != revoke);
-        if self.revokes.len() == before {
+        let mut revokes = self.revokes.clone();
+        revokes.retain(|owed| owed != revoke);
+        if revokes.len() == self.revokes.len() {
             return Ok(());
         }
-        self.save_revokes()
+        self.replace_revokes(revokes)
     }
 
-    fn save_revokes(&self) -> Result<()> {
-        let content = serde_json::to_vec_pretty(&self.revokes).map_err(super::Error::Encode)?;
-        write_private(&self.revokes_path, &content)
+    /// Writes `revokes`, then keeps them: memory never holds what the file
+    /// does not.
+    fn replace_revokes(&mut self, revokes: Vec<HostRevoke>) -> Result<()> {
+        let content = serde_json::to_vec_pretty(&revokes).map_err(super::Error::Encode)?;
+        write_private(&self.revokes_path, &content)?;
+        self.revokes = revokes;
+        Ok(())
     }
 
     /// Fails requests Herdr UI took and never finished, and drops ones it

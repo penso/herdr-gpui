@@ -30,6 +30,7 @@ impl Drop for HostAsk {
             client.notify(Request::HostPaired {
                 device: job.pairing.device,
                 host: job.pairing.host,
+                public_key: Some(job.pairing.public_key),
                 outcome: HostOutcome::Denied,
             });
         }

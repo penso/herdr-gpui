@@ -162,6 +162,7 @@ impl Supervisor {
         client.notify(Request::HostPaired {
             device: job.pairing.device,
             host: job.pairing.host,
+            public_key: Some(job.pairing.public_key),
             outcome: HostOutcome::Denied,
         });
     }
@@ -210,6 +211,7 @@ impl Supervisor {
             return;
         };
         cx.global_mut::<Self>().links.running.insert(key.clone());
+        let public_key = job.pairing.public_key.clone();
         let task = cx.background_executor().spawn(async move {
             // The host gets this daemon's APNs key, to notify the phone
             // itself while this computer sleeps.
@@ -225,6 +227,7 @@ impl Supervisor {
                 .request(Request::HostPaired {
                     device,
                     host,
+                    public_key: Some(public_key),
                     outcome,
                 })
                 .await;

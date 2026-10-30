@@ -627,11 +627,12 @@ impl Auth {
         &mut self,
         device: &DeviceId,
         host: &HostId,
+        public_key: Option<&str>,
         outcome: HostOutcome,
         now_ms: u64,
     ) -> Result<()> {
         self.links
-            .finish(&mut self.devices, device, host, outcome, now_ms)
+            .finish(&mut self.devices, device, host, public_key, outcome, now_ms)
     }
 
     pub(crate) fn host_revokes(&self) -> Vec<HostRevoke> {

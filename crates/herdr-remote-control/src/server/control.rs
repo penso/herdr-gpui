@@ -156,10 +156,11 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
         Request::HostPaired {
             device,
             host,
+            public_key,
             outcome,
         } => state
             .auth()
-            .host_paired(&device, &host, outcome, now)
+            .host_paired(&device, &host, public_key.as_deref(), outcome, now)
             .map(|()| Response::Done),
         Request::HostRevokes => Ok(Response::HostRevokes {
             revokes: state.auth().host_revokes(),

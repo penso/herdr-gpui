@@ -174,6 +174,11 @@ pub enum Request {
     HostPaired {
         device: DeviceId,
         host: hosts::HostId,
+        /// The key of the request it took (`HostPairing::public_key`), so
+        /// an attempt that outlasted a retry cannot answer the retry.
+        /// Absent from an older Herdr UI, which matches any request.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        public_key: Option<String>,
         outcome: hosts::HostOutcome,
     },
     /// The devices revoked here that hosts still hold.
