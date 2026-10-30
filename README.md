@@ -102,6 +102,18 @@ running another terminal emulator or wrapping the TUI.
       <sub><b>Light or dark, or both.</b> Any theme, or a light and dark pair that follows the system appearance; status colours keep their contrast on either.</sub>
     </td>
   </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/theme-favorites.png" alt="Color Scheme picker with three starred themes pinned above a rule, and an outline star on the selected row whose light theme is previewed">
+      <br>
+      <sub><b>Star your favorites.</b> Pin the themes you keep coming back to at the top of the Color Scheme picker; one click stars or unstars a theme, and the stars are saved with your settings.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/theme-search.png" alt="Color Scheme picker filtered by a search, with the starred Catppuccin Mocha first among the results">
+      <br>
+      <sub><b>Hundreds of themes, one search away.</b> Built-ins and Ghostty themes in one list: arrow or hover through them to preview each live, and your starred themes lead every search.</sub>
+    </td>
+  </tr>
 </table>
 
 Also included: saved SSH hosts with [file copies](crates/herdr-gpui/README.md#ssh-file-copies),
