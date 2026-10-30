@@ -198,8 +198,10 @@ const POLLS = [
 // Icons are drawn on a 100×100 tile; tile() adds the rounded square, rim and shared gradients.
 let uid = 0;
 function tile(bg, body, rim) {
-  const id = "t" + (uid++);
-  return (size) => `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+  return (size) => {
+    // Every rendered copy gets its own IDs, so no copy's gradients or clip depend on another's.
+    const id = "t" + (uid++);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
     <defs>
       <clipPath id="${id}c"><rect width="100" height="100" rx="22.5"/></clipPath>
       ${bg.defs ? bg.defs(id) : ""}
@@ -208,6 +210,7 @@ function tile(bg, body, rim) {
     <g clip-path="url(#${id}c)">${typeof body === "function" ? body(id) : body}</g>
     <rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="none" stroke="${rim}"/>
   </svg>`;
+  };
 }
 const flat = (color) => ({ fill: () => color });
 const grad = (top, bottom) => ({
