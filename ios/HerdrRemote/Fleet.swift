@@ -83,6 +83,10 @@ final class Fleet {
     private var readers: [String: Task<Void, Never>] = [:]
     private var chats: [PaneKey: ChatStore] = [:]
     private var terms: [PaneKey: TermStore] = [:]
+    /// How many views show each chat or terminal: iPad windows can show
+    /// the same one, and only the last to close stops watching it.
+    @ObservationIgnored private var chatViewers: [PaneKey: Int] = [:]
+    @ObservationIgnored private var termViewers: [PaneKey: Int] = [:]
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
     /// Commands sent to chats that have not come back yet.
@@ -105,6 +109,15 @@ final class Fleet {
         }
         machines = computers.map { computer in
             if var known = machines.first(where: { $0.id == computer.device }) {
+                // Addresses learned since (over Bluetooth, say) go to the
+                // running link too, which otherwise keeps the old ones.
+                if known.computer.origins != computer.origins, let link = links[computer.device] {
+                    let origins = computer.origins
+                    Task {
+                        await link.updateOrigins(origins)
+                        await link.networkChanged()
+                    }
+                }
                 known.computer = computer
                 return known
             }
@@ -227,6 +240,7 @@ final class Fleet {
     // MARK: Views
 
     func openChat(_ key: PaneKey) -> ChatStore {
+        chatViewers[key, default: 0] += 1
         if let open = chats[key] { return open }
         let store = ChatStore(key: key, cached: cache.chat(key.device, pane: key.pane))
         chats[key] = store
@@ -236,7 +250,7 @@ final class Fleet {
     }
 
     func closeChat(_ store: ChatStore) {
-        guard chats[store.key] === store else { return }
+        guard chats[store.key] === store, Self.release(store.key, from: &chatViewers) else { return }
         chats[store.key] = nil
         if let transcript = store.transcript {
             cache.save(chat: transcript, cursor: store.cursor, device: store.key.device, pane: store.key.pane)
@@ -245,6 +259,7 @@ final class Fleet {
     }
 
     func openTerm(_ key: PaneKey) -> TermStore {
+        termViewers[key, default: 0] += 1
         if let open = terms[key] { return open }
         let store = TermStore(key: key)
         terms[key] = store
@@ -267,9 +282,16 @@ final class Fleet {
     }
 
     func closeTerm(_ store: TermStore) {
-        guard terms[store.key] === store else { return }
+        guard terms[store.key] === store, Self.release(store.key, from: &termViewers) else { return }
         terms[store.key] = nil
         Task { await links[store.key.device]?.unwatch(.term(pane: store.key.pane)) }
+    }
+
+    /// One view of `key` closed; whether it was the last.
+    private static func release(_ key: PaneKey, from viewers: inout [PaneKey: Int]) -> Bool {
+        let left = (viewers[key] ?? 1) - 1
+        viewers[key] = left > 0 ? left : nil
+        return left <= 0
     }
 
     /// Sends a command to a chat; answers a reason to show when it failed
