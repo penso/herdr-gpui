@@ -65,9 +65,18 @@ struct WorkspaceScreen: View {
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) { launcher(workspace, online: isOnline(machine)) }
         .navigationDestination(item: $opened) { $0.screen }
-        .task(id: isOnline(machine)) {
-            guard isOnline(machine), agents.isEmpty else { return }
-            agents = (try? await model.fleet.call(key.device) { client, token in try await client.newOptions(bearer: token) }.agents) ?? []
+        // Keyed on the whole status, so a link that comes back at another
+        // address loads again: a phone waking from sleep still shows the
+        // address it had, and the first try there fails.
+        .task(id: machine.status) {
+            guard isOnline(machine) else { return }
+            while agents.isEmpty, !Task.isCancelled {
+                if let loaded = try? await model.fleet.call(key.device, { client, token in try await client.newOptions(bearer: token) }).agents {
+                    agents = loaded
+                    return
+                }
+                try? await Task.sleep(for: .seconds(3))
+            }
         }
         .alert("The tab did not start", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
         } message: {
