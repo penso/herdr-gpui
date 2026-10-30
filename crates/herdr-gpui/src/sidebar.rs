@@ -1,5 +1,6 @@
 //! The sidebar: spaces and agents, the rows that show them, and the hover
 //! menu a resting pointer opens.
+// i18n: migrated
 
 mod accessibility;
 mod activity;

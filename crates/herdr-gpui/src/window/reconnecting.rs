@@ -2,8 +2,9 @@
 //! drop: the last picture dimmed, and a card naming the host, why it dropped,
 //! and a way to retry now. The endpoint keeps retrying on its own backoff and
 //! the window stays on it; nothing typed meanwhile is sent.
+// i18n: migrated
 use super::HerdrWindow;
-use crate::notifications::safe_text;
+use crate::{i18n::fl, notifications::safe_text};
 use gpui::{prelude::*, *};
 
 const MAX_WIDTH: f32 = 420.;
@@ -27,9 +28,9 @@ impl HerdrWindow {
         // A device going away drops on purpose: say so, and offer no retry.
         let removing = self.device_removing(endpoint);
         let reason = if removing {
-            Some("It is being removed.")
+            Some(fl!("window-device-being-removed"))
         } else {
-            endpoint.outage()
+            endpoint.outage().map(str::to_owned)
         };
         let theme = &self.theme;
         let card = div()
@@ -54,21 +55,20 @@ impl HerdrWindow {
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
                     .truncate()
-                    .child(format!(
-                        "{} {}",
+                    .child({
+                        let host = safe_text(&endpoint.label, 80);
                         if removing {
-                            "Removing"
+                            fl!("window-removing", host = host)
                         } else {
-                            "Reconnecting to"
-                        },
-                        safe_text(&endpoint.label, 80)
-                    )),
+                            fl!("window-reconnecting", host = host)
+                        }
+                    }),
             )
             .children(reason.map(|reason| {
                 div()
                     .debug_selector(|| "reconnecting-reason".into())
                     .text_color(rgb(theme.muted))
-                    .child(safe_text(reason, MAX_REASON))
+                    .child(safe_text(&reason, MAX_REASON))
             }))
             .when(!removing, |card| {
                 card.child(
@@ -83,7 +83,7 @@ impl HerdrWindow {
                             .border_color(rgb(theme.active))
                             .cursor_pointer()
                             .hover(|s| s.bg(rgb(theme.active)))
-                            .child("Reconnect now")
+                            .child(fl!("window-reconnect-now"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.reconnect(cx);

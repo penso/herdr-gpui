@@ -1,8 +1,10 @@
 //! The status bar along the window's foot. `[status_bar]` chooses which of
 //! its items show and how compactly, so a crowded bar can give room back.
+// i18n: migrated
 
 use super::HerdrWindow;
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     APP_VERSION,
     config::status_bar::{AwakeScope, Button},
@@ -38,7 +40,7 @@ impl HerdrWindow {
             .id("connection-status")
             .debug_selector(|| "connection-status".into())
             .role(Role::Status)
-            .aria_label("Status bar")
+            .aria_label(fl!("status-bar-label"))
             // Windows pages draw above the bar's tooltips, so those under
             // where a tooltip shows hide while the pointer is over the bar.
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
@@ -82,13 +84,13 @@ impl HerdrWindow {
                         .px(px(6.))
                         .rounded(px(crate::config::corners::SMALL))
                         .bg(rgb(self.theme.active))
-                        .child("Resize"),
+                        .child(fl!("status-bar-resize")),
                 )
                 .child(
                     div()
                         .flex_none()
                         .text_color(rgb(self.theme.muted))
-                        .child("h j k l or arrows resize, Esc ends"),
+                        .child(fl!("status-bar-resize-keys")),
                 )
             })
             .when(!self.live.status.is_connected(), |bar| {
@@ -122,7 +124,7 @@ impl HerdrWindow {
                     self.status_button(
                         "status-theme",
                         glyph("icons/theme.svg", self.theme.foreground),
-                        "Theme",
+                        fl!("status-bar-theme"),
                         items.theme,
                     )
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -135,7 +137,7 @@ impl HerdrWindow {
                     self.status_button(
                         "status-keybinds",
                         glyph("icons/keyboard.svg", self.theme.foreground),
-                        "Shortcuts",
+                        fl!("status-bar-shortcuts"),
                         items.shortcuts,
                     )
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -148,7 +150,7 @@ impl HerdrWindow {
                     self.status_button(
                         "report-issue",
                         self.issue_ring(),
-                        "Report issue",
+                        fl!("status-bar-report-issue"),
                         items.report_issue,
                     )
                     .on_click(cx.listener(|this, _, _, cx| this.open_report_issue(cx))),
@@ -163,9 +165,9 @@ impl HerdrWindow {
                     })
                     .role(Role::Button)
                     .aria_label(if self.updater.update_available() {
-                        SharedString::from("Update available")
+                        fl!("status-bar-update-available")
                     } else {
-                        SharedString::from(format!("Version {APP_VERSION}"))
+                        fl!("status-bar-version", version = APP_VERSION)
                     })
                     .flex_none()
                     .whitespace_nowrap()
@@ -180,9 +182,9 @@ impl HerdrWindow {
                         self.theme.muted
                     }))
                     .child(if self.updater.update_available() {
-                        "Update available"
+                        fl!("status-bar-update-available")
                     } else {
-                        APP_VERSION
+                        APP_VERSION.to_owned()
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_app_update(false, window, cx);
@@ -202,7 +204,7 @@ impl HerdrWindow {
             .debug_selector(|| "agent-model".into())
             .map(|segment| {
                 // A label's name is its value, a button's its label.
-                let spoken = format!("Model {label}");
+                let spoken = fl!("status-bar-model", model = label.as_str());
                 if picker {
                     self.chrome_stop(
                         crate::window::chrome_focus::Region::StatusBar,
@@ -226,7 +228,7 @@ impl HerdrWindow {
             segment
                 .cursor_pointer()
                 .hover(|s| s.bg(rgb(self.theme.active)))
-                .tooltip(self.hint("Change model"))
+                .tooltip(self.hint(fl!("status-bar-change-model")))
                 .on_click(cx.listener(|this, _, _, cx| this.open_agent_model_picker(cx))),
         )
     }
@@ -335,8 +337,8 @@ impl HerdrWindow {
                 self.chrome_stop(crate::window::chrome_focus::Region::StatusBar, control)
             })
             .aria_label(match crate::caffeine::scope(cx) {
-                AwakeScope::Display => "Keep the display awake",
-                AwakeScope::System => "Keep the system awake",
+                AwakeScope::Display => fl!("status-bar-awake-display"),
+                AwakeScope::System => fl!("status-bar-awake-system"),
             })
             .aria_toggled(match cup {
                 Cup::On(_) => Toggled::True,
@@ -344,7 +346,7 @@ impl HerdrWindow {
                 Cup::Off => Toggled::False,
             })
             .when(cup == Cup::On(Mode::UntilAgentsFinish), |button| {
-                button.aria_description("until agents finish")
+                button.aria_description(fl!("status-bar-awake-until-agents"))
             })
             .flex_none()
             .row()
@@ -374,22 +376,22 @@ impl HerdrWindow {
             ))
             .tooltip(self.hint(match (cup, crate::caffeine::scope(cx)) {
                 (Cup::On(Mode::UntilAgentsFinish), AwakeScope::Display) => {
-                    "Keeping the display awake until agents finish"
+                    fl!("status-bar-awake-display-until-agents")
                 }
                 (Cup::On(Mode::UntilAgentsFinish), AwakeScope::System) => {
-                    "Keeping the system awake until agents finish"
+                    fl!("status-bar-awake-system-until-agents")
                 }
                 (Cup::On(Mode::Indefinite), AwakeScope::Display) => {
-                    "Keeping the display awake · Right-click: until agents finish"
+                    fl!("status-bar-awake-display-on")
                 }
                 (Cup::On(Mode::Indefinite), AwakeScope::System) => {
-                    "Keeping the system awake · Right-click: until agents finish"
+                    fl!("status-bar-awake-system-on")
                 }
                 (Cup::Off | Cup::Pending, AwakeScope::Display) => {
-                    "Keep the display awake · Right-click: until agents finish"
+                    fl!("status-bar-awake-display-off")
                 }
                 (Cup::Off | Cup::Pending, AwakeScope::System) => {
-                    "Keep the system awake · Right-click: until agents finish"
+                    fl!("status-bar-awake-system-off")
                 }
             }))
             .on_click(cx.listener(|_, _, _, cx| {
@@ -433,14 +435,15 @@ impl HerdrWindow {
         &self,
         id: &'static str,
         icon: impl IntoElement,
-        label: &'static str,
+        label: String,
         style: Button,
     ) -> Stateful<Div> {
+        let label = SharedString::from(label);
         let button = div()
             .id(id)
             .debug_selector(move || id.into())
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(label.clone())
             .map(|control| {
                 self.chrome_stop(crate::window::chrome_focus::Region::StatusBar, control)
             })
@@ -460,11 +463,15 @@ impl HerdrWindow {
         }
     }
 
-    fn hint(&self, text: &'static str) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    fn hint(
+        &self,
+        text: impl Into<SharedString>,
+    ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+        let text = text.into();
         let (foreground, surface) = (self.theme.foreground, self.theme.surface);
         move |_, cx| {
             cx.new(|_| crate::usage::Hint {
-                text: text.into(),
+                text: text.clone(),
                 foreground,
                 surface,
             })

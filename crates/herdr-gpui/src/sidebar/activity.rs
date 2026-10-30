@@ -16,6 +16,7 @@
 use super::{SidebarMode, agents::Indicators, line_height};
 use crate::direction::Logical;
 use crate::fonts::StyledFont;
+use crate::i18n::fl;
 use crate::{
     Command, HerdrWindow,
     orchestrator::{List, OrchestratorView, ViewId},
@@ -44,16 +45,17 @@ const TITLE_END: f32 = 4.;
 /// One breath of a busy icon's pulse.
 const BUSY_PULSE: std::time::Duration = std::time::Duration::from_millis(1600);
 
-fn label(panel: ActivityPanel) -> &'static str {
+fn label(panel: ActivityPanel) -> SharedString {
     match panel {
-        ActivityPanel::Overview => "Overview",
-        ActivityPanel::Workspaces => "Workspaces",
-        ActivityPanel::PullRequests => "Pull requests",
-        ActivityPanel::Issues => "Issues",
-        ActivityPanel::Security => "Security",
-        ActivityPanel::Automations => "Automations",
-        ActivityPanel::Usage => "Usage",
+        ActivityPanel::Overview => fl!("sidebar-activity-overview"),
+        ActivityPanel::Workspaces => fl!("sidebar-activity-workspaces"),
+        ActivityPanel::PullRequests => fl!("sidebar-activity-pull-requests"),
+        ActivityPanel::Issues => fl!("sidebar-activity-issues"),
+        ActivityPanel::Security => fl!("sidebar-activity-security"),
+        ActivityPanel::Automations => fl!("sidebar-activity-automations"),
+        ActivityPanel::Usage => fl!("sidebar-activity-usage"),
     }
+    .into()
 }
 
 fn icon(panel: ActivityPanel) -> &'static str {
@@ -408,7 +410,7 @@ impl HerdrWindow {
             .debug_selector(|| "activity-bar".into())
             // Each panel replaces the column beside the bar, as a tab does.
             .role(Role::TabList)
-            .aria_label("Activity")
+            .aria_label(fl!("sidebar-activity-bar"))
             .aria_orientation(Orientation::Vertical)
             .w(px(BAR_WIDTH))
             .flex_none()
@@ -477,7 +479,7 @@ impl HerdrWindow {
                 self.bar_button(
                     "activity-settings",
                     "icons/settings.svg",
-                    "Settings",
+                    fl!("sidebar-activity-settings").into(),
                     (BarState::Idle, false),
                     None,
                 )
@@ -492,7 +494,7 @@ impl HerdrWindow {
         &self,
         id: &'static str,
         icon: &'static str,
-        label: &'static str,
+        label: SharedString,
         (state, busy): (BarState, bool),
         bubble: Option<Bubble>,
     ) -> Stateful<Div> {
@@ -539,9 +541,17 @@ impl HerdrWindow {
             Some(Bubble {
                 count,
                 unseen: true,
-            }) => SharedString::from(format!("{label}, {count}, new activity")),
-            Some(Bubble { count, .. }) => SharedString::from(format!("{label}, {count}")),
-            None => SharedString::from(label),
+            }) => SharedString::from(fl!(
+                "sidebar-activity-spoken-new",
+                label = label.as_ref(),
+                count = count
+            )),
+            Some(Bubble { count, .. }) => SharedString::from(fl!(
+                "sidebar-activity-spoken",
+                label = label.as_ref(),
+                count = count
+            )),
+            None => label.clone(),
         };
         div()
             .id(id)
@@ -557,7 +567,7 @@ impl HerdrWindow {
             .rounded(px(crate::config::corners::CONTROL))
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::menu::SettingsHint {
-                    text: label.into(),
+                    text: label.clone(),
                     foreground,
                     surface,
                 })
