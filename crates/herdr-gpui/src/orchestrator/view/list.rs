@@ -745,7 +745,7 @@ fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
         .take(CHECK_PILLS)
         .map(|check| {
             let hue = check_hue(look, check.state);
-            let short: String = check.name.chars().take(4).collect();
+            let short = crate::truncate::cut_width(&check.name, 4).unwrap_or(&check.name);
             div()
                 .flex_none()
                 .px(px(4.))
@@ -753,7 +753,7 @@ fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
                 .bg(rgb(crate::config::mix(look.theme.background, hue, 18)))
                 .text_color(rgb(hue))
                 .text_size(look.tiny())
-                .child(short)
+                .child(short.to_owned())
         })
         .collect();
     if checks.len() > CHECK_PILLS {

@@ -3,7 +3,7 @@ use herdr_chat_protocol::ImageType;
 
 const PNG: &str = "iVBORw0KGgo=";
 
-fn image_chunk(kind: &str, mime: &str) -> serde_json::Value {
+fn image_chunk(kind: &str, mime: &str) -> Value {
     json!({"sessionUpdate": kind,
         "content": {"type": "image", "data": PNG, "mimeType": mime}})
 }

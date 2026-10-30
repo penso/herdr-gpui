@@ -15,6 +15,7 @@ pub(crate) mod backdrop;
 mod bitmap_fonts;
 mod boat;
 pub(crate) mod chat;
+mod cjk_fonts;
 mod cloud;
 mod coder;
 mod container;

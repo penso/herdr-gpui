@@ -40,10 +40,12 @@ mod pasted;
 mod prepared;
 mod questions;
 mod recall;
+mod running;
 mod selection;
 mod session;
 mod start;
 mod stop;
+mod subagents;
 mod terminal_input;
 mod timeline;
 mod tool_glance;
@@ -233,6 +235,7 @@ fn send(stream: &mut Peer, message: &ServerMessage) {
 fn hello(since: Option<Cursor>) -> ClientMessage {
     ClientMessage::Hello {
         client: herdr_chat_protocol::ClientKind::Gui,
+        revision: herdr_chat_protocol::REVISION,
         since,
         version: VERSION,
     }

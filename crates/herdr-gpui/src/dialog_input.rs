@@ -99,7 +99,17 @@ impl DialogInput {
         }
         self.text
             .replace_range(range.clone(), &format!("{text}{after}"));
-        let end = range.start + text.len();
+        let mut end = range.start + text.len();
+        if !marked {
+            // What was typed can join the cluster after it, as a letter typed
+            // before a combining accent does; the caret goes after the cluster.
+            end = self
+                .text
+                .grapheme_indices(true)
+                .map(|(i, _)| i)
+                .find(|i| *i >= end)
+                .unwrap_or(self.text.len());
+        }
         self.selection = if let Some(selected) = selected {
             let start = byte_offset(&text, selected.start);
             range.start + start..range.start + byte_offset(&text, selected.end).max(start)
@@ -413,6 +423,7 @@ mod tests {
     use gpui::Keystroke;
 
     mod branch_format;
+    mod graphemes;
     mod word_keys;
 
     #[test]

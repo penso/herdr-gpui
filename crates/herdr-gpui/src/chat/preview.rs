@@ -24,6 +24,7 @@ use super::{
 use crate::{HerdrWindow, config::ChatLayoutMode};
 
 mod input_resize;
+mod running;
 mod selection;
 
 const PANE: &str = "rich-chat-preview";
@@ -119,10 +120,12 @@ impl Options {
                 | "input-resize"
                 | "tools"
                 | "turns"
+                | "running"
+                | "running-open"
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, conversation, existing, input-resize, tools, turns, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, conversation, existing, input-resize, tools, turns, running, running-open, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -404,6 +407,10 @@ fn install(
     if options.case == "tools" {
         transcript.entries = tool_entries();
     }
+    if options.case.starts_with("running") {
+        transcript.entries = running::entries();
+        transcript.activities = running::activities(super::now_ms());
+    }
     if options.case == "turns" {
         transcript.entries = earlier_turns();
         transcript
@@ -476,6 +483,13 @@ fn install(
         && let Some(pane) = view.chats.pane_mut(PANE)
     {
         pane.expanded.insert(EntryId(1));
+    }
+    // The first sub-agent's steps and the table of what runs, open.
+    if options.case == "running-open"
+        && let Some(pane) = view.chats.pane_mut(PANE)
+    {
+        pane.expanded.insert(EntryId(3));
+        pane.running.set(true, crate::motion::now(), true);
     }
     // One call's output open, the rest folded, as a reader leaves them.
     if options.case == "tools"
@@ -725,6 +739,7 @@ fn tool_entries() -> Vec<Entry> {
             content,
             kind,
             locations: locations.iter().map(|path| (*path).to_owned()).collect(),
+            parent: None,
             status,
             title: title.into(),
         }),

@@ -1,22 +1,23 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::*;
 
+mod activities;
 mod images;
 
-fn update(value: serde_json::Value) -> wire::SessionUpdate {
+fn update(value: Value) -> wire::SessionUpdate {
     serde_json::from_value(value).unwrap()
 }
 
-fn apply(projector: &mut Projector, transcript: &mut Transcript, value: serde_json::Value) {
-    for change in projector.update(transcript, update(value)) {
+fn apply(projector: &mut Projector, transcript: &mut Transcript, value: Value) {
+    for change in projector.update(transcript, update(value), 1_000) {
         transcript.apply(&change).unwrap();
     }
 }
 
-fn chunk(kind: &str, text: &str, message: Option<&str>) -> serde_json::Value {
+fn chunk(kind: &str, text: &str, message: Option<&str>) -> Value {
     let mut value = json!({"sessionUpdate": kind, "content": {"type": "text", "text": text}});
     if let Some(message) = message {
         value["messageId"] = json!(message);

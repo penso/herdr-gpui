@@ -7,7 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Author, CommandId, Image};
 
+mod activity;
 mod question_answers;
+pub use activity::{
+    Activity, ActivityKind, ActivityState, MAX_ACTIVITIES, MAX_ACTIVITY_TEXT, Running,
+};
 pub use question_answers::{MAX_QUESTION_ANSWERS, MAX_QUESTION_TEXT, valid_question_answers};
 
 /// An entry's identity, assigned by the program in increasing order.
@@ -23,6 +27,9 @@ pub struct PermissionId(pub u64);
 /// Everything a client needs to draw the conversation.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Transcript {
+    /// Sub-agents and background shells, running or ended, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activities: Vec<Activity>,
     /// The agent's display name, such as `Claude`.
     pub agent: String,
     /// Permission requests are answered with their allow option as they
@@ -95,6 +102,30 @@ impl Transcript {
         self.options
             .iter()
             .find(|option| option.category == category)
+    }
+
+    /// How many sub-agents and background shells still run.
+    pub fn running(&self) -> Running {
+        let mut running = Running::default();
+        for activity in self
+            .activities
+            .iter()
+            .filter(|activity| activity.is_running())
+        {
+            match activity.kind {
+                ActivityKind::Subagent => running.subagents += 1,
+                ActivityKind::Shell => running.shells += 1,
+                ActivityKind::Other => running.other += 1,
+            }
+        }
+        running
+    }
+
+    /// The activity a tool call started.
+    pub fn activity(&self, call_id: &str) -> Option<&Activity> {
+        self.activities
+            .iter()
+            .find(|activity| activity.call_id == call_id)
     }
 
     pub(crate) fn position(&self, id: EntryId) -> Option<usize> {
@@ -226,6 +257,9 @@ pub struct Tool {
     /// Files the call touches.
     #[serde(default)]
     pub locations: Vec<String>,
+    /// The sub-agent call this call is a step of, when a sub-agent made it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
     #[serde(default)]
     pub status: ToolStatus,
     pub title: String,
@@ -243,6 +277,9 @@ pub enum ToolKind {
     Think,
     Fetch,
     SwitchMode,
+    /// A task delegated to a sub-agent, whose own steps name it as their
+    /// parent.
+    Subagent,
     #[default]
     #[serde(other)]
     Other,

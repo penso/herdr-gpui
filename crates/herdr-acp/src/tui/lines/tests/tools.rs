@@ -11,6 +11,7 @@ fn call(title: &str) -> Entry {
             content: Vec::new(),
             kind: ToolKind::Execute,
             locations: Vec::new(),
+            parent: None,
             status: ToolStatus::Completed,
             title: title.to_owned(),
         }),

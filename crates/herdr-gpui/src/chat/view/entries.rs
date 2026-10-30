@@ -18,9 +18,13 @@ use super::{
 };
 use crate::{HerdrWindow, config::corners, fonts::StyledFont, notifications::safe_text};
 use gpui::{prelude::*, *};
-use herdr_chat_protocol::{Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus};
+use herdr_chat_protocol::{
+    ActivityState, Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus,
+};
 
 mod questions;
+mod steps;
+use steps::steps_label;
 
 /// Locations listed under a folded tool call.
 const LOCATIONS: usize = 3;
@@ -33,9 +37,22 @@ fn tool_kind(kind: ToolKind) -> &'static str {
         ToolKind::Search => "Search",
         ToolKind::Execute => "Run",
         ToolKind::Think => "Think",
+        ToolKind::Subagent => "Sub-agent",
         ToolKind::Fetch => "Fetch",
         ToolKind::SwitchMode => "Mode",
         ToolKind::Other => "Tool",
+    }
+}
+
+/// The word a tool call's card shows for where it stands: what it started
+/// when it started something, which can outlive the call, else the call.
+fn tool_state(activity: Option<ActivityState>, status: ToolStatus) -> &'static str {
+    match (activity, status) {
+        (Some(ActivityState::Running), _) | (None, ToolStatus::InProgress) => "running",
+        (Some(ActivityState::Finished), _) | (None, ToolStatus::Completed) => "done",
+        (Some(ActivityState::Failed), _) | (None, ToolStatus::Failed) => "failed",
+        (Some(ActivityState::Killed), _) => "stopped",
+        (None, ToolStatus::Pending) => "pending",
     }
 }
 
@@ -78,6 +95,12 @@ impl HerdrWindow {
         let Some(entry) = entries.get(index) else {
             return div().into_any_element();
         };
+        // A sub-agent's own steps are listed in its call's card.
+        if let EntryKind::Tool(tool) = &entry.kind
+            && tool.parent.is_some()
+        {
+            return div().into_any_element();
+        }
         let body = chat.prepared.body(entry.id);
         let content = match &entry.kind {
             EntryKind::User { text, .. } | EntryKind::Agent { text } => {
@@ -254,12 +277,18 @@ impl HerdrWindow {
     ) -> Div {
         let theme = &self.theme;
         let hues = Hues::of(theme);
-        let (status, color) = match tool.status {
-            ToolStatus::Pending => ("pending", theme.muted),
-            ToolStatus::InProgress => ("running", hues.yellow),
-            ToolStatus::Completed => ("done", hues.green),
-            ToolStatus::Failed => ("failed", hues.red),
+        let chat = self.chats.pane(pane_id);
+        let activity = chat.and_then(|chat| chat.session.transcript().activity(&tool.call_id));
+        // What a call started outlives it: a background shell runs on after
+        // its call is done, and its card says so until it ends.
+        let status = tool_state(activity.map(|activity| activity.state), tool.status);
+        let color = match status {
+            "running" => hues.yellow,
+            "done" => hues.green,
+            "failed" => hues.red,
+            _ => theme.muted,
         };
+        let steps = chat.map_or(&[][..], |chat| chat.prepared.steps(&tool.call_id));
         let small = self.chat_small_text();
         let summary = match body {
             Some(Body::Tool(summary)) => Some(summary),
@@ -301,6 +330,15 @@ impl HerdrWindow {
                         cx,
                     )),
             )
+            .when(!steps.is_empty(), |header| {
+                header.child(
+                    div()
+                        .flex_none()
+                        .text_size(small)
+                        .text_color(rgb(theme.muted))
+                        .child(steps_label(steps.len())),
+                )
+            })
             .child(
                 div()
                     .flex_none()
@@ -313,6 +351,9 @@ impl HerdrWindow {
             .flex_col()
             .gap(px(2.))
             .child(self.chat_disclosure(header, pane_id, entry, expanded, HeaderText::Label, cx))
+            .when(expanded && !steps.is_empty(), |card| {
+                card.children(chat.map(|chat| self.render_chat_steps(chat, entry, steps)))
+            })
             .children(
                 page_written(tool).map(|path| self.render_chat_file_page(pane_id, entry, path, cx)),
             )

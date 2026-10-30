@@ -5,7 +5,7 @@
 //! bounded, stripped of control characters, and marked as quoted data in the
 //! prompt, which is pasted into an agent's terminal.
 use super::{Location, Tab};
-use crate::notifications::safe_text;
+use crate::truncate::one_line;
 use serde::Deserialize;
 use std::{path::PathBuf, sync::Arc};
 
@@ -162,29 +162,6 @@ pub(crate) enum Report {
     },
 }
 
-/// One line of page text: no controls or direction overrides, no runs of
-/// whitespace, and bounded.
-fn line(text: &str, limit: usize) -> String {
-    // Breaks and controls become spaces first, so words never run together.
-    let spaced: String = text
-        .chars()
-        .take(limit * 4)
-        .map(|c| {
-            if c.is_whitespace() || c.is_control() {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect();
-    let text = safe_text(&spaced, limit * 4);
-    let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => format!("{}\u{2026}", &text[..end]),
-        None => text,
-    }
-}
-
 fn tag(text: &str) -> String {
     let tag: String = text
         .chars()
@@ -219,10 +196,10 @@ impl Report {
                 rect,
             } => Self::Picked {
                 anchor: Anchor::Element {
-                    selector: line(&selector, 1000),
+                    selector: one_line(&selector, 1000),
                     tag: tag(&name),
-                    text: line(&text, 300),
-                    html: line(&html, 2000),
+                    text: one_line(&text, 300),
+                    html: one_line(&html, 2000),
                 },
                 shot: rect,
             },
@@ -233,9 +210,9 @@ impl Report {
                 rect,
             } => Self::Picked {
                 anchor: Anchor::Selection {
-                    selector: line(&selector, 1000),
+                    selector: one_line(&selector, 1000),
                     tag: tag(&name),
-                    quote: line(&quote, 1000),
+                    quote: one_line(&quote, 1000),
                 },
                 shot: rect,
             },
@@ -258,17 +235,17 @@ impl Report {
                     anchor: Anchor::Region {
                         rect: rect.offset(scroll.x, scroll.y),
                         viewport: (viewport.width.max(0.), viewport.height.max(0.)),
-                        container: line(&container, 1000),
+                        container: one_line(&container, 1000),
                         covers: covers
                             .into_iter()
                             .take(MAX_COVERED)
                             .map(|covered| Covered {
-                                selector: line(&covered.selector, 1000),
+                                selector: one_line(&covered.selector, 1000),
                                 tag: tag(&covered.tag),
-                                text: line(&covered.text, 120),
+                                text: one_line(&covered.text, 120),
                             })
                             .collect(),
-                        text: line(&text, 600),
+                        text: one_line(&text, 600),
                     },
                     shot: Some(rect),
                 }
@@ -282,7 +259,7 @@ impl Report {
     /// JSON without characters that could steer a terminal. Too much data
     /// is refused rather than cut into JSON that does not parse.
     fn sent(summary: &str, data: &serde_json::Value) -> Option<Self> {
-        let summary = line(summary, MAX_SUMMARY_CHARS);
+        let summary = one_line(summary, MAX_SUMMARY_CHARS);
         let data = match data {
             serde_json::Value::Null => String::new(),
             data => serde_json::to_string(data).ok()?,
@@ -343,8 +320,8 @@ impl Anchor {
     pub(crate) fn summary(&self) -> String {
         match self {
             Self::Element { tag, text, .. } if text.is_empty() => format!("<{tag}>"),
-            Self::Element { tag, text, .. } => format!("<{tag}> {}", line(text, 60)),
-            Self::Selection { quote, .. } => format!("\u{201c}{}\u{201d}", line(quote, 60)),
+            Self::Element { tag, text, .. } => format!("<{tag}> {}", one_line(text, 60)),
+            Self::Selection { quote, .. } => format!("\u{201c}{}\u{201d}", one_line(quote, 60)),
             Self::Region { rect, .. } => format!(
                 "Region {}\u{00d7}{}",
                 rect.width.round(),
@@ -352,7 +329,7 @@ impl Anchor {
             ),
             Self::Page => "Whole page".into(),
             Self::Sent { summary, .. } if summary.is_empty() => "Page result".into(),
-            Self::Sent { summary, .. } => format!("Page result: {}", line(summary, 60)),
+            Self::Sent { summary, .. } => format!("Page result: {}", one_line(summary, 60)),
         }
     }
 
@@ -398,7 +375,7 @@ impl Note {
     }
 
     pub(crate) fn new(anchor: Anchor, comment: &str) -> Option<Self> {
-        let comment = line(comment, MAX_COMMENT_CHARS);
+        let comment = one_line(comment, MAX_COMMENT_CHARS);
         (!comment.is_empty()).then_some(Self {
             anchor,
             comment,

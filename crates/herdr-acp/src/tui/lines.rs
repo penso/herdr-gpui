@@ -95,6 +95,13 @@ fn prefixed(
 
 /// The lines for one entry, followed by a blank separator line.
 pub(crate) fn entry(entry: &Entry, width: usize) -> Vec<Line<'static>> {
+    // A sub-agent's own steps show under its call in Herdr UI; here the call
+    // alone stands for them.
+    if let EntryKind::Tool(tool) = &entry.kind
+        && tool.parent.is_some()
+    {
+        return Vec::new();
+    }
     let mut lines = Vec::new();
     match &entry.kind {
         EntryKind::User { text, .. } => {

@@ -191,7 +191,9 @@ impl<R: FnMut(Update)> Session<R> {
         if self.acp_session.as_ref() != Some(&notification.session_id) {
             return;
         }
-        let changes = self.projector.update(&self.transcript, notification.update);
+        let changes = self
+            .projector
+            .update(&self.transcript, notification.update, now_ms());
         self.emit_all(changes);
     }
 
@@ -365,6 +367,8 @@ impl<R: FnMut(Update)> Session<R> {
             self.emit(Change::Turn { turn: None });
         }
         self.clear_queue();
+        let gone = project::kill_all(&self.transcript, now_ms());
+        self.emit_all(gone);
         let level = if code == Some(0) {
             NoticeLevel::Info
         } else {

@@ -16,6 +16,7 @@ use gpui::{
 };
 use herdr_client::protocol::{AgentStatus, ClientShellWorkspace};
 use std::ops::Range;
+use unicode_segmentation::UnicodeSegmentation;
 
 mod heading;
 mod results;
@@ -195,25 +196,27 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
     found
 }
 
-/// Characters before a note's match that a row still shows; more are cut.
+/// Characters (grapheme clusters) before a note's match that a row still
+/// shows; more are cut.
 const EXCERPT_REACH: usize = 24;
 /// Characters of a cut note kept before its match.
 const EXCERPT_LEAD: usize = 12;
 
 /// `text`, or when its match starts too far in to show, the text from
 /// shortly before it behind an ellipsis, with the range moved to match.
+/// The cut falls between grapheme clusters, so no accent loses its letter.
 fn excerpt(text: &str, range: Range<usize>) -> (String, Range<usize>) {
-    if text[..range.start].chars().count() <= EXCERPT_REACH {
+    let before = &text[..range.start];
+    if before.graphemes(true).count() <= EXCERPT_REACH {
         return (text.to_owned(), range);
     }
-    // The character before the kept lead.
-    let Some((before, ch)) = text[..range.start].char_indices().rev().nth(EXCERPT_LEAD) else {
+    let Some((start, _)) = before.grapheme_indices(true).nth_back(EXCERPT_LEAD - 1) else {
         return (text.to_owned(), range);
     };
-    let start = before + ch.len_utf8();
-    let moved = |offset: usize| offset - start + '…'.len_utf8();
+    let ellipsis = crate::truncate::ELLIPSIS;
+    let moved = |offset: usize| offset - start + ellipsis.len_utf8();
     (
-        format!("…{}", &text[start..]),
+        format!("{ellipsis}{}", &text[start..]),
         moved(range.start)..moved(range.end),
     )
 }

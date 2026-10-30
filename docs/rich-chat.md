@@ -51,6 +51,22 @@ The Terminal layout still renders chat. The terminal button and
 `herdr-gpui chat show` restores the chat view. These commands change presentation
 without starting or stopping the agent. See the [CLI guide](cli.md#existing-agent-rendering).
 
+## Sub-agents and background shells
+
+When the agent hands a task to a sub-agent or leaves a command running in the
+background, the row above the composer says so after what the agent is doing,
+such as `Writing… 12s · 2 sub-agents · 1 background shell`. A background shell
+outlives the turn that started it, so once the agent is idle the row keeps
+saying what still runs (`1 background shell still running`) and clears when
+everything has ended. Click it for a table of each one: what it is, how long it
+has run or ran, and whether it is running, done, failed, or stopped.
+
+A sub-agent's call is marked **Sub-agent** in the conversation, with the number
+of steps it took; open it to list them. Its steps stay in its card rather than
+in the conversation. A call that started a background shell says `running`
+until the shell ends, even though the call itself is done. Which agents report
+this, and how, is in the [`herdr-acp` README](../crates/herdr-acp/README.md#behaviour).
+
 ## Messages and controls
 
 Write normal Markdown and TeX in user and agent messages. Rich chat supports

@@ -6,6 +6,7 @@
 //! keeps the `codex-acp` adapter for when a release changes them.
 
 mod approval;
+mod background;
 mod bridge;
 mod items;
 mod settings;

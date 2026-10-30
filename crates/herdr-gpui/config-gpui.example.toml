@@ -16,6 +16,11 @@
 # none. Uninstalled names are ignored, and at most 8 are accepted per section.
 # With none installed and [terminal] fallback unset, a pane showing an icon
 # brings up a dismissible card naming a Nerd Font to install.
+# [sidebar], [tabs], and [ui] then fall back to the platform's Chinese,
+# Japanese, and Korean faces (PingFang and Hiragino on macOS, Microsoft YaHei
+# and Yu Gothic on Windows, Noto Sans CJK on Linux), the one matching the
+# first CJK language in `language` or the system's languages first, so Han
+# characters take that region's shapes. [terminal] keeps the icons alone.
 # Saved changes to the local file reload automatically in every GUI window.
 
 # Built-ins: Default, Nord, Dracula, Catppuccin Mocha, Catppuccin Latte, plus

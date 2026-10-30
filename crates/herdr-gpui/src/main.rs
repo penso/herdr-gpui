@@ -142,6 +142,7 @@ mod terminal_painter;
 mod theme_picker;
 mod titlebar;
 mod toggles;
+mod truncate;
 mod update_panel;
 mod usage;
 mod window;

@@ -154,6 +154,8 @@ pub(crate) struct ChatPane {
     /// A read-only overlay owns the keyboard without installing an input handler.
     pub(crate) read_only_focus: Option<FocusHandle>,
     retry_at: Option<Instant>,
+    /// Whether the table of running sub-agents and shells is open.
+    pub(crate) running: crate::motion::Toggle,
     pub(crate) selection: super::selection::Selection,
     /// What the composer's round button does; the poll keeps it current as
     /// the composer changes, since typing does not redraw the window.
@@ -263,6 +265,7 @@ impl ChatPane {
             rail: true,
             read_only_focus: None,
             retry_at: None,
+            running: Default::default(),
             selection: Default::default(),
             send: SendButton::Off,
             session: Session::default(),

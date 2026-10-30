@@ -245,8 +245,7 @@ fn consumed_question_ids_remain_bounded() {
                 )
             })
             .collect(),
-        transcript: Transcript::default(),
-        tools: HashMap::new(),
+        ..Projection::default()
     };
     projection.codex(EntryId(1), &request("call1", &["Question?"]));
     let source = envelope(vec![reply("call1", 0, "Question?", "Answer")]);
@@ -271,8 +270,7 @@ fn remembered_question_text_has_a_separate_memory_bound() {
                 answer: "A".repeat(MAX_TRANSCRIPT_TEXT - 4),
             },
         )]),
-        transcript: Transcript::default(),
-        tools: HashMap::new(),
+        ..Projection::default()
     };
     projection.codex(EntryId(1), &request("call1", &["Question?"]));
     let source = envelope(vec![reply("call1", 0, "Question?", "Answer")]);
