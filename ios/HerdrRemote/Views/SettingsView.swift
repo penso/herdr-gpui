@@ -65,7 +65,12 @@ struct SettingsView: View {
                     set: { on in
                         // Turning the lock off asks too, so a borrowed,
                         // unlocked phone cannot drop it.
-                        Task { if await OwnerCheck.confirm(on ? "Lock Herdr Remote" : "Stop locking Herdr Remote") { requireFaceID = on } }
+                        Task {
+                            if await OwnerCheck.confirm(on ? "Lock Herdr Remote" : "Stop locking Herdr Remote") {
+                                requireFaceID = on
+                                model.appLockChanged()
+                            }
+                        }
                     }
                 ))
             } header: {

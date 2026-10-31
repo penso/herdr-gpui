@@ -77,10 +77,22 @@ struct ChatQuery: EntityStringQuery {
 @MainActor
 final class SpotlightChats {
     private var indexed: [String: String] = [:]
+    /// Spotlight was emptied for the app lock since it was last turned on.
+    private var clearedForLock = false
 
+    /// The app lock hides chat names from Spotlight too. What an earlier
+    /// launch indexed is not in `indexed`, so turning the lock on, or
+    /// launching with it on, empties the index of every chat.
     func update(_ summary: WidgetSummary) {
-        // The app lock hides chat names from Spotlight too.
-        let chats = AppLock.isOn ? [] : summary.chats
+        guard !AppLock.isOn else {
+            indexed = [:]
+            guard !clearedForLock else { return }
+            clearedForLock = true
+            Task { try? await CSSearchableIndex.default().deleteAppEntities(ofType: ChatEntity.self) }
+            return
+        }
+        clearedForLock = false
+        let chats = summary.chats
         let current = Dictionary(chats.map { ($0.id, "\($0.title)|\($0.computer)|\($0.workspace)") }, uniquingKeysWith: { first, _ in first })
         guard current != indexed else { return }
         let gone = Set(indexed.keys).subtracting(current.keys)

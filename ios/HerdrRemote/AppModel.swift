@@ -41,6 +41,12 @@ final class AppModel {
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
 
+    /// Spotlight follows the app lock as soon as it changes, not at the
+    /// next change to the chats.
+    func appLockChanged() {
+        spotlight.update(WidgetSummary.load())
+    }
+
     /// The one model, for intents iOS runs in the app's process.
     static var current: AppModel?
 
@@ -99,6 +105,8 @@ final class AppModel {
             spotlight.update(summary)
             WatchLink.shared.publish(summary)
         }
+        // At launch too: Spotlight may hold chats from before the lock.
+        spotlight.update(WidgetSummary.load())
         WatchLink.shared.start()
         paths.pathUpdateHandler = { [weak self] _ in
             Task { @MainActor in self?.fleet.networkChanged() }
