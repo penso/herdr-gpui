@@ -160,7 +160,6 @@ impl Localize for Error {
             Self::SnapshotIdentity => fl!("error-client-snapshot-identity"),
             Self::SocketClosed => fl!("error-client-socket-closed"),
             Self::Ssh(error) => error.localize(),
-            Self::TerminalAttach(error) => error.localize(),
             // Its path is for diagnostics; the message is the failure's own.
             Self::Storage { source, .. } => source.localize(),
             Self::StorageDestinationNotFile => fl!("error-client-storage-destination-not-file"),
@@ -170,6 +169,7 @@ impl Localize for Error {
                 fl!("error-client-surface-encoding-not-negotiated")
             }
             Self::SurfaceIdentity => fl!("error-client-surface-identity"),
+            Self::TerminalAttach(error) => error.localize(),
             Self::UnsolicitedResponse => fl!("error-client-unsolicited-response"),
             Self::UnsupportedMethod => fl!("error-client-unsupported-method"),
             Self::UnsupportedSurfaceInterest => fl!("error-client-unsupported-surface-interest"),
