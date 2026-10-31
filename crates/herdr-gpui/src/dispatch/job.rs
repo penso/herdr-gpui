@@ -237,7 +237,7 @@ impl Job {
     pub(crate) fn status(&self) -> String {
         #[cfg(feature = "cloud")]
         if let (None, Some(step)) = (self.step, &self.provision) {
-            return format!("Making {}: {}", self.host, step.text());
+            return format!("Making {}: {}", self.host, crate::cloud::status::step(step));
         }
         match self.step {
             None => format!("Starting on {}...", self.host),

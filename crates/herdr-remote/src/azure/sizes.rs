@@ -101,19 +101,6 @@ impl SandboxSize {
             .find(|&&choice| f64::from(choice) == millicores)
             .map(|&millicores| Self::standard(millicores))
     }
-
-    /// The size as a choice shows it, with the disk the service gives.
-    pub fn summary(self) -> String {
-        format!("{} · {} GiB disk", self.short(), self.disk_gib())
-    }
-
-    pub fn short(self) -> String {
-        format!(
-            "{} vCPU · {}",
-            self.cores(),
-            memory_text(u64::from(self.memory_mib))
-        )
-    }
 }
 
 /// The feature letters after a size's vCPU count, as `pls` in
@@ -164,41 +151,14 @@ pub struct VmSpec {
     pub memory_mb: u64,
 }
 
-impl VmSpec {
-    pub fn summary(self, size: &str) -> String {
-        format!(
-            "{} vCPU · {} · {}",
-            self.cores,
-            memory_text(self.memory_mb),
-            if is_arm(size) { "Arm" } else { "x64" }
-        )
-    }
-}
-
-fn memory_text(mib: u64) -> String {
-    if mib.is_multiple_of(1024) {
-        format!("{} GiB", mib / 1024)
-    } else {
-        format!("{:.1} GiB", mib as f64 / 1024.0)
-    }
-}
-
 /// An hourly list price in US dollars.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Price(pub f64);
 
 impl Price {
-    /// `$0.0095/hr · ~$7/mo`, a month being 730 running hours.
-    pub fn text(self, month: bool) -> String {
-        let hourly = if self.0 < 1.0 {
-            format!("${:.4}/hr", self.0)
-        } else {
-            format!("${:.2}/hr", self.0)
-        };
-        if !month {
-            return hourly;
-        }
-        format!("{hourly} · ~${:.0}/mo", self.0 * HOURS_PER_MONTH)
+    /// What the price comes to over a month of 730 running hours.
+    pub fn monthly(self) -> f64 {
+        self.0 * HOURS_PER_MONTH
     }
 }
 
@@ -389,13 +349,27 @@ pub fn rates(items: &[PriceItem]) -> Option<SandboxRates> {
     })
 }
 
+/// A saved machine's size, which Settings writes out in the window's
+/// language.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DeviceSize {
+    /// A VM: Azure's size name, its specs when the region lists them, and
+    /// whether it runs as Spot.
+    Vm {
+        size: String,
+        spec: Option<VmSpec>,
+        spot: bool,
+    },
+    Sandbox(SandboxSize),
+}
+
 /// Each saved device's size, as Settings lists it, by device ID. Best
 /// effort: a device whose machine is gone or unreadable is left out.
 pub fn device_sizes(
     settings: &Settings,
     devices: &[SavedDevice],
     catalog: &Catalog,
-) -> HashMap<String, String> {
+) -> HashMap<String, DeviceSize> {
     use super::machine::Machine;
     let mut sizes = HashMap::new();
     let vms = devices
@@ -407,17 +381,14 @@ pub fn device_sizes(
             if let Machine::Vm(name) = Machine::parse(&device.id)
                 && let Some(vm) = found.get(&name.to_ascii_lowercase())
             {
-                let size = &vm.size;
-                let mut text = match catalog.vms.get(size) {
-                    Some(spec) => format!("{size} · {}", spec.summary(size)),
-                    None => size.clone(),
-                };
-                text.push_str(if vm.spot {
-                    " · Spot"
-                } else {
-                    " · regular price"
-                });
-                sizes.insert(device.id.clone(), text);
+                sizes.insert(
+                    device.id.clone(),
+                    DeviceSize::Vm {
+                        spec: catalog.vms.get(&vm.size).copied(),
+                        size: vm.size.clone(),
+                        spot: vm.spot,
+                    },
+                );
             }
         }
     }
@@ -429,7 +400,7 @@ pub fn device_sizes(
             if let Machine::Sandbox(id) = Machine::parse(&device.id)
                 && let Some(size) = found.get(id)
             {
-                sizes.insert(device.id.clone(), size.short());
+                sizes.insert(device.id.clone(), DeviceSize::Sandbox(*size));
             }
         }
     }

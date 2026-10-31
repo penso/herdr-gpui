@@ -103,7 +103,10 @@ fn status_text(enabled: bool, status: Option<&Status>, error: Option<&str>) -> S
 pub(super) fn line(device: &Device, now_ms: u64) -> String {
     let seen = match device.last_seen_ms {
         _ if device.connected => "connected".to_owned(),
-        Some(seen) => format!("last seen {}", crate::remote::ago(seen, now_ms)),
+        Some(seen) => format!(
+            "last seen {}",
+            crate::ago::english(now_ms.saturating_sub(seen) / 1000)
+        ),
         None => "never connected".to_owned(),
     };
     let push = if device.push {

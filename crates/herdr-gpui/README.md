@@ -2666,7 +2666,12 @@ its dashes turn solid once its target is verified:
 
 A plain URL is read from its row. One that reaches the pane's right edge may
 wrap onto the next row; a daemon that offers `pane.link.resolve` reads it
-whole, and otherwise it needs explicit terminal hyperlink metadata. Paths are
+whole, and otherwise it needs explicit terminal hyperlink metadata. A file
+path or `file://` address that fills a row to the right edge and goes on in
+the next is read across those rows, up to 16 of them. The rest may start the
+next row, where the terminal wraps it, or follow an indent, where an agent
+wraps its own output under a list item. Once the whole path is found on disk,
+every row of it is underlined, and a click on any of them opens it. Paths are
 not links in panes on SSH hosts, whose files live on that host.
 
 A file opens in your terminal editor at the printed line, in a new pane split

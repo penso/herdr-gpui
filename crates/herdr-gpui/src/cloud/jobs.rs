@@ -116,7 +116,7 @@ impl HerdrWindow {
             id,
             provider,
             name,
-            status: format!("Contacting {}…", crate::cloud::name(provider)),
+            status: crate::cloud::status::contacting(provider),
             progress: None,
             setup,
             _worker: worker,
@@ -134,7 +134,7 @@ impl HerdrWindow {
         match update {
             Update::Step(step) => {
                 let job = &mut self.cloud_jobs.jobs[index];
-                job.status = step.text();
+                job.status = crate::cloud::status::step(&step);
                 job.progress = Some(step.progress());
             }
             Update::Finished(result) => {
