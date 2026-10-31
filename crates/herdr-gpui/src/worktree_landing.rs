@@ -10,9 +10,9 @@ use crate::{
     teleport::{AgentKind, Host},
 };
 use gpui::{
-    AnyElement, App, Context, Global, InteractiveElement, IntoElement, ParentElement, Role,
-    SharedString, StatefulInteractiveElement, Styled, Toggled, div, prelude::FluentBuilder, px,
-    rgb,
+    AnyElement, App, AppContext, Context, Global, InteractiveElement, IntoElement, ParentElement,
+    Role, SharedString, StatefulInteractiveElement, Styled, Toggled, div, prelude::FluentBuilder,
+    px, rgb,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -338,10 +338,12 @@ impl HerdrWindow {
 }
 
 impl HerdrWindow {
-    /// The dialog's landing choices as one strip: the terminal, then each
-    /// agent the host has, wrapping on a narrow dialog.
+    /// The dialog's landing choices as a row of icon tiles: the terminal,
+    /// then each agent the host has by its logo, named in a tooltip and to
+    /// assistive technology. A narrow dialog wraps them.
     pub(crate) fn render_landing(&self, picker: &Picker, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
+        let (foreground, surface) = (theme.foreground, theme.surface);
         div()
             .id("worktree-landing")
             .debug_selector(|| "worktree-landing".into())
@@ -350,32 +352,48 @@ impl HerdrWindow {
             .flex()
             .flex_wrap()
             .items_center()
-            .gap(px(4.))
+            .gap(px(6.))
             .children(picker.offered().into_iter().map(|landing| {
                 let on = picker.chosen == landing;
-                let (key, label): (&str, SharedString) = match landing {
-                    Landing::Terminal => ("terminal", fl!("worktree-landing-terminal").into()),
-                    Landing::Agent(kind) => (kind.name(), kind.name().into()),
+                let (key, name, icon): (&str, SharedString, &'static str) = match landing {
+                    Landing::Terminal => (
+                        "terminal",
+                        fl!("worktree-landing-terminal").into(),
+                        "icons/terminal.svg",
+                    ),
+                    Landing::Agent(kind) => (
+                        kind.name(),
+                        kind.name().into(),
+                        crate::icons::AgentIcon::from_identity(Some(kind.name())).path(),
+                    ),
                 };
+                let hint = name.clone();
                 div()
                     .id(SharedString::from(format!("worktree-landing-{key}")))
                     .debug_selector(move || format!("worktree-landing-{key}"))
                     .role(Role::RadioButton)
+                    .aria_label(name)
                     .aria_toggled(if on { Toggled::True } else { Toggled::False })
-                    .px(px(10.))
-                    .py(px(3.))
-                    .rounded(px(crate::config::corners::SMALL))
+                    .size(px(32.))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(crate::config::corners::CONTROL))
                     .border_1()
-                    .border_color(rgb(theme.active))
-                    .whitespace_nowrap()
-                    .text_color(rgb(if on {
-                        theme.foreground
-                    } else {
-                        theme.subtext()
-                    }))
-                    .when(on, |chip| chip.bg(rgb(theme.active)))
-                    .when(!on, |chip| {
-                        chip.cursor_pointer()
+                    .border_color(rgb(if on { theme.primary() } else { theme.active }))
+                    .when(on, |tile| tile.bg(rgb(theme.primary_wash())))
+                    .hover(|tile| tile.bg(rgb(theme.active)))
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| crate::usage::Hint {
+                            text: hint.clone(),
+                            foreground,
+                            surface,
+                        })
+                        .into()
+                    })
+                    .when(!on, |tile| {
+                        tile.cursor_pointer()
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if let Some(picker) = &mut this.menu.landing
                                     && picker.choose(landing)
@@ -384,7 +402,11 @@ impl HerdrWindow {
                                 }
                             }))
                     })
-                    .child(label)
+                    .child(crate::icons::icon(
+                        icon,
+                        18.,
+                        if on { foreground } else { theme.subtext() },
+                    ))
             }))
             .when(picker.looking(), |strip| {
                 strip.child(
