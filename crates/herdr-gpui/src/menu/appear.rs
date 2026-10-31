@@ -86,7 +86,17 @@ impl Appear {
         if self.leaving.map(|(page, _)| page) != self.kept.as_ref().map(|(page, _)| *page) {
             self.kept = None;
         }
-        self.since = shown.is_some().then_some(now).filter(|_| !still);
+        // All Devices stays drawn beneath a session form it opened, so
+        // closing the form uncovers it where it was rather than showing it
+        // anew; only the dimming lifts.
+        let uncovered = page == Some(Page::Devices)
+            && last == page
+            && self.shown == Some(Shown::Dialog)
+            && matches!(shown, Some(Shown::Popover(_)));
+        self.since = shown
+            .is_some()
+            .then_some(now)
+            .filter(|_| !still && !uncovered);
         self.backdrop.set(shown == Some(Shown::Dialog), now, still);
         self.shown = shown;
     }

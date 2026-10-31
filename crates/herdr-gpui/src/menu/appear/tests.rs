@@ -234,5 +234,8 @@ fn the_dimming_lifts_behind_the_picker_a_dialog_returns_to(cx: &mut gpui::TestAp
         assert_eq!(view.menu.appear.backdrop(open), 1.);
         assert!(view.menu.appear.moving(open));
         assert_eq!(view.menu.appear.backdrop(open + LEAVE), 0.);
+        // The picker was drawn beneath the form all along, so it is uncovered
+        // in place rather than rising out of the footer again.
+        assert_eq!(view.menu.appear.panel(open), 1.);
     });
 }
