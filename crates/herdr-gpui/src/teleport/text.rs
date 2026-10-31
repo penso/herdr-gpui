@@ -1,9 +1,10 @@
-//! What the Teleport dialog says about a move, from `teleport.ftl`.
-//! `herdr_remote::teleport` keeps its English labels for logs and errors.
+//! What the Teleport dialog and the pane menu's move to another device say
+//! about a move, from `teleport.ftl`. `herdr_remote::teleport` keeps its
+//! English labels for logs.
 
-use crate::i18n::fl;
+use crate::i18n::{errors::Localize, fl};
 use crate::teleport::{
-    Step,
+    Step, Warning,
     job::{Action, Candidate, Destination},
     launch::{Work, command_line},
     provision::Arrival,
@@ -11,7 +12,7 @@ use crate::teleport::{
 };
 
 /// The review's first line: where the worktree goes, and how.
-pub(super) fn destination(candidate: &Candidate) -> String {
+pub(crate) fn destination(candidate: &Candidate) -> String {
     let host = candidate.place.label.as_str();
     match &candidate.destination {
         Destination::Open { repository, reason } => {
@@ -42,7 +43,7 @@ pub(super) fn destination(candidate: &Candidate) -> String {
 }
 
 /// What a pane will run on the destination, as the review lists it.
-pub(super) fn pane(work: &Work, action: &Action) -> String {
+pub(crate) fn pane(work: &Work, action: &Action) -> String {
     // i18n: data
     let program = work.program().unwrap_or("shell");
     match action {
@@ -83,5 +84,39 @@ pub(crate) fn step(step: Option<Step>) -> String {
         Step::Credentials => fl!("teleport-step-credentials"),
         Step::Sessions => fl!("teleport-step-sessions"),
         Step::Launch => fl!("teleport-step-launch"),
+    }
+}
+
+/// What did not carry over in a move that otherwise finished.
+pub(crate) fn warning(warning: &Warning) -> String {
+    match warning {
+        Warning::AgentStartedAfresh { agent, source } => fl!(
+            "teleport-warning-started-afresh",
+            agent = agent.binary(),
+            error = source.localize()
+        ),
+        Warning::EnvrcTracked => fl!("teleport-warning-envrc"),
+        Warning::GitHubAccess { source } => {
+            fl!("teleport-warning-github", error = source.localize())
+        }
+        Warning::NoHandoffNote {
+            pane: Some(pane),
+            source,
+        } => fl!(
+            "teleport-warning-no-note-from",
+            pane = pane.as_str(),
+            error = source.localize()
+        ),
+        Warning::NoHandoffNote { pane: None, source } => {
+            fl!("teleport-warning-no-note", error = source.localize())
+        }
+        Warning::ProgramMissing { program, host } => fl!(
+            "teleport-warning-missing",
+            program = program.as_str(),
+            host = host.as_str()
+        ),
+        Warning::SourcePaneOpen { source } => {
+            fl!("teleport-warning-pane-open", error = source.localize())
+        }
     }
 }
