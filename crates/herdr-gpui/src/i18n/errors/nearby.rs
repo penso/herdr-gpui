@@ -1,4 +1,4 @@
-//! The nearby pairing helper: `error-nearby.ftl`.
+//! The nearby Bluetooth relay: `error-nearby.ftl`.
 
 use super::Localize;
 use crate::{i18n::fl, remote::nearby::Error};

@@ -1,5 +1,5 @@
-//! `herdr_client::terminal_attach::Error`: one terminal's direct attach,
-//! from `error-client-terminal-attach.ftl`.
+//! `herdr_client::terminal_attach::Error`, a direct terminal attach, from
+//! `error-client-terminal-attach.ftl`.
 
 use super::Localize;
 use crate::i18n::fl;
@@ -14,6 +14,7 @@ impl Localize for Error {
             Self::Io(_) => fl!("error-client-terminal-attach-io"),
             Self::Protocol(_) => fl!("error-client-terminal-attach-protocol"),
             Self::Refused(None) => fl!("error-client-terminal-attach-refused"),
+            // Herdr's own bounded words for why.
             Self::Refused(Some(reason)) => fl!(
                 "error-client-terminal-attach-refused-reason",
                 reason = reason.as_str()
