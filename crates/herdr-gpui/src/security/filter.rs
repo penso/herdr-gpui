@@ -40,7 +40,7 @@ impl SecuritySearch {
     pub(crate) fn new(cx: &mut Context<HerdrWindow>) -> Self {
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder(&fl!("security-filter"), cx);
+            input.set_placeholder_with(|| fl!("security-filter"), cx);
             input.set_frameless(cx);
             input
         });
