@@ -113,6 +113,7 @@ impl TabKind {
             Self::Review => "review",
             Self::Orchestrator => "orchestrator",
             Self::Devices => "devices",
+            Self::CoreTerminal => "core_terminal",
             Self::Editor => "editor",
         }
     }
@@ -133,6 +134,8 @@ pub enum TabKind {
     Review,
     Orchestrator,
     Devices,
+    /// A herdr-core (Herdr 2) terminal the app draws.
+    CoreTerminal,
     /// The workspace's VS Code tab.
     Editor,
 }

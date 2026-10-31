@@ -2,6 +2,7 @@
 //! Recovery advice wraps and stays available until the user closes the dialog.
 use super::{Page, add_device::Step, setup::SaveOutcome};
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -70,7 +71,7 @@ impl HerdrWindow {
                             .w_full()
                             .whitespace_normal()
                             .text_color(rgb(self.theme.ink(self.theme.palette[3])))
-                            .child(warning),
+                            .child(crate::i18n::message(warning, &[])),
                     ),
             )
             .child(
@@ -96,7 +97,7 @@ impl HerdrWindow {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.dismiss_menu(window, cx);
                             }))
-                            .child("Done"),
+                            .child(fl!("devices-setup-done")),
                     ),
             )
     }

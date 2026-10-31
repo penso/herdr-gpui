@@ -43,6 +43,10 @@ impl Classic {
 }
 
 impl TabLayout for Classic {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Classic
+    }
+
     fn width(
         &self,
         title: f32,

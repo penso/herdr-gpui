@@ -5,6 +5,7 @@
 //! listing, presets, removal) run through `cloud::worker` and stop with it.
 
 use super::super::Page;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     cloud::{CloudProvider, worker},
@@ -76,14 +77,14 @@ impl HerdrWindow {
 
     fn coder_input(
         &self,
-        placeholder: &str,
+        placeholder: fn() -> String,
         text: &str,
         cx: &mut Context<Self>,
     ) -> Entity<SearchInput> {
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-            input.set_placeholder(placeholder, cx);
+            input.set_placeholder_with(placeholder, cx);
             if !text.is_empty() {
                 input.set_text_selected(text, cx);
             }
@@ -99,8 +100,8 @@ impl HerdrWindow {
             choice: None,
             presets: None,
             preset: None,
-            name: self.coder_input("Workspace name", &name, cx),
-            label: self.coder_input("Device name (defaults to the workspace name)", "", cx),
+            name: self.coder_input(|| fl!("devices-coder-name-placeholder"), &name, cx),
+            label: self.coder_input(|| fl!("devices-coder-label-placeholder"), "", cx),
             install: true,
             setup: true,
             status: None,
@@ -143,6 +144,7 @@ impl HerdrWindow {
         let account = Account {
             user: serde_json::from_str(r#"{"id":"u1","username":"fixture-user"}"#).unwrap(),
             templates: serde_json::from_str(
+                // i18n: data
                 r#"[{"id":"t1","name":"docker","display_name":"Docker with a very long display name that must truncate","organization_name":"acme","active_version_id":"v1"}]"#,
             )
             .unwrap(),
@@ -212,7 +214,7 @@ impl HerdrWindow {
             }
             Update::SignedIn(Ok(false)) => wizard.phase = Phase::SignedOut,
             Update::Opened(url) => {
-                wizard.status = Some("Finish signing in in your browser…".into());
+                wizard.status = Some(fl!("devices-coder-finish-sign-in"));
                 cx.open_url(&url);
             }
             Update::Account(Ok(account)) => {
@@ -266,7 +268,7 @@ impl HerdrWindow {
             return;
         }
         wizard.phase = Phase::SigningIn;
-        wizard.status = Some("Opening the Coder sign-in page…".into());
+        wizard.status = Some(fl!("devices-coder-opening-sign-in"));
         self.set_coder_error(None);
         self.coder_job(cx, |settings, cancelled, send| {
             let result = setup::begin_sign_in(settings).and_then(|pending| {
@@ -326,7 +328,7 @@ impl HerdrWindow {
             _ => return,
         }
         let (Some(account), Some(choice)) = (&wizard.account, &wizard.choice) else {
-            self.set_coder_error(Some("Choose a template or an existing workspace.".into()));
+            self.set_coder_error(Some(fl!("devices-coder-choose")));
             cx.notify();
             return;
         };
@@ -365,16 +367,14 @@ impl HerdrWindow {
                 };
                 let name = wizard.name.read(cx).text().trim().to_owned();
                 let problem = if !crate::coder::valid_name(&name) {
-                    Some(
-                        "Workspace names use lowercase letters, digits, and single hyphens (at most 32).",
-                    )
+                    Some(fl!("devices-coder-invalid-name"))
                 } else if account.workspaces.iter().any(|w| w.name == name) {
-                    Some("A workspace with this name already exists.")
+                    Some(fl!("devices-coder-name-taken"))
                 } else {
                     None
                 };
                 if let Some(problem) = problem {
-                    self.set_coder_error(Some(problem.into()));
+                    self.set_coder_error(Some(problem));
                     cx.notify();
                     return;
                 }
@@ -393,7 +393,10 @@ impl HerdrWindow {
             }
         };
         if self.cloud_jobs.contains(CloudProvider::Coder, &name) {
-            self.set_coder_error(Some(format!("{name} is already being added.")));
+            self.set_coder_error(Some(fl!(
+                "devices-coder-already-adding",
+                name = name.as_str()
+            )));
             cx.notify();
             return;
         }
@@ -453,9 +456,9 @@ impl HerdrWindow {
                     .min_w_0()
                     .child(div().truncate().child(title))
                     .when(!detail.is_empty(), |column| {
+                        // Wraps: the install row's detail is a sentence.
                         column.child(
                             div()
-                                .truncate()
                                 .text_size(px(self.config.ui.size * 0.85))
                                 .text_color(rgb(theme.muted))
                                 .child(detail),
@@ -468,7 +471,7 @@ impl HerdrWindow {
 
     fn render_coder_choices(&self, wizard: &Wizard, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
-        let heading = |text: &'static str| {
+        let heading = |text: String| {
             div()
                 .flex_none()
                 .pt(px(4.))
@@ -479,12 +482,12 @@ impl HerdrWindow {
         let Some(account) = &wizard.account else {
             return body;
         };
-        body = body.child(heading("NEW WORKSPACE"));
+        body = body.child(heading(fl!("devices-coder-new-workspace")));
         if account.templates.is_empty() {
             body = body.child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("No templates are available to this account."),
+                    .child(fl!("devices-coder-no-templates")),
             );
         }
         for (index, template) in account.templates.iter().enumerate() {
@@ -503,13 +506,16 @@ impl HerdrWindow {
             }
         }
         if !account.workspaces.is_empty() {
-            body = body.child(heading("EXISTING WORKSPACE"));
+            body = body.child(heading(fl!("devices-coder-existing-workspace")));
         }
         for (index, workspace) in account.workspaces.iter().enumerate() {
             let checked = wizard.choice.as_ref() == Some(&Choice::Existing(workspace.id.clone()));
             let chosen = workspace.clone();
             let detail = if account.saved.contains(&workspace.id) {
-                format!("{} · saved device", workspace.template_name)
+                fl!(
+                    "devices-coder-saved",
+                    template = workspace.template_name.as_str()
+                )
             } else {
                 workspace.template_name.clone()
             };
@@ -541,24 +547,31 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child("Workspace name")
+                    .child(fl!("devices-coder-name"))
                     .child(wizard.name.clone()),
             );
         match &wizard.presets {
             None => {
-                section =
-                    section.child(div().text_color(rgb(theme.muted)).child("Loading presets…"));
+                section = section.child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("devices-coder-loading-presets")),
+                );
             }
             Some(presets) if presets.is_empty() => {}
             Some(presets) => {
-                let mut list = div().flex().flex_col().gap(px(2.)).child("Preset");
+                let mut list = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(fl!("devices-coder-preset"));
                 for (index, preset) in presets.iter().enumerate() {
                     let id = preset.id.clone();
                     list = list.child(self.coder_row(
                         ("coder-preset", index),
                         preset.name.clone(),
                         if preset.default {
-                            "Default".into()
+                            fl!("devices-coder-default")
                         } else {
                             String::new()
                         },
@@ -623,7 +636,7 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .rounded(px(crate::config::corners::CONTROL))
                         .hover(|s| s.bg(rgb(theme.active)))
-                        .child("Sign out")
+                        .child(fl!("devices-coder-sign-out"))
                         .on_click(cx.listener(|this, _, _, cx| this.coder_sign_out(cx))),
                 )
             });
@@ -644,56 +657,55 @@ impl HerdrWindow {
         let text = |text: String| div().flex_none().text_color(rgb(theme.muted)).child(text);
         let has_script = matches!(self.config.cloud.script(CloudProvider::Coder), Ok(Some(_)));
         body = match wizard.phase {
-            Phase::Checking | Phase::Loading => {
-                body.child(text("Checking your Coder account…".into()))
-            }
-            Phase::SignedOut => body.child(text(
-                "Sign in with your Coder account to create workspaces and add them as devices."
-                    .into(),
-            )),
+            Phase::Checking | Phase::Loading => body.child(text(fl!("devices-coder-checking"))),
+            Phase::SignedOut => body.child(text(fl!("devices-coder-sign-in-intro"))),
             Phase::SigningIn => body,
             // Removing a saved device names and installs nothing.
-            Phase::Choose => body
-                .child(self.render_coder_choices(wizard, cx))
-                .when(!removing, |body| {
-                    body.child(
-                        div()
-                            .flex_none()
-                            .flex()
-                            .flex_col()
-                            .gap(px(6.))
-                            .child("Label")
-                            .child(wizard.label.clone()),
-                    )
-                    .child(self.coder_row(
-                        "coder-install",
-                        "Install Herdr if it is missing".into(),
-                        "Runs curl -fsSL https://herdr.dev/install.sh | sh in the workspace; the installer verifies the release checksum".into(),
-                        wizard.install,
-                        cx,
-                        |this, cx| {
-                            if let Some(wizard) = &mut this.menu.coder {
-                                wizard.install = !wizard.install;
-                            }
-                            cx.notify();
-                        },
-                    ))
-                    .when(has_script, |body| {
-                        body.child(self.coder_row(
-                            "coder-run-setup",
-                            "Run the setup script when it connects".into(),
-                            crate::cloud_setup::summary(&self.config.cloud, CloudProvider::Coder),
-                            wizard.setup,
+            Phase::Choose => {
+                body.child(self.render_coder_choices(wizard, cx))
+                    .when(!removing, |body| {
+                        body.child(
+                            div()
+                                .flex_none()
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.))
+                                .child(fl!("devices-coder-label"))
+                                .child(wizard.label.clone()),
+                        )
+                        .child(self.coder_row(
+                            "coder-install",
+                            fl!("devices-coder-install"),
+                            fl!("devices-coder-install-detail"),
+                            wizard.install,
                             cx,
                             |this, cx| {
                                 if let Some(wizard) = &mut this.menu.coder {
-                                    wizard.setup = !wizard.setup;
+                                    wizard.install = !wizard.install;
                                 }
                                 cx.notify();
                             },
                         ))
+                        .when(has_script, |body| {
+                            body.child(self.coder_row(
+                                "coder-run-setup",
+                                fl!("devices-coder-run-setup"),
+                                crate::cloud_setup::summary(
+                                    &self.config.cloud,
+                                    CloudProvider::Coder,
+                                ),
+                                wizard.setup,
+                                cx,
+                                |this, cx| {
+                                    if let Some(wizard) = &mut this.menu.coder {
+                                        wizard.setup = !wizard.setup;
+                                    }
+                                    cx.notify();
+                                },
+                            ))
+                        })
                     })
-                }),
+            }
         };
         if let Some(status) = &wizard.status {
             body = body.child(div().flex_none().child(status.clone()));
@@ -707,18 +719,18 @@ impl HerdrWindow {
             );
         }
         let (label, ready) = match wizard.phase {
-            Phase::SignedOut => ("Sign in with Coder", true),
-            Phase::SigningIn => ("Waiting for browser…", false),
+            Phase::SignedOut => (fl!("devices-coder-sign-in"), true),
+            Phase::SigningIn => (fl!("devices-coder-waiting"), false),
             Phase::Choose => (
                 match &wizard.choice {
-                    _ if removing => "Remove device",
-                    Some(Choice::Existing(_)) => "Add workspace",
-                    _ => "Create workspace",
+                    _ if removing => fl!("devices-coder-remove"),
+                    Some(Choice::Existing(_)) => fl!("devices-coder-add"),
+                    _ => fl!("devices-coder-create"),
                 },
                 wizard.choice.is_some()
                     && !matches!(wizard.choice, Some(Choice::Template(_)) if wizard.presets.is_none()),
             ),
-            Phase::Checking | Phase::Loading => ("Working…", false),
+            Phase::Checking | Phase::Loading => (fl!("devices-coder-working"), false),
         };
         let pane = div()
             .flex_1()

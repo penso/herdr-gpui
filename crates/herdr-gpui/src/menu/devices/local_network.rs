@@ -6,13 +6,14 @@
 
 use super::{add_device::Step, setup};
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::{HostProbe, LocalNetworkAccess, SshFailure};
 use std::{sync::Arc, time::Duration};
 
 /// System Settings › Privacy & Security › Local Network.
 const SETTINGS_URL: &str =
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork"; // i18n: data
 /// How long a refused host check waits for the user to allow Herdr.
 const PERMISSION_WAIT: Duration = Duration::from_secs(60);
 
@@ -37,7 +38,7 @@ impl HerdrWindow {
                 .cursor_pointer()
                 .rounded(px(crate::config::corners::CONTROL))
                 .hover(|s| s.bg(rgb(theme.active)))
-                .child("Open Local Network Settings")
+                .child(fl!("add-device-local-network-settings"))
                 .on_click(cx.listener(|_, _, _, cx| cx.open_url(SETTINGS_URL))),
         )
     }
@@ -87,7 +88,5 @@ impl HerdrWindow {
 
 /// What the dialog says while it waits.
 pub(super) fn waiting_status(target: &str) -> String {
-    format!(
-        "macOS refused Herdr's connection to {target} on your local network. Allow Herdr when macOS asks, or turn it on in System Settings › Privacy & Security › Local Network. Herdr checks again by itself."
-    )
+    fl!("add-device-local-network-waiting", target = target)
 }

@@ -3,6 +3,7 @@
 //! only forgets the distribution here. Nothing here installs Herdr, edits a
 //! distribution, or boots one the user did not pick.
 use super::Page;
+use crate::i18n::fl;
 use crate::{HerdrWindow, endpoint::WSL_PREFIX, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_client::HostProbe;
@@ -155,12 +156,15 @@ impl HerdrWindow {
             return;
         }
         let Some(distro) = setup.selected.clone() else {
-            self.set_wsl_error(Some("Pick a distribution.".into()));
+            self.set_wsl_error(Some(fl!("devices-wsl-pick")));
             cx.notify();
             return;
         };
         if saved.contains(&distro) {
-            self.set_wsl_error(Some(format!("{distro} is already a device.")));
+            self.set_wsl_error(Some(fl!(
+                "devices-wsl-already-added",
+                distro = distro.as_str()
+            )));
             cx.notify();
             return;
         }
@@ -219,19 +223,25 @@ impl HerdrWindow {
             .gap(px(2.));
         match &setup.distros {
             Distros::Loading => {
-                list = list.child(div().text_color(rgb(theme.muted)).child("Looking for distributions…"))
+                list = list.child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("devices-wsl-looking")),
+                )
             }
             Distros::Failed(error) => {
                 list = list.child(
                     div()
                         .text_color(crate::menu::danger(theme))
-                        .child(format!("WSL did not list its distributions: {error}")),
+                        .child(fl!("devices-wsl-list-failed", error = error.as_str())),
                 )
             }
             Distros::Ready(distros) if distros.is_empty() => {
-                list = list.child(div().text_color(rgb(theme.muted)).child(
-                    "No WSL distributions are installed. Install one with `wsl --install`, then open this dialog again.",
-                ))
+                list = list.child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("devices-wsl-none")),
+                )
             }
             Distros::Ready(distros) => {
                 for (index, distro) in distros.iter().enumerate() {
@@ -253,9 +263,13 @@ impl HerdrWindow {
                             .when(!added, |row| {
                                 row.cursor_pointer().hover(|s| s.bg(rgb(theme.active)))
                             })
-                            .child(crate::toggles::radio(theme, self.config.ui.size + 2., checked))
+                            .child(crate::toggles::radio(
+                                theme,
+                                self.config.ui.size + 2.,
+                                checked,
+                            ))
                             .child(div().flex_1().truncate().child(distro.clone()))
-                            .when(added, |row| row.child("Added"))
+                            .when(added, |row| row.child(fl!("devices-wsl-added")))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if added {
                                     return;
@@ -279,9 +293,12 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(div().flex_none().text_color(rgb(theme.subtext())).child(
-                "Herdr is checked inside the distribution and its server started if it is installed. Install Herdr there first if it is not.",
-            ))
+            .child(
+                div()
+                    .flex_none()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("devices-wsl-intro")),
+            )
             .child(list)
             .child(
                 div()
@@ -289,7 +306,7 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child("Session (optional)")
+                    .child(fl!("devices-wsl-session"))
                     .child(setup.session.clone()),
             );
         if let Some(error) = &setup.error {
@@ -307,7 +324,7 @@ impl HerdrWindow {
                     .debug_selector(|| "wsl-setup-status".into())
                     .flex_none()
                     .text_color(rgb(theme.muted))
-                    .child(format!("Checking Herdr in {distro}…")),
+                    .child(fl!("devices-wsl-checking", distro = distro.as_str())),
             );
         }
         let ready = setup.step == Step::Form && setup.selected.is_some();
@@ -332,8 +349,8 @@ impl HerdrWindow {
                     })
                     .when(!ready, |button| button.text_color(rgb(theme.muted)))
                     .child(match setup.step {
-                        Step::Form => "Add distribution",
-                        Step::Checking(_) => "Checking…",
+                        Step::Form => fl!("devices-wsl-add"),
+                        Step::Checking(_) => fl!("devices-wsl-add-checking"),
                     })
                     .on_click(cx.listener(|this, _, window, cx| this.submit_add_wsl(window, cx))),
             );
@@ -400,9 +417,15 @@ impl HerdrWindow {
             let result = background.await;
             let _ = this.update(cx, |this, cx| {
                 if let Err(error) = result {
+                    // The log's context.
+                    // i18n: data
                     crate::storage_warning::warn_storage_failure("Remove WSL device", &error);
                     this.menu.removing_devices.remove(&id);
-                    this.local_error = Some(format!("Remove {distro}: {error}"));
+                    this.local_error = Some(fl!(
+                        "devices-wsl-remove-failed",
+                        distro = distro.as_str(),
+                        error = error.to_string(),
+                    ));
                     cx.notify();
                 }
             });
@@ -424,11 +447,13 @@ impl HerdrWindow {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Remove distribution"),
+                    .child(fl!("devices-wsl-remove-title")),
             )
-            .child(div().text_color(rgb(theme.subtext())).child(format!(
-                "Remove {distro} from this computer's devices? Herdr keeps running inside it."
-            )))
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("devices-wsl-remove-note", distro = distro.as_str())),
+            )
             .child(
                 div()
                     .flex()
@@ -439,7 +464,7 @@ impl HerdrWindow {
                             .id("remove-wsl-cancel")
                             .p(px(6.))
                             .cursor_pointer()
-                            .child("Cancel")
+                            .child(fl!("devices-wsl-cancel"))
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
                             ),
@@ -453,7 +478,7 @@ impl HerdrWindow {
                             .bg(rgb(theme.active))
                             .text_color(crate::menu::danger(theme))
                             .cursor_pointer()
-                            .child("Remove")
+                            .child(fl!("devices-wsl-remove"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.confirm_remove_wsl(window, cx)
                             })),
@@ -471,19 +496,27 @@ fn add(distro: &str, session: &str) -> Outcome {
             match herdr_client::add_wsl_host(false, distro, session) {
                 Ok(()) => Outcome::Saved,
                 Err(error) => {
+                    // The log's context.
+                    // i18n: data
                     crate::storage_warning::warn_storage_failure("Save WSL device", &error);
-                    Outcome::Refused(format!("Save {distro}: {error}"))
+                    Outcome::Refused(fl!(
+                        "devices-wsl-save-failed",
+                        distro = distro,
+                        error = error.to_string(),
+                    ))
                 }
             }
         }
-        Ok(HostProbe::Missing) => Outcome::Refused(format!(
-            "Herdr was not found in {distro}. Install it inside the distribution, then add it again."
+        Ok(HostProbe::Missing) => Outcome::Refused(fl!("devices-wsl-missing", distro = distro)),
+        Ok(HostProbe::Outdated) => Outcome::Refused(fl!("devices-wsl-outdated", distro = distro)),
+        Ok(HostProbe::SshFailed(_)) => {
+            Outcome::Refused(fl!("devices-wsl-no-answer", distro = distro))
+        }
+        Err(error) => Outcome::Refused(fl!(
+            "devices-wsl-check-failed",
+            distro = distro,
+            error = error.to_string(),
         )),
-        Ok(HostProbe::Outdated) => Outcome::Refused(format!(
-            "The Herdr in {distro} is too old for this app. Update it inside the distribution, then add it again."
-        )),
-        Ok(HostProbe::SshFailed(_)) => Outcome::Refused(format!("{distro} did not answer.")),
-        Err(error) => Outcome::Refused(format!("Check {distro}: {error}")),
     }
 }
 

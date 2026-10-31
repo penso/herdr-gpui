@@ -8,8 +8,9 @@ case $2 in x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;; *) fail 'Unsup
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
 # The app starts chats with the herdr-acp beside its executable, runs the
 # herdr-remote-control beside it as a user service, and runs automations in
-# the herdr-automate there; the build leaves all three beside herdr-gpui.
-companions=(herdr-acp herdr-remote-control herdr-automate)
+# the herdr-automate there, and Herdr 2 terminals in the herdr-core there;
+# the build leaves all four beside herdr-gpui (herdr-core fetched pinned).
+companions=(herdr-acp herdr-remote-control herdr-automate herdr-core)
 for companion in "${companions[@]}"; do
     [[ -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside the binary required"
 done
@@ -38,6 +39,7 @@ cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$release_root/crates/he
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$root/share/licenses/herdr-gpui/"
 cp "$5" "$root/share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt"
 cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$root/share/licenses/herdr-gpui/"
+cp "$release_root/scripts/release/herdr-core-licenses.txt" "$root/share/licenses/herdr-gpui/HERDR-CORE-LICENSES.txt"
 COPYFILE_DISABLE=1 tar -C "$tmp" -czf "$tmp/archive.tar.gz" "$name"
 mv "$tmp/archive.tar.gz" "$out"
 printf '%s\n' "$out"

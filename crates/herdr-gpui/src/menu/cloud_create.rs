@@ -3,7 +3,9 @@
 //! is created until the user confirms here, once for the whole batch. The
 //! batch it answers is cancelled if the question closes unanswered.
 
+// i18n: migrated
 use super::Page;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     cloud::{
@@ -93,19 +95,22 @@ impl HerdrWindow {
             .iter()
             .filter(|device| device.state == DeviceState::Failed)
             .collect();
-        let mut body = format!(
-            "{ready} of {} new cloud devices are ready. Choose one in the device picker.",
-            batch.devices.len()
-        );
-        if let Some(first) = failed.first() {
-            body.push_str(&format!(
-                " {} failed. {}: {}",
-                failed.len(),
-                first.label,
-                first.error.as_deref().unwrap_or("unknown error"),
-            ));
-        }
-        self.local_transfer_notice("Cloud devices created", body, cx);
+        let total = batch.devices.len();
+        let body = match failed.first() {
+            None => fl!("cloud-create-done", ready = ready, total = total),
+            Some(first) => fl!(
+                "cloud-create-done-failed",
+                ready = ready,
+                total = total,
+                failed = failed.len(),
+                device = first.label.as_str(),
+                error = first
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| fl!("cloud-create-unknown-error")),
+            ),
+        };
+        self.local_transfer_notice(&fl!("cloud-create-done-title"), body, cx);
     }
 
     pub(in crate::menu) fn render_create_cloud(&self, cx: &mut Context<Self>) -> Div {
@@ -130,7 +135,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Create {}?", machines(creation))),
+                    .child(title(creation)),
             )
             .children(
                 choices(creation)
@@ -139,9 +144,7 @@ impl HerdrWindow {
             )
             .child(line(
                 "create-cloud-cost",
-                format!(
-                    "A command asked for this. {provider} bills each one until it is destroyed."
-                ),
+                fl!("cloud-create-cost", provider = provider),
             ))
             .child(
                 div()
@@ -155,7 +158,7 @@ impl HerdrWindow {
                             .debug_selector(|| "create-cloud-cancel".into())
                             .p(px(6.))
                             .cursor_pointer()
-                            .child("Cancel")
+                            .child(fl!("cloud-create-cancel"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -169,7 +172,7 @@ impl HerdrWindow {
                             .rounded(px(crate::config::corners::CONTROL))
                             .bg(rgb(theme.active))
                             .cursor_pointer()
-                            .child(format!("Create {count}"))
+                            .child(fl!("cloud-create-submit", count = count))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.confirm_create_cloud(window, cx);
@@ -179,18 +182,19 @@ impl HerdrWindow {
     }
 }
 
-/// "3 Coder workspaces", "1 Azure sandbox".
-fn machines(creation: &Creation) -> String {
-    let noun = match creation.spec.shape {
-        Shape::Sandbox => "sandbox",
+/// "Create 3 Coder workspaces?", "Create 1 Azure sandbox?".
+fn title(creation: &Creation) -> String {
+    let kind = match creation.spec.shape {
+        // The selector the message chooses the noun by.
+        Shape::Sandbox => "sandbox", // i18n: data
         Shape::Machine => crate::cloud::noun(creation.provider),
     };
-    let name = crate::cloud::name(creation.provider);
-    match creation.count {
-        1 => format!("1 {name} {noun}"),
-        count if noun.ends_with('x') => format!("{count} {name} {noun}es"),
-        count => format!("{count} {name} {noun}s"),
-    }
+    fl!(
+        "cloud-create-title",
+        count = creation.count,
+        provider = crate::cloud::name(creation.provider),
+        kind = kind,
+    )
 }
 
 /// What the user is agreeing to besides the count, one line each.
@@ -199,29 +203,28 @@ fn choices(creation: &Creation) -> Vec<String> {
     let mut lines = Vec::new();
     #[cfg(feature = "coder")]
     if creation.provider == crate::cloud::CloudProvider::Coder {
-        let template = spec
-            .template
-            .as_deref()
-            .map_or("the deployment's only template".to_owned(), |name| {
-                format!("template {name}")
-            });
-        let preset = spec
-            .preset
-            .as_deref()
-            .map_or("its default preset".to_owned(), |name| {
-                format!("preset {name}")
-            });
-        lines.push(format!("From {template}, with {preset}."));
+        lines.push(match (spec.template.as_deref(), spec.preset.as_deref()) {
+            (Some(template), Some(preset)) => fl!(
+                "cloud-create-template-preset",
+                template = template,
+                preset = preset
+            ),
+            (Some(template), None) => {
+                fl!("cloud-create-template-default-preset", template = template)
+            }
+            (None, Some(preset)) => fl!("cloud-create-only-template-preset", preset = preset),
+            (None, None) => fl!("cloud-create-only-template-default-preset"),
+        });
     }
     lines.push(if spec.install {
-        "Herdr is installed on each one that lacks it.".to_owned()
+        fl!("cloud-create-install")
     } else {
-        "Herdr is not installed; one that lacks it fails.".to_owned()
+        fl!("cloud-create-no-install")
     });
     lines.push(if creation.setup {
-        "The [cloud] setup script runs on each before it is ready.".to_owned()
+        fl!("cloud-create-setup")
     } else {
-        "No setup script runs.".to_owned()
+        fl!("cloud-create-no-setup")
     });
     lines
 }

@@ -1,7 +1,9 @@
 //! The titlebar's Git actions popup: commit, push, and pull request creation
 //! for the focused local checkout, plus review, comment, and merge for its
 //! open pull request.
+// i18n: migrated
 use super::{Page, accent, danger};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
@@ -36,24 +38,17 @@ impl Row {
 /// Stats as the titlebar and the popup header both show them.
 pub(super) fn summary(status: Option<Status>) -> String {
     let Some(status) = status else {
-        return "Checking working tree...".into();
+        return fl!("git-menu-checking");
     };
     if !status.dirty() {
-        return "No uncommitted changes".into();
+        return fl!("git-menu-clean");
     }
-    let mut parts = vec![format!("+{} -{}", status.additions, status.deletions)];
-    if status.untracked > 0 {
-        parts.push(format!(
-            "{} untracked {}",
-            status.untracked,
-            if status.untracked == 1 {
-                "entry"
-            } else {
-                "entries"
-            }
-        ));
-    }
-    parts.join(", ")
+    fl!(
+        "git-menu-changes",
+        additions = status.additions,
+        deletions = status.deletions,
+        untracked = status.untracked,
+    )
 }
 
 impl HerdrWindow {
@@ -194,14 +189,14 @@ impl HerdrWindow {
             return Vec::new();
         }
         let mut rows = vec![
-            (Row::Commit, "Commit...".into()),
-            (Row::Push, "Push".into()),
+            (Row::Commit, fl!("git-menu-commit")),
+            (Row::Push, fl!("git-menu-push")),
             match self.git_open_pull_request() {
                 Some(pr) => (
                     Row::PullRequest,
-                    format!("Open pull request #{}", pr.number),
+                    fl!("git-menu-open-pull-request", number = pr.number),
                 ),
-                None => (Row::PullRequest, "Create pull request".into()),
+                None => (Row::PullRequest, fl!("git-menu-create-pull-request")),
             },
         ];
         // Acting on a pull request needs its identity, which only an open,
@@ -209,11 +204,11 @@ impl HerdrWindow {
         if let Some(pr) = self.git_open_pull_request()
             && self.pr_actions.target().is_some()
         {
-            rows.push((Row::Review, "Checks and comments".into()));
-            rows.push((Row::Comment, "Comment...".into()));
+            rows.push((Row::Review, fl!("git-menu-checks-and-comments")));
+            rows.push((Row::Comment, fl!("git-menu-comment")));
             // GitHub refuses to merge a draft; the repository may allow nothing.
             if !pr.is_draft && !pr.merge_methods.is_empty() {
-                rows.push((Row::Merge, "Merge...".into()));
+                rows.push((Row::Merge, fl!("git-menu-merge")));
             }
         }
         rows
@@ -334,10 +329,7 @@ impl HerdrWindow {
             div()
                 .flex_1()
                 .min_w_0()
-                .child("Not yet committed")
-                .when(status.untracked > 0, |label| {
-                    label.child(format!(" ({} untracked)", status.untracked))
-                }),
+                .child(fl!("git-menu-not-committed", untracked = status.untracked)),
         )
         .child(
             div()
@@ -443,16 +435,28 @@ impl HerdrWindow {
                         .px(px(8.))
                         .pb(px(8.))
                         .child(if pr.is_draft {
-                            "Draft — not ready for review"
+                            fl!("git-menu-draft")
                         } else {
-                            "Ready for review"
+                            fl!("git-menu-ready")
                         }),
                 );
             }
             for (selector, heading, label) in [
-                ("git-menu-pr-review", "Review", pr.review().to_owned()),
-                ("git-menu-pr-merge", "Merge", pr.merge_status().to_owned()),
-                ("git-menu-pr-checks", "Checks", pr.checks_summary.clone()),
+                (
+                    "git-menu-pr-review",
+                    fl!("git-menu-review-heading"),
+                    pr.review().to_owned(),
+                ),
+                (
+                    "git-menu-pr-merge",
+                    fl!("git-menu-merge-heading"),
+                    pr.merge_status().to_owned(),
+                ),
+                (
+                    "git-menu-pr-checks",
+                    fl!("git-menu-checks-heading"),
+                    pr.checks_summary.clone(),
+                ),
             ] {
                 panel = panel.child(
                     div()
@@ -501,7 +505,7 @@ impl HerdrWindow {
                                     },
                                 ),
                         )
-                        .child("Loading pull request..."),
+                        .child(fl!("git-menu-loading-pull-request")),
                 );
             }
             panel = panel.child(self.render_git_summary());
@@ -579,7 +583,7 @@ impl HerdrWindow {
                         .pb(px(8.))
                         .cursor_pointer()
                         .text_color(accent(theme))
-                        .child("Open in browser")
+                        .child(fl!("git-menu-open-in-browser"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             cx.open_url(&url);
@@ -626,7 +630,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .text_color(rgb(theme.subtext()))
-                    .child("Stages every change in the checkout, then commits."),
+                    .child(fl!("git-commit-note")),
             )
             .child(
                 div()
@@ -691,7 +695,7 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Commit"),
+                                    .child(fl!("git-commit-title")),
                             )
                             .when_some(self.git.tracked(), |header, input| {
                                 header.child(
@@ -717,7 +721,7 @@ impl HerdrWindow {
                         button("git-commit-cancel")
                             .border_color(rgb(theme.active))
                             .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Cancel")
+                            .child(fl!("git-commit-cancel"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -733,7 +737,7 @@ impl HerdrWindow {
                             .when(armed, |button| button.bg(rgb(theme.active)))
                             .text_color(rgb(if armed { theme.foreground } else { theme.muted }))
                             .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Commit")
+                            .child(fl!("git-commit-submit"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.submit_git_commit(cx);

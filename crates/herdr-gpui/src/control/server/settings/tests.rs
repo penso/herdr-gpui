@@ -87,7 +87,7 @@ fn every_reach_has_a_stable_name() {
 fn update_states_are_named_with_their_version_or_reason() {
     assert_eq!(
         describe(&State::Disabled("Local build".into())),
-        ("disabled", Some("Local build"), None)
+        ("disabled", Some("Local build".to_owned()), None)
     );
     assert_eq!(describe(&State::Checking), ("checking", None, None));
     assert_eq!(
@@ -99,7 +99,13 @@ fn update_states_are_named_with_their_version_or_reason() {
     );
     assert_eq!(
         describe(&State::Error("offline".into())),
-        ("error", Some("offline"), None)
+        ("error", Some("offline".to_owned()), None)
+    );
+    assert_eq!(
+        describe(&State::Upgrading {
+            detail: crate::updater::Progress::Starting
+        }),
+        ("upgrading", Some("Starting Homebrew...".to_owned()), None)
     );
 }
 
