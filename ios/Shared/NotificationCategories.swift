@@ -6,6 +6,17 @@ enum AlertKeys {
     static let computer = "computer"
     static let pane = "pane"
     static let permission = "permission"
+
+    /// A chat's notification thread. Pane ids are only unique on one
+    /// computer, so the thread names the computer too.
+    static func thread(computer: String, pane: String) -> String {
+        "\(computer)/\(pane)"
+    }
+
+    /// Whether `content` is one of the chat's notifications.
+    static func belongs(_ content: UNNotificationContent, computer: String, pane: String) -> Bool {
+        content.userInfo[Self.computer] as? String == computer && content.userInfo[Self.pane] as? String == pane
+    }
 }
 
 /// Registers the category a notification's actions hang on. Questions get

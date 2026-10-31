@@ -23,7 +23,7 @@ final class NotificationService: UNNotificationServiceExtension {
         let alert = opened.alert
         content.title = alert.title
         content.body = alert.body
-        content.threadIdentifier = alert.pane
+        content.threadIdentifier = AlertKeys.thread(computer: opened.computer.hex, pane: alert.pane)
         // The count is this computer's; the badge is every computer's.
         if let badge = alert.badge {
             let total = BadgeCounts.update(badge, for: alert.computer, in: UserDefaults(suiteName: "group.so.pen.herdr.remote"))

@@ -55,12 +55,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didReceiveRemoteNotification userInfo: [AnyHashable: Any]
     ) async -> UIBackgroundFetchResult {
         guard let sealed = userInfo["sealed"] as? String,
-              let alert = (try? NotifyKey.open(sealed))?.alert
+              let opened = try? NotifyKey.open(sealed)
         else { return .noData }
+        let alert = opened.alert
         let center = UNUserNotificationCenter.current()
         if alert.clear {
+            // Only the computer whose key opened the clear: another may use
+            // the same pane id for a chat still waiting.
             let shown = await center.deliveredNotifications()
-            let gone = shown.filter { $0.request.content.threadIdentifier == alert.pane }.map(\.request.identifier)
+            let gone = shown.filter { AlertKeys.belongs($0.request.content, computer: opened.computer.hex, pane: alert.pane) }
+                .map(\.request.identifier)
             center.removeDeliveredNotifications(withIdentifiers: gone)
         }
         if let badge = alert.badge {
@@ -97,7 +101,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
             let failed = UNMutableNotificationContent()
             failed.title = "Not sent"
             failed.body = error.localizedDescription
-            failed.threadIdentifier = pane
+            failed.threadIdentifier = AlertKeys.thread(computer: computer, pane: pane)
             try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: failed, trigger: nil))
         }
     }
