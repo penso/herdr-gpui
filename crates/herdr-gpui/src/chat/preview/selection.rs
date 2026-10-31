@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 use super::PANE;
 use crate::HerdrWindow;
 
-const PROSE: &str = "Read naïve café 中文 text across a narrow paragraph. These extra words deliberately wrap onto several lines before the code and table below.";
-pub(super) const SOURCE: &str = "Read naïve café 中文 text across a narrow paragraph. These extra words deliberately wrap onto several lines before the code and table below.\n\n```rust\n\tlet α = 1;\n\tprintln!(\"{α}\");\n```\n\n| Name | Value |\n|:--|--:|\n| café | 42 |\n\nBefore $x^2$ after.\n\n$$\\sum_{i=1}^n i$$\n\n[Readable reference](https://example.org/selection)";
-const SEED: &str = "selection probe ready";
+const PROSE: &str = "Read naïve café 中文 text across a narrow paragraph. These extra words deliberately wrap onto several lines before the code and table below."; // i18n: data
+pub(super) const SOURCE: &str = "Read naïve café 中文 text across a narrow paragraph. These extra words deliberately wrap onto several lines before the code and table below.\n\n```rust\n\tlet α = 1;\n\tprintln!(\"{α}\");\n```\n\n| Name | Value |\n|:--|--:|\n| café | 42 |\n\nBefore $x^2$ after.\n\n$$\\sum_{i=1}^n i$$\n\n[Readable reference](https://example.org/selection)"; // i18n: data
+const SEED: &str = "selection probe ready"; // i18n: data
 
 #[derive(Default)]
 pub(super) struct Probe {
@@ -39,9 +39,9 @@ impl Probe {
             Ok(json!([f32::from(point.x), f32::from(point.y)]))
         };
         let data = json!({
-            "from": point(0, 0, 0, "Read ".len())?,
+            "from": point(0, 0, 0, "Read ".len())?, // i18n: data
             "to": point(2, 1, 1, 2)?,
-            "expected": format!("{}\n\n\tlet α = 1;\n\tprintln!(\"{{α}}\");\n\nName\tValue\ncafé\t42", &PROSE["Read ".len()..]),
+            "expected": format!("{}\n\n\tlet α = 1;\n\tprintln!(\"{{α}}\");\n\nName\tValue\ncafé\t42", &PROSE["Read ".len()..]), // i18n: data
             "inline_from": point(3, 0, 0, 7)?,
             "inline_to": point(3, 0, 0, 10)?,
             "inline_expected": "x^2",
@@ -49,8 +49,8 @@ impl Probe {
             "math_to": point(4, 0, 0, "\\sum_{i=1}^n i".len())?,
             "math_expected": "\\sum_{i=1}^n i",
             "link_from": point(5, 0, 0, 0)?,
-            "link_to": point(5, 0, 0, "Readable reference".len())?,
-            "link_expected": "Readable reference",
+            "link_to": point(5, 0, 0, "Readable reference".len())?, // i18n: data
+            "link_expected": "Readable reference", // i18n: data
         });
         cx.write_to_clipboard(ClipboardItem::new_string(SEED.into()));
         eprintln!("RICH CHAT SELECTION PROBE {data}");

@@ -36,38 +36,38 @@ pub(super) fn entries() -> Vec<Entry> {
         "bash-dev",
         ToolKind::Execute,
         ToolStatus::Completed,
-        "`npm run dev -- --port 5173`",
+        "`npm run dev -- --port 5173`", // i18n: data
         None,
     );
     if let EntryKind::Tool(tool) = &mut server.kind {
         tool.content = vec![ToolContent::Text {
-            text: "Command running in background with ID: b3x9k2.".into(),
+            text: "Command running in background with ID: b3x9k2.".into(), // i18n: data
         }];
     }
     vec![
         Entry {
             id: EntryId(1),
             kind: EntryKind::User {
-                text: "Check why the attach socket drops after a daemon restart, and keep the dev server up so I can try it.".into(),
+                text: "Check why the attach socket drops after a daemon restart, and keep the dev server up so I can try it.".into(), // i18n: data
                 files: 0,
             },
         },
         Entry {
             id: EntryId(2),
             kind: EntryKind::Agent {
-                text: "I'll split this up: one sub-agent explores the reconnect path while another reviews the reducer tests.".into(),
+                text: "I'll split this up: one sub-agent explores the reconnect path while another reviews the reducer tests.".into(), // i18n: data
             },
         },
-        tool(3, "task-explore", ToolKind::Subagent, ToolStatus::Completed, "Explore how the attach socket reconnects after a daemon restart", None),
-        tool(4, "read-1", ToolKind::Read, ToolStatus::Completed, "Read crates/herdr-chat-protocol/src/endpoint.rs", Some("task-explore")),
-        tool(5, "grep-1", ToolKind::Search, ToolStatus::Completed, "Search for fn reconnect", Some("task-explore")),
-        tool(6, "bash-1", ToolKind::Execute, ToolStatus::Failed, "`cargo test -p herdr-client reconnect`", Some("task-explore")),
-        tool(7, "task-review", ToolKind::Subagent, ToolStatus::InProgress, "Review the reducer tests", None),
+        tool(3, "task-explore", ToolKind::Subagent, ToolStatus::Completed, "Explore how the attach socket reconnects after a daemon restart", None), // i18n: data
+        tool(4, "read-1", ToolKind::Read, ToolStatus::Completed, "Read crates/herdr-chat-protocol/src/endpoint.rs", Some("task-explore")), // i18n: data
+        tool(5, "grep-1", ToolKind::Search, ToolStatus::Completed, "Search for fn reconnect", Some("task-explore")), // i18n: data
+        tool(6, "bash-1", ToolKind::Execute, ToolStatus::Failed, "`cargo test -p herdr-client reconnect`", Some("task-explore")), // i18n: data
+        tool(7, "task-review", ToolKind::Subagent, ToolStatus::InProgress, "Review the reducer tests", None), // i18n: data
         server,
         Entry {
             id: EntryId(9),
             kind: EntryKind::Agent {
-                text: "The socket is reopened before the daemon's new endpoint exists. The dev server keeps running in the background on port 5173.".into(),
+                text: "The socket is reopened before the daemon's new endpoint exists. The dev server keeps running in the background on port 5173.".into(), // i18n: data
             },
         },
     ]
@@ -88,17 +88,17 @@ pub(super) fn activities(now_ms: u64) -> Vec<Activity> {
         activity(
             "task-explore",
             ActivityKind::Subagent,
-            "Explore how the attach socket reconnects after a daemon restart",
+            "Explore how the attach socket reconnects after a daemon restart", // i18n: data
             190_000,
             Some(120_000),
             ActivityState::Finished,
         ),
         Activity {
-            detail: Some("Search for apply(&Change".into()),
+            detail: Some("Search for apply(&Change".into()), // i18n: data
             ..activity(
                 "task-review",
                 ActivityKind::Subagent,
-                "Review the reducer tests",
+                "Review the reducer tests", // i18n: data
                 38_000,
                 None,
                 ActivityState::Running,
@@ -107,17 +107,17 @@ pub(super) fn activities(now_ms: u64) -> Vec<Activity> {
         activity(
             "bash-dev",
             ActivityKind::Shell,
-            "npm run dev -- --port 5173",
+            "npm run dev -- --port 5173", // i18n: data
             252_000,
             None,
             ActivityState::Running,
         ),
         Activity {
-            detail: Some("Exited 1".into()),
+            detail: Some("Exited 1".into()), // i18n: data
             ..activity(
                 "bash-watch",
                 ActivityKind::Shell,
-                "pnpm vitest --watch",
+                "pnpm vitest --watch", // i18n: data
                 400_000,
                 Some(230_000),
                 ActivityState::Failed,

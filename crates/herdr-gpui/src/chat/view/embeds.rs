@@ -10,17 +10,19 @@ use super::{
     },
     visuals::Frame,
 };
-use crate::{HerdrWindow, browser::WebUrl, config::corners, notifications::safe_text};
+use crate::{HerdrWindow, browser::WebUrl, config::corners, i18n::fl, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryId;
 use std::{path::PathBuf, rc::Rc};
 
 /// What the button says where it shows the page.
-const SHOW: &str = if crate::browser::EMBEDDED {
-    "Show page"
-} else {
-    "Open in browser"
-};
+fn show_label() -> String {
+    if crate::browser::EMBEDDED {
+        fl!("chat-page-show")
+    } else {
+        fl!("chat-page-open-in-browser")
+    }
+}
 
 impl HerdrWindow {
     /// An HTML fence: its page live in the message once shown, until then
@@ -41,10 +43,12 @@ impl HerdrWindow {
         let source = PageSource::Html(page.clone());
         self.embed_card("icons/globe.svg")
             .debug_selector(move || format!("chat-html-{part}"))
-            .child(div().flex_1().min_w_0().child(match lines {
-                1 => "HTML page \u{b7} 1 line".to_owned(),
-                count => format!("HTML page \u{b7} {count} lines"),
-            }))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(fl!("chat-page-html-lines", count = lines)),
+            )
             .child(self.show_button(pane_id, ("chat-show-page", part), key, source, cx))
             .into_any_element()
     }
@@ -101,7 +105,7 @@ impl HerdrWindow {
             .text_color(rgb(theme.text_on(fill)))
             .text_size(self.chat_small_text())
             .cursor_pointer()
-            .child(SHOW)
+            .child(show_label())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 cx.stop_propagation();
@@ -146,7 +150,7 @@ impl HerdrWindow {
                     .size(px(9.))
                     .text_color(rgb(theme.subtext())),
             )
-            .child("Hide")
+            .child(fl!("chat-page-hide"))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
@@ -185,7 +189,13 @@ impl HerdrWindow {
                                 .size(px(12.))
                                 .text_color(rgb(theme.subtext())),
                         )
-                        .child(div().flex_1().min_w_0().truncate().child("HTML page"))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child(fl!("chat-page-html")),
+                        )
                         .child(hide),
                 )
                 .child(div().w_full().h(px(PAGE_HEIGHT)).relative().child(body)),
@@ -224,7 +234,7 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .child(div().truncate().child(if alt.is_empty() {
-                        "A picture on the web".to_owned()
+                        fl!("chat-picture-web")
                     } else {
                         alt.to_owned()
                     }))
@@ -233,7 +243,7 @@ impl HerdrWindow {
                             .text_size(px((self.chat_text_size() - 2.).max(10.)))
                             .text_color(rgb(theme.muted))
                             .truncate()
-                            .child(format!("Loading it tells {host} this machine's address")),
+                            .child(fl!("chat-picture-web-warning", host = host.as_str())),
                     ),
             )
             .child(
@@ -251,7 +261,7 @@ impl HerdrWindow {
                     .text_size(self.chat_small_text())
                     .cursor_pointer()
                     .hover(|button| button.bg(rgb(theme.active)))
-                    .child(format!("Load from {host}"))
+                    .child(fl!("chat-picture-load", host = host.as_str()))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
@@ -282,7 +292,7 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted)),
             )
             .child(if alt.is_empty() {
-                "Picture".to_owned()
+                fl!("chat-picture")
             } else {
                 alt.to_owned()
             })
@@ -320,5 +330,5 @@ fn opening(theme: &crate::config::Theme) -> Div {
         .justify_center()
         .bg(rgb(theme.background))
         .text_color(rgb(theme.muted))
-        .child("Opening the page\u{2026}")
+        .child(fl!("chat-page-opening"))
 }

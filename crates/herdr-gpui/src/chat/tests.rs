@@ -23,6 +23,7 @@ mod composer;
 mod controls;
 mod discovery;
 mod embeds;
+mod en_xa;
 mod feature;
 mod file_links;
 mod glide;

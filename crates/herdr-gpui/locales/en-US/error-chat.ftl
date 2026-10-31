@@ -36,3 +36,54 @@ error-chat-start-program-unknown = Herdr UI is still looking for herdr-acp
 error-chat-start-response = Herdr's answer did not name the chat's tab
 error-chat-start-slot-busy = another tab is still opening
 error-chat-start-timeout = Herdr did not open the chat's tab in time
+
+# A picture pasted into a chat's composer, saved to a file to attach.
+error-chat-pasted-folder = no private folder holds pasted images
+error-chat-pasted-write = could not save the pasted image
+
+# A web page an agent wrote, copied to a private file to show in its chat.
+error-chat-page-folder = no folder for pages
+error-chat-page-not-file = not a file path
+error-chat-page-too-large = the page is too large
+
+# A picture, diagram, or formula in a chat message that could not be drawn.
+error-chat-visual-base64 = the image is not valid base64
+error-chat-visual-decode = the image could not be decoded
+error-chat-visual-diagram = the diagram could not be read
+error-chat-visual-fetch = the picture could not be fetched
+# $reason is the formula renderer's own reason, in English.
+error-chat-visual-math = the formula could not be drawn: { $reason }
+error-chat-visual-math-limit = the formula exceeds the rendering limits
+error-chat-visual-math-parse = the formula could not be parsed
+error-chat-visual-not-an-image = the address does not answer with a picture
+error-chat-visual-panicked = the diagram renderer failed
+error-chat-visual-raster = the diagram could not be drawn
+
+# Why the chat program did nothing with a command the window sent it.
+error-chat-rejection-empty-prompt = the prompt is empty
+error-chat-rejection-prompt-too-long = the prompt is longer than the program accepts
+error-chat-rejection-not-ready = the agent cannot take prompts
+error-chat-rejection-not-working = no turn is running
+error-chat-rejection-unknown-permission = that permission request was already answered
+error-chat-rejection-unknown-option = that is not one of the request's options
+error-chat-rejection-unknown-mode = the agent has no such mode
+error-chat-rejection-unknown-setting = the agent has no such setting, or it does not take that value
+error-chat-rejection-unknown-queued = that prompt is no longer queued
+error-chat-rejection-agent-unavailable = the program could not deliver the command to the agent
+# $count is the most files one prompt takes.
+error-chat-rejection-too-many-attachments = a prompt takes at most { $count } files
+error-chat-rejection-queue-full = too many prompts are waiting; wait for the turn to end
+error-chat-rejection-unknown-file = an attached file does not exist or cannot be read
+error-chat-rejection-unsupported = this chat program is older than Herdr UI; start a new chat to use that
+error-chat-rejection-other = the program refused the command
+
+# An interactive card an agent's answer holds, whose JSON the window checks.
+error-chat-card-action-gone = invalid interactive card: action is no longer present
+error-chat-card-component = invalid interactive card: component fields or bounds
+error-chat-card-component-count = invalid interactive card: component count
+error-chat-card-field-id = invalid interactive card: field ids must be unique ASCII names
+error-chat-card-form-value = invalid interactive card: form value
+error-chat-card-json = invalid interactive card JSON
+error-chat-card-title = invalid interactive card: title
+error-chat-card-too-large = the interactive card exceeds its size limit
+error-chat-card-too-many-fields = invalid interactive card: too many editable fields

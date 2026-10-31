@@ -3,6 +3,7 @@
 //! rest behind one more button, and how full the context window is.
 
 use super::{super::chats::ChatPane, Hues};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow, chat::chats::Menu, config::corners, notifications::safe_text,
     search_input::SearchInput,
@@ -151,7 +152,7 @@ impl HerdrWindow {
                 // The menu draws the field's frame.
                 input.set_frameless(cx);
                 input.set_appearance(font, theme, cx);
-                input.set_placeholder("Search\u{2026}", cx);
+                input.set_placeholder_with(|| fl!("chat-settings-search"), cx);
                 input
             });
             let redraw = cx.observe(&input, |this, _, cx| this.redraw_terminal(cx));
@@ -269,7 +270,11 @@ impl HerdrWindow {
                     .size(px(12.))
                     .text_color(rgb(color)),
             )
-            .child(if on { "Auto-accepting" } else { "Asks first" })
+            .child(if on {
+                fl!("chat-settings-auto-accept-on")
+            } else {
+                fl!("chat-settings-auto-accept-off")
+            })
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
@@ -550,7 +555,7 @@ impl HerdrWindow {
                             .px(px(8.))
                             .py(px(4.))
                             .text_color(rgb(theme.muted))
-                            .child("No match")
+                            .child(fl!("chat-settings-no-match"))
                             .into_any_element(),
                     );
                 }

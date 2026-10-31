@@ -230,6 +230,7 @@ fn a_running_turn_shows_how_long_it_has_taken(cx: &mut TestAppContext) {
     });
     let text = view.read_with(cx, |view, _| {
         view::status_text(view.chats.pane("w1:p1").unwrap().session.transcript())
+            .replace(['\u{2068}', '\u{2069}'], "")
     });
     assert!(
         text.starts_with("Working 5s") || text.starts_with("Working 6s"),

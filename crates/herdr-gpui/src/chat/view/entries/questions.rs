@@ -24,7 +24,7 @@ impl HerdrWindow {
         };
         let body = chat.prepared.body(entry.id);
         let Some(Body::Answers { text, parts }) = body.as_deref() else {
-            return div().child("Preparing answers…");
+            return div().child(fl!("chat-answers-preparing"));
         };
         let message = self.render_chat_message(
             pane_id,
@@ -60,7 +60,7 @@ impl HerdrWindow {
                     pane_id,
                     entry.id,
                     *level,
-                    "Original record",
+                    &fl!("chat-answers-record"),
                     details.as_deref(),
                     cx,
                 ))
