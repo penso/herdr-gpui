@@ -13,9 +13,8 @@ impl Localize for Error {
                 path = path.display().to_string()
             ),
             Self::Checksum => fl!("error-host-build-checksum"),
-            Self::Platform(output) => {
-                fl!("error-host-build-platform", output = output.as_str())
-            } // keep-sorted end
+            Self::Platform(output) => fl!("error-host-build-platform", output = output.as_str()),
+            // keep-sorted end
         }
     }
 }
