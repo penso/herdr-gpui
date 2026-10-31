@@ -2004,7 +2004,11 @@ Server ignores for administrators, so the others may not reach it. Removing a de
 elsewhere, and a sync can bring it back from a machine that still lists it;
 untick it instead. A machine saved under two different addresses on two
 computers can be listed twice, and changing this computer's address later
-does not update the machines that already list it.
+does not update the machines that already list it. Addresses are copied as
+saved, so one that works only through this computer's `~/.ssh/config` (an
+alias such as `gpu` with its own `HostName`, `User`, or `Port`) does not
+connect from the others: save a name every machine resolves, such as a
+Tailscale or `.local` name, or add the same alias to their SSH configs.
 
 ## Worktree Scripts
 
