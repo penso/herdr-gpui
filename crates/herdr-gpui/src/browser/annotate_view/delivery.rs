@@ -5,7 +5,7 @@ use super::{
     super::{Tab, TabId, annotate},
     screenshots::save_screenshots,
 };
-use crate::{HerdrWindow, window::Flash};
+use crate::{HerdrWindow, i18n::fl, window::Flash};
 use gpui::{prelude::*, *};
 use std::{path::PathBuf, sync::Arc};
 
@@ -47,7 +47,7 @@ impl HerdrWindow {
             this.update(cx, |this, cx| {
                 let paths = paths.unwrap_or_else(|error| {
                     tracing::warn!(%error, "Could not save note screenshots");
-                    this.show_flash(Flash::warning("Screenshots could not be saved"), cx);
+                    this.show_flash(Flash::warning(fl!("browser-notes-screenshots-failed")), cx);
                     Vec::new()
                 });
                 let text = annotate::prompt(&tab, &notes, &paths, &reload);
@@ -62,7 +62,7 @@ impl HerdrWindow {
         let (_, notes) = self.notes_round(tab);
         self.with_notes_prompt(tab, notes, save_screenshots, cx, |this, text, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
-            this.show_flash(Flash::success("Notes copied"), cx);
+            this.show_flash(Flash::success(fl!("browser-notes-copied")), cx);
         });
     }
 
@@ -82,10 +82,7 @@ impl HerdrWindow {
     ) {
         let (indexes, notes) = self.notes_round(tab);
         let Some((send, pending)) = self.tab_notes(tab.id).sending.start() else {
-            self.show_flash(
-                Flash::warning("The previous notes are still pending delivery"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("browser-notes-pending")), cx);
             return;
         };
         let pane_id = tab.origin.clone();
@@ -113,7 +110,7 @@ impl HerdrWindow {
         };
         let feedback = cx.default_global::<crate::browser::Feedback>();
         let Some(send) = notes.sending.withdraw(&mut self.deliveries, Some(feedback)) else {
-            self.show_flash(Flash::warning("The agent already has those notes"), cx);
+            self.show_flash(Flash::warning(fl!("browser-notes-delivered")), cx);
             return;
         };
         for note in &mut notes.notes {
@@ -121,7 +118,7 @@ impl HerdrWindow {
                 note.sent = None;
             }
         }
-        self.show_flash(Flash::success("Notes withdrawn"), cx);
+        self.show_flash(Flash::success(fl!("browser-notes-withdrawn")), cx);
         cx.notify();
     }
 

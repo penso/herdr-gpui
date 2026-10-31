@@ -39,6 +39,7 @@ fn respond(responder: RequestAsyncResponder, status: u16, content_type: &str, bo
         .status(status)
         .header(http::header::CONTENT_TYPE, content_type)
         .header(http::header::CACHE_CONTROL, "no-store")
+        // i18n: data
         .header("X-Content-Type-Options", "nosniff")
         .body(Cow::Owned(body));
     match response {

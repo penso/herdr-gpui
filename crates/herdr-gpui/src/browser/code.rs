@@ -11,6 +11,7 @@
 //! empty. The server is the one at `[code] url`, or the one the app starts
 //! (see [`crate::code_server::launcher`]).
 use super::{Editor, GroupId, Location, Scope, Store, TabId, WebUrl, view::store};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     code_server::{self, Launcher, Server, Startup},
@@ -80,18 +81,18 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         if self.browser_key().is_none() {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("browser-open-workspace-first")), cx);
             return;
         }
         let startup = Launcher::startup(cx, &self.config.code);
         if !super::EMBEDDED {
-            self.show_flash(Flash::warning("This build cannot show pages"), cx);
+            self.show_flash(Flash::warning(fl!("browser-no-pages")), cx);
             return;
         }
         if !startup.offered(&self.config.code) {
             let why = match startup {
-                Startup::Finding => "Still looking for VS Code",
-                _ => "Set the VS Code server in Settings",
+                Startup::Finding => fl!("browser-vscode-still-finding"),
+                _ => fl!("browser-vscode-set-server"),
             };
             self.show_flash(Flash::warning(why), cx);
             return;
@@ -282,7 +283,7 @@ impl HerdrWindow {
                     Err(error) => {
                         tracing::info!(%error, "The VS Code server did not answer");
                         Reach::Failed {
-                            message: error.to_string().into(),
+                            message: crate::i18n::Localize::localize(&error).into(),
                             at: Instant::now(),
                         }
                     }
