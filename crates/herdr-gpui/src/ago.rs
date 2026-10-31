@@ -1,6 +1,8 @@
 //! How long ago something happened, in the largest whole unit: "just now",
-//! "5 min ago", "yesterday", "3 days ago". Checkpoints, paired phones, and
-//! the command line's checkpoint list read it from seconds elapsed.
+//! "5 min ago", "yesterday", "3 days ago". Checkpoints, paired phones,
+//! Security, code search, the orchestrator, and the command line's
+//! checkpoint list read it from seconds elapsed; a list column that has no
+//! room for a sentence takes [`short`] ("5m", "3d", "2w").
 // i18n: migrated
 
 use crate::i18n::{self, FluentValue};
@@ -26,6 +28,19 @@ fn args(count: Option<u64>) -> Vec<(&'static str, FluentValue<'static>)> {
 /// `seconds` ago in the current locale.
 pub(crate) fn text(seconds: u64) -> String {
     let (id, count) = message(seconds);
+    i18n::message(id, &args(count))
+}
+
+/// `seconds` ago as a list column's compact age: "now", "12m", "5h", "3d",
+/// and whole weeks from two weeks on.
+pub(crate) fn short(seconds: u64) -> String {
+    let (id, count) = match seconds {
+        0..60 => ("ago-short-now", None),
+        60..3600 => ("ago-short-minutes", Some(seconds / 60)),
+        3600..86_400 => ("ago-short-hours", Some(seconds / 3600)),
+        86_400..1_209_600 => ("ago-short-days", Some(seconds / 86_400)),
+        _ => ("ago-short-weeks", Some(seconds / 604_800)),
+    };
     i18n::message(id, &args(count))
 }
 

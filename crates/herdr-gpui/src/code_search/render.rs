@@ -1,27 +1,22 @@
 //! The picker paints ranked rows; ranking and input live elsewhere.
 
 use super::{CodeSearch, Mode, Status, rank};
-use crate::{HerdrWindow, code_index::Change, config::Theme};
+use crate::{HerdrWindow, code_index::Change, config::Theme, i18n::fl};
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
 
-/// How long ago a change was last written, as `5m` or `3h`.
-fn age(modified: Option<SystemTime>) -> Option<String> {
-    let seconds = SystemTime::now().duration_since(modified?).ok()?.as_secs();
-    Some(match seconds {
-        0..60 => "just now".into(),
-        60..3600 => format!("{}m ago", seconds / 60),
-        3600..86_400 => format!("{}h ago", seconds / 3600),
-        _ => format!("{}d ago", seconds / 86_400),
-    })
-}
-
-/// What a changed file's row says under its path.
-fn changed_detail(change: &Change) -> String {
-    let what = if change.new { "New" } else { "Changed" };
-    match age(change.modified) {
-        Some(age) => format!("{what} {age}"),
-        None => what.into(),
+/// What a changed file's row says under its path: whether Git tracks it,
+/// and how long ago it was last written.
+pub(super) fn changed_detail(change: &Change) -> String {
+    let ago = change
+        .modified
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .map(|elapsed| crate::ago::text(elapsed.as_secs()));
+    match (change.new, ago) {
+        (true, Some(ago)) => fl!("code-search-new-ago", ago = ago),
+        (false, Some(ago)) => fl!("code-search-changed-ago", ago = ago),
+        (true, None) => fl!("code-search-new"),
+        (false, None) => fl!("code-search-changed"),
     }
 }
 

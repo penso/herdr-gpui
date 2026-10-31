@@ -350,20 +350,21 @@ pub(crate) fn agent_icon(agent: &str) -> &'static str {
     crate::icons::AgentIcon::from_identity(Some(agent)).path()
 }
 
-/// "2d", "5h", "12m": how long ago `at` was.
+/// "2d", "5h", "12m": how long ago `at` was, in a list column.
 pub(crate) fn age(
     at: Option<chrono::DateTime<chrono::Utc>>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> String {
-    let Some(at) = at else {
-        return String::new();
-    };
-    let seconds = (now - at).num_seconds().max(0);
-    match seconds {
-        0..60 => "now".into(),
-        60..3_600 => format!("{}m", seconds / 60),
-        3_600..86_400 => format!("{}h", seconds / 3_600),
-        86_400..1_209_600 => format!("{}d", seconds / 86_400),
-        _ => format!("{}w", seconds / 604_800),
-    }
+    at.map(|at| crate::ago::short(elapsed(at, now)))
+        .unwrap_or_default()
+}
+
+/// "2 days ago": how long ago `at` was, inside a sentence.
+pub(crate) fn ago(at: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> String {
+    crate::ago::text(elapsed(at, now))
+}
+
+/// Seconds from `at` to `now`; a time ahead of the clock reads as now.
+fn elapsed(at: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> u64 {
+    u64::try_from((now - at).num_seconds()).unwrap_or(0)
 }

@@ -332,3 +332,5 @@ fn shown_hits_keep_the_index_they_were_ranked_against(cx: &mut TestAppContext) {
     });
     assert!(selected.ends_with("src/lib.rs"));
 }
+
+mod changed;

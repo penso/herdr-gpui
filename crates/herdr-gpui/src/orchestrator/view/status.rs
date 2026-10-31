@@ -5,9 +5,10 @@
 
 use super::{
     OrchestratorView,
-    look::{GREEN, RED, YELLOW, age, agent_icon},
+    look::{GREEN, RED, YELLOW, agent_icon, ago},
     rows::{RunRow, Runs},
 };
+use crate::i18n::fl;
 use crate::{
     config::corners,
     orchestrator::{Access, Item},
@@ -280,20 +281,24 @@ impl OrchestratorView {
         let now = chrono::Utc::now();
         let mut parts = Vec::new();
         match (&item.author, item.created_at) {
-            (Some(author), Some(_)) => {
-                parts.push(format!("{author} opened {} ago", age(item.created_at, now)));
-            }
+            (Some(author), Some(at)) => parts.push(fl!(
+                "orchestrator-detail-opened-by",
+                author = author.as_str(),
+                ago = ago(at, now)
+            )),
             (Some(author), None) => parts.push(author.clone()),
-            (None, Some(_)) => parts.push(format!("opened {} ago", age(item.created_at, now))),
+            (None, Some(at)) => parts.push(fl!("orchestrator-detail-opened", ago = ago(at, now))),
             (None, None) => {}
         }
-        if item.updated_at.is_some() {
-            parts.push(format!("updated {} ago", age(item.updated_at, now)));
+        if let Some(at) = item.updated_at {
+            parts.push(fl!("orchestrator-detail-updated", ago = ago(at, now)));
         }
         if let Some(pr) = self.open_pull_request() {
-            parts.push(format!(
-                "+{} \u{2212}{} in {} files",
-                pr.additions, pr.deletions, pr.changed_files
+            parts.push(fl!(
+                "orchestrator-detail-size",
+                additions = pr.additions,
+                deletions = pr.deletions,
+                files = pr.changed_files
             ));
         }
         div()

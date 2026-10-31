@@ -154,15 +154,11 @@ pub(super) fn summary(comments: &[Comment]) -> Summary {
     summary
 }
 
-/// "2h ago" from an RFC 3339 time, or nothing when it does not parse.
+/// "2 h ago" from an RFC 3339 time, or nothing when it does not parse.
 pub(super) fn ago(at: &str, now: chrono::DateTime<chrono::Utc>) -> String {
-    let at = chrono::DateTime::parse_from_rfc3339(at)
-        .ok()
-        .map(|at| at.with_timezone(&chrono::Utc));
-    match super::look::age(at, now) {
-        age if age.is_empty() || age == "now" => age,
-        age => format!("{age} ago"),
-    }
+    chrono::DateTime::parse_from_rfc3339(at)
+        .map(|at| super::look::ago(at.with_timezone(&chrono::Utc), now))
+        .unwrap_or_default()
 }
 
 fn plural(count: usize, one: &str, many: &str) -> String {
