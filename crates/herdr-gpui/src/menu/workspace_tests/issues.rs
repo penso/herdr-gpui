@@ -17,7 +17,7 @@ fn a_git_workspace_offers_issues_and_pull_requests(cx: &mut gpui::TestAppContext
     assert!(
         items.iter().any(
             |(action, label)| *action == WorkspaceMenuAction::Orchestrator
-                && *label == "Issues and pull requests"
+                && label.english() == "Issues and pull requests"
         ),
         "{items:?}"
     );

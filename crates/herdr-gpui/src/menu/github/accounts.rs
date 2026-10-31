@@ -3,6 +3,7 @@
 //! device's own account, adding and removing them, and signing in with a
 //! pasted token. Which account reads a repository is `github::Tokens`' rule.
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     config::{Config, GitHubAccount},
@@ -146,9 +147,9 @@ impl HerdrWindow {
     /// runs off the UI thread; the reload that follows creates its sign-in.
     pub(super) fn add_github_account(&mut self, cx: &mut Context<Self>) {
         if self.config.github.accounts.len() >= crate::config::MAX_ACCOUNTS {
-            self.menu.error = Some(format!(
-                "At most {} additional GitHub accounts can be added.",
-                crate::config::MAX_ACCOUNTS
+            self.menu.error = Some(fl!(
+                "github-menu-too-many-accounts",
+                count = crate::config::MAX_ACCOUNTS
             ));
             return;
         }
@@ -204,7 +205,7 @@ impl HerdrWindow {
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_masked(true, cx);
-            input.set_placeholder("github_pat_… or ghp_…", cx);
+            input.set_placeholder_with(|| fl!("github-menu-token-placeholder"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
         });
@@ -316,11 +317,10 @@ impl HerdrWindow {
                 .hover(|style| style.bg(rgb(theme.active)))
                 .child(crate::sidebar::label_text(&label))
         };
-        let login = |auth: &Auth, fallback: &str| {
-            auth.profile.as_ref().map_or_else(
-                || fallback.to_owned(),
-                |profile| format!("@{}", profile.login),
-            )
+        let login = |auth: &Auth, fallback: String| {
+            auth.profile
+                .as_ref()
+                .map_or_else(|| fallback, |profile| format!("@{}", profile.login))
         };
         let mut strip = div()
             .debug_selector(|| "github-accounts".into())
@@ -331,7 +331,7 @@ impl HerdrWindow {
             .child(
                 chip(
                     "github-account-main".into(),
-                    login(device, "Main account"),
+                    login(device, fl!("github-menu-main-account")),
                     self.menu.github_account.is_none(),
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -346,7 +346,7 @@ impl HerdrWindow {
             strip = strip.child(
                 chip(
                     format!("github-account-{index}").into(),
-                    login(&account.auth, "New account"),
+                    login(&account.auth, fl!("github-menu-new-account")),
                     selected,
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -360,7 +360,7 @@ impl HerdrWindow {
             strip = strip.child(
                 chip(
                     "github-account-add".into(),
-                    "+ Add account (A)".into(),
+                    fl!("github-menu-add-account-chip"),
                     false,
                 )
                 .text_color(rgb(theme.muted))
@@ -379,12 +379,9 @@ impl HerdrWindow {
         let account = self.selected_github_account()?;
         let covered = account.covered();
         Some(if covered.is_empty() {
-            "Sign in to an account that can see repositories your main account cannot, such as an Enterprise Managed User. It reads repositories owned by its login and organizations; the rest stay with your main account. An Enterprise Managed User cannot install Herdr's GitHub App, so use a personal access token for one.".to_owned()
+            fl!("github-menu-account-note")
         } else {
-            format!(
-                "Reads repositories owned by {}. Everything else uses your main account. Add owners in [github] accounts.",
-                covered.join(", ")
-            )
+            fl!("github-menu-account-owners", owners = covered.join(", "))
         })
     }
 
@@ -398,12 +395,12 @@ impl HerdrWindow {
                 .flex()
                 .flex_col()
                 .gap(px(6.))
-                .child("Personal access token")
+                .child(fl!("github-menu-token-label"))
                 .child(input)
                 .child(
                     div()
                         .text_color(rgb(self.theme.muted))
-                        .child("Create one at github.com/settings/tokens as this account: a classic token with repo and read:org, or a fine-grained token with Contents, Issues, and Pull requests read access. It is checked with GitHub, then saved like a browser sign-in."),
+                        .child(fl!("github-menu-token-help")),
                 ),
         )
     }

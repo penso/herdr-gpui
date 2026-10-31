@@ -22,6 +22,7 @@ use herdr_remote_control::control::Device;
 pub(crate) use revoke::Revoke;
 pub(crate) use supervisor::{Health, Supervisor};
 
+use crate::i18n::fl;
 use std::path::PathBuf;
 
 /// The daemon's private state directory: the app's own, under `remote/`.
@@ -50,33 +51,15 @@ fn host(state_dir: PathBuf) -> crate::Result<service::Host> {
     })
 }
 
-/// "Last seen 3 h ago" and the like, from milliseconds since the epoch.
-pub(crate) fn ago(then_ms: u64, now_ms: u64) -> String {
-    let seconds = now_ms.saturating_sub(then_ms) / 1000;
-    match seconds {
-        0..60 => "just now".to_owned(),
-        60..3600 => format!("{} min ago", seconds / 60),
-        3600..86_400 => format!("{} h ago", seconds / 3600),
-        _ => match seconds / 86_400 {
-            1 => "yesterday".to_owned(),
-            days => format!("{days} days ago"),
-        },
-    }
-}
-
-/// "Last seen 2 h ago · Notifications on · Connected".
+/// "Last seen 2 h ago · notifications on".
 pub(crate) fn device_line(device: &Device, now_ms: u64) -> String {
-    let seen = match device.last_seen_ms {
-        _ if device.connected => "Connected now".to_owned(),
-        Some(seen) => format!("Last seen {}", ago(seen, now_ms)),
-        None => "Never connected".to_owned(),
+    let (seen, ago) = match device.last_seen_ms {
+        _ if device.connected => ("connected", String::new()),
+        Some(seen) => ("seen", crate::ago::text(now_ms.saturating_sub(seen) / 1000)),
+        None => ("never", String::new()),
     };
-    let push = if device.push {
-        "notifications on"
-    } else {
-        "notifications off"
-    };
-    format!("{seen} \u{b7} {push}")
+    let push = if device.push { "on" } else { "off" };
+    fl!("remote-device-line", seen = seen, ago = ago, push = push)
 }
 
 /// Milliseconds since the Unix epoch, now.

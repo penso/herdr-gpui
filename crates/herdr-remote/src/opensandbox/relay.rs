@@ -25,6 +25,7 @@ use super::{
     http::{self, Auth},
     store,
 };
+use crate::cloud::Value;
 use crate::cloud::socket::{self, Header, pending};
 use herdr_client::shell_quote;
 use std::{
@@ -107,12 +108,12 @@ pub fn run_helper(args: &[OsString]) -> Option<ExitCode> {
 }
 
 fn run(account: &OsString, sandbox: &OsString, remote: &[OsString]) -> Result<u8> {
-    let account = account.to_str().ok_or(Error::Encoding("account"))?;
-    let sandbox = sandbox.to_str().ok_or(Error::Encoding("sandbox ID"))?;
+    let account = account.to_str().ok_or(Error::Encoding(Value::Account))?;
+    let sandbox = sandbox.to_str().ok_or(Error::Encoding(Value::SandboxId))?;
     // Like `ssh`, the remote command is its arguments joined by spaces.
     let command = remote
         .iter()
-        .map(|part| part.to_str().ok_or(Error::Encoding("remote command")))
+        .map(|part| part.to_str().ok_or(Error::Encoding(Value::RemoteCommand)))
         .collect::<Result<Vec<_>>>()?
         .join(" ");
     let settings = super::connect::settings(account)?;
@@ -159,17 +160,17 @@ pub(super) fn start(execd: &Execd, command: &str) -> Result<String> {
         },
     )?;
     if !super::settings::sandbox_id(&created.session_id) {
-        return Err(Error::Field("exec session ID"));
+        return Err(Error::Field(Value::ExecSessionId));
     }
     Ok(created.session_id)
 }
 
 pub(super) fn attach(execd: &Execd, session: &str) -> Result<WebSocket<socket::Stream>> {
     let mut url = url::Url::parse(&format!("{}/pty/{session}/ws?pty=0", execd.root))
-        .map_err(|_| Error::Field("execd endpoint"))?;
+        .map_err(|_| Error::Field(Value::ExecdEndpoint))?;
     let scheme = if url.scheme() == "https" { "wss" } else { "ws" };
     url.set_scheme(scheme)
-        .map_err(|()| Error::Field("execd endpoint"))?;
+        .map_err(|()| Error::Field(Value::ExecdEndpoint))?;
     let headers: Vec<Header> = execd
         .headers
         .iter()

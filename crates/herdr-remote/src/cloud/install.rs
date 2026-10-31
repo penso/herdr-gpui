@@ -35,6 +35,72 @@ exit 3"#;
 const INSTALL: &str = r#"command -v curl >/dev/null 2>&1 || { echo "curl is required to install Herdr" >&2; exit 4; }
 curl -fsSL https://herdr.dev/install.sh | sh"#;
 
+/// Why Herdr is not ready on a cloud machine after the probe or the
+/// installer ran. Only [`Failure::Output`] holds text from the machine; the
+/// rest are this crate's own reasons, so the app can translate each whole.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Failure {
+    // keep-sorted start
+    /// The installer finished, but the probe still finds no Herdr.
+    Missing,
+    /// The machine has no `curl` for the installer.
+    NoCurl,
+    /// The installer ended without printing anything.
+    NoOutput,
+    /// Herdr is missing and the user did not approve installing it.
+    /// `machine` names it when the provider has a name to show.
+    NotInstalled {
+        machine: Option<String>,
+        retry: Retry,
+    },
+    /// The tail of what the probe or the installer printed.
+    Output(String),
+    /// The probe could not reach the machine and printed nothing.
+    Unreachable,
+    // keep-sorted end
+}
+
+/// How a provider's setup lets the user install Herdr after declining.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Retry {
+    /// Add Herdr to the machine by hand.
+    Add,
+    /// Allow installing it in the setup form.
+    Allow,
+    /// Turn on Install Herdr in the setup form.
+    Enable,
+    /// Turn on Install Herdr and use Finish setup.
+    FinishSetup,
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Missing => {
+                f.write_str("the installer finished but Herdr is not on the expected paths")
+            }
+            Self::NoCurl => f.write_str(
+                "the machine has no curl; add it to its image or install Herdr there manually",
+            ),
+            Self::NoOutput => f.write_str("the installer did not finish"),
+            Self::NotInstalled { machine, retry } => {
+                match machine {
+                    Some(machine) => write!(f, "Herdr is not installed on {machine}; ")?,
+                    None => f.write_str("Herdr is not installed on the machine; ")?,
+                }
+                f.write_str(match retry {
+                    Retry::Add => "add it and try again",
+                    Retry::Allow => "allow installing it and try again",
+                    Retry::Enable => "enable Install Herdr and retry",
+                    Retry::FinishSetup => "enable Install Herdr and use Finish setup",
+                })
+            }
+            Self::Output(output) => f.write_str(output),
+            Self::Unreachable => f.write_str("the remote command could not reach the machine"),
+        }
+    }
+}
+
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
@@ -162,9 +228,9 @@ pub fn installed(mut ssh: Command, cancelled: &impl Fn() -> bool) -> Result<bool
         Some(0) => Ok(true),
         Some(3) => Ok(false),
         _ => Err(Error::Install(if finished.output.is_empty() {
-            "the remote command could not reach the machine".into()
+            Failure::Unreachable
         } else {
-            finished.output
+            Failure::Output(finished.output)
         })),
     }
 }
@@ -188,13 +254,11 @@ pub fn install(mut ssh: Command, cancelled: &impl Fn() -> bool) -> Result<()> {
     let finished = run(ssh, INSTALL_TIMEOUT, cancelled)?;
     match finished.code {
         Some(0) => Ok(()),
-        Some(NO_CURL) => Err(Error::Install(
-            "the machine has no curl; add it to its image or install Herdr there manually".into(),
-        )),
+        Some(NO_CURL) => Err(Error::Install(Failure::NoCurl)),
         _ => Err(Error::Install(if finished.output.is_empty() {
-            "the installer did not finish".into()
+            Failure::NoOutput
         } else {
-            finished.output
+            Failure::Output(finished.output)
         })),
     }
 }

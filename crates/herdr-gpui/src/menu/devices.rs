@@ -1,3 +1,4 @@
+// i18n: migrated
 //! The sidebar's device footer and the device picker that scopes the sidebar
 //! to one device, several, or all of them, or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
@@ -27,6 +28,7 @@ pub(crate) use scope::DeviceScope;
 pub(super) use wsl::WslSetup;
 
 use super::{Page, colors};
+use crate::i18n::fl;
 use crate::{Command, HerdrWindow};
 use gpui::{prelude::*, *};
 use herdr_client::ConnectTarget;
@@ -35,11 +37,37 @@ use rail::add_device_offer;
 pub(super) const MENU_GAP: f32 = 12.;
 
 /// How the picker says several devices can be listed at once.
-const MULTI_SELECT_HINT: &str = if cfg!(target_os = "macos") {
-    "⌘-click or Space for several"
-} else {
-    "Ctrl-click or Space for several"
-};
+fn multi_select_hint() -> String {
+    if cfg!(target_os = "macos") {
+        fl!("devices-multi-select-macos")
+    } else {
+        fl!("devices-multi-select")
+    }
+}
+
+/// Why Add Device cannot open in this window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SetupUnavailable {
+    /// The window talks to an explicit socket, which has no device catalog.
+    Socket,
+    /// The window shows a development catalog.
+    Development,
+}
+
+impl SetupUnavailable {
+    pub(crate) fn text(self) -> String {
+        match self {
+            Self::Socket => fl!("devices-unavailable-socket"),
+            Self::Development => fl!("devices-unavailable-development"),
+        }
+    }
+}
+
+impl From<SetupUnavailable> for SharedString {
+    fn from(reason: SetupUnavailable) -> Self {
+        reason.text().into()
+    }
+}
 pub(super) const MENU_WIDTH: f32 = 280.;
 
 /// How tall an anchored list above the sidebar footer may be, measured from the
@@ -208,14 +236,12 @@ impl HerdrWindow {
         self.sidebar_pin_reveal.set(None);
     }
 
-    pub(crate) fn device_setup_unavailable(&self) -> Option<&'static str> {
+    pub(crate) fn device_setup_unavailable(&self) -> Option<SetupUnavailable> {
         match &self.endpoints[0].connection.target {
-            ConnectTarget::Socket(_) => {
-                Some("Device setup is unavailable with an explicit socket.")
-            }
+            ConnectTarget::Socket(_) => Some(SetupUnavailable::Socket),
             ConnectTarget::Session {
                 development: true, ..
-            } => Some("Device setup is unavailable with a development catalog."),
+            } => Some(SetupUnavailable::Development),
             _ => None,
         }
     }
@@ -256,8 +282,8 @@ impl HerdrWindow {
             .shortcuts(Command::Settings)
             .next()
             .map_or_else(
-                || "Settings".to_owned(),
-                |shortcut| format!("Settings ({shortcut})"),
+                || fl!("devices-settings"),
+                |shortcut| fl!("devices-settings-shortcut", shortcut = shortcut.to_string()),
             )
             .into();
         let foreground = self.theme.foreground;
@@ -268,9 +294,9 @@ impl HerdrWindow {
                 .endpoints
                 .iter()
                 .find(|endpoint| endpoint.id == id)
-                .map_or_else(|| "All Devices".to_owned(), |e| e.label.clone()),
-            Some(_) => format!("{picked} Devices"),
-            None => "All Devices".to_owned(),
+                .map_or_else(|| fl!("devices-all"), |e| e.label.clone()),
+            Some(_) => fl!("devices-picked", count = picked),
+            None => fl!("devices-all"),
         };
         let connected = self.endpoints.iter().any(|endpoint| {
             self.device_visible(&endpoint.id) && endpoint.live.status.is_connected()
@@ -300,14 +326,11 @@ impl HerdrWindow {
                 div()
                     .id("device-picker")
                     .role(Role::Button)
-                    .aria_label(format!(
-                        "Devices: {label}, {}",
-                        if connected {
-                            "connected"
-                        } else {
-                            "disconnected"
-                        }
-                    ))
+                    .aria_label(if connected {
+                        fl!("devices-picker-connected", device = label.as_str())
+                    } else {
+                        fl!("devices-picker-disconnected", device = label.as_str())
+                    })
                     .map(|picker| {
                         self.chrome_stop(crate::window::chrome_focus::Region::Sidebar, picker)
                     })
@@ -380,7 +403,7 @@ impl HerdrWindow {
                                 .flex_none()
                                 .text_size(px(11.))
                                 .text_color(rgb(self.theme.muted))
-                                .child(format!("{hosts} hosts")),
+                                .child(fl!("devices-hosts", count = hosts)),
                         )
                     })
                     .child(
@@ -426,7 +449,7 @@ impl HerdrWindow {
                 div()
                     .id("device-sessions")
                     .role(Role::Button)
-                    .aria_label("Sessions")
+                    .aria_label(fl!("devices-sessions"))
                     .map(|button| {
                         self.chrome_stop(crate::window::chrome_focus::Region::Sidebar, button)
                     })
@@ -441,7 +464,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .tooltip(move |_, cx| {
                         cx.new(|_| SettingsHint {
-                            text: "Sessions".into(),
+                            text: fl!("devices-sessions").into(),
                             foreground,
                             surface,
                         })
@@ -511,16 +534,15 @@ impl HerdrWindow {
             .count();
         let count = self.endpoints.len();
         let mut rows = vec![(
-            "All Devices".to_owned(),
-            format!(
-                "{count} {} · {connected} connected",
-                if count == 1 { "device" } else { "devices" }
-            ),
+            fl!("devices-all"),
+            fl!("devices-all-detail", count = count, connected = connected),
             self.device_filter == DeviceScope::All,
             true,
         )];
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
+                // Names: the host, machine, or distribution, and the session.
+                // i18n: data
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
                 #[cfg(feature = "cloud")]
                 ConnectTarget::Cloud {
@@ -529,31 +551,39 @@ impl HerdrWindow {
                     session,
                     ..
                 } => format!("{} {machine} · {session}", crate::cloud::name(*provider)),
+                // i18n: data
                 ConnectTarget::Wsl { distro, session } => format!("WSL {distro} · {session}"),
                 ConnectTarget::Socket(path) => path.display().to_string(),
-                ConnectTarget::Session { name, .. } => format!("This device · {name}"),
-                ConnectTarget::Local => "This device".into(),
+                ConnectTarget::Session { name, .. } => {
+                    fl!("devices-this-device-session", session = name.as_str())
+                }
+                ConnectTarget::Local => fl!("devices-this-device"),
             };
             (
                 endpoint.label.clone(),
-                format!("{detail} · {}", endpoint.status()),
+                fl!(
+                    "devices-row-detail",
+                    place = detail,
+                    state = endpoint.status()
+                ),
                 self.device_filter.picks(&endpoint.id),
                 endpoint.enabled,
             )
         }));
         rows.push((
-            "Add Device…".into(),
-            self.device_setup_unavailable()
-                .unwrap_or_else(|| add_device_offer(self.cloud_offered()))
-                .into(),
+            fl!("devices-add"),
+            self.device_setup_unavailable().map_or_else(
+                || add_device_offer(self.cloud_offered()),
+                SetupUnavailable::text,
+            ),
             false,
             self.device_setup_unavailable().is_none(),
         ));
         // The footer's Sessions button is an icon with no label, so the
         // picker, whose Local row already names the session, offers it too.
         rows.push((
-            "Sessions…".into(),
-            "Switch, add, or delete this device's sessions".into(),
+            fl!("devices-sessions-row"),
+            fl!("devices-sessions-detail"),
             false,
             true,
         ));
@@ -573,13 +603,13 @@ impl HerdrWindow {
                     .justify_between()
                     .gap(px(8.))
                     .text_color(rgb(self.theme.muted))
-                    .child(div().flex_none().child("DEVICES"))
+                    .child(div().flex_none().child(fl!("devices-heading")))
                     .child(
+                        // Wraps rather than cutting a longer language short.
                         div()
                             .min_w_0()
-                            .truncate()
                             .text_size(px(self.config.ui.size * 0.85))
-                            .child(MULTI_SELECT_HINT),
+                            .child(multi_select_hint()),
                     ),
             );
         for (index, (label, detail, checked, enabled)) in rows.into_iter().enumerate() {
@@ -721,7 +751,7 @@ impl HerdrWindow {
                 div()
                     .p(px(8.))
                     .text_color(rgb(self.theme.muted))
-                    .child("ADDING"),
+                    .child(fl!("devices-adding")),
             );
         }
         for (index, provision) in self.cloud_jobs.iter().enumerate() {
@@ -765,7 +795,7 @@ impl HerdrWindow {
     /// Shared by the picker and overview, including isolated-window guards.
     pub(crate) fn open_device_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(reason) = self.device_setup_unavailable() {
-            tracing::info!(category = "device_setup", reason, "Add Device unavailable");
+            tracing::info!(category = "device_setup", ?reason, "Add Device unavailable");
             return;
         }
         tracing::info!(category = "device_setup", "Opening Add Device");

@@ -20,14 +20,6 @@ impl Progress {
         (total > 0).then(|| (step.saturating_sub(1) as f32 / total as f32).clamp(0.0, 1.0))
     }
 
-    /// The status line under the bar: the step, then what it runs.
-    pub fn text(&self) -> String {
-        match self.step {
-            Some((step, total)) => format!("Step {step} of {total}: {}", self.status),
-            None => self.status.clone(),
-        }
-    }
-
     /// Take one line of a local builder's output into account.
     pub fn line(&mut self, line: &str) {
         let line = line.trim();

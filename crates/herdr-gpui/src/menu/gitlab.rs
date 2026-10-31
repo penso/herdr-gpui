@@ -4,7 +4,9 @@
 //! it is saved. Every lookup blocks on direnv, the credential store, `glab`,
 //! or the network, so it runs on the background executor and lands back here.
 
+// i18n: migrated
 use super::Page;
+use crate::i18n::fl;
 use crate::{HerdrWindow, orchestrator::GitLabRead, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_orchestrator::gitlab::{
@@ -32,7 +34,9 @@ mod tests;
 /// gitlab.com, listed when no repository names another instance.
 const DEFAULT_HOST: &str = "gitlab.com";
 /// What a save or forget says in a window that keeps no saved credential.
-pub(super) const NO_STORE: &str = "This window does not keep GitLab tokens.";
+pub(super) fn no_store() -> String {
+    fl!("gitlab-menu-no-store")
+}
 
 /// What is known of an instance's token.
 pub(crate) enum Token {
@@ -143,55 +147,43 @@ impl GitLabMenu {
 /// Where a token came from, as the page says it.
 fn source_label(source: Source, status: &HostStatus) -> String {
     match (source, status.checkout.as_deref()) {
-        (Source::Envrc, Some(checkout)) => format!("from the .envrc of {checkout}"),
-        (Source::Envrc, None) => "from the project's .envrc".to_owned(),
-        (Source::Environment, _) => "from GITLAB_TOKEN".to_owned(),
-        (Source::Saved, _) if status.connected => "connected here".to_owned(),
-        (Source::Saved, _) => "saved here".to_owned(),
-        (Source::Cli, _) => "from the GitLab CLI (glab)".to_owned(),
+        (Source::Envrc, Some(checkout)) => fl!("gitlab-menu-from-envrc-of", checkout = checkout),
+        (Source::Envrc, None) => fl!("gitlab-menu-from-envrc"),
+        (Source::Environment, _) => fl!("gitlab-menu-from-environment"),
+        (Source::Saved, _) if status.connected => fl!("gitlab-menu-from-connected"),
+        (Source::Saved, _) => fl!("gitlab-menu-from-saved"),
+        (Source::Cli, _) => fl!("gitlab-menu-from-cli"),
     }
 }
 
 /// What an instance's row says.
 pub(crate) fn status_line(status: &HostStatus) -> String {
     if status.plain {
-        return "Read over plain HTTP, so no token is sent. Use an https:// remote for private \
-                projects."
-            .to_owned();
+        return fl!("gitlab-menu-plain");
     }
     let (source, user) = match &status.token {
-        Token::Unknown => return "Looking for a token\u{2026}".to_owned(),
-        Token::None if status.can_connect => {
-            return "Not connected. Public projects still list; connect for private ones."
-                .to_owned();
-        }
-        Token::None => {
-            return "No token. Public projects still list; set GITLAB_TOKEN in the project's \
-                    .envrc, sign in with glab, or paste a token for private ones."
-                .to_owned();
-        }
+        Token::Unknown => return fl!("gitlab-menu-looking"),
+        Token::None if status.can_connect => return fl!("gitlab-menu-not-connected-note"),
+        Token::None => return fl!("gitlab-menu-no-token-note"),
         Token::Found { source, user } => (*source, user),
     };
     let from = source_label(source, status);
     match user {
-        None => format!("Checking the token {from}\u{2026}"),
-        Some(Ok(user)) => format!("Signed in as {}, {from}.", user.username),
+        None => fl!("gitlab-menu-checking", from = from),
+        Some(Ok(user)) => fl!(
+            "gitlab-menu-signed-in",
+            user = user.username.as_str(),
+            from = from
+        ),
         Some(Err(error)) => match **error {
             gitlab::Error::Authentication if status.can_connect => {
-                format!("GitLab refused the token {from}. Connect again, or paste a new one.")
+                fl!("gitlab-menu-refused-connect", from = from)
             }
-            gitlab::Error::Authentication => {
-                format!("GitLab refused the token {from}. Paste a new one.")
-            }
+            gitlab::Error::Authentication => fl!("gitlab-menu-refused", from = from),
             // A pasted token is only tried after these, so it cannot help.
-            gitlab::Error::EnvironmentRefused => "GitLab refused GITLAB_TOKEN. Change or unset \
-                                                  it in your shell: a token saved here is only \
-                                                  tried after it."
-                .to_owned(),
-            gitlab::Error::EnvrcRefused => {
-                format!("GitLab refused the token {from}. Change it there: it is tried first.")
-            }
-            _ => format!("{error}. The token is {from}."),
+            gitlab::Error::EnvironmentRefused => fl!("gitlab-menu-environment-refused"),
+            gitlab::Error::EnvrcRefused => fl!("gitlab-menu-envrc-refused", from = from),
+            _ => fl!("gitlab-menu-failed", error = error.to_string(), from = from),
         },
     }
 }
@@ -395,7 +387,7 @@ impl HerdrWindow {
             let _ = this.update(cx, |this, cx| {
                 this.menu.gitlab.problem = saved.as_ref().err().map(|error| match error {
                     gitlab::Error::Record => {
-                        format!("{error}. Saving or forgetting a token replaces them.")
+                        fl!("gitlab-menu-record-failed", error = error.to_string())
                     }
                     error => error.to_string(),
                 });
@@ -573,7 +565,7 @@ impl HerdrWindow {
             {
                 Some(gitlab::Error::InsecureHost(host).to_string())
             }
-            Some(_) if token.is_empty() => Some("Paste a personal access token first.".to_owned()),
+            Some(_) if token.is_empty() => Some(fl!("gitlab-menu-paste-first")),
             Some(host) => {
                 // The pasted token is the user's later choice: an approval
                 // still awaited for the instance would replace it, maybe
@@ -585,7 +577,7 @@ impl HerdrWindow {
                 {
                     self.menu.gitlab.connecting = None;
                 }
-                self.gitlab_store().is_none().then(|| NO_STORE.to_owned())
+                self.gitlab_store().is_none().then(no_store)
             }
         };
         if let Some(failure) = failure {
@@ -606,21 +598,23 @@ impl HerdrWindow {
             let api = listed.unwrap_or_else(|| Api::of_instance(&host, &cli_hosts::read()));
             let user = account::whoami(&api, &token)?.username;
             saved::save(store, &host, Some(token))?;
-            Ok(format!(
-                "Saved. GitLab at {host} signs this token in as {user}."
+            Ok(fl!(
+                "gitlab-menu-saved",
+                host = host.as_str(),
+                user = user.as_str()
             ))
         });
     }
 
     pub(super) fn forget_gitlab(&mut self, host: String, cx: &mut Context<Self>) {
         let Some(store) = self.gitlab_store() else {
-            self.menu.gitlab.message = Some(NO_STORE.to_owned());
+            self.menu.gitlab.message = Some(no_store());
             cx.notify();
             return;
         };
         self.run_gitlab(cx, None, move || {
             saved::save(store, &host, None)?;
-            Ok(format!("Removed the GitLab sign-in kept for {host}."))
+            Ok(fl!("gitlab-menu-removed", host = host.as_str()))
         });
     }
 

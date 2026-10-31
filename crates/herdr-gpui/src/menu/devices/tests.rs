@@ -13,6 +13,7 @@ mod add_provider;
 mod boat_rail;
 #[cfg(feature = "cloud")]
 mod cloud_providers;
+mod en_xa;
 mod host_key;
 mod host_key_choice;
 mod key_login;
@@ -40,7 +41,10 @@ fn only_a_present_herdr_is_saved_without_a_terminal() {
         Offer::for_probe(HostProbe::SshFailed(herdr_client::SshFailure::Auth)),
         Some(Offer::InstallKey)
     );
-    let question = Offer::Install.question("dev@box", Some("dev"));
+    // Without Fluent's isolation marks around each name.
+    let question = Offer::Install
+        .question("dev@box", Some("dev"))
+        .replace(['\u{2068}', '\u{2069}'], "");
     if cfg!(windows) {
         // No terminal setup: the user is told what to run instead.
         assert!(question.contains("Herdr was not detected there"));

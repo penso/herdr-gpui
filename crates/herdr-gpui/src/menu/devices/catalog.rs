@@ -4,6 +4,7 @@
 //! Settings tab.
 
 use super::super::Page;
+use crate::i18n::fl;
 use crate::{HerdrWindow, cloud::CloudProvider};
 use gpui::{prelude::*, *};
 use herdr_client::ConnectTarget;
@@ -67,9 +68,9 @@ impl HerdrWindow {
             .gap(px(8.))
             .child(div().pb(px(4.)).text_color(rgb(theme.subtext())).child(
                 if providers.is_empty() {
-                    "Every cloud provider is set up and listed beside SSH."
+                    fl!("add-device-providers-all-set")
                 } else {
-                    "Set up a provider in Settings, and Add Device lists it beside SSH."
+                    fl!("add-device-providers-lead")
                 },
             ));
         let per_row = if compact { 1 } else { 2 };

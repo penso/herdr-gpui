@@ -26,7 +26,7 @@ use crate::{
     },
     config::{AzureConfig, AzureFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -96,7 +96,7 @@ enum Account {
         /// What sizes cost in the saved regions; `None` when unreadable.
         catalog: Option<Box<crate::azure::sizes::Catalog>>,
         /// Each saved device's size, by device ID.
-        sizes: HashMap<String, String>,
+        sizes: HashMap<String, crate::azure::sizes::DeviceSize>,
     },
 }
 
@@ -227,9 +227,9 @@ impl AzureCard {
         }
     }
 
-    fn device_size(&self, id: &str) -> Option<&str> {
+    fn device_size(&self, id: &str) -> Option<String> {
         match &self.account {
-            Account::Known { sizes, .. } => sizes.get(id).map(String::as_str),
+            Account::Known { sizes, .. } => sizes.get(id).map(sizes::device_size),
             Account::Checking | Account::Unconfigured { .. } => None,
         }
     }
@@ -377,7 +377,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.azure_card {
                     card.refreshing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -692,7 +694,7 @@ impl SettingsWindow {
                 Some(size) => fl!(
                     "settings-cloud-azure-device-size",
                     kind = kind,
-                    size = size.to_owned(),
+                    size = size,
                     group = group
                 ),
                 None => fl!("settings-cloud-azure-device", kind = kind, group = group),

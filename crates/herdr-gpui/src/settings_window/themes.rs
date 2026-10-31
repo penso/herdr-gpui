@@ -5,7 +5,7 @@ use crate::{
     config::{Config, Theme, ThemeName},
     contrast::Contrast,
     herdr_settings::{self, Edit},
-    i18n::fl,
+    i18n::{Localize, fl},
     search_input::{Changed, SearchInput},
 };
 use gpui::{prelude::*, *};
@@ -463,7 +463,7 @@ impl SettingsWindow {
                                 this.flushing = false;
                                 this.error = Some(fl!(
                                     "settings-theme-error-load",
-                                    error = error.to_string()
+                                    error = error.localize()
                                 ));
                             }
                         }

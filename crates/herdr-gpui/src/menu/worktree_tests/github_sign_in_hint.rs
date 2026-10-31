@@ -1,4 +1,5 @@
 use super::*;
+use crate::menu::worktree_source::signed_out_hint;
 
 /// A faded GitHub tab says why on hover: Herdr keeps its own GitHub sign-in,
 /// so a `gh` login elsewhere does not enable it.
@@ -43,14 +44,10 @@ fn a_connected_github_tab_has_no_sign_in_hint(cx: &mut gpui::TestAppContext) {
 #[test]
 fn the_hint_names_the_listing_and_where_to_sign_in() {
     for kind in [Kind::PullRequest, Kind::Issue] {
-        let hint = kind.signed_out_hint();
+        let hint = signed_out_hint(kind);
         assert!(hint.contains("Sign in to GitHub in Herdr"), "{hint}");
         assert!(hint.contains("account button"), "{hint}");
     }
-    assert!(
-        Kind::PullRequest
-            .signed_out_hint()
-            .ends_with("pull requests.")
-    );
-    assert!(Kind::Issue.signed_out_hint().ends_with("issues."));
+    assert!(signed_out_hint(Kind::PullRequest).ends_with("pull requests."));
+    assert!(signed_out_hint(Kind::Issue).ends_with("issues."));
 }

@@ -13,7 +13,7 @@ use crate::{
         CloudProvider,
         worker::{self, Worker},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     railway::setup::{self, AddRequest, Overview},
     search_input::SearchInput,
 };
@@ -161,7 +161,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.railway_card {
                     card.changing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

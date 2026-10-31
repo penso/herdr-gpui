@@ -138,10 +138,7 @@ pub fn install(settings: &Settings, ready: &Ready, cancelled: impl Fn() -> bool)
     install::install(ssh(settings, ready)?, &cancelled)?;
     // The installer's own success is not proof the bridge will find it.
     if !install::installed(ssh(settings, ready)?, &cancelled)? {
-        return Err(cloud::Error::Install(
-            "the installer finished but Herdr is not on the expected paths".into(),
-        )
-        .into());
+        return Err(cloud::Error::Install(install::Failure::Missing).into());
     }
     Ok(())
 }
@@ -260,10 +257,10 @@ fn finish(
     report(step(Step::CheckingHerdr));
     if !install::installed(ssh(settings, &ready)?, &cancelled)? {
         if !request.install {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed in {}; add it and try again",
-                ready.name
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(ready.name.clone()),
+                retry: install::Retry::Add,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);

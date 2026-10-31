@@ -8,6 +8,7 @@ mod accessibility;
 mod actions;
 mod agent_notes;
 mod agent_skill;
+mod ago;
 mod app;
 #[cfg(any(target_os = "macos", windows, test))]
 mod app_badge;

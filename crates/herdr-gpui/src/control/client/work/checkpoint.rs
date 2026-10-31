@@ -6,7 +6,7 @@ use super::{
     rejected,
 };
 use crate::{
-    checkpoint::{self, Checkout, Checkpoint, direct},
+    checkpoint::{Checkout, Checkpoint, direct},
     cli::control::CheckpointCommand,
     control::{ErrorCode, protocol::Request, protocol::work::WorkOp},
 };
@@ -59,7 +59,7 @@ pub(super) fn describe(checkpoints: &[CheckpointInfo], branch: &str, now: i64) -
             text,
             "{}  {:<12}  {}  ({} file{}, +{} -{})",
             checkpoint.id,
-            checkpoint::age(checkpoint.created, now),
+            crate::ago::english(crate::ago::since(checkpoint.created, now)),
             checkpoint.label,
             checkpoint.files,
             if checkpoint.files == 1 { "" } else { "s" },
