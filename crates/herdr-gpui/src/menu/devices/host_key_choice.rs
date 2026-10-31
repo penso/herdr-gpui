@@ -4,7 +4,8 @@
 //! device (see `config::ssh_hosts`).
 
 use super::add_device::{Setup, Step};
-use crate::{HerdrWindow, i18n::fl};
+use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::HostKeys;
 

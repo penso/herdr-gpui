@@ -2,14 +2,18 @@
 //! load is a cancellable background task: config parsing never runs on the UI
 //! thread, and a superseded load cannot overwrite a newer one.
 
+// i18n: migrated
 use super::{Page, accent};
+use crate::i18n::fl;
 use crate::{HerdrWindow, config::Config, keymap::Reach};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::ClientShellCommand;
 use std::borrow::Cow;
 
 /// The semantic paste row, which no keymap command holds.
-const PASTE_LABEL: &str = "Paste into terminal";
+fn paste_label() -> String {
+    fl!("menu-settings-paste")
+}
 
 impl HerdrWindow {
     pub(crate) fn reload_notification_config(&mut self, cx: &mut Context<Self>) {
@@ -99,7 +103,7 @@ impl HerdrWindow {
         self.menu.keybinds_scroll.set_offset(Point::default());
         let search = cx.new(crate::search_input::SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search shortcuts...", cx);
+            input.set_placeholder_with(|| fl!("menu-settings-search"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
         });
@@ -139,6 +143,7 @@ impl HerdrWindow {
                 let mut config = Config::load()?;
                 config.resolve_fonts(|| text_system.all_font_names());
                 // Follow Herdr is resolved from the latest prepared snapshot on completion.
+                // i18n: data
                 let theme = if config.theme == "Follow Herdr" {
                     Default::default()
                 } else {
@@ -208,6 +213,7 @@ impl HerdrWindow {
                             this.status_bar_visible = config.status_bar.show;
                         }
                         this.config = config.clone();
+                        // i18n: data
                         if this.config.theme != "Follow Herdr" {
                             this.theme = theme;
                         }
@@ -238,7 +244,7 @@ impl HerdrWindow {
                     }
                     Err(error) => {
                         tracing::warn!(%error, "Could not load GUI config; keeping current settings");
-                        let message = format!("Load GUI config: {error}");
+                        let message = fl!("menu-settings-load-failed", error = error.to_string());
                         this.local_error = Some(message);
                     }
                 }
@@ -291,23 +297,24 @@ impl HerdrWindow {
             .px(px(16.))
             .py(px(8.))
             .children(editor);
+        let paste = paste_label();
         let mut groups = [
-            ("WORKSPACES & PANES", Vec::new()),
-            ("NAVIGATION", Vec::new()),
+            (fl!("menu-settings-workspaces"), Vec::new()),
+            (fl!("menu-settings-navigation"), Vec::new()),
             (
-                "APPLICATION",
+                fl!("menu-settings-application"),
                 vec![(
                     vec![(Cow::Borrowed(crate::actions::EDIT_KEYS[2]), None)],
-                    Cow::Borrowed(PASTE_LABEL),
+                    Cow::Owned(paste.clone()),
                     None,
                 )],
             ),
-            ("PLUGIN & CUSTOM COMMANDS", Vec::new()),
+            (fl!("menu-settings-commands"), Vec::new()),
         ];
         for info in COMMANDS {
             let mut keys: Vec<&str> = self.keymap().shortcuts(info.command).collect();
             if info.command == Command::Palette && self.config.palette.double_shift {
-                keys.push("shift shift");
+                keys.push("shift shift"); // i18n: data
             }
             let group = match info.command {
                 Command::Workspace
@@ -434,7 +441,7 @@ impl HerdrWindow {
                         // or an earlier command is numbered. Daemon command IDs
                         // are generated per boot and mean nothing to a reader.
                         let earlier = usize::from(
-                            description == PASTE_LABEL
+                            description == paste
                                 || COMMANDS
                                     .iter()
                                     .any(|info| crate::i18n::command(info) == description),
@@ -465,10 +472,10 @@ impl HerdrWindow {
             let shortcuts: Vec<_> = shortcuts
                 .into_iter()
                 .filter(|(keys, description, _)| {
-                    shortcut_matches(query, "", description, section)
+                    shortcut_matches(query, "", description, &section)
                         || keys
                             .iter()
-                            .any(|(keys, _)| shortcut_matches(query, keys, description, section))
+                            .any(|(keys, _)| shortcut_matches(query, keys, description, &section))
                 })
                 .collect();
             if shortcuts.is_empty() {
@@ -506,7 +513,7 @@ impl HerdrWindow {
                                     column.child(
                                         div()
                                             .text_color(rgb(theme.muted))
-                                            .child("No shortcut assigned"),
+                                            .child(fl!("menu-settings-no-shortcut")),
                                     )
                                 })
                                 .children(keys.into_iter().map(|(keys, note)| {
@@ -556,7 +563,7 @@ impl HerdrWindow {
                                     .py(px(4.))
                                     .cursor_pointer()
                                     .text_color(accent)
-                                    .child("Edit")
+                                    .child(fl!("menu-settings-edit"))
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.edit_shortcut(info, window, cx)
                                     })),
@@ -571,14 +578,14 @@ impl HerdrWindow {
                     .debug_selector(|| "keybinds-empty".into())
                     .py(px(20.))
                     .text_color(rgb(theme.muted))
-                    .child("No matching shortcuts. Try an action name or key combination."),
+                    .child(fl!("menu-settings-no-match")),
             );
         }
         body = body.child(
             div()
                 .py(px(14.))
                 .text_color(rgb(theme.subtext()))
-                .child("Includes Herdr's [keys] prefix chords and the connected daemon's plugin and custom commands. A binding that cannot run says why. Terminal applications keep their own shortcuts."),
+                .child(fl!("menu-settings-note")),
         );
         div()
             .flex()
@@ -610,12 +617,12 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Keyboard Shortcuts"),
+                                    .child(fl!("menu-settings-title")),
                             )
                             .child(
                                 div()
                                     .text_color(rgb(theme.muted))
-                                    .child("View and edit shortcuts"),
+                                    .child(fl!("menu-settings-subtitle")),
                             ),
                     )
                     .child(
@@ -633,7 +640,7 @@ impl HerdrWindow {
                                     .bg(rgb(theme.active))
                                     .text_color(rgb(theme.foreground))
                             })
-                            .child("Close")
+                            .child(fl!("menu-settings-close"))
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
                             ),
@@ -653,7 +660,7 @@ impl HerdrWindow {
                             .debug_selector(|| "keybinds-count".into())
                             .pt(px(4.))
                             .text_color(rgb(theme.muted))
-                            .child(format!("{count} of {total} shortcuts")),
+                            .child(fl!("menu-settings-count", count = count, total = total)),
                     ),
             )
             .child(body)
@@ -666,7 +673,7 @@ impl HerdrWindow {
                     .border_t_1()
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
-                    .child("Esc to close  /  click outside to dismiss"),
+                    .child(fl!("menu-settings-footer")),
             )
     }
 }
@@ -684,19 +691,19 @@ fn command_name(command: &ClientShellCommand) -> &str {
 }
 
 /// Why a custom command's binding does not run, beneath its keycaps.
-fn reach_note(reach: Reach) -> Option<&'static str> {
-    match reach {
-        Reach::Runs => None,
-        Reach::Shadowed => Some("Used by a Herdr or GUI shortcut"),
-        Reach::Taken => Some("Used by an earlier command"),
-        Reach::NeedsModifier => Some("Needs a modifier key"),
-        Reach::NoPrefix => Some("No usable prefix key"),
-        Reach::OverLimit => Some("Beyond the 8-shortcut limit"),
-        Reach::Unsupported => Some("Not supported by this client"),
-    }
+fn reach_note(reach: Reach) -> Option<String> {
+    Some(match reach {
+        Reach::Runs => return None,
+        Reach::Shadowed => fl!("menu-settings-shadowed"),
+        Reach::Taken => fl!("menu-settings-taken"),
+        Reach::NeedsModifier => fl!("menu-settings-needs-modifier"),
+        Reach::NoPrefix => fl!("menu-settings-no-prefix"),
+        Reach::OverLimit => fl!("menu-settings-over-limit", limit = 8),
+        Reach::Unsupported => fl!("menu-settings-unsupported"),
+    })
 }
 
-fn keycaps(shortcut: &str) -> impl Iterator<Item = String> + '_ {
+pub(super) fn keycaps(shortcut: &str) -> impl Iterator<Item = String> + '_ {
     shortcut
         .split(' ')
         .flat_map(|keystroke| {

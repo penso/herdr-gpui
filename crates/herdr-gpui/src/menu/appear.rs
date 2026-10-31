@@ -14,6 +14,7 @@ mod kept;
 
 pub(super) use kept::{Kept, leaves};
 
+// i18n: migrated
 use super::Page;
 use crate::{
     HerdrWindow,

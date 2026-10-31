@@ -13,7 +13,10 @@ use herdr_client::{ConnectTarget, LocalSession, SessionState};
 
 // Adding a session needs SSH, which Windows does not offer.
 #[cfg(not(windows))]
+mod en_xa;
+#[cfg(not(windows))]
 mod form_scroll;
+mod row_height;
 
 /// A session as discovery reports it. The socket comes from the same path rules
 /// the window resolves, so no test hard-codes a home directory.
@@ -187,6 +190,17 @@ fn on_the_first_device(
     cx: &mut TestAppContext,
     answer: Option<crate::sessions::DeviceScan>,
 ) -> (Entity<crate::HerdrWindow>, &mut VisualTestContext) {
+    let (view, cx) = device_window(cx, answer);
+    click(cx, "device-sessions");
+    draw(cx);
+    (view, cx)
+}
+
+/// The window [`on_the_first_device`] opens the list in, drawn once.
+fn device_window(
+    cx: &mut TestAppContext,
+    answer: Option<crate::sessions::DeviceScan>,
+) -> (Entity<crate::HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = cx.add_window_view(move |window, cx| {
         let mut view = fixture_window(window, cx);
         view.endpoints[0].connection.target = development("default");
@@ -210,8 +224,6 @@ fn on_the_first_device(
     });
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
-    draw(cx);
-    click(cx, "device-sessions");
     draw(cx);
     (view, cx)
 }
