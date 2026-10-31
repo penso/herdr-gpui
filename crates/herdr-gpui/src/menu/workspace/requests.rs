@@ -229,6 +229,8 @@ impl HerdrWindow {
             .then(|| self.setup_launch(result, &created))
             .flatten();
         let endpoint = self.endpoints[self.selected_endpoint].id.clone();
+        // Taken before dismissal drops it; an opened checkout keeps whatever it runs.
+        let landing = self.menu.landing.take().filter(|_| !opening);
         // A folded group would hide the new checkout the sidebar is about to select.
         let group = self
             .menu
@@ -255,6 +257,9 @@ impl HerdrWindow {
             .filter(|id| !id.is_empty());
         if let Some(pane_id) = pane {
             self.navigate_endpoint(&endpoint, NavigationTarget::Pane(pane_id), cx);
+            if let Some(landing) = &landing {
+                self.land_worktree(landing, pane_id, cx);
+            }
         } else {
             self.navigate_endpoint(&endpoint, NavigationTarget::Workspace(&created), cx);
         }
