@@ -127,9 +127,17 @@ fn linked_checkout_menu_creates_from_its_branch(cx: &mut gpui::TestAppContext) {
             view.menu.reset();
             view.open_workspace_menu("w4", Default::default(), window, cx);
             let items = view.workspace_items();
-            assert!(items.iter().any(|(_, label)| *label == "New worktree"));
+            assert!(
+                items
+                    .iter()
+                    .any(|(_, label)| label.english() == "New worktree")
+            );
             // Opening an existing checkout stays a main checkout action.
-            assert!(!items.iter().any(|(_, label)| *label == "Open worktree..."));
+            assert!(
+                !items
+                    .iter()
+                    .any(|(_, label)| label.english() == "Open worktree...")
+            );
             view.open_workspace_dialog(WorkspaceAction::NewWorktree, window, cx);
             let target = view.menu.target.as_ref().unwrap();
             assert_eq!(target.id, "w3");
@@ -150,7 +158,7 @@ fn linked_checkout_menu_creates_from_its_branch(cx: &mut gpui::TestAppContext) {
                 !view
                     .workspace_items()
                     .iter()
-                    .any(|(_, label)| *label == "New worktree")
+                    .any(|(_, label)| label.english() == "New worktree")
             );
         });
     });

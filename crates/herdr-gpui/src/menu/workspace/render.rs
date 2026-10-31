@@ -3,7 +3,8 @@
 
 use crate::{
     HerdrWindow,
-    menu::{WorkspaceAction, WorkspaceMenuAction, danger, workspace_close::CHECKING},
+    i18n::fl,
+    menu::{WorkspaceAction, WorkspaceMenuAction, danger, workspace_close::checking},
 };
 use gpui::{prelude::*, *};
 
@@ -29,9 +30,9 @@ impl HerdrWindow {
             .as_ref()
             .map_or("", |input| input.text.trim());
         match (repo, root) {
-            _ if branch.is_empty() => "The daemon names the checkout.".to_owned(),
+            _ if branch.is_empty() => fl!("workspace-dialog-daemon-names"),
             (Some(repo), Some(root)) => crate::worktree::checkout_preview(root, repo, branch),
-            _ => "The daemon chooses the checkout.".to_owned(),
+            _ => fl!("workspace-dialog-daemon-chooses"),
         }
     }
 
@@ -103,69 +104,110 @@ impl HerdrWindow {
             action,
             WorkspaceAction::Close | WorkspaceAction::DeleteWorktree
         );
-        let (title, submit): (&str, SharedString) = match action {
-            WorkspaceAction::Rename => ("Rename workspace", "Rename".into()),
-            WorkspaceAction::Close => (target.close_label(), target.close_label().into()),
-            WorkspaceAction::NewWorktree => ("New worktree", create_label(destination)),
-            WorkspaceAction::OpenWorktree => ("Open worktree", "Open".into()),
-            WorkspaceAction::NewTab => ("New tab", "Create".into()),
-            WorkspaceAction::NewWorkspace => ("New workspace", create_label(destination)),
-            WorkspaceAction::Note => ("Note", "Save".into()),
-            WorkspaceAction::DeleteWorktree if force => {
-                ("Force delete checkout?", "Force remove".into())
-            }
-            WorkspaceAction::DeleteWorktree => ("Delete worktree checkout?", "Remove".into()),
+        let (title, submit): (String, SharedString) = match action {
+            WorkspaceAction::Rename => (
+                fl!("workspace-dialog-rename-title"),
+                fl!("workspace-dialog-rename").into(),
+            ),
+            WorkspaceAction::Close => (
+                target.close_label().text(),
+                target.close_label().text().into(),
+            ),
+            WorkspaceAction::NewWorktree => (
+                fl!("workspace-dialog-new-worktree-title"),
+                create_label(destination),
+            ),
+            WorkspaceAction::OpenWorktree => (
+                fl!("workspace-dialog-open-worktree-title"),
+                fl!("workspace-dialog-open").into(),
+            ),
+            WorkspaceAction::NewTab => (
+                fl!("workspace-dialog-new-tab-title"),
+                fl!("workspace-dialog-create").into(),
+            ),
+            WorkspaceAction::NewWorkspace => (
+                fl!("workspace-dialog-new-workspace-title"),
+                create_label(destination),
+            ),
+            WorkspaceAction::Note => (
+                fl!("workspace-dialog-note-title"),
+                fl!("workspace-dialog-save").into(),
+            ),
+            WorkspaceAction::DeleteWorktree if force => (
+                fl!("workspace-dialog-force-delete-title"),
+                fl!("workspace-dialog-force-remove").into(),
+            ),
+            WorkspaceAction::DeleteWorktree => (
+                fl!("workspace-dialog-delete-title"),
+                fl!("workspace-dialog-remove").into(),
+            ),
         };
         let mut body = div().flex().flex_col().gap(px(10.)).px(px(16.)).py(px(12.));
         body = match action {
             WorkspaceAction::OpenWorktree => body,
-            WorkspaceAction::Rename => {
-                body.child(div().text_color(rgb(theme.subtext())).child("Edit the workspace label."))
-            }
-            WorkspaceAction::Note => body.child(div().text_color(rgb(theme.subtext())).child(
-                "A reminder kept only in this app, on this checkout and branch. Save it empty to remove it.",
-            )),
+            WorkspaceAction::Rename => body.child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("workspace-dialog-rename-note")),
+            ),
+            WorkspaceAction::Note => body.child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("workspace-dialog-note-note")),
+            ),
             WorkspaceAction::NewTab => body.child(
                 div()
                     .text_color(rgb(theme.subtext()))
-                    .child("Name the tab, or leave the suggestion for Herdr to number it."),
+                    .child(fl!("workspace-dialog-new-tab-note")),
             ),
             WorkspaceAction::NewWorkspace => body
                 .child(
                     div()
                         .text_color(rgb(theme.subtext()))
-                        .child("Name the workspace, or leave the suggestion for Herdr to name it."),
+                        .child(fl!("workspace-dialog-new-workspace-note")),
                 )
                 .children(self.menu.dispatch.as_ref().map(|picker| {
+                    // The picker's own captions, in English until dispatch's
+                    // text is messages.
                     let caption = |caption: &'static str, field: AnyElement| {
                         div()
                             .flex()
                             .items_center()
                             .gap(px(10.))
-                            .child(div().flex_none().text_color(rgb(theme.muted)).child(caption))
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .text_color(rgb(theme.muted))
+                                    .child(caption),
+                            )
                             .child(div().flex_1().min_w_0().child(field))
                     };
                     self.render_host_picker(picker, caption, cx)
                 }))
                 .children(dispatched.map(|host| {
-                    div().text_color(rgb(theme.subtext())).child(format!(
-                        "Opens the repository's main checkout on {}{}.",
-                        host.label,
-                        clone_note(host)
-                    ))
+                    let host_name = host.label.as_str();
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(if clones(host) {
+                            fl!("workspace-dialog-opens-on-clone", host = host_name)
+                        } else {
+                            fl!("workspace-dialog-opens-on", host = host_name)
+                        })
                 }))
                 .children(sandbox.clone().map(|machine| {
-                    div().text_color(rgb(theme.subtext())).child(format!(
-                        "Makes {machine}, clones the repository there, and opens it."
-                    ))
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("workspace-dialog-opens-in", machine = machine))
                 })),
-            WorkspaceAction::Close => body.child(div().text_color(rgb(theme.subtext())).child(format!(
-                "Closes {} workspace(s) and terminates their running terminals. Checkout files and branches are not deleted.",
-                target.close_members.len()
-            ))),
+            WorkspaceAction::Close => {
+                body.child(div().text_color(rgb(theme.subtext())).child(fl!(
+                    "workspace-dialog-close-note",
+                    count = target.close_members.len()
+                )))
+            }
             WorkspaceAction::NewWorktree => {
                 // Captions share a column so both fields start at the same edge.
-                let row = |caption: &'static str, field: AnyElement| {
+                let row = |caption: SharedString, field: AnyElement| {
                     div()
                         .flex()
                         .items_center()
@@ -179,37 +221,51 @@ impl HerdrWindow {
                         )
                         .child(div().flex_1().min_w_0().child(field))
                 };
+                if let Some(source) = &self.menu.worktree {
+                    // Set each frame, like the caption beside it, so the
+                    // accessible name follows a language change; unchanged
+                    // is a no-op.
+                    source.name.update(cx, |input, cx| {
+                        input.set_label(&fl!("worktree-source-name"), cx);
+                    });
+                }
                 body.children(self.menu.worktree.as_ref().map(|source| {
                     row(
-                        "Name",
+                        fl!("workspace-dialog-name").into(),
                         div()
                             .debug_selector(|| "worktree-name".into())
                             .child(source.name.clone())
                             .into_any_element(),
                     )
                 }))
-                .child(row("Branch", self.render_dialog_input(cx).into_any_element()))
-                .children(
-                    self.menu
-                        .dispatch
-                        .as_ref()
-                        .map(|picker| self.render_host_picker(picker, row, cx)),
-                )
+                .child(row(
+                    fl!("workspace-dialog-branch").into(),
+                    self.render_dialog_input(cx).into_any_element(),
+                ))
+                .children(self.menu.dispatch.as_ref().map(|picker| {
+                    // The picker's own captions, in English until dispatch's
+                    // text is messages.
+                    self.render_host_picker(picker, |caption, field| row(caption.into(), field), cx)
+                }))
                 .child(match (dispatched, &sandbox) {
-                    (Some(host), _) => format!(
-                        "Creates a worktree from {} on {}{}, without granting repository trust:",
-                        target.base_label(),
-                        host.label,
-                        clone_note(host)
+                    (Some(host), _) if clones(host) => fl!(
+                        "workspace-dialog-creates-on-clone",
+                        base = target.base_label(),
+                        host = host.label.as_str(),
                     ),
-                    (None, Some(machine)) => format!(
-                        "Makes {machine} and creates a worktree from {} there, cloning the repository first, without granting repository trust:",
-                        target.base_label(),
+                    (Some(host), _) => fl!(
+                        "workspace-dialog-creates-on",
+                        base = target.base_label(),
+                        host = host.label.as_str(),
                     ),
-                    (None, None) => format!(
-                        "Creates this folder from {}, without granting repository trust:",
-                        target.base_label()
+                    (None, Some(machine)) => fl!(
+                        "workspace-dialog-creates-in",
+                        machine = machine.as_str(),
+                        base = target.base_label(),
                     ),
+                    (None, None) => {
+                        fl!("workspace-dialog-creates-here", base = target.base_label())
+                    }
                 })
                 .child(
                     div()
@@ -220,9 +276,9 @@ impl HerdrWindow {
                         .py(px(6.))
                         .child(match (dispatched, &sandbox) {
                             (Some(host), _) => {
-                                format!("{}'s daemon chooses the checkout.", host.label)
+                                fl!("workspace-dialog-host-chooses", host = host.label.as_str())
                             }
-                            (None, Some(_)) => "Its daemon chooses the checkout.".to_owned(),
+                            (None, Some(_)) => fl!("workspace-dialog-its-daemon-chooses"),
                             (None, None) => self.checkout_preview(),
                         }),
                 )
@@ -231,12 +287,12 @@ impl HerdrWindow {
                 .children(deletion.and_then(|deletion| deletion.merged).map(|number| {
                     div()
                         .debug_selector(|| "dialog-merged-pr".into())
-                        .child(format!("Pull request #{number} was merged."))
+                        .child(fl!("workspace-dialog-merged", number = number))
                 }))
                 .child(if force {
-                    "This force removes the checkout folder:"
+                    fl!("workspace-dialog-force-removes")
                 } else {
-                    "This removes the checkout folder:"
+                    fl!("workspace-dialog-removes")
                 })
                 .child(
                     div()
@@ -247,29 +303,30 @@ impl HerdrWindow {
                         .py(px(6.))
                         .child(
                             deletion
-                                .and_then(|deletion| deletion.path.as_deref())
-                                .unwrap_or("Waiting for the daemon to name the checkout...")
-                                .to_owned(),
+                                .and_then(|deletion| deletion.path.clone())
+                                .unwrap_or_else(|| fl!("workspace-dialog-path-pending")),
                         ),
                 )
                 .child(div().text_color(rgb(theme.subtext())).child(if force {
-                    "Modified and untracked files, including submodule contents, are discarded. The branch is not deleted. The Herdr workspace will close."
+                    fl!("workspace-dialog-force-note")
                 } else {
-                    "The branch is not deleted. The Herdr workspace will close."
+                    fl!("workspace-dialog-delete-note")
                 }))
-                .children(deletion.and_then(|deletion| {
-                    self.archive_note(target, deletion, cx)
-                })),
+                .children(deletion.and_then(|deletion| self.archive_note(target, deletion, cx))),
         };
         if action == WorkspaceAction::Close {
             body = body.child(
                 div()
                     .debug_selector(|| "close-git-status".into())
                     .text_color(danger)
-                    .child(self.menu.close_check.as_ref().map_or_else(
-                        || CHECKING.to_owned(),
-                        |check| check.status(self.config.confirm_close_workspace),
-                    )),
+                    .child(
+                        self.menu
+                            .close_check
+                            .as_ref()
+                            .map_or_else(checking, |check| {
+                                check.status(self.config.confirm_close_workspace)
+                            }),
+                    ),
             );
         }
         if self.menu.input.is_some() && action != WorkspaceAction::NewWorktree {
@@ -290,8 +347,8 @@ impl HerdrWindow {
         if creating || removing {
             // Dismissing only closes the panel; the daemon keeps the queued work.
             let waiting = match self.dispatch_job.as_ref().filter(|_| dispatching) {
-                Some(job) => format!("{} Dismissing does not cancel it.", job.status()),
-                None => "Waiting for the daemon. Dismissing does not cancel it.".to_owned(),
+                Some(job) => fl!("workspace-dialog-job-waiting", status = job.status()),
+                None => fl!("workspace-dialog-daemon-waiting"),
             };
             body = body.child(
                 div()
@@ -437,10 +494,10 @@ impl HerdrWindow {
                     .child(
                         button("dialog-cancel")
                             .role(Role::Button)
-                            .aria_label("Cancel")
+                            .aria_label(fl!("workspace-dialog-cancel"))
                             .border_color(rgb(theme.active))
                             .hover(|button| button.bg(rgb(theme.active)))
-                            .child("Cancel")
+                            .child(fl!("workspace-dialog-cancel"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -451,7 +508,7 @@ impl HerdrWindow {
                         !listing || action == WorkspaceAction::OpenWorktree,
                         |footer| {
                             let spoken = if creating {
-                                SharedString::from("Waiting")
+                                SharedString::from(fl!("workspace-dialog-waiting-spoken"))
                             } else {
                                 submit.clone()
                             };
@@ -481,7 +538,7 @@ impl HerdrWindow {
                                         rgb(theme.foreground)
                                     })
                                     .child(if creating {
-                                        "Waiting...".into()
+                                        fl!("workspace-dialog-waiting").into()
                                     } else {
                                         submit
                                     })
@@ -508,19 +565,19 @@ impl HerdrWindow {
 /// The submit button of a dialog that may create on another host.
 fn create_label(destination: crate::dispatch::Destination<'_>) -> SharedString {
     match destination {
-        crate::dispatch::Destination::Here => "Create".into(),
-        crate::dispatch::Destination::Host(host) => format!("Create on {}", host.label).into(),
-        crate::dispatch::Destination::Sandbox(sandbox) => {
-            format!("Create in {}", crate::dispatch::sandbox_words(sandbox)).into()
+        crate::dispatch::Destination::Here => fl!("workspace-dialog-create").into(),
+        crate::dispatch::Destination::Host(host) => {
+            fl!("workspace-dialog-create-on", host = host.label.as_str()).into()
         }
+        crate::dispatch::Destination::Sandbox(sandbox) => fl!(
+            "workspace-dialog-create-in",
+            machine = crate::dispatch::sandbox_words(sandbox)
+        )
+        .into(),
     }
 }
 
-/// What choosing a host without the repository adds to the dialog's text.
-fn clone_note(host: &crate::dispatch::Candidate) -> &'static str {
-    if host.repository == crate::dispatch::Repository::Missing {
-        ", cloning the repository there first"
-    } else {
-        ""
-    }
+/// Whether choosing `host` clones the repository there first.
+fn clones(host: &crate::dispatch::Candidate) -> bool {
+    host.repository == crate::dispatch::Repository::Missing
 }

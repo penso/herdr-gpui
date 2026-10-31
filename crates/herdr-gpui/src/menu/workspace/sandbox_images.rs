@@ -2,7 +2,7 @@
 //! image ahead of a dispatch, for every provider a dispatch could make a new
 //! machine from that holds images, so the first new machine starts at once.
 
-use crate::{HerdrWindow, cloud::CloudProvider, window::Flash};
+use crate::{HerdrWindow, cloud::CloudProvider, i18n::fl, window::Flash};
 use gpui::{Context, Window};
 
 impl HerdrWindow {
@@ -26,7 +26,7 @@ impl HerdrWindow {
             Some((origin, path))
         }) else {
             self.show_flash(
-                Flash::warning("This repository has no checkout to build an image from"),
+                Flash::warning(fl!("worktree-popover-images-no-checkout")),
                 cx,
             );
             return;
@@ -43,16 +43,30 @@ impl HerdrWindow {
             ) {
                 Ok(()) => started.push(crate::cloud::name(provider)),
                 Err(error) => {
-                    self.show_flash(Flash::warning(format!("Not built: {error}")), cx);
+                    self.show_flash(
+                        Flash::warning(fl!(
+                            "worktree-popover-images-failed",
+                            error = error.to_string()
+                        )),
+                        cx,
+                    );
                     return;
                 }
             }
         }
         self.show_flash(
-            Flash::success(format!(
-                "Building {}'s images for {}; Settings > Cloud devices shows their progress",
-                origin.repo_label,
-                started.join(" and ")
+            Flash::success(fl!(
+                "worktree-popover-images-building",
+                repository = origin.repo_label.as_str(),
+                providers = started
+                    .into_iter()
+                    .map(str::to_owned)
+                    .reduce(|first, second| fl!(
+                        "worktree-popover-and",
+                        first = first,
+                        second = second
+                    ))
+                    .unwrap_or_default(),
             )),
             cx,
         );

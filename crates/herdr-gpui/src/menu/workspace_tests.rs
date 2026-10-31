@@ -8,6 +8,7 @@ mod close;
 mod close_unconfirmed;
 mod dialog_layout;
 mod dispatch;
+mod en_xa;
 mod issues;
 mod left_checkout;
 mod left_checkout_lookup;
@@ -259,8 +260,8 @@ pub(crate) fn check_menu_interactions(
                 super::Page::Workspace,
                 items.len(),
                 // Debug selectors are static; leaking two test labels is fine.
-                &*format!("workspace-menu-{}", items[0].1).leak(),
-                &*format!("workspace-menu-{}", items[1].1).leak(),
+                &*format!("workspace-menu-{}", items[0].1.english()).leak(),
+                &*format!("workspace-menu-{}", items[1].1.english()).leak(),
             )
         } else {
             (
