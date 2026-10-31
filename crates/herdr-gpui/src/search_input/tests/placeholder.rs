@@ -41,3 +41,35 @@ fn a_localized_placeholder_follows_the_locale(cx: &mut gpui::TestAppContext) {
         english
     );
 }
+
+#[gpui::test]
+fn setting_the_same_localized_placeholder_again_does_not_redraw(cx: &mut gpui::TestAppContext) {
+    let input = cx.update(|cx| {
+        i18n::install(&Language::System, cx);
+        cx.new(|cx| {
+            let mut input = SearchInput::new(cx);
+            input.set_placeholder_with(|| fl!("chat-composer-placeholder"), cx);
+            input
+        })
+    });
+    let notified = std::rc::Rc::new(std::cell::Cell::new(0));
+    let _observer = cx.update(|cx| {
+        let notified = notified.clone();
+        cx.observe(&input, move |_, _| notified.set(notified.get() + 1))
+    });
+    input.update(cx, |input, cx| {
+        input.set_placeholder_with(|| fl!("chat-composer-placeholder"), cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(notified.get(), 0, "same text, no redraw");
+
+    input.update(cx, |input, cx| {
+        input.set_placeholder_with(|| fl!("chat-composer-closed"), cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(notified.get(), 1, "a new text redraws once");
+    assert_eq!(
+        input.read_with(cx, |input, _| input.placeholder().to_owned()),
+        cx.update(|_| fl!("chat-composer-closed"))
+    );
+}

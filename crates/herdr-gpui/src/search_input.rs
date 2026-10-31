@@ -269,14 +269,17 @@ impl SearchInput {
         }
     }
 
-    /// Shows what `placeholder` formats now, and formats it again whenever
-    /// the locale changes.
+    /// Shows what `placeholder` formats now, laid out again only when its text
+    /// changed (callers set it every poll), and formats it again per locale.
     pub(crate) fn set_placeholder_with(
         &mut self,
         placeholder: impl Fn() -> String + 'static,
         cx: &mut Context<Self>,
     ) {
-        self.show_placeholder(placeholder(), cx);
+        let shown = placeholder();
+        if self.placeholder != shown {
+            self.show_placeholder(shown, cx);
+        }
         self.localized = Some(Box::new(placeholder));
     }
 
