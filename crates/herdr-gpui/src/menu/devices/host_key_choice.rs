@@ -5,6 +5,7 @@
 
 use super::add_device::{Setup, Step};
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::HostKeys;
 
@@ -37,16 +38,15 @@ impl HerdrWindow {
                         self.config.ui.size + 2.,
                         skip,
                     ))
-                    .child("Skip host key verification (dangerous)")
+                    .child(fl!("add-device-skip-host-key"))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_host_key_choice(cx))),
             )
             .when(skip, |choice| {
-                choice.child(div().text_color(crate::menu::danger(theme)).child(
-                    "Herdr will accept any key this host offers, now and on every \
-                         connection. Anyone who can intercept the connection can \
-                         impersonate the host and read your terminals. Use it only for \
-                         hosts that keep no key, such as Coder workspaces.",
-                ))
+                choice.child(
+                    div()
+                        .text_color(crate::menu::danger(theme))
+                        .child(fl!("add-device-skip-host-key-warning")),
+                )
             })
     }
 
