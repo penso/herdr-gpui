@@ -9,7 +9,7 @@ use std::fmt;
 const MAX_URL_BYTES: usize = 8192;
 
 /// Schemes that open without a confirmation.
-const TRUSTED: [&str; 2] = ["mailto", "vscode"];
+const TRUSTED: &[&str] = &["mailto", "vscode", "vscodium"];
 
 /// A bounded, parsed address with a scheme other than `http`, `https`, and
 /// `file`, which have their own handling. If a value exists, it is safe to

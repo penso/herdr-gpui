@@ -6,7 +6,7 @@
 //!
 //! Builds that cannot show pages (Linux) find and start nothing.
 use super::{
-    cli,
+    cli::{self, Install, Product},
     supervisor::{Plan, Report, Status, Supervisor},
     token,
 };
@@ -42,8 +42,8 @@ pub(crate) enum Cli {
     #[default]
     Unknown,
     Finding,
-    /// The program that runs `serve-web`.
-    Found(PathBuf),
+    /// The editor found, with its program that runs `serve-web`.
+    Found(Install),
     Missing,
 }
 
@@ -133,7 +133,7 @@ fn startup(
     match cli {
         Cli::Unknown | Cli::Finding => return Startup::Finding,
         Cli::Missing => return Startup::Missing,
-        Cli::Found(_) if !code.license_accepted => return Startup::Consent,
+        Cli::Found(install) if consent_needed(code, install) => return Startup::Consent,
         Cli::Found(_) => {}
     }
     let Some(report) = report else {
@@ -154,14 +154,29 @@ fn startup(
     }
 }
 
-/// The server to run for `code`: only in start mode, with VS Code found and
-/// its license accepted, in a build that shows pages.
+/// Whether `install`'s server waits for the user to accept its license:
+/// VS Code's does until they have, VSCodium's has none to accept.
+fn consent_needed(code: &CodeConfig, install: &Install) -> bool {
+    install.product().licensed() && !code.license_accepted
+}
+
+/// Whether `code` has the app run the server: start mode, with VS Code or
+/// VSCodium found and any license accepted.
+fn wanted(code: &CodeConfig, cli: &Cli) -> bool {
+    let Cli::Found(install) = cli else {
+        return false;
+    };
+    !consent_needed(code, install) && mode(code, cli) == Some(CodeMode::Start)
+}
+
+/// The server to run for `code`: only when it is [`wanted`], in a build that
+/// shows pages.
 fn plan(embedded: bool, code: &CodeConfig, cli: &Cli, token_file: PathBuf) -> Option<Plan> {
-    let Cli::Found(program) = cli else {
+    let Cli::Found(install) = cli else {
         return None;
     };
-    (embedded && code.license_accepted && mode(code, cli) == Some(CodeMode::Start)).then(|| Plan {
-        program: program.clone(),
+    (embedded && wanted(code, cli)).then(|| Plan {
+        program: install.program().to_owned(),
         port: code.port,
         token_file,
     })
@@ -218,8 +233,15 @@ impl Launcher {
         cx.spawn(async move |cx| {
             let found = found.await;
             match &found {
-                Some(program) => tracing::info!(program = %program.display(), "Found VS Code"),
-                None => tracing::info!("VS Code is not installed"),
+                Some(install) => tracing::info!(
+                    editor = install.product().name(),
+                    program = %install.program().display(),
+                    "Found an editor to serve VS Code tabs"
+                ),
+                None => tracing::info!(
+                    looked_for = %cli::product_names(),
+                    "No editor to serve VS Code tabs is installed"
+                ),
             }
             cx.update(|cx| {
                 cx.global_mut::<Self>().cli = found.map_or(Cli::Missing, Cli::Found);
@@ -271,6 +293,14 @@ impl Launcher {
     /// never looks for it.
     pub(crate) fn cli(cx: &App) -> Option<&Cli> {
         cx.try_global::<Self>().map(|launcher| &launcher.cli)
+    }
+
+    /// The editor found to start, such as VSCodium, to name it in messages.
+    pub(crate) fn product(cx: &App) -> Option<&'static Product> {
+        match Self::cli(cx)? {
+            Cli::Found(install) => Some(install.product()),
+            Cli::Unknown | Cli::Finding | Cli::Missing => None,
+        }
     }
 
     /// Where the VS Code tabs' server is for `code`. Without a launcher, as in
@@ -337,8 +367,7 @@ impl Launcher {
         let Some(launcher) = cx.try_global::<Self>() else {
             return;
         };
-        let wanted = code.license_accepted && mode(code, &launcher.cli) == Some(CodeMode::Start);
-        if launcher.server.is_some() && !wanted {
+        if launcher.server.is_some() && !wanted(code, &launcher.cli) {
             tracing::info!("Stopping VS Code: the config no longer starts it");
             Self::stop(cx);
         }

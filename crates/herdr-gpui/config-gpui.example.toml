@@ -478,9 +478,9 @@ size = 12
 # VS Code as a tab of a space's editor groups (macOS and Windows only),
 # showing what VS Code's own web server, `code serve-web`, serves. Settings >
 # Code edits this table. mode = "start" has the app run that server when a
-# VS Code tab first needs it, once you accept VS Code's server license there
-# (license_accepted); it is the default when VS Code is found and no url is
-# set. port is picked once and kept, since VS Code keeps its settings per
+# VS Code tab first needs it: VS Code's, once you accept its server license
+# there (license_accepted), or, without VS Code, VSCodium's, which has none.
+# It is the default when either is found and no url is set. port is picked once and kept, since VS Code keeps its settings per
 # address. mode = "address" uses a server you run at url, with its ?tkn=
 # token; a url without a mode does too. Show VS Code appears in each editor
 # group's … menu once either is possible.

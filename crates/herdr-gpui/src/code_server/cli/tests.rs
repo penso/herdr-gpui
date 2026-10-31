@@ -1,6 +1,18 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+const COMMAND: &str = VS_CODE.command;
+const SERVER: &str = VS_CODE.server;
+
+/// What the search finds when only VS Code, with `bundled`, is looked for.
+fn find_code<'a>(
+    path: Option<&OsStr>,
+    bundled: impl IntoIterator<Item = &'a Path>,
+) -> Option<PathBuf> {
+    let bundled: Vec<_> = bundled.into_iter().collect();
+    find_in(path, [(&VS_CODE, bundled)]).map(|install| install.program)
+}
+
 /// Writes a program the search accepts at `path`.
 fn program(path: &Path) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -32,22 +44,22 @@ fn the_login_path_comes_before_the_app_bundle() {
     // The first directory on PATH that has it wins over later ones.
     let path = joined(&[&empty, &first, &second]);
     assert_eq!(
-        find_in(Some(&path), [bundled.as_path()]),
+        find_code(Some(&path), [bundled.as_path()]),
         Some(canonical(&first.join(COMMAND)))
     );
     // The bundle is the fallback when PATH has none.
     let path = joined(&[&empty]);
     assert_eq!(
-        find_in(Some(&path), [bundled.as_path()]),
+        find_code(Some(&path), [bundled.as_path()]),
         Some(canonical(&bundled))
     );
     assert_eq!(
-        find_in(None, [bundled.as_path()]),
+        find_code(None, [bundled.as_path()]),
         Some(canonical(&bundled))
     );
     // Nothing installed finds nothing.
     let missing = temp.path().join("missing").join(COMMAND);
-    assert_eq!(find_in(Some(&path), [missing.as_path()]), None);
+    assert_eq!(find_code(Some(&path), [missing.as_path()]), None);
 }
 
 #[test]
@@ -57,9 +69,9 @@ fn the_serving_program_beside_the_command_is_preferred() {
     program(&bin.join(COMMAND));
     let path = joined(&[&bin]);
     let canonical = std::fs::canonicalize(&bin).unwrap();
-    assert_eq!(find_in(Some(&path), []), Some(canonical.join(COMMAND)));
+    assert_eq!(find_code(Some(&path), []), Some(canonical.join(COMMAND)));
     program(&bin.join(SERVER));
-    assert_eq!(find_in(Some(&path), []), Some(canonical.join(SERVER)));
+    assert_eq!(find_code(Some(&path), []), Some(canonical.join(SERVER)));
 }
 
 /// Homebrew and VS Code's own "Install 'code' command in PATH" link the
@@ -76,7 +88,7 @@ fn a_linked_command_finds_the_server_beside_its_target() {
     std::os::unix::fs::symlink(bin.join(COMMAND), links.join(COMMAND)).unwrap();
     let path = joined(&[&links]);
     assert_eq!(
-        find_in(Some(&path), []),
+        find_code(Some(&path), []),
         Some(std::fs::canonicalize(&bin).unwrap().join(SERVER))
     );
 }
@@ -95,7 +107,9 @@ fn what_cannot_run_is_skipped() {
     // A relative directory would depend on where the app was started.
     let path = joined(&[&plain, &unexecutable, Path::new("relative"), &real]);
     assert_eq!(
-        find_in(Some(&path), []),
+        find_code(Some(&path), []),
         Some(std::fs::canonicalize(&real).unwrap().join(COMMAND))
     );
 }
+
+mod products;

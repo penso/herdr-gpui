@@ -1,10 +1,13 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::code_server::supervisor::Address;
+use crate::code_server::{VS_CODE, supervisor::Address};
 use std::num::NonZeroU16;
 
 fn found() -> Cli {
-    Cli::Found(PathBuf::from("/Applications/VS Code/bin/code-tunnel"))
+    Cli::Found(Install::new(
+        &VS_CODE,
+        "/Applications/VS Code/bin/code-tunnel",
+    ))
 }
 
 fn url(text: &str) -> WebUrl {
@@ -304,3 +307,5 @@ fn a_config_that_no_longer_starts_vs_code_stops_it(cx: &mut gpui::TestAppContext
         assert!(!Launcher::running(cx));
     });
 }
+
+mod products;
