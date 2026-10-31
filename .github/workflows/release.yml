@@ -143,6 +143,20 @@ jobs:
           EXPECTED_SHA: ${{ needs.validate.outputs.sha }}
         run: python3 scripts/release/check-ci.py "$EXPECTED_SHA" --wait
 
+  # The Nix flake, built for both Linux architectures from this commit. The
+  # five packages build in one cargo run there, unifying features that CI
+  # builds apart, so a release is not signed until the flake builds.
+  nix:
+    needs: validate
+    if: >-
+      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.actor == 'penso' && github.triggering_actor == 'penso'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/nix.yml # zizmor: ignore[self-repository]
+    with:
+      ref: ${{ needs.validate.outputs.sha }}
+
   # Both macOS targets build on Apple Silicon: Intel runners are scarce and
   # slow, and x86_64 cross-compiles there and runs under Rosetta. Formatting,
   # lints and the test suites are CI's, which validate requires for this commit.
@@ -580,7 +594,7 @@ jobs:
           retention-days: 7
 
   sign:
-    needs: [validate, ci-gate, macos-build, linux, windows, windows-sign]
+    needs: [validate, ci-gate, nix, macos-build, linux, windows, windows-sign]
     # windows-sign is skipped while Windows signing is not set up, and a
     # skipped need skips this job unless its condition checks results itself.
     if: >-
@@ -588,6 +602,7 @@ jobs:
       github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.result == 'success' && needs.ci-gate.result == 'success' &&
+      needs.nix.result == 'success' &&
       needs.macos-build.result == 'success' && needs.linux.result == 'success' &&
       needs.windows.result == 'success' &&
       (needs.windows-sign.result == 'success' ||

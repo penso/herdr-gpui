@@ -1,14 +1,12 @@
 //! Remote control's failures in the app, from `error-remote-control.ftl`:
 //! its settings and service install (`app::Error`) and the daemon's
-//! control socket (`control::Error`). Program names, paths, exit statuses,
+//! control socket (`control::Error`), and enrolling a host's daemon
+//! (`enroll::Error`). Program names, paths, exit statuses,
 //! and the daemon's and commands' own words are placeables.
 
 use super::Localize;
 use crate::i18n::fl;
-use herdr_remote_control::{
-    app::{self, enroll},
-    control,
-};
+use herdr_remote_control::{app, app::enroll, control};
 
 impl Localize for app::Error {
     fn localize(&self) -> String {

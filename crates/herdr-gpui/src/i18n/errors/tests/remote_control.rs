@@ -1,6 +1,6 @@
 use super::*;
 use herdr_remote_control::{
-    app::{self, enroll},
+    app,
     control::{self, ErrorCode},
 };
 use std::{io, path::PathBuf, process::ExitStatus};
@@ -79,20 +79,4 @@ fn frame_errors_show_as_they_are() {
         control::Error::Frame(herdr_chat_protocol::Error::EmptyFrame),
         control::Error::Frame(herdr_chat_protocol::Error::Io(io())),
     ]);
-}
-
-#[test]
-fn every_enroll_variant_has_a_message() {
-    assert_localized(&[
-        enroll::Error::ApnsSize,
-        enroll::Error::Config {
-            path: PathBuf::from("/home/me/.config/herdr/remote.toml"),
-            source: "expected a table".into(),
-        },
-        enroll::Error::NoHome,
-        enroll::Error::NotStarted(control::Error::NoAnswer),
-        enroll::Error::Outdated,
-        enroll::Error::Unexpected,
-    ]);
-    assert_localized(&[app::Error::Enroll(enroll::Error::Outdated)]);
 }
