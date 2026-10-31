@@ -2,10 +2,12 @@
 //! the panes beneath, and painting the page the menu is currently on. Geometry
 //! here is the same geometry used for hit testing and IME placement.
 
+// i18n: migrated
 mod keys;
 
 use super::{MENU_MARGIN, Page, WorkspaceAction, devices::rail};
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{HerdrWindow, actions, fonts::StyledFont};
 use gpui::{prelude::*, *};
 
@@ -90,7 +92,12 @@ impl HerdrWindow {
         self.local_error = self.endpoints[self.selected_endpoint]
             .reload_config()
             .err()
-            .map(|error| format!("Reload config: {error}"));
+            .map(|error| {
+                fl!(
+                    "menu-chrome-reload-config-failed",
+                    error = error.to_string()
+                )
+            });
     }
 
     pub(super) fn menu_items(&self) -> Vec<&'static str> {
@@ -98,19 +105,19 @@ impl HerdrWindow {
             "settings",
             "shortcuts",
             "themes",
-            "increase font size",
-            "decrease font size",
-            "reset font size",
-            "command palette",
+            "increase font size", // i18n: data
+            "decrease font size", // i18n: data
+            "reset font size",    // i18n: data
+            "command palette",    // i18n: data
             "workspaces",
-            "reload GUI config",
-            "app updates",
-            "preview app update",
-            "GitHub sign-in",
+            "reload GUI config",  // i18n: data
+            "app updates",        // i18n: data
+            "preview app update", // i18n: data
+            "GitHub sign-in",     // i18n: data
             "about",
         ];
         if self.live.status.is_connected() {
-            items.push("reload daemon config");
+            items.push("reload daemon config"); // i18n: data
         }
         items.extend(self.release_notes_item());
         items.push(
@@ -134,28 +141,30 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         match item {
-            "GitHub sign-in" => self.menu.page = Some(Page::GitHub),
+            "GitHub sign-in" => self.menu.page = Some(Page::GitHub), // i18n: data
             "about" => self.open_about(window, cx),
             "settings" => self.open_preferences(window, cx),
             "shortcuts" => self.open_keybinds(window, cx),
             "themes" => self.open_theme_picker(window, cx),
+            // i18n: data
             "increase font size" | "decrease font size" | "reset font size" => {
                 use crate::config::FONT_SIZE_STEP;
                 let size = match item {
-                    "increase font size" => self.config.terminal.size + FONT_SIZE_STEP,
-                    "decrease font size" => self.config.terminal.size - FONT_SIZE_STEP,
+                    "increase font size" => self.config.terminal.size + FONT_SIZE_STEP, // i18n: data
+                    "decrease font size" => self.config.terminal.size - FONT_SIZE_STEP, // i18n: data
                     _ => self.configured_terminal_size,
                 };
                 // `command` refuses to act while a page is open, so apply here.
                 self.set_terminal_font_size(size, cx);
                 self.dismiss_menu(window, cx);
             }
-            "command palette" => self.open_palette(crate::palette::Filter::All, window, cx),
+            "command palette" => self.open_palette(crate::palette::Filter::All, window, cx), // i18n: data
             "workspaces" => self.open_palette(crate::palette::Filter::Navigation, window, cx),
-            "update ready" | "what's new" => self.menu.page = Some(Page::Update),
-            "app updates" => self.open_app_update(false, window, cx),
-            "preview app update" => self.open_app_update(true, window, cx),
-            "reload GUI config" => self.reload_gui_config(window, cx),
+            "update ready" | "what's new" => self.menu.page = Some(Page::Update), // i18n: data
+            "app updates" => self.open_app_update(false, window, cx),             // i18n: data
+            "preview app update" => self.open_app_update(true, window, cx),       // i18n: data
+            "reload GUI config" => self.reload_gui_config(window, cx),            // i18n: data
+            // i18n: data
             "reload daemon config" => {
                 self.reload_daemon_config();
                 self.dismiss_menu(window, cx);
@@ -638,7 +647,7 @@ impl HerdrWindow {
                         .id(item)
                         .debug_selector(move || format!("menu-{item}"))
                         .role(Role::MenuItem)
-                        .aria_label(item)
+                        .aria_label(menu_item_label(item))
                         .when(Some(index) == self.menu.selected, |row| {
                             row.aria_active_descendant()
                         })
@@ -658,7 +667,7 @@ impl HerdrWindow {
                             }
                             cx.notify();
                         }))
-                        .child(item)
+                        .child(menu_item_label(item))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             this.activate_menu(item, window, cx);
@@ -766,10 +775,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_open_checkout(cx));
         } else if page == Page::Install {
             panel = panel
-                .child(div().p(px(8.)).child("Herdr must be installed"))
-                .child(div().p(px(8.)).child(
-                    "Install Herdr first, then choose Terminal > Reconnect. The Install button opens the Herdr website; nothing is installed automatically.",
-                ))
+                .child(div().p(px(8.)).child(fl!("menu-chrome-install-title")))
+                .child(div().p(px(8.)).child(fl!("menu-chrome-install-note")))
                 .child(
                     div()
                         .row()
@@ -784,7 +791,7 @@ impl HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .bg(rgb(theme.active))
                                 .cursor_pointer()
-                                .child("Install")
+                                .child(fl!("menu-chrome-install"))
                                 .on_click(|_, _, cx| {
                                     cx.stop_propagation();
                                     cx.open_url(crate::about::WEBSITE);
@@ -798,7 +805,7 @@ impl HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .hover(|button| button.bg(rgb(theme.active)))
                                 .cursor_pointer()
-                                .child("Dismiss")
+                                .child(fl!("menu-chrome-dismiss"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.dismiss_menu(window, cx);
@@ -946,5 +953,31 @@ impl HerdrWindow {
             )
             .on_key_down(cx.listener(Self::menu_key_down))
             .child(placed)
+    }
+}
+
+/// What the menu shows for `item`, one of [`HerdrWindow::menu_items`]'
+/// keys, which stay English as its selectors and dispatch do.
+fn menu_item_label(item: &str) -> String {
+    match item {
+        "settings" => fl!("menu-chrome-settings"),
+        "shortcuts" => fl!("menu-chrome-shortcuts"),
+        "themes" => fl!("menu-chrome-themes"),
+        "increase font size" => fl!("menu-chrome-increase-font-size"), // i18n: data
+        "decrease font size" => fl!("menu-chrome-decrease-font-size"), // i18n: data
+        "reset font size" => fl!("menu-chrome-reset-font-size"),       // i18n: data
+        "command palette" => fl!("menu-chrome-command-palette"),       // i18n: data
+        "workspaces" => fl!("menu-chrome-workspaces"),
+        "reload GUI config" => fl!("menu-chrome-reload-gui-config"), // i18n: data
+        "app updates" => fl!("menu-chrome-app-updates"),             // i18n: data
+        "preview app update" => fl!("menu-chrome-preview-app-update"), // i18n: data
+        "GitHub sign-in" => fl!("menu-chrome-github-sign-in"),       // i18n: data
+        "about" => fl!("menu-chrome-about"),
+        "reload daemon config" => fl!("menu-chrome-reload-daemon-config"), // i18n: data
+        "update ready" => fl!("menu-chrome-update-ready"),                 // i18n: data
+        "what's new" => fl!("menu-chrome-whats-new"),                      // i18n: data
+        "detach" => fl!("menu-chrome-detach"),
+        "reconnect" => fl!("menu-chrome-reconnect"),
+        item => item.to_owned(),
     }
 }
