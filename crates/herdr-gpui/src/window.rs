@@ -323,8 +323,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) server_keys: Option<server_keys::ServerKeymap>,
     /// Local sessions on this machine, scanned on a worker while the popup is open.
     pub(crate) sessions: sessions::Sessions,
-    /// Where the footer's sessions button last painted. The window owns it so a
-    /// shortcut and a click anchor the list at the same place.
+    /// Where the footer's device picker last painted, so the Sessions shortcut
+    /// opens the list where the picker opens.
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) settings: crate::settings_panel::SettingsPanel,
     pub(super) shift_taps: double_shift::ShiftTaps,

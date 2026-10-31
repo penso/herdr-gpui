@@ -71,6 +71,9 @@ pub(crate) struct MenuState {
     /// The saved distribution the removal confirmation names.
     pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
+    /// The device whose sessions the picker shows under it, by endpoint id so
+    /// a catalog change cannot unfold another one.
+    pub(crate) unfolded_device: Option<String>,
     /// The folder the open-checkout question is about.
     pub(super) open_checkout: Option<std::path::PathBuf>,
     /// The address the open-link question is about.
@@ -91,8 +94,9 @@ pub(crate) struct MenuState {
     /// The device the revoke question is about.
     pub(crate) remote_revoke: Option<crate::remote::Revoke>,
     pub(super) devices_scroll: ScrollHandle,
-    /// The sessions list scrolls its own way; the two popups never share one.
-    pub(crate) sessions_scroll: ScrollHandle,
+    /// The picker line to scroll into view once the list has been laid out:
+    /// on the frame it first appears, GPUI drops a scroll request unapplied.
+    pub(super) devices_reveal: std::cell::Cell<Option<usize>>,
     pub(crate) usage_scroll: ScrollHandle,
     // Selection epoch and connection generation fence captured modal actions.
     pub(super) endpoint_target: (u64, u64),
@@ -339,6 +343,7 @@ impl MenuState {
             wsl_setup: None,
             wsl_remove: None,
             session_edit: None,
+            unfolded_device: None,
             open_checkout: None,
             open_link: None,
             #[cfg(feature = "cloud")]
@@ -350,7 +355,7 @@ impl MenuState {
             remote_pairing: None,
             remote_revoke: None,
             devices_scroll: ScrollHandle::new(),
-            sessions_scroll: ScrollHandle::new(),
+            devices_reveal: std::cell::Cell::new(None),
             usage_scroll: ScrollHandle::new(),
             endpoint_target: (0, 0),
             anchor: Point::default(),
@@ -419,6 +424,7 @@ impl MenuState {
         self.wsl_setup = None;
         self.wsl_remove = None;
         self.session_edit = None;
+        self.unfolded_device = None;
         self.open_checkout = None;
         self.open_link = None;
         #[cfg(feature = "cloud")]
@@ -433,7 +439,7 @@ impl MenuState {
         self.remote_pairing = None;
         self.remote_revoke = None;
         self.devices_scroll.set_offset(Point::default());
-        self.sessions_scroll.set_offset(Point::default());
+        self.devices_reveal.set(None);
         self.usage_scroll.set_offset(Point::default());
         self.opening_right_click = false;
         self.tab = None;

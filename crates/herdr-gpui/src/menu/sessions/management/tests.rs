@@ -47,7 +47,7 @@ fn create_form_owns_text_validates_and_returns_focus(cx: &mut TestAppContext) {
         let view = view.read(cx);
         assert!(view.menu.session_edit.is_none());
         assert!(view.menu.focus.is_focused(window));
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
     });
 }
 
@@ -101,7 +101,7 @@ fn delete_confirmation_is_centered_and_cancel_returns_to_picker(cx: &mut TestApp
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert!(view.menu.session_edit.is_none());
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
         assert!(view.sessions.mutation.is_none());
     });
 }

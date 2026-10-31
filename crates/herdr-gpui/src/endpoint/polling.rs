@@ -306,7 +306,8 @@ impl HerdrWindow {
     /// page starts one; results are cached between opens.
     pub(crate) fn poll_sessions(&mut self, cx: &mut Context<Self>) {
         let development = self.local_development();
-        let open = self.menu.page == Some(crate::menu::Page::Sessions);
+        let open = self.menu.page == Some(crate::menu::Page::Devices)
+            && self.menu.unfolded_device.is_some();
         let now = Instant::now();
         let targets = self.probe_targets();
         self.sessions.devices.forget_replaced(&targets);

@@ -46,7 +46,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn management_target(&self, row: &Row) -> Option<Target> {
+    pub(in crate::menu) fn management_target(&self, row: &Row) -> Option<Target> {
         match row {
             Row::Local(_) if self.local_management_available() => Some(Target::Local),
             Row::Device { id, .. } => self
@@ -153,7 +153,7 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    pub(super) fn confirm_session_delete(
+    pub(in crate::menu) fn confirm_session_delete(
         &mut self,
         row: Row,
         painted_target: Option<Target>,
@@ -262,7 +262,7 @@ impl HerdrWindow {
                 // cannot reconnect to and recreate the name being deleted.
                 if self.retarget_session_for_deletion(&connection) {
                     self.reconnect(cx);
-                    self.menu.page = Some(Page::Sessions);
+                    self.menu.page = Some(Page::Devices);
                     self.menu.selected = Some(0);
                 }
                 let background = cx.background_executor().spawn(async move {
@@ -324,7 +324,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_session_edit(&self, cx: &mut Context<Self>) -> Div {
+    pub(in crate::menu) fn render_session_edit(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let mut view = div()
             .debug_selector(|| "session-modal".into())

@@ -93,8 +93,6 @@ pub(crate) enum Page {
     RenameTab,
     /// Confirming a paired remote control device should be revoked.
     RevokeDevice,
-    /// Local sessions and remote devices, with the state of each.
-    Sessions,
     Tab,
     /// Moving a linked worktree to another host.
     Teleport,

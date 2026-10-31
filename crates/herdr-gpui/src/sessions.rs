@@ -1,6 +1,6 @@
 //! The sessions this window can attach to: the named local sessions and, since
 //! a saved device's own sessions need a round trip to its host to list, the devices
-//! themselves. Only the sessions popup asks for either: probing is I/O, so it
+//! themselves. Only a device unfolded in the picker asks: probing is I/O, so it
 //! runs on a worker thread and an idle window never touches the disk or a host.
 use crate::Error;
 use herdr_client::{ConnectTarget, LocalSession, RemoteHost, RemoteSession, list_local_sessions};

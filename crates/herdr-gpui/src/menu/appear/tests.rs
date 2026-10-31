@@ -221,13 +221,13 @@ fn the_dimming_lifts_behind_the_picker_a_dialog_returns_to(cx: &mut gpui::TestAp
         view.menu.appear.live = true;
         view.menu
             .appear
-            .observe(Some(Shown::Dialog), Some(Page::Sessions), start);
+            .observe(Some(Shown::Dialog), Some(Page::Devices), start);
         let open = start + ENTER;
         // Escape in the session editor goes back to the picker, a popover.
-        view.menu.page = Some(Page::Sessions);
+        view.menu.page = Some(Page::Devices);
         view.menu.appear.observe(
             Some(Shown::Popover(point(px(10.), px(600.)))),
-            Some(Page::Sessions),
+            Some(Page::Devices),
             open,
         );
         assert!(!view.menu_dims());

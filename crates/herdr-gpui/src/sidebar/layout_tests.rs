@@ -37,7 +37,7 @@ mod device_multi_select;
 #[cfg(all(test, feature = "azure"))]
 mod device_removing;
 #[cfg(test)]
-mod device_sessions_row;
+mod device_sessions_unfold;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
