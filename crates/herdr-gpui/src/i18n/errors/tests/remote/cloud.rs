@@ -15,12 +15,29 @@ fn every_cloud_variant_has_a_message() {
         Error::Invalid(Invalid::Target),
         Error::Missing,
         Error::StateDirectory,
-        Error::Worker("setup"),
+        Error::Worker(crate::cloud::Worker::Setup),
         Error::Process(io()),
         Error::Cancelled,
         Error::InstallTimeout,
         Error::Unavailable("Cloud devices are unavailable on Windows."),
     ]);
+}
+
+#[test]
+fn every_worker_has_a_message() {
+    use herdr_remote::cloud::Worker;
+    let workers = [
+        Worker::Destroy,
+        Worker::ImageBuild,
+        Worker::ImageReset,
+        Worker::Job,
+        Worker::Settings,
+        Worker::Setup,
+        Worker::SignIn,
+    ];
+    assert_localized(&workers.map(Error::Worker));
+    #[cfg(feature = "coder")]
+    assert_localized(&workers.map(herdr_remote::coder::Error::Worker));
 }
 
 #[test]

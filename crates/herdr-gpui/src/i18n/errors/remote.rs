@@ -21,7 +21,15 @@ mod railway;
 #[cfg(feature = "sprites")]
 mod sprites;
 mod teleport;
-#[cfg(feature = "cloud")]
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "container",
+    feature = "daytona",
+    feature = "opensandbox",
+    feature = "sprites"
+))]
 mod value;
 
 use super::Localize;

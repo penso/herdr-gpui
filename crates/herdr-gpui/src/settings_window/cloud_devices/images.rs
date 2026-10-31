@@ -189,7 +189,7 @@ impl SettingsWindow {
             Ok(reset) => self.sandbox_images.reset = Some(reset),
             Err(_) => {
                 self.sandbox_images.message =
-                    Some(crate::cloud::Error::Worker("image reset").to_string()); // i18n: data
+                    Some(crate::cloud::Error::Worker(crate::cloud::Worker::ImageReset).localize());
             }
         }
         cx.notify();

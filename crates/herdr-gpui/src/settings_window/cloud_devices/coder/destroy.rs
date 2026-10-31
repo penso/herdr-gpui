@@ -130,7 +130,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder destroy worker");
                 card.outcome = Some(Outcome::Failed(
-                    crate::coder::Error::Worker("destroy").to_string(), // i18n: data
+                    crate::coder::Error::Worker(crate::cloud::Worker::Destroy).localize(),
                 ));
             }
         }

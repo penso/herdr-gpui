@@ -4,7 +4,7 @@
 
 use super::path;
 use crate::i18n::{errors::Localize, fl};
-use herdr_remote::cloud::{Error, Invalid, ProviderError, image, install};
+use herdr_remote::cloud::{Error, Invalid, ProviderError, Worker, image, install};
 
 impl Localize for Error {
     fn localize(&self) -> String {
@@ -23,7 +23,10 @@ impl Localize for Error {
             Self::Invalid(Invalid::Target) => fl!("error-remote-cloud-invalid-target"),
             Self::Missing => fl!("error-remote-cloud-missing"),
             Self::StateDirectory => fl!("error-remote-cloud-state-directory"),
-            Self::Worker(worker) => fl!("error-remote-cloud-worker", worker = *worker),
+            Self::Worker(worker) => fl!(
+                "error-remote-cloud-worker",
+                worker = worker_selector(*worker)
+            ),
             Self::Process(_) => fl!("error-remote-cloud-process"),
             Self::Cancelled => fl!("error-remote-cloud-cancelled"),
             Self::Install(failure) => failure.localize(),
@@ -152,5 +155,18 @@ impl Localize for herdr_remote::cloud::socket::Error {
             Self::HeaderName(_) => fl!("error-remote-cloud-socket-header-name"),
             Self::Closed => fl!("error-remote-cloud-socket-closed"),
         }
+    }
+}
+
+/// The Fluent selector for each worker that can stop.
+pub(super) fn worker_selector(worker: Worker) -> &'static str {
+    match worker {
+        Worker::Destroy => "destroy",
+        Worker::ImageBuild => "image-build",
+        Worker::ImageReset => "image-reset",
+        Worker::Job => "job",
+        Worker::Settings => "settings",
+        Worker::Setup => "setup",
+        Worker::SignIn => "sign-in",
     }
 }

@@ -33,8 +33,17 @@ error-remote-coder-cli = The coder CLI was not found. Install it or set [coder] 
 error-remote-coder-deployment = This device belongs to a Coder deployment that is no longer configured in [coder] url.
 # $path is a file; $error is the system's text.
 error-remote-coder-catalog = Could not update { $path }: { $error }
-# $worker names the background worker that stopped.
-error-remote-coder-worker = Coder { $worker } worker stopped.
+# $worker selects the background worker that stopped. Coder is a product
+# name.
+error-remote-coder-worker = { $worker ->
+    [destroy] Coder destroy worker stopped.
+    [image-build] Coder image build worker stopped.
+    [image-reset] Coder image reset worker stopped.
+    [job] Coder job worker stopped.
+    [settings] Coder settings worker stopped.
+   *[setup] Coder setup worker stopped.
+    [sign-in] Coder sign-in worker stopped.
+}
 # $name is a template's display name; $matches lists the templates shown so.
 error-remote-coder-ambiguous-template = Several Coder templates are shown as { $name } ({ $matches }); name one by its name or ID.
 # $available lists the deployment's templates by name.

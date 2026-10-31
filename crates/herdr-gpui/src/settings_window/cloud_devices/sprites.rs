@@ -146,7 +146,9 @@ impl SettingsWindow {
                 tracing::error!(category = "sprites_worker", error_kind = ?error.kind(), "Could not start the Sprites settings worker");
                 if let Some(card) = &mut self.sprites_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

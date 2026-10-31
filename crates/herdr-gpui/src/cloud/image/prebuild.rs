@@ -98,7 +98,7 @@ impl HerdrWindow {
                 this.local_transfer_notice(&title, body, cx);
             },
         )
-        .map_err(|_| crate::cloud::Error::Worker("image build"))?;
+        .map_err(|_| crate::cloud::Error::Worker(crate::cloud::Worker::ImageBuild))?;
         self.sandbox_image_builds.running.push((id, worker));
         Ok(())
     }

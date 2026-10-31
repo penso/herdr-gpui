@@ -5,7 +5,7 @@
 //! listing, presets, removal) run through `cloud::worker` and stop with it.
 
 use super::super::Page;
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     cloud::{CloudProvider, worker},
@@ -194,7 +194,9 @@ impl HerdrWindow {
             }
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder setup worker");
-                self.set_coder_error(Some(crate::coder::Error::Worker("setup").to_string()));
+                self.set_coder_error(Some(
+                    crate::coder::Error::Worker(crate::cloud::Worker::Setup).localize(),
+                ));
             }
         }
     }

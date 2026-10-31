@@ -110,7 +110,7 @@ impl HerdrWindow {
         )
         .map_err(|error| {
             tracing::error!(category = "cloud_worker", error_kind = ?error.kind(), "Could not start cloud job worker");
-            crate::cloud::Error::Worker("job")
+            crate::cloud::Error::Worker(crate::cloud::Worker::Job)
         })?;
         self.cloud_jobs.jobs.push(Job {
             id,

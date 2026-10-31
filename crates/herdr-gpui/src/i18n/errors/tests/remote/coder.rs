@@ -48,7 +48,7 @@ fn every_variant_has_a_message() {
         },
         Error::Cloud(herdr_remote::cloud::Error::Cancelled),
         Error::Storage(remote()),
-        Error::Worker("sign-in"),
+        Error::Worker(crate::cloud::Worker::SignIn),
         Error::AmbiguousTemplate {
             name: "Docker".into(),
             matches: "docker, docker-gpu".into(),

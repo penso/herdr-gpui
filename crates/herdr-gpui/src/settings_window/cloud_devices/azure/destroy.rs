@@ -128,7 +128,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "azure_worker", error_kind = ?error.kind(), "Could not start Azure destroy worker");
                 card.outcome = Some(Outcome::Failed(
-                    crate::cloud::Error::Worker("destroy").to_string(), // i18n: data
+                    crate::cloud::Error::Worker(crate::cloud::Worker::Destroy).localize(),
                 ));
             }
         }

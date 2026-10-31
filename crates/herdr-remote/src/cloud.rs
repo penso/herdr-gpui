@@ -19,6 +19,7 @@ mod providers;
 pub mod socket;
 pub mod unsynced;
 mod value;
+mod worker;
 
 pub use catalog::{FILE as CATALOG_FILE, SavedDevice, load, remove, rename, save};
 pub use command::with_command;
@@ -29,6 +30,7 @@ pub use providers::{
     provision,
 };
 pub use value::Value;
+pub use worker::Worker;
 
 use std::{io, path::PathBuf};
 
@@ -51,7 +53,7 @@ pub enum Error {
     #[error("No state directory for saved cloud devices.")]
     StateDirectory,
     #[error("The cloud {0} worker stopped.")]
-    Worker(&'static str),
+    Worker(Worker),
     #[error("Could not run the command that reaches the machine.")]
     Process(#[source] io::Error),
     #[error("Cancelled.")]

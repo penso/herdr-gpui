@@ -13,7 +13,16 @@ pub(super) fn invalid(value: Value) -> String {
     }
 }
 
-/// `value` is not UTF-8.
+/// `value` is not UTF-8. Every provider but containers reads text that
+/// may not be.
+#[cfg(any(
+    feature = "azure",
+    feature = "boat",
+    feature = "coder",
+    feature = "daytona",
+    feature = "opensandbox",
+    feature = "sprites"
+))]
 pub(super) fn not_utf8(value: Value) -> String {
     match value {
         Value::Key(key) => fl!("error-remote-cloud-value-encoding-key", key = key),

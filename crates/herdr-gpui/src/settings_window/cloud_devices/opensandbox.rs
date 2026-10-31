@@ -174,7 +174,9 @@ impl SettingsWindow {
                 tracing::error!(category = "opensandbox_worker", error_kind = ?error.kind(), "Could not start the OpenSandbox settings worker");
                 if let Some(card) = &mut self.opensandbox_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

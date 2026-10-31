@@ -47,7 +47,10 @@ impl Localize for Error {
             ),
             Self::Cloud(error) => error.localize(),
             Self::Storage(error) => error.localize(),
-            Self::Worker(worker) => fl!("error-remote-coder-worker", worker = *worker),
+            Self::Worker(worker) => fl!(
+                "error-remote-coder-worker",
+                worker = super::cloud::worker_selector(*worker)
+            ),
             Self::AmbiguousTemplate { name, matches } => fl!(
                 "error-remote-coder-ambiguous-template",
                 name = name.as_str(),

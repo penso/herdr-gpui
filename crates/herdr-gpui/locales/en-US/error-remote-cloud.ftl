@@ -10,8 +10,16 @@ error-remote-cloud-invalid-device = The cloud device is not valid.
 error-remote-cloud-invalid-target = The cloud target is not valid.
 error-remote-cloud-missing = The cloud device is no longer saved.
 error-remote-cloud-state-directory = No state directory for saved cloud devices.
-# $worker names the background worker that stopped.
-error-remote-cloud-worker = The cloud { $worker } worker stopped.
+# $worker selects the background worker that stopped.
+error-remote-cloud-worker = { $worker ->
+    [destroy] The cloud destroy worker stopped.
+    [image-build] The cloud image build worker stopped.
+    [image-reset] The cloud image reset worker stopped.
+    [job] The cloud job worker stopped.
+    [settings] The cloud settings worker stopped.
+   *[setup] The cloud setup worker stopped.
+    [sign-in] The cloud sign-in worker stopped.
+}
 error-remote-cloud-process = Could not run the command that reaches the machine.
 error-remote-cloud-cancelled = Cancelled.
 # $detail is the tail of what the installer or the probe printed on the
