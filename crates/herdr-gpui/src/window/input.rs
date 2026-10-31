@@ -407,12 +407,16 @@ impl HerdrWindow {
             self.paste(cx);
             cx.stop_propagation();
             window.prevent_default();
-        } else if cfg!(target_os = "linux") && plain_ctrl_v(&event.keystroke) {
+        } else if cfg!(target_os = "linux")
+            && plain_ctrl_v(&event.keystroke)
+            && self.keymap().pane_key(&event.keystroke).is_none()
+        {
             // Desktops such as Omarchy send plain Ctrl+V for their universal
-            // paste (Super+V), so it pastes text here too. The background
-            // reader decides: text pastes, a remote pane's image is bridged,
-            // and anything else still reaches the pane as Ctrl+V, so local
-            // agents keep reading clipboard images themselves.
+            // paste (Super+V), so it pastes text here too, unless
+            // `[pane_keys]` says what Ctrl+V sends. The background reader
+            // decides: text pastes, a remote pane's image is bridged, and
+            // anything else still reaches the pane as Ctrl+V, so local agents
+            // keep reading clipboard images themselves.
             self.paste_or_hold(false, key_input(event, alt_keys), cx);
             cx.stop_propagation();
             window.prevent_default();
@@ -425,7 +429,12 @@ impl HerdrWindow {
             && self.selected_is_remote()
             && (self.accepts_remote_images() || !self.input_ready())
         {
-            self.paste_or_hold(true, key_input(event, alt_keys), cx);
+            // Without an image the key goes out as `[pane_keys]` maps it.
+            let key = match self.keymap().pane_key(&event.keystroke) {
+                Some(sent) => pane_key_input(event, sent),
+                None => key_input(event, alt_keys),
+            };
+            self.paste_or_hold(true, key, cx);
             cx.stop_propagation();
             window.prevent_default();
         } else if self.marked.is_empty()

@@ -15,10 +15,29 @@ fn ctrl_v() -> gpui::KeyDownEvent {
 
 /// What plain Ctrl+V sends with `clipboard` copied.
 fn ctrl_v_with(clipboard: ClipboardItem, cx: &mut TestAppContext) -> ClientMessage {
+    ctrl_v_mapped(&[], clipboard, cx)
+}
+
+/// What plain Ctrl+V sends with `clipboard` copied and `pane_keys` set.
+fn ctrl_v_mapped(
+    pane_keys: &[(&str, &str)],
+    clipboard: ClipboardItem,
+    cx: &mut TestAppContext,
+) -> ClientMessage {
     let mut peer = MockPeer::new();
     let (view, cx) = cx.add_window_view(fixture_window);
     view.update_in(cx, |view, window, cx| {
         connect(&peer, view, cx);
+        let pane_keys = pane_keys
+            .iter()
+            .map(|(typed, sent)| ((*typed).to_owned(), (*sent).to_owned()))
+            .collect();
+        view.config.keybindings = crate::keymap::Keymap::with_overrides(
+            &Default::default(),
+            &pane_keys,
+            &Default::default(),
+        )
+        .unwrap();
         cx.write_to_clipboard(clipboard);
         view.key_down(&ctrl_v(), window, cx);
         assert!(view.local_error.is_none(), "{:?}", view.local_error);
@@ -61,4 +80,18 @@ fn ctrl_v_with_an_empty_clipboard_reaches_the_pane_as_the_key(cx: &mut TestAppCo
     let empty = ClipboardItem::new_string(String::new());
     let key = crate::terminal::key_input(&ctrl_v(), true).unwrap();
     assert_eq!(ctrl_v_with(empty, cx), typed(key));
+}
+
+#[gpui::test]
+fn a_ctrl_v_mapped_in_pane_keys_sends_its_mapping(cx: &mut TestAppContext) {
+    let text = ClipboardItem::new_string("copied".into());
+    let sent = ctrl_v_mapped(&[("ctrl-v", "ctrl-q")], text, cx);
+    let ctrl_q = gpui::KeyDownEvent {
+        keystroke: gpui::Keystroke::parse("ctrl-q").unwrap(),
+        ..ctrl_v()
+    };
+    assert_eq!(
+        sent,
+        typed(crate::terminal::key_input(&ctrl_q, true).unwrap())
+    );
 }

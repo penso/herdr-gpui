@@ -304,10 +304,10 @@ impl HerdrWindow {
                 #[cfg(test)]
                 let item = {
                     let _ = read;
-                    item
+                    read_or_key(Ok(item), fallback.is_some())?
                 };
                 #[cfg(not(test))]
-                let item = read(image_only)?;
+                let item = read_or_key(read(image_only), fallback.is_some())?;
                 let Some(item) = item else {
                     return Ok(fallback.map_or(Prepared::Empty, Prepared::Input));
                 };
@@ -541,6 +541,23 @@ impl HerdrWindow {
     }
 }
 
+/// The clipboard `read` found. A paste standing in for a key (Linux Ctrl+V,
+/// a remote pane's Ctrl+V) that cannot read the clipboard, as without
+/// `wl-paste` or `xclip`, finds it empty so the key still goes out, as it did
+/// before the key pasted; other pastes report the failure.
+fn read_or_key(
+    read: crate::Result<Option<ClipboardItem>>,
+    sends_key: bool,
+) -> crate::Result<Option<ClipboardItem>> {
+    match read {
+        Err(error) if sends_key => {
+            tracing::warn!(%error, "Clipboard not read; the key was sent instead");
+            Ok(None)
+        }
+        read => read,
+    }
+}
+
 enum Prepared {
     Image(PreparedImage),
     Input(ClientPaneInputEvent),
@@ -582,6 +599,7 @@ mod tests {
     use herdr_client::ConnectTarget;
     use std::io;
 
+    mod key_fallback;
     mod paste_errors;
 
     fn processing_errors() -> Vec<Error> {
