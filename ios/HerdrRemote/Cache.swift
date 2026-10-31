@@ -99,15 +99,21 @@ struct Cache: Sendable {
         }
     }
 
+    /// After every save queued before it, so a draft just left or just
+    /// sent reads as it was last saved.
     func draft(_ device: String, pane: String) -> Draft? {
-        read(Draft.self, at: draftFile(device, pane))
+        let file = draftFile(device, pane)
+        return Self.writes.sync { read(Draft.self, at: file) }
     }
 
     /// Keeps the draft across launches; `nil` removes it, as sending does.
+    /// Saves run in the order they were made: a write left running must not
+    /// bring back a draft that was sent after it, nor a removal erase a
+    /// newer one.
     func save(draft: Draft?, device: String, pane: String) {
         let file = draftFile(device, pane)
         guard let draft else {
-            Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: file) }
+            Self.writes.async { try? FileManager.default.removeItem(at: file) }
             return
         }
         write(draft, to: file)
@@ -126,8 +132,11 @@ struct Cache: Sendable {
         return try? JSONDecoder().decode(type, from: data)
     }
 
+    /// One queue for the cache's small writes, which then land in order.
+    private static let writes = DispatchQueue(label: "so.pen.herdr.remote.cache", qos: .utility)
+
     private func write<Value: Encodable & Sendable>(_ value: Value, to url: URL) {
-        Task.detached(priority: .utility) { Self.store(value, to: url) }
+        Self.writes.async { Self.store(value, to: url) }
     }
 
     private static func store<Value: Encodable>(_ value: Value, to url: URL) {
