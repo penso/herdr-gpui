@@ -2,6 +2,7 @@
 //! value later passed to the engine is a known-good argument.
 
 use super::{Engine, Error, Result};
+use crate::cloud::Value;
 use crate::config::ContainerConfig;
 use std::time::Duration;
 
@@ -35,22 +36,24 @@ impl Settings {
     pub fn resolve(config: &ContainerConfig) -> Result<Self> {
         let engine = match config.engine.as_deref().map(str::trim) {
             None | Some("") => None,
-            Some(key) => Some(Engine::from_key(key).ok_or(Error::Field("[container] engine"))?),
+            Some(key) => {
+                Some(Engine::from_key(key).ok_or(Error::Field(Value::Key("[container] engine")))?)
+            }
         };
         let image = text(&config.image).unwrap_or(DEFAULT_IMAGE).to_owned();
         if !crate::cloud::names::image_reference(&image) {
-            return Err(Error::Field("[container] image"));
+            return Err(Error::Field(Value::Key("[container] image")));
         }
         let cpus = text(&config.cpus).unwrap_or(DEFAULT_CPUS).to_owned();
         if !cpus
             .parse::<f32>()
             .is_ok_and(|cpus| cpus > 0. && cpus <= 512.)
         {
-            return Err(Error::Field("[container] cpus"));
+            return Err(Error::Field(Value::Key("[container] cpus")));
         }
         let memory = text(&config.memory).unwrap_or(DEFAULT_MEMORY).to_owned();
         if !memory_size(&memory) {
-            return Err(Error::Field("[container] memory"));
+            return Err(Error::Field(Value::Key("[container] memory")));
         }
         let pids = match text(&config.pids_limit) {
             None => DEFAULT_PIDS,
@@ -58,17 +61,17 @@ impl Settings {
                 .parse()
                 .ok()
                 .filter(|pids| (64..=1 << 20).contains(pids))
-                .ok_or(Error::Field("[container] pids_limit"))?,
+                .ok_or(Error::Field(Value::Key("[container] pids_limit")))?,
         };
         let auto_stop = auto_stop(text(&config.auto_stop).unwrap_or("never"))
-            .ok_or(Error::Field("[container] auto_stop"))?;
+            .ok_or(Error::Field(Value::Key("[container] auto_stop")))?;
         let max = match text(&config.max_containers) {
             None => DEFAULT_MAX,
             Some(text) => text
                 .parse()
                 .ok()
                 .filter(|max| (1..=64).contains(max))
-                .ok_or(Error::Field("[container] max_containers"))?,
+                .ok_or(Error::Field(Value::Key("[container] max_containers")))?,
         };
         Ok(Self {
             engine,

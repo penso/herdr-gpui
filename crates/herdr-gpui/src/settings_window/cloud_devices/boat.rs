@@ -19,7 +19,7 @@ use crate::{
     },
     config::{BoatFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -201,7 +201,9 @@ impl SettingsWindow {
                 tracing::error!(category = "boat_worker", error_kind = ?error.kind(), "Could not start Boat settings worker");
                 if let Some(card) = &mut self.boat_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -385,12 +387,12 @@ impl SettingsWindow {
             Account::Known(overview) => (
                 match (&overview.key, &overview.sandboxes) {
                     (Err(error), _) => {
-                        fl!("settings-cloud-key-unreadable", error = error.to_string())
+                        fl!("settings-cloud-key-unreadable", error = error.localize())
                     }
                     (Ok(Key::Missing), _) => fl!("settings-cloud-key-missing"),
                     (_, Some(Ok(count))) => sandbox_status(*count),
                     (_, Some(Err(error))) => {
-                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                        fl!("settings-cloud-key-unusable", error = error.localize())
                     }
                     (_, None) => fl!("settings-cloud-checking"),
                 },

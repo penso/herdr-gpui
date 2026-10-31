@@ -3,7 +3,7 @@
 //! cancel one; the shared [`crate::cloud::image::builds`] registry shows their progress
 //! wherever it is drawn, and a notice reports how each ended.
 
-use crate::cloud::image::{Checkout, Error, builds};
+use crate::cloud::image::{Checkout, Error, Unsupported, builds};
 use crate::{
     HerdrWindow,
     cloud::{
@@ -40,7 +40,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> crate::Result<()> {
         let support = crate::cloud::image_support(provider)
-            .ok_or(Error::Unsupported("a provider that does not hold images"))?;
+            .ok_or(Error::Unsupported(Unsupported::Provider))?;
         let endpoint = self
             .endpoints
             .iter()
@@ -98,7 +98,7 @@ impl HerdrWindow {
                 this.local_transfer_notice(&title, body, cx);
             },
         )
-        .map_err(|_| crate::cloud::Error::Worker("image build"))?;
+        .map_err(|_| crate::cloud::Error::Worker(crate::cloud::Worker::ImageBuild))?;
         self.sandbox_image_builds.running.push((id, worker));
         Ok(())
     }

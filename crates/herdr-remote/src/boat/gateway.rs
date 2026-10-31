@@ -3,6 +3,7 @@
 //! returns that machine's host key over the authenticated API connection.
 
 use super::{Error, Result, api::SshAccess};
+use crate::cloud::Value;
 use std::{
     io::Write,
     net::IpAddr,
@@ -59,7 +60,7 @@ fn public_key(private: &Path) -> Result<String> {
         return Err(Error::SshKeygen);
     }
     let key =
-        String::from_utf8(output.stdout).map_err(|_| Error::Encoding("Boat SSH public key"))?;
+        String::from_utf8(output.stdout).map_err(|_| Error::Encoding(Value::BoatSshPublicKey))?;
     let key = key.trim();
     if key.len() > 4096
         || !key.starts_with("ssh-ed25519 ")

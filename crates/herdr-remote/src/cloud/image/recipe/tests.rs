@@ -90,19 +90,19 @@ fn unusable_dev_containers_say_why() {
     let path = ".devcontainer/devcontainer.json";
     assert!(matches!(
         devcontainer_plan(path, r#"{"dockerComposeFile": "compose.yml"}"#),
-        Err(Error::Unsupported(_))
+        Err(Error::Unsupported(Unsupported::Compose))
     ));
     assert!(matches!(
         devcontainer_plan(path, "{}"),
-        Err(Error::Unsupported(_))
+        Err(Error::Unsupported(Unsupported::NoBuild))
     ));
     assert!(matches!(
         devcontainer_plan(path, r#"{"image": "--privileged"}"#),
-        Err(Error::Field(_))
+        Err(Error::Field(Field::DevcontainerImage))
     ));
     assert!(matches!(
         devcontainer_plan(path, r#"{"build": {"dockerfile": "../../etc/Dockerfile"}}"#),
-        Err(Error::Field(_))
+        Err(Error::Field(Field::ProjectPath))
     ));
     assert!(matches!(
         devcontainer_plan(path, "{"),

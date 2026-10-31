@@ -14,7 +14,7 @@ use crate::{
         SavedDevice,
         worker::{self, Worker},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     progress::{self, Progress},
 };
 use gpui::{prelude::*, *};
@@ -128,7 +128,7 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "azure_worker", error_kind = ?error.kind(), "Could not start Azure destroy worker");
                 card.outcome = Some(Outcome::Failed(
-                    crate::cloud::Error::Worker("destroy").to_string(), // i18n: data
+                    crate::cloud::Error::Worker(crate::cloud::Worker::Destroy).localize(),
                 ));
             }
         }
@@ -158,7 +158,7 @@ impl SettingsWindow {
                     Err(error) => Outcome::Failed(fl!(
                         "settings-cloud-delete-failed",
                         name = label,
-                        error = error.to_string()
+                        error = error.localize()
                     )),
                 });
                 self.refresh_azure(cx);
