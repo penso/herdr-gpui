@@ -140,7 +140,25 @@ fn the_host_scripts_run_against_a_home() {
         idle: Duration::from_secs(10),
     };
     let device = DeviceId("d'1".into());
-    host.capture(&revoke_script(&device), &cancelled).unwrap();
+    // Not through the host: its prelude puts the usual install
+    // folders first, where an installed herdr-remote-control would answer.
+    // An empty PATH leaves the script none to find.
+    let empty = dir.path().join("empty");
+    std::fs::create_dir(&empty).unwrap();
+    let without_program = format!(
+        "PATH={}\nexport PATH\n{}",
+        shell_quote(&empty.to_string_lossy()),
+        revoke_script(&device)
+    );
+    herdr_client::run_script(
+        herdr_client::ScriptHost::Local,
+        &without_program,
+        &[][..],
+        Vec::new(),
+        limits,
+        &cancelled,
+    )
+    .unwrap();
     let probe = host.capture(&probe_script("9.9.9"), &cancelled).unwrap();
     assert!(probe.is_empty());
     let file = std::fs::File::open(&build).unwrap();
