@@ -82,7 +82,7 @@ pub(crate) fn start(
         };
         report.step(
             DeviceState::Creating,
-            cloud::status::step(&cloud::Step::Creating),
+            cloud::status::english(&cloud::Step::Creating),
         );
         let work = work.clone();
         let spawned = std::thread::Builder::new()
@@ -125,7 +125,7 @@ pub(crate) fn create(creation: &Creation, report: &Report) -> crate::Result<()> 
     let provider = creation.provider;
     let provision = cloud::provision(provider).ok_or(Error::NotOffered(cloud::name(provider)))?;
     let device = provision(&creation.spec, &|| false, &|step| {
-        report.step(DeviceState::Creating, cloud::status::step(&step));
+        report.step(DeviceState::Creating, cloud::status::english(&step));
     })
     .map_err(crate::Error::from)
     .inspect_err(|error| {
