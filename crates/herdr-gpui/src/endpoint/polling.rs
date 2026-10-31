@@ -50,6 +50,9 @@ impl HerdrWindow {
             match result {
                 Ok(update) => {
                     self.catalog.accept(&update);
+                    if self.catalog.production() {
+                        crate::machine_sync::MachineSync::hosts_seen(&update.hosts, cx);
+                    }
                     #[cfg(feature = "cloud")]
                     self.reconcile_devices(update.hosts, update.wsl, update.cloud, cx);
                     #[cfg(not(feature = "cloud"))]

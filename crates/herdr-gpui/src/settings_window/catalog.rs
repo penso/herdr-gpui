@@ -502,6 +502,18 @@ pub(super) const CATALOG: &[Entry] = &[
         "settings-cloud-setup-description",
     ),
     entry(
+        Section::MachineSync,
+        "machine-sync",
+        "settings-machine-sync-title",
+        "settings-machine-sync-description",
+    ),
+    entry(
+        Section::MachineSync,
+        "machine-sync-machines",
+        "settings-machine-sync-section-machines",
+        "settings-machine-sync-machines-description",
+    ),
+    entry(
         Section::RemoteControl,
         "remote-enabled",
         "settings-remote-enabled",

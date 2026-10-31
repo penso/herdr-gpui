@@ -348,6 +348,7 @@ fn master_command(target: &str, socket: &Path) -> Command {
             "-o",
         ])
         .arg(control_path(socket))
+        .args(ssh::identity::options())
         .args(["--", target]);
     command
 }

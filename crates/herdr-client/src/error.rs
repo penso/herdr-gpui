@@ -143,6 +143,8 @@ pub enum Error {
     #[error("{0}")]
     ServerShutdown(String),
     #[error(transparent)]
+    MachineSync(#[from] crate::machine_sync::Error),
+    #[error(transparent)]
     Sessions(#[from] crate::sessions::Error),
     #[error(transparent)]
     Ssh(#[from] crate::ssh::Error),

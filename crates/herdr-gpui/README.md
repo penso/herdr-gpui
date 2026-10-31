@@ -1955,6 +1955,57 @@ bridge files, they are not owned or deleted by Herdr on disconnect. Network loss
 can prevent cleanup, and kernel-blocked local filesystem operations cannot be
 forcibly interrupted. A copy stalls out after 30 seconds without progress.
 
+## Machine Sync
+
+Settings > Machine sync keeps the saved SSH devices of all your computers in
+step. Your laptop may know your NAS and GPU box, but Herdr UI on the GPU box
+shows only that box until it learns the others. Turn sync on once on the
+laptop and each computer in the list can reach every other one, from whichever
+one you use.
+
+Before anything changes, Settings asks for this computer's **Address** (the
+`user@host` the others reach it by: a Tailscale or local network name works
+best, and it needs SSH turned on, which is Remote Login on macOS) and its
+**Name**. It then lists the machines it will change and what it does on each:
+
+- Creates an SSH key of their own, `~/.ssh/herdr_ed25519`, if they lack one.
+- Adds every other machine's herdr key to `~/.ssh/authorized_keys`, each line
+  ending in `herdr-sync:<name>` so you can find and remove it.
+- Saves the machines each one lacks as devices in Herdr's own catalog
+  (`~/.local/state/herdr/client/endpoints.json`), with the same IDs and names.
+- Saves a sync state beside that catalog (`machine-sync.json`) on each machine
+  that had none, so Herdr UI there keeps the list in step too.
+
+Nothing a machine already has is changed or removed: catalogs only grow, a
+key already authorized under any comment is not added again, and a machine's
+own sync state is never replaced. A catalog that changed between the read and
+the write is left alone until the next sync. Devices another machine saved
+(a desktop added on the NAS, say) are saved here too.
+
+After you confirm, sync runs without asking: 20 seconds after launch, every
+hour, whenever a device is added here (by the Add Device dialog, a terminal
+setup, or `herdr machine add`), and from **Sync now**. Each device has a
+checkbox: untick one to leave it out, so it gets no keys or devices and is not
+given to the others. A device turned off in Herdr is left out too.
+
+Herdr UI's own SSH connections offer the herdr key after OpenSSH's default
+keys; your SSH config is never edited, so a plain `ssh` in a terminal does not
+use it. Each machine still approves a new machine's host key the first time
+it connects, as for any device.
+
+Turning sync off removes only this computer's sync state. The other machines
+keep what earlier syncs gave them. To undo the keys, delete the `herdr-sync`
+lines from `~/.ssh/authorized_keys` on each machine.
+
+Limits: the machines must run a POSIX shell with OpenSSH (`ssh-keygen`,
+`cksum`), so Windows OpenSSH hosts are not synced. On a Windows computer
+running Herdr UI, keys go to `~/.ssh/authorized_keys`, which Windows OpenSSH
+Server ignores for administrators, so the others may not reach it. Removing a device on one computer does not remove it
+elsewhere, and a sync can bring it back from a machine that still lists it;
+untick it instead. A machine saved under two different addresses on two
+computers can be listed twice, and changing this computer's address later
+does not update the machines that already list it.
+
 ## Worktree Scripts
 
 A repository can commit scripts that prepare, start, and clean up its

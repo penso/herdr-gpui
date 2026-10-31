@@ -169,6 +169,7 @@ struct SettingsWindow {
     code: controls::code::CodeSettings,
     px0: controls::px0::Px0Settings,
     chat_env: controls::chat_env::ChatEnvSettings,
+    machines: pages::machine_sync::MachineSyncSettings,
     remote: pages::remote_control::RemoteSettings,
     /// The open override dropdown, if any; its list renders inside its button.
     dropdown: Option<ui::Dropdown>,
@@ -334,6 +335,7 @@ impl SettingsWindow {
             code: Default::default(),
             px0: Default::default(),
             chat_env: Default::default(),
+            machines: Default::default(),
             remote: Default::default(),
             dropdown: None,
             number_edit: None,
@@ -708,6 +710,11 @@ impl SettingsWindow {
         } else {
             self.close_remote_control();
         }
+        if section == Section::MachineSync {
+            self.open_machine_sync(cx);
+        } else {
+            self.close_machine_sync();
+        }
         self.body_scroll.set_offset(Point::default());
         window.focus(&self.focus, cx);
         if section == Section::Integrations {
@@ -742,6 +749,7 @@ impl Render for SettingsWindow {
                 Section::Integrations => self.render_integration_controls(cx),
                 Section::Plugins => self.render_plugin_controls(cx),
                 Section::Code => self.render_code_controls(window, cx),
+                Section::MachineSync => self.render_machine_sync(cx),
                 Section::RemoteControl => self.render_remote_control(cx),
                 #[cfg(feature = "cloud")]
                 Section::CloudDevices => self.render_cloud_devices(cx),

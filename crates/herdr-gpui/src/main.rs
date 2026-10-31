@@ -89,6 +89,7 @@ mod links;
 mod listening_ports;
 mod log_targets;
 mod log_window;
+mod machine_sync;
 mod mark_layer;
 mod menu;
 mod menus;

@@ -127,6 +127,11 @@ impl Catalog {
         }
     }
 
+    /// Whether this is the user's own catalog, the one machine sync keeps.
+    pub(super) fn production(&self) -> bool {
+        self.development == Some(false)
+    }
+
     pub(super) fn poll(&mut self) -> Option<Result<CatalogUpdate>> {
         let development = self.development?;
         if let Some(result) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {

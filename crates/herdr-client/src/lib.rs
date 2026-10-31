@@ -23,6 +23,7 @@ mod limits;
 mod local_network;
 pub mod local_path;
 pub mod login_env;
+pub mod machine_sync;
 mod method;
 mod options;
 pub mod private_endpoint;

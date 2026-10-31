@@ -24,6 +24,7 @@ use std::{
 mod error;
 mod failure;
 mod host_key;
+pub mod identity;
 pub(crate) mod mux;
 mod unverified;
 pub use error::Error;
@@ -470,7 +471,10 @@ fn command_with(target: &str, remote_command: &str, keys: HostKeys) -> Command {
 /// `ssh` with the bridge's connection policy and nothing to connect yet.
 fn noninteractive(keys: HostKeys) -> Command {
     let mut command = crate::environment::command("ssh");
-    command.args(keys.options()).args(POLICY);
+    command
+        .args(keys.options())
+        .args(POLICY)
+        .args(identity::options());
     command
 }
 

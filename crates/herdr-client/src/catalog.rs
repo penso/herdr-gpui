@@ -23,15 +23,22 @@ pub struct SavedHost {
     pub enabled: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Catalog {
-    version: u32,
+pub(crate) struct Catalog {
+    pub(crate) version: u32,
     #[serde(default)]
-    selected_profile: Option<String>,
+    pub(crate) selected_profile: Option<String>,
     #[serde(default)]
-    ssh: Vec<SavedHost>,
+    pub(crate) ssh: Vec<SavedHost>,
 }
+
+/// The most profiles a catalog holds, as upstream's reader allows.
+pub(crate) const MAX_HOSTS: usize = 64;
+
+/// Serializes this client's writers, including adds of different devices.
+/// Herdr's CLI does not participate in a shared catalog lock.
+static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Load profiles only, like upstream `load_profiles`; selection is client-local.
 /// This performs bounded filesystem I/O; call it from a background task.
@@ -48,9 +55,6 @@ pub fn store_saved_host(development: bool, host: &SavedHost) -> Result<SavedHost
 }
 
 fn store_host(path: &Path, host: &SavedHost) -> Result<SavedHost> {
-    // Serialize this client's writers, including adds of different devices.
-    // Herdr's CLI does not participate in a shared catalog lock.
-    static WRITER: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = WRITER.lock().unwrap_or_else(|error| error.into_inner());
     let mut catalog = load_catalog(path)?;
     if let Some(existing) = catalog
@@ -61,14 +65,49 @@ fn store_host(path: &Path, host: &SavedHost) -> Result<SavedHost> {
         return Ok(existing.clone());
     }
     catalog.ssh.push(host.clone());
-    let content = serde_json::to_vec_pretty(&catalog).map_err(|error| {
-        Error::storage(StorageOperation::Encode, path, Error::CatalogSchema(error))
-    })?;
-    // Reuse the reader's schema, ID, field, count and byte limits before writing.
-    parse_catalog(&content)
-        .map_err(|error| Error::storage(StorageOperation::Validate, path, error))?;
-    write_private(path, &content)?;
+    write_catalog(path, &catalog)?;
     Ok(host.clone())
+}
+
+/// Append each of `hosts` that no profile has the ID or target of yet, as
+/// many as the catalog has room for, and return how many were added. The
+/// rest of the catalog, its selection included, is kept as it is.
+pub(crate) fn add_hosts(path: &Path, hosts: &[SavedHost]) -> Result<usize> {
+    let _guard = WRITER.lock().unwrap_or_else(|error| error.into_inner());
+    let mut catalog = load_catalog(path)?;
+    let mut added = 0;
+    for host in hosts {
+        if catalog.ssh.len() >= MAX_HOSTS {
+            break;
+        }
+        if catalog
+            .ssh
+            .iter()
+            .any(|saved| saved.id == host.id || saved.target == host.target)
+        {
+            continue;
+        }
+        catalog.ssh.push(host.clone());
+        added += 1;
+    }
+    if added > 0 {
+        write_catalog(path, &catalog)?;
+    }
+    Ok(added)
+}
+
+/// The catalog's bytes as upstream writes them, checked by the reader's own
+/// schema, ID, field, count and byte limits.
+pub(crate) fn encode_catalog(catalog: &Catalog) -> Result<Vec<u8>> {
+    let content = serde_json::to_vec_pretty(catalog).map_err(Error::CatalogSchema)?;
+    parse_catalog(&content)?;
+    Ok(content)
+}
+
+fn write_catalog(path: &Path, catalog: &Catalog) -> Result<()> {
+    let content = encode_catalog(catalog)
+        .map_err(|error| Error::storage(StorageOperation::Validate, path, error))?;
+    write_private(path, &content)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -275,7 +314,7 @@ fn load_path(path: &Path) -> Result<Vec<SavedHost>> {
     load_catalog(path).map(|catalog| catalog.ssh)
 }
 
-fn load_catalog(path: &Path) -> Result<Catalog> {
+pub(crate) fn load_catalog(path: &Path) -> Result<Catalog> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -310,13 +349,13 @@ fn parse(bytes: &[u8]) -> Result<Vec<SavedHost>> {
     parse_catalog(bytes).map(|catalog| catalog.ssh)
 }
 
-fn parse_catalog(bytes: &[u8]) -> Result<Catalog> {
+pub(crate) fn parse_catalog(bytes: &[u8]) -> Result<Catalog> {
     if bytes.len() > 65536 {
         return Err(Error::CatalogLimit);
     }
     // Do not include serde's error text: unknown field names can contain secrets.
     let catalog: Catalog = serde_json::from_slice(bytes).map_err(Error::CatalogSchema)?;
-    if catalog.version != 1 || catalog.ssh.len() > 64 {
+    if catalog.version != 1 || catalog.ssh.len() > MAX_HOSTS {
         return Err(Error::CatalogVersionOrCount);
     }
     let mut ids = HashSet::new();
