@@ -19,7 +19,7 @@ mod providers;
 pub mod socket;
 pub mod unsynced;
 
-pub use catalog::{SavedDevice, load, remove, rename, save};
+pub use catalog::{FILE as CATALOG_FILE, SavedDevice, load, remove, rename, save};
 pub use command::with_command;
 pub use herdr_client::CloudProvider;
 pub use providers::ProviderError;
@@ -42,8 +42,8 @@ pub enum Error {
     },
     #[error("Invalid saved cloud devices.")]
     Json(#[source] serde_json::Error),
-    #[error("{0} is not valid.")]
-    Invalid(&'static str),
+    #[error("{0}")]
+    Invalid(Invalid),
     #[error("The cloud device is no longer saved.")]
     Missing,
     #[error("No state directory for saved cloud devices.")]
@@ -60,6 +60,29 @@ pub enum Error {
     InstallTimeout,
     #[error("{0}")]
     Unavailable(&'static str),
+}
+
+/// What a cloud operation refused, each a whole sentence so the app can
+/// translate it as one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Invalid {
+    /// The saved cloud devices file is too large, not this version's, or
+    /// holds a device that fails its checks.
+    Catalog,
+    /// A device about to be saved fails its checks, or there are too many.
+    Device,
+    /// A connection meant for a cloud machine names another kind of host.
+    Target,
+}
+
+impl std::fmt::Display for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Catalog => write!(f, "{} is not valid.", catalog::FILE),
+            Self::Device => f.write_str("The cloud device is not valid."),
+            Self::Target => f.write_str("The cloud target is not valid."),
+        }
+    }
 }
 
 /// Why cloud machines cannot be used on this system, if they cannot. Each is

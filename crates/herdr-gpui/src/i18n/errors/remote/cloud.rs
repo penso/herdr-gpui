@@ -4,7 +4,7 @@
 
 use super::path;
 use crate::i18n::{errors::Localize, fl};
-use herdr_remote::cloud::{Error, ProviderError, image};
+use herdr_remote::cloud::{Error, Invalid, ProviderError, image};
 
 impl Localize for Error {
     fn localize(&self) -> String {
@@ -15,7 +15,12 @@ impl Localize for Error {
                 error = source.to_string()
             ),
             Self::Json(_) => fl!("error-remote-cloud-json"),
-            Self::Invalid(what) => fl!("error-remote-cloud-invalid", what = *what),
+            Self::Invalid(Invalid::Catalog) => fl!(
+                "error-remote-cloud-invalid-catalog",
+                path = herdr_remote::cloud::CATALOG_FILE
+            ),
+            Self::Invalid(Invalid::Device) => fl!("error-remote-cloud-invalid-device"),
+            Self::Invalid(Invalid::Target) => fl!("error-remote-cloud-invalid-target"),
             Self::Missing => fl!("error-remote-cloud-missing"),
             Self::StateDirectory => fl!("error-remote-cloud-state-directory"),
             Self::Worker(worker) => fl!("error-remote-cloud-worker", worker = *worker),
@@ -71,7 +76,19 @@ impl Localize for image::Error {
                 fl!("error-remote-cloud-image-context", provider = *provider)
             }
             Self::Devcontainer(_) => fl!("error-remote-cloud-image-devcontainer"),
-            Self::Field(field) => fl!("error-remote-cloud-image-field", field = *field),
+            Self::Field(field) => match field {
+                image::Field::Catalog => fl!(
+                    "error-remote-cloud-image-field-catalog",
+                    path = image::catalog::FILE
+                ),
+                image::Field::ContextPath => fl!("error-remote-cloud-image-field-context-path"),
+                image::Field::DevcontainerImage => {
+                    fl!("error-remote-cloud-image-field-devcontainer-image")
+                }
+                image::Field::FileName => fl!("error-remote-cloud-image-field-file-name"),
+                image::Field::Projects => fl!("error-remote-cloud-image-field-projects"),
+                image::Field::ProjectPath => fl!("error-remote-cloud-image-field-project-path"),
+            },
             Self::Host(_) => fl!("error-remote-cloud-image-host"),
             Self::Json(_) => fl!("error-remote-cloud-image-json"),
             Self::Missing(file) => {
@@ -81,8 +98,14 @@ impl Localize for image::Error {
             Self::TooLarge => fl!("error-remote-cloud-image-too-large"),
             Self::Truncated => fl!("error-remote-cloud-image-truncated"),
             Self::Unknown => fl!("error-remote-cloud-image-unknown"),
-            Self::Unsupported(feature) => {
-                fl!("error-remote-cloud-image-unsupported", feature = *feature)
+            Self::Unsupported(image::Unsupported::Compose) => {
+                fl!("error-remote-cloud-image-unsupported-compose")
+            }
+            Self::Unsupported(image::Unsupported::NoBuild) => {
+                fl!("error-remote-cloud-image-unsupported-no-build")
+            }
+            Self::Unsupported(image::Unsupported::Provider) => {
+                fl!("error-remote-cloud-image-unsupported-provider")
             }
         }
     }

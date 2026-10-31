@@ -4,8 +4,10 @@
 
 error-remote-cloud-catalog = Could not update { $path }: { $error }
 error-remote-cloud-json = Invalid saved cloud devices.
-# $what names what was refused, such as cloud device or cloud target.
-error-remote-cloud-invalid = { $what } is not valid.
+# $path is the saved cloud devices file's name.
+error-remote-cloud-invalid-catalog = { $path } is not valid.
+error-remote-cloud-invalid-device = The cloud device is not valid.
+error-remote-cloud-invalid-target = The cloud target is not valid.
 error-remote-cloud-missing = The cloud device is no longer saved.
 error-remote-cloud-state-directory = No state directory for saved cloud devices.
 # $worker names the background worker that stopped.
@@ -25,8 +27,13 @@ error-remote-cloud-image-catalog = Could not update { $path }: { $error }
 # Dockerfile instructions.
 error-remote-cloud-image-context = { $provider } cannot copy files into an image yet: remove the recipe's COPY and ADD lines, or use a container.
 error-remote-cloud-image-devcontainer = The dev container definition is not valid JSON.
-# $field names what was refused, such as the dev container's image.
-error-remote-cloud-image-field = { $field } is not valid.
+# $path is the sandbox image records file's name.
+error-remote-cloud-image-field-catalog = { $path } is not valid.
+error-remote-cloud-image-field-context-path = A file path outside the build context is not valid.
+error-remote-cloud-image-field-devcontainer-image = The dev container's image is not valid.
+error-remote-cloud-image-field-file-name = A file name that is not UTF-8 is not valid.
+error-remote-cloud-image-field-projects = Sandbox images are kept for too many projects.
+error-remote-cloud-image-field-project-path = A path outside the project is not valid.
 error-remote-cloud-image-host = Could not read the project's recipe from its host.
 error-remote-cloud-image-json = Invalid sandbox image records.
 # $path is a file in the project, such as .devcontainer/Dockerfile.
@@ -35,9 +42,9 @@ error-remote-cloud-image-state-directory = No state directory for sandbox images
 error-remote-cloud-image-too-large = The project's recipe has more files than an image build takes.
 error-remote-cloud-image-truncated = The project's recipe changed while it was being read; try again.
 error-remote-cloud-image-unknown = This app has no record of that project's image.
-# $feature is what the recipe uses, such as a dev container defined by
-# Docker Compose.
-error-remote-cloud-image-unsupported = This project's recipe uses { $feature }, which sandbox images do not support.
+error-remote-cloud-image-unsupported-compose = This project's recipe uses a dev container defined by Docker Compose, which sandbox images do not support.
+error-remote-cloud-image-unsupported-no-build = This project's recipe uses a dev container with neither an image nor a Dockerfile, which sandbox images do not support.
+error-remote-cloud-image-unsupported-provider = This project's recipe uses a provider that does not hold images, which sandbox images do not support.
 
 error-remote-cloud-socket-url = The exec stream's address is not valid.
 error-remote-cloud-socket-connect = Could not reach the exec stream.

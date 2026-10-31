@@ -5,7 +5,7 @@
 //! Dockerfile or image it names is used: features and lifecycle scripts
 //! belong to the dev container tools, not to an image build.
 
-use super::{Error, Result};
+use super::{Error, Field, Result, Unsupported};
 
 /// The recipe a project keeps for this app, with its directory as the
 /// build context.
@@ -54,9 +54,7 @@ pub fn devcontainer_plan(path: &str, text: &str) -> Result<Plan> {
     let definition: Definition =
         serde_json::from_str(&strip_jsonc(text)).map_err(Error::Devcontainer)?;
     if definition.docker_compose_file.is_some() {
-        return Err(Error::Unsupported(
-            "a dev container defined by Docker Compose",
-        ));
+        return Err(Error::Unsupported(Unsupported::Compose));
     }
     let base = path.rsplit_once('/').map_or("", |(dir, _)| dir);
     let (dockerfile, context) = match definition.build {
@@ -72,10 +70,8 @@ pub fn devcontainer_plan(path: &str, text: &str) -> Result<Plan> {
     }
     match definition.image {
         Some(image) if crate::cloud::names::image_reference(&image) => Ok(Plan::Image(image)),
-        Some(_) => Err(Error::Field("the dev container's image")),
-        None => Err(Error::Unsupported(
-            "a dev container with neither an image nor a Dockerfile",
-        )),
+        Some(_) => Err(Error::Field(Field::DevcontainerImage)),
+        None => Err(Error::Unsupported(Unsupported::NoBuild)),
     }
 }
 
@@ -83,16 +79,14 @@ pub fn devcontainer_plan(path: &str, text: &str) -> Result<Plan> {
 /// when it leaves the project.
 pub fn join(base: &str, relative: &str) -> Result<String> {
     if relative.starts_with('/') || relative.contains('\0') {
-        return Err(Error::Field("a path outside the project"));
+        return Err(Error::Field(Field::ProjectPath));
     }
     let mut parts: Vec<&str> = base.split('/').filter(|part| !part.is_empty()).collect();
     for part in relative.split('/') {
         match part {
             "" | "." => {}
             ".." => {
-                parts
-                    .pop()
-                    .ok_or(Error::Field("a path outside the project"))?;
+                parts.pop().ok_or(Error::Field(Field::ProjectPath))?;
             }
             part => parts.push(part),
         }

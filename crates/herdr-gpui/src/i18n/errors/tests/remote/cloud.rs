@@ -1,5 +1,5 @@
 use super::*;
-use herdr_remote::cloud::{Error, ProviderError, image};
+use herdr_remote::cloud::{Error, Invalid, ProviderError, image};
 use std::path::PathBuf;
 
 #[test]
@@ -10,7 +10,9 @@ fn every_cloud_variant_has_a_message() {
             source: io(),
         },
         Error::Json(json()),
-        Error::Invalid("cloud device"),
+        Error::Invalid(Invalid::Catalog),
+        Error::Invalid(Invalid::Device),
+        Error::Invalid(Invalid::Target),
         Error::Missing,
         Error::StateDirectory,
         Error::Worker("setup"),
@@ -33,7 +35,12 @@ fn every_image_variant_has_a_message() {
         },
         image::Error::Context("Daytona"),
         image::Error::Devcontainer(json()),
-        image::Error::Field("the dev container's image"),
+        image::Error::Field(image::Field::Catalog),
+        image::Error::Field(image::Field::ContextPath),
+        image::Error::Field(image::Field::DevcontainerImage),
+        image::Error::Field(image::Field::FileName),
+        image::Error::Field(image::Field::Projects),
+        image::Error::Field(image::Field::ProjectPath),
         image::Error::Host(client()),
         image::Error::Json(json()),
         image::Error::Missing(".devcontainer/Dockerfile.dev".into()),
@@ -41,7 +48,9 @@ fn every_image_variant_has_a_message() {
         image::Error::TooLarge,
         image::Error::Truncated,
         image::Error::Unknown,
-        image::Error::Unsupported("a dev container defined by Docker Compose"),
+        image::Error::Unsupported(image::Unsupported::Compose),
+        image::Error::Unsupported(image::Unsupported::NoBuild),
+        image::Error::Unsupported(image::Unsupported::Provider),
     ]);
 }
 
