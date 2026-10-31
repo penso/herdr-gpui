@@ -1,4 +1,4 @@
-//! Copying one of this app's programs to a host: `error-host-build.ftl`.
+//! Copying a helper program onto a host: `error-host-build.ftl`.
 
 use super::Localize;
 use crate::{host_build::Error, i18n::fl};

@@ -224,8 +224,18 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("check-ci.py", jobs["validate"])
         self.assertNotIn("actions: read", jobs["validate"])
         self.assertNotIn("check-ci.py", (ROOT / "scripts/release/dispatch.sh").read_text())
-        self.assertIn("    needs: [validate, ci-gate, macos-build, linux, windows, windows-sign]\n", jobs["sign"])
+        self.assertIn("    needs: [validate, ci-gate, nix, macos-build, linux, windows, windows-sign]\n", jobs["sign"])
         self.assertIn("needs.ci-gate.result == 'success'", jobs["sign"])
+        # The Nix flake builds this commit before anything is signed.
+        self.assertIn("needs.nix.result == 'success'", jobs["sign"])
+        self.assertIn("    uses: ./.github/workflows/nix.yml", jobs["nix"])
+        self.assertIn("    needs: validate\n", jobs["nix"])
+        self.assertNotIn("secrets", jobs["nix"])
+        nix = (ROOT / ".github/workflows/nix.yml").read_text()
+        self.assertIn("  workflow_call:\n", nix)
+        self.assertIn("ref: ${{ inputs.ref || github.sha }}\n", nix)
+        self.assertIn("persist-credentials: false\n", nix)
+        self.assertIn("group: nix-${{ github.workflow }}-${{ github.ref }}\n", nix)
         for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
             # The Authenticode-signed builds are attested and published once
             # signing is set up; the tested unsigned ones only until then.
@@ -259,8 +269,10 @@ class ReleaseTargets(unittest.TestCase):
         for name, job in jobs.items():
             ref = "github.sha" if name in ("audit", "validate") else "needs.validate.outputs.sha"
             self.assertIn("ref: ${{ " + ref + " }}", job)
-            self.assertIn("persist-credentials: false", job)
-        for name in ("audit", "validate", "ci-gate", "sign", "windows-sign", "attest", "publish", "homebrew", "winget"):
+            # A called workflow checks out in its own file, checked above.
+            if "    uses: ./" not in job:
+                self.assertIn("persist-credentials: false", job)
+        for name in ("audit", "validate", "ci-gate", "nix", "sign", "windows-sign", "attest", "publish", "homebrew", "winget"):
             for condition in ("github.repository == 'penso/herdr-gpui'", "github.ref == 'refs/heads/main'",
                               "github.actor == 'penso'", "github.triggering_actor == 'penso'"):
                 self.assertIn(condition, jobs[name])
