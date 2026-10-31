@@ -167,8 +167,8 @@ impl HerdrWindow {
         let mut notice = Notice::new(
             SemanticNotification {
                 kind,
-                title,
-                body: Some(body),
+                title: title.clone(),
+                body: Some(body.clone()),
                 sound: None,
                 agent: None,
                 workspace_id: target.and_then(|s| s.focused_workspace_id.clone()),
@@ -180,6 +180,7 @@ impl HerdrWindow {
         )
         // Previews keep their own text rather than the pane's context.
         .preview()
+        .with_message(title, body)
         .with_snapshot(snapshot.as_deref());
         // Each QA action immediately presents its own card, even offline.
         for endpoint in &mut self.endpoints {

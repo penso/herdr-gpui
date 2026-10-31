@@ -300,11 +300,13 @@ impl HerdrWindow {
     ) {
         let index = self.selected_endpoint;
         let snapshot = self.endpoints[index].live.snapshot.clone();
+        let title = crate::i18n::fl!("notifications-preview-attention");
+        let body = crate::i18n::fl!("notifications-preview-attention-body");
         let mut notice = crate::notifications::Notice::new(
             herdr_client::protocol::SemanticNotification {
                 kind: herdr_client::protocol::SemanticNotificationKind::NeedsAttention,
-                title: crate::i18n::fl!("notifications-preview-attention"),
-                body: Some(crate::i18n::fl!("notifications-preview-attention-body")),
+                title: title.clone(),
+                body: Some(body.clone()),
                 sound: None,
                 agent: None,
                 workspace_id: snapshot
@@ -318,6 +320,7 @@ impl HerdrWindow {
         )
         // Previews keep their own text rather than the pane's context.
         .preview()
+        .with_message(title, body)
         .with_snapshot(snapshot.as_deref());
         // Retained like a real post, so a click resolves through the same path.
         notice.posted = true;

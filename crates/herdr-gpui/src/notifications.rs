@@ -61,6 +61,16 @@ impl Notice {
         self
     }
 
+    /// A QA preview shows the app's own messages as written. `new` cleans
+    /// daemon text with `safe_text`, which also drops the direction marks a
+    /// right-to-left language (and `en-XB`) relies on, so the preview's
+    /// title and body are set from the messages after it.
+    pub(crate) fn with_message(mut self, title: String, body: String) -> Self {
+        self.title = title;
+        self.body = Some(body);
+        self
+    }
+
     /// Feedback for a user action is not governed by daemon notification mutes,
     /// activity evidence, or focused-pane suppression. It still uses the queue.
     pub fn local_feedback(notification: SemanticNotification, now: Instant) -> Self {

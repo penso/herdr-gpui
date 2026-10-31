@@ -45,3 +45,5 @@ window-notices-diagnostic-full = Full message
 # checkout's branch, $error why it failed.
 window-notices-checkpoint-restored = Restored a checkpoint of { $branch }
 window-notices-checkpoint-not-restored = Checkpoint not restored: { $error }
+# $cause is what the failed Git commands or worker reported.
+window-notices-checkpoint-not-restored-cause = Checkpoint not restored: { $error }: { $cause }
