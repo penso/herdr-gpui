@@ -160,11 +160,17 @@ fn is_group(place: &Place) -> bool {
 impl Tab {
     /// The title the window shows: a page's own, or the one the app gives
     /// a tab it draws or one still waiting for an address. An editor tab
-    /// keeps its product's name while it waits.
+    /// keeps its product's name while it waits, and a terminal tab shows its
+    /// program's title once the program sets one.
     pub(crate) fn label(&self) -> String {
         match &self.location {
             None if self.place.is_editor() => self.title.clone(),
             None => fl!("browser-tab-new"),
+            Some(location @ Location::CoreTerminal { .. })
+                if !self.title.is_empty() && self.title != location.default_title() =>
+            {
+                self.title.clone()
+            }
             Some(location) => location.drawn_title().unwrap_or_else(|| self.title.clone()),
         }
     }
