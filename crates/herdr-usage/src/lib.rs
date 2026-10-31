@@ -33,7 +33,8 @@ pub use settings::UsageConfig;
 /// [`Report::detail`] by type.
 pub mod details {
     pub use crate::providers::{
-        claude::cswap::Other as ClaudeAccount, openai::Daily as OpenaiDaily,
+        claude::cswap::{Other as ClaudeAccount, Status as ClaudeAccountStatus},
+        openai::Daily as OpenaiDaily,
     };
 }
 

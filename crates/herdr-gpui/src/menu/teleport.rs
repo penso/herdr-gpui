@@ -1,5 +1,6 @@
 //! Opening Teleport from a workspace row: what moves, and the repositories
 //! every other connected host has open, both read from the GUI snapshots.
+// i18n: migrated
 
 use super::Page;
 use crate::{

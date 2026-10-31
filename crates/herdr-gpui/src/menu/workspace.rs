@@ -2,6 +2,7 @@
 //! which sibling workspaces close with it, and the dialogs that carry those
 //! requests to the daemon and report what came back.
 
+// i18n: migrated
 mod dispatch;
 pub(super) mod popover;
 mod render;
@@ -11,12 +12,13 @@ mod sandbox_images;
 mod scripts;
 
 use super::{Page, WorkspaceAction, WorkspaceMenuAction, state::Deletion};
-use crate::{HerdrWindow, dialog_input::DialogInput};
+use crate::{HerdrWindow, dialog_input::DialogInput, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_client::{
     Method,
     protocol::{ClientShellSnapshot, ClientShellWorkspace, ClientShellWorktree},
 };
+use popover::Label;
 
 pub(crate) struct WorkspaceTarget {
     pub(super) boot_id: String,
@@ -219,11 +221,11 @@ impl WorkspaceTarget {
             .map(|tree| tree.key.as_str())
     }
 
-    pub(super) fn close_label(&self) -> &'static str {
+    pub(super) fn close_label(&self) -> Label {
         if self.close_members.len() > 1 {
-            "Close group"
+            Label::CLOSE_GROUP
         } else {
-            "Close"
+            Label::CLOSE
         }
     }
 
@@ -324,13 +326,13 @@ pub(super) enum NewWorktreeUnavailable {
 }
 
 impl NewWorktreeUnavailable {
-    pub(super) fn message(self) -> &'static str {
+    pub(super) fn message(self) -> String {
         match self {
-            Self::Disconnected => "Not connected, so no worktree can be created",
-            Self::NoWorkspace => "No workspace is focused to create a worktree from",
-            Self::NotGit => "This workspace is not a Git repository",
-            Self::MainCheckoutClosed => "Open this repository's main checkout to create a worktree",
-            Self::Detached => "This checkout has no branch to start a worktree from",
+            Self::Disconnected => fl!("worktree-popover-new-disconnected"),
+            Self::NoWorkspace => fl!("worktree-popover-new-no-workspace"),
+            Self::NotGit => fl!("worktree-popover-not-git"),
+            Self::MainCheckoutClosed => fl!("worktree-popover-new-main-closed"),
+            Self::Detached => fl!("worktree-popover-new-detached"),
         }
     }
 }
@@ -600,79 +602,79 @@ impl HerdrWindow {
     /// and arrow keys walk them: the header's mute toggle, the tile grid row
     /// by row (work, then moving or leaving), the plain rows, and the
     /// destructive action last.
-    pub(super) fn workspace_items(&self) -> Vec<(WorkspaceMenuAction, &'static str)> {
+    pub(super) fn workspace_items(&self) -> Vec<(WorkspaceMenuAction, Label)> {
         use WorkspaceMenuAction::Dialog;
         let Some(target) = &self.menu.target else {
             return vec![];
         };
         let mut items = vec![if target.muted {
-            (WorkspaceMenuAction::Unmute, "Unmute notifications")
+            (WorkspaceMenuAction::Unmute, Label::UNMUTE)
         } else {
-            (WorkspaceMenuAction::Mute, "Mute notifications")
+            (WorkspaceMenuAction::Mute, Label::MUTE)
         }];
         if target.can_create() || self.linked_new_worktree_target().is_some() {
-            items.push((Dialog(WorkspaceAction::NewWorktree), "New worktree"));
+            items.push((Dialog(WorkspaceAction::NewWorktree), Label::NEW_WORKTREE));
         }
         if let Some(label) = self.fan_out_item() {
             items.push((WorkspaceMenuAction::FanOut, label));
         }
-        items.push((Dialog(WorkspaceAction::Rename), "Rename"));
+        items.push((Dialog(WorkspaceAction::Rename), Label::RENAME));
         if self.teleport_mark().is_some() {
-            items.push((WorkspaceMenuAction::GoToTeleported, "Go to teleported copy"));
+            items.push((WorkspaceMenuAction::GoToTeleported, Label::GO_TO_TELEPORTED));
             items.push((
                 WorkspaceMenuAction::ClearTeleported,
-                "Clear teleported mark",
+                Label::CLEAR_TELEPORTED,
             ));
         } else if self.can_teleport() {
-            items.push((WorkspaceMenuAction::Teleport, "Teleport..."));
+            items.push((WorkspaceMenuAction::Teleport, Label::TELEPORT));
             if self.teleport_origin().is_some() {
-                items.push((WorkspaceMenuAction::TeleportBack, "Teleport back"));
+                items.push((WorkspaceMenuAction::TeleportBack, Label::TELEPORT_BACK));
             }
         }
         items.push((Dialog(WorkspaceAction::Close), target.close_label()));
         if self.checkpoint_checkout().is_some() {
-            items.push((WorkspaceMenuAction::Checkpoints, "Checkpoints..."));
+            items.push((WorkspaceMenuAction::Checkpoints, Label::CHECKPOINTS));
         }
         if self.note_checkout().is_some() {
-            items.push((Dialog(WorkspaceAction::Note), "Note..."));
+            items.push((Dialog(WorkspaceAction::Note), Label::NOTE));
         }
         if target.worktree.is_some() && self.orchestrator_host() {
-            items.push((
-                WorkspaceMenuAction::Orchestrator,
-                "Issues and pull requests",
-            ));
+            items.push((WorkspaceMenuAction::Orchestrator, Label::ORCHESTRATOR));
         }
         if target.can_create() {
-            items.push((Dialog(WorkspaceAction::OpenWorktree), "Open worktree..."));
+            items.push((Dialog(WorkspaceAction::OpenWorktree), Label::OPEN_WORKTREE));
         }
         #[cfg(feature = "cloud")]
         if target.worktree.is_some() && !self.sandbox_image_providers().is_empty() {
-            items.push((WorkspaceMenuAction::SandboxImages, "Build sandbox images"));
+            items.push((WorkspaceMenuAction::SandboxImages, Label::SANDBOX_IMAGES));
         }
         // Whether the checkout defines scripts is only known once its file is
         // read, so every Git checkout offers them and an absent one says so.
         if target.worktree.is_some() {
             use crate::worktree_scripts::ScriptKind;
-            items.push((WorkspaceMenuAction::Script(ScriptKind::Run), "Run script"));
+            items.push((
+                WorkspaceMenuAction::Script(ScriptKind::Run),
+                Label::RUN_SCRIPT,
+            ));
             if target.can_delete() {
                 items.push((
                     WorkspaceMenuAction::Script(ScriptKind::Setup),
-                    "Run setup script",
+                    Label::RUN_SETUP_SCRIPT,
                 ));
             }
         }
         // Only a workspace that heads a group of checkouts can fold anything.
         if let Some(key) = target.group_key() {
             items.push(if self.collapsed_repos_for_selection().contains(key) {
-                (WorkspaceMenuAction::Expand, "Expand group")
+                (WorkspaceMenuAction::Expand, Label::EXPAND_GROUP)
             } else {
-                (WorkspaceMenuAction::Collapse, "Collapse group")
+                (WorkspaceMenuAction::Collapse, Label::COLLAPSE_GROUP)
             });
         }
         if target.can_delete() {
             items.push((
                 Dialog(WorkspaceAction::DeleteWorktree),
-                "Delete worktree checkout",
+                Label::DELETE_WORKTREE,
             ));
         }
         items

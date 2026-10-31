@@ -188,7 +188,7 @@ impl Look {
         &self,
         id: impl Into<ElementId>,
         path: &'static str,
-        label: &'static str,
+        label: impl Into<SharedString>,
     ) -> Stateful<Div> {
         let hover = self.theme.active;
         div()
@@ -210,14 +210,15 @@ impl Look {
     pub(crate) fn toggle(
         &self,
         id: impl Into<ElementId>,
-        label: &'static str,
+        label: impl Into<SharedString>,
         on: bool,
     ) -> Stateful<Div> {
         let theme = &self.theme;
+        let label = label.into();
         div()
             .id(id)
             .role(Role::Switch)
-            .aria_label(label)
+            .aria_label(label.clone())
             .aria_toggled(if on { Toggled::True } else { Toggled::False })
             .flex_none()
             .px_3()
@@ -267,14 +268,15 @@ impl Look {
     pub(crate) fn compact_button(
         &self,
         id: impl Into<ElementId>,
-        label: &'static str,
+        label: impl Into<SharedString>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let hover = theme.active;
+        let label = label.into();
         div()
             .id(id)
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(label.clone())
             .flex_none()
             .px_2()
             .py(px(1.))

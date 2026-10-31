@@ -679,6 +679,7 @@ impl HerdrWindow {
             cx.notify();
         }
         self.publish_remote_pull_requests(cx);
+        self.sync_remote_hosts(window, cx);
         self.update_merged_cleanup(window, cx);
         if self.update_git() {
             cx.notify();

@@ -11,6 +11,7 @@ fn requests_and_responses_keep_their_wire_names() {
             id: PairingId("p1".into()),
             allow: true,
             code: "428913".into(),
+            hosts: Vec::new(),
         })
         .unwrap(),
         json!({"request": "approve", "id": "p1", "allow": true, "code": "428913"})

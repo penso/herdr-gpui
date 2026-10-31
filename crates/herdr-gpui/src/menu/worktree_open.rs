@@ -1,7 +1,8 @@
 //! Existing checkouts come only from the selected daemon, never local Git.
 
+// i18n: migrated
 use super::{MenuState, Page, WorkspaceAction, endpoint_error};
-use crate::{HerdrWindow, search_input::SearchInput};
+use crate::{HerdrWindow, i18n::fl, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 use serde::Deserialize;
@@ -207,7 +208,7 @@ impl HerdrWindow {
     pub(super) fn open_existing_worktrees(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search worktrees...", cx);
+            input.set_placeholder_with(|| fl!("worktree-source-search-worktrees"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
         });
@@ -256,10 +257,10 @@ impl HerdrWindow {
                     div()
                         .pt(px(6.))
                         .text_color(rgb(self.theme.muted))
-                        .child(format!(
-                            "{} of {} worktrees",
-                            picker.filtered.len(),
-                            picker.entries.len()
+                        .child(fl!(
+                            "worktree-source-count-worktrees",
+                            shown = picker.filtered.len(),
+                            total = picker.entries.len(),
                         )),
                 ),
         );
@@ -281,13 +282,13 @@ impl HerdrWindow {
                     .p(px(16.))
                     .text_color(rgb(self.theme.muted))
                     .child(if picker.pending.is_some() {
-                        "Loading worktrees..."
+                        fl!("worktree-source-loading-worktrees")
                     } else if !picker.entries.is_empty() {
-                        "No matching worktrees. Try a shorter search."
+                        fl!("worktree-source-no-matching-worktrees")
                     } else if self.menu.error.is_some() {
-                        "Worktrees unavailable."
+                        fl!("worktree-source-worktrees-unavailable")
                     } else {
-                        "No Git worktrees found for this repository."
+                        fl!("worktree-source-no-worktrees")
                     }),
             );
         } else {
@@ -320,9 +321,9 @@ impl HerdrWindow {
         };
         let label = entry.branch.as_deref().unwrap_or(&entry.label);
         let status = match (entry.open_workspace_id.is_some(), entry.is_detached) {
-            (true, _) => "open",
-            (_, true) => "detached",
-            _ => "",
+            (true, _) => fl!("worktree-source-open"),
+            (_, true) => fl!("worktree-source-detached"),
+            _ => String::new(),
         };
         div()
             .id(row)
@@ -378,26 +379,4 @@ impl HerdrWindow {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn malformed_worktree_list_retains_parser_source() {
-        use std::error::Error;
-        let result = super::listing(&serde_json::json!({"result": {
-            "type": "worktree_list", "source": {"repo_key":"key", "repo_name":"repo"},
-            "worktrees": [{"path": "/checkout", "label": 42}]
-        }}));
-        let Err(error) = result else {
-            panic!("invalid entry accepted")
-        };
-        assert!(matches!(error, crate::Error::WorktreeListDecode(_)));
-        assert!(
-            error
-                .source()
-                .is_some_and(|source| source.is::<serde_json::Error>())
-        );
-        assert_eq!(
-            error.to_string(),
-            "Malformed worktree list. Dismiss and reopen the menu."
-        );
-    }
-}
+mod tests;

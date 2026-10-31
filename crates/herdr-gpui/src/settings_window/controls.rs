@@ -17,6 +17,7 @@ use super::{Section, SettingsWindow};
 use crate::{
     config::{Config, FONT_SIZE_RANGE, FontFace, corners},
     font_picker::FontTarget,
+    i18n::Localize,
     search_input::{Changed, SearchInput},
 };
 use gpui::{prelude::*, *};
@@ -99,7 +100,7 @@ impl Controls {
                 .unwrap_or_else(|error| {
                     crate::i18n::fl!(
                         "settings-configuration-path-unavailable",
-                        error = error.to_string()
+                        error = error.localize()
                     )
                 }),
             local_file: Config::local_path().ok(),

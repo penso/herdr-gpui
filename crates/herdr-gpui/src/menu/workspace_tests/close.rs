@@ -106,7 +106,7 @@ fn a_parent_beside_another_parent_closes_alone_but_still_folds() {
     for index in [3, 7] {
         let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[index]);
         let id = &snapshot.workspaces[index].workspace_id;
-        assert_eq!(target.close_label(), "Close");
+        assert_eq!(target.close_label().english(), "Close");
         assert_eq!(target.close_members, std::slice::from_ref(id));
         assert_eq!(target.group_key(), Some(sidebar::layout_tests::REPO_KEY));
         assert_eq!(
@@ -134,7 +134,7 @@ fn a_parent_beside_another_parent_closes_alone_but_still_folds() {
         .retain(|w| w.workspace_id != "w4" && w.workspace_id != "w5");
     for index in [3, 5] {
         let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[index]);
-        assert_eq!(target.close_label(), "Close");
+        assert_eq!(target.close_label().english(), "Close");
         assert_eq!(target.group_key(), None);
     }
 }

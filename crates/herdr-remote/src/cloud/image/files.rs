@@ -5,7 +5,7 @@
 //! and never from a folder that resolves outside the project, so a link or
 //! an ignored secret beside the recipe cannot leave the host.
 
-use super::{Error, Result};
+use super::{Error, Field, Result};
 use herdr_client::shell_quote;
 use std::sync::atomic::AtomicBool;
 
@@ -71,7 +71,7 @@ pub fn parse(mut output: &[u8]) -> Result<Vec<File>> {
                 .position(|&b| b == 0)
                 .ok_or(Error::Truncated)?;
             let text = std::str::from_utf8(&output[..end])
-                .map_err(|_| Error::Field("a file name that is not UTF-8"))?
+                .map_err(|_| Error::Field(Field::FileName))?
                 .to_owned();
             output = &output[end + 1..];
             Ok(text)
@@ -85,7 +85,7 @@ pub fn parse(mut output: &[u8]) -> Result<Vec<File>> {
         let (bytes, rest) = output.split_at(size);
         output = rest;
         if path.is_empty() || path.starts_with('/') || path.split('/').any(|part| part == "..") {
-            return Err(Error::Field("a file path outside the context"));
+            return Err(Error::Field(Field::ContextPath));
         }
         files.push(File {
             path,

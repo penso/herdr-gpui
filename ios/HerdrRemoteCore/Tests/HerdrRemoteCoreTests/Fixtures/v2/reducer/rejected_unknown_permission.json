@@ -1,0 +1,190 @@
+{
+  "start": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [
+      {
+        "id": 1,
+        "kind": {
+          "type": "agent",
+          "text": "hi"
+        }
+      },
+      {
+        "id": 2,
+        "kind": {
+          "type": "tool",
+          "call_id": "call-1",
+          "content": [
+            {
+              "type": "text",
+              "text": "cargo nextest run"
+            },
+            {
+              "type": "diff",
+              "new": "let share = 1.0;\n",
+              "old": "let share = 0.5;\n",
+              "path": "src/splits.rs"
+            },
+            {
+              "type": "diff",
+              "new": "fn new_file() {}\n",
+              "old": null,
+              "path": "src/new.rs"
+            },
+            {
+              "type": "image",
+              "image": {
+                "data": "iVBORw0KGgo=",
+                "mime_type": "image/png"
+              }
+            },
+            {
+              "type": "terminal",
+              "id": "term-1"
+            }
+          ],
+          "kind": "execute",
+          "locations": [
+            "src/splits.rs"
+          ],
+          "status": "pending",
+          "title": "Run just ci"
+        }
+      }
+    ],
+    "modes": null,
+    "options": [],
+    "permissions": [
+      {
+        "call_id": "call-1",
+        "id": 1,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    ],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  },
+  "changes": [
+    {
+      "change": "append",
+      "id": 1,
+      "text": " there"
+    },
+    {
+      "change": "permission_resolved",
+      "id": 9
+    }
+  ],
+  "end": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [
+      {
+        "id": 1,
+        "kind": {
+          "type": "agent",
+          "text": "hi there"
+        }
+      },
+      {
+        "id": 2,
+        "kind": {
+          "type": "tool",
+          "call_id": "call-1",
+          "content": [
+            {
+              "type": "text",
+              "text": "cargo nextest run"
+            },
+            {
+              "type": "diff",
+              "new": "let share = 1.0;\n",
+              "old": "let share = 0.5;\n",
+              "path": "src/splits.rs"
+            },
+            {
+              "type": "diff",
+              "new": "fn new_file() {}\n",
+              "old": null,
+              "path": "src/new.rs"
+            },
+            {
+              "type": "image",
+              "image": {
+                "data": "iVBORw0KGgo=",
+                "mime_type": "image/png"
+              }
+            },
+            {
+              "type": "terminal",
+              "id": "term-1"
+            }
+          ],
+          "kind": "execute",
+          "locations": [
+            "src/splits.rs"
+          ],
+          "status": "pending",
+          "title": "Run just ci"
+        }
+      }
+    ],
+    "modes": null,
+    "options": [],
+    "permissions": [
+      {
+        "call_id": "call-1",
+        "id": 1,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    ],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  },
+  "error": "unknown_permission"
+}

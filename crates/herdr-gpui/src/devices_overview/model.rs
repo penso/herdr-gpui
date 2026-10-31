@@ -2,6 +2,7 @@
 //! live state before drawing, and the search that narrows the list.
 
 use super::history::Counts;
+use crate::i18n::fl;
 use crate::{endpoint::Endpoint, state::LiveState, usage::Host};
 use herdr_client::{ConnectTarget, protocol::AgentStatus};
 
@@ -207,7 +208,7 @@ impl Device {
             index: 0,
             id: label.to_owned(),
             label: label.to_owned(),
-            address: format!("ssh {label}"),
+            address: format!("ssh {label}"), // i18n: data
             link,
             tally: Tally::of(statuses.iter().copied()),
             dots,
@@ -232,14 +233,20 @@ fn order(status: AgentStatus) -> u8 {
 /// How a device is reached, as its row's second line says it.
 pub(crate) fn address(target: &ConnectTarget) -> String {
     match target {
-        ConnectTarget::Local => "this machine".to_owned(),
-        ConnectTarget::Session { name, .. } => format!("session {name}"),
+        ConnectTarget::Local => fl!("devices-overview-this-machine"),
+        ConnectTarget::Session { name, .. } => {
+            fl!("devices-overview-session", name = name.as_str())
+        }
         ConnectTarget::Socket(path) => path.display().to_string(),
-        ConnectTarget::Ssh { target, .. } => format!("ssh {target}"),
+        ConnectTarget::Ssh { target, .. } => {
+            fl!("devices-overview-ssh", target = target.as_str())
+        }
         #[cfg(feature = "cloud")]
         ConnectTarget::Cloud {
             provider, machine, ..
         } => format!("{} · {machine}", provider.key()),
-        ConnectTarget::Wsl { distro, .. } => format!("WSL · {distro}"),
+        ConnectTarget::Wsl { distro, .. } => {
+            fl!("devices-overview-wsl", distro = distro.as_str())
+        }
     }
 }

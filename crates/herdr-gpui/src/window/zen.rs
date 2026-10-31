@@ -6,9 +6,11 @@
 //! Render reads [`HerdrWindow::zen_layout`] instead of zen mode rewriting the
 //! sidebar or status bar flags, so leaving it shows exactly what was there
 //! before, including toggles made while the chrome was hidden.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     browser::{Pick, Slot},
     config::ZenWidth,
@@ -220,8 +222,8 @@ impl HerdrWindow {
                 let key = self.keymap().primary(Command::ToggleZenMode);
                 self.show_flash(
                     Flash::success(match key {
-                        "" => "Zen mode: run Toggle Zen Mode to leave".to_owned(),
-                        key => format!("Zen mode: {key} to leave"),
+                        "" => fl!("window-notices-zen-command"),
+                        key => fl!("window-notices-zen-key", key = key),
                     }),
                     cx,
                 );

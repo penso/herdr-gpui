@@ -6,7 +6,7 @@ use std::io;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0} is not valid.")]
-    Field(&'static str),
+    Field(crate::cloud::Value),
     #[error("Neither docker nor podman was found. Install one, or set [container] engine.")]
     NoEngine,
     #[error("Could not run {engine}.")]

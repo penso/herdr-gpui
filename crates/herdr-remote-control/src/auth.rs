@@ -11,16 +11,24 @@
 mod devices;
 mod handoff;
 mod limits;
+pub(crate) mod links;
+pub(crate) mod nearby;
 mod pairing;
+pub(crate) mod presence;
 mod session;
 
-pub(crate) use devices::Devices;
+pub(crate) use devices::{DeviceRecord, Devices};
 pub(crate) use handoff::{Handoff, Handoffs};
 pub(crate) use limits::RateLimiter;
+pub(crate) use nearby::NearbySessions;
 pub(crate) use pairing::{Claim, ClaimId, NewDevice, Pairings};
+pub(crate) use presence::Presences;
 pub(crate) use session::{Challenge, ChallengeId, Session, Sessions};
 
-use crate::control::{self, DeviceId, Offer, PairingId, PairingState};
+use crate::control::{
+    self, DeviceId, NearbyRevealed, NearbyStarted, Offer, PairingId, PairingState,
+    hosts::{Enroll, HostId, HostLink, HostOutcome, HostPairing, HostRevoke, HostState},
+};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::VerifyingKey;
 use sha2::{Digest, Sha256};
@@ -56,8 +64,18 @@ pub enum Error {
     InvalidSignature,
     #[error("the pairing token is not valid")]
     InvalidToken,
+    #[error(transparent)]
+    Links(#[from] links::Error),
+    #[error("too many phones are pairing nearby; try again shortly")]
+    NearbyBusy,
+    #[error("the nearby pairing did not check out; start again")]
+    NearbyCrypto,
+    #[error("too many nearby attempts; open Pair device on the computer again")]
+    NearbyExhausted,
     #[error("the remote control daemon has no address to offer")]
     NoAddress,
+    #[error("open Remote control > Pair device on the computer first")]
+    NoPairing,
     #[error("the pairing is not waiting for an answer")]
     NotClaimed,
     #[error("could not draw random bytes")]
@@ -83,8 +101,14 @@ pub enum Error {
     UnknownClaim,
     #[error("no such device")]
     UnknownDevice,
+    #[error("no such nearby pairing, or it expired")]
+    UnknownNearby,
     #[error("no such pairing, or it expired")]
     UnknownPairing,
+    /// Every presence failure: an unknown hint, a spent or late nonce, a
+    /// bad signature. One text, so a phone learns nothing from which.
+    #[error("presence was not accepted")]
+    UnknownPresence,
     // keep-sorted end
 }
 
@@ -120,6 +144,8 @@ impl From<&Error> for control::ErrorCode {
             Error::UnknownPairing => Self::UnknownPairing,
             Error::UnknownDevice => Self::UnknownDevice,
             Error::NotClaimed => Self::NotClaimed,
+            Error::NoPairing => Self::NoPairing,
+            Error::Encode(_) | Error::Store { .. } => Self::Unsaved,
             _ => Self::Other,
         }
     }
@@ -262,8 +288,11 @@ pub(crate) struct Auth {
     challenge_limit: RateLimiter<IpAddr>,
     devices: Devices,
     handoffs: Handoffs,
+    links: links::Links,
+    nearby: NearbySessions,
     pair_limit: RateLimiter<IpAddr>,
     pairings: Pairings,
+    presence: Presences,
     /// Bumped whenever sessions end early, so open streams check again.
     revoked: watch::Sender<u64>,
     sessions: Sessions,
@@ -282,12 +311,15 @@ impl Auth {
             ),
             devices,
             handoffs: Handoffs::load(state_dir),
+            links: links::Links::load(state_dir),
+            nearby: NearbySessions::default(),
             pair_limit: RateLimiter::new(
                 limits.pair_burst,
                 limits.pair_refill_ms,
                 limits.addresses,
             ),
             pairings: Pairings::default(),
+            presence: Presences::default(),
             revoked: watch::Sender::new(0),
             sessions: Sessions::default(),
         })
@@ -352,6 +384,76 @@ impl Auth {
         self.pairings.claim(token, device_name, public_key, now_ms)
     }
 
+    /// Whether a pairing dialog is open and unclaimed, which Bonjour
+    /// advertises so phones nearby offer to pair.
+    pub(crate) fn pairing_open(&mut self, now_ms: u64) -> bool {
+        self.pairings.waiting(now_ms)
+    }
+
+    /// A nearby phone's first step. `client` is its address over the
+    /// network, rate limited as claims are; Herdr UI relaying Bluetooth
+    /// passes `None`.
+    pub(crate) fn nearby_start(
+        &mut self,
+        client: Option<IpAddr>,
+        public_key: &str,
+        computer: &str,
+        fingerprint: &str,
+        now_ms: u64,
+    ) -> Result<NearbyStarted> {
+        if let Some(client) = client
+            && !self.pair_limit.allow(client, now_ms)
+        {
+            return Err(Error::RateLimited);
+        }
+        if !self.pairings.waiting(now_ms) {
+            return Err(Error::NoPairing);
+        }
+        self.nearby.start(public_key, computer, fingerprint, now_ms)
+    }
+
+    /// A nearby phone's second step: seals a fresh token for the open
+    /// pairing, whose claim will carry the code both sides computed.
+    pub(crate) fn nearby_reveal(
+        &mut self,
+        session: &str,
+        nonce: &str,
+        fingerprint: &str,
+        origins: &[String],
+        now_ms: u64,
+    ) -> Result<NearbyRevealed> {
+        let started = self.nearby.take(session, now_ms)?;
+        if !self.pairings.waiting(now_ms) {
+            return Err(Error::NoPairing);
+        }
+        let token = random_bytes::<SECRET_LEN>()?;
+        let (revealed, code) = started.reveal(nonce, fingerprint, &token, origins)?;
+        self.pairings.set_nearby(&token, code, now_ms)?;
+        Ok(revealed)
+    }
+
+    /// A nonce for the paired phone whose daily hint is `hint` to sign.
+    pub(crate) fn presence_challenge(
+        &mut self,
+        hint: &str,
+        now_ms: u64,
+    ) -> Result<presence::Challenge> {
+        self.presence.challenge(hint, now_ms, &self.devices)
+    }
+
+    /// Checks a phone's presence proof for the CA with `fingerprint`;
+    /// answers the device it proves.
+    pub(crate) fn presence_prove(
+        &mut self,
+        nonce: &str,
+        signature: &str,
+        fingerprint: &[u8; 32],
+        now_ms: u64,
+    ) -> Result<DeviceId> {
+        self.presence
+            .prove(nonce, signature, fingerprint, now_ms, &self.devices)
+    }
+
     /// Notes that `claim` came from an app installed from another computer.
     pub(crate) fn claimed_from(&mut self, claim: &ClaimId, origin: String) {
         self.pairings.claimed_from(claim, origin);
@@ -364,11 +466,24 @@ impl Auth {
     /// The desktop's answer for the claim whose matching code it showed; an
     /// approval stores the device before the phone can learn it was
     /// approved. An approval naming any other code denies the pairing.
+    #[cfg(test)]
     pub(crate) fn answer(
         &mut self,
         id: &PairingId,
         allow: bool,
         shown: &str,
+        now_ms: u64,
+    ) -> Result<PairingState> {
+        self.answer_with_hosts(id, allow, shown, &[], now_ms)
+    }
+
+    /// [`Self::answer`], allowing the device on the hosts the desktop ticked.
+    pub(crate) fn answer_with_hosts(
+        &mut self,
+        id: &PairingId,
+        allow: bool,
+        shown: &str,
+        hosts: &[HostId],
         now_ms: u64,
     ) -> Result<PairingState> {
         if allow {
@@ -382,8 +497,9 @@ impl Auth {
             }
         }
         let devices = &mut self.devices;
+        let links = self.links.allowed(hosts);
         self.pairings.answer(id, allow, now_ms, |device| {
-            devices.add(device.clone(), now_ms)
+            devices.add_with(device.clone(), now_ms, None, links)
         })?;
         self.sync_apps();
         self.pairings.state(id, now_ms)
@@ -451,8 +567,13 @@ impl Auth {
         Ok(device)
     }
 
-    /// Forgets a device and ends its sessions at once.
+    /// Forgets a device and ends its sessions at once. The hosts it was
+    /// paired with from here are owed a revocation, which Herdr UI carries
+    /// out.
     pub(crate) fn revoke(&mut self, device: &DeviceId) -> Result<bool> {
+        if let Some(record) = self.devices.get(device) {
+            self.links.forget(record)?;
+        }
         // The device goes either way; a stale digest only names a device
         // that no longer exists.
         let _ = self.handoffs.forget(device);
@@ -461,6 +582,96 @@ impl Auth {
         let revoked = self.devices.revoke(device);
         self.sync_apps();
         revoked
+    }
+
+    /// The devices for Herdr UI, with the hosts each may be paired with.
+    pub(crate) fn device_list(
+        &mut self,
+        connected: impl Fn(&DeviceId) -> bool,
+        now_ms: u64,
+    ) -> Vec<control::Device> {
+        let mut list = self.devices.list(connected);
+        for (device, record) in list.iter_mut().zip(self.devices.records()) {
+            device.hosts = self.links.view(record, now_ms);
+        }
+        list
+    }
+
+    /// Replaces the hosts Herdr UI connects to.
+    pub(crate) fn set_hosts(&mut self, hosts: Vec<control::hosts::Host>) -> Result<()> {
+        self.links.set_hosts(hosts)
+    }
+
+    /// Every host as `device` sees it.
+    pub(crate) fn host_links(&mut self, device: &DeviceId, now_ms: u64) -> Result<Vec<HostLink>> {
+        let record = self.devices.get(device).ok_or(Error::UnknownDevice)?;
+        Ok(self.links.view(record, now_ms))
+    }
+
+    /// The phone asks to be paired with `host` with a key it made for it.
+    pub(crate) fn ask_host(
+        &mut self,
+        device: &DeviceId,
+        host: &HostId,
+        public_key: &str,
+        now_ms: u64,
+    ) -> Result<HostState> {
+        let record = self.devices.get(device).ok_or(Error::UnknownDevice)?;
+        self.links.ask(record, host, public_key, now_ms)
+    }
+
+    pub(crate) fn take_host_pairings(&mut self, now_ms: u64) -> Vec<HostPairing> {
+        self.links.take(now_ms)
+    }
+
+    pub(crate) fn host_paired(
+        &mut self,
+        device: &DeviceId,
+        host: &HostId,
+        public_key: Option<&str>,
+        outcome: HostOutcome,
+        now_ms: u64,
+    ) -> Result<()> {
+        self.links
+            .finish(&mut self.devices, device, host, public_key, outcome, now_ms)
+    }
+
+    pub(crate) fn host_revokes(&self) -> Vec<HostRevoke> {
+        self.links.revokes()
+    }
+
+    pub(crate) fn host_revoked(&mut self, revoke: &HostRevoke) -> Result<()> {
+        self.links.revoked(revoke)
+    }
+
+    /// On a host: adds a phone another computer's user allowed. A device it
+    /// replaces goes only when it too was enrolled that way, so a computer
+    /// cannot revoke a phone paired here directly. Blocking.
+    pub(crate) fn enroll(&mut self, enroll: &Enroll, now_ms: u64) -> Result<DeviceId> {
+        let public_key = PublicKey::parse(&enroll.public_key)?;
+        let name = device_name(&enroll.name)?;
+        let via = device_name(&enroll.via)?;
+        if let Some(old) = &enroll.replace
+            && self
+                .devices
+                .get(old)
+                .is_some_and(|record| record.via.is_some())
+        {
+            self.revoke(old)?;
+        }
+        let id = DeviceId(random_id()?);
+        self.devices.add_with(
+            NewDevice {
+                app: None,
+                id: id.clone(),
+                name,
+                public_key,
+            },
+            now_ms,
+            Some(via),
+            Vec::new(),
+        )?;
+        Ok(id)
     }
 
     /// Forgets devices unseen for `idle_ms` and ends their sessions.

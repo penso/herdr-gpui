@@ -162,7 +162,7 @@ macro_rules! providers {
                 ..
             } = target
             else {
-                return Err(io::Error::other(Error::Invalid("cloud target")));
+                return Err(io::Error::other(Error::Invalid(super::Invalid::Target)));
             };
             match provider {
                 $(#[cfg(feature = $feature)]

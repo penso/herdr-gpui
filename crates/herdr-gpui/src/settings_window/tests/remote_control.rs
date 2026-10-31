@@ -30,6 +30,7 @@ fn status() -> Status {
             "https://[fd7a:115c::3]:7443".into(),
         ],
         fingerprint: "5F:2A:C1:9E".into(),
+        computer: String::new(),
         herdr: true,
         chats: 2,
         devices: 2,
@@ -46,6 +47,8 @@ fn devices() -> Vec<Device> {
             last_seen_ms: Some(0),
             push: true,
             connected: true,
+            via: None,
+            hosts: Vec::new(),
         },
         Device {
             id: DeviceId("d2".into()),
@@ -54,6 +57,8 @@ fn devices() -> Vec<Device> {
             last_seen_ms: None,
             push: false,
             connected: false,
+            via: None,
+            hosts: Vec::new(),
         },
     ]
 }

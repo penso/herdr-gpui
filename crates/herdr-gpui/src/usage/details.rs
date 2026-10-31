@@ -5,10 +5,12 @@
 
 use super::{
     model::{Report, Window},
+    text,
     ui::Ui,
 };
+use crate::i18n::fl;
 use gpui::{AnyElement, Div, div, prelude::*, px};
-use herdr_usage::details::{ClaudeAccount, OpenaiDaily};
+use herdr_usage::details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily};
 
 pub(super) fn render(report: &Report, ui: &Ui) -> AnyElement {
     let standard = ui.standard(report);
@@ -43,7 +45,7 @@ pub(super) fn render(report: &Report, ui: &Ui) -> AnyElement {
 fn daily_spend(daily: &OpenaiDaily, ui: &Ui) -> Div {
     let max = daily.days.iter().map(|(_, cost)| *cost).fold(0., f64::max);
     ui.block()
-        .child(ui.heading("Daily spend"))
+        .child(ui.heading(fl!("usage-daily-spend")))
         .children(daily.days.iter().map(|(label, cost)| {
             let fill = if max > 0. {
                 (cost / max * 100.) as f32
@@ -78,14 +80,9 @@ fn daily_spend(daily: &OpenaiDaily, ui: &Ui) -> Div {
 /// and note, then a bar of what is left per window.
 fn other_accounts(others: &[ClaudeAccount], ui: &Ui) -> Div {
     ui.block()
-        .child(ui.heading("Other accounts"))
+        .child(ui.heading(fl!("usage-other-accounts")))
         .children(others.iter().map(|other| {
-            let note = other
-                .note()
-                .into_iter()
-                .chain(other.disabled.then_some("disabled"))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let note = note(other);
             div()
                 .flex()
                 .flex_col()
@@ -111,6 +108,31 @@ fn other_accounts(others: &[ClaudeAccount], ui: &Ui) -> Div {
         }))
 }
 
+/// Why an account's windows are missing or old, and whether claude-swap
+/// holds it out of rotation, as `ClaudeAccount::note` says in English.
+pub(super) fn note(other: &ClaudeAccount) -> String {
+    let status = match other.status {
+        ClaudeAccountStatus::Ok if other.stale => "stale",
+        ClaudeAccountStatus::Ok => "ok",
+        ClaudeAccountStatus::TokenExpired => "token-expired",
+        ClaudeAccountStatus::ApiKey => "api-key",
+        ClaudeAccountStatus::KeychainUnavailable => "keychain",
+        ClaudeAccountStatus::ReloginRequired => "relogin",
+        ClaudeAccountStatus::ForeignCredential => "foreign",
+        ClaudeAccountStatus::NoCredentials => "no-credentials",
+        ClaudeAccountStatus::Unavailable | ClaudeAccountStatus::Unknown => "unavailable",
+    };
+    match (status, other.disabled) {
+        ("ok", false) => String::new(),
+        ("ok", true) => fl!("usage-account-disabled"),
+        (status, disabled) => fl!(
+            "usage-account-note",
+            status = status,
+            disabled = if disabled { "yes" } else { "no" }
+        ),
+    }
+}
+
 fn window(limit: &Window, ui: &Ui) -> Div {
     div()
         .flex()
@@ -123,7 +145,7 @@ fn window(limit: &Window, ui: &Ui) -> Div {
                 .flex_none()
                 .truncate()
                 .text_color(ui.muted())
-                .child(limit.kind.title().to_owned()),
+                .child(text::title(&limit.kind)),
         )
         .child(
             div()
@@ -136,6 +158,6 @@ fn window(limit: &Window, ui: &Ui) -> Div {
                 .flex_none()
                 .flex()
                 .justify_end()
-                .child(format!("{}% left", limit.left())),
+                .child(text::left(limit)),
         )
 }

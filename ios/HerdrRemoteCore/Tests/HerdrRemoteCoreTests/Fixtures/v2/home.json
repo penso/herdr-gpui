@@ -1,0 +1,117 @@
+{
+  "type": "home",
+  "home": {
+    "computer": "MacBook Pro",
+    "fingerprint": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+    "connected": true,
+    "waiting": 1,
+    "load": {
+      "cpu": 47,
+      "memory": 67
+    },
+    "workspaces": [
+      {
+        "id": "w1",
+        "label": "herdr-gpui",
+        "branch": "main",
+        "cwd": "/work",
+        "worktree": {
+          "key": "/work/.git",
+          "label": "work",
+          "is_linked_worktree": false
+        },
+        "pull_request": {
+          "number": 870,
+          "url": "https://github.com/penso/herdr-gpui/pull/870",
+          "tone": "waiting"
+        },
+        "chats": [
+          {
+            "pane": "p1",
+            "tab": "t1",
+            "title": "Equalize splits",
+            "agent": "Claude",
+            "status": "working",
+            "summary": {
+              "connected": true,
+              "status": {
+                "state": "working"
+              },
+              "question": {
+                "call_id": "call-1",
+                "id": 3,
+                "options": [
+                  {
+                    "id": "allow",
+                    "kind": "allow_once",
+                    "name": "Allow once"
+                  },
+                  {
+                    "id": "reject",
+                    "kind": "reject_once",
+                    "name": "Deny"
+                  }
+                ],
+                "title": "Run `git push origin fix/mise`?"
+              },
+              "questions": 1,
+              "last_text": "Added Equalize Splits.",
+              "turn_started_ms": 1761670000000,
+              "usage_percent": 42
+            }
+          },
+          {
+            "pane": "p3",
+            "tab": "t3",
+            "title": "Starting",
+            "agent": null,
+            "status": "unknown"
+          }
+        ],
+        "terminals": [
+          {
+            "tab": "t2",
+            "label": "zsh",
+            "cwd": "/work",
+            "zoomed": false,
+            "panes": [
+              {
+                "pane": "p2",
+                "label": null,
+                "cwd": "/work",
+                "focused": true
+              }
+            ],
+            "agent": {
+              "name": "claude",
+              "status": "done",
+              "pane": "p2",
+              "title": "Fix the build"
+            }
+          }
+        ]
+      },
+      {
+        "id": "w2",
+        "label": "moltis",
+        "branch": null,
+        "cwd": "/moltis",
+        "chats": [],
+        "terminals": []
+      },
+      {
+        "id": "w3",
+        "label": "spaces tab",
+        "branch": "worktree/spaces-tab",
+        "cwd": "/work-spaces-tab",
+        "worktree": {
+          "key": "/work/.git",
+          "label": "work",
+          "is_linked_worktree": true
+        },
+        "chats": [],
+        "terminals": []
+      }
+    ]
+  }
+}

@@ -26,7 +26,7 @@ use crate::{
     },
     config::{AzureConfig, AzureFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -377,7 +377,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.azure_card {
                     card.refreshing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

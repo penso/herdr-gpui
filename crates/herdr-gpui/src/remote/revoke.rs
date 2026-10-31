@@ -59,6 +59,12 @@ impl HerdrWindow {
             return div();
         };
         let name = crate::notifications::safe_text(&device.name, 64);
+        let elsewhere = device.hosts.iter().any(|link| {
+            matches!(
+                link.state,
+                herdr_remote_control::control::hosts::HostState::Paired(_)
+            )
+        });
         div()
             .debug_selector(|| "remote-revoke".into())
             .flex()
@@ -74,6 +80,17 @@ impl HerdrWindow {
                 "It loses remote control of your chats at once: its sessions end and it gets no \
                  more notifications. Pairing it again needs a new code.",
             ))
+            .when(elsewhere, |body| {
+                body.child(
+                    div()
+                        .debug_selector(|| "remote-revoke-hosts".into())
+                        .text_color(rgb(theme.subtext()))
+                        .child(
+                            "It is also revoked on the machines it was paired with from here, \
+                             as soon as each can be reached.",
+                        ),
+                )
+            })
             .child(
                 div()
                     .flex()

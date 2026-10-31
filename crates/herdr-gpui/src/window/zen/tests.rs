@@ -183,7 +183,10 @@ fn entering_zen_says_how_to_leave(cx: &mut TestAppContext) {
         )
     });
     assert!(!key.is_empty());
-    assert_eq!(text.unwrap(), format!("Zen mode: {key} to leave"));
+    assert_eq!(
+        text.unwrap(),
+        format!("Zen mode: \u{2068}{key}\u{2069} to leave")
+    );
 }
 
 fn set_width(view: &Entity<HerdrWindow>, width: ZenWidth, cx: &mut VisualTestContext) {

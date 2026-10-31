@@ -13,11 +13,18 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
 mod apps;
+#[cfg(unix)]
+mod echo;
 mod handoff;
+mod hosts;
 mod indicators;
+mod nearby;
 mod origins;
+mod pace;
 mod pairing;
+mod presence;
 mod pull_requests;
+mod rename;
 mod routes;
 mod stream;
 #[cfg(unix)]
@@ -25,7 +32,7 @@ mod streaming;
 mod terminal;
 mod uploads;
 
-pub(super) const ORIGIN: &str = "https://192.168.1.20:7443";
+pub(crate) const ORIGIN: &str = "https://192.168.1.20:7443";
 
 /// A server state on a private directory with no daemon behind it.
 pub(crate) fn state(dir: &std::path::Path) -> Shared {
@@ -55,20 +62,23 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         fingerprint: authority.fingerprint().to_owned(),
         authority: Some(authority),
         hub,
+        load: tokio::sync::watch::channel(None).1,
         look: Look::load(dir),
         names: RwLock::new(names),
+        near: Mutex::default(),
         port: 7443,
         privacy: Privacy::Generic,
         pull_requests,
         push: None,
         reports: Mutex::new(report_limit()),
         seen: Mutex::new(seen),
+        typed: Typed::default(),
         uploads: Uploads::new(dir),
     })
 }
 
 /// Sends `request` through the router as a phone at 192.168.1.50 would.
-pub(super) async fn send(
+pub(crate) async fn send(
     state: &Shared,
     mut request: HttpRequest<Body>,
 ) -> (StatusCode, HeaderMap, String) {
@@ -131,11 +141,11 @@ pub(crate) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
     (device, session.token)
 }
 
-pub(super) fn get(path: &str) -> HttpRequest<Body> {
+pub(crate) fn get(path: &str) -> HttpRequest<Body> {
     HttpRequest::get(path).body(Body::empty()).unwrap()
 }
 
-pub(super) fn post(path: &str, body: serde_json::Value) -> HttpRequest<Body> {
+pub(crate) fn post(path: &str, body: serde_json::Value) -> HttpRequest<Body> {
     HttpRequest::post(path)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body.to_string()))
