@@ -4,7 +4,7 @@
 
 use super::HerdrWindow;
 use crate::direction::Logical;
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::{
     APP_VERSION,
     config::status_bar::{AwakeScope, Button},
@@ -310,7 +310,7 @@ impl HerdrWindow {
     fn caffeine_report(cx: &Context<Self>) -> impl FnOnce(crate::Error, &mut App) + 'static {
         let view = cx.entity().downgrade();
         move |error, cx| {
-            let flash = super::Flash::warning(error.to_string());
+            let flash = super::Flash::warning(error.localize());
             let _ = view.update(cx, |this, cx| this.show_flash(flash, cx));
         }
     }

@@ -57,7 +57,7 @@ fn snapshot_names(snapshot: &ClientShellSnapshot) -> Vec<String> {
 /// time, the search query, the app's version, the build's
 /// branch on the worktree banner, each endpoint's label, and what is drawn
 /// only to be measured.
-fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
+pub(super) fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
     let mut names = view
         .live
         .snapshot
@@ -89,7 +89,7 @@ fn data(view: &HerdrWindow, shown: &[String]) -> Vec<String> {
         .collect()
 }
 
-fn check(
+pub(super) fn check(
     surface: &str,
     view: &Entity<HerdrWindow>,
     cx: &mut VisualTestContext,

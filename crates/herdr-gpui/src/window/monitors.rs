@@ -1,8 +1,10 @@
 //! The background monitors the window polls as it ticks: plan usage, system
 //! load, listening ports, agent checkpoints, and port forwards, each on the
 //! hosts it watches.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
+use crate::i18n::{Localize, fl};
 use gpui::Context;
 
 impl HerdrWindow {
@@ -124,13 +126,13 @@ impl HerdrWindow {
         let (changed, restored) = self.checkpoints.poll();
         for restored in restored {
             let flash = match restored.result {
-                Ok(()) => Flash::success(format!(
-                    "Restored a checkpoint of {}",
-                    restored.checkout.branch
+                Ok(()) => Flash::success(fl!(
+                    "window-notices-checkpoint-restored",
+                    branch = restored.checkout.branch
                 )),
-                Err(error) => Flash::warning(format!(
-                    "Checkpoint not restored: {}",
-                    crate::checkpoint::describe(&error)
+                Err(error) => Flash::warning(fl!(
+                    "window-notices-checkpoint-not-restored",
+                    error = error.localize()
                 )),
             };
             self.show_flash(flash, cx);
