@@ -77,8 +77,12 @@ struct ChatQuery: EntityStringQuery {
 @MainActor
 final class SpotlightChats {
     private var indexed: [String: String] = [:]
-    /// Spotlight was emptied for the app lock since it was last turned on.
+    /// Spotlight was emptied for the app lock since it was last turned on;
+    /// set only once the removal succeeded, so a failed one is tried again.
     private var clearedForLock = false
+    /// The last change sent to Spotlight. Each waits for the one before,
+    /// so an index still in flight cannot land after a removal.
+    private var last: Task<Void, Never>?
 
     /// The app lock hides chat names from Spotlight too. What an earlier
     /// launch indexed is not in `indexed`, so turning the lock on, or
@@ -87,8 +91,10 @@ final class SpotlightChats {
         guard !AppLock.isOn else {
             indexed = [:]
             guard !clearedForLock else { return }
-            clearedForLock = true
-            Task { try? await CSSearchableIndex.default().deleteAppEntities(ofType: ChatEntity.self) }
+            enqueue { [weak self] in
+                let removed = (try? await CSSearchableIndex.default().deleteAppEntities(ofType: ChatEntity.self)) != nil
+                self?.clearedForLock = removed
+            }
             return
         }
         clearedForLock = false
@@ -98,10 +104,20 @@ final class SpotlightChats {
         let gone = Set(indexed.keys).subtracting(current.keys)
         let changed = chats.filter { indexed[$0.id] != current[$0.id] }.map { ChatEntity($0) }
         indexed = current
-        Task {
+        enqueue {
             let index = CSSearchableIndex.default()
             if !gone.isEmpty { try? await index.deleteAppEntities(identifiedBy: Array(gone), ofType: ChatEntity.self) }
             if !changed.isEmpty { try? await index.indexAppEntities(changed) }
+            // Locked while this ran: what it indexed goes again.
+            if AppLock.isOn { try? await index.deleteAppEntities(ofType: ChatEntity.self) }
+        }
+    }
+
+    private func enqueue(_ work: @escaping @MainActor () async -> Void) {
+        let previous = last
+        last = Task {
+            await previous?.value
+            await work()
         }
     }
 }
