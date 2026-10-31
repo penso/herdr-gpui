@@ -159,9 +159,11 @@ fn is_group(place: &Place) -> bool {
 
 impl Tab {
     /// The title the window shows: a page's own, or the one the app gives
-    /// a tab it draws or one still waiting for an address.
+    /// a tab it draws or one still waiting for an address. An editor tab
+    /// keeps its product's name while it waits.
     pub(crate) fn label(&self) -> String {
         match &self.location {
+            None if self.place.is_editor() => self.title.clone(),
             None => fl!("browser-tab-new"),
             Some(location) => location.drawn_title().unwrap_or_else(|| self.title.clone()),
         }

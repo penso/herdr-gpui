@@ -48,3 +48,20 @@ fn every_editor_reuses_navigation_and_reopens_without_duplicates() {
         );
     }
 }
+
+#[test]
+fn a_waiting_editor_tab_keeps_its_name_and_a_blank_tab_is_new() {
+    let scope = Scope::endpoint("local");
+    let mut store = Store::default();
+    for editor in [Editor::Px0, Editor::VsCode] {
+        let id = store
+            .open_editor_tab(scope.clone(), "w", editor, None)
+            .unwrap();
+        assert_eq!(store.get(id).unwrap().label(), editor.name());
+    }
+    let blank = store.open(scope, "w", None, None).unwrap();
+    assert_eq!(
+        store.get(blank).unwrap().label(),
+        crate::i18n::message("browser-tab-new", &[])
+    );
+}
