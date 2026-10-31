@@ -2,7 +2,6 @@
 //! its toolbar where the terminal would be.
 
 use super::{store, tab_label};
-use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{
@@ -13,6 +12,7 @@ use crate::{
     tab_layout::{Mark, Probe, TabContext, TabFace},
     window::Flash,
 };
+use crate::{direction::Logical as _, i18n::fl};
 use gpui::{prelude::*, *};
 
 /// What a page's tab shows until the page reports an icon of its own.
@@ -218,6 +218,7 @@ impl HerdrWindow {
         let toolbar = div()
             .debug_selector(move || slot.selector("browser-toolbar"))
             .flex()
+            .row()
             .flex_none()
             .items_center()
             .gap(px(4.))
@@ -229,7 +230,7 @@ impl HerdrWindow {
             .child(self.toolbar_button(
                 slot,
                 "browser-back",
-                "icons/arrow-left.svg",
+                crate::direction::icon("icons/arrow-left.svg"),
                 loaded,
                 cx,
                 move |this, _, _| {
@@ -242,7 +243,7 @@ impl HerdrWindow {
             .child(self.toolbar_button(
                 slot,
                 "browser-forward",
-                "icons/arrow-right.svg",
+                crate::direction::icon("icons/arrow-right.svg"),
                 loaded,
                 cx,
                 move |this, _, _| {
