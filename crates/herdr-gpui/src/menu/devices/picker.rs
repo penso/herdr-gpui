@@ -24,6 +24,29 @@ pub(in crate::menu) enum Line {
     AddDevice,
 }
 
+/// A device's sessions closing after it folded: drawn under its row,
+/// shrinking from where they were, until [`crate::motion::LEAVE`] passes.
+pub(in crate::menu) struct Folding {
+    pub(super) device: String,
+    pub(super) since: std::time::Instant,
+    /// Their height when they began to close.
+    height: Pixels,
+    /// How open they were then, from 0 to 1.
+    pub(super) from: f32,
+}
+
+impl Folding {
+    /// How open they still are at `now`, or `None` once closed.
+    fn shown(&self, now: std::time::Instant) -> Option<f32> {
+        crate::motion::progress(
+            self.since,
+            now,
+            crate::motion::duration(crate::motion::LEAVE),
+        )
+        .map(|k| self.from * (1. - k))
+    }
+}
+
 impl Line {
     fn selectable(&self) -> bool {
         match self {
@@ -62,10 +85,27 @@ impl HerdrWindow {
     /// Unfolds device `index` to its sessions, folding any other, and selects
     /// its row. Unfolding is what asks the device for its sessions again.
     pub(in crate::menu) fn unfold_device(&mut self, index: usize) {
-        let Some(endpoint) = self.endpoints.get(index) else {
+        let Some(id) = self
+            .endpoints
+            .get(index)
+            .map(|endpoint| endpoint.id.clone())
+        else {
             return;
         };
-        self.menu.unfolded_device = Some(endpoint.id.clone());
+        let now = crate::motion::now();
+        // Sessions still closing reopen from where they are.
+        let from = self
+            .menu
+            .folding
+            .take()
+            .filter(|folding| folding.device == id)
+            .and_then(|folding| folding.shown(now))
+            .unwrap_or(0.);
+        if self.menu.unfolded_device.as_ref() != Some(&id) {
+            self.start_folding(now);
+        }
+        self.menu.unfolded_device = Some(id);
+        self.menu.unfold_from = from;
         // The list from the last unfold paints at once, so it is never blank
         // while the new scan runs.
         self.sessions.refresh();
@@ -78,12 +118,34 @@ impl HerdrWindow {
             .iter()
             .position(|line| matches!(line, Line::Session(_)));
         self.menu.devices_reveal.set(first.map(|first| first + 1));
-        self.menu.unfolded_since = Some(crate::motion::now());
+        self.menu.unfolded_since = Some(now);
     }
 
-    fn fold_device(&mut self, index: usize) {
-        self.menu.unfolded_device = None;
+    pub(super) fn fold_device(&mut self, index: usize) {
+        self.start_folding(crate::motion::now());
         self.select_device_line(index);
+    }
+
+    /// Folds the unfolded device, whose sessions close from however open
+    /// they had come.
+    fn start_folding(&mut self, now: std::time::Instant) {
+        let Some(device) = self.menu.unfolded_device.take() else {
+            return;
+        };
+        let opened = self
+            .menu
+            .unfolded_since
+            .and_then(|since| {
+                crate::motion::progress(since, now, crate::motion::duration(crate::motion::ENTER))
+            })
+            .unwrap_or(1.);
+        let from = self.menu.unfold_from + (1. - self.menu.unfold_from) * opened;
+        self.menu.folding = Some(Folding {
+            device,
+            since: now,
+            height: self.menu.unfolded_height.get() * from,
+            from,
+        });
     }
 
     fn select_device_line(&mut self, index: usize) {
@@ -209,6 +271,9 @@ impl HerdrWindow {
                     _ => {
                         view = self.unfolded_sessions(view, &mut unfolded);
                         view = view.child(element);
+                        if let Line::Device(index) = line {
+                            view = self.folding_sessions(view, index, cx);
+                        }
                     }
                 }
             }
@@ -247,6 +312,60 @@ impl HerdrWindow {
                 .children(lines.drain(..)),
             ElementId::Name(format!("device-sessions-{device}").into()),
             self.menu.unfolded_height.clone(),
+            self.menu.unfolded_since.unwrap_or_else(crate::motion::now),
+            self.menu.unfold_from,
+        ))
+    }
+
+    /// The sessions of device `index` while they close after it folded.
+    /// They are only a picture of what was there: nothing in them takes the
+    /// pointer, and the keys never reach them.
+    fn folding_sessions(
+        &self,
+        view: Stateful<Div>,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        // Unit tests see the fold finished at once.
+        if cfg!(test) {
+            return view;
+        }
+        let Some(folding) = self.menu.folding.as_ref().filter(|folding| {
+            self.endpoints
+                .get(index)
+                .is_some_and(|endpoint| endpoint.id == folding.device)
+        }) else {
+            return view;
+        };
+        if folding.shown(crate::motion::now()).is_none() {
+            return view;
+        }
+        let mut lines = div().relative().flex().flex_col().gap(px(4.));
+        let mut row = 0;
+        for entry in self.device_session_entries(index) {
+            let element = match &entry {
+                Entry::Row { row: choice, spec } => {
+                    row += 1;
+                    self.sessions_row(row - 1, usize::MAX, choice.clone(), false, spec, cx)
+                }
+                _ => match self.session_note(&entry) {
+                    Some(note) => note,
+                    None => continue,
+                },
+            };
+            lines = lines.child(session_indent(&self.theme).child(element));
+        }
+        view.child(crate::motion::fold(
+            lines.child(
+                div()
+                    .id("device-sessions-folding-cover")
+                    .absolute()
+                    .inset_0()
+                    .occlude(),
+            ),
+            ElementId::Name(format!("device-sessions-folding-{}", folding.device).into()),
+            folding.height,
+            folding.since,
         ))
     }
 

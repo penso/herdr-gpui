@@ -56,11 +56,19 @@ pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
 /// `height` keeps that height from the frame before, which is what the
 /// space grows towards (the first frame, still unmeasured, shows nothing).
 /// Once open it is the content's own height, so rows added later show at
-/// once. Unit tests see it open.
+/// once. `from` is how open it already was, when it reverses a [`fold`]
+/// that had not finished.
+///
+/// How far it has come is a function of `since`, when it began to open, not
+/// of when this element first drew: drawn again elsewhere, as the device
+/// picker is beneath a dialog, it carries on rather than opening again. The
+/// animation only keeps frames coming while it moves. Unit tests see it open.
 pub(crate) fn unfold(
     content: impl IntoElement,
     id: impl Into<ElementId>,
     height: Rc<Cell<Pixels>>,
+    since: Instant,
+    from: f32,
 ) -> AnimationElement<Div> {
     let measured = height.clone();
     div()
@@ -77,14 +85,42 @@ pub(crate) fn unfold(
         .child(div().flex_none().child(content))
         .with_animation(
             id,
-            gpui::Animation::new(duration(ENTER)).with_easing(|k| 1. - (1. - k).powi(3)),
-            move |element, k| {
-                let k = if cfg!(test) { 1. } else { k };
-                if k >= 1. {
-                    element
-                } else {
-                    element.h(height.get() * k).opacity(k)
+            gpui::Animation::new(duration(ENTER)),
+            move |element, _| match progress(since, now(), duration(ENTER)).filter(|_| !cfg!(test))
+            {
+                Some(k) => {
+                    let shown = from + (1. - from) * k;
+                    element.h(height.get() * shown).opacity(shown)
                 }
+                None => element,
+            },
+        )
+}
+
+/// A disclosure closing, [`unfold`] run backwards: the space shrinks from
+/// `height`, how tall it was when it began to close at `since`, to nothing
+/// while the content fades out, so the rows below move back up instead of
+/// jumping. Like [`unfold`], it follows `since`, not its first frame. Its
+/// caller stops drawing it once [`LEAVE`] has passed. Unit tests never draw
+/// it, as they see a fold finished at once.
+pub(crate) fn fold(
+    content: impl IntoElement,
+    id: impl Into<ElementId>,
+    height: Pixels,
+    since: Instant,
+) -> AnimationElement<Div> {
+    div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .overflow_hidden()
+        .child(div().flex_none().child(content))
+        .with_animation(
+            id,
+            gpui::Animation::new(duration(LEAVE)),
+            move |element, _| {
+                let shown = 1. - progress(since, now(), duration(LEAVE)).unwrap_or(1.);
+                element.h(height * shown).opacity(shown)
             },
         )
 }

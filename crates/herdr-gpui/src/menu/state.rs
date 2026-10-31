@@ -80,6 +80,11 @@ pub(crate) struct MenuState {
     /// When a device last unfolded, so the list follows its sessions into
     /// view while they open.
     pub(super) unfolded_since: Option<std::time::Instant>,
+    /// How open the unfolded sessions already were when they began to open,
+    /// as when they reverse a fold that had not finished.
+    pub(super) unfold_from: f32,
+    /// The sessions still closing under the device that folded them.
+    pub(super) folding: Option<super::devices::picker::Folding>,
     /// The folder the open-checkout question is about.
     pub(super) open_checkout: Option<std::path::PathBuf>,
     /// The address the open-link question is about.
@@ -352,6 +357,8 @@ impl MenuState {
             unfolded_device: None,
             unfolded_height: Default::default(),
             unfolded_since: None,
+            unfold_from: 0.,
+            folding: None,
             open_checkout: None,
             open_link: None,
             #[cfg(feature = "cloud")]
@@ -433,6 +440,7 @@ impl MenuState {
         self.wsl_remove = None;
         self.session_edit = None;
         self.unfolded_device = None;
+        self.folding = None;
         self.open_checkout = None;
         self.open_link = None;
         #[cfg(feature = "cloud")]
