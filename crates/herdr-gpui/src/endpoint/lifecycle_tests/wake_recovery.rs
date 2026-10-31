@@ -154,7 +154,11 @@ fn recovering_waits_while_the_worker_report_cannot_be_read() {
     assert!(!handle.is_disconnected());
     assert_eq!(endpoint.recovery, Some(Trigger::Sleep));
     drop(busy);
-    endpoint.poll(Instant::now());
+    // The worker may briefly take the inbox again before the next poll.
+    wait_until(|| {
+        endpoint.poll(Instant::now());
+        endpoint.recovery.is_none()
+    });
     assert!(handle.is_disconnected());
     assert_eq!(endpoint.recovery, None);
     std::fs::remove_file(path).unwrap();

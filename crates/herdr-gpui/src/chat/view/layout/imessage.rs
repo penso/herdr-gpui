@@ -2,8 +2,8 @@
 //! on the right, the agent's in gray ones on the left, the last bubble of
 //! each run ending in a tail toward its speaker, how a turn ended centered
 //! between them as Messages dates a conversation, "Delivered" under a
-//! prompt the agent has not answered yet, and "typing…" while the agent
-//! works on a turn. The composer is a round field with the attach button
+//! prompt the agent has not answered yet, and the shared activity strip while
+//! the agent works. The composer is a round field with the attach button
 //! before it and send inside it.
 
 use super::{ChatLayout, ComposerParts, CopyPlacement, Look, Row, Side, summary_row};
@@ -136,9 +136,9 @@ impl ChatLayout for IMessage {
         None
     }
 
-    /// Links keep the bubble's text color, which reads on its fill.
-    fn link(&self, _look: &Look<'_>) -> Option<u32> {
-        None
+    /// User links keep their white ink; agent links may carry an accent.
+    fn link(&self, look: &Look<'_>, inherit_ink: bool) -> Option<u32> {
+        (!inherit_ink).then_some(look.theme.palette[4])
     }
 
     /// Bubbles are filled, so what the theme's ink is drawn for keeps the

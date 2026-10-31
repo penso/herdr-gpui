@@ -9,6 +9,9 @@ mod background;
 
 const THREAD: &str = "01a160d5-4de7-7262-b413-0ce5180918ce";
 
+mod collaboration;
+mod command_output;
+
 fn harness(out: &Out) -> &Value {
     match out {
         Out::Harness(message) => message,
@@ -235,7 +238,7 @@ fn a_turn_streams_its_answer_and_tools_then_ends_with_its_tokens() {
     let started = notify(
         &mut bridge,
         "item/started",
-        json!({"threadId": THREAD, "item": command}),
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": command}),
     );
     let call = update(&started[0]);
     assert_eq!(call["sessionUpdate"], "tool_call");
@@ -247,7 +250,7 @@ fn a_turn_streams_its_answer_and_tools_then_ends_with_its_tokens() {
     let done = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": finished}),
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": finished}),
     );
     let done = update(&done[0]);
     assert_eq!(done["status"], "completed");

@@ -39,3 +39,48 @@ fn an_unlocated_observer_program_is_retried_not_permanent() {
         assert!(!error.permanent());
     }
 }
+
+#[test]
+fn pending_helper_lookup_does_not_back_off_or_count_as_attachment_failure() {
+    let mut chats = Chats::default();
+    let now = Instant::now();
+    for program in [Program::Unknown, Program::Looking] {
+        chats.reconcile(vec![observed()], now, &mut |target, since, resend| {
+            chats::connect(target, &program, since, resend)
+        });
+        let pane = chats.pane("w1:p1").unwrap();
+        assert!(pane.loading());
+        assert!(!pane.available());
+        assert!(!chats.shown("w1:p1"));
+    }
+    let fixture = super::Program::new();
+    let mut connected = 0;
+    chats.reconcile(vec![observed()], now, &mut |_, since, resend| {
+        connected += 1;
+        crate::chat::link::Link::start(fixture.path.clone(), since, resend)
+    });
+    assert_eq!(
+        connected, 1,
+        "resolved helper connects on the next poll without elapsed time"
+    );
+    assert!(chats.pane("w1:p1").unwrap().has_link());
+    let (_stream, _) = fixture.accept();
+}
+
+#[test]
+fn a_missing_helper_still_exposes_the_original_terminal() {
+    let mut chats = Chats::default();
+    let now = Instant::now();
+    chats.reconcile(vec![observed()], now, &mut |target, since, resend| {
+        chats::connect(target, &Program::Unknown, since, resend)
+    });
+    assert!(chats.pane("w1:p1").unwrap().loading());
+    assert!(
+        chats.reconcile(vec![observed()], now, &mut |target, since, resend| {
+            chats::connect(target, &Program::Missing, since, resend)
+        }),
+        "the loading-to-terminal transition requests a redraw"
+    );
+    assert!(!chats.pane("w1:p1").unwrap().loading());
+    assert!(!chats.shown("w1:p1"));
+}

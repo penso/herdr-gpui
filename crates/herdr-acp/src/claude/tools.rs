@@ -62,7 +62,7 @@ pub(super) fn title(name: &str, input: &Value) -> String {
     titled.unwrap_or_else(|| name.to_owned())
 }
 
-fn kind(name: &str) -> wire::ToolKind {
+pub(super) fn kind(name: &str) -> wire::ToolKind {
     match name {
         "Bash" | "BashOutput" | "KillShell" => wire::ToolKind::Execute,
         "Read" => wire::ToolKind::Read,

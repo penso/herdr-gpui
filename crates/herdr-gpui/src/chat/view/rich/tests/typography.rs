@@ -57,6 +57,7 @@ fn mixed_math_retains_inline_atom_layout_and_headings_have_hierarchy() {
     let content = [Inline::Math {
         id: VisualId::of("test"),
         source: "x".into(),
+        mode: crate::chat::rich::MathMode::Inline,
     }];
     assert!(prose_spans(&content).is_none());
     assert!(rhythm::heading_scale(HeadingLevel::H1) > rhythm::heading_scale(HeadingLevel::H2));

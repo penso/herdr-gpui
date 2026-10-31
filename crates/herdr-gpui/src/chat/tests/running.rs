@@ -52,7 +52,11 @@ fn a_shell_still_running_after_the_turn_shows_in_every_layout(cx: &mut TestAppCo
             running.bottom() <= composer.top(),
             "{layout:?}: above the composer"
         );
-        assert!(cx.debug_bounds("chat-working").is_none(), "{layout:?}");
+        assert!(cx.debug_bounds("chat-live-moving").is_none(), "{layout:?}");
+        assert!(
+            cx.debug_bounds("chat-live-activity").is_some(),
+            "{layout:?}"
+        );
     }
 }
 

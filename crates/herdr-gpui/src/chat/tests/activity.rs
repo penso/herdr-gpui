@@ -7,7 +7,7 @@ use herdr_chat_protocol::{Tool, ToolContent, ToolKind, ToolStatus};
 use herdr_client::ConnectTarget;
 
 #[gpui::test]
-fn tools_start_folded_and_toggle_their_complete_output(cx: &mut TestAppContext) {
+fn tools_hide_output_until_expanded_and_collapse_it_again(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(
@@ -34,6 +34,7 @@ fn tools_start_folded_and_toggle_their_complete_output(cx: &mut TestAppContext) 
     );
     assert!(cx.debug_bounds("chat-tool-details-1").is_none());
     assert!(cx.debug_bounds("chat-tool-content-1-0").is_none());
+    assert!(cx.debug_bounds("chat-code-line-0").is_none());
     let header = cx.debug_bounds("chat-tool-1").unwrap();
     cx.simulate_click(header.center(), Modifiers::default());
     poll(&view, &program, cx);
@@ -42,10 +43,30 @@ fn tools_start_folded_and_toggle_their_complete_output(cx: &mut TestAppContext) 
         content.size.height > header.size.height * 6.,
         "output beyond the old six-line preview is drawn"
     );
+    assert!(cx.debug_bounds("chat-code-line-7").is_some());
+    // The expanded code panel is taller than the fixture's list viewport.
+    // Tail following can move its disclosure above the visible region; a
+    // debug bound still exists for that overdrawn row. Scroll it into view
+    // before clicking, as a user must (also covered by the embed tests).
+    view.update(cx, |view, _| {
+        let pane = view.chats.pane("w1:p1").unwrap();
+        pane.list.scroll_to(gpui::ListOffset {
+            item_ix: 0,
+            offset_in_item: gpui::px(0.),
+        });
+        pane.glide.user_scrolled();
+    });
+    poll(&view, &program, cx);
     let header = cx.debug_bounds("chat-tool-1").unwrap();
+    let viewport = view.read_with(cx, |view, _| {
+        view.chats.pane("w1:p1").unwrap().list.viewport_bounds()
+    });
+    assert!(header.top() >= viewport.top() && header.bottom() <= viewport.bottom());
     cx.simulate_click(header.center(), Modifiers::default());
     poll(&view, &program, cx);
     assert!(cx.debug_bounds("chat-tool-details-1").is_none());
+    assert!(cx.debug_bounds("chat-tool-content-1-0").is_none());
+    assert!(cx.debug_bounds("chat-code-line-0").is_none());
 }
 
 #[gpui::test]
@@ -78,3 +99,7 @@ fn thoughts_start_folded_and_expand_without_losing_their_text(cx: &mut TestAppCo
         folded.size.height
     );
 }
+
+mod diff_previews;
+mod disclosure;
+mod tool_previews;

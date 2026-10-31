@@ -456,3 +456,9 @@ terminal input remains interactive in the same pane. `chat status --json`
 reports `input_mode` (`chat`, `terminal`, or `read_only`) and `session_id`;
 `blocked` status means the running agent needs input. `chat show/hide/toggle`
 still switches the pane presentation, without starting or stopping its agent.
+The choice belongs to that pane and agent process, even when another pane shows
+the same session. Codex `resume UUID` must agree with the daemon's session ID;
+conflicting IDs or ambiguous resume selectors keep the original terminal visible.
+The launch arguments cannot establish the current thread after an in-process
+session switch. This check rejects a conflict; it does not guess a replacement
+session or replace the existing process and transcript verification.

@@ -1,14 +1,15 @@
 use super::*;
+use crate::chat::prepared::{tool::label, tool_text};
 use herdr_chat_protocol::ToolContent;
 
 mod states;
 
 #[core::prelude::v1::test]
 fn question_tool_labels_do_not_change_unknown_tools() {
-    assert_eq!(tool_header("request_user_input"), "Ask user");
-    assert_eq!(tool_header("request_user_input_async"), "Ask user");
+    assert_eq!(label("request_user_input", None), "Ask user");
+    assert_eq!(label("request_user_input_async", None), "Ask user");
     assert_eq!(
-        tool_header("some_request_user_input"),
+        label("some_request_user_input", None),
         "some_request_user_input"
     );
 }

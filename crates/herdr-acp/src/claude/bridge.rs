@@ -1,7 +1,10 @@
 //! The translation itself, kept free of threads and pipes: each message from
 //! the session or from Claude Code yields the messages to send on.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use acp::v1 as wire;
 use serde_json::{Value, json};
@@ -16,6 +19,8 @@ use crate::{
     rpc::Inbound,
 };
 
+mod progress;
+
 /// What a control request this side sent is waiting for.
 #[derive(Debug)]
 enum Control {
@@ -29,9 +34,12 @@ enum Control {
 /// A tool call of the running turn.
 #[derive(Debug)]
 struct Call {
+    completed: bool,
+    elapsed: Option<u32>,
     /// Shown otherwise than as a call (the to-do list is the plan).
     hidden: bool,
     name: String,
+    title: String,
 }
 
 /// Where the handshake stands.
@@ -56,6 +64,7 @@ pub(super) struct Bridge {
     next_request: i64,
     /// `session/new` or `session/load`, answered once Claude's handshake is.
     opening: Option<wire::RequestId>,
+    progress: progress::Progress,
     /// The running `session/prompt`, answered by Claude's `result`.
     prompt: Option<wire::RequestId>,
     session: String,
@@ -77,6 +86,7 @@ impl Bridge {
             next_control: 0,
             next_request: 0,
             opening: None,
+            progress: progress::Progress::default(),
             prompt: None,
             session,
             streamed: HashSet::new(),
@@ -85,6 +95,14 @@ impl Bridge {
 }
 
 impl Translator for Bridge {
+    fn next_tick(&self) -> Option<Instant> {
+        self.progress.active.next_tick()
+    }
+
+    fn tick(&mut self) -> Vec<Out> {
+        self.progress.flush(&self.session)
+    }
+
     /// Claude's handshake.
     fn start(&mut self) -> Vec<Out> {
         vec![self.control(
@@ -113,6 +131,18 @@ impl Translator for Bridge {
 
     fn on_harness(&mut self, message: &Value) -> Vec<Out> {
         let field = |key: &str| message.get(key).and_then(Value::as_str);
+        // The child is launched with this session ID. A foreign activity
+        // message must not seed a known call or complete its progress state.
+        // Handshake/control messages retain their existing routing contract.
+        if matches!(
+            field("type"),
+            Some("assistant" | "user" | "result" | "stream_event")
+        ) && message
+            .get("session_id")
+            .is_some_and(|session| session.as_str() != Some(self.session.as_str()))
+        {
+            return Vec::new();
+        }
         // A sub-agent's own steps show under its call; its prose stays
         // inside it.
         match message.get("parent_tool_use_id") {
@@ -121,6 +151,10 @@ impl Translator for Bridge {
             Some(_) => return Vec::new(),
         }
         match field("type") {
+            Some("tool_progress") => self.tool_progress(message),
+            Some("system") if field("subtype").is_some_and(|kind| kind.starts_with("task_")) => {
+                self.task_event(message)
+            }
             Some("control_response") => self.control_response(message.get("response")),
             Some("control_request") => self.control_request(message),
             Some("system") => self.system(message),
@@ -505,19 +539,27 @@ impl Bridge {
     /// A call as it starts: the plan for the to-do list, else a card,
     /// tagged with the sub-agent it is a step of and the activity it starts.
     fn tool_use(&mut self, block: &Value, parent: Option<&str>) -> Option<Out> {
-        let text = |key: &str| block.get(key).and_then(Value::as_str);
-        let (call, name) = (text("id")?, text("name")?);
+        let (call, name) = (
+            progress::identifier(block, "id")?,
+            progress::identifier(block, "name")?,
+        );
         let input = block.get("input").cloned().unwrap_or(Value::Null);
         let hidden = name == tools::TODOS;
         // A sub-agent's own to-do list is not the conversation's plan.
-        if hidden && parent.is_some() {
+        if (hidden && parent.is_some())
+            || self.calls.contains_key(call)
+            || self.calls.len() >= progress::MAX_CALLS
+        {
             return None;
         }
         self.calls.insert(
             call.to_owned(),
             Call {
+                completed: false,
+                elapsed: None,
                 hidden,
                 name: name.to_owned(),
+                title: progress::text(&tools::title(name, &input)),
             },
         );
         if hidden {
@@ -603,22 +645,31 @@ impl Bridge {
             let Some(id) = block.get("tool_use_id").and_then(Value::as_str) else {
                 continue;
             };
-            let Some(call) = self.calls.get(id).filter(|call| !call.hidden) else {
+            let Some(call) = self
+                .calls
+                .get_mut(id)
+                .filter(|call| !call.hidden && !call.completed)
+            else {
                 continue;
             };
+            call.completed = true;
+            let progress = self.progress.active.remove(id);
             let failed = block.get("is_error").and_then(Value::as_bool) == Some(true);
             let output = block.get("content").unwrap_or(&Value::Null);
             let name = call.name.clone();
             let (report, elsewhere) = self
                 .background
                 .result(id, &name, failed, output, structured);
-            let fields = wire::ToolCallUpdateFields::new()
+            let mut fields = wire::ToolCallUpdateFields::new()
                 .status(Some(if failed {
                     wire::ToolCallStatus::Failed
                 } else {
                     wire::ToolCallStatus::Completed
                 }))
                 .content(tools::result(&name, output, failed));
+            if progress.is_some() {
+                fields = fields.title(Some(call.title.clone()));
+            }
             let mut update = wire::ToolCallUpdate::new(id.to_owned(), fields);
             if let Some(report) = report {
                 update = update.meta(Tag::activity(report).meta());
@@ -652,6 +703,11 @@ impl Bridge {
             (false, subtype) => Err(error_text(message, subtype)),
         };
         self.interrupted = false;
+        // A background task can outlive this prompt; ordinary tool heartbeats cannot.
+        outs.extend(self.progress.flush(&self.session));
+        for id in self.calls.keys() {
+            self.progress.active.remove(id);
+        }
         let stopped = self.background.turn_ended();
         outs.extend(
             stopped

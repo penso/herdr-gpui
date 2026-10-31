@@ -231,6 +231,7 @@ fn projected_question_and_answer_text_counts_toward_retention() {
 #[test]
 fn consumed_question_ids_remain_bounded() {
     let mut projection = Projection {
+        activity: tool_activity::Activity::default(),
         answered: (0..MAX_ENTRIES)
             .map(|index| {
                 (
@@ -260,6 +261,7 @@ fn consumed_question_ids_remain_bounded() {
 #[test]
 fn remembered_question_text_has_a_separate_memory_bound() {
     let mut projection = Projection {
+        activity: tool_activity::Activity::default(),
         answered: HashMap::from([(
             QuestionKey {
                 call: "old".into(),

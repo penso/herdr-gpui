@@ -51,11 +51,18 @@ The Terminal layout still renders chat. The terminal button and
 `herdr-gpui chat show` restores the chat view. These commands change presentation
 without starting or stopping the agent. See the [CLI guide](cli.md#existing-agent-rendering).
 
+On first discovery or while waiting for the first history snapshot, a loading
+view covers the conversation area while the original terminal editor remains
+usable below it. **Use terminal** reveals the full original interface. Questions
+and approvals keep that interface visible; failed or unmatched discovery falls
+back to it. Local and remote discovery retain their before/after identity checks,
+grouping the reads into two command streams instead of four.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the
-background, the row above the composer says so after what the agent is doing,
-such as `Writing… 12s · 2 sub-agents · 1 background shell`. A background shell
+background, the summary above the composer says so below the activity strip,
+such as `2 sub-agents · 1 background shell`. A background shell
 outlives the turn that started it, so once the agent is idle the row keeps
 saying what still runs (`1 background shell still running`) and clears when
 everything has ended. Click it for a table of each one: what it is, how long it
@@ -76,6 +83,11 @@ the UI font; inline code and code fences use the terminal font. Code blocks
 preserve blank lines, show tabs at four-column stops and scroll without wrapping.
 **Copy code** preserves the parsed source's tabs, indentation and Unicode.
 
+Conversation typography combines proportional prose with theme-colored headings,
+emphasis, links and inline code. Quotes have a tinted panel and accent rail;
+code keeps its monospace font. Colored user bubbles retain legible inherited
+text instead of applying accents that could disappear against the bubble.
+
 Inline and display equations accept dollar and bracket delimiters outside code.
 Multiline display equations preserve TeX line breaks, including a standalone
 `=`. Equations scale with prose and align with inline baselines. Failed display
@@ -95,6 +107,12 @@ scroll while selecting. With the conversation reader focused, **Ctrl+C** copies,
 to return typing there. Copying from the reader never sends an interrupt to the
 agent. Dragging across a link selects its label; a plain click still opens it.
 
+Scrolling up or selecting text keeps your reading position when new output
+arrives. **Jump to latest** appears while the newest output is below the viewport,
+centered above the input with theme-aware cyan text and a
+downward arrow. Clicking it clears the text selection and resumes following
+new output without changing the composer draft or moving keyboard focus.
+
 Selected code preserves original tabs; tables copy as tab-separated cells and
 newline-separated rows. Formulas are atomic selections and copy their original
 TeX. Collapsed card details and retained hidden source are omitted until opened;
@@ -105,6 +123,96 @@ selectable conversation text.
 ACP chats retain their native composer, permissions, tools, plans, context
 information and file attachments. Tool and thinking cards start collapsed and
 expand to show retained text and diffs.
+
+## Streaming and tool activity
+
+Every layout has an activity strip above the input. Its standard indicator uses
+blue for running work, purple for thinking, amber for requests for input, green
+for completed turns, and red for failures. Labels and icons accompany the colors.
+Active work animates three dots; iMessage instead keeps its native typing cue,
+with the shared metrics below it. Waiting, idle and disconnected states do not
+animate. Animations use the app's motion settings; the three-dot indicator is
+capped at 12 frames per second.
+
+Elapsed time appears only with a reported turn start and a live working state.
+Context usage is labeled separately from the previous turn's reported output
+and thinking tokens. Unknown counts are omitted. Existing terminal sessions
+use the daemon's activity state: saved thoughts or unfinished tool records
+cannot make an idle agent appear busy. Their working phase remains **Working**
+rather than guessing the current thinking/tool phase from historical entries. Codex
+logs can supply turn clocks and completed counts; Claude's recorded duration
+does not establish a successful outcome or a live clock.
+
+Tool cards start folded, showing the title, state and a bounded file/location
+summary. Click the chevron or header to reveal the output, code, images and copy
+controls; **Collapse** hides those details again. Hidden details are excluded
+from text selection. Explicit command/code arguments and fenced source receive syntax
+highlighting where available. Known before/after text and recognized patches
+show unified changes with red removal rows, green addition rows, and unchanged
+context. The original `+`/`-` markers remain readable without color. Syntax
+grammars follow supplied filenames, parsing old and new code independently.
+File totals count those generated changes; unsupported or oversized payloads
+retain their source without estimated totals.
+Unknown previous contents are shown as written content without invented
+deletions or new-file claims. **Copy diff** retains the displayed diff source;
+**Copy code** retains decoded code and **Copy original** retains the original
+payload. Malformed or unsupported edit formats stay readable as raw source.
+Additional retained output remains available through its copy button.
+Tool status labels use the same semantic colors as the activity strip.
+
+The shared ACP reader renders message chunks and in-progress tool updates from
+any conforming agent, including custom adapters. It does not choose streaming
+behavior by provider name. Agent interfaces differ in what they report:
+
+| Connection | Message text | Tool activity |
+| --- | --- | --- |
+| Direct Codex | Streams text and thinking chunks | Streams command output deltas into the running card |
+| Direct Pi | Streams text and thinking chunks | Displays reported partial tool results as replacement snapshots; final output is authoritative |
+| Direct Claude | Streams text and thinking chunks | Displays reported elapsed time and background-task progress; command output arrives with the tool result |
+| Other/custom ACP adapters | Displays supplied message chunks | Displays supplied in-progress status/content updates; output cadence belongs to the adapter |
+| Existing Codex/Claude terminal sessions | Refreshes saved log records | Projects recorded tool arguments, results and status; cannot show unsaved tokens |
+
+The direct bridges share bounded streaming buffers. The first changed update is
+shown immediately; later small updates share a fixed 50ms flush deadline.
+Idle bridges do not poll. Expand a tool card to read its output; incoming updates
+respect the expanded or folded choice. A completed result replaces queued
+partial output, including an empty result, so stale text cannot reappear.
+Oversized output is bounded and includes a visible truncation marker.
+
+Claude's elapsed time and task summaries are reported progress, not a fabricated
+stdout stream. Verified background tasks have their own cards and can keep
+updating after the originating invocation returns. Task output-file paths are
+never fetched. Generic ACP support likewise cannot produce data an adapter does
+not send; the table describes the bridge contracts, not a guarantee that every
+provider exposes incremental command output.
+
+Any additional agent can use the standard ACP path, for example
+`herdr-acp -- your-agent acp`. Arbitrary existing terminal programs need a
+supported structured adapter or observer; the viewer does not guess an event
+protocol by scraping terminal text. Tests with conforming fixtures verify the
+shared contract, rather than claiming that every live provider was exercised.
+
+Existing Codex and Claude terminal sessions refresh from their saved logs.
+Known tools get descriptions from their structured arguments: commands, file
+paths, search patterns, and agent task names replace opaque function names.
+Expand a card to inspect its retained input and output. Unknown tools keep their
+original names. Descriptions are deterministic; the viewer does not run tool
+input or ask a model to summarize it. Arbitrary JavaScript remains a **Tool
+script** card, with its source available when expanded; nested actions are not
+guessed from code strings.
+
+A returned tool invocation does not mean its background work finished. Explicit
+command or script session IDs and completion results can update the matching
+card; a spawned agent's eventual outcome is not inferred from a successful
+spawn or wait call. Missing execution evidence stays pending, and reported
+errors are shown as failures.
+
+The log viewer cannot show tokens before the agent saves them. Observing an
+existing terminal session does not resume it or silently take over its approval
+requests. A new chat started through `herdr-acp` uses the agent's structured
+streaming interface directly.
+
+## Questions and interactive cards
 
 Native chats support permission buttons and the single-choice questions exposed
 by their agent bridge. Multi-question, multi-select and free-text prompts are
@@ -189,6 +297,21 @@ Rich parsing lives in [`chat/rich`](../crates/herdr-gpui/src/chat/rich.rs), with
 native layout in [`chat/view/rich.rs`](../crates/herdr-gpui/src/chat/view/rich.rs).
 Math rasterization and syntax highlighting use the bounded visual worker queue;
 discarded streamed revisions retain their worker slots until completion.
+The lazy list prioritizes rich visuals in the rendered viewport, keeping at most
+128 admitted formulas/code blocks per chat. Visible chat panes share at most two
+running visual jobs per window; hidden, raw-terminal and covered panes start no
+new jobs. Already running work keeps its slot until completion, even if its pane
+is removed. Offscreen rich
+entries can be evicted and reconstructed from retained message source when you
+scroll back. Visible formulas can reclaim offscreen texture space within the
+64 MiB math cache; a budget refusal retries only once space is available.
+Unsupported formulas, oversized inputs and a viewport exceeding these limits
+retain their readable source fallback.
+
+Virtualization is at message-entry level, with a small overdraw margin. A visible
+long message still lays out its blocks together. Initial retained-history parsing
+is bounded and eager; unchanged bodies and text projections are reused. This is
+separate from background syntax highlighting and formula rasterization.
 
 - Message preparation is limited to 256 KiB and 2,000 lines. Rich fragments
   exceeding 4,096 words or 16,384 parser events use the bounded source renderer.
@@ -237,6 +360,16 @@ and clipboard text, and records screenshots plus `selection.json`:
 
 ```sh
 python3 scripts/check-rich-chat-native.py --case selection --theme dark --size narrow
+```
+
+The tool disclosure probe clicks the actual chevron to expand, collapse and
+expand a synthetic code edit, checking visible source and capturing each state.
+It neither executes the displayed code nor connects to an agent:
+
+```sh
+python3 scripts/check-rich-chat-native.py --case tool-disclosure --theme dark --size narrow
+python3 scripts/check-rich-chat-native.py --case tools-open --theme light --size narrow
+python3 scripts/check-rich-chat-native.py --case loading --theme dark --size narrow
 ```
 
 For example, `--layout imessage --case user --theme light --size narrow`

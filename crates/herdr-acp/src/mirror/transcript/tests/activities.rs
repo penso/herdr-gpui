@@ -1,4 +1,4 @@
-use herdr_chat_protocol::{ActivityKind, ActivityState};
+use herdr_chat_protocol::{ActivityKind, ActivityState, ToolKind};
 
 use super::*;
 

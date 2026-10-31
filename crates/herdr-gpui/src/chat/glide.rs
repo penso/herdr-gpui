@@ -79,6 +79,34 @@ impl Glide {
         self.scrolled.set(true);
     }
 
+    /// A reader has paused above the end, including a selection holding it still.
+    pub(crate) fn needs_jump(&self, list: &ListState, selection_paused: bool) -> bool {
+        (!self.following.get() || selection_paused) && behind(list) > AT_END
+    }
+
+    /// Growing rows are measured after render; refresh the button only when
+    /// that layout changes its visibility, including while selection pauses us.
+    pub(crate) fn watch_jump(
+        &self,
+        list: &ListState,
+        selection_paused: bool,
+    ) -> impl IntoElement + use<> {
+        let shown = self.needs_jump(list, selection_paused);
+        let following = self.following.clone();
+        let list = list.clone();
+        canvas(
+            move |_, window, _| {
+                let needed = (!following.get() || selection_paused) && behind(&list) > AT_END;
+                if needed != shown {
+                    window.request_animation_frame();
+                }
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .size_0()
+    }
+
     /// An empty element to place after `list` in the frame: once the list
     /// is laid out, with heights the frame's render could not know yet, it
     /// asks for another frame if the list is behind its end and following.

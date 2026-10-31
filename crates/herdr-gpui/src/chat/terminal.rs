@@ -144,15 +144,26 @@ impl HerdrWindow {
         if !self.chats.shown(&pane.pane_id) || chat.input() != ChatInput::Terminal {
             return None;
         }
+        Some(self.existing_terminal_layout(pane, surface, chat.terminal_size))
+    }
+
+    /// The same original grid also keeps the editor visible while an
+    /// observer is discovering or reading its first transcript.
+    pub(super) fn existing_terminal_layout(
+        &self,
+        pane: &PaneSurfacePane,
+        surface: &PaneSurfaceFrame,
+        size: InputSize,
+    ) -> Layout {
         let status = self.live.agent_status(&pane.pane_id);
         let blocked = status == Some(AgentStatus::Blocked);
         let editing = matches!(
             status,
             Some(AgentStatus::Idle | AgentStatus::Done | AgentStatus::Blocked)
         );
-        Some(layout(
+        layout(
             pane.inner_rect,
-            chat.terminal_size,
+            size,
             blocked,
             // A working agent may leave its output cursor near the top. Only
             // its interactive editor/dialog cursor should grow this region.
@@ -162,7 +173,7 @@ impl HerdrWindow {
                 .as_ref()
                 .filter(|_| pane.focused && editing),
             self.options.surface_size,
-        ))
+        )
     }
 
     /// A small separator above the uncovered terminal editor. Clicking its

@@ -11,6 +11,9 @@ use gpui::TestAppContext;
 use herdr_chat_protocol::{Author, Image};
 use std::{collections::HashSet, io::Cursor};
 
+mod scheduling;
+mod viewport;
+
 const FLOW: &str = "flowchart LR\n  A[Ask] --> B[Draw]\n";
 
 fn png(width: u32, height: u32) -> Image {

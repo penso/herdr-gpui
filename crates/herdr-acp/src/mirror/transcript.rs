@@ -11,7 +11,7 @@ use std::{
 
 use herdr_chat_protocol::{
     Author, ConfigOption, Entry, EntryId, EntryKind, OptionCategory, OptionKind, SessionInfo, Tool,
-    ToolContent, ToolKind, ToolStatus, Transcript, Usage,
+    ToolContent, ToolStatus, Transcript, Usage,
 };
 use serde_json::Value;
 
@@ -25,6 +25,9 @@ mod activities;
 mod codex_messages;
 mod notices;
 mod question_replies;
+mod tool_activity;
+mod tool_metadata;
+mod turns;
 
 use question_replies::QuestionKey;
 
@@ -222,6 +225,7 @@ fn text_block(block: &Value) -> bool {
 
 #[derive(Default)]
 struct Projection {
+    activity: tool_activity::Activity,
     answered: HashMap<QuestionKey, herdr_chat_protocol::QuestionAnswer>,
     /// Claude Code's sub-agents and background shells in the log.
     background: crate::claude::background::Background,
@@ -229,6 +233,7 @@ struct Projection {
     names: HashMap<String, String>,
     transcript: Transcript,
     tools: HashMap<String, usize>,
+    turns: turns::Turns,
 }
 
 impl Projection {
@@ -283,6 +288,9 @@ impl Projection {
         if call.is_empty() || name.is_empty() || call.len() > MAX_ID {
             return;
         }
+        let index = self.transcript.entries.len();
+        self.activity.record(index, name, input);
+        let (kind, title, locations) = tool_metadata::describe(name, input);
         let input = input
             .as_str()
             .map_or_else(|| input.to_string(), str::to_owned);
@@ -291,11 +299,11 @@ impl Projection {
             content: vec![ToolContent::Text {
                 text: self.clip(&input, TEXT),
             }],
-            kind: ToolKind::Other,
-            locations: Vec::new(),
+            kind,
+            locations,
             parent: None,
             status: ToolStatus::Pending,
-            title: limited(name, MAX_TITLE),
+            title,
         };
         self.tools
             .insert(call.to_owned(), self.transcript.entries.len());
@@ -306,18 +314,32 @@ impl Projection {
         let Some(&index) = self.tools.get(call) else {
             return;
         };
-        let output = self.text(output);
+        let content = if output.is_object() {
+            self.clip(&output.to_string(), TEXT)
+        } else {
+            self.text(output)
+        };
+        self.activity.output(
+            index,
+            output,
+            &content,
+            status == ToolStatus::Failed,
+            &mut self.transcript.entries,
+        );
         let EntryKind::Tool(tool) = &mut self.transcript.entries[index].kind else {
             return;
         };
-        tool.status = status;
-        if !output.is_empty() {
+        if !content.is_empty() {
             tool.content.truncate(1);
-            tool.content.push(ToolContent::Text { text: output });
+            tool.content.push(ToolContent::Text { text: content });
         }
     }
 
     fn codex(&mut self, id: EntryId, record: &Value) {
+        if let Some(summary) = self.turns.codex(record) {
+            self.push(id, EntryKind::Turn(summary));
+        }
+        self.transcript.turn = self.turns.current();
         let payload = &record["payload"];
         match string(record, "type") {
             "session_meta" => {
@@ -435,6 +457,9 @@ impl Projection {
     }
 
     fn claude(&mut self, base: EntryId, record: &Value) {
+        if let Some(summary) = self.turns.claude(record) {
+            self.push(base, EntryKind::Turn(summary));
+        }
         let Some(role) = Role::of(string(record, "type")) else {
             return;
         };
@@ -532,14 +557,20 @@ fn parse(agent: TranscriptAgent, bytes: &[u8], mut offset: u64) -> Transcript {
         };
         if line.len() > record_limit {
             projection.transcript.truncated = true;
+            projection.turns.invalidate();
+            projection.transcript.turn = None;
             continue;
         }
         let Ok(record) = serde_json::from_slice::<Value>(line) else {
             projection.transcript.truncated |= line.len() > RECORD;
+            projection.turns.invalidate();
+            projection.transcript.turn = None;
             continue;
         };
         if line.len() > RECORD && !codex_messages::image_record(&record) {
             projection.transcript.truncated = true;
+            projection.turns.invalidate();
+            projection.transcript.turn = None;
             continue;
         }
         let Some(base) = start
@@ -569,3 +600,7 @@ fn parse(agent: TranscriptAgent, bytes: &[u8], mut offset: u64) -> Transcript {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "transcript/tests/tool_activity.rs"]
+mod tool_tests;

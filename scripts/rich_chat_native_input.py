@@ -9,6 +9,8 @@ import subprocess
 import time
 
 from rich_chat_resize import capture_resize
+from rich_chat_disclosure import capture_disclosure
+from rich_chat_jump import capture_jump
 
 
 def last_record(log, prefix):
@@ -119,6 +121,12 @@ def capture_native_input(env, directory, app, case):
             button_down = down
             x.XSync(display, False)
 
+        def wheel(number, steps):
+            for _ in range(steps):
+                test.XTestFakeButtonEvent(display, number, True, 0)
+                test.XTestFakeButtonEvent(display, number, False, 0)
+            x.XSync(display, False)
+
         def drag(start, end):
             motion(start)
             button(True)
@@ -182,6 +190,17 @@ def capture_native_input(env, directory, app, case):
             capture_resize(directory, app,
                            lambda: record("RICH CHAT INPUT SIZE "),
                            drag, motion, double_click, capture_stable_frame)
+            return
+
+        if case == "tool-disclosure":
+            capture_disclosure(directory, app,
+                               lambda: record("RICH CHAT DISCLOSURE "),
+                               motion, button, capture_stable_frame)
+            return
+
+        if case == "tools-open":
+            capture_jump(directory, app, lambda: record("RICH CHAT JUMP "),
+                         motion, button, wheel, capture_stable_frame)
             return
 
         probe = record("RICH CHAT SELECTION PROBE ")

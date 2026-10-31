@@ -11,6 +11,8 @@ use serde_json::json;
 
 use super::*;
 
+mod flushing;
+
 const WAIT: Duration = Duration::from_secs(10);
 
 /// A file link under the test checkout, absolute on this platform: a

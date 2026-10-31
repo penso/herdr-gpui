@@ -4,7 +4,7 @@
 
 use super::{
     overlay::{attach_with, open, poll},
-    timeline::conversation,
+    timeline::{conversation, fit_conversation},
     *,
 };
 use crate::{HerdrWindow, config::ChatLayoutMode};
@@ -25,6 +25,7 @@ fn the_user_speaks_on_the_right_and_the_agent_on_the_left(cx: &mut TestAppContex
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(&view, &program, conversation(false), cx);
+    fit_conversation(&view, &program, cx);
     imessage(&view, &program, cx);
     let chat = cx.debug_bounds("chat-view").unwrap();
     let prompt = cx.debug_bounds("chat-imessage-1").unwrap();
@@ -109,11 +110,13 @@ fn typing_shows_while_the_agent_works(cx: &mut TestAppContext) {
         transcript: Box::new(transcript),
     };
     let _stream = attach_with(&view, &program, snapshot, cx);
-    // Other layouts leave it to the header.
-    assert!(cx.debug_bounds("chat-typing").is_none());
+    // The shared strip uses the layout's native typing cue in iMessage.
+    assert!(cx.debug_bounds("chat-live-moving").is_some());
     imessage(&view, &program, cx);
     let prompt = cx.debug_bounds("chat-imessage-1").unwrap();
     let typing = cx.debug_bounds("chat-typing").unwrap();
+    assert!(cx.debug_bounds("chat-live-activity").is_some());
+    assert!(cx.debug_bounds("chat-live-moving").is_none());
     assert!(typing.top() >= prompt.bottom(), "under the conversation");
     let composer = cx.debug_bounds("chat-composer").unwrap();
     assert!(typing.bottom() <= composer.top(), "above the composer");
@@ -125,6 +128,7 @@ fn typing_is_gone_once_the_turn_ends(cx: &mut TestAppContext) {
     let program = Program::new();
     let _stream = attach_with(&view, &program, conversation(false), cx);
     imessage(&view, &program, cx);
+    assert!(cx.debug_bounds("chat-live-moving").is_none());
     assert!(cx.debug_bounds("chat-typing").is_none());
 }
 

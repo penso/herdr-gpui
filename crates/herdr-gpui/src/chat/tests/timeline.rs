@@ -6,11 +6,42 @@ use super::{
     overlay::{attach_with, open, poll},
     *,
 };
-use gpui::{Modifiers, TestAppContext};
+use crate::HerdrWindow;
+use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext, px, size};
 use herdr_chat_protocol::{
     PlanEntry, PlanPriority, PlanStatus, SlashCommand, Tool, ToolContent, ToolKind, ToolStatus,
 };
 use herdr_client::ConnectTarget;
+
+/// Geometry tests inspect the whole short conversation. Resizing only the
+/// window leaves MockPeer's 80×24 surface unchanged until its reply is applied.
+pub(super) fn fit_conversation(
+    view: &Entity<HerdrWindow>,
+    program: &Program,
+    cx: &mut VisualTestContext,
+) {
+    let before = cx.debug_bounds("chat-view").unwrap();
+    cx.simulate_resize(size(px(1100.), px(1000.)));
+    poll(view, program, cx);
+    selection::acknowledge_size(view, cx);
+    poll(view, program, cx);
+    let after = cx.debug_bounds("chat-view").unwrap();
+    assert!(
+        after.size.height > before.size.height,
+        "mock pane must grow with the window: {before:?} -> {after:?}"
+    );
+    view.read_with(cx, |view, _| {
+        let surface = view.live.surface.as_ref().unwrap();
+        assert_eq!(
+            surface.panes[0].inner_rect.height,
+            view.options.surface_size.rows
+        );
+        assert_eq!(
+            surface.panes[0].inner_rect.width,
+            view.options.surface_size.cols
+        );
+    });
+}
 
 pub(super) fn conversation(plan: bool) -> ServerMessage {
     let mut transcript = Transcript::new("Claude");
@@ -72,6 +103,7 @@ fn avatars_mark_where_the_speaker_changes(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(&view, &program, conversation(false), cx);
+    fit_conversation(&view, &program, cx);
     // The selector is borrowed for as long as the window, so it is leaked.
     let mut drawn = |selector: String| cx.debug_bounds(selector.leak()).is_some();
     for id in [1, 2] {

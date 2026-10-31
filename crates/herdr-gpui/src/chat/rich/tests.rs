@@ -88,6 +88,7 @@ fn code_is_copied_verbatim_and_only_complete_fences_queue_grammars() {
         id,
         source,
         language,
+        ..
     } = &closed[0]
     else {
         panic!("code")

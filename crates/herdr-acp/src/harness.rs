@@ -4,13 +4,15 @@
 //! of its own, so the session cannot tell the two apart.
 
 pub(crate) mod out;
+pub(crate) mod streaming;
 
 use std::{
     io::{Read, Write},
     thread,
+    time::Instant,
 };
 
-use crossbeam_channel::{Receiver, bounded, select};
+use crossbeam_channel::{Receiver, after, bounded, never, select};
 use serde_json::Value;
 
 use crate::{
@@ -63,6 +65,14 @@ pub(crate) enum Out {
 /// no I/O: each message in yields the messages to pass on, which keeps it
 /// testable without a process.
 pub(crate) trait Translator: Send + 'static {
+    /// An optional flush deadline. Idle translators do not wake periodically.
+    fn next_tick(&self) -> Option<Instant> {
+        None
+    }
+    /// Flush buffered updates at their deadline, or before the harness closes.
+    fn tick(&mut self) -> Vec<Out> {
+        Vec::new()
+    }
     /// What to send the harness before anything else, such as its handshake.
     fn start(&mut self) -> Vec<Out>;
     fn on_session(&mut self, inbound: Inbound) -> Vec<Out>;
@@ -125,6 +135,7 @@ fn run(
     from_harness: &Receiver<FromHarness>,
 ) {
     let mut outs = first;
+    let mut closing = false;
     loop {
         for out in outs.drain(..) {
             let delivered = match out {
@@ -138,7 +149,21 @@ fn run(
                 return;
             }
         }
+        if closing {
+            return;
+        }
+        if translator
+            .next_tick()
+            .is_some_and(|deadline| deadline <= Instant::now())
+        {
+            outs.extend(translator.tick());
+            continue;
+        }
+        let timer = translator.next_tick().map_or_else(never, |deadline| {
+            after(deadline.saturating_duration_since(Instant::now()))
+        });
         select! {
+            recv(timer) -> _ => outs.extend(translator.tick()),
             recv(from_session) -> line => match line {
                 Ok(line) => outs.extend(
                     rpc::classify(&line)
@@ -151,10 +176,11 @@ fn run(
             recv(from_harness) -> message => match message {
                 Ok(FromHarness::Message(message)) => outs.extend(translator.on_harness(&message)),
                 Ok(FromHarness::Closed(error)) => {
-                    deliver(Inbound::Closed(error));
-                    return;
+                    outs.extend(translator.tick());
+                    outs.push(Out::Session(Inbound::Closed(error)));
+                    closing = true;
                 }
-                Err(_) => return,
+                Err(_) => { outs.extend(translator.tick()); closing = true; },
             },
         }
     }

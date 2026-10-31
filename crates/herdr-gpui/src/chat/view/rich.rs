@@ -21,6 +21,8 @@ use crate::chat::selection::Cell;
 use links::Links;
 
 struct RichContext<'a, 'b, 'c> {
+    /// User and answered-question text inherits white ink from an iMessage bubble.
+    inherit_ink: bool,
     visuals: &'a Visuals,
     links: Links,
     selection: &'a Scope<'a>,
@@ -30,12 +32,14 @@ struct RichContext<'a, 'b, 'c> {
 }
 
 impl HerdrWindow {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_chat_rich(
         &self,
         pane_id: &str,
         blocks: &[Block],
         visuals: &Visuals,
         selection: &Scope<'_>,
+        inherit_ink: bool,
         size: f32,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -43,6 +47,7 @@ impl HerdrWindow {
         let look = self.chat_look();
         let layout = layout_for(self.config.chat.layout);
         let mut context = RichContext {
+            inherit_ink,
             visuals,
             links,
             selection,
@@ -91,6 +96,7 @@ impl HerdrWindow {
                         id,
                         language,
                         source,
+                        ..
                     } => self
                         .rich_code(*id, language, source, index, &mut context)
                         .into_any_element(),
@@ -125,14 +131,24 @@ impl HerdrWindow {
         }
         let row = row
             .when_some(heading(kind), |row, level| {
-                row.font_weight(FontWeight::SEMIBOLD)
+                row.font_weight(FontWeight::BOLD)
+                    .when(!context.inherit_ink, |row| {
+                        row.text_color(rgb(self.prose_ink(4)))
+                    })
                     .text_size(px(context.size * rhythm::heading_scale(level)))
                     .line_height(relative(1.3))
             })
             .when(kind == Kind::Quote, |row| {
-                row.pl(px(10.))
+                row.px(px(12.))
+                    .py(px(7.))
+                    .rounded(px(4.))
+                    .bg(rgb(self.theme.surface))
+                    .text_color(rgb(self.theme.foreground))
                     .border_l_2()
-                    .border_color(rgb(self.theme.active))
+                    .border_color(rgb(super::text_ink(
+                        self.theme.palette[4],
+                        self.theme.surface,
+                    )))
             });
         let marker = match kind {
             Kind::Bullet => Some("•".to_owned()),
@@ -174,7 +190,7 @@ impl HerdrWindow {
         if let Some(Prose { text, spans }) = prose_spans(&content) {
             let highlights = spans
                 .iter()
-                .map(|(range, style)| (range.clone(), self.rich_style(style)));
+                .map(|(range, style)| (range.clone(), self.rich_style(style, context.inherit_ink)));
             let fonts = spans
                 .iter()
                 .filter(|(_, style)| style.code)
@@ -230,7 +246,7 @@ impl HerdrWindow {
                             .as_ref()
                             .map(|fragment| fragment.range(offset..offset + word.len()));
                         offset += word.len();
-                        let marks = [(0..word.len(), self.rich_style(style))];
+                        let marks = [(0..word.len(), self.rich_style(style, context.inherit_ink))];
                         let styled =
                             styled_text(selected.as_ref(), word.to_owned(), marks, &self.theme);
                         item = selectable(
@@ -257,7 +273,7 @@ impl HerdrWindow {
                         children.push(item.into_any_element());
                     }
                 }
-                Inline::Math { id, source } => {
+                Inline::Math { id, source, .. } => {
                     let formula = self.rich_math(*id, source, context.visuals, true, context.size);
                     let formula = match &fragment {
                         Some(fragment) => fragment.range(offset..offset + source.len()).atomic(
@@ -461,16 +477,39 @@ impl HerdrWindow {
             }))
     }
 
-    fn rich_style(&self, style: &Style) -> HighlightStyle {
+    /// Text accents must read on both themed panels and the gray reply bubble.
+    fn prose_ink(&self, palette: usize) -> u32 {
+        self.prose_color_ink(self.theme.palette[palette])
+    }
+
+    fn prose_color_ink(&self, color: u32) -> u32 {
+        let background = if self.config.chat.layout == ChatLayoutMode::IMessage {
+            crate::config::mix(self.theme.background, self.theme.foreground, 14)
+        } else {
+            self.theme.background
+        };
+        crate::contrast::ink_on_chrome(
+            color,
+            [background, self.theme.surface, self.theme.active],
+            4.5,
+        )
+    }
+
+    fn rich_style(&self, style: &Style, inherit_ink: bool) -> HighlightStyle {
         HighlightStyle {
-            font_weight: style.bold.then_some(FontWeight::SEMIBOLD),
+            font_weight: style.bold.then_some(FontWeight::BOLD),
             font_style: style.italic.then_some(FontStyle::Italic),
-            color: style
-                .link
-                .as_ref()
-                .and_then(|_| layout_for(self.config.chat.layout).link(&self.chat_look()))
-                .or_else(|| style.code.then_some(self.theme.foreground))
-                .map(|color| rgb(color).into()),
+            color: if style.code {
+                Some(rgb(super::text_ink(self.theme.palette[5], self.theme.active)).into())
+            } else if !inherit_ink && style.link.is_some() {
+                layout_for(self.config.chat.layout)
+                    .link(&self.chat_look(), inherit_ink)
+                    .map(|ink| rgb(self.prose_color_ink(ink)).into())
+            } else if !inherit_ink && style.bold {
+                Some(rgb(self.prose_ink(6)).into())
+            } else {
+                None
+            },
             underline: style.link.as_ref().map(|_| UnderlineStyle {
                 thickness: px(1.),
                 ..Default::default()

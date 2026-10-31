@@ -157,7 +157,7 @@ pub(super) trait ChatLayout {
 
     /// The color of a link in a message: by default the theme's blue.
     /// `None` draws it as the text around it.
-    fn link(&self, look: &Look<'_>) -> Option<u32> {
+    fn link(&self, look: &Look<'_>, _inherit_ink: bool) -> Option<u32> {
         Some(look.theme.ink(look.theme.palette[4]))
     }
 
