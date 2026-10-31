@@ -74,6 +74,16 @@ pub(crate) enum Location {
     },
     /// Every device this window connects to, drawn by the app, never a page.
     Devices,
+    /// herdr-core (Herdr 2) terminals, emulated and drawn by the app, split
+    /// into panes. Tabs saved before splits named one `terminal`.
+    CoreTerminal {
+        #[serde(alias = "terminal")]
+        panes: crate::core_terminals::panes::Panes,
+        /// A watch-only mirror: it follows the terminal's size and never
+        /// types into it.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        observe: bool,
+    },
 }
 
 /// The checkout an orchestrator view lists the repository of, on the view's
@@ -207,9 +217,11 @@ impl Location {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.page_url(),
             // Never loaded: a review is drawn by the app.
-            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices => {
-                "about:blank".to_owned()
-            }
+            Self::Review { .. }
+            | Self::Code { .. }
+            | Self::Orchestrator { .. }
+            | Self::Devices
+            | Self::CoreTerminal { .. } => "about:blank".to_owned(),
         }
     }
 
@@ -217,7 +229,11 @@ impl Location {
     pub(crate) fn is_page(&self) -> bool {
         !matches!(
             self,
-            Self::Review { .. } | Self::Code { .. } | Self::Orchestrator { .. } | Self::Devices
+            Self::Review { .. }
+                | Self::Code { .. }
+                | Self::Orchestrator { .. }
+                | Self::Devices
+                | Self::CoreTerminal { .. }
         )
     }
 
@@ -230,6 +246,11 @@ impl Location {
             Self::Code { file } => file.path.clone(),
             Self::Orchestrator { repo } => format!("Orchestrator of {}", repo.name()),
             Self::Devices => "Devices overview".to_owned(),
+            Self::CoreTerminal { panes, .. } => {
+                let terminals: Vec<String> =
+                    panes.terminals().iter().map(ToString::to_string).collect();
+                format!("herdr-core terminal {}", terminals.join(", "))
+            }
         }
     }
 
@@ -242,6 +263,7 @@ impl Location {
             Self::Code { file } => file.name().to_owned(),
             Self::Orchestrator { repo } => format!("Orchestrator \u{00b7} {}", repo.name()),
             Self::Devices => "Devices".to_owned(),
+            Self::CoreTerminal { .. } => "Terminal".to_owned(),
         }
     }
 

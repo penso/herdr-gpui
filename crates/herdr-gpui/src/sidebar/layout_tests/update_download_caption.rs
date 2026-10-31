@@ -1,23 +1,42 @@
 use super::*;
-use crate::{update_panel::download_caption, updater::State};
+use crate::{i18n::fl, update_panel::download_caption, updater::State};
 
 fn caption(received: u64, total: u64) -> Option<(String, Option<String>)> {
     download_caption(&State::Downloading { received, total })
+}
+
+fn megabytes(amount: &str) -> String {
+    fl!("update-panel-megabytes", amount = amount)
+}
+
+fn progress(received: &str, total: &str) -> String {
+    fl!(
+        "update-panel-progress",
+        received = megabytes(received),
+        total = megabytes(total)
+    )
+}
+
+fn percent(percent: &str) -> String {
+    fl!("update-panel-percent", percent = percent)
 }
 
 #[test]
 fn download_sizes_read_in_megabytes() {
     assert_eq!(
         caption(42_318_544, 96_104_448),
-        Some(("42.3 MB of 96.1 MB".into(), Some("44%".into())))
+        Some((progress("42.3", "96.1"), Some(percent("44"))))
     );
     assert_eq!(
         caption(0, 100_000_000),
-        Some(("0.0 MB of 100.0 MB".into(), Some("0%".into())))
+        Some((progress("0.0", "100.0"), Some(percent("0"))))
     );
     assert_eq!(
         caption(42_318_544, 0),
-        Some(("42.3 MB downloaded".into(), None)),
+        Some((
+            fl!("update-panel-downloaded", received = megabytes("42.3")),
+            None
+        )),
         "an unknown size shows what arrived and no percentage"
     );
 }

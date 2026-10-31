@@ -7,6 +7,7 @@
 use crate::{
     HerdrWindow,
     config::corners,
+    i18n::fl,
     search_input::SearchInput,
     sidebar::{layout::SidebarLook, line_height},
 };
@@ -22,26 +23,34 @@ pub(in crate::sidebar) enum Heading {
 }
 
 impl Heading {
-    fn label(self) -> &'static str {
+    /// The heading's debug selectors, the same in every language.
+    fn key(self) -> &'static str {
         match self {
             Self::Spaces => "spaces",
             Self::DeviceTree => "devices",
         }
     }
 
-    /// The field's accessible name, which stays put while the visible
-    /// label swaps between the heading and the placeholder.
-    fn name(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Spaces => "Search spaces",
-            Self::DeviceTree => "Search devices",
+            Self::Spaces => fl!("sidebar-header-spaces"),
+            Self::DeviceTree => fl!("sidebar-header-devices"),
         }
     }
 
-    fn placeholder(self) -> &'static str {
+    /// The field's accessible name, which stays put while the visible
+    /// label swaps between the heading and the placeholder.
+    fn name(self) -> String {
         match self {
-            Self::Spaces => "Devices, worktrees, branches, notes",
-            Self::DeviceTree => "Search devices and agents",
+            Self::Spaces => fl!("sidebar-search-spaces-label"),
+            Self::DeviceTree => fl!("sidebar-search-devices-label"),
+        }
+    }
+
+    fn placeholder(self) -> String {
+        match self {
+            Self::Spaces => fl!("sidebar-search-spaces-placeholder"),
+            Self::DeviceTree => fl!("sidebar-search-devices-placeholder"),
         }
     }
 
@@ -83,12 +92,12 @@ impl HerdrWindow {
         };
         let open = typed || focus.is_focused(window);
         let placeholder = if open {
-            heading.placeholder().to_owned()
+            heading.placeholder()
         } else {
-            look.header_label(heading.label())
+            look.header_label(&heading.label())
         };
         input.update(cx, |input, cx| {
-            input.set_label(heading.name(), cx);
+            input.set_label(&heading.name(), cx);
             input.set_placeholder(&placeholder, cx);
         });
         let magnifier = || {
@@ -122,7 +131,7 @@ impl HerdrWindow {
             .when(open, |field| field.child(magnifier()))
             .child(
                 div()
-                    .debug_selector(move || format!("header-label-{}", heading.label()))
+                    .debug_selector(move || format!("header-label-{}", heading.key()))
                     .flex_1()
                     .min_w_0()
                     .child(input),
@@ -134,7 +143,7 @@ impl HerdrWindow {
                         .id("sidebar-search-clear")
                         .debug_selector(|| "sidebar-search-clear".into())
                         .role(Role::Button)
-                        .aria_label("Clear search")
+                        .aria_label(fl!("sidebar-search-clear"))
                         .flex_none()
                         .size(px(20.))
                         .flex()
@@ -156,7 +165,7 @@ impl HerdrWindow {
             });
         Some(
             div()
-                .debug_selector(move || format!("header-{}", heading.label()))
+                .debug_selector(move || format!("header-{}", heading.key()))
                 .flex_none()
                 .h(px(line_height(font) + 2. * look.density.header_padding()))
                 .px(px(look.inset()))

@@ -3,6 +3,7 @@
 //! filtered by what the field holds.
 
 use super::{Discovery, Source};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     progress::{self, Progress},
@@ -23,27 +24,26 @@ impl HerdrWindow {
         let text = setup.fields[0].read(cx).text().to_owned();
         let completion = self.device_completion(setup, &text);
         let status = if discovery.awaiting_local_network {
-            "Waiting for macOS to allow Herdr on your local network…".into()
+            fl!("devices-discover-waiting")
         } else if discovery.searching() {
-            format!("Searching {}…", sources(&discovery.pending))
+            fl!(
+                "devices-discover-searching",
+                sources = sources(&discovery.pending)
+            )
         } else {
-            match completion.unsaved {
-                0 => "Search finished. No devices found.".into(),
-                1 => "Search finished. Found 1 device.".into(),
-                count => format!("Search finished. Found {count} devices."),
-            }
+            fl!("devices-discover-found", count = completion.unsaved)
         };
         let mut header = div()
             .flex()
             .items_center()
             .gap(px(8.))
-            .child(div().flex_none().child("Nearby devices"))
+            .child(div().flex_none().child(fl!("devices-discover-heading")))
             .child(
                 div()
                     .debug_selector(|| "device-discovery-status".into())
                     .flex_1()
+                    // Wraps rather than cutting a longer language short.
                     .min_w_0()
-                    .truncate()
                     .text_color(rgb(theme.muted))
                     .child(status),
             );
@@ -58,7 +58,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .rounded(px(crate::config::corners::CONTROL))
                     .hover(|s| s.bg(rgb(theme.active)))
-                    .child("Search again")
+                    .child(fl!("devices-discover-again"))
                     .on_click(cx.listener(|this, _, _, cx| this.start_device_discovery(cx))),
             );
         }
@@ -140,11 +140,11 @@ impl HerdrWindow {
         }
         view = view.child(list);
         for (source, error) in &discovery.failures {
-            view = view.child(
-                div()
-                    .text_color(rgb(theme.muted))
-                    .child(format!("{}: {error}", source.name())),
-            );
+            view = view.child(div().text_color(rgb(theme.muted)).child(fl!(
+                "devices-discover-failed",
+                source = source.name(),
+                error = error.to_string(),
+            )));
         }
         // While waiting the system alert may be up already; after a refusal
         // the setting is the only way. "Search again" then checks anew.
@@ -190,11 +190,28 @@ impl HerdrWindow {
 
 /// `Bonjour`, `Tailscale and Bonjour`, `SSH config, Tailscale, and Bonjour`.
 pub(super) fn sources(sources: &[Source]) -> String {
-    let names: Vec<&str> = sources.iter().map(|source| source.name()).collect();
+    let names: Vec<String> = sources.iter().map(|source| source.name()).collect();
     match names.as_slice() {
         [] => String::new(),
-        [one] => (*one).to_owned(),
-        [first, second] => format!("{first} and {second}"),
-        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
+        [one] => one.clone(),
+        [first, second] => fl!(
+            "devices-discover-list-two",
+            first = first.as_str(),
+            second = second.as_str()
+        ),
+        [first, middle @ .., last] => {
+            let start = middle.iter().fold(first.clone(), |start, next| {
+                fl!(
+                    "devices-discover-list-middle",
+                    start = start,
+                    next = next.as_str()
+                )
+            });
+            fl!(
+                "devices-discover-list-end",
+                start = start,
+                last = last.as_str()
+            )
+        }
     }
 }

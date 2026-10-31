@@ -476,6 +476,11 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::cloud::install_idle_checks(cx);
             }
             cx.set_global(appearance.select(light_appearance(cx)));
+            // Only the user's own app follows their saved SSH host choices.
+            if mode == LaunchMode::Normal {
+                let ssh = cx.global::<InitialAppearance>().config.ssh.clone();
+                crate::config::ssh_hosts::install(&ssh, cx);
+            }
             let language = cx.global::<InitialAppearance>().config.language.clone();
             crate::i18n::install(&language, cx);
             app_icon::install();

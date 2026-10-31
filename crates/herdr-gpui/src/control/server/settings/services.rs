@@ -15,10 +15,11 @@ use crate::{
 use gpui::{App, WindowHandle};
 use std::time::Duration;
 
-/// The state's short name, its detail, and the version it names.
-pub(super) fn describe(state: &State) -> (&'static str, Option<&str>, Option<&str>) {
+/// The state's short name, its detail, and the version it names. The
+/// detail is English: the command line's words are not localized.
+pub(super) fn describe(state: &State) -> (&'static str, Option<String>, Option<&str>) {
     match state {
-        State::Disabled(reason) => ("disabled", Some(reason), None),
+        State::Disabled(reason) => ("disabled", Some(reason.clone()), None),
         State::Idle => ("idle", None, None),
         State::Checking => ("checking", None, None),
         State::Current => ("current", None, None),
@@ -27,11 +28,11 @@ pub(super) fn describe(state: &State) -> (&'static str, Option<&str>, Option<&st
         State::Ready { version } => ("ready", None, Some(version)),
         State::Installing => ("installing", None, None),
         State::Homebrew { version, .. } => ("homebrew", None, Some(version)),
-        State::Upgrading { detail } => ("upgrading", Some(detail), None),
+        State::Upgrading { detail } => ("upgrading", Some(detail.to_string()), None),
         State::Restart { version } => ("restart", None, Some(version)),
         State::Restarting => ("restarting", None, None),
         State::Cancelling => ("cancelling", None, None),
-        State::Error(message) => ("error", Some(message), None),
+        State::Error(message) => ("error", Some(message.clone()), None),
     }
 }
 
@@ -41,7 +42,7 @@ fn reply(updater: &Updater) -> Response {
         reply: Reply::Update {
             state: state.to_owned(),
             latest: version.or(updater.latest_version()).map(str::to_owned),
-            detail: detail.map(str::to_owned),
+            detail,
         },
     }
 }

@@ -7,6 +7,7 @@
 //! convention project discovery already uses.
 
 use super::{Action, Entry, Error, Palette, projects};
+use crate::i18n::fl;
 use crate::pull_request::run;
 use std::{
     fs,
@@ -228,18 +229,25 @@ fn new_project_entry(roots: &[String], query: &str) -> Option<Entry> {
     let plan = plan(roots, query).ok().flatten()?;
     let (label, detail) = match &plan.source {
         Source::Folder => (
-            format!("Create folder \"{}\"", plan.label),
-            format!("New project in {}", plan.path.display()),
+            fl!("palette-projects-create-folder", name = plan.label.as_str()),
+            fl!(
+                "palette-projects-new-in",
+                path = plan.path.display().to_string()
+            ),
         ),
         Source::Clone { url } => (
-            format!("Clone \"{}\"", plan.label),
-            format!("git clone {url} into {}", plan.path.display()),
+            fl!("palette-projects-clone", name = plan.label.as_str()),
+            fl!(
+                "palette-projects-clone-into",
+                url = url.as_str(),
+                path = plan.path.display().to_string()
+            ),
         ),
     };
     Some(Entry::with_keywords(
         label,
         detail,
-        "Project",
+        fl!("palette-badge-project"),
         Action::NewProject(plan),
         None,
         // The raw query, so the row is offered for exactly what was typed.

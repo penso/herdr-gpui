@@ -359,6 +359,12 @@ jobs:
         run: cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"
       - name: Smoke-test the optimized executable as the release does
         run: python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"
+      # The package requires the pinned herdr-core beside the app, as the
+      # release fetches it.
+      - name: Fetch the pinned herdr-core
+        run: python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
+      - name: Smoke-test herdr-core
+        run: '"target/$TARGET/release/herdr-core.exe" --version'
       # The release job passes generated third-party notices; any nonempty
       # file exercises the same packaging.
       - name: Package the Windows zip

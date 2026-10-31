@@ -24,6 +24,7 @@ mod daytona;
 mod devices;
 mod edit;
 mod error;
+pub(crate) mod favorite_themes;
 mod features;
 mod files;
 mod font_weight;
@@ -41,6 +42,7 @@ pub(crate) use herdr_remote_control::app::config as remote;
 pub(crate) mod sidebar;
 mod sidebar_style;
 mod sprites;
+pub(crate) mod ssh_hosts;
 pub(crate) mod status_bar;
 mod status_icons;
 pub(crate) mod tab_layout;
@@ -124,6 +126,7 @@ pub(crate) use sidebar::{
 };
 pub(crate) use sidebar_style::{ChangeCounts, DeviceFooter};
 pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
+pub use ssh_hosts::SshConfig;
 pub use status_bar::StatusBar;
 pub use status_icons::StatusIcons;
 use std::{
@@ -199,12 +202,18 @@ pub struct Config {
     pub edge_rail: bool,
     /// How the editor starts; the pane's `$VISUAL` or `$EDITOR` when unset.
     pub(crate) editor_command: Option<crate::editor::EditorCommand>,
+    /// Themes starred in the Color Scheme picker, which lists them first.
+    pub favorite_themes: Vec<String>,
     pub features: Features,
     /// Focus the split terminal pane under the pointer without clicking.
     pub focus_follows_mouse: bool,
     pub github: GitHubConfig,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab: GitLabConfig,
+    /// New tabs run in herdr-core (Herdr 2) rather than Herdr 1, for their
+    /// native panes. Off by default while Herdr 1 holds the user's sessions;
+    /// without Herdr 1 installed, terminals are Herdr 2's anyway.
+    pub herdr_2_terminals: bool,
     /// Font resolution searched for an icon font for the terminal and found
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
@@ -224,6 +233,7 @@ pub struct Config {
     pub(crate) missing_fonts: Vec<String>,
     /// The terminal's configured weight, when its family has no face at it.
     pub(crate) missing_weight: Option<font_weight::MissingWeight>,
+    pub mods: crate::mods::Config,
     pub(crate) notification_overrides: NotificationSettings,
     pub notifications: NotificationConfig,
     /// Where a link-modifier click on a printed file path opens it.
@@ -282,6 +292,8 @@ pub struct Config {
     pub sound: SoundConfig,
     /// The Fly Sprites account whose sprites are devices.
     pub sprites: SpritesConfig,
+    /// SSH hosts whose host keys the user chose not to verify.
+    pub ssh: SshConfig,
     /// Which status bar items show, and how compactly.
     pub status_bar: StatusBar,
     /// The set agent status is drawn with.
@@ -412,10 +424,12 @@ impl Default for Config {
             devices: BTreeMap::new(),
             edge_rail: false,
             editor_command: None,
+            favorite_themes: Vec::new(),
             features: Features::default(),
             focus_follows_mouse: true,
             github: GitHubConfig::default(),
             gitlab: GitLabConfig::default(),
+            herdr_2_terminals: false,
             icon_font_missing: false,
             keep_selection_after_copy: true,
             keybinding_overrides: BTreeMap::new(),
@@ -424,6 +438,7 @@ impl Default for Config {
             layout: Layout::default(),
             missing_fonts: Vec::new(),
             missing_weight: None,
+            mods: crate::mods::Config::default(),
             notification_overrides: NotificationSettings::default(),
             notifications: NotificationConfig::default(),
             open_files_in: FileTarget::default(),
@@ -452,6 +467,7 @@ impl Default for Config {
             smooth_scroll: true,
             sound: SoundConfig::default(),
             sprites: SpritesConfig::default(),
+            ssh: SshConfig::default(),
             status_bar: StatusBar::default(),
             status_icons: StatusIcons::default(),
             tab_layout: TabLayoutMode::default(),
@@ -498,14 +514,17 @@ struct Settings {
     devices: BTreeMap<String, DeviceSettings>,
     edge_rail: Option<bool>,
     editor_command: Option<crate::editor::EditorCommand>,
+    favorite_themes: Vec<String>,
     features: Features,
     focus_follows_mouse: Option<bool>,
     github: GitHubConfig,
     gitlab: GitLabConfig,
+    herdr_2_terminals: Option<bool>,
     keep_selection_after_copy: Option<bool>,
     keybindings: BTreeMap<String, Binding>,
     language: Option<herdr_i18n::Language>,
     layout: Layout,
+    mods: crate::mods::Config,
     notifications: NotificationSettings,
     open_files_in: FileTarget,
     open_links_in: LinkTarget,
@@ -531,6 +550,7 @@ struct Settings {
     smooth_scroll: Option<bool>,
     sound: SoundConfig,
     sprites: SpritesConfig,
+    ssh: SshConfig,
     status_bar: StatusBar,
     status_icons: Option<status_icons::SavedIcons>,
     tab_layout: TabLayoutMode,
@@ -587,6 +607,13 @@ impl Config {
 
     pub fn path() -> Result<PathBuf> {
         Ok(config_root()?.join("herdr/config-gpui.toml"))
+    }
+
+    /// Where mods live, one folder each (`docs/mods-plan.md`). Beside this
+    /// app's config rather than at Herdr's top level, so a folder Herdr adds
+    /// later cannot collide with it.
+    pub fn mods_dir() -> Result<PathBuf> {
+        Ok(config_root()?.join("herdr/gpui-mods"))
     }
 
     pub fn local_path() -> Result<PathBuf> {
@@ -813,6 +840,12 @@ impl Config {
         #[cfg(feature = "sprites")]
         settings.sprites.settings_with(|_| None)?;
         config.sprites = settings.sprites;
+        config.favorite_themes = settings.favorite_themes;
+        // A hand-edited list may name a theme twice; it is starred once.
+        let mut starred = std::collections::HashSet::new();
+        config
+            .favorite_themes
+            .retain(|name| starred.insert(name.clone()));
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
         config.notifications = settings
@@ -875,8 +908,12 @@ impl Config {
             .unwrap_or(cfg!(target_os = "linux"));
         config.smooth_scroll = settings.smooth_scroll.unwrap_or(true);
         // keep-sorted end
+        settings.mods.validate()?;
+        config.mods = settings.mods;
         config.status_bar = settings.status_bar;
         config.tab_layout = settings.tab_layout;
+        settings.ssh.check()?;
+        config.ssh = settings.ssh;
         let (status_icons, legacy_rail) = status_icons::SavedIcons::resolve(settings.status_icons);
         config.status_icons = status_icons;
         config.edge_rail = settings.edge_rail.unwrap_or(legacy_rail);
@@ -899,6 +936,7 @@ impl Config {
         config.open_files_in = settings.open_files_in;
         config.editor_command = settings.editor_command;
         config.keep_selection_after_copy = settings.keep_selection_after_copy.unwrap_or(true);
+        config.herdr_2_terminals = settings.herdr_2_terminals.unwrap_or(false);
         for (name, font, settings) in [
             ("sidebar", &mut config.sidebar, settings.sidebar.font),
             ("tabs", &mut config.tabs, settings.tabs),

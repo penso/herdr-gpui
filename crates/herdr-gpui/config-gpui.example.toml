@@ -33,6 +33,9 @@
 # To follow the system light/dark appearance, name a theme for each side, as
 # Ghostty does: theme = "light:Catppuccin Latte,dark:Catppuccin Mocha"
 theme = "Default"
+# Themes starred in the Color Scheme picker, listed above the rest. The
+# picker's star button keeps this list in config-gpui.local.toml.
+# favorite_themes = ["Nord", "Catppuccin Mocha"]
 # How far the app's own colors (status dots, pull request badges, diff counts,
 # warnings, dim labels) stand off the sidebar and menus. "standard" moves a
 # color only when it would fall below 3:1, as pastels do on light themes.
@@ -184,6 +187,11 @@ layout = "normal"
 # between tabs), or "compact" (icons only, the chosen tab named). View > Tab
 # Layout lists them all.
 tab_layout = "classic"
+# New tabs run in herdr-core (Herdr 2), whose terminals Herdr UI draws and
+# splits into native panes, instead of in Herdr 1. Herdr 1 tabs keep running
+# beside them. Without Herdr 1 installed, terminals are Herdr 2's anyway.
+# Also under Settings > Tabs.
+herdr_2_terminals = false
 
 [palette]
 # Two short Shift taps open the unified palette in the focused GUI window.
@@ -343,6 +351,15 @@ project_roots = []
 # [devices.0123456789abcdef0123456789abcdef]
 # keybindings = "server"
 # theme = "Dracula"
+
+# SSH hosts whose host keys are never verified, by the target saved with the
+# device. Anyone who can intercept the connection to one can impersonate it.
+# Only for hosts that keep no key, such as `coder config-ssh`'s `*.coder`
+# aliases (`UserKnownHostsFile=/dev/null`). Add Device's "Skip host key
+# verification" box adds the target. To verify a host again, delete its
+# target here, or remove the device and add it again with the box clear.
+# [ssh]
+# skip_host_key_verification = ["dev.workspace.user.coder"]
 
 # Preferences offers a searchable picker for all four families together or each row.
 # Platform default removes the local family override; fallback cascades remain active.
@@ -730,6 +747,14 @@ size = 12
 # theme = "label"
 # shortcuts = "label"
 # report_issue = "label"
+
+# Mods: sandboxed Luau folders in <config>/herdr/gpui-mods that add status
+# bar items, sidebar sections, and palette commands (docs/mods.md).
+# [mods]
+# false runs none.
+# enabled = true
+# Mods, by folder name, not to run.
+# disabled = []
 
 # Zen mode (View > Toggle Zen Mode, or `toggle_zen_mode`) hides the
 # header, sidebar, tab strips, status bar, and notices, and every group but

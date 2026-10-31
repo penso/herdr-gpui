@@ -5,19 +5,18 @@
 //! cancels discovery and review; a move in progress keeps going and reports
 //! its outcome as a flash, because stopping halfway would strand work.
 
+use super::text;
 use crate::teleport::{
-    carry::describe,
     error::{Error, Step},
     job::{
-        self, Action, Candidate, Destination, GitHubAccess, HostRepositories, Outcome, Place,
-        Review, Source,
+        self, Action, Candidate, GitHubAccess, HostRepositories, Outcome, Place, Review, Source,
     },
     marks::{Destination as MarkDestination, Mark},
-    provision::Arrival,
     remote::MatchReason,
 };
 use crate::{
     HerdrWindow, NavigationTarget,
+    i18n::fl,
     menu::Page,
     progress::{self, Progress},
     window::Flash,
@@ -159,7 +158,7 @@ impl Teleport {
         };
         let candidate = Candidate {
             place: place.clone(),
-            destination: Destination::Arrive(Arrival::Clone {
+            destination: job::Destination::Arrive(crate::teleport::provision::Arrival::Clone {
                 path: "/tmp/repo".into(),
             }),
             origin: None,
@@ -281,37 +280,6 @@ impl Teleport {
     }
 }
 
-fn reason_text(reason: MatchReason) -> &'static str {
-    match reason {
-        MatchReason::Origin => "Same origin remote",
-        MatchReason::Remote => "Shares a remote",
-        MatchReason::Name => "Same name only; remotes differ",
-    }
-}
-
-/// What a destination row says: where the worktree goes, and how.
-fn destination_text(candidate: &Candidate) -> (String, String) {
-    match &candidate.destination {
-        Destination::Open { repository, reason } => {
-            (repository.label.clone(), reason_text(*reason).to_owned())
-        }
-        Destination::Reclaim { repository, .. } => (
-            repository.label.clone(),
-            "Brings the work back to the checkout it left".to_owned(),
-        ),
-        Destination::Arrive(Arrival::Existing { path, .. }) => {
-            (path.clone(), "Opens the checkout already there".to_owned())
-        }
-        Destination::Arrive(Arrival::Clone { path }) => (
-            path.clone(),
-            match candidate.origin {
-                Some(_) => "Clones the repository there first".to_owned(),
-                None => "Copies the repository there first".to_owned(),
-            },
-        ),
-    }
-}
-
 impl HerdrWindow {
     pub(crate) fn poll_teleport(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.teleport_marks.poll() {
@@ -340,7 +308,10 @@ impl HerdrWindow {
             Ok(outcome) => outcome,
             Err(error) if !open => {
                 self.teleport = None;
-                self.show_flash(Flash::warning(format!("Teleport failed: {error}")), cx);
+                self.show_flash(
+                    Flash::warning(fl!("teleport-failed", error = error.to_string())),
+                    cx,
+                );
                 return;
             }
             Err(_) => return cx.notify(),
@@ -368,10 +339,12 @@ impl HerdrWindow {
             },
         });
         let flash = match outcome.warnings.first() {
-            None => Flash::success(format!("Teleported to {destination}")),
-            Some(first) => Flash::warning(format!(
-                "Teleported to {destination} with {} warning(s): {first}",
-                outcome.warnings.len()
+            None => Flash::success(fl!("teleport-done", host = destination.as_str())),
+            Some(first) => Flash::warning(fl!(
+                "teleport-done-warnings",
+                host = destination.as_str(),
+                count = outcome.warnings.len(),
+                first = first.as_str()
             )),
         };
         self.show_flash(flash, cx);
@@ -504,9 +477,7 @@ impl HerdrWindow {
         let (primary, armed) = match &teleport.stage {
             Stage::Choosing => {
                 if teleport.hosts.is_empty() {
-                    body = body.child(line(
-                        "No other host is saved. Add one from Devices, then try again.".into(),
-                    ));
+                    body = body.child(line(fl!("teleport-no-hosts")));
                 }
                 for (index, host) in teleport.hosts.iter().enumerate() {
                     let selected = teleport.selected == Some(index);
@@ -514,9 +485,9 @@ impl HerdrWindow {
                     // others are reached over SSH once chosen.
                     let connected = host.repositories.is_some();
                     let detail = if connected {
-                        "Connected"
+                        fl!("teleport-host-connected")
                     } else {
-                        "Not connected; reached over SSH"
+                        fl!("teleport-host-ssh")
                     };
                     body = body.child(
                         div()
@@ -566,60 +537,58 @@ impl HerdrWindow {
                             })),
                     );
                 }
-                ("Review", teleport.selected.is_some())
+                (fl!("teleport-review"), teleport.selected.is_some())
             }
             Stage::Reviewing(place) => {
                 body = body.child(bar(Progress::Busy)).child(
-                    line(format!(
-                        "Checking {} and the running programs...",
-                        place.label
-                    ))
-                    .text_color(muted),
+                    line(fl!("teleport-checking", host = place.label.as_str())).text_color(muted),
                 );
-                ("Teleport", false)
+                (fl!("teleport-title"), false)
             }
             Stage::Ready(candidate, review) => {
                 let state = &review.state;
                 body = body
-                    .child({
-                        let (title, detail) = destination_text(candidate);
-                        line(format!("To {} · {title}. {detail}.", candidate.place.label))
-                    })
-                    .child(line(format!(
-                        "Branch {} · {} unpushed commit(s) · {} changed file(s), {} untracked",
-                        review.branch, state.unpushed, state.changed, state.untracked
+                    .child(line(text::destination(candidate)))
+                    .child(line(fl!(
+                        "teleport-state",
+                        branch = review.branch.as_str(),
+                        unpushed = state.unpushed,
+                        changed = state.changed,
+                        untracked = state.untracked
                     )));
                 match review.github {
                     GitHubAccess::Direct => {}
                     GitHubAccess::Token => {
-                        body = body.child(line(format!(
-                            "{} cannot reach GitHub by itself, so your GitHub CLI token is installed for this repository there, for git pull and push.",
-                            candidate.place.label
+                        body = body.child(line(fl!(
+                            "teleport-github-token",
+                            host = candidate.place.label.as_str()
                         )));
                     }
                     GitHubAccess::Unavailable => {
                         body = body.child(
-                            line(format!(
-                                "{} cannot reach GitHub, and the GitHub CLI here is not signed in, so pull and push will not work there.",
-                                candidate.place.label
+                            line(fl!(
+                                "teleport-github-unavailable",
+                                host = candidate.place.label.as_str()
                             ))
                             .text_color(danger),
                         );
                     }
                 }
                 if review.reason == Some(MatchReason::Name) {
-                    body = body.child(
-                        line(
-                            "Matched by name only: this repository's remotes differ there.".into(),
-                        )
-                        .text_color(danger),
-                    );
+                    body = body.child(line(fl!("teleport-name-only")).text_color(danger));
                 }
                 for (index, tab) in review.tabs.iter().enumerate() {
-                    let title = tab.label.clone().map_or_else(
-                        || format!("Tab {}", index + 1),
-                        |label| format!("Tab {}: {label}", index + 1),
-                    );
+                    let number = index + 1;
+                    let title = match &tab.label {
+                        None => fl!("teleport-tab", number = number),
+                        Some(label) => {
+                            fl!(
+                                "teleport-tab-labeled",
+                                number = number,
+                                label = label.as_str()
+                            )
+                        }
+                    };
                     body = body.child(
                         div()
                             .pt(px(4.))
@@ -633,29 +602,27 @@ impl HerdrWindow {
                                 .pl(px(12.))
                                 .truncate()
                                 .when(missing, |row| row.text_color(danger))
-                                .child(describe(&pane.work, &pane.action)),
+                                .child(text::pane(&pane.work, &pane.action)),
                         );
                     }
                 }
-                body = body.child(line(
-                    "Ignored files such as .env stay behind. The workspace here then closes; its checkout stays and can be reopened with Open worktree.".into(),
-                ).text_color(subtext));
-                ("Teleport", true)
+                body = body.child(line(fl!("teleport-left-behind")).text_color(subtext));
+                (fl!("teleport-title"), true)
             }
             Stage::Moving(candidate, step) => {
                 body = body
-                    .child(line(format!("Moving to {}...", candidate.place.label)))
+                    .child(line(fl!(
+                        "teleport-moving-to",
+                        host = candidate.place.label.as_str()
+                    )))
                     .child(bar(Progress::Working(step.map_or(0., Step::progress))))
                     .child(
-                        line(step.map_or("Starting", Step::label).to_owned())
+                        line(text::step(*step))
                             .debug_selector(|| "teleport-step".into())
                             .text_color(muted),
                     )
-                    .child(
-                        line("Closing this dialog does not stop the move.".into())
-                            .text_color(subtext),
-                    );
-                ("Moving...", false)
+                    .child(line(fl!("teleport-keeps-moving")).text_color(subtext));
+                (fl!("teleport-moving"), false)
             }
             Stage::Failed(error) => {
                 body = body
@@ -664,14 +631,8 @@ impl HerdrWindow {
                             .debug_selector(|| "teleport-error".into())
                             .text_color(danger),
                     )
-                    .child(
-                        line(
-                            "The source workspace closes only once the destination is ready."
-                                .into(),
-                        )
-                        .text_color(subtext),
-                    );
-                ("Close", true)
+                    .child(line(fl!("teleport-source-closes-later")).text_color(subtext));
+                (fl!("teleport-close"), true)
             }
         };
         let button = |id: &'static str| {
@@ -713,11 +674,12 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Teleport"),
+                                    .child(fl!("teleport-title")),
                             )
-                            .child(div().truncate().text_color(muted).child(format!(
-                                "{} from {}",
-                                teleport.label, teleport.source.place.label
+                            .child(div().truncate().text_color(muted).child(fl!(
+                                "teleport-subtitle",
+                                worktree = teleport.label.as_str(),
+                                host = teleport.source.place.label.as_str()
                             ))),
                     ),
             )
@@ -741,7 +703,11 @@ impl HerdrWindow {
                         button("teleport-cancel")
                             .border_color(rgb(theme.active))
                             .hover(|button| button.bg(rgb(theme.active)))
-                            .child(if teleport.moving() { "Hide" } else { "Cancel" })
+                            .child(if teleport.moving() {
+                                fl!("teleport-hide")
+                            } else {
+                                fl!("teleport-cancel")
+                            })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -771,3 +737,7 @@ impl HerdrWindow {
             )
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;

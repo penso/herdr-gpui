@@ -29,8 +29,11 @@ set -euo pipefail
 /usr/bin/herdr-acp --help >/dev/null
 /usr/bin/herdr-remote-control --version >/dev/null
 /usr/bin/herdr-automate --version >/dev/null
+/usr/bin/herdr-core --version >/dev/null
 # Capture before matching: with pipefail, grep -q exiting early would fail the
 # writer with SIGPIPE and turn a present library into a false failure.
+# herdr-core is a static-pie binary with no libraries to find, so it is left
+# out: ldd's answer for those differs between glibc releases.
 for program in herdr-gpui herdr-acp herdr-remote-control herdr-automate; do
     linked=$(ldd "/usr/bin/$program")
     if grep "not found" <<<"$linked"; then exit 1; fi
@@ -55,13 +58,13 @@ for image in "$ubuntu" "$debian"; do
         DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends /dist/$name.deb >/dev/null
         bash -c \"\$CHECK\"
         apt-get remove -qq -y herdr-gpui >/dev/null
-        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate"
+        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate && test ! -e /usr/bin/herdr-core"
 done
 run "$name.rpm" "$fedora" "
     dnf install -q -y --setopt=install_weak_deps=False /dist/$name.rpm >/dev/null
     bash -c \"\$CHECK\"
     dnf remove -q -y herdr-gpui >/dev/null
-    test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate"
+    test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate && test ! -e /usr/bin/herdr-core"
 if [[ $2 == x86_64-unknown-linux-gnu ]]; then
     run "$name.pkg.tar.zst" "$arch" "
         # pacman 7 drops to a seccomp-sandboxed download user, which some
@@ -70,5 +73,5 @@ if [[ $2 == x86_64-unknown-linux-gnu ]]; then
         pacman -U --noconfirm --disable-sandbox /dist/$name.pkg.tar.zst >/dev/null
         bash -c \"\$CHECK\"
         pacman -R --noconfirm herdr-gpui >/dev/null
-        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate"
+        test ! -e /usr/bin/herdr-gpui && test ! -e /usr/bin/herdr-acp && test ! -e /usr/bin/herdr-remote-control && test ! -e /usr/bin/herdr-automate && test ! -e /usr/bin/herdr-core"
 fi

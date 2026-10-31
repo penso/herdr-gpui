@@ -2,6 +2,8 @@
 use crate::pull_request::{Origin, repository_input};
 use herdr_client::protocol::ClientShellWorktree;
 
+mod en_xa;
+
 #[test]
 fn metadata_priority_alternates_with_round_robin_and_skips_ineligible_workspaces() {
     let mut snapshot = crate::sidebar::layout_tests::ssh_snapshot(6);

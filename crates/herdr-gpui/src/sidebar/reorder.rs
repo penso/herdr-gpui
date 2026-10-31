@@ -12,6 +12,7 @@
 //! rows. A linked worktree only moves among its own siblings: the group is
 //! decided by its repository, not by where it is dropped.
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     reorder::{LIFT_DELAY, LIFT_DISTANCE, SETTLE_TIMEOUT, SLIDE, Slide, slot_for},
@@ -389,7 +390,12 @@ impl HerdrWindow {
                 });
                 self.workspace_drag = Some(drag);
             }
-            Err(error) => self.local_error = Some(format!("Workspace move not sent: {error}")),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "sidebar-workspace-move-not-sent",
+                    error = error.to_string()
+                ));
+            }
         }
         true
     }

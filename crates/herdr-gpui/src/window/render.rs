@@ -720,6 +720,14 @@ impl Render for HerdrWindow {
                 _ => None,
             };
             let body = match (&shown, tab) {
+                // No Herdr 1 is installed: herdr-core's shell stands in.
+                (Shown::Terminal, _)
+                    if terminal_slot == Some(slot) && self.core_fallback_view().is_some() =>
+                {
+                    self.core_fallback_view()
+                        .map(IntoElement::into_any_element)
+                        .unwrap_or_else(|| div().into_any_element())
+                }
                 (Shown::Terminal, _) if terminal_slot == Some(slot) => terminal
                     .take()
                     .map(IntoElement::into_any_element)
@@ -749,6 +757,9 @@ impl Render for HerdrWindow {
                         Some(crate::browser::Location::Devices) => {
                             self.render_devices_tab(slot, &tab, cx)
                         }
+                        Some(crate::browser::Location::CoreTerminal { .. }) => {
+                            self.render_core_terminal_tab(slot, &tab, cx)
+                        }
                         _ => self.render_review_tab(slot, &tab, cx),
                     }
                 }
@@ -770,7 +781,8 @@ impl Render for HerdrWindow {
             groups.push(self.render_group(slot, body, ends, reach, window, cx));
         }
         let content = self.render_groups(groups, cx);
-        let content = section.unwrap_or_else(|| self.zen_column(content));
+        let content =
+            section.unwrap_or_else(|| self.with_mod_panel(self.zen_column(content), window, cx));
         // Not `||`: asking forgets group motion that has finished.
         if self.groups_moving()
             | self.tabs_growing()
@@ -862,7 +874,7 @@ impl Render for HerdrWindow {
                 |this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
                     this.open_update_progress_preview(
                         crate::updater::State::Upgrading {
-                            detail: "Refreshing Homebrew metadata with brew update...".into(),
+                            detail: crate::updater::Progress::Refreshing,
                         },
                         window,
                         cx,

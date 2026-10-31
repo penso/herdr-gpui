@@ -80,15 +80,17 @@ ditto "$2" "$app"
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App version mismatch'
 [[ $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App build version mismatch'
 [[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 14.2 ]] || fail 'App minimum OS mismatch'
-for executable in Herdr herdr-acp herdr-remote-control herdr-automate; do
+for executable in Herdr herdr-acp herdr-remote-control herdr-automate herdr-core; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
 done
 # Nested code is signed before the app that seals it. herdr-acp, a command
 # line program, herdr-remote-control, the remote control daemon, and
-# herdr-automate, the automation daemon, need none of the app's entitlements.
-for executable in herdr-acp herdr-remote-control herdr-automate; do
+# herdr-automate, the automation daemon, and herdr-core, the Herdr 2 daemon
+# (fetched pinned, re-signed here so the bundle notarizes), need none of the
+# app's entitlements.
+for executable in herdr-acp herdr-remote-control herdr-automate herdr-core; do
     codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/$executable"
 done
 codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app/Contents/MacOS/Herdr"

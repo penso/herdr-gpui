@@ -16,6 +16,7 @@ use super::{
 };
 use crate::config::Theme;
 use crate::direction::Logical;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
@@ -194,7 +195,7 @@ impl RowLayout for Orca {
                 .bg(wash(theme.foreground, 0x0f))
                 .text_size(px(small))
                 .text_color(rgb(theme.subtext()))
-                .child(super::super::label_text("primary"))
+                .child(super::super::label_text(&fl!("sidebar-primary")))
         });
         if !lines.is_empty() {
             let (mark, room) = configured_status(&lines, status, removing, cx);

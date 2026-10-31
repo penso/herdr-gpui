@@ -124,6 +124,7 @@ impl Localize for Error {
             Self::MissingDeletion => fl!("error-missing-deletion"),
             Self::MissingHome => fl!("error-missing-home"),
             Self::MissingStateRoot => fl!("error-missing-state-root"),
+            Self::Mods(error) => error.localize(),
             Self::NoSnapshot => fl!("error-no-snapshot"),
             Self::NoTab => fl!("error-no-tab"),
             Self::NotAGitRepository { path: dir } => {
@@ -189,6 +190,7 @@ impl Localize for Error {
                 path = path(file),
                 error = source.to_string()
             ),
+            Self::SshHosts(error) => error.localize(),
             Self::StaleCloseTarget => fl!("error-stale-close-target"),
             Self::StaleConnection => fl!("error-stale-connection"),
             Self::StalePane => fl!("error-stale-pane"),

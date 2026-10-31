@@ -213,4 +213,5 @@ fn reopening_a_code_tab_reads_its_file_again(cx: &mut TestAppContext) {
     });
 }
 
+mod en_xa;
 mod top_row;
