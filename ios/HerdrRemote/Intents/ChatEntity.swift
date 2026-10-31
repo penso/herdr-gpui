@@ -93,7 +93,8 @@ final class SpotlightChats {
             guard !clearedForLock else { return }
             enqueue { [weak self] in
                 let removed = (try? await CSSearchableIndex.default().deleteAppEntities(ofType: ChatEntity.self)) != nil
-                self?.clearedForLock = removed
+                // Unlocked meanwhile: the next lock must remove again.
+                self?.clearedForLock = removed && AppLock.isOn
             }
             return
         }
