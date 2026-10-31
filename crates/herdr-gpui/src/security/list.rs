@@ -5,7 +5,7 @@
 use super::{
     Item,
     page::Opened,
-    section::{ago, severity_color},
+    section::{severity_color, since},
 };
 use crate::HerdrWindow;
 use crate::i18n::fl;
@@ -51,9 +51,7 @@ impl HerdrWindow {
                         .reporter
                         .as_ref()
                         .map(|login| fl!("security-reported-by", login = login.as_str())),
-                    report
-                        .created_at
-                        .map(|at| ago(now.duration_since(at.into()).unwrap_or_default())),
+                    report.created_at.map(|at| since(now, at.into())),
                 ]
                 .into_iter()
                 .flatten()

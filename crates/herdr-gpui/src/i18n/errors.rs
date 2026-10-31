@@ -52,6 +52,7 @@ mod remote;
 mod remote_control;
 mod review;
 mod root;
+mod security;
 #[cfg(unix)]
 mod setup_relay;
 mod sound;
