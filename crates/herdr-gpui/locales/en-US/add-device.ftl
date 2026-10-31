@@ -75,3 +75,7 @@ add-device-terminal-input = Setting up { $target } needs a terminal: SSH needs y
 add-device-terminal-restart = Setting up { $target } needs a terminal: its Herdr server has to restart. Run `herdr machine add { $target }` in a terminal, then add the device again.
 add-device-terminal-key-user = Setting up { $target } needs a terminal: it accepted none of your SSH keys for the user { $user } (use { $example } to log in as someone else). Run `herdr machine add { $target }` in a terminal, then add the device again.
 add-device-terminal-key = Setting up { $target } needs a terminal: it accepted none of your SSH keys. Run `herdr machine add { $target }` in a terminal, then add the device again.
+# The SSH host form's opt-in to connect without verifying the host's key.
+add-device-skip-host-key = Skip host key verification (dangerous)
+# Shown while the opt-in is on. Coder is a product name; keep it as it is.
+add-device-skip-host-key-warning = Herdr will accept any key this host offers, now and on every connection. Anyone who can intercept the connection can impersonate the host and read your terminals. Use it only for hosts that keep no key, such as Coder workspaces.
