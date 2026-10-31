@@ -108,7 +108,7 @@ enum Piece {
 /// The pointer's hold on the `divider`th divider, which its line and both
 /// parts of its grip share, though they are drawn in different groups.
 fn hold(divider: usize, window: &mut Window, cx: &mut App) -> GripHold {
-    GripHold::keyed(("group-divider-grip", divider), window, cx)
+    GripHold::keyed(("group-divider", divider), window, cx)
 }
 
 /// The part of the `divider`th divider's grip on one `side` of its line.

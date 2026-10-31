@@ -117,18 +117,27 @@ impl Hold {
 
 /// The pointer's hold on an edge, which every piece of the edge shares.
 #[derive(Clone)]
-pub(crate) struct GripHold(Entity<Hold>);
+pub(crate) struct GripHold {
+    hold: Entity<Hold>,
+    /// The key's name; the pill's debug selector is it with `-pill`.
+    name: SharedString,
+}
 
 impl GripHold {
     /// The hold keyed `id` in the view being drawn, kept while it is drawn.
     pub(crate) fn keyed(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) -> Self {
-        Self(window.use_keyed_state(id, cx, |_, _| Hold::default()))
+        let id = id.into();
+        let name = id.to_string().into();
+        Self {
+            hold: window.use_keyed_state(id, cx, |_, _| Hold::default()),
+            name,
+        }
     }
 
     /// Makes `band` the `piece`th piece of the edge (below 8): hovering,
     /// pressing, and releasing it count for the whole edge.
     pub(crate) fn listen(&self, piece: u8, band: Stateful<Div>) -> Stateful<Div> {
-        let hold = &self.0;
+        let hold = &self.hold;
         // A hover ends unreported while a drag is under way, so a release
         // settles whether the pointer is still on the piece. Both listen in
         // the capture phase, which an owner's drag that stops the release
@@ -183,17 +192,21 @@ impl GripHold {
         cx: &mut App,
     ) -> Option<Div> {
         let now = motion::now();
-        let (length, opacity, moving) = self.0.update(cx, |hold, cx| {
+        // Unit tests see the pill where it settles, as `motion::pop_in`'s.
+        let at = if cfg!(test) { now + motion::ENTER } else { now };
+        let (length, opacity, moving) = self.hold.update(cx, |hold, cx| {
             let level = hold.level(cx.has_active_drag(), own_drag);
             hold.indicator.set(level, now);
-            let (length, opacity) = hold.indicator.look(now);
-            (length, opacity, hold.indicator.moving(now))
+            let (length, opacity) = hold.indicator.look(at);
+            (length, opacity, hold.indicator.moving(at))
         });
         if moving {
             window.request_animation_frame();
         }
+        let name = self.name.clone();
         (length > 0.5).then(|| {
             let pill = div()
+                .debug_selector(move || format!("{name}-pill"))
                 .flex_none()
                 .rounded_full()
                 .bg(rgb(COLOR))

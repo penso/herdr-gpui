@@ -85,6 +85,8 @@ mod probes;
 #[cfg(test)]
 mod repository_icons;
 #[cfg(test)]
+mod resize_grip;
+#[cfg(test)]
 mod row_drag;
 #[cfg(test)]
 mod rtl_layouts;
