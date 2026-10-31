@@ -752,6 +752,7 @@ impl HerdrWindow {
         })();
         match result {
             Ok(id) => {
+                self.arm_landing(&id, pending.opens());
                 self.menu.creation = Some(id);
                 self.menu.error = None;
                 self.local_error = None;

@@ -26,8 +26,6 @@ use std::{
 /// The file only ever holds one short agent name.
 const MAX_FILE_BYTES: u64 = 256;
 const FILE: &str = "worktree-landing.json";
-/// How long `herdr agent start` may wait for the agent to be ready, as fan-out allows.
-const AGENT_START_TIMEOUT_MS: &str = "90000";
 
 /// What a new worktree's first pane shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -259,20 +257,53 @@ fn agent_name(kind: AgentKind) -> String {
     format!("{}-{}", kind.name(), &hex[..8])
 }
 
-/// The script line starting `kind` in `pane`. Herdr's CLI waits while the
-/// new shell is still starting, which a bare `agent.start` refuses as busy.
-fn start_line(kind: AgentKind, pane: &str) -> String {
-    Host::herdr_line(&[
-        "agent",
-        "start",
-        &agent_name(kind),
-        "--kind",
-        kind.name(),
-        "--pane",
-        pane,
-        "--timeout",
-        AGENT_START_TIMEOUT_MS,
-    ])
+/// A new worktree's landing, kept from its creation request until the
+/// daemon answers, so closing the dialog meanwhile does not drop it.
+#[derive(Debug)]
+pub(crate) struct Launch {
+    /// The correlated `worktree.create` this landing is for.
+    request: String,
+    /// The selection epoch and connection generation it was sent under.
+    endpoint: (u64, u64),
+    boot: String,
+    landing: Landing,
+    host: Host,
+}
+
+impl Launch {
+    /// `picker`'s choice for creation request `request`, sent on boot `boot`
+    /// under the `endpoint` fence.
+    pub(crate) fn new(request: &str, endpoint: (u64, u64), boot: &str, picker: &Picker) -> Self {
+        Self {
+            request: request.to_owned(),
+            endpoint,
+            boot: boot.to_owned(),
+            landing: picker.chosen,
+            host: picker.host.clone(),
+        }
+    }
+
+    /// Whether an answer on this connection and boot can still be for it.
+    pub(crate) fn current(&self, endpoint: (u64, u64), boot: Option<&str>) -> bool {
+        self.endpoint == endpoint && boot == Some(self.boot.as_str())
+    }
+
+    /// Whether `request` is the creation this landing waits on.
+    pub(crate) fn answers(&self, request: &str) -> bool {
+        self.request == request
+    }
+}
+
+/// The created checkout's root pane and its terminal, from the daemon's
+/// `worktree_created` answer.
+fn root_pane(response: &serde_json::Value) -> Option<(&str, Option<&str>)> {
+    let result = &response["result"];
+    if result["type"] != "worktree_created" {
+        return None;
+    }
+    let pane = &result["root_pane"];
+    let id = pane["pane_id"].as_str().filter(|id| !id.is_empty())?;
+    Some((id, pane["terminal_id"].as_str().filter(|id| !id.is_empty())))
 }
 
 impl HerdrWindow {
@@ -307,18 +338,41 @@ impl HerdrWindow {
         Some(picker)
     }
 
-    /// Land a created checkout as `picker` chose: remember the choice, and
-    /// start the agent in `pane` off the UI thread, reporting a failure.
-    pub(crate) fn land_worktree(&mut self, picker: &Picker, pane: &str, cx: &mut Context<Self>) {
-        Remembered::record(picker.chosen, cx);
-        let Some(kind) = picker.chosen.agent() else {
+    /// Land the checkout the open dialog's request created.
+    pub(crate) fn land_created(&mut self, response: &serde_json::Value, cx: &mut Context<Self>) {
+        if let Some(launch) = self.landing_launch.take() {
+            self.land(launch, response, cx);
+        }
+    }
+
+    /// Remember `launch`'s choice and start its agent in the created root
+    /// pane off the UI thread, reporting a failure. A refused or unexpected
+    /// answer created nothing to land in.
+    pub(crate) fn land(
+        &mut self,
+        launch: Launch,
+        response: &serde_json::Value,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((pane, terminal)) = root_pane(response) else {
             return;
         };
-        let (host, line) = (picker.host.clone(), start_line(kind, pane));
-        // Not the dialog's flag: the dialog closes as the checkout opens.
-        let started = cx
-            .background_executor()
-            .spawn(async move { host.capture(&line, &AtomicBool::new(false)).map(drop) });
+        Remembered::record(launch.landing, cx);
+        let Some(kind) = launch.landing.agent() else {
+            return;
+        };
+        let (pane, terminal) = (pane.to_owned(), terminal.map(str::to_owned));
+        let host = launch.host;
+        let started = cx.background_executor().spawn(async move {
+            herdr_orchestrator::actions::start_agent(
+                &host,
+                kind,
+                &agent_name(kind),
+                &pane,
+                terminal.as_deref(),
+                &AtomicBool::new(false),
+            )
+        });
         cx.spawn(async move |this, cx| {
             let Err(error) = started.await else {
                 return;

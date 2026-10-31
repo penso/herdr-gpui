@@ -101,6 +101,7 @@ impl HerdrWindow {
     /// and to a removal whose dialog has already closed.
     pub(crate) fn update_workspace_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.update_pending_removal(window, cx);
+        self.land_dismissed_creation(cx);
         if let Some(check) = &mut self.menu.close_check
             && check.poll()
         {
@@ -166,6 +167,60 @@ impl HerdrWindow {
         self.apply_creation_response(result, window, cx);
     }
 
+    /// Keep the open dialog's landing for creation request `request`. An
+    /// opened checkout keeps whatever it runs, so it has none.
+    pub(in crate::menu) fn arm_landing(&mut self, request: &str, opens: bool) {
+        self.landing_launch = self
+            .menu
+            .landing
+            .as_ref()
+            .zip(self.menu.target.as_ref())
+            .filter(|_| !opens)
+            .map(|(picker, target)| {
+                crate::worktree_landing::Launch::new(
+                    request,
+                    self.menu.endpoint_target,
+                    &target.boot_id,
+                    picker,
+                )
+            });
+    }
+
+    /// Land a checkout whose dialog closed before the daemon answered, once
+    /// the answer arrives. A newer connection or boot never receives it.
+    fn land_dismissed_creation(&mut self, cx: &mut Context<Self>) {
+        if self.menu.creation.is_some() {
+            return;
+        }
+        let Some(launch) = &self.landing_launch else {
+            return;
+        };
+        let endpoint = (
+            self.selection_epoch,
+            self.endpoints[self.selected_endpoint].generation,
+        );
+        let boot = self
+            .live
+            .snapshot
+            .as_ref()
+            .filter(|_| self.live.status.is_connected())
+            .map(|snapshot| snapshot.boot_id.as_str());
+        if !launch.current(endpoint, boot) {
+            self.landing_launch = None;
+            return;
+        }
+        let Some((id, Some(result))) = &self.live.dialog_response else {
+            return;
+        };
+        if !launch.answers(id) {
+            return;
+        }
+        let answer = result.as_ref().ok().cloned();
+        if let (Some(launch), Some(response)) = (self.landing_launch.take(), answer) {
+            self.land(launch, &response, cx);
+        }
+    }
+
     /// Follow the checkout the daemon created or opened. The daemon switches its own
     /// session, but this client shell keeps its own location, so the new
     /// workspace is only selected (and revealed in the sidebar) once this
@@ -182,6 +237,8 @@ impl HerdrWindow {
             if let Some(source) = &mut this.menu.worktree {
                 source.pending = None;
             }
+            // Nothing was created, so the next submission arms its own landing.
+            this.landing_launch = None;
             this.menu.error = Some(error);
             cx.notify();
         };
@@ -229,8 +286,6 @@ impl HerdrWindow {
             .then(|| self.setup_launch(result, &created))
             .flatten();
         let endpoint = self.endpoints[self.selected_endpoint].id.clone();
-        // Taken before dismissal drops it; an opened checkout keeps whatever it runs.
-        let landing = self.menu.landing.take().filter(|_| !opening);
         // A folded group would hide the new checkout the sidebar is about to select.
         let group = self
             .menu
@@ -257,12 +312,10 @@ impl HerdrWindow {
             .filter(|id| !id.is_empty());
         if let Some(pane_id) = pane {
             self.navigate_endpoint(&endpoint, NavigationTarget::Pane(pane_id), cx);
-            if let Some(landing) = &landing {
-                self.land_worktree(landing, pane_id, cx);
-            }
         } else {
             self.navigate_endpoint(&endpoint, NavigationTarget::Workspace(&created), cx);
         }
+        self.land_created(&response, cx);
         if let Some(launch) = setup
             && let Err(error) = self.start_worktree_script(launch, cx)
         {
@@ -451,6 +504,7 @@ impl HerdrWindow {
                 let id = self.endpoints[self.selected_endpoint]
                     .connection
                     .request_dialog(&target.boot_id, method, params)?;
+                self.arm_landing(&id, action == WorkspaceAction::OpenWorktree);
                 self.menu.creation = Some(id);
                 self.menu.error = None;
                 if let Some(source) = &mut self.menu.worktree {

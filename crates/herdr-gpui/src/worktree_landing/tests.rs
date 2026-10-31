@@ -115,7 +115,40 @@ fn agent_names_are_ones_herdr_accepts() {
             "{name}"
         );
     }
-    let line = start_line(AgentKind::Claude, "p_1");
-    assert!(line.starts_with("herdr_cli 'agent' 'start' "), "{line}");
-    assert!(line.contains("'--pane' 'p_1'"), "{line}");
+}
+
+#[test]
+fn only_a_created_root_pane_is_landed_in() {
+    let created = serde_json::json!({"result":{"type":"worktree_created",
+        "root_pane":{"pane_id":"p9","terminal_id":"t_42"}}});
+    assert_eq!(root_pane(&created), Some(("p9", Some("t_42"))));
+    // Without the terminal's identity a busy shell is not retried.
+    let older = serde_json::json!({"result":{"type":"worktree_created",
+        "root_pane":{"pane_id":"p9"}}});
+    assert_eq!(root_pane(&older), Some(("p9", None)));
+    let opened = serde_json::json!({"result":{"type":"worktree_opened",
+        "root_pane":{"pane_id":"p9"}}});
+    assert_eq!(root_pane(&opened), None);
+    let refused = serde_json::json!({"error":{"code":"worktree_create_failed"}});
+    assert_eq!(root_pane(&refused), None);
+    let blank = serde_json::json!({"result":{"type":"worktree_created",
+        "root_pane":{"pane_id":""}}});
+    assert_eq!(root_pane(&blank), None);
+}
+
+#[test]
+fn a_launch_answers_only_its_request_on_its_connection_and_boot() {
+    let launch = Launch::new(
+        "create",
+        (3, 7),
+        "boot-a",
+        &picker(Landing::Agent(AgentKind::Claude)),
+    );
+    assert!(launch.answers("create"));
+    assert!(!launch.answers("list"));
+    assert!(launch.current((3, 7), Some("boot-a")));
+    assert!(!launch.current((3, 8), Some("boot-a")));
+    assert!(!launch.current((4, 7), Some("boot-a")));
+    assert!(!launch.current((3, 7), Some("boot-b")));
+    assert!(!launch.current((3, 7), None));
 }
