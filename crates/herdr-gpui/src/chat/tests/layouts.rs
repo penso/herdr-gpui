@@ -3,7 +3,7 @@
 
 use super::{
     overlay::{attach_with, open, poll},
-    timeline::conversation,
+    timeline::{conversation, fit_conversation},
     *,
 };
 use crate::{HerdrWindow, chat::chats::Chats, config::ChatLayoutMode};
@@ -23,6 +23,7 @@ fn bubbles_put_the_user_on_the_right_without_avatars(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(&view, &program, conversation(false), cx);
+    fit_conversation(&view, &program, cx);
     for mode in [ChatLayoutMode::Bubbles] {
         switch(&view, mode, cx);
         poll(&view, &program, cx);
@@ -103,6 +104,7 @@ fn each_layout_marks_the_conversation_its_own_way(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(&view, &program, conversation(false), cx);
+    fit_conversation(&view, &program, cx);
     let marks = [
         (ChatLayoutMode::Timeline, "chat-avatar-1"),
         (ChatLayoutMode::Bubbles, "chat-bubble-1"),

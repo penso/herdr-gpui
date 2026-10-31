@@ -50,7 +50,13 @@ impl Background {
                 self.agents.insert(id.to_owned());
                 Tag::activity(Report::new(ActivityKind::Subagent, ActivityState::Running))
             }
-            Some("commandExecution") if self.commands.len() < MAX_TRACKED => {
+            Some("commandExecution")
+                if self.commands.contains_key(id) || self.commands.len() < MAX_TRACKED =>
+            {
+                // A start accepted for a later turn owns this ID now. A late
+                // completion from its old background run must not bypass the
+                // bridge's current-turn fence and finish the new command.
+                self.shells.remove(id);
                 self.commands.insert(
                     id.to_owned(),
                     field("command").unwrap_or_default().to_owned(),
@@ -156,6 +162,11 @@ impl Background {
             _ => ActivityState::Finished,
         };
         self.end_child(thread, state)
+    }
+
+    /// Only a known background shell may finish after its originating turn.
+    pub(super) fn is_shell(&self, id: &str) -> bool {
+        self.shells.contains(id)
     }
 
     /// The turn ended: every command still running runs in the background.

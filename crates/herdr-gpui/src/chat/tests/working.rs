@@ -40,7 +40,7 @@ fn every_layout_shows_the_agent_working(cx: &mut TestAppContext) {
         let sign = if layout == ChatLayoutMode::IMessage {
             "chat-typing"
         } else {
-            "chat-working"
+            "chat-live-moving"
         };
         let working = cx
             .debug_bounds(sign)
@@ -63,7 +63,7 @@ fn the_sign_is_gone_between_turns(cx: &mut TestAppContext) {
             view.set_chat_layout_with(layout, |_| Ok(()), cx)
         });
         poll(&view, &program, cx);
-        assert!(cx.debug_bounds("chat-working").is_none(), "{layout:?}");
+        assert!(cx.debug_bounds("chat-live-moving").is_none(), "{layout:?}");
         assert!(cx.debug_bounds("chat-typing").is_none(), "{layout:?}");
     }
 }

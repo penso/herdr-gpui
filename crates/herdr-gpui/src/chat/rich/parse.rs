@@ -170,7 +170,11 @@ impl<'a> Builder<'a> {
             Event::End(tag) => return self.end(tag),
             Event::InlineMath(source) => {
                 match formula(&source, MathMode::Inline, &mut self.maths, self.visuals) {
-                    Some((id, source)) => self.content.push(Inline::Math { id, source }),
+                    Some((id, source)) => self.content.push(Inline::Math {
+                        id,
+                        source,
+                        mode: MathMode::Inline,
+                    }),
                     None => self.text(&format!("${source}$")),
                 }
             }
@@ -364,7 +368,9 @@ impl<'a> Builder<'a> {
         };
         let source: Arc<str> = source.into();
         let id = VisualId::of(("code", &language, &source));
-        if closed && source.len() <= super::MAX_CODE_BYTES && self.codes < MAX_HIGHLIGHTED {
+        let highlight =
+            closed && source.len() <= super::MAX_CODE_BYTES && self.codes < MAX_HIGHLIGHTED;
+        if highlight {
             self.visuals.want(
                 id,
                 Source::Code {
@@ -378,6 +384,7 @@ impl<'a> Builder<'a> {
             id,
             language,
             source,
+            highlight,
         });
     }
 
@@ -390,7 +397,11 @@ impl<'a> Builder<'a> {
             return;
         };
         if self.table.is_some() {
-            self.content.push(Inline::Math { id, source });
+            self.content.push(Inline::Math {
+                id,
+                source,
+                mode: MathMode::Display,
+            });
         } else {
             self.flush();
             self.blocks.push(Block::Math { id, source });

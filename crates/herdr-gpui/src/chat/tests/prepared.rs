@@ -1,9 +1,10 @@
 use super::*;
-use crate::chat::prepared::{Body, DiffSummary, Part, Prepared, diff_counts, summarize};
+use crate::chat::prepared::{Body, DiffSummary, Part, Prepared, summarize};
 use herdr_chat_protocol::{Tool, ToolContent, ToolKind, ToolStatus};
 
 mod cut;
 mod fences;
+mod measurement;
 
 #[test]
 fn literal_indented_widget_examples_cannot_become_controls() {
@@ -24,9 +25,22 @@ fn literal_indented_widget_examples_cannot_become_controls() {
 
 #[test]
 fn diffs_count_lines_added_and_removed() {
-    assert_eq!(diff_counts("a\nb\nc\n", "a\nB\nc\nd\n"), (2, 1));
-    assert_eq!(diff_counts("", "one\ntwo"), (2, 0));
-    assert_eq!(diff_counts("same", "same"), (0, 0));
+    for (old, new, counts) in [
+        ("a\nb\nc\n", "a\nB\nc\nd\n", (2, 1)),
+        ("", "one\ntwo", (2, 0)),
+        ("same", "same", (0, 0)),
+    ] {
+        let summary = summarize(
+            &[ToolContent::Diff {
+                path: "file".into(),
+                old: Some(old.into()),
+                new: new.into(),
+            }],
+            ToolKind::Edit,
+            &mut Default::default(),
+        );
+        assert_eq!((summary.diffs[0].added, summary.diffs[0].removed), counts);
+    }
 }
 
 #[test]
@@ -40,11 +54,12 @@ fn a_tool_call_is_summarized() {
             ToolContent::Text { text },
             ToolContent::Diff {
                 new: "x\ny\n".into(),
-                old: None,
+                old: Some(String::new()),
                 path: "/src/new.rs".into(),
             },
             ToolContent::Terminal { id: "t1".into() },
         ],
+        ToolKind::Other,
         &mut Default::default(),
     );
     assert_eq!(summary.lines.len(), 6);

@@ -1,8 +1,12 @@
 //! A sub-agent's own steps, listed in its call's card when it is open: one
 //! quiet line each, its state's mark and its title.
 
-use super::{Hues, tool_header};
-use crate::{HerdrWindow, chat::chats::ChatPane, fonts::StyledFont};
+use super::Hues;
+use crate::{
+    HerdrWindow,
+    chat::{chats::ChatPane, prepared::tool::label},
+    fonts::StyledFont,
+};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{EntryId, EntryKind, ToolStatus};
 
@@ -59,7 +63,7 @@ impl HerdrWindow {
                                 .truncate()
                                 .text_font(&self.config.terminal)
                                 .text_color(rgb(theme.muted))
-                                .child(tool_header(&tool.title)),
+                                .child(label(&tool.title, None)),
                         ),
                 )
             }))

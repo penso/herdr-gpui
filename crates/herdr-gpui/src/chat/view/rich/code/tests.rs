@@ -4,6 +4,49 @@ use crate::{chat::rich::TAB_WIDTH, review::highlight::Token};
 mod truncation;
 
 #[core::prelude::v1::test]
+fn changed_rows_and_syntax_tokens_keep_contrast_in_light_and_dark_themes() {
+    for name in ["Default", "Catppuccin Latte"] {
+        let Some(theme) = Theme::builtin(name) else {
+            panic!("builtin theme")
+        };
+        for kind in [
+            DiffKind::Added,
+            DiffKind::Removed,
+            DiffKind::Context,
+            DiffKind::Meta,
+        ] {
+            let (background, ink) = diff_colors(&theme, Some(kind));
+            assert!(
+                crate::contrast::ratio(ink, background) >= 4.5,
+                "{name}: {kind:?}"
+            );
+            if let Some(sign) = diff_sign(&theme, Some(kind), background) {
+                assert!(crate::contrast::ratio(sign, background) >= 4.5);
+                assert_ne!(background, theme.surface);
+            } else {
+                assert_eq!(background, theme.surface);
+            }
+            for token in [
+                Token::Comment,
+                Token::String,
+                Token::Number,
+                Token::Constant,
+                Token::Keyword,
+                Token::Type,
+                Token::Function,
+            ] {
+                let ink = token.colour(&theme, Contrast::On(background));
+                assert!(crate::contrast::ratio(ink, background) >= 4.5);
+            }
+        }
+        assert_ne!(
+            diff_colors(&theme, Some(DiffKind::Added)).0,
+            diff_colors(&theme, Some(DiffKind::Removed)).0
+        );
+    }
+}
+
+#[core::prelude::v1::test]
 fn tabs_keep_code_indentation_and_unicode_highlight_offsets() {
     let raw = "\tlet α = 2;\u{202e}";
     let keyword = Span {

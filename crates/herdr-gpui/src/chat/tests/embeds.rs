@@ -186,5 +186,9 @@ fn an_html_file_a_tool_wrote_offers_a_preview(cx: &mut TestAppContext) {
         transcript: Box::new(transcript),
     };
     let _stream = attach_with(&view, &program, snapshot, cx);
+    assert!(cx.debug_bounds("chat-show-page").is_none());
+    let header = cx.debug_bounds("chat-tool-1").unwrap();
+    cx.simulate_click(header.center(), Modifiers::default());
+    poll(&view, &program, cx);
     assert!(cx.debug_bounds("chat-show-page").is_some());
 }

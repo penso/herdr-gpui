@@ -1,8 +1,12 @@
 use super::*;
 use crate::chat::{
-    rich::{CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES},
+    rich::{
+        CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES,
+        diff::{self, Kind as DiffKind},
+    },
     selection::{Cell, Segment},
 };
+use crate::config::Theme;
 use crate::review::highlight::{Contrast, Span};
 use std::sync::Arc;
 
@@ -15,23 +19,77 @@ impl HerdrWindow {
         block: usize,
         context: &mut RichContext<'_, '_, '_>,
     ) -> Div {
-        let spans = context.visuals.code(id);
+        self.render_rich_code_block(
+            CodeView {
+                id,
+                language,
+                source,
+                block,
+                limit: MAX_CODE_LINES,
+            },
+            context.visuals,
+            Some(context.selection),
+            context.cx,
+        )
+    }
+
+    pub(in crate::chat::view) fn render_chat_tool_code(
+        &self,
+        code: &crate::chat::prepared::tool::Code,
+        selection: Option<&Scope<'_>>,
+        expanded: bool,
+        visuals: &Visuals,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        self.render_rich_code_block(
+            CodeView {
+                id: code.id,
+                language: &code.language,
+                source: &code.source,
+                block: 0,
+                limit: crate::chat::selection::tool_code_limit(&code.language, expanded),
+            },
+            visuals,
+            selection,
+            cx,
+        )
+    }
+
+    fn render_rich_code_block(
+        &self,
+        code: CodeView<'_>,
+        visuals: &Visuals,
+        selection: Option<&Scope<'_>>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let CodeView {
+            id,
+            language,
+            source,
+            block,
+            limit,
+        } = code;
+        let is_diff =
+            language.eq_ignore_ascii_case("diff") || language.eq_ignore_ascii_case("patch");
+        let diff_rows = is_diff.then(|| diff::rows(source, limit));
+        let spans = visuals.code(id);
         // One pass: the lines past the limit are only checked for, not counted.
         let mut raw = source.lines();
         let lines: Vec<_> = raw
             .by_ref()
-            .take(MAX_CODE_LINES)
+            .take(limit)
             .enumerate()
             .map(|(index, raw)| {
                 let spans = spans
                     .and_then(|spans| spans.get(index))
                     .map_or(&[][..], Vec::as_slice);
-                match context
-                    .selection
-                    .segment(Cell {
-                        block,
-                        row: index,
-                        column: 0,
+                match selection
+                    .and_then(|selection| {
+                        selection.segment(Cell {
+                            block,
+                            row: index,
+                            column: 0,
+                        })
                     })
                     .and_then(Segment::code)
                 {
@@ -62,14 +120,20 @@ impl HerdrWindow {
                     .text_size(px(self.chat_text_size() - 2.))
                     .text_color(rgb(self.theme.muted))
                     .child(
-                        if language.is_empty() {
+                        if is_diff {
+                            "Diff"
+                        } else if language.is_empty() {
                             "Code"
                         } else {
                             language
                         }
                         .to_owned(),
                     )
-                    .child(self.rich_copy(copy::CODE, Arc::clone(source), context.cx)),
+                    .child(self.rich_copy(
+                        if is_diff { copy::DIFF } else { copy::CODE },
+                        Arc::clone(source),
+                        cx,
+                    )),
             )
             .child(
                 div()
@@ -85,34 +149,56 @@ impl HerdrWindow {
                     .line_height(relative(1.5))
                     .text_font(&self.config.terminal)
                     .children(lines.into_iter().enumerate().map(|(index, line)| {
-                        let marks = line.spans.into_iter().map(|span| {
-                            (
-                                span.start..span.end,
-                                HighlightStyle {
-                                    color: Some(
-                                        rgb(span
-                                            .token
-                                            .colour(&self.theme, Contrast::On(self.theme.surface)))
-                                        .into(),
-                                    ),
-                                    ..Default::default()
-                                },
-                            )
-                        });
-                        let fragment = context.selection.fragment(Cell {
-                            block,
-                            row: index,
-                            column: 0,
+                        let kind = diff_rows
+                            .as_ref()
+                            .and_then(|rows| rows.get(index))
+                            .map(|row| row.kind);
+                        let (background, ink) = diff_colors(&self.theme, kind);
+                        let marks = diff_sign(&self.theme, kind, background)
+                            .map(|color| {
+                                (
+                                    0..1,
+                                    HighlightStyle {
+                                        color: Some(rgb(color).into()),
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .into_iter()
+                            .chain(line.spans.into_iter().map(|span| {
+                                (
+                                    span.start..span.end,
+                                    HighlightStyle {
+                                        color: Some(
+                                            rgb(span
+                                                .token
+                                                .colour(&self.theme, Contrast::On(background)))
+                                            .into(),
+                                        ),
+                                        ..Default::default()
+                                    },
+                                )
+                            }));
+                        let fragment = selection.and_then(|selection| {
+                            selection.fragment(Cell {
+                                block,
+                                row: index,
+                                column: 0,
+                            })
                         });
                         let styled = styled_text(fragment.as_ref(), line.text, marks, &self.theme);
                         let layout = styled.layout().clone();
                         let view = div()
                             .debug_selector(move || format!("chat-code-line-{index}"))
                             .flex_none()
+                            .min_w_full()
                             .whitespace_nowrap()
                             .min_h(px(self.config.terminal.size * 1.5))
+                            .bg(rgb(background))
+                            .text_color(rgb(ink))
+                            .when(is_diff, |row| row.px(px(6.)))
                             .child(styled);
-                        selectable(fragment.as_ref(), view, layout, context.cx)
+                        selectable(fragment.as_ref(), view, layout, cx)
                     })),
             )
             .when(truncated, |view| {
@@ -122,7 +208,11 @@ impl HerdrWindow {
                         .px(px(14.))
                         .pb(px(6.))
                         .text_color(rgb(self.theme.muted))
-                        .child(truncation_note()),
+                        .child(if limit < MAX_CODE_LINES {
+                            "Expand for more lines; Copy includes the full source.".to_owned()
+                        } else {
+                            truncation_note()
+                        }),
                 )
             })
     }
@@ -149,6 +239,37 @@ fn grouped(number: usize) -> String {
         text.push(digit);
     }
     text
+}
+
+fn diff_colors(theme: &Theme, kind: Option<DiffKind>) -> (u32, u32) {
+    let background = match kind {
+        Some(DiffKind::Added) => crate::config::mix(theme.surface, theme.palette[2], 17),
+        Some(DiffKind::Removed) => crate::config::mix(theme.surface, theme.palette[1], 17),
+        _ => theme.surface,
+    };
+    let ink = if kind == Some(DiffKind::Meta) {
+        theme.muted
+    } else {
+        theme.foreground
+    };
+    (background, super::super::text_ink(ink, background))
+}
+
+fn diff_sign(theme: &Theme, kind: Option<DiffKind>, background: u32) -> Option<u32> {
+    let palette = match kind? {
+        DiffKind::Added => 2,
+        DiffKind::Removed => 1,
+        _ => return None,
+    };
+    Some(super::super::text_ink(theme.palette[palette], background))
+}
+
+struct CodeView<'a> {
+    id: VisualId,
+    language: &'a str,
+    source: &'a Arc<str>,
+    block: usize,
+    limit: usize,
 }
 
 struct CodeLine {

@@ -118,6 +118,19 @@ The mirror's native-log format support is best effort because those storage
 formats can change. A missing or unreadable source ends the watcher with an
 error. It never repairs or writes to the transcript.
 
+Known tool arguments provide concise command, path, search and agent activity
+titles; the retained raw input and output remain available in the card. Explicit
+exit/error fields and background command or script IDs refine tool status.
+Returning from a delegation or wait call does not establish that a child agent
+finished. Unknown tools retain their original names and unsupported results are
+not interpreted as evidence of background completion.
+
+Log observation is not a token subscription. The viewer can only display a
+record after the CLI writes it. It does not call `thread/resume` on a shared
+Codex server to obtain events, because resume is not a passive observer API.
+See [streaming and tool activity](../../docs/rich-chat.md#streaming-and-tool-activity)
+for the distinction between existing logs and a new native streaming chat.
+
 ## What it tells Herdr
 
 Inside a Herdr pane (`HERDR_PANE_ID` and `HERDR_SOCKET_PATH` set), it reports
@@ -177,6 +190,12 @@ when leaving plan mode, and questions with choices. `--load` continues a
 session with its context, but the chat starts empty: the earlier messages
 are not shown again.
 
+Reported `tool_progress` updates show elapsed time for known active tools.
+Verified root background-task events have separate, bounded progress cards;
+they can outlive the originating tool invocation. Task run identities fence
+resumes and late events. These messages report progress, not incremental stdout,
+and the bridge never reads a task's `output_file` path.
+
 ### Codex and pi without an adapter
 
 The same holds for two more agents, each through a translator of its own
@@ -189,11 +208,24 @@ The same holds for two more agents, each through a translator of its own
   reasoning efforts come from `model/list` and go with each turn, and command,
   file-change, and extra-access approvals become permission requests. A
   configured model the account does not offer gives way to Codex's default.
+  Command output deltas update the running tool card; final output replaces the
+  partial aggregate. Up to 16 active commands retain bounded streaming buffers;
+  additional commands still receive their start and completion updates.
 - **pi** (`@earendil-works/pi-coding-agent`) runs as `pi --mode rpc`, the JSON
   lines its `docs/rpc.md` documents. pi asks no tool approvals of its own; an
   extension's `select` and `confirm` dialogs become permission requests, and
   its models and thinking levels are the session's settings. `--load` passes
-  pi's `--session`.
+  pi's `--session`. Reported partial tool results update the running card as
+  snapshots; the final result replaces them. Custom tool partials are not
+  blindly concatenated, since each tool defines whether its result extends or
+  replaces earlier output.
+
+Native bridges share a bounded first-immediate, then 50ms coalescing helper.
+It constructs wire updates only when publishing and has no periodic idle timer.
+The generic ACP path already accepts message chunks and in-progress tool content
+from any adapter, including custom agents. Its behavior does not depend on the
+agent's display name. See the [capability table](../../docs/rich-chat.md#streaming-and-tool-activity)
+for the difference between streamed output, reported progress and log observation.
 
 ### Enterprise endpoints
 

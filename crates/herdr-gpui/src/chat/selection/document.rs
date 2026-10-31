@@ -3,7 +3,7 @@
 use super::{Caret, Cell, Key, Position, Region};
 use crate::{
     chat::{
-        prepared::{Body, MESSAGE, Part, folded_thought, notice_label, tool_header, tool_text},
+        prepared::{Body, MESSAGE, Part, folded_thought, notice_label},
         rich::{Block, CodeText, Inline, Kind, MAX_CODE_LINES, remote_content},
     },
     release_notes::Line,
@@ -276,19 +276,53 @@ fn project(
                 builder.plain(Region::Body(0), Cell::default(), summary.gist.clone());
             }
         }
-        Some(Body::Tool(_)) => {
+        Some(Body::Tool(summary)) => {
             if let EntryKind::Tool(tool) = &entry.kind {
-                builder.plain(Region::Label, Cell::default(), tool_header(&tool.title));
+                use crate::chat::prepared::tool::COMPACT_LOCATIONS;
+                builder.plain(Region::Label, Cell::default(), summary.label.clone());
                 if expanded {
                     builder.plain(Region::ToolTitle, Cell::default(), tool.title.clone());
-                    for (row, location) in tool.locations.iter().enumerate() {
-                        builder.plain(Region::ToolLocations, Cell::row(row), location.clone());
+                }
+                for (row, location) in tool
+                    .locations
+                    .iter()
+                    .take(if expanded {
+                        usize::MAX
+                    } else {
+                        COMPACT_LOCATIONS
+                    })
+                    .enumerate()
+                {
+                    builder.plain(
+                        Region::ToolLocations,
+                        Cell::row(row),
+                        if expanded {
+                            location.clone()
+                        } else {
+                            crate::notifications::safe_text(location, 300)
+                        },
+                    );
+                }
+                for (index, preview) in summary
+                    .previews
+                    .iter()
+                    .take(if expanded { usize::MAX } else { 0 })
+                    .enumerate()
+                {
+                    builder.plain(
+                        Region::ToolPreviewLabel(index),
+                        Cell::default(),
+                        preview.label.clone(),
+                    );
+                    if expanded && let Some(before) = &preview.before {
+                        builder.code(Region::ToolBefore(index), 0, &before.source, MAX_CODE_LINES);
                     }
-                    for (block, content) in tool.content.iter().enumerate() {
-                        if let Some(text) = tool_text(content) {
-                            builder.plain(Region::ToolContent, Cell::block(block), text);
-                        }
-                    }
+                    builder.code(
+                        Region::ToolPreview(index),
+                        0,
+                        &preview.code.source,
+                        super::tool_code_limit(&preview.code.language, expanded),
+                    );
                 }
             }
         }
@@ -428,37 +462,7 @@ impl Builder {
                     std::iter::once(0..source.len()).collect(),
                     "\n\n",
                 ),
-                Block::Code { source, .. } => {
-                    let mut offset = 0;
-                    for (row, raw) in source
-                        .split_inclusive('\n')
-                        .take(MAX_CODE_LINES)
-                        .enumerate()
-                    {
-                        let line = raw
-                            .strip_suffix('\n')
-                            .map(|line| line.strip_suffix('\r').unwrap_or(line))
-                            .unwrap_or(raw);
-                        self.push(
-                            Position {
-                                cell: Cell {
-                                    block,
-                                    row,
-                                    column: 0,
-                                },
-                                ..position
-                            },
-                            Text::Code {
-                                line: CodeText::expand(line),
-                                source: source.clone(),
-                                start: offset,
-                            },
-                            Vec::new(),
-                            if row == 0 { "\n\n" } else { "\n" },
-                        );
-                        offset += raw.len();
-                    }
-                }
+                Block::Code { source, .. } => self.code(region, block, source, MAX_CODE_LINES),
                 Block::Table { rows, .. } => {
                     for (row, cells) in rows.iter().enumerate() {
                         for (column, content) in cells.iter().enumerate() {
@@ -480,6 +484,34 @@ impl Builder {
                     }
                 }
             }
+        }
+    }
+
+    fn code(&mut self, region: Region, block: usize, source: &Arc<str>, limit: usize) {
+        let mut offset = 0;
+        for (row, raw) in source.split_inclusive('\n').take(limit).enumerate() {
+            let line = raw
+                .strip_suffix('\n')
+                .map(|line| line.strip_suffix('\r').unwrap_or(line))
+                .unwrap_or(raw);
+            self.push(
+                Position {
+                    region,
+                    cell: Cell {
+                        block,
+                        row,
+                        column: 0,
+                    },
+                },
+                Text::Code {
+                    line: CodeText::expand(line),
+                    source: source.clone(),
+                    start: offset,
+                },
+                Vec::new(),
+                if row == 0 { "\n\n" } else { "\n" },
+            );
+            offset += raw.len();
         }
     }
 

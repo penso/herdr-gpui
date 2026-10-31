@@ -68,7 +68,7 @@ def capture(args, case, theme, width, root):
             "HERDR_TEST_RICH_CHAT": case,
             "HERDR_TEST_RICH_CHAT_THEME": theme,
             "HERDR_TEST_RICH_CHAT_SIZE": width,
-            "HERDR_TEST_RICH_CHAT_HOLD_MS": "15000" if case in ("selection", "input-resize") else "3000",
+            "HERDR_TEST_RICH_CHAT_HOLD_MS": "20000" if case in ("tool-disclosure", "tools-open") else "15000" if case in ("selection", "input-resize") else "3000",
             "HERDR_CONFIG_PATH": str(sandbox / "daemon.toml"),
             "LP_NUM_THREADS": "2",
             "RAYON_NUM_THREADS": "2",
@@ -112,12 +112,12 @@ def capture(args, case, theme, width, root):
                         if time.monotonic() >= deadline:
                             raise TimeoutError(f"fixture did not settle: {log_path}")
                         time.sleep(0.1)
-                    if case in ("selection", "input-resize"):
+                    if case in ("selection", "input-resize", "tool-disclosure", "tools-open"):
                         capture_native_input(env, directory, app, case)
                     output = directory / "native.png"
                     subprocess.run(["magick", "import", "-display", env["DISPLAY"], "-window", "root",
                                     str(output)], env=env, check=True, timeout=10)
-                    status = app.wait(timeout=20 if case in ("selection", "input-resize") else 10)
+                    status = app.wait(timeout=25 if case in ("selection", "input-resize", "tool-disclosure", "tools-open") else 10)
                     if status or "native fixture PASS" not in log_path.read_text(errors="replace"):
                         raise RuntimeError(f"fixture did not pass: {log_path}")
                     if opener_log.exists():
@@ -137,7 +137,7 @@ def main():
     parser.add_argument("--xvfb", type=Path, default=Path("/usr/bin/Xvfb"))
     parser.add_argument("--vulkan-library", type=Path)
     parser.add_argument("--output", type=Path, default=Path("target/rich-chat-native"))
-    parser.add_argument("--case", choices=["math", "code", "diagram", "activity", "activity-open", "attachments", "questions", "selection", "input-resize", "user", "widgets", "widgets-end", "conversation", "existing", "running", "running-open", "all"])
+    parser.add_argument("--case", choices=["math", "code", "diagram", "activity", "activity-open", "tools", "tools-open", "tool-disclosure", "tool-summary", "turns", "running", "running-open", "loading", "attachments", "questions", "selection", "input-resize", "user", "widgets", "widgets-end", "conversation", "existing", "all"])
     parser.add_argument("--layout", choices=["timeline", "bubbles", "terminal", "document", "cards", "imessage"])
     parser.add_argument("--theme", choices=["dark", "light"], default="dark")
     parser.add_argument("--size", choices=["wide", "narrow"], default="wide")

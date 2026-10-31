@@ -27,7 +27,7 @@ pub(crate) fn completed(item: &Value) -> Option<wire::ToolCallUpdate> {
     let id = item.get("id")?.as_str()?;
     let (title, _, content) = describe(item)?;
     let status = match item.get("status").and_then(Value::as_str) {
-        Some("failed" | "declined") => wire::ToolCallStatus::Failed,
+        Some("failed" | "declined" | "interrupted") => wire::ToolCallStatus::Failed,
         Some("inProgress") => wire::ToolCallStatus::InProgress,
         _ => wire::ToolCallStatus::Completed,
     };
@@ -51,7 +51,7 @@ fn describe(item: &Value) -> Option<(String, wire::ToolKind, Vec<wire::ToolCallC
             // The whole command, so what an approval runs is never hidden.
             field("command")
                 .filter(|command| command.lines().nth(1).is_some())
-                .map(out::text)
+                .map(|command| out::text(&bounded_text(command)))
                 .into_iter()
                 .collect(),
         ),
@@ -94,9 +94,20 @@ fn describe(item: &Value) -> Option<(String, wire::ToolKind, Vec<wire::ToolCallC
             wire::ToolKind::Read,
             Vec::new(),
         ),
-        "collabAgentToolCall" => (collab_title(item), wire::ToolKind::Think, Vec::new()),
+        "collabToolCall" | "collabAgentToolCall" => collaboration(item),
         _ => return None,
     })
+}
+
+fn collaboration(item: &Value) -> (String, wire::ToolKind, Vec<wire::ToolCallContent>) {
+    let content = item
+        .get("prompt")
+        .and_then(Value::as_str)
+        .filter(|prompt| !prompt.is_empty())
+        .map(|prompt| out::text(&bounded_text(prompt)))
+        .into_iter()
+        .collect();
+    (collab_title(item), wire::ToolKind::Think, content)
 }
 
 /// A collab call's title: a sub-agent's task, or what the call does to one.
@@ -107,24 +118,31 @@ fn collab_title(item: &Value) -> String {
     let prompt = field("prompt")
         .and_then(|prompt| prompt.lines().find(|line| !line.trim().is_empty()))
         .map(str::trim);
-    match (field("tool"), prompt) {
-        (Some("spawnAgent"), Some(prompt)) => prompt.to_owned(),
-        (Some("spawnAgent"), None) => "Start a sub-agent".to_owned(),
-        (Some("wait"), _) => "Wait for sub-agents".to_owned(),
-        (Some("sendInput" | "sendMessage" | "followupTask"), _) => "Message a sub-agent".to_owned(),
-        (Some("closeAgent"), _) => "Close a sub-agent".to_owned(),
-        (Some("interruptAgent"), _) => "Interrupt a sub-agent".to_owned(),
-        (Some("resumeAgent"), _) => "Resume a sub-agent".to_owned(),
-        (Some("listAgents"), _) => "List sub-agents".to_owned(),
-        (_, Some(prompt)) => prompt.to_owned(),
-        _ => "Sub-agent".to_owned(),
+    let title = match (field("tool"), prompt) {
+        (Some("spawnAgent"), Some(prompt)) => prompt,
+        (Some("spawnAgent"), None) => "Start a sub-agent",
+        (Some("wait"), _) => "Wait for sub-agents",
+        (Some("sendInput" | "sendMessage" | "followupTask"), _) => "Message a sub-agent",
+        (Some("closeAgent"), _) => "Close a sub-agent",
+        (Some("interruptAgent"), _) => "Interrupt a sub-agent",
+        (Some("resumeAgent"), _) => "Resume a sub-agent",
+        (Some("listAgents"), _) => "List sub-agents",
+        (_, Some(prompt)) => prompt,
+        _ => "Sub-agent",
+    };
+    const MAX_TITLE: usize = 256;
+    if title.len() <= MAX_TITLE {
+        title.to_owned()
+    } else {
+        let end = title.floor_char_boundary(MAX_TITLE - '…'.len_utf8());
+        format!("{}…", &title[..end])
     }
 }
 
 /// What a finished item printed or returned.
 fn output(item: &Value) -> Option<String> {
     let text = match item.get("type").and_then(Value::as_str)? {
-        "commandExecution" => item.get("aggregatedOutput")?.as_str()?.to_owned(),
+        "commandExecution" => bounded_text(item.get("aggregatedOutput")?.as_str()?),
         "mcpToolCall" => {
             if let Some(error) = item.pointer("/error/message").and_then(Value::as_str) {
                 error.to_owned()
@@ -140,6 +158,12 @@ fn output(item: &Value) -> Option<String> {
         _ => return None,
     };
     (!text.trim().is_empty()).then_some(text)
+}
+
+/// Bound before copying potentially large harness text into an ACP update.
+pub(super) fn bounded_text(text: &str) -> String {
+    let end = text.floor_char_boundary(crate::project::MAX_ENTRY_TEXT + 4);
+    crate::project::bounded(text[..end].to_owned())
 }
 
 /// A file change's paths and unified diffs.

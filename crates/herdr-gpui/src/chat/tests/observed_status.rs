@@ -21,12 +21,16 @@ fn a_mirrored_pane_follows_the_daemons_agent_status(cx: &mut TestAppContext) {
         view.read_with(cx, |view, _| {
             let pane = view.chats.pane("w1:p1").unwrap();
             assert!(pane.target.existing.is_none());
-            pane.session.transcript().status.clone()
+            (
+                pane.session.transcript().status.clone(),
+                view.chat_needs_input(pane),
+            )
         })
     };
     for (reported, expected) in [
-        (AgentStatus::Working, Status::Working),
-        (AgentStatus::Idle, Status::Idle),
+        (AgentStatus::Working, (Status::Working, false)),
+        (AgentStatus::Blocked, (Status::Working, true)),
+        (AgentStatus::Idle, (Status::Idle, false)),
     ] {
         view.update(cx, |view, _| {
             let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());

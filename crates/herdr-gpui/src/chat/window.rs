@@ -5,12 +5,13 @@
 use super::{
     chats::{self, ChatInput, Connect},
     discovery,
-    visual::{DiagramStyle, Output, VisualId},
 };
 use crate::{HerdrWindow, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{Attachment, Command, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, Status, assist};
 use std::time::Instant;
+
+mod visuals;
 
 impl HerdrWindow {
     /// Runs every tick: attaches to the selected daemon's chat panes when it
@@ -186,11 +187,12 @@ impl HerdrWindow {
         }
         // A running turn's timer moves once a second.
         let second = super::now_ms() / 1000;
-        if self
-            .chats
-            .panes()
-            .any(|pane| pane.session.transcript().turn.is_some())
-            && self.chats.ticked != second
+        if self.chats.panes().any(|pane| {
+            pane.attached()
+                && pane.session.transcript().status == Status::Working
+                && pane.session.transcript().turn.is_some()
+                && !self.chat_needs_input(pane)
+        }) && self.chats.ticked != second
         {
             self.chats.ticked = second;
             changed = true;
@@ -201,59 +203,6 @@ impl HerdrWindow {
         if changed {
             self.redraw_terminal(cx);
         }
-    }
-
-    /// Starts the pictures and diagrams each chat waits for on the
-    /// background executor, and drops the textures no entry draws any more.
-    pub(super) fn prepare_chat_visuals(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        for texture in self.chats.take_released() {
-            cx.drop_image(texture, Some(window));
-        }
-        #[cfg(any(target_os = "macos", windows))]
-        for page in self.chats.take_closed_pages() {
-            self.close_chat_page(page);
-        }
-        let font = self.chat_font();
-        let style = DiagramStyle::of(&self.theme, &font);
-        let renderer = cx.svg_renderer();
-        for pane in self.chats.panes_mut() {
-            for texture in pane.prepared.visuals.take_released() {
-                cx.drop_image(texture, Some(window));
-            }
-            for job in pane.prepared.visuals.jobs(&style, &renderer) {
-                let pane_id = pane.target.pane_id.clone();
-                let task = cx.background_spawn(async move { job.run() });
-                cx.spawn(async move |this, cx| {
-                    let (id, ticket, drawn) = task.await;
-                    let _ = this.update(cx, |this, cx| {
-                        this.finish_chat_visual(&pane_id, id, ticket, drawn, cx);
-                    });
-                })
-                .detach();
-            }
-        }
-    }
-
-    fn finish_chat_visual(
-        &mut self,
-        pane_id: &str,
-        id: VisualId,
-        ticket: u64,
-        drawn: super::visual::Result<Output>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(pane) = self.chats.pane_mut(pane_id) else {
-            return;
-        };
-        if !pane.prepared.visuals.finish(id, ticket, drawn) {
-            return;
-        }
-        // The row's height changed with what it now draws.
-        let entries: Vec<_> = pane.prepared.drawing(id).collect();
-        for entry in entries {
-            pane.remeasure(entry);
-        }
-        self.redraw_terminal(cx);
     }
 
     /// The keyboard destination of the visible, Herdr-focused chat. A mirror

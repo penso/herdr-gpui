@@ -31,6 +31,8 @@ mod imessage;
 mod layouts;
 mod link;
 mod list;
+mod live_activity;
+mod loading;
 mod menus;
 mod notices;
 mod observed_status;
@@ -38,6 +40,7 @@ mod observer_program;
 mod overlay;
 mod pasted;
 mod prepared;
+mod program_cleanup;
 mod questions;
 mod recall;
 mod running;
@@ -45,6 +48,7 @@ mod selection;
 mod session;
 mod start;
 mod stop;
+mod streaming;
 mod subagents;
 mod terminal_input;
 mod timeline;
@@ -155,7 +159,7 @@ impl Program {
         let (sender, accepted) = mpsc::channel();
         let stopping = Arc::new(AtomicBool::new(false));
         let stop = Arc::clone(&stopping);
-        // Blocks in `accept` until the test process ends or `stop` wakes it.
+        // Blocks in `accept` until explicit stop or fixture cleanup wakes it.
         let listening = std::thread::spawn(move || {
             while let Ok(connection) = listener.accept() {
                 if stop.load(Ordering::Acquire) || sender.send(connection).is_err() {
@@ -175,12 +179,16 @@ impl Program {
     /// Stops listening, as a program that went away does: on Windows its
     /// pipe is gone, on Unix nothing answers at its socket.
     fn stop(&mut self) {
+        let Some(listening) = self.listening.take() else {
+            return;
+        };
         self.stopping.store(true, Ordering::Release);
-        // Wakes the blocked `accept`.
-        let _ = Connection::connect(&self.path, WAIT);
-        if let Some(listening) = self.listening.take() {
-            listening.join().unwrap();
-        }
+        // Keep the wakeup alive until `accept` returns: Windows discards
+        // pipe clients that disconnect before the listener accepts them.
+        let wakeup = Connection::connect(&self.path, WAIT);
+        wait_until(|| listening.is_finished());
+        listening.join().unwrap();
+        drop(wakeup);
     }
 
     /// Accepts the next client and reads its greeting.
@@ -198,6 +206,12 @@ impl Program {
         };
         let hello = read(&mut peer).expect("a greeting");
         (peer, hello)
+    }
+}
+
+impl Drop for Program {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 

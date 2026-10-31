@@ -10,6 +10,8 @@ use crate::{HerdrWindow, window::MockPeer};
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use herdr_client::ConnectTarget;
 
+mod jump;
+
 /// How far the list's top is from its end, in pixels.
 fn behind(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> f32 {
     view.read_with(cx, |view, _| {
@@ -236,7 +238,7 @@ fn a_sent_prompt_shows_whole_with_its_delivered_note(cx: &mut TestAppContext) {
         }
     }
     let delivered = cx.debug_bounds("chat-delivered").unwrap();
-    let typing = cx.debug_bounds("chat-typing").unwrap();
+    let typing = cx.debug_bounds("chat-live-activity").unwrap();
     assert!(
         delivered.bottom() <= typing.top(),
         "{delivered:?} above {typing:?}"

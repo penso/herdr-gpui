@@ -117,8 +117,17 @@ fn a_tool_call_runs_through_to_its_result() {
     assert_eq!(done["sessionUpdate"], "tool_call_update");
     assert_eq!(done["status"], "completed");
     assert_eq!(done["content"][0]["content"]["text"], "ok: 3 passed");
-    let failed = bridge.on_harness(&tool_result("toolu_1", json!("boom"), true));
+    bridge.on_harness(&assistant(
+        "msg_2",
+        json!([{"type": "tool_use", "id": "toolu_failed", "name": "Bash", "input": {"command": "false"}}]),
+    ));
+    let failed = bridge.on_harness(&tool_result("toolu_failed", json!("boom"), true));
     assert_eq!(update(&failed[0])["status"], "failed");
+    assert!(
+        bridge
+            .on_harness(&tool_result("toolu_failed", json!("late success"), false))
+            .is_empty()
+    );
     assert!(
         bridge
             .on_harness(&tool_result("toolu_unknown", json!("x"), false))

@@ -4,6 +4,7 @@ mod document;
 
 pub(crate) use document::{Document, Segment};
 
+use super::rich::MAX_CODE_LINES;
 use document::Order;
 use herdr_chat_protocol::EntryId;
 use std::ops::Range;
@@ -18,10 +19,14 @@ pub(crate) enum Region {
     Details,
     /// The header above historical Q&A or a tool call.
     Label,
-    /// An expanded tool call's output, one block per content item.
-    ToolContent,
+    /// The original side of an expanded before/after preview.
+    ToolBefore(usize),
     /// An expanded tool call's locations, one row each.
     ToolLocations,
+    /// One decoded, visible tool preview.
+    ToolPreview(usize),
+    /// The label above one decoded tool preview.
+    ToolPreviewLabel(usize),
     /// An expanded tool call's full title.
     ToolTitle,
 }
@@ -48,6 +53,17 @@ impl Cell {
             row,
             ..Self::default()
         }
+    }
+}
+
+/// Drawn and selectable prefixes must agree, including compact patch headers.
+pub(crate) fn tool_code_limit(language: &str, expanded: bool) -> usize {
+    if expanded {
+        MAX_CODE_LINES
+    } else if language.eq_ignore_ascii_case("diff") || language.eq_ignore_ascii_case("patch") {
+        10
+    } else {
+        super::prepared::tool::COMPACT_LINES
     }
 }
 

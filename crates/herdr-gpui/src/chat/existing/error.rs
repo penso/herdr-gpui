@@ -4,6 +4,8 @@ use crate::teleport;
 pub(crate) enum Error {
     #[error("could not read the existing agent metadata")]
     Answer(#[source] serde_json::Error),
+    #[error("existing agent metadata was incomplete or incorrectly framed")]
+    Framing,
     #[error(transparent)]
     Host(#[from] teleport::Error),
     #[error("could not inspect the existing agent on its host")]

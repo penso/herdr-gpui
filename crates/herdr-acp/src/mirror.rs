@@ -197,6 +197,9 @@ fn changes(previous: &Transcript, next: &Transcript) -> Option<Vec<Change>> {
             usage: next.usage.clone(),
         });
     }
+    if previous.turn != next.turn {
+        changes.push(Change::Turn { turn: next.turn });
+    }
     // The reducer only adds and replaces activities; one that is gone needs
     // a snapshot.
     if previous

@@ -2,6 +2,8 @@ use super::*;
 use crate::chat::{Chats, link::Link};
 use herdr_chat_protocol::{Command, EndpointId};
 
+mod observed_identity;
+
 const A: &str = "0123456789abcdef0123456789abcdef";
 const B: &str = "fedcba9876543210fedcba9876543210";
 

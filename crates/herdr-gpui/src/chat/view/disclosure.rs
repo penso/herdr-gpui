@@ -49,7 +49,21 @@ impl HerdrWindow {
             HeaderText::Label => true,
             HeaderText::Body => !expanded,
         };
+        let toggle = move |this: &mut Self, _: &mut Window, cx: &mut Context<Self>| {
+            if let Some(pane) = this.chats.pane_mut(&toggle_pane) {
+                pane.toggle_expanded(id);
+            }
+            cx.notify();
+        };
         header
+            .map(|header| {
+                crate::accessibility::expandable(
+                    header,
+                    expanded,
+                    cx.entity().downgrade(),
+                    toggle.clone(),
+                )
+            })
             .cursor_pointer()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when(label_toggles, |header| {
@@ -60,12 +74,9 @@ impl HerdrWindow {
                     }),
                 )
             })
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 cx.stop_propagation();
-                if let Some(pane) = this.chats.pane_mut(&toggle_pane) {
-                    pane.toggle_expanded(id);
-                }
-                cx.notify();
+                toggle(this, window, cx);
             }))
     }
 }

@@ -21,7 +21,7 @@ fn spawned() -> Bridge {
     let started = notify(
         &mut bridge,
         "item/started",
-        json!({"threadId": THREAD, "item": spawn("inProgress", json!({}))}),
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": spawn("inProgress", json!({}))}),
     );
     let call = update(&started[0]);
     assert_eq!(call["title"], "Explore the parser");
@@ -30,7 +30,7 @@ fn spawned() -> Bridge {
     let completed = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": spawn("completed",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": spawn("completed",
             json!({CHILD: {"status": "running", "message": null}}))}),
     );
     let done = update(&completed[0]);
@@ -88,7 +88,7 @@ fn a_wait_that_reports_an_error_fails_the_sub_agent() {
     let outs = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": {"type": "collabAgentToolCall", "id": "call_wait",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": {"type": "collabAgentToolCall", "id": "call_wait",
             "tool": "wait", "status": "completed", "senderThreadId": THREAD,
             "receiverThreadIds": [CHILD], "prompt": null,
             "agentsStates": {CHILD: {"status": "errored", "message": "Out of context"}}}}),
@@ -106,7 +106,7 @@ fn a_sub_agent_activity_item_ends_it_without_a_card() {
     let outs = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": {"type": "subAgentActivity",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": {"type": "subAgentActivity",
             "id": "subagent-completed-1", "kind": "completed", "agentThreadId": CHILD,
             "agentPath": "/root/explorer"}}),
     );
@@ -124,14 +124,14 @@ fn a_command_still_running_when_its_turn_ends_is_a_background_shell() {
         notify(
             &mut bridge,
             "item/started",
-            json!({"threadId": THREAD, "item": {"type": "commandExecution", "id": id,
+            json!({"threadId": THREAD, "turnId": "turn-1", "item": {"type": "commandExecution", "id": id,
                 "command": command, "status": "inProgress", "processId": "41"}}),
         );
     }
     notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": {"type": "commandExecution", "id": "exec-quick",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": {"type": "commandExecution", "id": "exec-quick",
             "command": "ls", "status": "completed", "exitCode": 0, "aggregatedOutput": "a"}}),
     );
     let outs = notify(
@@ -149,7 +149,7 @@ fn a_command_still_running_when_its_turn_ends_is_a_background_shell() {
     let outs = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": {"type": "commandExecution", "id": "exec-bg",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": {"type": "commandExecution", "id": "exec-bg",
             "command": "npm run dev", "status": "failed", "exitCode": 130,
             "aggregatedOutput": "^C"}}),
     );
@@ -166,12 +166,12 @@ fn a_failed_spawn_fails_its_sub_agent_and_unknown_threads_stay_skipped() {
     notify(
         &mut bridge,
         "item/started",
-        json!({"threadId": THREAD, "item": spawn("inProgress", json!({}))}),
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": spawn("inProgress", json!({}))}),
     );
     let outs = notify(
         &mut bridge,
         "item/completed",
-        json!({"threadId": THREAD, "item": spawn("failed", json!({}))}),
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": spawn("failed", json!({}))}),
     );
     assert_eq!(tag(update(&outs[0]))["activity"]["state"], "failed");
     let child = notify(
@@ -181,4 +181,117 @@ fn a_failed_spawn_fails_its_sub_agent_and_unknown_threads_stay_skipped() {
             "command": "ls", "status": "inProgress"}}),
     );
     assert!(child.is_empty(), "a failed spawn has no thread to follow");
+}
+
+#[test]
+fn only_a_known_shell_in_its_thread_can_finish_during_a_later_turn() {
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    let item = json!({"type": "commandExecution", "id": "exec-bg",
+        "command": "serve", "status": "inProgress"});
+    notify(
+        &mut bridge,
+        "item/started",
+        json!({
+            "threadId": THREAD, "turnId": "turn-1", "item": item,
+        }),
+    );
+    notify(
+        &mut bridge,
+        "turn/completed",
+        json!({
+            "threadId": THREAD, "turn": {"id": "turn-1", "status": "completed"},
+        }),
+    );
+    prompt(&mut bridge, 3);
+    notify(
+        &mut bridge,
+        "turn/started",
+        json!({
+            "threadId": THREAD, "turn": {"id": "turn-2"},
+        }),
+    );
+    let done = json!({"threadId": THREAD, "turnId": "turn-1", "item": {
+        "type": "commandExecution", "id": "exec-bg", "command": "serve",
+        "status": "completed", "aggregatedOutput": "bye", "exitCode": 0,
+    }});
+    for thread in [Value::Null, json!("other")] {
+        let mut foreign = done.clone();
+        foreign["threadId"] = thread;
+        assert!(notify(&mut bridge, "item/completed", foreign).is_empty());
+    }
+    let mut unknown = done.clone();
+    unknown["item"]["id"] = json!("unknown");
+    assert!(notify(&mut bridge, "item/completed", unknown).is_empty());
+    let ended = notify(&mut bridge, "item/completed", done.clone());
+    assert_eq!(ended.len(), 1);
+    assert_eq!(update(&ended[0])["status"], "completed");
+    assert_eq!(tag(update(&ended[0]))["activity"]["state"], "finished");
+    assert!(bridge.prompt.is_some());
+    assert_eq!(bridge.turn.as_deref(), Some("turn-2"));
+    assert!(notify(&mut bridge, "item/completed", done).is_empty());
+}
+
+#[test]
+fn a_reused_background_id_cannot_bypass_the_new_commands_turn_fence() {
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    let item = json!({"type": "commandExecution", "id": "exec-reused",
+        "command": "serve", "status": "inProgress"});
+    notify(
+        &mut bridge,
+        "item/started",
+        json!({
+            "threadId": THREAD, "turnId": "turn-1", "item": item,
+        }),
+    );
+    notify(
+        &mut bridge,
+        "turn/completed",
+        json!({
+            "threadId": THREAD, "turn": {"id": "turn-1", "status": "completed"},
+        }),
+    );
+    prompt(&mut bridge, 3);
+    notify(
+        &mut bridge,
+        "turn/started",
+        json!({
+            "threadId": THREAD, "turn": {"id": "turn-2"},
+        }),
+    );
+    let started = notify(
+        &mut bridge,
+        "item/started",
+        json!({
+            "threadId": THREAD, "turnId": "turn-2", "item": item,
+        }),
+    );
+    assert_eq!(started.len(), 1);
+    let old = notify(
+        &mut bridge,
+        "item/completed",
+        json!({
+            "threadId": THREAD, "turnId": "turn-1", "item": {
+                "type": "commandExecution", "id": "exec-reused", "command": "serve",
+                "status": "completed", "aggregatedOutput": "old final", "exitCode": 0,
+            },
+        }),
+    );
+    assert!(
+        old.is_empty(),
+        "an old background run cannot finish its replacement"
+    );
+    let output = notify(
+        &mut bridge,
+        "item/commandExecution/outputDelta",
+        json!({
+            "threadId": THREAD, "turnId": "turn-2", "itemId": "exec-reused", "delta": "new output",
+        }),
+    );
+    assert_eq!(
+        update(&output[0])["content"][0]["content"]["text"],
+        "new output"
+    );
+    assert!(bridge.prompt.is_some());
 }
