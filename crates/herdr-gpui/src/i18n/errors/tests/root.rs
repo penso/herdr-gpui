@@ -88,6 +88,7 @@ fn every_own_variant_has_a_message() {
         Error::MissingDeletion,
         Error::MissingHome,
         Error::MissingStateRoot,
+        Error::Nearby(crate::remote::nearby::Error::Spawn(io())),
         Error::NoSnapshot,
         Error::NoTab,
         Error::NotAGitRepository { path: path.clone() },

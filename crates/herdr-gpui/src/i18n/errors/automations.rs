@@ -12,13 +12,7 @@ impl Localize for Error {
                 path = path.as_str(),
                 host = host.as_str()
             ),
-            Self::Binary { path, .. } => {
-                fl!(
-                    "error-automations-binary",
-                    path = path.display().to_string()
-                )
-            }
-            Self::Checksum => fl!("error-automations-checksum"),
+            Self::Build(error) => error.localize(),
             Self::Json(_) => fl!("error-automations-json"),
             Self::Missing => fl!("error-automations-missing"),
             Self::NoBuild { platform } => {
@@ -31,9 +25,6 @@ impl Localize for Error {
             ),
             Self::NotRead { host } => fl!("error-automations-not-read", host = host.as_str()),
             Self::Off => fl!("error-automations-off"),
-            Self::Platform(output) => {
-                fl!("error-automations-platform", output = output.as_str())
-            }
             Self::Protocol { found, expected } => fl!(
                 "error-automations-protocol",
                 found = *found,

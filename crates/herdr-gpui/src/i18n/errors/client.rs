@@ -5,6 +5,7 @@
 mod clipboard;
 mod sessions;
 mod ssh;
+mod terminal_attach;
 mod wsl;
 
 /// A missing home or config root, in the root error's words.
@@ -159,6 +160,7 @@ impl Localize for Error {
             Self::SnapshotIdentity => fl!("error-client-snapshot-identity"),
             Self::SocketClosed => fl!("error-client-socket-closed"),
             Self::Ssh(error) => error.localize(),
+            Self::TerminalAttach(error) => error.localize(),
             // Its path is for diagnostics; the message is the failure's own.
             Self::Storage { source, .. } => source.localize(),
             Self::StorageDestinationNotFile => fl!("error-client-storage-destination-not-file"),

@@ -125,6 +125,7 @@ impl Localize for Error {
             Self::MissingHome => fl!("error-missing-home"),
             Self::MissingStateRoot => fl!("error-missing-state-root"),
             Self::Mods(error) => error.localize(),
+            Self::Nearby(error) => error.localize(),
             Self::NoSnapshot => fl!("error-no-snapshot"),
             Self::NoTab => fl!("error-no-tab"),
             Self::NotAGitRepository { path: dir } => {

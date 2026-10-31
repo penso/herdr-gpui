@@ -1,7 +1,7 @@
 use super::*;
 use herdr_client::{
     Error, SshFailure, clipboard, protocol::endpoint::ENDPOINT_PROTOCOL_GENERATION,
-    scrollback::EndpointErrorCode, sessions, ssh, wsl,
+    scrollback::EndpointErrorCode, sessions, ssh, terminal_attach, wsl,
 };
 use std::{io, path::PathBuf, process::ExitStatus};
 
@@ -131,6 +131,7 @@ fn every_client_variant_has_a_message() {
         Error::SnapshotIdentity,
         Error::SocketClosed,
         Error::Ssh(ssh::Error::Timeout),
+        Error::TerminalAttach(terminal_attach::Error::Ended),
         Error::Storage {
             operation: herdr_client::StorageOperation::Write,
             path: PathBuf::from("/tmp/catalog.json"),
@@ -248,5 +249,24 @@ fn every_wsl_variant_has_a_message() {
         wsl::Error::PathUnmapped(path),
         wsl::Error::Timeout,
         wsl::Error::Unsupported,
+    ]);
+}
+
+#[test]
+fn every_terminal_attach_variant_has_a_message() {
+    assert_localized(&[
+        terminal_attach::Error::Busy,
+        terminal_attach::Error::Ended,
+        terminal_attach::Error::Io(io()),
+        terminal_attach::Error::Protocol(herdr_client::protocol::Error::EmptyFrame),
+        terminal_attach::Error::Refused(None),
+        terminal_attach::Error::Refused(Some("terminal is attached elsewhere".into())),
+        terminal_attach::Error::Rejected {
+            version: 2,
+            reason: "unsupported".into(),
+        },
+        terminal_attach::Error::Scroll,
+        terminal_attach::Error::Size,
+        terminal_attach::Error::Unexpected,
     ]);
 }

@@ -2,9 +2,6 @@
 # host. $host is a host's name; $path is an automation script's path on it.
 
 error-automations-approved = { $path } is already approved on { $host }
-# $path is the herdr-automate program file this app ships.
-error-automations-binary = Could not read the herdr-automate build at { $path }
-error-automations-checksum = The copy on the host did not match this app's build; nothing was installed
 error-automations-json = herdr-automate printed output this app cannot read
 error-automations-missing = herdr-automate is not installed on this host
 # $platform is a system and processor, such as linux-x86_64.
@@ -12,8 +9,6 @@ error-automations-no-build = This app has no herdr-automate build for { $platfor
 error-automations-no-script = { $host } has no automation script { $path }
 error-automations-not-read = { $host } has not been read yet; try again in a moment
 error-automations-off = Automations are turned off in Herdr UI: Settings, Sidebar, Show automations
-# $output is what `uname -sm` printed.
-error-automations-platform = Cannot tell this host's platform from `uname -sm`: { $output }
 # $found and $expected are report protocol version numbers.
 error-automations-protocol = herdr-automate on this host speaks report protocol { $found }; this app reads { $expected }. Update this app.
 # $error is herdr-automate's own message, kept as it is.

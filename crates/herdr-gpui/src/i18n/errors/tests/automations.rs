@@ -1,6 +1,5 @@
 use super::*;
 use crate::automations::Error;
-use std::{io, path::PathBuf};
 
 #[test]
 fn every_automations_variant_has_a_message() {
@@ -11,11 +10,7 @@ fn every_automations_variant_has_a_message() {
             path: path(),
             host: host(),
         },
-        Error::Binary {
-            path: PathBuf::from("/Applications/Herdr.app/herdr-automate"),
-            source: io::Error::other("gone"),
-        },
-        Error::Checksum,
+        Error::Build(crate::host_build::Error::Checksum),
         Error::Json(serde_json::from_str::<u8>("x").unwrap_err()),
         Error::Missing,
         Error::NoBuild {
@@ -27,7 +22,6 @@ fn every_automations_variant_has_a_message() {
         },
         Error::NotRead { host: host() },
         Error::Off,
-        Error::Platform("Plan9 mips".into()),
         Error::Protocol {
             found: 3,
             expected: 2,

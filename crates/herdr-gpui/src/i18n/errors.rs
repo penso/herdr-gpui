@@ -28,11 +28,13 @@ mod dispatch;
 mod editor;
 mod file_drop;
 mod github;
+mod host_build;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
 mod listening_ports;
 mod mods;
+mod nearby;
 mod notification_mutes;
 mod orchestrator;
 mod overview;
