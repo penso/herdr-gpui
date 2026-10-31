@@ -1,12 +1,13 @@
 use super::*;
+use herdr_remote::cloud::Value;
 use herdr_remote::sprites::{Error, Status};
 
 #[test]
 fn every_variant_has_a_message() {
     assert_localized(&[
         Error::Url("sprites.api_url"),
-        Error::Field("sprite name"),
-        Error::Encoding("HERDR_SPRITES_API_URL"),
+        Error::Field(Value::SpriteName),
+        Error::Encoding(Value::Key("HERDR_SPRITES_API_URL")),
         Error::MissingToken,
         Error::Authentication,
         Error::Forbidden,

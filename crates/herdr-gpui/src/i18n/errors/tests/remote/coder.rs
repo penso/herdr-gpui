@@ -1,4 +1,5 @@
 use super::*;
+use herdr_remote::cloud::Value;
 use herdr_remote::coder::{Error, Status};
 use std::path::PathBuf;
 
@@ -6,8 +7,8 @@ use std::path::PathBuf;
 fn every_variant_has_a_message() {
     assert_localized(&[
         Error::Url("coder.url"),
-        Error::Field("coder.organization"),
-        Error::Encoding("HERDR_CODER_OAUTH_CLIENT_SECRET"),
+        Error::Field(Value::Key("coder.organization")),
+        Error::Encoding(Value::Key("HERDR_CODER_OAUTH_CLIENT_SECRET")),
         Error::Missing("url"),
         Error::Authentication,
         Error::Client,

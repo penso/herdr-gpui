@@ -18,6 +18,7 @@ mod providers;
 #[cfg(any(feature = "opensandbox", feature = "sprites"))]
 pub mod socket;
 pub mod unsynced;
+mod value;
 
 pub use catalog::{FILE as CATALOG_FILE, SavedDevice, load, remove, rename, save};
 pub use command::with_command;
@@ -27,6 +28,7 @@ pub use providers::{
     Deletion, Shape, Spec, connect, deletion, icon, image as image_support, name, noun, offer,
     provision,
 };
+pub use value::Value;
 
 use std::{io, path::PathBuf};
 

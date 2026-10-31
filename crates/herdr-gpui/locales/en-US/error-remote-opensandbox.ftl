@@ -2,11 +2,8 @@
 # is the server's own text, kept as it is. [opensandbox] is the config
 # table; api_url is its key.
 
-# $field names a setting, such as opensandbox.api_url, or a value the
-# server returned, such as the execd endpoint.
+# $field names a setting, such as opensandbox.api_url.
 error-remote-opensandbox-url = { $field } must be https (http only on loopback) with no credentials, query, or fragment.
-error-remote-opensandbox-field = { $field } is not valid.
-error-remote-opensandbox-encoding = { $field } must be UTF-8.
 error-remote-opensandbox-missing-key = OpenSandbox needs an API key. Save one in Settings > Cloud devices.
 error-remote-opensandbox-authentication = OpenSandbox rejected the API key.
 error-remote-opensandbox-forbidden = OpenSandbox denied access.

@@ -1,11 +1,8 @@
 # Boat sandboxes as cloud devices. $detail is Boat's own text, kept as it
 # is; $error is the failure underneath; $id is a sandbox's ID at Boat.
 
-# $field names a setting, such as boat.api_url, or a value Boat returned,
-# such as the Boat sandbox ID.
+# $field names a setting, such as boat.api_url.
 error-remote-boat-url = { $field } must be https (http only on loopback) with no credentials, query, or fragment.
-error-remote-boat-field = { $field } is not valid.
-error-remote-boat-encoding = { $field } must be UTF-8.
 error-remote-boat-missing-key = Boat needs an API key. Save one in Settings > Cloud devices.
 error-remote-boat-authentication = Boat rejected the API key.
 error-remote-boat-forbidden = Boat denied access. Check the API key's scopes and sandbox access.

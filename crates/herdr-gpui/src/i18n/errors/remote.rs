@@ -21,6 +21,8 @@ mod railway;
 #[cfg(feature = "sprites")]
 mod sprites;
 mod teleport;
+#[cfg(feature = "cloud")]
+mod value;
 
 use super::Localize;
 use crate::i18n::fl;

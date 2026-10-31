@@ -1,10 +1,11 @@
 use super::*;
+use herdr_remote::cloud::Value;
 use herdr_remote::container::Error;
 
 #[test]
 fn every_variant_has_a_message() {
     assert_localized(&[
-        Error::Field("[container] cpus"),
+        Error::Field(Value::Key("[container] cpus")),
         Error::NoEngine,
         Error::Spawn {
             engine: "docker",

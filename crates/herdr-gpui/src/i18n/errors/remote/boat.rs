@@ -8,8 +8,8 @@ impl Localize for Error {
     fn localize(&self) -> String {
         match self {
             Self::Url(field) => fl!("error-remote-boat-url", field = *field),
-            Self::Field(field) => fl!("error-remote-boat-field", field = *field),
-            Self::Encoding(field) => fl!("error-remote-boat-encoding", field = *field),
+            Self::Field(value) => super::value::invalid(*value),
+            Self::Encoding(value) => super::value::not_utf8(*value),
             Self::MissingKey => fl!("error-remote-boat-missing-key"),
             Self::Authentication => fl!("error-remote-boat-authentication"),
             Self::Forbidden => fl!("error-remote-boat-forbidden"),

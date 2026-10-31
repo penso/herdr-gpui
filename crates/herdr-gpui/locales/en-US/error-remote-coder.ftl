@@ -1,11 +1,8 @@
 # Coder workspaces as cloud devices. $detail is Coder's own text, kept as
 # it is. [coder] is the config table; url and cli are its keys.
 
-# $field names a setting, such as coder.url, or a value Coder returned,
-# such as the Coder workspace.
+# $field names a setting, such as coder.url.
 error-remote-coder-url = { $field } must be https (http only on loopback) with no credentials, query, or fragment.
-error-remote-coder-field = { $field } is not valid.
-error-remote-coder-encoding = { $field } must be UTF-8.
 # $key is the missing [coder] setting, such as url or oauth_client_id.
 error-remote-coder-missing = Coder needs { $key }. Set it in Settings > Cloud devices.
 error-remote-coder-authentication = Coder sign-in required.

@@ -7,8 +7,8 @@ impl Localize for Error {
     fn localize(&self) -> String {
         match self {
             Self::Url(field) => fl!("error-remote-sprites-url", field = *field),
-            Self::Field(field) => fl!("error-remote-sprites-field", field = *field),
-            Self::Encoding(field) => fl!("error-remote-sprites-encoding", field = *field),
+            Self::Field(value) => super::value::invalid(*value),
+            Self::Encoding(value) => super::value::not_utf8(*value),
             Self::MissingToken => fl!("error-remote-sprites-missing-token"),
             Self::Authentication => fl!("error-remote-sprites-authentication"),
             Self::Forbidden => fl!("error-remote-sprites-forbidden"),

@@ -7,8 +7,8 @@ impl Localize for Error {
     fn localize(&self) -> String {
         match self {
             Self::Url(field) => fl!("error-remote-daytona-url", field = *field),
-            Self::Field(field) => fl!("error-remote-daytona-field", field = *field),
-            Self::Encoding(field) => fl!("error-remote-daytona-encoding", field = *field),
+            Self::Field(value) => super::value::invalid(*value),
+            Self::Encoding(value) => super::value::not_utf8(*value),
             Self::MissingKey => fl!("error-remote-daytona-missing-key"),
             Self::Authentication => fl!("error-remote-daytona-authentication"),
             Self::Forbidden => fl!("error-remote-daytona-forbidden"),

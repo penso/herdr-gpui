@@ -1,5 +1,6 @@
 use super::*;
 use herdr_remote::boat::{Error, Status};
+use herdr_remote::cloud::Value;
 use std::{path::PathBuf, time::SystemTime};
 
 #[test]
@@ -9,8 +10,8 @@ fn every_variant_has_a_message() {
         .unwrap_err();
     assert_localized(&[
         Error::Url("boat.api_url"),
-        Error::Field("boat.machine_type"),
-        Error::Encoding("HERDR_BOAT_API_URL"),
+        Error::Field(Value::Key("boat.machine_type")),
+        Error::Encoding(Value::Key("HERDR_BOAT_API_URL")),
         Error::MissingKey,
         Error::Authentication,
         Error::Forbidden,

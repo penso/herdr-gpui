@@ -5,6 +5,7 @@
 //! the person who creates one.
 
 use super::super::{Error, Result, Settings, http::Client};
+use crate::cloud::Value;
 use base64::Engine as _;
 use secrecy::ExposeSecret;
 use serde::Deserialize;
@@ -38,10 +39,10 @@ pub(super) fn principal(token: &str) -> Result<Principal> {
     let claims = token
         .split('.')
         .nth(1)
-        .ok_or(Error::Field("Azure access token"))?;
+        .ok_or(Error::Field(Value::AzureAccessToken))?;
     let claims = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(claims.trim_end_matches('='))
-        .map_err(|_| Error::Field("Azure access token"))?;
+        .map_err(|_| Error::Field(Value::AzureAccessToken))?;
     serde_json::from_slice(&claims).map_err(Error::Json)
 }
 

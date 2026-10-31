@@ -2,8 +2,6 @@
 # program, docker or podman. $name is a container's or volume's name.
 # [container] is the config table; engine and max_containers are its keys.
 
-# $field names a setting, such as [container] cpus.
-error-remote-container-field = { $field } is not valid.
 error-remote-container-no-engine = Neither docker nor podman was found. Install one, or set [container] engine.
 error-remote-container-spawn = Could not run { $engine }.
 # $action is the engine's command that failed, such as pull or inspect;

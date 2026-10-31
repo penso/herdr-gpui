@@ -2,11 +2,8 @@
 # as it is. [sprites] is the config table; api_url is its key. A sprite is
 # what Sprites calls one machine.
 
-# $field names a setting, such as sprites.api_url, or a value Sprites
-# returned, such as the sprite name.
+# $field names a setting, such as sprites.api_url.
 error-remote-sprites-url = { $field } must be https (http only on loopback) with no credentials, query, or fragment.
-error-remote-sprites-field = { $field } is not valid.
-error-remote-sprites-encoding = { $field } must be UTF-8.
 error-remote-sprites-missing-token = Sprites needs an API token. Save one in Settings > Cloud devices.
 error-remote-sprites-authentication = Sprites rejected the API token.
 error-remote-sprites-forbidden = Sprites denied access. Check the token's organization.

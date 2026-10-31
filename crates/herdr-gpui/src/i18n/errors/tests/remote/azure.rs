@@ -1,5 +1,6 @@
 use super::*;
 use herdr_remote::azure::Error;
+use herdr_remote::cloud::Value;
 
 /// `Stream`, `StreamHeader`, and `Tls` hold `tungstenite` and `rustls`
 /// errors, which this crate does not depend on, so they cannot be built
@@ -7,8 +8,8 @@ use herdr_remote::azure::Error;
 #[test]
 fn every_variant_has_a_message() {
     assert_localized(&[
-        Error::Field("azure.subscription_id"),
-        Error::Encoding("Azure SSH public key"),
+        Error::Field(Value::Key("azure.subscription_id")),
+        Error::Encoding(Value::AzureSshPublicKey),
         Error::MissingSubscription,
         Error::MissingCredentials,
         Error::Authentication("AADSTS7000215: Invalid client secret".into()),

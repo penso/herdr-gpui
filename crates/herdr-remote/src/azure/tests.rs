@@ -2,6 +2,7 @@
 //! Unit tests for Azure cloud device provider.
 
 use super::*;
+use crate::cloud::Value;
 use crate::config::AzureConfig;
 use settings::{DEFAULT_ADMIN_USERNAME, DEFAULT_LOCATION, DEFAULT_RESOURCE_GROUP, DEFAULT_VM_SIZE};
 
@@ -53,7 +54,10 @@ fn settings_invalid_subscription_guid() {
     };
 
     let error = Settings::resolve(&config, |_| None).unwrap_err();
-    assert!(matches!(error, Error::Field("azure.subscription_id")));
+    assert!(matches!(
+        error,
+        Error::Field(Value::Key("azure.subscription_id"))
+    ));
 }
 
 #[test]

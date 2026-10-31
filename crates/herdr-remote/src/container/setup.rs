@@ -7,6 +7,7 @@ pub use super::{
     machine::State,
     settings::{DEFAULT_CPUS, DEFAULT_IMAGE, DEFAULT_MEMORY},
 };
+use crate::cloud::Value;
 use crate::cloud::{self, CloudProvider, SavedDevice, Spec, install};
 
 /// The session every container device attaches to.
@@ -267,7 +268,7 @@ pub fn destroy_saved(id: &str) -> crate::Result<()> {
         return Ok(());
     };
     let engine =
-        Engine::from_key(&device.account).ok_or(super::Error::Field("container engine"))?;
+        Engine::from_key(&device.account).ok_or(super::Error::Field(Value::ContainerEngine))?;
     machine::delete(engine, id, &|| false)?;
     Ok(cloud::remove(CloudProvider::Container, id)?)
 }
@@ -281,7 +282,7 @@ pub fn stop_saved(id: &str) -> crate::Result<()> {
         return Ok(());
     };
     let engine =
-        Engine::from_key(&device.account).ok_or(super::Error::Field("container engine"))?;
+        Engine::from_key(&device.account).ok_or(super::Error::Field(Value::ContainerEngine))?;
     Ok(super::lifecycle::stop(engine, id, || {
         machine::stop(engine, id, &|| false)
     })?)

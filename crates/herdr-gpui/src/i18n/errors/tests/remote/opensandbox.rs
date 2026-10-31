@@ -1,12 +1,13 @@
 use super::*;
+use herdr_remote::cloud::Value;
 use herdr_remote::opensandbox::{Error, Status};
 
 #[test]
 fn every_variant_has_a_message() {
     assert_localized(&[
         Error::Url("opensandbox.api_url"),
-        Error::Field("opensandbox.image"),
-        Error::Encoding("HERDR_OPENSANDBOX_API_URL"),
+        Error::Field(Value::Key("opensandbox.image")),
+        Error::Encoding(Value::Key("HERDR_OPENSANDBOX_API_URL")),
         Error::MissingKey,
         Error::Authentication,
         Error::Forbidden,

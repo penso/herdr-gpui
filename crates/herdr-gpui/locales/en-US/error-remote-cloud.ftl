@@ -72,3 +72,74 @@ error-remote-cloud-socket-stream = The exec stream failed.
 error-remote-cloud-socket-header = Invalid exec stream header.
 error-remote-cloud-socket-header-name = Invalid exec stream header name.
 error-remote-cloud-socket-closed = The exec stream closed before the command finished.
+
+# What a cloud provider refused, for every provider. $key is a setting such
+# as daytona.api_url or an environment variable, as written. Each $value
+# branch is a whole sentence; Azure, Boat, Coder, Daytona, OpenSandbox, and
+# Sprites are product names, and execd is a program's name.
+error-remote-cloud-value-invalid-key = { $key } is not valid.
+error-remote-cloud-value-invalid = { $value ->
+   *[account] Account is not valid.
+    [azure-access-token] Azure access token is not valid.
+    [azure-client-secret] Azure client secret is not valid.
+    [azure-device-account] Saved Azure device account is not valid.
+    [azure-sandbox-endpoint] Azure sandbox endpoint is not valid.
+    [azure-sandbox-id] Azure sandbox ID is not valid.
+    [azure-ssh-public-key] Azure SSH public key is not valid.
+    [boat-api-key] Boat API key is not valid.
+    [boat-auto-stop] boat.auto_stop (never or 1–2592000 seconds) is not valid.
+    [boat-pending] Boat pending creation is not valid.
+    [boat-pending-path] Boat pending path is not valid.
+    [boat-pending-size] Boat pending creation size is not valid.
+    [boat-sandbox-id] Boat sandbox ID is not valid.
+    [boat-ssh-private-key] Boat SSH private key is not valid.
+    [boat-ssh-public-key] Boat SSH public key is not valid.
+    [coder-identifier] Coder identifier is not valid.
+    [coder-workspace] Coder workspace is not valid.
+    [container-engine] Container engine is not valid.
+    [daytona-api-key] Daytona API key is not valid.
+    [daytona-sandbox-id] Daytona sandbox ID is not valid.
+    [daytona-snapshot] Daytona snapshot name is not valid.
+    [exec-session-id] Exec session ID is not valid.
+    [execd-endpoint] Execd endpoint is not valid.
+    [opensandbox-api-key] OpenSandbox API key is not valid.
+    [remote-command] Remote command is not valid.
+    [sandbox-id] Sandbox ID is not valid.
+    [sprite-name] Sprite name is not valid.
+    [sprite-prefix] Sprite prefix is not valid.
+    [sprites-api-token] Sprites API token is not valid.
+    [workspace-name] Workspace name is not valid.
+}
+error-remote-cloud-value-encoding-key = { $key } must be UTF-8.
+error-remote-cloud-value-encoding = { $value ->
+   *[account] Account must be UTF-8.
+    [azure-access-token] Azure access token must be UTF-8.
+    [azure-client-secret] Azure client secret must be UTF-8.
+    [azure-device-account] Saved Azure device account must be UTF-8.
+    [azure-sandbox-endpoint] Azure sandbox endpoint must be UTF-8.
+    [azure-sandbox-id] Azure sandbox ID must be UTF-8.
+    [azure-ssh-public-key] Azure SSH public key must be UTF-8.
+    [boat-api-key] Boat API key must be UTF-8.
+    [boat-auto-stop] boat.auto_stop (never or 1–2592000 seconds) must be UTF-8.
+    [boat-pending] Boat pending creation must be UTF-8.
+    [boat-pending-path] Boat pending path must be UTF-8.
+    [boat-pending-size] Boat pending creation size must be UTF-8.
+    [boat-sandbox-id] Boat sandbox ID must be UTF-8.
+    [boat-ssh-private-key] Boat SSH private key must be UTF-8.
+    [boat-ssh-public-key] Boat SSH public key must be UTF-8.
+    [coder-identifier] Coder identifier must be UTF-8.
+    [coder-workspace] Coder workspace must be UTF-8.
+    [container-engine] Container engine must be UTF-8.
+    [daytona-api-key] Daytona API key must be UTF-8.
+    [daytona-sandbox-id] Daytona sandbox ID must be UTF-8.
+    [daytona-snapshot] Daytona snapshot name must be UTF-8.
+    [exec-session-id] Exec session ID must be UTF-8.
+    [execd-endpoint] Execd endpoint must be UTF-8.
+    [opensandbox-api-key] OpenSandbox API key must be UTF-8.
+    [remote-command] Remote command must be UTF-8.
+    [sandbox-id] Sandbox ID must be UTF-8.
+    [sprite-name] Sprite name must be UTF-8.
+    [sprite-prefix] Sprite prefix must be UTF-8.
+    [sprites-api-token] Sprites API token must be UTF-8.
+    [workspace-name] Workspace name must be UTF-8.
+}

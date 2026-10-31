@@ -2,10 +2,6 @@
 # Azure's own text (or the Azure CLI's), kept as it is; $error is the
 # failure underneath.
 
-# $field names a setting, such as azure.subscription_id, or a value Azure
-# returned, such as the Azure sandbox endpoint.
-error-remote-azure-field = { $field } is not valid.
-error-remote-azure-encoding = { $field } must be UTF-8.
 error-remote-azure-missing-subscription = Azure needs a subscription ID. Configure one in Settings > Cloud Devices.
 error-remote-azure-missing-credentials = Azure needs credentials (client secret or Azure CLI login).
 error-remote-azure-authentication = Azure authentication failed: { $detail }

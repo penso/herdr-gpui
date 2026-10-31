@@ -1,11 +1,8 @@
 # Daytona sandboxes as cloud devices. $detail is Daytona's own text, kept as
 # it is. [daytona] is the config table; api_url is its key.
 
-# $field names a setting, such as daytona.api_url, or a value Daytona
-# returned, such as the Daytona sandbox ID.
+# $field names a setting, such as daytona.api_url.
 error-remote-daytona-url = { $field } must be https (http only on loopback) with no credentials, query, or fragment.
-error-remote-daytona-field = { $field } is not valid.
-error-remote-daytona-encoding = { $field } must be UTF-8.
 error-remote-daytona-missing-key = Daytona needs an API key. Save one in Settings > Cloud devices.
 error-remote-daytona-authentication = Daytona rejected the API key.
 error-remote-daytona-forbidden = Daytona denied access. Check the API key's permissions.

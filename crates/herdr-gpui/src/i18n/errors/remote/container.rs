@@ -6,7 +6,7 @@ use herdr_remote::container::Error;
 impl Localize for Error {
     fn localize(&self) -> String {
         match self {
-            Self::Field(field) => fl!("error-remote-container-field", field = *field),
+            Self::Field(value) => super::value::invalid(*value),
             Self::NoEngine => fl!("error-remote-container-no-engine"),
             Self::Spawn { engine, .. } => fl!("error-remote-container-spawn", engine = *engine),
             Self::Failed {
