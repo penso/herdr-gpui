@@ -18,6 +18,7 @@ mod en_xa;
 #[cfg(not(windows))]
 mod form_scroll;
 mod row_height;
+mod scroll;
 
 /// A session as discovery reports it. The socket comes from the same path rules
 /// the window resolves, so no test hard-codes a home directory.

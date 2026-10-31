@@ -145,19 +145,30 @@ impl Devices {
     /// window may ask. Reports whether the popup should repaint. Opening the
     /// popup does not reset these ages: a host asked a moment ago is still
     /// inside its own interval.
+    /// Asks the `wanted` device for its sessions when its answer is stale:
+    /// only the device the picker has unfolded shows them. Every device in
+    /// `targets` keeps its cached answer.
     pub(super) fn poll(
         &mut self,
         targets: &[(String, RemoteHost)],
-        open: bool,
+        wanted: Option<&str>,
         now: Instant,
     ) -> bool {
-        self.poll_with(targets, open, now, RemoteHost::list_sessions)
+        self.poll_with(
+            targets,
+            wanted.is_some(),
+            wanted,
+            now,
+            RemoteHost::list_sessions,
+        )
     }
 
+    /// `only`, when given, narrows what an open popup asks to that device.
     fn poll_with(
         &mut self,
         targets: &[(String, RemoteHost)],
         open: bool,
+        only: Option<&str>,
         now: Instant,
         probe: impl Fn(&RemoteHost) -> Result<Vec<RemoteSession>, herdr_client::Error>
         + Send
@@ -199,17 +210,13 @@ impl Devices {
             }
             Some(Err(mpsc::TryRecvError::Empty)) | None => {}
         }
-        if open
-            && self.pending.is_none()
-            && targets
-                .iter()
-                .any(|(id, host)| stale(&self.asked, id, host, now))
-        {
-            let stale: Vec<(String, RemoteHost)> = targets
-                .iter()
-                .filter(|(id, host)| stale(&self.asked, id, host, now))
-                .cloned()
-                .collect();
+        let wanted = |id: &str| only.is_none_or(|only| only == id);
+        let stale: Vec<(String, RemoteHost)> = targets
+            .iter()
+            .filter(|(id, host)| wanted(id) && stale(&self.asked, id, host, now))
+            .cloned()
+            .collect();
+        if open && self.pending.is_none() && !stale.is_empty() {
             self.start(stale, now, probe);
             changed = true;
         }

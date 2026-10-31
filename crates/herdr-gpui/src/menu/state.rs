@@ -8,7 +8,7 @@ use super::endpoint_error;
 use super::{Page, WorkspaceMenuAction, WorkspaceTarget, git, github};
 use crate::dialog_input::DialogInput;
 use crate::i18n::fl;
-use gpui::{App, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
+use gpui::{App, Bounds, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
 use herdr_client::protocol::ClientShellSnapshot;
 
 /// What an open menu covers, as its last frame laid it out. Windows pages
@@ -23,14 +23,14 @@ pub(crate) enum Cover {
     /// A dialog dims the whole window.
     All,
     /// A popover or menu covers only its own panel.
-    Panel(gpui::Bounds<Pixels>),
+    Panel(Bounds<Pixels>),
 }
 
 #[cfg(any(windows, test))]
 impl Cover {
     /// Whether a page drawn at `page` would hide this menu. Before the menu
     /// is laid out nothing is, so pages keep showing for that one frame.
-    pub(crate) fn covers(self, page: Option<gpui::Bounds<Pixels>>) -> bool {
+    pub(crate) fn covers(self, page: Option<Bounds<Pixels>>) -> bool {
         match self {
             Self::Unknown => false,
             Self::All => true,
@@ -77,6 +77,9 @@ pub(crate) struct MenuState {
     /// How tall the unfolded sessions were last frame, which their unfolding
     /// grows towards.
     pub(super) unfolded_height: std::rc::Rc<std::cell::Cell<Pixels>>,
+    /// Where each line in the unfolded block last painted, so the keys can
+    /// scroll to one session inside it rather than to the block.
+    pub(super) unfolded_rows: std::rc::Rc<std::cell::RefCell<Vec<Bounds<Pixels>>>>,
     /// When a device last unfolded, so the list follows its sessions into
     /// view while they open.
     pub(super) unfolded_since: Option<std::time::Instant>,
@@ -358,6 +361,7 @@ impl MenuState {
             session_edit: None,
             unfolded_device: None,
             unfolded_height: Default::default(),
+            unfolded_rows: Default::default(),
             unfolded_since: None,
             unfold_from: 0.,
             folding: None,

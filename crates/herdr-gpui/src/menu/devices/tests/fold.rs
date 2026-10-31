@@ -58,3 +58,25 @@ fn unfolding_another_device_folds_the_first(cx: &mut gpui::TestAppContext) {
         assert_eq!(view.menu.unfold_from, 0.);
     });
 }
+
+#[gpui::test]
+fn right_on_an_open_device_leaves_it_open(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        crate::bind_keys(cx);
+        fixture_window(window, cx)
+    });
+    view.update_in(cx, |view, window, cx| {
+        if view.open_menu(window, cx) {
+            view.menu.page = Some(Page::Devices);
+            view.menu.selected = Some(1);
+        }
+    });
+    cx.simulate_keystrokes("right");
+    let since = view.read_with(cx, |view, _| view.menu.unfolded_since);
+    assert!(since.is_some(), "right unfolds Local");
+    cx.simulate_keystrokes("right");
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.menu.unfolded_since, since, "it does not open again");
+        assert!(view.menu.unfolded_device.is_some());
+    });
+}

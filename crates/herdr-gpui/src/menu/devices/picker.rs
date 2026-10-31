@@ -345,11 +345,13 @@ impl HerdrWindow {
             return view;
         }
         let device = self.menu.unfolded_device.clone().unwrap_or_default();
+        let rows = self.menu.unfolded_rows.clone();
         view.child(crate::motion::unfold(
             div()
                 .flex()
                 .flex_col()
                 .gap(px(4.))
+                .on_children_prepainted(move |bounds, _, _| *rows.borrow_mut() = bounds)
                 .children(lines.drain(..)),
             ElementId::Name(format!("device-sessions-{device}").into()),
             self.menu.unfolded_height.clone(),
@@ -744,9 +746,7 @@ impl HerdrWindow {
                 None => 0,
             };
             self.menu.selected = Some(next);
-            if let Some(child) = children.get(next) {
-                self.menu.devices_scroll.scroll_to_item(*child);
-            }
+            self.reveal_picker_line(&lines, next, children.get(next).copied());
             cx.notify();
             return;
         }
@@ -782,8 +782,14 @@ impl HerdrWindow {
                 }
             }
             ("right", Line::Device(device)) => {
-                self.unfold_device(*device);
-                cx.notify();
+                // Already open, it stays as it is rather than opening again.
+                let open = self.endpoints.get(*device).is_some_and(|endpoint| {
+                    self.menu.unfolded_device.as_ref() == Some(&endpoint.id)
+                });
+                if !open {
+                    self.unfold_device(*device);
+                    cx.notify();
+                }
             }
             ("left", Line::Device(_) | Line::Session(_)) => {
                 if let Some(device) = parent.filter(|_| self.menu.unfolded_device.is_some()) {
@@ -802,6 +808,48 @@ impl HerdrWindow {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+impl HerdrWindow {
+    /// Scrolls the selectable line at `ordinal` into view. A session shares
+    /// one child of the list with the rest of its device's block, so it is
+    /// brought in by where it last painted; anything else by its `child`.
+    fn reveal_picker_line(&self, lines: &[Line], ordinal: usize, child: Option<usize>) {
+        let scroll = &self.menu.devices_scroll;
+        let Some(index) = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.selectable())
+            .nth(ordinal)
+            .map(|(index, _)| index)
+        else {
+            return;
+        };
+        let session = matches!(lines[index], Line::Session(_)).then(|| {
+            lines[..index]
+                .iter()
+                .filter(|line| matches!(line, Line::Session(_)))
+                .count()
+        });
+        let row = session.and_then(|row| self.menu.unfolded_rows.borrow().get(row).copied());
+        match row {
+            Some(row) => {
+                let view = scroll.bounds();
+                let mut offset = scroll.offset();
+                if row.top() < view.top() {
+                    offset.y += view.top() - row.top();
+                } else if row.bottom() > view.bottom() {
+                    offset.y -= row.bottom() - view.bottom();
+                }
+                scroll.set_offset(offset);
+            }
+            None => {
+                if let Some(child) = child {
+                    scroll.scroll_to_item(child);
+                }
+            }
         }
     }
 }

@@ -321,9 +321,13 @@ impl HerdrWindow {
         }
         // New answers add or take away rows under the unfolded device; the
         // keys stay on the row they were on, not on its old place.
+        // Only the unfolded device shows its sessions, so only it is asked.
+        let unfolded = self.menu.unfolded_device.clone().filter(|_| open);
+        let local = unfolded.as_deref() == Some(self.endpoints[0].id.as_str());
         let changed = self.keep_picker_selection(|this| {
-            let local = this.sessions.poll(development, open, now);
-            this.sessions.devices.poll(&targets, open, now) || local
+            let scanned = this.sessions.poll(development, local, now);
+            let wanted = unfolded.as_deref().filter(|_| !local);
+            this.sessions.devices.poll(&targets, wanted, now) || scanned
         });
         if changed {
             cx.notify();
