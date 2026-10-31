@@ -330,10 +330,15 @@ impl HerdrWindow {
                     }
                     return Ok(Prepared::Input(ClientPaneInputEvent::Paste(text)));
                 }
-                if let Some(image) = item.into_entries().find_map(|entry| match entry {
-                    ClipboardEntry::Image(image) => Some(image),
-                    _ => None,
-                }) {
+                // A paste that replaces a key (Linux Ctrl+V) leaves a local
+                // pane's image to that key: its agent reads the clipboard.
+                let key_reads_image = !image_only && !bridge_paths && fallback.is_some();
+                if !key_reads_image
+                    && let Some(image) = item.into_entries().find_map(|entry| match entry {
+                        ClipboardEntry::Image(image) => Some(image),
+                        _ => None,
+                    })
+                {
                     return Source::Clipboard(image).prepare().map(Prepared::Image);
                 }
                 Ok(fallback.map_or(Prepared::Empty, Prepared::Input))

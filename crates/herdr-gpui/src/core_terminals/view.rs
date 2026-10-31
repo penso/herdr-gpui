@@ -215,7 +215,11 @@ impl CoreTerminalView {
                 .and_then(|item| item.text())
                 .is_some_and(|text| !text.is_empty())
         };
-        if paste::pastes(&event.keystroke, cfg!(target_os = "windows"), has_text) {
+        if paste::pastes(
+            &event.keystroke,
+            cfg!(any(windows, target_os = "linux")),
+            has_text,
+        ) {
             self.paste_clipboard(cx);
             cx.stop_propagation();
             window.prevent_default();

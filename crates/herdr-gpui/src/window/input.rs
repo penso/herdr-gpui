@@ -30,16 +30,20 @@ fn plain_ctrl_v_paste(
     ctrl_v_pastes: bool,
     read_clipboard: impl FnOnce() -> Option<ClipboardItem>,
 ) -> bool {
+    ctrl_v_pastes
+        && plain_ctrl_v(keystroke)
+        && read_clipboard().is_some_and(|item| item.text().is_some_and(|text| !text.is_empty()))
+}
+
+/// Ctrl+V with no other modifier.
+fn plain_ctrl_v(keystroke: &Keystroke) -> bool {
     let modifiers = keystroke.modifiers;
-    let plain_ctrl_v = modifiers.control
+    modifiers.control
         && !modifiers.shift
         && !modifiers.alt
         && !modifiers.platform
         && !modifiers.function
-        && keystroke.key.eq_ignore_ascii_case("v");
-    ctrl_v_pastes
-        && plain_ctrl_v
-        && read_clipboard().is_some_and(|item| item.text().is_some_and(|text| !text.is_empty()))
+        && keystroke.key.eq_ignore_ascii_case("v")
 }
 
 impl HerdrWindow {
@@ -401,6 +405,15 @@ impl HerdrWindow {
             // The same paste as Ctrl+Shift+V: held across a projection gap,
             // reading the clipboard again when it is delivered.
             self.paste(cx);
+            cx.stop_propagation();
+            window.prevent_default();
+        } else if cfg!(target_os = "linux") && plain_ctrl_v(&event.keystroke) {
+            // Desktops such as Omarchy send plain Ctrl+V for their universal
+            // paste (Super+V), so it pastes text here too. The background
+            // reader decides: text pastes, a remote pane's image is bridged,
+            // and anything else still reaches the pane as Ctrl+V, so local
+            // agents keep reading clipboard images themselves.
+            self.paste_or_hold(false, key_input(event, alt_keys), cx);
             cx.stop_propagation();
             window.prevent_default();
         } else if event.keystroke.key == "v"

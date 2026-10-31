@@ -219,7 +219,7 @@ impl HerdrWindow {
         if image_only {
             self.paste_native_clipboard(true, fallback, cx)
         } else if cfg!(any(target_os = "macos", target_os = "linux")) {
-            self.paste_native_clipboard(false, None, cx)
+            self.paste_native_clipboard(false, fallback, cx)
         } else if let Some(item) = cx.read_from_clipboard() {
             self.paste_item(item, false, cx).unwrap_or(Delivery::Queued)
         } else {

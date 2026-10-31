@@ -32,8 +32,9 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
                         assert_eq!(cx.read_from_clipboard(), Some(item));
                         // Remote clipboard reads reserve FIFO order even for text-only
                         // Ctrl-V. Local Ctrl-V stays a key for agents that read the
-                        // clipboard themselves; local Cmd-V bridges images.
-                        let native_paste = key == "cmd-v";
+                        // clipboard themselves, except on Linux, where it reads the
+                        // clipboard to paste text; local Cmd-V bridges images.
+                        let native_paste = key == "cmd-v" || cfg!(target_os = "linux");
                         assert_eq!(
                             view.pending_images.len(),
                             usize::from(native_paste || (remote && key == "ctrl-v"))
@@ -56,11 +57,13 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
                         server.receive(),
                         ClientMessage::ClientShellPaneInput {
                             pane_id: "w1:p1".into(),
-                            events: vec![if key == "ctrl-v" {
-                                crate::terminal::key_input(&event, true).unwrap()
-                            } else {
-                                ClientPaneInputEvent::Paste("clipboard text".into())
-                            }],
+                            events: vec![
+                                if key == "ctrl-v" && (image || !cfg!(target_os = "linux")) {
+                                    crate::terminal::key_input(&event, true).unwrap()
+                                } else {
+                                    ClientPaneInputEvent::Paste("clipboard text".into())
+                                }
+                            ],
                         }
                     );
                 }

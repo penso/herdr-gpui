@@ -8,7 +8,8 @@ use gpui::{App, Keystroke};
 use herdr_backend::ClientPaneInputEvent;
 
 /// Whether `keystroke` pastes: Cmd-V, Ctrl-Shift-V, or Shift-Insert, and
-/// plain Ctrl-V where it pastes (Windows) while the clipboard holds text.
+/// plain Ctrl-V where it pastes (Windows, and Linux, whose desktops send it
+/// for a universal paste) while the clipboard holds text.
 pub(crate) fn pastes(
     keystroke: &Keystroke,
     ctrl_v_pastes: bool,
