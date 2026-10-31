@@ -1,5 +1,7 @@
 use super::*;
 
+mod hosts_line;
+
 #[test]
 fn last_seen_reads_in_the_largest_whole_unit() {
     let now = 100 * 86_400_000;

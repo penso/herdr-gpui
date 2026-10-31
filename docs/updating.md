@@ -228,18 +228,19 @@ size, and hash checks and never changes the legacy manifest.
 4. Download both current-run Linux artifacts and both Windows installers
    (Authenticode-signed once Windows signing is set up) without executing their
    contents. Require all three updater
-   archives, all six Linux packages and both installers, check the PEM/public-key
-   match, sign the three exact manifest JSON files, verify the three signatures,
-   and require 64 raw bytes each. Upload the DMG, macOS updater archive, the three
-   JSON files and raw signatures for the attestation job.
+   archives, all six Linux packages, both installers, and both static
+   `herdr-remote-control` host builds, check the PEM/public-key match, sign the
+   four exact manifest JSON files, verify the four signatures, and require 64
+   raw bytes each. Upload the DMG, macOS updater archive, the four JSON files
+   and raw signatures for the attestation job.
 5. In the separate protected OIDC job, combine these with both Linux artifact
-   sets (manual tarball, `.deb`, `.rpm`, Arch package and updater archive), both
-   signed Windows zips and installers, and the locked six-target SBOM. Require the
-   exact twenty-three-file base set, then checksum, Sigstore-sign and attest all
-   twenty-three files. Each has four sidecars (`.sha256`, `.sha512`, `.sig`,
-   `.crt`); `SHA256SUMS` covers all 115 files.
+   sets (manual tarball, `.deb`, `.rpm`, Arch package, updater archive and
+   static host build), both signed Windows zips and installers, and the locked
+   six-target SBOM. Require the exact twenty-seven-file base set, then checksum,
+   Sigstore-sign and attest all twenty-seven files. Each has four sidecars
+   (`.sha256`, `.sha512`, `.sig`, `.crt`); `SHA256SUMS` covers all 135 files.
 6. The protected publication job refuses existing tags/releases, creates a
-   `vVERSION` tag at the validated SHA and a draft, uploads all 116 assets, then
+   `vVERSION` tag at the validated SHA and a draft, uploads all 136 assets, then
    re-downloads and verifies the exact set and hashes before publication. The
    separately approved Homebrew job uses only the verified published DMG.
 

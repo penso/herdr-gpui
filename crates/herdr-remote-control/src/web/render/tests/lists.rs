@@ -82,7 +82,12 @@ fn a_title_from_daemon_data_is_escaped() {
 fn rows_show_the_daemons_status_dot_and_no_path() {
     let mut terminal = crate::hub::layout_terminal("t2", "zsh");
     terminal.cwd = Some("/srv/code/app/src".into());
-    terminal.agent = Some((Some("codex".into()), AgentStatus::Blocked));
+    terminal.agent = Some(crate::hub::TerminalAgent {
+        name: Some("codex".into()),
+        status: AgentStatus::Blocked,
+        pane: "t2".into(),
+        title: None,
+    });
     let mut shell = crate::hub::layout_terminal("t3", "bash");
     shell.cwd = Some("/srv/code/app".into());
     let mut workspace = workspace(vec![row("p1")]);

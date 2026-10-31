@@ -20,7 +20,7 @@ ARCHES = {"x86_64-unknown-linux-gnu": "amd64", "aarch64-unknown-linux-gnu": "arm
 # (nfpm packager, published extension)
 FORMATS = (("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst"))
 TREE = {
-    "bin/herdr-acp", "bin/herdr-automate", "bin/herdr-core", "bin/herdr-gpui",
+    "bin/herdr-acp", "bin/herdr-automate", "bin/herdr-core", "bin/herdr-gpui", "bin/herdr-nearby",
     "bin/herdr-remote-control",
     "share/applications/so.pen.herdr-gpui.desktop",
     "share/icons/hicolor/scalable/apps/herdr-gpui.svg",

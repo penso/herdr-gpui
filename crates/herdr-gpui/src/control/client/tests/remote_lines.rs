@@ -15,6 +15,7 @@ fn status() -> Status {
             "https://100.64.0.3:7443".into(),
         ],
         fingerprint: "5F:2A:C1:9E".into(),
+        computer: String::new(),
         herdr: false,
         chats: 3,
         devices: 2,
@@ -88,6 +89,8 @@ fn devices_print_one_line_each_or_exit_4_when_there_are_none() {
             last_seen_ms: Some(now - 2 * 3_600_000),
             push: true,
             connected: false,
+            via: None,
+            hosts: Vec::new(),
         },
         Device {
             id: DeviceId("d2".into()),
@@ -96,6 +99,8 @@ fn devices_print_one_line_each_or_exit_4_when_there_are_none() {
             last_seen_ms: Some(now),
             push: false,
             connected: true,
+            via: None,
+            hosts: Vec::new(),
         },
         Device {
             id: DeviceId("d3".into()),
@@ -104,6 +109,8 @@ fn devices_print_one_line_each_or_exit_4_when_there_are_none() {
             last_seen_ms: None,
             push: false,
             connected: false,
+            via: None,
+            hosts: Vec::new(),
         },
     ];
     assert_eq!(

@@ -1,0 +1,40 @@
+{
+  "agents": [
+    {
+      "id": "claude",
+      "name": "Claude"
+    },
+    {
+      "id": "codex",
+      "name": "Codex"
+    },
+    {
+      "id": "copilot",
+      "name": "Copilot"
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini"
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode"
+    },
+    {
+      "id": "pi",
+      "name": "Pi"
+    }
+  ],
+  "recent": [
+    "/Users/me/code/herdr-gpui"
+  ],
+  "roots": [
+    {
+      "folders": [
+        "/Users/me/code/herdr-gpui",
+        "/Users/me/code/moltis"
+      ],
+      "path": "/Users/me/code"
+    }
+  ]
+}

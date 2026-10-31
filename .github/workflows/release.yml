@@ -176,6 +176,9 @@ jobs:
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
       - run: cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"
+      # Nearby pairing's Bluetooth side, in Swift; the app starts it beside
+      # its executable while the pairing dialog is open.
+      - run: bash scripts/release/build-nearby.sh "$TARGET"
       # Herdr 2 terminals run in the pinned herdr-core beside it, fetched
       # and checked against its checksum in herdr-core.json.
       - run: python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
@@ -208,6 +211,7 @@ jobs:
             target/${{ matrix.target }}/release/herdr-acp
             target/${{ matrix.target }}/release/herdr-remote-control
             target/${{ matrix.target }}/release/herdr-automate
+            target/${{ matrix.target }}/release/herdr-nearby
             target/${{ matrix.target }}/release/herdr-core
             target/${{ matrix.target }}/release/THIRD-PARTY-NOTICES.txt
           if-no-files-found: error
@@ -222,8 +226,10 @@ jobs:
         include:
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            host: x86_64-unknown-linux-musl
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            host: aarch64-unknown-linux-musl
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -231,6 +237,7 @@ jobs:
     env:
       VERSION: ${{ needs.validate.outputs.version }}
       TARGET: ${{ matrix.target }}
+      HOST_TARGET: ${{ matrix.host }}
       HERDR_RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       HERDR_UPDATE_PUBLIC_KEY: ${{ vars.HERDR_UPDATE_PUBLIC_KEY }}
     steps:
@@ -244,7 +251,7 @@ jobs:
       - name: Require the declared native target
         run: |
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
-      - run: cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"
+      - run: cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"
       # Herdr 2 terminals run in the pinned herdr-core beside it, fetched
       # and checked against its checksum in herdr-core.json.
       - run: python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
@@ -255,6 +262,8 @@ jobs:
       - run: '"target/$TARGET/release/herdr-remote-control" --version'
       # Automations run in the herdr-automate beside it.
       - run: '"target/$TARGET/release/herdr-automate" --version'
+      # Nearby pairing and presence run the herdr-nearby beside it.
+      - run: '"target/$TARGET/release/herdr-nearby" --version'
       - run: '"target/$TARGET/release/herdr-core" --version'
       - name: Install the notice generator
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
@@ -278,6 +287,11 @@ jobs:
             "dist/Herdr-$VERSION-$TARGET.tar.gz" dist --nfpm "$nfpm"
       - name: Install each package on its distribution and check its libraries
         run: bash scripts/release/smoke-linux-packages.sh "$VERSION" "$TARGET" dist
+      # Herdr UI copies this static herdr-remote-control onto SSH and cloud
+      # machines of this architecture to pair a phone with them, whatever
+      # their glibc. It is listed in host-manifest.json (schema 4).
+      - name: Build the static herdr-remote-control for other machines
+        run: bash scripts/release/build-host.sh "$VERSION" "$HOST_TARGET" dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-package-${{ matrix.target }}
@@ -287,6 +301,7 @@ jobs:
             dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.rpm
             dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.pkg.tar.zst
             dist/herdr-gpui-${{ needs.validate.outputs.version }}-${{ matrix.target }}-update.tar.gz
+            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-${{ matrix.host }}
           if-no-files-found: error
           retention-days: 7
 
@@ -329,7 +344,7 @@ jobs:
       - name: Require the declared native target
         run: |
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
-      - run: cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"
+      - run: cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"
       # Herdr 2 terminals run in the pinned herdr-core beside it; ARM64 gets
       # the x64 build, which Windows on ARM runs.
       - run: python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
@@ -337,6 +352,7 @@ jobs:
       - run: '"target/$TARGET/release/herdr-acp.exe" --help'
       - run: '"target/$TARGET/release/herdr-remote-control.exe" --version'
       - run: '"target/$TARGET/release/herdr-automate.exe" --version'
+      - run: '"target/$TARGET/release/herdr-nearby.exe" --version'
       - run: '"target/$TARGET/release/herdr-core.exe" --version'
       - name: Install the notice generator
         uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
@@ -425,6 +441,7 @@ jobs:
             ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-acp.exe
             ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-remote-control.exe
             ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-automate.exe
+            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-nearby.exe
             ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-core.exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
@@ -599,7 +616,7 @@ jobs:
       - name: Assemble without executing the downloaded binaries
         run: |
           mkdir dist
-          chmod +x binaries/arm64/herdr-gpui binaries/x86_64/herdr-gpui binaries/arm64/herdr-acp binaries/x86_64/herdr-acp binaries/arm64/herdr-remote-control binaries/x86_64/herdr-remote-control binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core
+          chmod +x binaries/arm64/herdr-gpui binaries/x86_64/herdr-gpui binaries/arm64/herdr-acp binaries/x86_64/herdr-acp binaries/arm64/herdr-remote-control binaries/x86_64/herdr-remote-control binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core binaries/arm64/herdr-nearby binaries/x86_64/herdr-nearby
           cmp binaries/arm64/THIRD-PARTY-NOTICES.txt binaries/x86_64/THIRD-PARTY-NOTICES.txt
           bash scripts/release/package-macos.sh "$VERSION" binaries/arm64/herdr-gpui binaries/x86_64/herdr-gpui dist binaries/arm64/THIRD-PARTY-NOTICES.txt
       - name: Sign and notarize app and DMG (never launch the app)
@@ -670,6 +687,14 @@ jobs:
           "$OPENSSL" pkeyutl -verify -rawin -pubin -inkey "$KEY_DIR/public.pem" \
             -in dist/windows-manifest.json -sigfile dist/windows-manifest.sig
           test "$(wc -c < dist/windows-manifest.sig | tr -d ' ')" = 64
+          # Host builds get a fourth manifest (schema 4): the static
+          # herdr-remote-control Herdr UI copies onto other machines.
+          python3 scripts/update-manifest.py create dist "$VERSION" --hosts
+          "$OPENSSL" pkeyutl -sign -rawin -inkey "$KEY_DIR/private.pem" -passin pass: \
+            -in dist/host-manifest.json -out dist/host-manifest.sig
+          "$OPENSSL" pkeyutl -verify -rawin -pubin -inkey "$KEY_DIR/public.pem" \
+            -in dist/host-manifest.json -sigfile dist/host-manifest.sig
+          test "$(wc -c < dist/host-manifest.sig | tr -d ' ')" = 64
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-signed
@@ -682,6 +707,8 @@ jobs:
             dist/package-manifest.sig
             dist/windows-manifest.json
             dist/windows-manifest.sig
+            dist/host-manifest.json
+            dist/host-manifest.sig
           if-no-files-found: error
           retention-days: 7
 
@@ -752,7 +779,7 @@ jobs:
       - uses: ./.github/actions/sign-artifacts # zizmor: ignore[self-repository]
         with:
           working-directory: dist
-          files: Herdr-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}.cdx.json herdr-gpui-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz update-manifest.json update-manifest.sig package-manifest.json package-manifest.sig windows-manifest.json windows-manifest.sig
+          files: Herdr-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}.cdx.json herdr-gpui-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz update-manifest.json update-manifest.sig package-manifest.json package-manifest.sig windows-manifest.json windows-manifest.sig herdr-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl herdr-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl host-manifest.json host-manifest.sig
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -779,6 +806,10 @@ jobs:
             dist/package-manifest.sig
             dist/windows-manifest.json
             dist/windows-manifest.sig
+            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl
+            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl
+            dist/host-manifest.json
+            dist/host-manifest.sig
       - run: python3 scripts/release/artifact-manifest.py create "$VERSION" dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

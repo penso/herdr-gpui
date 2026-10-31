@@ -4,17 +4,20 @@ use super::*;
 use crate::push::Chat;
 use p256::{SecretKey, ecdsa::SigningKey};
 
+mod alert;
 mod config;
 mod decide;
 mod jwt;
+mod notify_key;
 mod pacer;
 mod payload;
+mod seal;
 mod send;
 mod tokens;
 
 const TEAM: &str = "ABCDE12345";
 const KEY_ID: &str = "XYZ9876543";
-const TOPIC: &str = "so.pen.herdr-remote";
+const TOPIC: &str = "so.pen.herdr.remote";
 
 const CHAT: Chat<'static> = Chat {
     agent: "Claude",

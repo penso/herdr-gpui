@@ -286,6 +286,16 @@ impl SettingsWindow {
                 )),
             )
             .child(
+                ui::row(theme, "remote-presence", fl!("settings-remote-presence"))
+                    .description(fl!("settings-remote-presence-note"))
+                    .switch(self.preference_toggle(
+                        "remote-presence-toggle",
+                        remote.presence,
+                        Preference::Remote(Edit::Presence(!remote.presence)),
+                        cx,
+                    )),
+            )
+            .child(
                 ui::row(theme, "remote-restart", fl!("settings-remote-restart"))
                     .description(fl!("settings-remote-restart-note"))
                     .control(
@@ -617,7 +627,10 @@ impl SettingsWindow {
                 .description(if asking {
                     fl!("settings-remote-device-revoke-ask")
                 } else {
-                    device_line(device, now)
+                    match crate::remote::hosts_line(device) {
+                        Some(hosts) => format!("{} \u{b7} {hosts}", device_line(device, now)),
+                        None => device_line(device, now),
+                    }
                 })
                 .when(asking, |row| row.control(cancel))
                 .control(

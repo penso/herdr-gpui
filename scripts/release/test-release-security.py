@@ -114,7 +114,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("secrets.", package)
         # Bash, so "$TARGET" and friends expand on the Windows runner.
         self.assertIn("    defaults:\n      run:\n        shell: bash\n", package)
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
                         'python scripts/release/windows-installer.py install-iscc',
                         'python scripts/release/windows-installer.py build "$VERSION" "$TARGET"',
@@ -155,11 +155,12 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", linux), [
             ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
             ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"',
                         'python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"',
                         '"target/$TARGET/release/herdr-acp" --help',
                         '"target/$TARGET/release/herdr-remote-control" --version',
                         '"target/$TARGET/release/herdr-automate" --version',
+                        '"target/$TARGET/release/herdr-nearby" --version',
                         'python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
                         '"target/$TARGET/release/herdr-core" --version',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
@@ -177,7 +178,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", windows), [
             ("windows-2025", "x86_64-pc-windows-msvc"),
             ("windows-11-arm", "aarch64-pc-windows-msvc")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
+        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"',
                         'python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"',
                         'python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
                         '"target/$TARGET/release/herdr-core.exe" --version',
@@ -198,8 +199,12 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn('python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"', macos)
         self.assertIn('"target/$TARGET/release/herdr-core" --version', macos)
         self.assertIn("target/${{ matrix.target }}/release/herdr-core\n", macos)
-        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core\n", jobs["sign"])
+        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core ", jobs["sign"])
+        self.assertIn("binaries/arm64/herdr-nearby binaries/x86_64/herdr-nearby\n", jobs["sign"])
         self.assertIn('"target/$TARGET/release/herdr-automate.exe" --version', jobs["windows"])
+        self.assertIn('"target/$TARGET/release/herdr-nearby.exe" --version', jobs["windows"])
+        # The Swift helper ships on macOS; the Rust one only on Linux and Windows.
+        self.assertNotIn("-p herdr-nearby", macos)
         for name in ("macos-build", "linux", "windows"):
             # `cargo test` rebuilds the binary with dev-dependency features and
             # overwrites the one built for release; the shipped bytes are
@@ -359,6 +364,12 @@ class ReleaseTargets(unittest.TestCase):
         for name in ("update-manifest.json", "update-manifest.sig"):
             self.assertIn(f"            dist/{name}\n", sign)
         self.assertIn('test "$(wc -c < dist/update-manifest.sig | tr -d \' \')" = 64', sign)
+        # Host builds: built static in each Linux job, listed and signed here.
+        self.assertIn('create dist "$VERSION" --hosts', sign)
+        self.assertIn('test "$(wc -c < dist/host-manifest.sig | tr -d \' \')" = 64', sign)
+        for name in ("host-manifest.json", "host-manifest.sig"):
+            self.assertIn(f"            dist/{name}\n", sign)
+        self.assertIn('build-host.sh "$VERSION" "$HOST_TARGET" dist', jobs["linux"])
 
 
 class WindowsTrust(unittest.TestCase):
@@ -377,7 +388,7 @@ class WindowsTrust(unittest.TestCase):
         for setting in ("timestamp-rfc3161: http://timestamp.acs.microsoft.com", "timestamp-digest: SHA256",
                         "file-digest: SHA256", "exclude-environment-credential: true",
                         "cache-dependencies: false", "name: windows-package-${{ matrix.target }}",
-                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n", "}}\\herdr-remote-control.exe\n", "}}\\herdr-automate.exe\n", "}}\\herdr-core.exe\n",
+                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n", "}}\\herdr-remote-control.exe\n", "}}\\herdr-automate.exe\n", "}}\\herdr-nearby.exe\n", "}}\\herdr-core.exe\n",
                         "name: windows-signed-${{ matrix.target }}"):
             self.assertIn(setting, sign)
         # Unpack, sign, check and repack, then sign the installer, then verify.
@@ -551,7 +562,7 @@ class ReleaseSecurity(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name)
         for name in MANIFEST.base_names(VERSION):
-            data = b"s" * 64 if name in ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig") else name.encode()
+            data = b"s" * 64 if name in MANIFEST.UPDATER_SIGNATURES else name.encode()
             (self.path / name).write_bytes(data)
             for algorithm in ("sha256", "sha512"):
                 checksum = hashlib.new(algorithm, data).hexdigest()
@@ -581,7 +592,10 @@ class ReleaseSecurity(unittest.TestCase):
             "herdr-gpui-20260920.1-x86_64-unknown-linux-gnu-update.tar.gz",
             "herdr-gpui-20260920.1-aarch64-unknown-linux-gnu-update.tar.gz",
             "update-manifest.json", "update-manifest.sig", "package-manifest.json", "package-manifest.sig",
-            "windows-manifest.json", "windows-manifest.sig"})
+            "windows-manifest.json", "windows-manifest.sig",
+            *(f"herdr-remote-control-20260920.1-{target}"
+              for target in ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")),
+            "host-manifest.json", "host-manifest.sig"})
         # Five files per base asset; SHA256SUMS lists all but itself.
         assets = len(MANIFEST.base_names(VERSION)) * 5
         self.assertEqual(len((self.path / "SHA256SUMS").read_text().splitlines()), assets)
@@ -608,7 +622,7 @@ class ReleaseSecurity(unittest.TestCase):
         self.run_manifest("verify", False)
 
     def test_raw_updater_signature_length(self):
-        for name in ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig"):
+        for name in MANIFEST.UPDATER_SIGNATURES:
             path = self.path / name
             for size in (1, 63, 65, 128):
                 path.write_bytes(b"s" * size)

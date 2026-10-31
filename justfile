@@ -7,9 +7,10 @@ run *args:
     set -euo pipefail
     if [ "$(uname -s)" != Darwin ]; then
         # The app starts chats with the herdr-acp, finds the automation
-        # daemon, and starts Remote control with the herdr-remote-control, all beside
+        # daemon, starts Remote control with the herdr-remote-control, and
+        # Bluetooth pairing and presence with the herdr-nearby, all beside
         # its own executable.
-        cargo build --locked --release -p herdr-acp -p herdr-automate -p herdr-remote-control
+        cargo build --locked --release -p herdr-acp -p herdr-automate -p herdr-nearby -p herdr-remote-control
         exec cargo run --locked --release -p herdr-gpui -- {{args}}
     fi
     {{just_executable()}} bundle release
@@ -31,7 +32,7 @@ run-debug *args:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "$(uname -s)" != Darwin ]; then
-        cargo build --locked -p herdr-acp -p herdr-automate -p herdr-remote-control
+        cargo build --locked -p herdr-acp -p herdr-automate -p herdr-nearby -p herdr-remote-control
         exec cargo run --locked -p herdr-gpui -- {{args}}
     fi
     {{just_executable()}} bundle debug
@@ -176,7 +177,7 @@ bundle profile="release" features="":
     # a signed file's old signature with its inode, so reading the rewritten
     # pages kills the reader, and a chat still running the old herdr-acp
     # keeps its own copy.
-    rm -f "$app/Contents/MacOS/Herdr" "$app/Contents/MacOS/herdr-acp" "$app/Contents/MacOS/herdr-automate" "$app/Contents/MacOS/herdr-remote-control"
+    rm -f "$app/Contents/MacOS/Herdr" "$app/Contents/MacOS/herdr-acp" "$app/Contents/MacOS/herdr-automate" "$app/Contents/MacOS/herdr-remote-control" "$app/Contents/MacOS/herdr-nearby"
     cp target/{{profile}}/herdr-gpui "$app/Contents/MacOS/Herdr"
     # The automation daemon, found beside the app's executable.
     cp target/{{profile}}/herdr-automate "$app/Contents/MacOS/herdr-automate"
@@ -185,6 +186,10 @@ bundle profile="release" features="":
     cp target/{{profile}}/herdr-acp "$app/Contents/MacOS/herdr-acp"
     # Remote control runs the herdr-remote-control beside it as a user service.
     cp target/{{profile}}/herdr-remote-control "$app/Contents/MacOS/herdr-remote-control"
+    # Bluetooth pairing and presence run the Swift helper beside it; without
+    # it the app pairs over the network only.
+    xcrun swiftc -O -swift-version 6 macos/herdr-nearby/main.swift macos/herdr-nearby/Framing.swift \
+        macos/herdr-nearby/Bonjour.swift -o "$app/Contents/MacOS/herdr-nearby"
     # Herdr 2 terminals run in the pinned herdr-core beside it, as releases
     # bundle it. Fetched once per profile; an offline build goes on without.
     core=target/{{profile}}/herdr-core
@@ -241,6 +246,46 @@ sort:
 # the Tailwind standalone CLI v4, so building the crate needs no Node.
 web-css:
     tailwindcss --input crates/herdr-remote-control/src/web/assets/input.css --output crates/herdr-remote-control/src/web/assets/app.css --minify
+
+# The iOS app (ios/README.md). Not part of `ci`, which runs on Linux too;
+# the iOS workflow runs these on macOS.
+ios-generate:
+    cd ios && xcodegen -q
+
+# Swift package tests, against the fixtures the daemon's Rust tests write.
+ios-test:
+    cd ios/HerdrRemoteCore && swift test
+
+# Unsigned build of the app and its extensions for the simulator.
+ios-build: ios-generate
+    cd ios && xcodebuild -project HerdrRemote.xcodeproj -scheme HerdrRemote -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet build
+
+# Archive and upload to TestFlight, taking the key from `pass` when unset.
+ios-testflight:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # CI sets these from the `testflight` environment's secrets; here what
+    # the environment leaves unset comes from `pass`. The key ID and team
+    # are not secret.
+    export APPLE_TEAM_ID="${APPLE_TEAM_ID:-VJAHQVZ96V}"
+    export ASC_KEY_ID="${ASC_KEY_ID:-VACF2WK94S}"
+    if [ -z "${ASC_ISSUER_ID:-}" ] || [ -z "${ASC_KEY_P8:-}" ]; then
+        echo "Reading the App Store Connect key from pass: tap your YubiKey if it asks."
+    fi
+    if [ -z "${ASC_ISSUER_ID:-}" ]; then
+        ASC_ISSUER_ID=$(pass show apple/app-store-connect-issuer-id | head -1)
+        export ASC_ISSUER_ID
+    fi
+    if [ -z "${ASC_KEY_P8:-}" ]; then
+        ASC_KEY_P8=$(pass show "herdr-gpui/apple-api-key-$ASC_KEY_ID")
+        export ASC_KEY_P8
+    fi
+    echo "Credentials ready (key $ASC_KEY_ID, team $APPLE_TEAM_ID)."
+    sh ios/tools/testflight.sh
+
+# Render the native screen mockups in a headless simulator.
+ios-mockups appearance="dark" round="2":
+    ios/Mockups/render.sh {{appearance}} {{round}}
 
 test-mockup-wait:
     python3 .claude/skills/gpui-mockup/scripts/test_wait.py
