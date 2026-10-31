@@ -221,6 +221,14 @@ impl HerdrWindow {
                         )
                         .child(div().flex_1().min_w_0().child(field))
                 };
+                if let Some(source) = &self.menu.worktree {
+                    // Set each frame, like the caption beside it, so the
+                    // accessible name follows a language change; unchanged
+                    // is a no-op.
+                    source.name.update(cx, |input, cx| {
+                        input.set_label(&fl!("worktree-source-name"), cx);
+                    });
+                }
                 body.children(self.menu.worktree.as_ref().map(|source| {
                     row(
                         fl!("workspace-dialog-name").into(),
