@@ -57,9 +57,11 @@ fn work_pushed_nowhere_is_named_and_delete_asks_again(cx: &mut TestAppContext) {
     view.read_with(cx, |view, _| {
         let host = host(view);
         assert_eq!(super::super::remove_label(host), "Delete anyway");
-        let text = super::super::destroy::unsynced_text(&host.unsynced, "VM").unwrap();
+        let text = super::super::destroy::unsynced_text(&host.unsynced, "VM")
+            .unwrap()
+            .replace(['\u{2068}', '\u{2069}'], "");
         assert!(
-            text.contains("~/code/app (2 changed files, 1 unpushed commits)"),
+            text.contains("~/code/app (2 changed files, 1 unpushed commit)"),
             "{text}"
         );
     });
@@ -75,7 +77,10 @@ fn a_clean_machine_is_deleted_without_a_second_question(cx: &mut TestAppContext)
         .insert("herdr-clean".into(), Vec::new());
     let (view, cx) = open_remove(cx, "herdr-clean", "host-azure:herdr-clean");
     view.read_with(cx, |view, _| {
-        assert_eq!(super::super::remove_label(host(view)), "Delete VM");
+        assert_eq!(
+            super::super::remove_label(host(view)).replace(['\u{2068}', '\u{2069}'], ""),
+            "Delete VM"
+        );
     });
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
     assert!(cx.debug_bounds("remove-device-unsynced").is_none());
@@ -86,9 +91,14 @@ fn a_machine_that_cannot_be_searched_is_said_to_be_unchecked(cx: &mut TestAppCon
     let (view, cx) = open_remove(cx, "herdr-unreachable", "host-azure:herdr-unreachable");
     view.read_with(cx, |view, _| {
         let host = host(view);
-        let text = super::super::destroy::unsynced_text(&host.unsynced, "VM").unwrap();
+        let text = super::super::destroy::unsynced_text(&host.unsynced, "VM")
+            .unwrap()
+            .replace(['\u{2068}', '\u{2069}'], "");
         assert!(text.starts_with("Could not check the VM"), "{text}");
-        assert_eq!(super::super::remove_label(host), "Delete VM");
+        assert_eq!(
+            super::super::remove_label(host).replace(['\u{2068}', '\u{2069}'], ""),
+            "Delete VM"
+        );
     });
 }
 

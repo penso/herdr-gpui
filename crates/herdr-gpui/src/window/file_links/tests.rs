@@ -10,6 +10,8 @@ use herdr_client::{
 };
 use std::sync::Arc;
 
+mod wrapped;
+
 #[test]
 fn paths_resolve_under_home_or_the_pane_directory() {
     let home = Path::new("home");

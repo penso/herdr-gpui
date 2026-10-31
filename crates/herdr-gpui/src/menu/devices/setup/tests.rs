@@ -5,7 +5,7 @@ fn validates_setup_fields_before_launch() -> Result<()> {
     for target in ["", "-oProxyCommand=bad", "two hosts", "host\ncommand"] {
         assert!(matches!(
             Request::new(target, "Label", ""),
-            Err(crate::Error::Devices(Error::SetupInput(_)))
+            Err(crate::Error::Devices(Error::InvalidTarget))
         ));
     }
     // An empty label is not an error: the target names the device.
@@ -243,7 +243,7 @@ fn rename_passes_the_label_as_one_value_even_when_it_looks_like_a_flag() -> Resu
     );
     assert!(matches!(
         rename_with(binary.as_os_str(), "../x", "x"),
-        Err(crate::Error::Devices(Error::SetupInput(_)))
+        Err(crate::Error::Devices(Error::NoProfile))
     ));
     std::fs::remove_dir_all(&root)?;
     Ok(())
