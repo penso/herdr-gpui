@@ -5,6 +5,9 @@
 //! The user turns sync on once in Settings, after reading what it changes on
 //! each machine. From then on it runs without asking: soon after launch,
 //! every hour, when a device is added here, and from Settings' Sync now.
+mod suggestion;
+pub(crate) use suggestion::Suggestion;
+
 use gpui::{App, Global};
 use herdr_client::{
     SavedHost,
@@ -35,11 +38,11 @@ pub(crate) struct MachineSync {
     // keep-sorted start
     /// Set on quit, so a running sync stops its SSH children.
     cancelled: Arc<AtomicBool>,
-    /// Why this computer's sync state or devices could not be read.
-    load_failure: Option<crate::Error>,
     /// This computer's saved SSH devices, in catalog order.
     hosts: Vec<SavedHost>,
     last: Option<Outcome>,
+    /// Why this computer's sync state or devices could not be read.
+    load_failure: Option<crate::Error>,
     loaded: bool,
     /// Another sync was asked for while one ran.
     queued: bool,
@@ -48,6 +51,8 @@ pub(crate) struct MachineSync {
     save_failure: Option<crate::Error>,
     /// This computer's place in the list, or `None` while sync is off.
     state: Option<SyncState>,
+    /// What Settings fills in while sync is off, once looked up.
+    suggestion: Option<Suggestion>,
     // keep-sorted end
 }
 
@@ -77,6 +82,7 @@ impl MachineSync {
         })
         .detach();
         Self::reload(cx, false);
+        Self::suggest(cx);
         cx.spawn(async move |cx| {
             cx.background_executor().timer(STARTUP_DELAY).await;
             loop {
@@ -112,11 +118,31 @@ impl MachineSync {
         self.loaded
     }
 
+    pub(crate) fn suggestion(&self) -> Option<&Suggestion> {
+        self.suggestion.as_ref()
+    }
+
     /// Rereads the state and devices, as Settings does when it shows them.
     pub(crate) fn refresh(cx: &mut App) {
         if cx.has_global::<Self>() {
             Self::reload(cx, false);
+            // Tailscale may have connected since.
+            Self::suggest(cx);
         }
+    }
+
+    /// Looks up this computer's suggested address and name.
+    fn suggest(cx: &mut App) {
+        let task = cx.background_executor().spawn(async { Suggestion::find() });
+        cx.spawn(async move |cx| {
+            let suggestion = task.await;
+            cx.update(|cx| {
+                if cx.global::<Self>().suggestion.as_ref() != Some(&suggestion) {
+                    cx.global_mut::<Self>().suggestion = Some(suggestion);
+                }
+            });
+        })
+        .detach();
     }
 
     /// A window read this computer's catalog. A device it lists that the

@@ -12,6 +12,7 @@ mod complete;
 mod render;
 mod ssh_config;
 mod tailscale;
+pub(crate) use tailscale::own_name as own_tailscale_name;
 
 use crate::HerdrWindow;
 use gpui::{Context, Task};

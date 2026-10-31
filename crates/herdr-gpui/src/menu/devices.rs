@@ -10,6 +10,7 @@ mod catalog;
 pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
+pub(crate) use discover::own_tailscale_name;
 mod error;
 mod host_key;
 mod host_key_choice;

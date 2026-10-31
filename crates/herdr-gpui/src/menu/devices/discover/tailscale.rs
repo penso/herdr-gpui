@@ -52,6 +52,22 @@ struct Status {
     backend_state: Option<String>,
     #[serde(default)]
     peer: Option<BTreeMap<String, Peer>>,
+    /// This machine.
+    #[serde(default, rename = "Self")]
+    own: Option<Peer>,
+}
+
+impl Status {
+    /// Whether Tailscale is connected. An older CLI without the field is
+    /// taken as connected.
+    fn running(&self) -> bool {
+        // Tailscale's own state name.
+        // i18n: data
+        let running = "Running";
+        self.backend_state
+            .as_deref()
+            .is_none_or(|state| state == running)
+    }
 }
 
 #[derive(Deserialize)]
@@ -73,9 +89,24 @@ struct Peer {
 /// running, or switched off.
 /// Blocks on a process: call it from the background executor.
 pub(super) fn peers() -> Result<Vec<Candidate>> {
+    match status()? {
+        Some(json) => parse(&json),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// This machine's MagicDNS name, or `None` when Tailscale is not installed,
+/// not running, or has no name for it.
+/// Blocks on a process: call it from the background executor.
+pub(crate) fn own_name() -> Result<Option<String>> {
+    Ok(status()?.and_then(|json| parse_own(&json)))
+}
+
+/// `tailscale status --json`, or `None` when there is no CLI or it fails.
+fn status() -> Result<Option<Vec<u8>>> {
     let path = crate::login_env::path().unwrap_or_default();
     let Some(executable) = executable(&path, |path| path.is_file()) else {
-        return Ok(Vec::new());
+        return Ok(None);
     };
     let (status, stdout, stderr) = match setup::run_bounded(
         executable.as_os_str(),
@@ -98,9 +129,9 @@ pub(super) fn peers() -> Result<Vec<Candidate>> {
             stderr_bytes = stderr.len(),
             "Tailscale is not running"
         );
-        return Ok(Vec::new());
+        return Ok(None);
     }
-    parse(&stdout)
+    Ok(Some(stdout))
 }
 
 /// The first `tailscale` on `PATH`, then the usual install locations.
@@ -115,14 +146,7 @@ pub(super) fn executable(path: &OsStr, exists: impl Fn(&Path) -> bool) -> Option
 /// serve SSH, by its MagicDNS name. This machine is not a peer.
 pub(super) fn parse(json: &[u8]) -> Result<Vec<Candidate>> {
     let status: Status = serde_json::from_slice(json).map_err(Error::TailscaleJson)?;
-    // Tailscale's own state name.
-    // i18n: data
-    let running = "Running";
-    if status
-        .backend_state
-        .as_deref()
-        .is_some_and(|state| state != running)
-    {
+    if !status.running() {
         return Ok(Vec::new());
     }
     let mut peers: Vec<Candidate> = status
@@ -140,6 +164,17 @@ pub(super) fn parse(json: &[u8]) -> Result<Vec<Candidate>> {
     peers.sort_by(|a, b| a.name.cmp(&b.name));
     peers.truncate(MAX_PEERS);
     Ok(peers)
+}
+
+/// This machine's MagicDNS name in a status document, while connected.
+pub(super) fn parse_own(json: &[u8]) -> Option<String> {
+    let status: Status = serde_json::from_slice(json).ok()?;
+    if !status.running() {
+        return None;
+    }
+    let own = status.own?;
+    let dns = own.dns_name.trim_end_matches('.');
+    valid_host(dns).then(|| dns.to_owned())
 }
 
 fn candidate(peer: Peer) -> Option<Candidate> {

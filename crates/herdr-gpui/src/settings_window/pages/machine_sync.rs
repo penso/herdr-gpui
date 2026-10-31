@@ -8,7 +8,7 @@ use super::{SettingsWindow, ui};
 use crate::direction::Logical;
 use crate::{
     i18n::{Localize, fl},
-    machine_sync::{MachineSync, Outcome},
+    machine_sync::{MachineSync, Outcome, Suggestion},
     notifications::safe_text,
     search_input::SearchInput,
     toggles::checkbox,
@@ -29,20 +29,11 @@ pub(in crate::settings_window) struct MachineSyncSettings {
     pub(in crate::settings_window) confirming: bool,
     /// The address or name typed could not be saved, and why.
     pub(in crate::settings_window) invalid: Option<String>,
-}
-
-/// `user@host` for this computer, a guess the user corrects: whether the
-/// others reach it by this name depends on their network.
-fn suggested_address() -> String {
-    let user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_default();
-    let host = crate::remote::nearby::host_name();
-    if user.is_empty() {
-        host
-    } else {
-        format!("{user}@{host}")
-    }
+    /// The suggestion the fields were filled with while sync was off, so a
+    /// better one replaces only what the user has not edited.
+    filled: Option<Suggestion>,
+    /// Watches for that better suggestion while the page shows.
+    watch: Option<Subscription>,
 }
 
 /// What the page shows of [`MachineSync`], copied out so the page can hand
@@ -148,6 +139,38 @@ impl SettingsWindow {
     pub(in crate::settings_window) fn open_machine_sync(&mut self, cx: &mut Context<Self>) {
         MachineSync::refresh(cx);
         self.make_machine_sync_fields(cx);
+        if cx.has_global::<MachineSync>() {
+            self.machines.watch =
+                Some(cx.observe_global::<MachineSync>(Self::update_machine_sync_suggestion));
+        }
+    }
+
+    /// A suggestion arrived, such as this computer's Tailscale name: it
+    /// replaces each field the user has not changed from the last one.
+    fn update_machine_sync_suggestion(&mut self, cx: &mut Context<Self>) {
+        let Some(sync) = cx.try_global::<MachineSync>() else {
+            return;
+        };
+        if sync.state().is_some() {
+            return;
+        }
+        let Some(new) = sync.suggestion().cloned() else {
+            return;
+        };
+        let Some(old) = self.machines.filled.replace(new.clone()) else {
+            return;
+        };
+        for (input, old, new) in [
+            (&self.machines.address, &old.address, &new.address),
+            (&self.machines.name, &old.name, &new.name),
+        ] {
+            if let Some(input) = input
+                && old != new
+                && input.read(cx).text() == old
+            {
+                input.update(cx, |input, cx| input.set_text_selected(new, cx));
+            }
+        }
     }
 
     /// The address and name fields, filled from the saved state, or with a
@@ -159,7 +182,18 @@ impl SettingsWindow {
             .cloned();
         let (address, name) = match state {
             Some(state) => (state.target, state.label),
-            None => (suggested_address(), crate::remote::nearby::host_name()),
+            None => {
+                let suggestion = cx
+                    .try_global::<MachineSync>()
+                    .and_then(MachineSync::suggestion)
+                    .cloned()
+                    .unwrap_or_else(Suggestion::local);
+                let fields = (suggestion.address.clone(), suggestion.name.clone());
+                if self.machines.address.is_none() {
+                    self.machines.filled = Some(suggestion);
+                }
+                fields
+            }
         };
         let field = |text: String, placeholder: &str, cx: &mut Context<Self>| {
             let input = cx.new(SearchInput::new);
@@ -187,6 +221,7 @@ impl SettingsWindow {
     pub(in crate::settings_window) fn close_machine_sync(&mut self) {
         self.machines.confirming = false;
         self.machines.invalid = None;
+        self.machines.watch = None;
     }
 
     pub(in crate::settings_window) fn sync_machine_sync_fields(&mut self, cx: &mut Context<Self>) {

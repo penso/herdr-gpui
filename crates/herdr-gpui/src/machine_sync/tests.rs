@@ -19,3 +19,18 @@ fn only_an_enabled_device_the_last_read_lacked_is_new() {
     // A device turned off in Herdr is not synced, so it starts nothing.
     assert!(!new_device(&known, &[host('a', true), host('b', false)]));
 }
+
+#[test]
+fn the_suggested_name_is_the_first_label_of_the_host_name() {
+    assert_eq!(
+        suggestion::short_name("MacBookPro.localdomain"),
+        "MacBookPro"
+    );
+    assert_eq!(suggestion::short_name("MacBookPro"), "MacBookPro");
+    assert_eq!(suggestion::short_name(".odd"), ".odd");
+    assert_eq!(
+        suggestion::address("mac", "MacBookPro.tail1.ts.net"),
+        "mac@MacBookPro.tail1.ts.net"
+    );
+    assert_eq!(suggestion::address("", "studio.local"), "studio.local");
+}
