@@ -169,3 +169,28 @@ fn a_full_catalog_gains_nothing() {
     let plan = plan(&me, &key(1), &local, &members).unwrap();
     assert_eq!(plan.writes[0].as_ref().unwrap().devices, 0);
 }
+
+#[test]
+fn a_member_that_left_out_its_own_entry_for_a_machine_gets_no_key_for_it() {
+    let me = state(1, "me@laptop");
+    let local = [host(2, "me@nas"), host(3, "me@gpu")];
+    // The NAS saved the GPU itself, under another ID, and unticked it there.
+    let mut nas_state = state(2, "me@nas");
+    nas_state.excluded.insert(id(9));
+    let reports = [
+        collected(2, vec![host(9, "me@gpu")], Some(nas_state)),
+        collected(3, vec![], None),
+    ];
+    let members: Vec<Member> = local
+        .iter()
+        .zip(&reports)
+        .map(|(host, report)| Member {
+            host,
+            collected: Some(report),
+        })
+        .collect();
+    let plan = plan(&me, &key(1), &local, &members).unwrap();
+    let nas = plan.writes[0].as_ref().unwrap();
+    assert_eq!(nas.keys, [key(1).line("machine-1")]);
+    assert_eq!(ids(&written(nas)), [id(9), id(1)]);
+}

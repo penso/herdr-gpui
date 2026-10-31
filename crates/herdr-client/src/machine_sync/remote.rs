@@ -106,13 +106,19 @@ pub(crate) fn apply(target: &str, write: &Write, cancelled: &AtomicBool) -> Resu
 
 pub(crate) fn apply_script(write: &Write) -> String {
     let keys: Vec<String> = write.keys.iter().map(|line| shell_quote(line)).collect();
-    let catalog = if write.catalog.is_some() {
-        r#"tmp="$dir/.endpoints-sync.$$"
+    // The new catalog is read first, so the check and the replacement run
+    // back to back.
+    let (read, replace) = if write.catalog.is_some() {
+        (
+            r#"tmp="$dir/.endpoints-sync.$$"
 cat >"$tmp"
-mv -f "$tmp" "$catalog"
-"#
+"#,
+            r#"mv -f "$tmp" "$catalog"
+tmp=
+"#,
+        )
     } else {
-        ""
+        ("", "")
     };
     let state = match write.state {
         Some(json) => format!(
@@ -126,15 +132,28 @@ fi
         ),
         None => String::new(),
     };
+    // Syncs from other computers write here too: they take turns through
+    // the lock, and one finding it held is told the catalog changed, so it
+    // writes on its next sync. A lock older than ten minutes was left by a
+    // sync that died. Herdr's own CLI takes no lock; it can only land in the
+    // moment between the check and the replacement.
     format!(
-        r#"current=missing
+        r#"mkdir -p "$dir"
+lock="$dir/.machine-sync.lock"
+if [ -n "$(find "$lock" -prune -mmin +10 2>/dev/null)" ]; then rmdir "$lock" 2>/dev/null || true; fi
+if ! mkdir "$lock" 2>/dev/null; then
+    printf 'herdr-sync:changed\n'
+    exit 0
+fi
+tmp=
+trap 'if [ -n "$tmp" ]; then rm -f "$tmp"; fi; rmdir "$lock"' EXIT
+{read}current=missing
 if [ -f "$catalog" ]; then current=$(cksum <"$catalog"); fi
 if [ "$current" != {sum} ]; then
     printf 'herdr-sync:changed\n'
     exit 0
 fi
-mkdir -p "$dir"
-[ -d "$ssh_dir" ] || mkdir -m 700 "$ssh_dir"
+{replace}[ -d "$ssh_dir" ] || mkdir -m 700 "$ssh_dir"
 auth="$ssh_dir/authorized_keys"
 if [ -s "$auth" ] && [ -n "$(tail -c 1 "$auth")" ]; then printf '\n' >>"$auth"; fi
 added=0
@@ -145,7 +164,7 @@ for line do
         added=$((added + 1))
     fi
 done
-{catalog}{state}printf 'herdr-sync:done %s\n' "$added"
+{state}printf 'herdr-sync:done %s\n' "$added"
 "#,
         sum = shell_quote(write.sum),
         keys = keys.join(" "),

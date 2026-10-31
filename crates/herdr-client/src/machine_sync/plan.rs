@@ -127,12 +127,19 @@ pub(crate) fn plan(
         };
         // The member's own machine is never listed or authorized on itself.
         let itself = index + 1;
+        // The member may know a machine under its own ID, matched by target,
+        // and leave it out under that ID.
         let excluded = |machine: &Machine| {
             collected.state.as_ref().is_some_and(|state| {
                 machine
                     .ids
                     .iter()
                     .any(|id| state.excluded.contains(id.as_str()))
+                    || collected
+                        .catalog
+                        .ssh
+                        .iter()
+                        .any(|host| machine.matches(host) && state.excluded.contains(&host.id))
             })
         };
         let mut catalog = collected.catalog.clone();

@@ -123,6 +123,26 @@ mod shell {
         assert_eq!(apply(home.path(), &write), "herdr-sync:done 0\n");
     }
 
+    #[test]
+    fn a_write_waits_its_turn_behind_another_sync() {
+        let home = tempfile::tempdir().unwrap();
+        let write = Write {
+            sum: "missing",
+            keys: &[],
+            catalog: None,
+            state: None,
+        };
+        let lock = home
+            .path()
+            .join(".local/state/herdr/client/.machine-sync.lock");
+        fs::create_dir_all(&lock).unwrap();
+        assert_eq!(apply(home.path(), &write), "herdr-sync:changed\n");
+        fs::remove_dir(&lock).unwrap();
+        assert_eq!(apply(home.path(), &write), "herdr-sync:done 0\n");
+        // Its own lock goes when it finishes.
+        assert!(!lock.exists());
+    }
+
     fn ids(hosts: &[SavedHost]) -> Vec<String> {
         hosts.iter().map(|host| host.id.clone()).collect()
     }

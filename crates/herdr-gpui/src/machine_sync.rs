@@ -38,6 +38,9 @@ pub(crate) struct MachineSync {
     // keep-sorted start
     /// Set on quit, so a running sync stops its SSH children.
     cancelled: Arc<AtomicBool>,
+    /// Counts changes to `state`, so a read that began before one does not
+    /// undo it.
+    edits: u64,
     /// This computer's saved SSH devices, in catalog order.
     hosts: Vec<SavedHost>,
     last: Option<Outcome>,
@@ -53,6 +56,12 @@ pub(crate) struct MachineSync {
     state: Option<SyncState>,
     /// What Settings fills in while sync is off, once looked up.
     suggestion: Option<Suggestion>,
+    /// Whether the state saved next is synced once written.
+    sync_after_write: bool,
+    /// `state` changed while it was being written, so it is written again.
+    unwritten: bool,
+    /// A write of `state` is in flight; writes run one at a time, in order.
+    writing: bool,
     // keep-sorted end
 }
 
@@ -86,7 +95,8 @@ impl MachineSync {
         cx.spawn(async move |cx| {
             cx.background_executor().timer(STARTUP_DELAY).await;
             loop {
-                cx.update(Self::sync_if_on);
+                // Reread first: another computer's sync may have turned it on.
+                cx.update(|cx| Self::reload(cx, true));
                 cx.background_executor().timer(INTERVAL).await;
             }
         })
@@ -145,24 +155,31 @@ impl MachineSync {
         .detach();
     }
 
-    /// A window read this computer's catalog. A device it lists that the
-    /// last read did not, saved by the Add Device dialog, a terminal setup,
-    /// or Herdr's own CLI, is given to the other machines.
+    /// A window read this computer's catalog, which Settings then shows. A
+    /// device it lists that the last read did not, saved by the Add Device
+    /// dialog, a terminal setup, or Herdr's own CLI, is given to the other
+    /// machines. While sync is off, new devices may come from another
+    /// computer's sync, which turns it on here too, so the state is reread.
     pub(crate) fn hosts_seen(hosts: &[SavedHost], cx: &mut App) {
         let Some(this) = cx.try_global::<Self>() else {
             return;
         };
-        if !this.loaded || this.state.is_none() {
+        if !this.loaded || this.hosts == hosts {
             return;
         }
-        if new_device(&this.hosts, hosts) {
-            cx.global_mut::<Self>().hosts = hosts.to_vec();
-            Self::sync(cx);
-            cx.refresh_windows();
+        let added = new_device(&this.hosts, hosts);
+        let on = this.state.is_some();
+        cx.global_mut::<Self>().hosts = hosts.to_vec();
+        match (added, on) {
+            (true, true) => Self::sync(cx),
+            (true, false) => Self::reload(cx, true),
+            (false, _) => {}
         }
+        cx.refresh_windows();
     }
 
     fn reload(cx: &mut App, then_sync: bool) {
+        let edits = cx.global::<Self>().edits;
         let task = cx.background_executor().spawn(async move {
             let state = machine_sync::load_sync_state(false)?;
             let hosts = herdr_client::load_saved_hosts(false)?;
@@ -175,7 +192,10 @@ impl MachineSync {
                 this.loaded = true;
                 match result {
                     Ok((state, hosts)) => {
-                        this.state = state;
+                        // A change made since the read began is newer.
+                        if this.edits == edits && !this.writing {
+                            this.state = state;
+                        }
                         this.hosts = hosts;
                         this.load_failure = None;
                     }
@@ -276,29 +296,57 @@ impl MachineSync {
         Self::store(cx, Some(state), false);
     }
 
-    /// Shows `state` at once and writes it in the background; a failed
-    /// write rereads the file, so Settings shows what is really saved.
+    /// Shows `state` at once and writes it in the background, after any
+    /// write already running, so the newest state is the one left on disk.
     fn store(cx: &mut App, state: Option<SyncState>, then_sync: bool) {
-        cx.global_mut::<Self>().state = state.clone();
+        let this = cx.global_mut::<Self>();
+        this.state = state;
+        this.edits += 1;
+        this.sync_after_write |= then_sync;
+        if this.writing {
+            this.unwritten = true;
+        } else {
+            Self::write(cx);
+        }
         cx.refresh_windows();
+    }
+
+    /// Writes the current state; a failed write rereads the file, so
+    /// Settings shows what is really saved.
+    fn write(cx: &mut App) {
+        let this = cx.global_mut::<Self>();
+        this.writing = true;
+        this.unwritten = false;
+        let state = this.state.clone();
+        let then_sync = std::mem::take(&mut this.sync_after_write);
         let task = cx.background_executor().spawn(async move {
             machine_sync::store_sync_state(false, state.as_ref()).map_err(crate::Error::from)
         });
         cx.spawn(async move |cx| {
             let result = task.await;
-            cx.update(|cx| match result {
-                Ok(()) => {
-                    cx.global_mut::<Self>().save_failure = None;
-                    if then_sync {
-                        Self::sync(cx);
+            cx.update(|cx| {
+                let this = cx.global_mut::<Self>();
+                this.writing = false;
+                if this.unwritten {
+                    // A newer state replaces this one; it syncs if either asked.
+                    this.sync_after_write |= then_sync;
+                    Self::write(cx);
+                    return;
+                }
+                match result {
+                    Ok(()) => {
+                        this.save_failure = None;
+                        if then_sync {
+                            Self::sync(cx);
+                        }
                     }
-                    cx.refresh_windows();
+                    Err(error) => {
+                        tracing::warn!(category = "machine_sync", %error, "Cannot save machine sync");
+                        this.save_failure = Some(error);
+                        Self::reload(cx, false);
+                    }
                 }
-                Err(error) => {
-                    tracing::warn!(category = "machine_sync", %error, "Cannot save machine sync");
-                    cx.global_mut::<Self>().save_failure = Some(error);
-                    Self::reload(cx, false);
-                }
+                cx.refresh_windows();
             });
         })
         .detach();

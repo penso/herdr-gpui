@@ -34,3 +34,28 @@ fn the_suggested_name_is_the_first_label_of_the_host_name() {
     );
     assert_eq!(suggestion::address("", "studio.local"), "studio.local");
 }
+
+#[gpui::test]
+fn a_renamed_or_turned_off_device_shows_without_starting_a_sync(cx: &mut gpui::TestAppContext) {
+    let on = SyncState {
+        id: "f".repeat(32),
+        label: "laptop".to_owned(),
+        target: "me@laptop".to_owned(),
+        excluded: Default::default(),
+    };
+    cx.update(|cx| {
+        cx.set_global(MachineSync::fixture(
+            Some(on),
+            vec![host('a', true), host('b', true)],
+        ))
+    });
+    let mut renamed = host('a', true);
+    renamed.label = "nas".to_owned();
+    let seen = [renamed, host('b', false)];
+    cx.update(|cx| MachineSync::hosts_seen(&seen, cx));
+    cx.update(|cx| {
+        let sync = cx.global::<MachineSync>();
+        assert_eq!(sync.hosts(), seen);
+        assert!(!sync.running());
+    });
+}
