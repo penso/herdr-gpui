@@ -355,6 +355,7 @@ impl HerdrWindow {
             .as_ref()
             .filter(|departure| matches_target(&departure.target))
             .map(|departure| departure.remaining(crate::motion::now()));
+        // Two lines plus padding; a wrapped note makes the row taller.
         let height = font.line_height() * 2. + 16.;
         let removal = choice.clone();
         let removal_target = self.management_target(&choice);
@@ -370,7 +371,7 @@ impl HerdrWindow {
             .id(("session-entry", row))
             .debug_selector(move || format!("sessions-row-{row}"))
             .p(px(8.))
-            .h(px(height))
+            .min_h(px(height))
             .line_height(px(font.line_height()))
             .rounded(px(crate::config::corners::CONTROL))
             .flex_none()
@@ -404,6 +405,7 @@ impl HerdrWindow {
                         // Wraps rather than cutting a note short: the popup's
                         // width is the device list's, not the note's.
                         div()
+                            .debug_selector(move || format!("sessions-detail-{row}"))
                             .min_w_0()
                             .text_size(px(font.size * 0.85))
                             .text_color(rgb(theme.muted))
@@ -479,9 +481,8 @@ impl HerdrWindow {
                 .debug_selector(move || format!("sessions-departing-{row}"))
                 // Keep the anchored popup's height and every row position stable
                 // until the fade finishes; then remove the row in one update.
-                .h(px(height))
+                // The row sizes the wrapper, so a wrapped note keeps its height.
                 .flex_none()
-                .overflow_hidden()
                 .opacity(remaining)
                 .child(view)
                 .into_any_element()
