@@ -4957,7 +4957,7 @@ dependencies = [
  "getrandom 0.4.3",
  "herdr-client",
  "herdr-credentials",
- "herdr-updater",
+ "herdr-rate-limit",
  "rustix",
  "secrecy",
  "serde",
@@ -5159,6 +5159,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-rate-limit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "http",
+]
+
+[[package]]
 name = "herdr-remote"
 version = "0.1.0"
 dependencies = [
@@ -5258,6 +5267,7 @@ dependencies = [
  "ed25519-dalek",
  "flate2",
  "herdr-client",
+ "herdr-rate-limit",
  "rustix",
  "serde",
  "serde_json",
@@ -5302,7 +5312,6 @@ version = "0.1.0"
 dependencies = [
  "herdr-client",
  "herdr-github",
- "herdr-usage",
  "secrecy",
  "serde_json",
  "tempfile",

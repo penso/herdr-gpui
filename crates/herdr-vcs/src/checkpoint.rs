@@ -20,11 +20,10 @@ pub use script::valid_id;
 
 use crate::Result;
 use herdr_client::{
-    ConnectTarget, ScriptHost, ScriptLimits, SshLane,
+    ConnectTarget, Host, ScriptHost, ScriptLimits, SshLane,
     protocol::{AgentStatus, ClientShellSnapshot},
     run_script,
 };
-use herdr_usage::Host;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Weak, atomic::AtomicBool, mpsc},

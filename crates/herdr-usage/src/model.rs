@@ -3,67 +3,15 @@
 //! resets, and whatever else the agent's service reports.
 
 use super::service::Service;
-use herdr_client::ConnectTarget;
 use std::{
     any::Any,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
-/// The machine whose agent sign-ins are read. A remote host is asked over SSH
-/// and a WSL distribution through `wsl.exe`, so its own credentials are used
-/// and never leave it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Host {
-    Local,
-    Ssh(String),
-    /// A WSL distribution, asked through a `wsl.exe` shell as a remote host
-    /// is over SSH: its files and sign-ins are its own, not this machine's.
-    Wsl(String),
-    /// An Azure machine, by its saved account and ID. Only its CPU and memory
-    /// are sampled, through the command its connection uses; see `load_of`.
-    #[cfg(feature = "azure")]
-    Azure {
-        account: String,
-        id: String,
-    },
-}
-
-impl Host {
-    /// The host whose sign-ins a device's usage comes from, or `None` for a
-    /// cloud machine: it is reached only through its provider's command, and reading
-    /// this machine's sign-ins instead would misreport them as the workspace's.
-    pub fn of(target: &ConnectTarget) -> Option<Self> {
-        match target {
-            ConnectTarget::Ssh { target, .. } => Some(Self::Ssh(target.clone())),
-            ConnectTarget::Wsl { distro, .. } => Some(Self::Wsl(distro.clone())),
-            #[cfg(feature = "cloud")]
-            ConnectTarget::Cloud { .. } => None,
-            ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
-                Some(Self::Local)
-            }
-        }
-    }
-
-    /// The host whose CPU and memory a device shows: `of`'s, and also an
-    /// Azure machine's, sampled through its own connection command.
-    pub fn load_of(target: &ConnectTarget) -> Option<Self> {
-        #[cfg(feature = "azure")]
-        if let ConnectTarget::Cloud {
-            provider: herdr_client::CloudProvider::Azure,
-            account,
-            id,
-            ..
-        } = target
-        {
-            return Some(Self::Azure {
-                account: account.clone(),
-                id: id.clone(),
-            });
-        }
-        Self::of(target)
-    }
-}
+// Defined beside `ConnectTarget`, its lowest layer, so Git and checkpoint
+// code names a host without depending on usage.
+pub use herdr_client::Host;
 
 /// A registered provider. Only [`super::registry`] makes one, so each value
 /// is a real [`Service`]; two are equal when their ids are.

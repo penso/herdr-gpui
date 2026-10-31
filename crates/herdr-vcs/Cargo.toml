@@ -12,20 +12,19 @@ workspace = true
 [dependencies]
 herdr-client.workspace = true
 herdr-github.workspace = true
-herdr-usage.workspace  = true
 secrecy.workspace      = true
 serde_json.workspace   = true
 thiserror.workspace    = true
 tracing.workspace      = true
 
 [dev-dependencies]
-herdr-github = { features = ["test-support"], workspace = true }
+herdr-github       = { features = ["test-support"], workspace = true }
 tempfile.workspace = true
 
 [features]
 # Cloud machines as connections, which checkpoints do not run on.
 cloud = ["herdr-client/cloud"]
 # Azure machines as checkpoint hosts, which only refuse checkpoints so far.
-azure = ["cloud", "herdr-usage/azure"]
+azure = ["cloud", "herdr-client/azure"]
 # A view of queued checkpoints for the app's own tests.
 test-support = []

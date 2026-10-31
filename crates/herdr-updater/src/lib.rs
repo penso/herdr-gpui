@@ -11,7 +11,7 @@ mod error;
 mod progress;
 pub use channel::UpdateChannel;
 pub use error::{Error, Result};
-pub use error::{quota_exhausted, rate_limit_reset, retry_hint};
+pub use herdr_rate_limit::{quota_exhausted, rate_limit_reset, retry_hint};
 pub use progress::Progress;
 #[cfg(unix)]
 mod brew;

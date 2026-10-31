@@ -56,7 +56,7 @@ pub enum Error {
     #[error("GitHub query failed. Check token repository permissions and rate limits.")]
     Query,
     /// The account's (or, signed out, this address's) API quota is used up.
-    #[error("GitHub rate limit reached. {}.", herdr_updater::retry_hint(*reset))]
+    #[error("GitHub rate limit reached. {}.", herdr_rate_limit::retry_hint(*reset))]
     RateLimit {
         reset: Option<chrono::DateTime<chrono::Utc>>,
     },

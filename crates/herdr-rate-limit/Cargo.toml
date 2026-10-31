@@ -1,0 +1,17 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-rate-limit"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono.workspace = true
+http.workspace   = true
+
+[dev-dependencies]
+anyhow.workspace = true

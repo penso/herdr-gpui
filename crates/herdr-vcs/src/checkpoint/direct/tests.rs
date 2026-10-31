@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use herdr_client::Host;
 use herdr_client::{ScriptHost, run_script};
-use herdr_usage::Host;
 use std::{fs, path::Path, process::Command, sync::atomic::AtomicBool};
 
 /// Scripts run with Git isolated from the user's configuration.

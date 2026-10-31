@@ -14,7 +14,7 @@ chrono.workspace            = true
 getrandom.workspace         = true
 herdr-client.workspace      = true
 herdr-credentials.workspace = true
-herdr-updater.workspace     = true
+herdr-rate-limit.workspace  = true
 secrecy.workspace           = true
 serde.workspace             = true
 serde_json.workspace        = true
@@ -24,7 +24,7 @@ ureq.workspace              = true
 zeroize.workspace           = true
 
 [dev-dependencies]
-herdr-client = { features = ["test-support"], workspace = true }
+herdr-client       = { features = ["test-support"], workspace = true }
 tempfile.workspace = true
 
 [target.'cfg(unix)'.dev-dependencies]

@@ -5,7 +5,7 @@
 use super::{Result, log};
 use crate::Error;
 use chrono::{DateTime, Utc};
-use herdr_updater::{quota_exhausted, rate_limit_reset};
+use herdr_rate_limit::{quota_exhausted, rate_limit_reset};
 use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox as Secret, SecretString};
 use serde::de::DeserializeOwned;
 use serde_json::Value;

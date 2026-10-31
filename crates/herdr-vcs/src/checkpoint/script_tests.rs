@@ -62,8 +62,8 @@ fn labels_are_one_bounded_line() {
 mod live {
     use crate::checkpoint::Error;
     use crate::checkpoint::{Checkout, KEEP, script};
+    use herdr_client::Host;
     use herdr_client::{ScriptHost, ScriptLimits, run_script};
-    use herdr_usage::Host;
     use std::{
         fs,
         path::{Path, PathBuf},

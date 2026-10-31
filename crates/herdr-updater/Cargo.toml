@@ -10,31 +10,26 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-chrono.workspace        = true
-ed25519-dalek.workspace = true
-flate2.workspace        = true
-herdr-client.workspace  = true
-serde.workspace         = true
-serde_json.workspace    = true
-sha2.workspace          = true
-tar.workspace           = true
-tempfile.workspace      = true
-thiserror.workspace     = true
-tracing.workspace       = true
-ureq.workspace          = true
+chrono.workspace           = true
+ed25519-dalek.workspace    = true
+flate2.workspace           = true
+herdr-client.workspace     = true
+herdr-rate-limit.workspace = true
+serde.workspace            = true
+serde_json.workspace       = true
+sha2.workspace             = true
+tar.workspace              = true
+tempfile.workspace         = true
+thiserror.workspace        = true
+tracing.workspace          = true
+ureq.workspace             = true
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 
 # Checks an update installer's Authenticode signature (`windows::authenticode`).
 [target.'cfg(windows)'.dependencies]
-windows-sys = { features = [
-  "Win32_Security_Cryptography",
-  "Win32_Security_Cryptography_Catalog",
-  "Win32_Security_Cryptography_Sip",
-  "Win32_Security_WinTrust",
-  "Win32_Storage_FileSystem",
-], workspace = true }
+windows-sys = { features = ["Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_Storage_FileSystem"], workspace = true }
 
 [dev-dependencies]
 anyhow.workspace = true
