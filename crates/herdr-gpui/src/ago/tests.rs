@@ -37,3 +37,28 @@ fn the_window_isolates_the_count_and_translates_every_unit() {
     }
     i18n::show(&Locale::FALLBACK);
 }
+
+#[test]
+fn a_short_age_fits_a_column() {
+    i18n::show(&Locale::FALLBACK);
+    for (seconds, text) in [
+        (0, "now"),
+        (59, "now"),
+        (60, "1m"),
+        (3599, "59m"),
+        (3600, "1h"),
+        (86_399, "23h"),
+        (86_400, "1d"),
+        (13 * 86_400, "13d"),
+        (14 * 86_400, "2w"),
+    ] {
+        let shown = short(seconds).replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!(shown, text, "{seconds}");
+    }
+    i18n::show(&Pseudo::Accented.locale());
+    for seconds in [0, 120, 7200, 86_400, 30 * 86_400] {
+        let shown = short(seconds);
+        assert!(herdr_i18n::pseudo::is_marked(&shown), "{shown}");
+    }
+    i18n::show(&Locale::FALLBACK);
+}

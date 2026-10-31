@@ -7,12 +7,8 @@ security-title = Security
 security-subtitle = Private reports and Dependabot alerts
 security-refresh = Refresh
 security-updating = Updating…
-# When the last read finished: $ago is one of security-ago-* below.
+# When the last read finished: $ago is how long ago, such as 5 min ago.
 security-updated = Updated { $ago }
-security-ago-just-now = just now
-security-ago-minutes = { $minutes } min ago
-security-ago-hours = { $hours } h ago
-security-ago-days = { $days } days ago
 security-no-workspace = Open a workspace first
 
 security-reading-repositories = Reading the repositories…

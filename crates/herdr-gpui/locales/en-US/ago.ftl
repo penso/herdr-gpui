@@ -10,3 +10,12 @@ ago-days = { $count ->
     [one] { $count } day ago
    *[other] { $count } days ago
 }
+
+# A compact age in a list column, where a sentence has no room: "now",
+# "12m", "5h", "3d", "2w". $count is whole minutes, hours, days, or weeks.
+
+ago-short-now = now
+ago-short-minutes = { $count }m
+ago-short-hours = { $count }h
+ago-short-days = { $count }d
+ago-short-weeks = { $count }w
