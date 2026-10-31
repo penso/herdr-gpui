@@ -6,10 +6,12 @@ fn live(event: Event) -> Live {
         event,
         pane: "w1-p3".to_owned(),
         state: ContentState {
-            cost: None,
+            options: Vec::new(),
+            permission: None,
             phase: Phase::Finished,
             plan_done: None,
             plan_total: None,
+            previous: Vec::new(),
             question: None,
             started_at: 0,
             step: String::new(),

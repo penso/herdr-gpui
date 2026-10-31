@@ -114,5 +114,9 @@ pub(super) fn line(device: &Device, now_ms: u64) -> String {
     } else {
         "notifications off"
     };
-    format!("{}  {}  {seen}  {push}", device.id.0, device.name)
+    let line = format!("{}  {}  {seen}  {push}", device.id.0, device.name);
+    match crate::remote::hosts_line(device) {
+        Some(hosts) => format!("{line}  {hosts}"),
+        None => line,
+    }
 }

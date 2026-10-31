@@ -202,6 +202,8 @@ pub enum Error {
     MissingStateRoot,
     #[error(transparent)]
     Mods(#[from] crate::mods::Error),
+    #[error(transparent)]
+    Nearby(#[from] crate::remote::nearby::Error),
     #[error("No current daemon snapshot.")]
     NoSnapshot,
     #[error("No tab selected.")]

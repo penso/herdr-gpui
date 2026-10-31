@@ -4,7 +4,8 @@
 ; also the command line terminals and agents run, herdr-gpui-launcher.exe,
 ; which starts it without a console window, herdr-acp.exe, which the app starts
 ; chats with, herdr-remote-control.exe, the remote control daemon the app runs as
-; a scheduled task, herdr-automate.exe, the automation daemon, and the licenses.
+; a scheduled task, herdr-automate.exe, the automation daemon, herdr-nearby.exe,
+; the Bluetooth helper for nearby pairing and presence, and the licenses.
 ; Closing applications before replacing files also ends running chats, whose
 ; agents' sessions can be resumed, and Remote control, which the app starts
 ; again. It never installs, starts, or stops the Herdr daemon, and uninstalling
@@ -101,6 +102,7 @@ Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-acp.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-remote-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Automate}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\herdr-nearby.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; herdr-core keeps running Herdr 2 terminals after the app closes, and Setup
 ; never stops it: a running one is replaced when Windows next restarts.
 Source: "{#SourceDir}\herdr-core.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete

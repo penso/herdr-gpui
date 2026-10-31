@@ -48,6 +48,7 @@ menu-page-merge-pull-request = Merge pull request
 menu-page-pull-request = Pull request
 menu-page-remote-control = Remote control
 menu-page-remote-control-phones = Remote control phones
+menu-page-pair-another-machine = Pair another machine
 menu-page-remove-device = Remove device
 menu-page-remove-wsl-distribution = Remove WSL distribution
 menu-page-rename-device = Rename device

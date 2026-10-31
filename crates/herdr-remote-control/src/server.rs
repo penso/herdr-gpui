@@ -3,6 +3,7 @@
 //! web app over HTTPS until Herdr UI asks it to stop.
 
 mod addresses;
+mod bonjour;
 mod control;
 mod listener;
 mod live;
@@ -95,6 +96,7 @@ pub async fn run(options: Options) -> Result<()> {
     };
     let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
     let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
+    let load = crate::load::start();
     let state = Arc::new(State {
         apns,
         apps,
@@ -104,14 +106,17 @@ pub async fn run(options: Options) -> Result<()> {
         connected: Mutex::new(HashMap::new()),
         fingerprint,
         hub,
+        load,
         look: web::Look::load(&options.state_dir),
         names: RwLock::new(names),
+        near: Mutex::default(),
         port: options.port,
         privacy: options.privacy,
         pull_requests,
         push,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),
+        typed: web::Typed::default(),
         uploads: web::Uploads::new(&options.state_dir),
     });
     remember_origins(&state);
@@ -136,6 +141,13 @@ pub async fn run(options: Options) -> Result<()> {
         tokio::spawn(watch_addresses(state.clone(), resolver.clone(), bind));
     }
     tokio::spawn(expire(state.clone(), options.device_idle));
+    // On macOS a second mDNS responder beside mDNSResponder is invisible
+    // to browsers on the same Mac and contends for its host name; there
+    // Herdr UI's `herdr-nearby` helper registers the service through the
+    // system while the pairing dialog is open.
+    if options.bonjour && !cfg!(target_os = "macos") {
+        tokio::spawn(bonjour::advertise(state.clone(), stopped.clone()));
+    }
     let app = web::router(state).into_make_service_with_connect_info::<web::Peer>();
     let mut shutdown = stopped.clone();
     let serve = axum::serve(listener::TlsListener::new(tcp, config, resolver), app)

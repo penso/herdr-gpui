@@ -24,10 +24,10 @@ use std::time::Duration;
 
 /// How long starting a chat waits for it to open before answering with the
 /// list instead.
-const NEW_CHAT_WAIT: Duration = Duration::from_secs(10);
+pub(crate) const NEW_CHAT_WAIT: Duration = Duration::from_secs(10);
 
 /// Runs `action` with the auth state on the blocking pool.
-async fn with_auth<T: Send + 'static>(
+pub(super) async fn with_auth<T: Send + 'static>(
     state: &Shared,
     action: impl FnOnce(&mut crate::auth::Auth) -> Result<T, ApiError> + Send + 'static,
 ) -> Result<T, ApiError> {
@@ -262,27 +262,42 @@ pub(super) async fn create_workspace(
     _device: Device,
     Json(request): Json<NewWorkspace>,
 ) -> Result<Json<Value>, ApiError> {
-    let agent: Agent = request
-        .agent
-        .parse()
-        .map_err(|_| ApiError::Invalid("unknown agent"))?;
-    // Only a folder the form offered: never a path the phone made up.
+    let (agent, branch) =
+        check_new_workspace(&state, &request.cwd, &request.branch, &request.agent).await?;
+    state
+        .hub
+        .create_workspace(&request.cwd, branch.as_deref(), agent)
+        .await?;
+    Ok(Json(json!({ "location": "/" })))
+}
+
+/// The agent a request names, by its `name()`.
+pub(crate) fn parse_agent(name: &str) -> Result<Agent, ApiError> {
+    name.parse().map_err(|_| ApiError::Invalid("unknown agent"))
+}
+
+/// Checks a new workspace request: a known agent, a folder the form
+/// offers (never a path the phone made up), and a valid branch if any.
+/// Answers the agent and the trimmed branch, `None` for no worktree.
+pub(crate) async fn check_new_workspace(
+    state: &Shared,
+    cwd: &str,
+    branch: &str,
+    agent: &str,
+) -> Result<(Agent, Option<String>), ApiError> {
+    let agent = parse_agent(agent)?;
     let layout = state.hub.layout();
     let offered = tokio::task::spawn_blocking(move || folders(&layout))
         .await
         .map_err(|_| ApiError::Folder)?;
-    if !offered.offers(&request.cwd) {
+    if !offered.offers(cwd) {
         return Err(ApiError::Folder);
     }
-    let branch = request.branch.trim();
+    let branch = branch.trim();
     if !branch.is_empty() && !valid_branch(branch) {
         return Err(ApiError::Invalid("that is not a valid branch name"));
     }
-    state
-        .hub
-        .create_workspace(&request.cwd, (!branch.is_empty()).then_some(branch), agent)
-        .await?;
-    Ok(Json(json!({ "location": "/" })))
+    Ok((agent, (!branch.is_empty()).then(|| branch.to_owned())))
 }
 
 /// A conservative subset of Git's branch name rules.
@@ -310,10 +325,7 @@ pub(super) async fn start_chat(
     Path(workspace): Path<String>,
     Json(request): Json<NewChat>,
 ) -> Result<Json<Value>, ApiError> {
-    let agent: Agent = request
-        .agent
-        .parse()
-        .map_err(|_| ApiError::Invalid("unknown agent"))?;
+    let agent = parse_agent(&request.agent)?;
     let pane = state.hub.start_chat(&workspace, agent, None).await?;
     // The chat is listed once its program reports in; open it then, or
     // the list when it is slow to start.

@@ -333,22 +333,26 @@ impl HerdrWindow {
         let shown = leaving.unwrap_or_else(|| self.menu.appear.panel(now));
         let lift = super::appear::Appear::offset(dims, shown);
         let rises = page == Page::Devices;
+        // The worktree popover widens for captions a language makes longer.
+        let popover = (page == Page::Workspace)
+            .then(|| self.workspace_popover_width(window, (viewport.width - px(24.)).max(px(0.))));
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
             .when(matches!(page, Page::Workspace | Page::Dialog(_)), |panel| {
                 panel
-                    .w(px(if page == Page::Workspace {
-                        340.
-                    } else if page == Page::Dialog(WorkspaceAction::DeleteWorktree) {
-                        480.
-                    } else if settled {
-                        // A listing needs room for a title and its branch.
-                        560.
-                    } else {
-                        420.
-                    })
-                    .min((viewport.width - px(24.)).max(px(0.))))
+                    .w(popover
+                        .unwrap_or(px(
+                            if page == Page::Dialog(WorkspaceAction::DeleteWorktree) {
+                                480.
+                            } else if settled {
+                                // A listing needs room for a title and its branch.
+                                560.
+                            } else {
+                                420.
+                            },
+                        ))
+                        .min((viewport.width - px(24.)).max(px(0.))))
                     // Every dialog may use the window's height: a captioned form
                     // whose buttons need scrolling into view reads as clipped.
                     .max_h((viewport.height - px(24.)).max(px(0.)))
@@ -697,10 +701,11 @@ impl HerdrWindow {
         } else if page == Page::Workspace {
             // The PR card's text width: the panel's inset and border, and the
             // card's own margin, border, and padding.
-            panel = panel.child(self.render_workspace_popover(
-                (px(340.).min((viewport.width - px(24.)).max(px(0.))) - px(36.)).max(px(0.)),
-                cx,
-            ));
+            panel =
+                panel.child(self.render_workspace_popover(
+                    (popover.unwrap_or_default() - px(36.)).max(px(0.)),
+                    cx,
+                ));
         } else if let Page::Dialog(action) = page {
             panel = panel.child(self.render_workspace_dialog(action, cx));
         } else if page == Page::CarryPane {

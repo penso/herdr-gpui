@@ -43,6 +43,7 @@ fn rich() -> ServerMessage {
         Entry {
             id: EntryId(2),
             kind: EntryKind::Turn(TurnSummary {
+                ended_ms: None,
                 duration_ms: 12_000,
                 end: TurnEnd::Done,
                 tokens: None,

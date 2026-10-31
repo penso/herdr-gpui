@@ -11,7 +11,7 @@ fn a_failed_finish_deletes_the_machine_and_keeps_its_own_error() {
         || -> crate::Result<()> { Err(Error::Cancelled.into()) },
         || {
             deleted.set(deleted.get() + 1);
-            Err(Error::Invalid("delete").into())
+            Err(Error::Invalid(Invalid::Target).into())
         },
     );
     assert!(matches!(failed, Err(crate::Error::Cloud(Error::Cancelled))));

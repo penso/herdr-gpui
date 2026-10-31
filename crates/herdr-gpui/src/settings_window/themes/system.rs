@@ -5,7 +5,7 @@ use super::{Choice, FOLLOW, Scope, SettingsWindow};
 use crate::{
     config::{Theme, ThemeName},
     contrast::{Contrast, luminance},
-    i18n::fl,
+    i18n::{Localize, fl},
 };
 use gpui::{Context, ScrollStrategy};
 
@@ -192,7 +192,7 @@ impl SettingsWindow {
                     Err(error) => {
                         this.error = Some(fl!(
                             "settings-error-system-appearance",
-                            error = error.to_string()
+                            error = error.localize()
                         ));
                         cx.notify();
                         return;

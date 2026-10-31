@@ -14,7 +14,10 @@ use crate::cloud::{
     worker::{self, Worker},
 };
 use crate::direction::Logical;
-use crate::{fonts::StyledFont, i18n::fl};
+use crate::{
+    fonts::StyledFont,
+    i18n::{Localize, fl},
+};
 use gpui::{prelude::*, *};
 use std::time::Duration;
 
@@ -148,7 +151,7 @@ impl SettingsWindow {
             Ok(Err(error)) => Some(fl!(
                 "settings-cloud-image-build-error",
                 project = entry.project.label.clone(),
-                error = error.to_string(),
+                error = error.localize(),
                 path = entry.origin.path.clone()
             )),
             Err(_) => Some(fl!("settings-cloud-image-no-window")),
@@ -186,7 +189,7 @@ impl SettingsWindow {
             Ok(reset) => self.sandbox_images.reset = Some(reset),
             Err(_) => {
                 self.sandbox_images.message =
-                    Some(crate::cloud::Error::Worker("image reset").to_string()); // i18n: data
+                    Some(crate::cloud::Error::Worker(crate::cloud::Worker::ImageReset).localize());
             }
         }
         cx.notify();

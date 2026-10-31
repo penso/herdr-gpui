@@ -99,18 +99,16 @@ pub fn add_device(
         let command = || relay_command(&settings, &sandbox);
         if !wait_installed(&command, cancelled)? {
             if !install {
-                return Err(cloud::Error::Install(format!(
-                    "Herdr is not installed on Azure sandbox {sandbox}; enable Install Herdr and retry"
-                ))
+                return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                    machine: Some(sandbox.to_string()),
+                    retry: install::Retry::Enable,
+                })
                 .into());
             }
             report(cloud::Step::InstallingHerdr);
             install::install(command()?, &cancelled)?;
             if !install::installed(command()?, &cancelled)? {
-                return Err(cloud::Error::Install(
-                    "the installer finished but Herdr is not on the expected paths".into(),
-                )
-                .into());
+                return Err(cloud::Error::Install(install::Failure::Missing).into());
             }
         }
         Ok(())

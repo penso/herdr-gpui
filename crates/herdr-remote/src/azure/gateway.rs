@@ -1,6 +1,7 @@
 //! SSH key generation and OpenSSH command builder for Azure Virtual Machines.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -139,7 +140,7 @@ fn read_public_key(private: &Path) -> Result<String> {
         return Err(Error::SshKeygen);
     }
 
-    String::from_utf8(output.stdout).map_err(|_| Error::Encoding("Azure SSH public key"))
+    String::from_utf8(output.stdout).map_err(|_| Error::Encoding(Value::AzureSshPublicKey))
 }
 
 fn quoted_path(path: &Path) -> Result<String> {

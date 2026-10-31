@@ -2,6 +2,7 @@
 //! later request works with a known-good server root, image, and limits.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::OpenSandboxConfig, credentials::Store};
 use std::ffi::OsString;
 use url::Url;
@@ -33,7 +34,7 @@ impl Settings {
             Some(value) => Some(
                 value
                     .into_string()
-                    .map_err(|_| Error::Encoding("HERDR_OPENSANDBOX_API_URL"))?,
+                    .map_err(|_| Error::Encoding(Value::Key("HERDR_OPENSANDBOX_API_URL")))?,
             ),
             None => config.api_url.clone(),
         };
@@ -50,15 +51,15 @@ impl Settings {
         };
         let image = text(&config.image, DEFAULT_IMAGE);
         if !crate::cloud::names::image_reference(&image) {
-            return Err(Error::Field("opensandbox.image"));
+            return Err(Error::Field(Value::Key("opensandbox.image")));
         }
         let cpu = text(&config.cpu, DEFAULT_CPU);
         if !quantity(&cpu) {
-            return Err(Error::Field("opensandbox.cpu"));
+            return Err(Error::Field(Value::Key("opensandbox.cpu")));
         }
         let memory = text(&config.memory, DEFAULT_MEMORY);
         if !quantity(&memory) {
-            return Err(Error::Field("opensandbox.memory"));
+            return Err(Error::Field(Value::Key("opensandbox.memory")));
         }
         Ok(Some(Self {
             base: api_root(&url)?,

@@ -3,6 +3,7 @@
 //! connection workers share one record, so every access is one transaction.
 
 use super::{Error, Result, Settings, oauth, token::Credential};
+use crate::cloud::Value;
 use crate::credentials::{Entry, read_entry, save_entry};
 use secrecy::{ExposeSecret, SecretString};
 use std::time::SystemTime;
@@ -31,7 +32,7 @@ const CLIENT_SECRET: Entry = Entry {
         if super::token::valid(value.expose_secret()) {
             Ok(())
         } else {
-            Err(Error::Field("coder.oauth_client_secret").into())
+            Err(Error::Field(Value::Key("coder.oauth_client_secret")).into())
         }
     },
 };

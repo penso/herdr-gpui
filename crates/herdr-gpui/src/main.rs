@@ -72,6 +72,7 @@ mod github;
 mod group_menu;
 mod group_terminals;
 mod herdr_settings;
+mod host_build;
 mod i18n;
 mod icon_font_notice;
 mod icons;

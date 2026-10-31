@@ -4,7 +4,9 @@
 //! once; picking a row opens or creates the checkout, and a GitHub row leaves a
 //! note in it naming the pull request or issue it is for.
 
+// i18n: migrated
 use super::{Page, WorkspaceAction, worktree_open::Entry};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
@@ -37,12 +39,24 @@ impl Tab {
         Self::Items(Kind::Issue),
     ];
 
-    pub(super) fn label(self) -> &'static str {
+    /// Names the tab's elements, the same in every language.
+    pub(super) fn key(self) -> &'static str {
         match self {
             Self::New => "new",
             Self::Existing => "existing",
             Self::Branches => "branch",
-            Self::Items(kind) => kind.tab_label(),
+            Self::Items(Kind::PullRequest) => "PR", // i18n: data
+            Self::Items(Kind::Issue) => "issues",
+        }
+    }
+
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::New => fl!("worktree-source-tab-new"),
+            Self::Existing => fl!("worktree-source-tab-existing"),
+            Self::Branches => fl!("worktree-source-tab-branch"),
+            Self::Items(Kind::PullRequest) => fl!("worktree-source-tab-pull-requests"),
+            Self::Items(Kind::Issue) => fl!("worktree-source-tab-issues"),
         }
     }
 
@@ -58,6 +72,16 @@ impl Tab {
             .iter()
             .position(|tab| *tab == self)
             .unwrap_or_default()
+    }
+}
+
+/// Why a pull request or issue tab is faded without an account. Herdr keeps
+/// its own GitHub sign-in, so being signed in to `gh` or a browser is not
+/// enough.
+pub(super) fn signed_out_hint(kind: Kind) -> String {
+    match kind {
+        Kind::PullRequest => fl!("worktree-source-sign-in-pull-requests"),
+        Kind::Issue => fl!("worktree-source-sign-in-issues"),
     }
 }
 
@@ -332,7 +356,7 @@ impl HerdrWindow {
     ) {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search checkouts, branches, pull requests, issues...", cx);
+            input.set_placeholder_with(|| fl!("worktree-source-search"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let subscription = cx.subscribe_in(
@@ -345,8 +369,7 @@ impl HerdrWindow {
         );
         let name = cx.new(SearchInput::new);
         name.update(cx, |input, cx| {
-            input.set_placeholder("Default name", cx);
-            input.set_label("Name", cx);
+            input.set_placeholder_with(|| fl!("worktree-source-default-name"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let naming = cx.subscribe_in(
@@ -804,7 +827,7 @@ impl HerdrWindow {
             .as_str()
             .map(str::to_owned)
         else {
-            self.local_error = Some("The daemon did not report the new checkout path, so no agent context note was written.".into());
+            self.local_error = Some(fl!("worktree-source-no-checkout-path"));
             return;
         };
         let write = cx

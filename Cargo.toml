@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-github", "crates/herdr-gpui", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-nearby", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -71,6 +71,8 @@ jiff                 = "0.2.38"
 fontdb               = "0.24"
 foreign-types        = "0.5"
 futures-lite         = "2"
+# Sends frames on herdr-remote-control's WebSocket test client; axum already links it.
+futures-util         = { default-features = false, features = ["sink"], version = "0.3" }
 getrandom            = "0.4.3"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
@@ -184,9 +186,12 @@ thiserror            = "2"
 tokio                = { features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"], version = "1" }
 # Server-rendered HTML for the remote control web app, escaped by default.
 maud                 = "0.27"
-axum                 = { default-features = false, features = ["http1", "json", "matched-path", "query", "tokio"], version = "0.8" }
+axum                 = { default-features = false, features = ["http1", "json", "matched-path", "query", "tokio", "ws"], version = "0.8" }
 # Drives herdr-remote-control's router in tests without a socket; axum already links it.
 tower                = { default-features = false, features = ["util"], version = "0.5" }
+# A WebSocket client for herdr-remote-control's live socket tests; axum's
+# `ws` feature already links this version.
+tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.29" }
 tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
 # herdr-remote-control's APNs sender for iOS Live Activities: APNs speaks only
 # HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
@@ -223,6 +228,7 @@ windows-sys          = { features = ["Win32_Foundation", "Win32_System_Pipes"], 
 # Embeds the Windows executable's icon and version information; a build
 # dependency, so it runs on the host.
 winresource          = "0.1.34"
+zbus                 = { default-features = false, version = "5.19" }
 zeroize              = "=1.9.1"
 
 # Line tables keep file:line in backtraces and crash reports while cutting most

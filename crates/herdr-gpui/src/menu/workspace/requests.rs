@@ -5,6 +5,7 @@ use super::chosen_label;
 use crate::{
     HerdrWindow, NavigationTarget,
     dialog_input::DialogInput,
+    i18n::fl,
     menu::{Page, Removal, Submission, WorkspaceAction, endpoint_error},
 };
 use gpui::*;
@@ -89,7 +90,10 @@ impl HerdrWindow {
                 ..removal
             });
         }
-        self.local_error = Some(format!("Remove worktree: {error}"));
+        self.local_error = Some(fl!(
+            "workspace-dialog-remove-failed",
+            error = error.to_string()
+        ));
         cx.notify();
     }
 
@@ -208,12 +212,7 @@ impl HerdrWindow {
             .filter(|id| !id.is_empty())
             .map(str::to_owned);
         let Some(created) = created else {
-            return release(
-                self,
-                "Unexpected daemon response. Review current workspace state before retrying."
-                    .into(),
-                cx,
-            );
+            return release(self, fl!("workspace-dialog-unexpected"), cx);
         };
         // The note names what the checkout is for, so it is taken from the
         // dialog's own pending row before dismissal drops it.
@@ -262,7 +261,10 @@ impl HerdrWindow {
         if let Some(launch) = setup
             && let Err(error) = self.start_worktree_script(launch, cx)
         {
-            self.local_error = Some(format!("The setup script did not start: {error}"));
+            self.local_error = Some(fl!(
+                "workspace-dialog-setup-failed",
+                error = error.to_string()
+            ));
             cx.notify();
         }
     }

@@ -1,5 +1,6 @@
 //! Pull requests as the app shows them. `herdr-github` reads them on its
 //! worker; the app shares one store across its windows and colors badges.
+// i18n: migrated
 
 pub(crate) use herdr_github::pull_request::*;
 use std::{cell::RefCell, rc::Rc};

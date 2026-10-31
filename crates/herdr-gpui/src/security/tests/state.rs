@@ -51,11 +51,13 @@ fn says_how_long_ago_to_the_minute() {
         "just now"
     );
     assert_eq!(
-        crate::security::section::ago(Duration::from_secs(5 * 60 + 10)),
+        crate::security::section::ago(Duration::from_secs(5 * 60 + 10))
+            .replace(['\u{2068}', '\u{2069}'], ""),
         "5 min ago"
     );
     assert_eq!(
-        crate::security::section::ago(Duration::from_secs(3 * 3600)),
+        crate::security::section::ago(Duration::from_secs(3 * 3600))
+            .replace(['\u{2068}', '\u{2069}'], ""),
         "3 h ago"
     );
 }

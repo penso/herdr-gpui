@@ -116,6 +116,7 @@ fn a_new_prompt_or_dropped_entries_replace_the_whole_turn() {
         entry(
             3,
             EntryKind::Turn(TurnSummary {
+                ended_ms: None,
                 duration_ms: 1,
                 end: TurnEnd::Done,
                 tokens: None,

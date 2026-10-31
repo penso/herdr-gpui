@@ -1,0 +1,69 @@
+{
+  "type": "term_screen",
+  "pane": "p2",
+  "columns": 21,
+  "rows": [
+    [
+      {
+        "text": "~/code",
+        "fg": "cyan"
+      },
+      {
+        "text": " "
+      },
+      {
+        "text": "❯",
+        "fg": "green",
+        "bold": true
+      },
+      {
+        "text": " just ci"
+      }
+    ],
+    [
+      {
+        "text": "FAIL",
+        "fg": "red",
+        "bold": true
+      },
+      {
+        "text": " "
+      },
+      {
+        "text": "[0.144s]",
+        "dim": true
+      },
+      {
+        "text": " keymap"
+      }
+    ],
+    [
+      {
+        "text": "rgb",
+        "fg": "#ff8000"
+      },
+      {
+        "text": " "
+      },
+      {
+        "text": "inverse",
+        "inverse": true
+      },
+      {
+        "text": " "
+      },
+      {
+        "text": "it",
+        "italic": true,
+        "underline": true
+      },
+      {
+        "text": " "
+      },
+      {
+        "text": "bright",
+        "fg": "bright_blue"
+      }
+    ]
+  ]
+}

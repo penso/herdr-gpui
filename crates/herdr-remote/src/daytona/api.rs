@@ -3,6 +3,7 @@
 //! Daytona's sandbox states onto what adding or connecting needs to know.
 
 use super::{Error, Result, http::Request};
+use crate::cloud::Value;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -95,7 +96,7 @@ fn segment(id: &str) -> Result<&str> {
     {
         Ok(id)
     } else {
-        Err(Error::Field("Daytona sandbox ID"))
+        Err(Error::Field(Value::DaytonaSandboxId))
     }
 }
 

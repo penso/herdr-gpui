@@ -8,8 +8,9 @@ use super::{
     Reading,
     model::{Severity, Window as Limit},
     panel::PANEL_GAP,
+    text,
 };
-use crate::{config::status_bar::Detail, window::HerdrWindow};
+use crate::{config::status_bar::Detail, i18n::fl, window::HerdrWindow};
 use gpui::{prelude::*, *};
 use std::{
     cell::Cell,
@@ -67,7 +68,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .truncate()
                     .text_color(rgb(theme.muted))
-                    .child("Usage unavailable")
+                    .child(fl!("usage-unavailable"))
                     .tooltip(move |_, cx| {
                         let text = error.clone();
                         cx.new(|_| Hint {
@@ -99,7 +100,7 @@ impl HerdrWindow {
                         .id("usage-refresh")
                         .debug_selector(|| "usage-refresh".into())
                         .role(Role::Button)
-                        .aria_label("Refresh usage")
+                        .aria_label(fl!("usage-refresh-usage"))
                         .map(|control| {
                             self.chrome_stop(
                                 crate::window::chrome_focus::Region::StatusBar,
@@ -151,8 +152,12 @@ impl HerdrWindow {
         let painted = bounds.clone();
         let open = self.menu.page == Some(crate::menu::Page::Usage(provider));
         let spoken = match reading.report.as_ref().and_then(|report| report.tightest()) {
-            Some(tightest) => format!("{} usage {}% used", provider.name(), tightest.percent()),
-            None => format!("{} usage", provider.name()),
+            Some(tightest) => fl!(
+                "usage-segment",
+                name = provider.name(),
+                percent = tightest.percent()
+            ),
+            None => fl!("usage-segment-idle", name = provider.name()),
         };
         let mut segment = div()
             .id(SharedString::from(format!("usage-{key}")))
@@ -239,7 +244,7 @@ impl HerdrWindow {
                     labels = labels.child(
                         div()
                             .text_color(rgb(color(window.used.into(), theme, theme.foreground)))
-                            .child(window.label(now)),
+                            .child(text::bar_label(window, now)),
                     );
                 }
             }
@@ -299,13 +304,6 @@ fn meter(window: &Limit, theme: &crate::config::Theme) -> impl IntoElement {
                 .rounded_full()
                 .bg(rgb(color(window.used.into(), theme, theme.muted))),
         )
-}
-
-pub(super) fn ago(elapsed: Duration) -> String {
-    match elapsed.as_secs() {
-        0..60 => "less than a minute".into(),
-        seconds => super::model::countdown(Duration::from_secs(seconds - seconds % 60)),
-    }
 }
 
 /// A small tooltip in the status bar's colors.

@@ -88,7 +88,7 @@ fn demo_transcript() -> Transcript {
     transcript.entries = vec![
         entry(1, EntryKind::User { text: "Add the remote control plan".into(), files: 0 }),
         entry(2, EntryKind::Agent { text: "Done.".into() }),
-        entry(3, EntryKind::Turn(TurnSummary { duration_ms: 125_000, end: TurnEnd::Done, tokens: None })),
+        entry(3, EntryKind::Turn(TurnSummary { duration_ms: 125_000, ended_ms: None, end: TurnEnd::Done, tokens: None })),
         entry(4, EntryKind::User { text: "Write the plan in docs/ and give me mockups".into(), files: 0 }),
         entry(5, EntryKind::Tool(Tool {
             call_id: "1".into(),
@@ -150,7 +150,12 @@ fn write_preview_pages() {
     first.label = "remote control".into();
     first.branch = Some("worktree/remote-control".into());
     let mut agent_tab = crate::hub::layout_terminal("t7", "Review PR 775");
-    agent_tab.agent = Some((Some("codex".into()), AgentStatus::Blocked));
+    agent_tab.agent = Some(crate::hub::TerminalAgent {
+        name: Some("codex".into()),
+        status: AgentStatus::Blocked,
+        pane: "p9".into(),
+        title: None,
+    });
     let mut shell = crate::hub::layout_terminal("t8", "cargo watch");
     shell.cwd = Some("/code/herdr-gpui".into());
     first.terminals = vec![agent_tab, shell];

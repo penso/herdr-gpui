@@ -15,6 +15,7 @@ use std::{
 };
 
 mod addresses;
+mod hosts;
 mod keyboard;
 mod networks;
 
@@ -173,6 +174,7 @@ fn a_phone_scans_claims_and_is_allowed(cx: &mut TestAppContext) {
         id: PairingId("p1".into()),
         allow: true,
         code: "428913".into(),
+        hosts: Vec::new(),
     }));
     // A finished pairing is not cancelled on close.
     cx.simulate_keystrokes("escape");
@@ -245,6 +247,8 @@ fn pixel() -> Device {
         last_seen_ms: None,
         push: true,
         connected: true,
+        via: None,
+        hosts: Vec::new(),
     }
 }
 

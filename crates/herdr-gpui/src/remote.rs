@@ -12,6 +12,8 @@
 mod dialog;
 mod indicator;
 pub(crate) use indicator::MENU_WIDTH;
+pub(crate) mod links;
+pub(crate) mod nearby;
 mod revoke;
 pub(crate) mod supervisor;
 
@@ -60,6 +62,41 @@ pub(crate) fn device_line(device: &Device, now_ms: u64) -> String {
     };
     let push = if device.push { "on" } else { "off" };
     fl!("remote-device-line", seen = seen, ago = ago, push = push)
+}
+
+/// The other machines a phone is paired with from here, or being paired
+/// with: "Also on devbox, gpu box · pairing lab · failed on ci". `None`
+/// when there are none.
+pub(crate) fn hosts_line(device: &Device) -> Option<String> {
+    use herdr_remote_control::control::hosts::HostState;
+    let names = |wanted: fn(&HostState) -> bool| {
+        device
+            .hosts
+            .iter()
+            .filter(|link| wanted(&link.state))
+            .map(|link| crate::notifications::safe_text(&link.name, 64))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let parts: Vec<String> = [
+        (
+            "Also on ",
+            names(|state| matches!(state, HostState::Paired(_))),
+        ),
+        (
+            "pairing ",
+            names(|state| matches!(state, HostState::Pending | HostState::Asking)),
+        ),
+        (
+            "failed on ",
+            names(|state| matches!(state, HostState::Failed { .. })),
+        ),
+    ]
+    .into_iter()
+    .filter(|(_, names)| !names.is_empty())
+    .map(|(label, names)| format!("{label}{names}"))
+    .collect();
+    (!parts.is_empty()).then(|| parts.join(" \u{b7} "))
 }
 
 /// Milliseconds since the Unix epoch, now.

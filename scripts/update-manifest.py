@@ -19,6 +19,9 @@ MANIFEST_LIMIT = 65536
 LINUX_TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu")
 TARGETS = ("universal-apple-darwin", *LINUX_TARGETS)
 WINDOWS_TARGETS = ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
+# Static herdr-remote-control builds that Herdr UI copies onto SSH and cloud
+# machines of another platform (herdr-updater's release/host.rs).
+HOST_TARGETS = ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")
 ED25519_SPKI = bytes.fromhex("302a300506032b6570032100")
 
 
@@ -140,12 +143,13 @@ def package_linux(binary, target, release, destination):
     package([(Path(binary), name)], destination, linux=True)
 
 
-def create(directory, release, require_all_targets=False, packages=False, windows=False):
+def create(directory, release, require_all_targets=False, packages=False, windows=False, hosts=False):
     """Schema 1 lists the standalone archives, schema 2 the Linux packages,
-    and schema 3 the Windows installers; each family has its own manifest so
-    a client never meets a target its schema does not know."""
-    if packages and windows:
-        raise ValueError("a manifest lists packages or Windows installers, not both")
+    schema 3 the Windows installers, and schema 4 the host builds; each
+    family has its own manifest so a client never meets a target its schema
+    does not know."""
+    if packages + windows + hosts > 1:
+        raise ValueError("a manifest lists one family: packages, Windows installers, or host builds")
     directory = Path(directory)
     assets = []
     version(release)
@@ -158,6 +162,9 @@ def create(directory, release, require_all_targets=False, packages=False, window
     if windows:
         names = [(target, f"Herdr-{release}-{target}-setup.exe") for target in WINDOWS_TARGETS]
         schema, output = 3, "windows-manifest.json"
+    if hosts:
+        names = [(target, f"herdr-remote-control-{release}-{target}") for target in HOST_TARGETS]
+        schema, output = 4, "host-manifest.json"
     for target, name in names:
         path = directory / name
         if schema == 1 and not require_all_targets and not path.exists() and not path.is_symlink() and target != TARGETS[0]:
@@ -198,6 +205,7 @@ def main():
     family = manifest.add_mutually_exclusive_group()
     family.add_argument("--packages", action="store_true", help="write the separate signed Linux package manifest; require all six packages")
     family.add_argument("--windows", action="store_true", help="write the separate signed Windows installer manifest; require both signed installers")
+    family.add_argument("--hosts", action="store_true", help="write the separate signed host build manifest; require both herdr-remote-control builds")
     commands.add_parser("validate-public-key")
     key = commands.add_parser("check-key")
     key.add_argument("openssl")
@@ -209,7 +217,7 @@ def main():
         elif args.command == "package-linux":
             package_linux(args.binary, args.target, args.version, args.destination)
         elif args.command == "create":
-            create(args.directory, args.version, args.require_all_targets, args.packages, args.windows)
+            create(args.directory, args.version, args.require_all_targets, args.packages, args.windows, args.hosts)
         elif args.command == "validate-public-key":
             public_key(os.environ.get("HERDR_UPDATE_PUBLIC_KEY", ""))
         else:

@@ -3,6 +3,7 @@
 //! has it running again when it wakes.
 
 use super::{Error, Result, Status, http::Request, settings::sprite_name};
+use crate::cloud::Value;
 use serde::{Deserialize, Serialize};
 
 /// The service that keeps Herdr's server running across sleeps.
@@ -27,7 +28,7 @@ struct List {
 
 fn path(name: &str) -> Result<String> {
     if !sprite_name(name) {
-        return Err(Error::Field("sprite name"));
+        return Err(Error::Field(Value::SpriteName));
     }
     Ok(format!("/v1/sprites/{name}"))
 }
@@ -53,7 +54,7 @@ impl Request<'_> {
     /// The sprites whose names start with `prefix`, at most a page of them.
     pub fn sprites(&self, prefix: &str) -> Result<Vec<Sprite>> {
         if !prefix.is_empty() && !sprite_name(prefix) {
-            return Err(Error::Field("sprite prefix"));
+            return Err(Error::Field(Value::SpritePrefix));
         }
         let list: List = self.get(
             "list sprites",

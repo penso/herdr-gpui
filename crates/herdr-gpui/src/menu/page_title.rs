@@ -82,6 +82,7 @@ impl Page {
             Self::PrReview => fl!("menu-page-pull-request"),
             Self::RemoteControl => fl!("menu-page-remote-control"),
             Self::RemoteDevices => fl!("menu-page-remote-control-phones"),
+            Self::RemoteHostAsk => fl!("menu-page-pair-another-machine"),
             Self::RemoveDevice => fl!("menu-page-remove-device"),
             Self::RemoveWsl => fl!("menu-page-remove-wsl-distribution"),
             Self::RenameDevice => fl!("menu-page-rename-device"),
