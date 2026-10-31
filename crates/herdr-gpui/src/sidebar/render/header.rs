@@ -7,14 +7,17 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// A section's heading: `key` names its debug selectors, `label` is its
+/// text, cased as the look's headers are.
 pub(in crate::sidebar) fn header(
-    label: &'static str,
+    key: &'static str,
+    label: &str,
     font: &FontConfig,
     theme: &Theme,
     look: SidebarLook,
 ) -> Div {
     div()
-        .debug_selector(|| format!("header-{label}"))
+        .debug_selector(|| format!("header-{key}"))
         .flex_none()
         .h(px(line_height(font) + 2. * look.density.header_padding()))
         .px(px(look.content_x()))
@@ -24,7 +27,7 @@ pub(in crate::sidebar) fn header(
         .text_color(rgb(theme.muted))
         .child(
             div()
-                .debug_selector(|| format!("header-label-{label}"))
+                .debug_selector(|| format!("header-label-{key}"))
                 .child(label_text(&look.header_label(label))),
         )
 }

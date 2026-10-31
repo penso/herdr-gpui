@@ -24,6 +24,8 @@ mod windows;
 use windows as platform;
 
 #[cfg(windows)]
+pub(crate) use windows::IDENTIFICATION;
+#[cfg(windows)]
 pub use windows::{owner_sid, user_sid};
 
 pub use platform::{Closer, Connection, Listener, Reader, Writer};

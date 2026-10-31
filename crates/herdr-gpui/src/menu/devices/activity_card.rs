@@ -3,6 +3,7 @@
 //! whole card opens the Devices overview, where the same history is drawn
 //! in full.
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     devices_overview::{Tally, sparkline},
@@ -53,11 +54,11 @@ impl HerdrWindow {
                     .gap(px(8.))
                     .text_size(small)
                     .child(
+                        // Wraps rather than cutting a longer language short.
                         div()
                             .min_w_0()
-                            .truncate()
                             .text_color(rgb(theme.muted))
-                            .child("AGENT ACTIVITY · 2 H"),
+                            .child(fl!("devices-activity-heading")),
                     )
                     .child(
                         div()
@@ -66,7 +67,7 @@ impl HerdrWindow {
                             .items_center()
                             .gap(px(3.))
                             .text_color(rgb(theme.subtext()))
-                            .child("Overview")
+                            .child(fl!("devices-activity-overview"))
                             .child(
                                 svg()
                                     .size(px(11.))
@@ -90,11 +91,11 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(count(
                         AgentStatus::Working,
-                        format!("{} working", tally.working),
+                        fl!("devices-activity-working", count = tally.working),
                     ))
                     .child(count(
                         AgentStatus::Blocked,
-                        format!("{} blocked", tally.blocked),
+                        fl!("devices-activity-blocked", count = tally.blocked),
                     )),
             )
             .on_click(cx.listener(|this, _, window, cx| {

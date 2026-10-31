@@ -791,6 +791,9 @@ impl HerdrWindow {
             let focus = self.group_address(group, cx).read(cx).focus.clone();
             window.focus(&focus, cx);
         }
+        if let Some(Location::CoreTerminal { .. }) = &tab.location {
+            self.focus_core_terminal(id, window, cx);
+        }
         cx.notify();
     }
 

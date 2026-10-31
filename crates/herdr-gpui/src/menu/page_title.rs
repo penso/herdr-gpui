@@ -2,7 +2,9 @@
 //! popup's overlay while it is open, so the overlay carries the page's role
 //! and title, and the page's own rows and fields sit under it.
 
+// i18n: migrated
 use super::{Page, WorkspaceAction};
+use crate::i18n::fl;
 use gpui::{Role, SharedString};
 
 impl Page {
@@ -23,97 +25,80 @@ impl Page {
 
     pub(crate) fn accessible_name(self) -> SharedString {
         SharedString::from(match self {
-            Self::About => "About Herdr UI",
+            Self::About => fl!("menu-page-about-herdr-ui"),
             #[cfg(feature = "cloud")]
-            Self::AddCloud(_) => "Add device",
+            Self::AddCloud(_) => fl!("menu-page-add-device"),
             #[cfg(feature = "coder")]
-            Self::AddCoder => "Add Coder workspace",
-            Self::AddDevice => "Add device",
+            Self::AddCoder => fl!("menu-page-add-coder-workspace"),
+            Self::AddDevice => fl!("menu-page-add-device"),
             #[cfg(feature = "cloud")]
-            Self::AddProvider => "Add cloud provider",
-            Self::AddWsl => "Add WSL distribution",
-            Self::AgentSkill => "Install the agent skill",
-            Self::Application => "Menu",
-            Self::AppUpdate | Self::Update => "Update",
-            Self::Automation => "Automations",
-            Self::CarryPane => "Move pane to another device",
-            Self::Checkpoints => "Checkpoints",
-            Self::CodeSearch => "Go to symbol or file",
-            Self::ConfirmClose => "Close",
+            Self::AddProvider => fl!("menu-page-add-cloud-provider"),
+            Self::AddWsl => fl!("menu-page-add-wsl-distribution"),
+            Self::AgentSkill => fl!("menu-page-install-the-agent-skill"),
+            Self::Application => fl!("menu-page-menu"),
+            Self::AppUpdate | Self::Update => fl!("menu-page-update"),
+            Self::Automation => fl!("menu-page-automations"),
+            Self::CarryPane => fl!("menu-page-move-pane-to-another-device"),
+            Self::Checkpoints => fl!("menu-page-checkpoints"),
+            Self::CodeSearch => fl!("menu-page-go-to-symbol-or-file"),
+            Self::ConfirmClose => fl!("menu-page-close"),
             #[cfg(feature = "cloud")]
-            Self::CreateCloud => "Create cloud machines",
+            Self::CreateCloud => fl!("menu-page-create-cloud-machines"),
             #[cfg(feature = "cloud")]
-            Self::DestroyCloud => "Destroy cloud devices",
-            Self::Devices => "Devices",
-            Self::DeviceTheme => "Device theme",
+            Self::DestroyCloud => fl!("menu-page-destroy-cloud-devices"),
+            Self::Devices => fl!("menu-page-devices"),
+            Self::DeviceTheme => fl!("menu-page-device-theme"),
             Self::Dialog(action) => match action {
-                WorkspaceAction::Rename => "Rename workspace",
-                WorkspaceAction::Close => "Close workspace",
-                WorkspaceAction::NewWorktree => "New worktree",
-                WorkspaceAction::OpenWorktree => "Open worktree",
-                WorkspaceAction::DeleteWorktree => "Delete worktree",
-                WorkspaceAction::NewTab => "New tab",
-                WorkspaceAction::NewWorkspace => "New workspace",
-                WorkspaceAction::Note => "Worktree note",
+                WorkspaceAction::Rename => fl!("menu-page-rename-workspace"),
+                WorkspaceAction::Close => fl!("menu-page-close-workspace"),
+                WorkspaceAction::NewWorktree => fl!("menu-page-new-worktree"),
+                WorkspaceAction::OpenWorktree => fl!("menu-page-open-worktree"),
+                WorkspaceAction::DeleteWorktree => fl!("menu-page-delete-worktree"),
+                WorkspaceAction::NewTab => fl!("menu-page-new-tab"),
+                WorkspaceAction::NewWorkspace => fl!("menu-page-new-workspace"),
+                WorkspaceAction::Note => fl!("menu-page-worktree-note"),
             },
-            Self::FanOut => "Fan out",
-            Self::ForwardPort => "Forward port",
-            Self::Git => "Git",
-            Self::GitCommit => "Commit",
-            Self::GitHub => "GitHub account",
-            Self::GitLab => "GitLab tokens",
-            Self::Group => "Tab actions",
-            Self::Host => "Device",
-            Self::Install => "Install",
-            Self::Keybinds => "Keyboard shortcuts",
-            Self::KillProcesses => "End processes",
-            Self::Menu => "Menu",
-            Self::MovePane => "Move pane",
-            Self::MoveTab => "Move tab",
-            Self::OpenCheckout => "Open checkout",
-            Self::OpenLink => "Open link",
-            Self::Palette => "Command palette",
-            Self::Pane => "Pane",
-            Self::PaneProcesses => "Processes",
-            Self::PrComment => "Comment on pull request",
-            Self::PrMerge => "Merge pull request",
-            Self::PrReview => "Pull request",
-            Self::RemoteControl => "Remote control",
-            Self::RemoteDevices => "Remote control phones",
-            Self::RemoveDevice => "Remove device",
-            Self::RemoveWsl => "Remove WSL distribution",
-            Self::RenameDevice => "Rename device",
-            Self::RenamePane => "Rename pane",
-            Self::RenameTab => "Rename tab",
-            Self::RevokeDevice => "Revoke device",
-            Self::Sessions => "Sessions",
-            Self::Tab => "Tab",
-            Self::Teleport => "Teleport",
-            Self::Themes => "Themes",
-            Self::Usage(provider) => return format!("{} usage", provider.name()).into(),
-            Self::VersionMismatch => "Version mismatch",
-            Self::Workspace => "Workspace",
-            Self::WorktreeScript => "Trust worktree script",
+            Self::FanOut => fl!("menu-page-fan-out"),
+            Self::ForwardPort => fl!("menu-page-forward-port"),
+            Self::Git => fl!("menu-page-git"),
+            Self::GitCommit => fl!("menu-page-commit"),
+            Self::GitHub => fl!("menu-page-github-account"),
+            Self::GitLab => fl!("menu-page-gitlab-tokens"),
+            Self::Group => fl!("menu-page-tab-actions"),
+            Self::Host => fl!("menu-page-device"),
+            Self::Install => fl!("menu-page-install"),
+            Self::Keybinds => fl!("menu-page-keyboard-shortcuts"),
+            Self::KillProcesses => fl!("menu-page-end-processes"),
+            Self::Menu => fl!("menu-page-menu"),
+            Self::MovePane => fl!("menu-page-move-pane"),
+            Self::MoveTab => fl!("menu-page-move-tab"),
+            Self::OpenCheckout => fl!("menu-page-open-checkout"),
+            Self::OpenLink => fl!("menu-page-open-link"),
+            Self::Palette => fl!("menu-page-command-palette"),
+            Self::Pane => fl!("menu-page-pane"),
+            Self::PaneProcesses => fl!("menu-page-processes"),
+            Self::PrComment => fl!("menu-page-comment-on-pull-request"),
+            Self::PrMerge => fl!("menu-page-merge-pull-request"),
+            Self::PrReview => fl!("menu-page-pull-request"),
+            Self::RemoteControl => fl!("menu-page-remote-control"),
+            Self::RemoteDevices => fl!("menu-page-remote-control-phones"),
+            Self::RemoveDevice => fl!("menu-page-remove-device"),
+            Self::RemoveWsl => fl!("menu-page-remove-wsl-distribution"),
+            Self::RenameDevice => fl!("menu-page-rename-device"),
+            Self::RenamePane => fl!("menu-page-rename-pane"),
+            Self::RenameTab => fl!("menu-page-rename-tab"),
+            Self::RevokeDevice => fl!("menu-page-revoke-device"),
+            Self::Sessions => fl!("menu-page-sessions"),
+            Self::Tab => fl!("menu-page-tab"),
+            Self::Teleport => fl!("menu-page-teleport"),
+            Self::Themes => fl!("menu-page-themes"),
+            Self::Usage(provider) => fl!("menu-page-usage", provider = provider.name()),
+            Self::VersionMismatch => fl!("menu-page-version-mismatch"),
+            Self::Workspace => fl!("menu-page-workspace"),
+            Self::WorktreeScript => fl!("menu-page-trust-worktree-script"),
         })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn context_menus_are_menus_and_questions_are_dialogs() {
-        assert_eq!(Page::Workspace.accessible_role(), Role::Menu);
-        assert_eq!(Page::Host.accessible_role(), Role::Menu);
-        assert_eq!(
-            Page::Dialog(WorkspaceAction::DeleteWorktree).accessible_role(),
-            Role::Dialog
-        );
-        assert_eq!(
-            Page::Dialog(WorkspaceAction::DeleteWorktree).accessible_name(),
-            "Delete worktree"
-        );
-        assert_eq!(Page::Keybinds.accessible_role(), Role::Dialog);
-    }
-}
+mod tests;

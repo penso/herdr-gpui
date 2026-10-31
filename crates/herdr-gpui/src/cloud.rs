@@ -5,6 +5,7 @@
 pub(crate) mod batch;
 pub(crate) mod image;
 mod jobs;
+pub(crate) mod status;
 pub(crate) mod worker;
 
 pub(crate) use herdr_remote::cloud::*;

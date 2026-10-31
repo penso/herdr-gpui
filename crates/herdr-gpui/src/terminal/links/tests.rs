@@ -162,22 +162,23 @@ fn plain_links_do_not_cross_panes_or_guess_wrapped_destinations() {
     s.panes[0].inner_rect.width = 12;
     assert!(link_at(&s, 1., 1., 10., 20.).is_none());
     let wrapped = frame("https://example.com/long", 12, 2);
-    assert!(frame_link(&wrapped, 0, 0, 0, 12).is_none());
+    assert!(frame_link(&wrapped, 0, 0, 0..12, 0..2).is_none());
     for punctuation in ['.', ',', ';', ':', '!', '?', ')', ']', '}'] {
         let text = format!("https://example{punctuation}com/path");
         let wrapped = frame(&text, 16, 2);
-        assert!(frame_link(&wrapped, 0, 0, 0, 16).is_none(), "{text}");
+        assert!(frame_link(&wrapped, 0, 0, 0..16, 0..2).is_none(), "{text}");
         let mut s = surface(&text);
         s.panes[0].inner_rect.width = 16;
         assert!(link_at(&s, 1., 1., 10., 20.).is_none(), "{text}");
     }
     let unicode = frame("界 https://example.com ", 40, 1);
     assert_eq!(
-        frame_link(&unicode, 3, 0, 0, 40),
+        frame_link(&unicode, 3, 0, 0..40, 0..1),
         Some(RowLink {
             target: RowTarget::Web("https://example.com/".into()),
             row: 0,
             columns: 2..21,
+            continued: vec![],
         })
     );
 }
@@ -294,3 +295,4 @@ mod drive_paths;
 mod escaped_paths;
 mod external;
 mod paths;
+mod wrapped;

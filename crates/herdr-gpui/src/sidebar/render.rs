@@ -16,6 +16,7 @@ use super::{
     workspaces::{displayed_workspace_status, workspace_badge, workspace_label, workspace_note},
 };
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     Command, HerdrWindow, NavigationTarget, avatars::Checkout, config::AgentsPlacement,
     fonts::StyledFont,
@@ -70,7 +71,11 @@ impl HerdrWindow {
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
             .role(Role::List)
-            .aria_label(if devices { "Devices" } else { "Workspaces" })
+            .aria_label(if devices {
+                fl!("sidebar-devices-label")
+            } else {
+                fl!("sidebar-workspaces-label")
+            })
             .flex()
             .flex_col()
             .flex_1()
@@ -80,7 +85,7 @@ impl HerdrWindow {
             .id("agents-scroll")
             .debug_selector(|| "agents-scroll".into())
             .role(Role::List)
-            .aria_label("Agents")
+            .aria_label(fl!("sidebar-agents-label"))
             .flex()
             .flex_col()
             .flex_1()
@@ -681,10 +686,10 @@ impl HerdrWindow {
                     .px(px(content_x))
                     .text_color(rgb(theme.muted))
                     .truncate()
-                    .child(label_text(if filtered {
-                        "no matching agents"
+                    .child(label_text(&if filtered {
+                        fl!("sidebar-no-matching-agents")
                     } else {
-                        "no agents"
+                        fl!("sidebar-no-agents")
                     })),
             );
         }
@@ -692,7 +697,7 @@ impl HerdrWindow {
             .id("sidebar")
             .debug_selector(|| "sidebar".into())
             .role(Role::Navigation)
-            .aria_label("Sidebar")
+            .aria_label(fl!("sidebar-label"))
             .relative()
             .w(px(width))
             .flex_none()
@@ -728,12 +733,12 @@ impl HerdrWindow {
                             .or(tree_search.then_some(super::search::Heading::DeviceTree))
                             .and_then(|heading| self.search_heading(heading, look, window, cx))
                             .unwrap_or_else(|| {
-                                header(
-                                    if devices { "devices" } else { "spaces" },
-                                    font,
-                                    theme,
-                                    look,
-                                )
+                                let (key, label) = if devices {
+                                    ("devices", fl!("sidebar-header-devices"))
+                                } else {
+                                    ("spaces", fl!("sidebar-header-spaces"))
+                                };
+                                header(key, &label, font, theme, look)
                             }),
                     )
                     // The wrapper clips the pinned header as the next host's
@@ -767,10 +772,12 @@ impl HerdrWindow {
                             .child(
                                 div()
                                     .id("new-workspace")
-                                    .map(|button| self.sidebar_button(button, "New workspace"))
+                                    .map(|button| {
+                                        self.sidebar_button(button, fl!("sidebar-new-workspace"))
+                                    })
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(rgb(theme.foreground)))
-                                    .child("new")
+                                    .child(fl!("sidebar-new"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.command(Command::Workspace, window, cx)
                                     })),
@@ -779,10 +786,12 @@ impl HerdrWindow {
                                 div()
                                     .id("sidebar-menu")
                                     .debug_selector(|| "sidebar-menu".into())
-                                    .map(|button| self.sidebar_button(button, "Menu"))
+                                    .map(|button| {
+                                        self.sidebar_button(button, fl!("sidebar-menu-label"))
+                                    })
                                     .cursor_pointer()
                                     .hover(|s| s.text_color(rgb(theme.foreground)))
-                                    .child(label_text("menu"))
+                                    .child(label_text(&fl!("sidebar-menu")))
                                     .on_click(cx.listener(
                                         |this, event: &ClickEvent, window, cx| {
                                             this.menu.anchor = event.position();
@@ -836,14 +845,22 @@ impl HerdrWindow {
                             // rows, so the header stays to say so.
                             .when(self.config.show_agents_header || filtered, |section| {
                                 section.child(
-                                    header("agents", font, theme, look)
-                                        .justify_between()
-                                        .child(agents_sort(self, cx)),
+                                    header(
+                                        "agents",
+                                        &fl!("sidebar-header-agents"),
+                                        font,
+                                        theme,
+                                        look,
+                                    )
+                                    .justify_between()
+                                    .child(agents_sort(self, cx)),
                                 )
                             })
-                            .child(agents),
+                            .child(agents)
+                            .children(self.core_sidebar_rows(cx)),
                     )
             })
+            .children(self.render_mod_sidebar_sections(cx))
             .map(|sidebar| {
                 if self.device_footer_shown() {
                     sidebar.child(self.render_device_footer(cx))

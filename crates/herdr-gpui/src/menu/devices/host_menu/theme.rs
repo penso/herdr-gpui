@@ -2,6 +2,7 @@
 //! previews it on the terminal while that device is the one shown; Enter or a
 //! click saves `[devices.<id>] theme`, and "Same as app" removes it.
 use super::HostMenu;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     config::{Theme, ThemeName},
@@ -11,7 +12,7 @@ use crate::{
 use gpui::{prelude::*, *};
 
 /// The row that removes the device's own theme.
-const SAME_AS_APP: &str = "Same as app";
+const SAME_AS_APP: &str = "host-menu-theme-same-as-app";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Row {
@@ -42,7 +43,14 @@ pub(crate) struct DeviceThemePicker {
 impl DeviceThemePicker {
     fn filter(&mut self, query: &str) {
         let query = query.trim().to_lowercase();
-        let app = SAME_AS_APP.to_lowercase().contains(&query);
+        // Its name in the shown language and in English, as the palette
+        // matches both.
+        let app = [
+            crate::i18n::message(SAME_AS_APP, &[]),
+            crate::i18n::english(SAME_AS_APP, &[]),
+        ]
+        .iter()
+        .any(|name| name.to_lowercase().contains(&query));
         self.filtered = app
             .then_some(Row::App)
             .into_iter()
@@ -79,7 +87,7 @@ impl HerdrWindow {
         let current = current_row(self.device_theme_value(&host.id), light);
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search themes...", cx);
+            input.set_placeholder_with(|| fl!("host-menu-theme-search"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
         });
@@ -394,7 +402,7 @@ impl HerdrWindow {
                             .truncate()
                             .text_size(px(font.size * 1.35))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!("Terminal theme · {}", host.label)),
+                            .child(fl!("host-menu-theme-title", device = host.label.as_str())),
                     )
                     .child(
                         div()
@@ -405,7 +413,7 @@ impl HerdrWindow {
                             .cursor_pointer()
                             .rounded(px(crate::config::corners::CONTROL))
                             .hover(|s| s.bg(rgb(theme.active)))
-                            .child("Close")
+                            .child(fl!("host-menu-theme-close"))
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
                             ),
@@ -428,7 +436,7 @@ impl HerdrWindow {
                     .map(|index| {
                         let row = picker.filtered[index].clone();
                         let label = match &row {
-                            Row::App => SAME_AS_APP.to_owned(),
+                            Row::App => crate::i18n::message(SAME_AS_APP, &[]),
                             Row::Named(name) => name.clone(),
                         };
                         div()
@@ -447,7 +455,11 @@ impl HerdrWindow {
                             .hover(|s| s.bg(rgb(this.theme.active)))
                             .child(div().flex_1().min_w_0().truncate().child(label))
                             .when(row == current, |row| {
-                                row.child(div().text_color(rgb(this.theme.muted)).child("Current"))
+                                row.child(
+                                    div()
+                                        .text_color(rgb(this.theme.muted))
+                                        .child(fl!("host-menu-theme-current")),
+                                )
                             })
                             .on_hover(cx.listener(move |this, hovered, _, cx| {
                                 if *hovered && let Some(picker) = this.device_theme_picker_mut() {
@@ -468,10 +480,9 @@ impl HerdrWindow {
         let status = if let Some(error) = &picker.error {
             error.clone()
         } else if shown {
-            "Only this device's terminal changes. Hover to preview; Enter or click to save."
-                .to_owned()
+            fl!("host-menu-theme-hover-hint")
         } else {
-            "Only this device's terminal changes; select the device to preview it.".to_owned()
+            fl!("host-menu-theme-select-hint")
         };
         div()
             .debug_selector(|| "device-theme".into())

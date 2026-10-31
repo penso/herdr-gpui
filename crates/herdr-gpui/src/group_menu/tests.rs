@@ -258,6 +258,7 @@ mod any_repository;
 mod chat;
 mod close_others;
 mod closed_elsewhere;
+mod en_xa;
 mod new_tabs;
 mod orchestrator;
 #[cfg(unix)]

@@ -101,6 +101,9 @@ Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-acp.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-remote-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Automate}"; DestDir: "{app}"; Flags: ignoreversion
+; herdr-core keeps running Herdr 2 terminals after the app closes, and Setup
+; never stops it: a running one is replaced when Windows next restarts.
+Source: "{#SourceDir}\herdr-core.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 ; Uninstall removes only directories Setup created. Over an install.ps1 copy

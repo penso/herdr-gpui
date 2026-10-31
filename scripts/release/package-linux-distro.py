@@ -20,12 +20,13 @@ ARCHES = {"x86_64-unknown-linux-gnu": "amd64", "aarch64-unknown-linux-gnu": "arm
 # (nfpm packager, published extension)
 FORMATS = (("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst"))
 TREE = {
-    "bin/herdr-acp", "bin/herdr-automate", "bin/herdr-gpui", "bin/herdr-remote-control",
+    "bin/herdr-acp", "bin/herdr-automate", "bin/herdr-core", "bin/herdr-gpui",
+    "bin/herdr-remote-control",
     "share/applications/so.pen.herdr-gpui.desktop",
     "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
     *(f"share/licenses/herdr-gpui/{name}" for name in (
         "LICENSE", "NOTICE", "LICENSE-octicons", "LICENSE-APACHE", "NOTICE.md",
-        "SOUND-NOTICE.md", "THIRD-PARTY-NOTICES.txt")),
+        "SOUND-NOTICE.md", "THIRD-PARTY-NOTICES.txt", "HERDR-CORE-LICENSES.txt")),
 }
 # The release binary is built on Ubuntu 24.04 and requires GLIBC_2.39. It links
 # ALSA, FreeType, Fontconfig, xcb and xkbcommon, and dlopens the Vulkan loader and

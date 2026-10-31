@@ -15,6 +15,7 @@ mod classic;
 mod compact;
 mod curved;
 mod outline;
+pub(crate) mod panes;
 mod pills;
 mod underline;
 
@@ -280,6 +281,9 @@ pub(crate) trait TabLayout {
     fn connected(&self) -> Option<Connected> {
         None
     }
+
+    /// How a herdr-core tab split into panes reads under these tabs.
+    fn panes(&self) -> &'static dyn panes::PaneChrome;
 }
 
 /// The shape of a connected tab body and the card it flows into.

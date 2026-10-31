@@ -31,6 +31,10 @@ const BAR_INSET: f32 = 6.;
 pub(super) struct Underline;
 
 impl TabLayout for Underline {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Underline
+    }
+
     fn width(
         &self,
         title: f32,

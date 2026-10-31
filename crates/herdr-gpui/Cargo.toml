@@ -27,13 +27,16 @@ gix.workspace                  = true
 # default features off, so no Luau is built here.
 herdr-automation.workspace     = true
 herdr-chat-protocol.workspace  = true
+herdr-backend.workspace        = true
 herdr-client.workspace         = true
 herdr-commands.workspace       = true
 herdr-control-protocol.workspace = true
+herdr-core-client.workspace    = true
 herdr-credentials.workspace    = true
 herdr-diagnostics.workspace    = true
 herdr-github.workspace         = true
 herdr-i18n.workspace           = true
+herdr-mods.workspace           = true
 herdr-orchestrator.workspace   = true
 herdr-remote.workspace         = true
 # Remote control without its server: the control protocol and `app`.

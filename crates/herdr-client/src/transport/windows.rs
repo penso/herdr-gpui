@@ -22,7 +22,7 @@ use std::{
     os::windows::{
         ffi::OsStrExt,
         fs::OpenOptionsExt,
-        io::{AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle},
+        io::{AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle},
     },
     path::Path,
     process::Stdio,
@@ -231,6 +231,24 @@ fn private_pipe(direction: Direction, overlapped_peer: bool) -> io::Result<(Owne
 impl Stream {
     pub fn connect(path: impl AsRef<Path>) -> io::Result<Self> {
         Self::duplex(connect(path.as_ref())?)
+    }
+
+    /// Opens the pipe at the full `\\.\pipe\...` path, as a program of this
+    /// user serves it, and refuses one another user owns. A pipe name is open
+    /// to every local account, so one could create it first and wait for the
+    /// client; and the server may only identify this client, never act as it.
+    pub fn connect_owned(path: impl AsRef<Path>) -> io::Result<Self> {
+        let pipe = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(FILE_FLAG_OVERLAPPED)
+            .security_qos_flags(crate::private_endpoint::IDENTIFICATION)
+            .open(path.as_ref())?;
+        let owner = crate::private_endpoint::owner_sid(pipe.as_handle())?;
+        if owner != crate::private_endpoint::user_sid()? {
+            return Err(io::ErrorKind::PermissionDenied.into());
+        }
+        Self::duplex(OwnedHandle::from(pipe))
     }
 
     /// A bridge child's standard streams: this end, and the child's stdin and

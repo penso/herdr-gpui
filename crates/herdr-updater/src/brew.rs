@@ -13,6 +13,7 @@
 //! upgrade lands, and the upgrade itself is never interrupted: killing Homebrew
 //! mid-move can leave no installed app at all.
 
+use super::Progress;
 use super::error::{Error, Result};
 use super::release;
 use std::{
@@ -304,7 +305,7 @@ pub(super) fn upgrade(
     current: &str,
     expected: &str,
     cancel: &AtomicBool,
-    mut progress: impl FnMut(String),
+    mut progress: impl FnMut(Progress),
 ) -> Result<String> {
     if cancel.load(Ordering::Acquire) {
         return Err(Error::Cancelled);
@@ -316,9 +317,9 @@ pub(super) fn upgrade(
     let mut refreshed = false;
     loop {
         progress(if refreshed {
-            "Retrying Homebrew cask upgrade after refresh...".to_owned()
+            Progress::Retrying
         } else {
-            "Asking Homebrew to upgrade the cask...".to_owned()
+            Progress::Asking
         });
         if !refreshed && cancel.load(Ordering::Acquire) {
             return Err(Error::Cancelled);
@@ -330,8 +331,10 @@ pub(super) fn upgrade(
             upgrade.env("HOMEBREW_NO_AUTO_UPDATE", "1");
         }
         upgrade.args(["upgrade", "--cask", TOKEN]);
-        run(upgrade, remaining(), None, &mut progress)?;
-        progress("Checking the installed Homebrew cask version...".to_owned());
+        run(upgrade, remaining(), None, &mut |line| {
+            progress(Progress::Homebrew(line));
+        })?;
+        progress(Progress::Checking);
         let installed = installed(cask, remaining())?;
         let new = release::parse_version(&installed).ok_or(Error::BrewVersion)?;
         if new > old && new >= offered {
@@ -346,10 +349,12 @@ pub(super) fn upgrade(
         }
         // A successful upgrade can still use cached metadata or a tap that has
         // not published the offer yet. Command failures never reach this retry.
-        progress("Refreshing Homebrew metadata with brew update...".to_owned());
+        progress(Progress::Refreshing);
         let mut update = command(cask);
         update.arg("update");
-        run(update, remaining(), None, &mut progress)?;
+        run(update, remaining(), None, &mut |line| {
+            progress(Progress::Homebrew(line));
+        })?;
         refreshed = true;
     }
 }

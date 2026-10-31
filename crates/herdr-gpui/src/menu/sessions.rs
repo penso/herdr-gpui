@@ -3,12 +3,15 @@
 //! device this window is on.
 //! Both lists are probes — a session socket outlives its daemon, and a device's
 //! sessions cost an SSH round trip — so this page is the only thing that asks.
+// i18n: migrated
 use super::{Page, colors, devices};
+use crate::i18n::fl;
 use crate::{HerdrWindow, endpoint::Endpoint, sessions::DeviceScan};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, LocalSession};
 mod management;
-pub(super) use management::Edit;
+
+pub(super) use management::{Edit, Target};
 
 /// A line in the popup, in the order it is painted. Only a row can be selected,
 /// so navigation walks the `Row` entries and skips headers and notes.
@@ -41,7 +44,7 @@ enum Entry {
 pub(super) enum Row {
     Local(String),
     Device { id: String, session: String },
-    Add(management::Target),
+    Add(Target),
 }
 
 /// What one row paints. Both kinds share one shape so they cannot drift apart.
@@ -79,8 +82,12 @@ fn target_session(target: &ConnectTarget) -> String {
 
 /// The state word a session paints, whether it was probed on this machine or
 /// reported by its host.
-fn state_word(running: bool) -> &'static str {
-    if running { "running" } else { "stopped" }
+fn state_word(running: bool) -> String {
+    if running {
+        fl!("sessions-menu-running")
+    } else {
+        fl!("sessions-menu-stopped")
+    }
 }
 
 impl HerdrWindow {
@@ -132,13 +139,16 @@ impl HerdrWindow {
         if let Some(endpoint) = self.endpoints.get(current).filter(|_| current != 0) {
             entries.push(Entry::Header {
                 selector: "sessions-current-device".to_owned(),
-                text: format!("{} · CURRENT DEVICE", endpoint.label.to_uppercase()),
+                text: fl!(
+                    "sessions-menu-current-device",
+                    device = endpoint.label.to_uppercase()
+                ),
             });
             self.device_entries(&mut entries, endpoint, current);
         }
         entries.push(Entry::Header {
             selector: "sessions-local-header".to_owned(),
-            text: "LOCAL SESSIONS".to_owned(),
+            text: fl!("sessions-menu-local"),
         });
         self.local_entries(&mut entries);
         // This machine's scan error belongs to its own section, not to the device
@@ -153,16 +163,16 @@ impl HerdrWindow {
             entries.push(Entry::Header {
                 selector: "sessions-others-header".to_owned(),
                 text: if current == 0 {
-                    "REMOTE DEVICES".to_owned()
+                    fl!("sessions-menu-remote-devices")
                 } else {
-                    "OTHER DEVICES".to_owned()
+                    fl!("sessions-menu-other-devices")
                 },
             });
         }
         if others.is_empty() && current == 0 {
             entries.push(Entry::Muted {
                 selector: "sessions-no-devices".to_owned(),
-                text: "No saved devices. Add one from the device picker.".to_owned(),
+                text: fl!("sessions-menu-no-devices"),
             });
         }
         // Each device names itself: the rows under it are its sessions, not the
@@ -210,7 +220,7 @@ impl HerdrWindow {
                         .map(|session| {
                             (
                                 session.name.clone(),
-                                state_word(session.running).to_owned(),
+                                state_word(session.running),
                                 session.running,
                                 attached && session.name == saved,
                             )
@@ -220,13 +230,13 @@ impl HerdrWindow {
             }
             Some(DeviceScan::Sessions(_)) => (
                 vec![fallback()],
-                Some("No sessions on this device.".to_owned()),
+                Some(fl!("sessions-menu-no-device-sessions")),
             ),
             Some(DeviceScan::Failed(error)) => (vec![fallback()], Some(error.clone())),
             // A disabled device is never dialled, so it must not claim to be
             // waiting for an answer that is not coming.
-            None if !endpoint.enabled => (vec![fallback()], Some("Disabled".to_owned())),
-            None => (vec![fallback()], Some("Checking…".to_owned())),
+            None if !endpoint.enabled => (vec![fallback()], Some(fl!("sessions-menu-disabled"))),
+            None => (vec![fallback()], Some(fl!("sessions-menu-checking"))),
         };
         for (name, detail, online, checked) in rows {
             entries.push(Entry::Row {
@@ -250,7 +260,7 @@ impl HerdrWindow {
             });
         }
         if let Some(host) = endpoint.connection.target.remote_host() {
-            entries.push(self.add_session_entry(management::Target::Device {
+            entries.push(self.add_session_entry(Target::Device {
                 id: endpoint.id.clone(),
                 host,
             }));
@@ -264,9 +274,9 @@ impl HerdrWindow {
             entries.push(Entry::Muted {
                 selector: "sessions-empty".to_owned(),
                 text: if self.sessions.scanning {
-                    "Checking…".to_owned()
+                    fl!("sessions-menu-checking")
                 } else {
-                    "No sessions on this machine.".to_owned()
+                    fl!("sessions-menu-no-local-sessions")
                 },
             });
         }
@@ -280,14 +290,14 @@ impl HerdrWindow {
         {
             entries.push(Entry::Muted {
                 selector: "sessions-stopped".to_owned(),
-                text: "Stopped sessions start their daemon when selected.".to_owned(),
+                text: fl!("sessions-menu-stopped-note"),
             });
         }
         entries.extend(self.sessions.entries.iter().map(|session| Entry::Row {
             row: Row::Local(session.name.clone()),
             spec: self.local_session_spec(session),
         }));
-        entries.push(self.add_session_entry(management::Target::Local));
+        entries.push(self.add_session_entry(Target::Local));
     }
 
     /// The child index of each selectable row, which is what navigation and the
@@ -345,6 +355,7 @@ impl HerdrWindow {
             .as_ref()
             .filter(|departure| matches_target(&departure.target))
             .map(|departure| departure.remaining(crate::motion::now()));
+        // Two lines plus padding; a wrapped note makes the row taller.
         let height = font.line_height() * 2. + 16.;
         let removal = choice.clone();
         let removal_target = self.management_target(&choice);
@@ -360,7 +371,7 @@ impl HerdrWindow {
             .id(("session-entry", row))
             .debug_selector(move || format!("sessions-row-{row}"))
             .p(px(8.))
-            .h(px(height))
+            .min_h(px(height))
             .line_height(px(font.line_height()))
             .rounded(px(crate::config::corners::CONTROL))
             .flex_none()
@@ -391,12 +402,15 @@ impl HerdrWindow {
                             .child(spec.label.clone()),
                     )
                     .child(
+                        // Wraps rather than cutting a note short: the popup's
+                        // width is the device list's, not the note's.
                         div()
-                            .truncate()
+                            .debug_selector(move || format!("sessions-detail-{row}"))
+                            .min_w_0()
                             .text_size(px(font.size * 0.85))
                             .text_color(rgb(theme.muted))
                             .child(if deleting {
-                                "Deleting…".into()
+                                fl!("sessions-menu-deleting").into()
                             } else {
                                 spec.detail.clone()
                             }),
@@ -467,9 +481,8 @@ impl HerdrWindow {
                 .debug_selector(move || format!("sessions-departing-{row}"))
                 // Keep the anchored popup's height and every row position stable
                 // until the fade finishes; then remove the row in one update.
-                .h(px(height))
+                // The row sizes the wrapper, so a wrapped note keeps its height.
                 .flex_none()
-                .overflow_hidden()
                 .opacity(remaining)
                 .child(view)
                 .into_any_element()

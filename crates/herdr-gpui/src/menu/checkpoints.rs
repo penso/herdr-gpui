@@ -6,7 +6,7 @@
 use super::Page;
 use crate::{
     HerdrWindow,
-    checkpoint::{Checkout, Listing, age, host_for},
+    checkpoint::{Checkout, Listing, host_for},
     i18n::fl,
 };
 use gpui::{prelude::*, *};
@@ -126,7 +126,7 @@ impl HerdrWindow {
                     line(fl!(
                         "checkpoints-restore-title",
                         label = checkpoint.label.as_str(),
-                        age = age(checkpoint.created, now),
+                        age = crate::ago::text(crate::ago::since(checkpoint.created, now)),
                     ))
                     .font_weight(FontWeight::SEMIBOLD),
                 )

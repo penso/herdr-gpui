@@ -370,7 +370,7 @@ impl HerdrWindow {
         let name = cx.new(SearchInput::new);
         name.update(cx, |input, cx| {
             input.set_placeholder_with(|| fl!("worktree-source-default-name"), cx);
-            input.set_label(fl!("worktree-source-name"), cx);
+            input.set_label(&fl!("worktree-source-name"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let naming = cx.subscribe_in(

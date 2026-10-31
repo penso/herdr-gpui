@@ -1,7 +1,9 @@
 //! The daemon's update notice and release notes. Closing the sheet tells the
 //! daemon the notes were read, so its other clients agree. An install command
 //! is shown for the user to review and run; nothing here runs it.
+// i18n: migrated
 use super::Page;
+use crate::i18n::fl;
 use crate::{HerdrWindow, fonts::StyledFont, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
@@ -14,7 +16,7 @@ impl HerdrWindow {
     pub(super) fn release_notes_item(&self) -> Option<&'static str> {
         let snapshot = self.live.snapshot.as_deref()?;
         if snapshot.update_available.is_some() {
-            Some("update ready")
+            Some("update ready") // i18n: data
         } else if snapshot.release_notes.is_some() {
             Some("what's new")
         } else {
@@ -28,11 +30,9 @@ impl HerdrWindow {
         let update = snapshot.and_then(|s| s.update_available.as_deref());
         let notes = snapshot.and_then(|s| s.release_notes.as_ref());
         let title = match (update, notes) {
-            (Some(version), _) => format!("Update ready: Herdr {}", safe_text(version, 64)),
-            (None, Some(notes)) => {
-                format!("What's new in Herdr {}", safe_text(&notes.version, 64))
-            }
-            (None, None) => "Release notes are unavailable".into(),
+            (Some(version), _) => fl!("whats-new-update-ready", version = safe_text(version, 64)),
+            (None, Some(notes)) => fl!("whats-new-title", version = safe_text(&notes.version, 64)),
+            (None, None) => fl!("whats-new-unavailable"),
         };
         let mut sheet = div()
             .debug_selector(|| "release-notes".into())
@@ -50,11 +50,7 @@ impl HerdrWindow {
                 .map(|s| s.update_install_command.trim())
                 .filter(|command| !command.is_empty());
             sheet = sheet
-                .child(
-                    div()
-                        .p(px(8.))
-                        .child("Suggested command (review and run yourself):"),
-                )
+                .child(div().p(px(8.)).child(fl!("whats-new-suggested-command")))
                 .child(
                     div()
                         .debug_selector(|| "release-notes-command".into())
@@ -64,7 +60,7 @@ impl HerdrWindow {
                         .bg(rgb(theme.active))
                         .text_font(&self.config.terminal)
                         .child(command.map_or_else(
-                            || "No install command provided by daemon.".into(),
+                            || fl!("whats-new-no-command"),
                             |command| safe_text(command, MAX_COMMAND),
                         )),
                 )
@@ -72,16 +68,16 @@ impl HerdrWindow {
                     div()
                         .p(px(8.))
                         .text_color(rgb(theme.subtext()))
-                        .child("Nothing is installed or executed by this panel."),
+                        .child(fl!("whats-new-nothing-runs")),
                 );
         }
         if let Some(notes) = notes {
             let lines = self.daemon_text.release_notes.lines(&notes.body);
             sheet = sheet
                 .when(update.is_some(), |sheet| {
-                    sheet.child(div().p(px(8.)).text_color(rgb(theme.muted)).child(format!(
-                        "Release notes for {}",
-                        safe_text(&notes.version, 64)
+                    sheet.child(div().p(px(8.)).text_color(rgb(theme.muted)).child(fl!(
+                        "whats-new-notes-for",
+                        version = safe_text(&notes.version, 64)
                     )))
                 })
                 .child(
@@ -106,7 +102,7 @@ impl HerdrWindow {
                 .debug_selector(|| "release-notes-close".into())
                 .p(px(8.))
                 .cursor_pointer()
-                .child("Close")
+                .child(fl!("whats-new-close"))
                 .on_click(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     this.dismiss_menu(window, cx);
@@ -136,7 +132,7 @@ impl HerdrWindow {
             Method::ReleaseNotesDismiss,
             serde_json::json!({ "version": notes.version }),
         ) {
-            self.local_error = Some(format!("Release notes: {error}"));
+            self.local_error = Some(fl!("whats-new-dismiss-failed", error = error.to_string()));
         }
     }
 }

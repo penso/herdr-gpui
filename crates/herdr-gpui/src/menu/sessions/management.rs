@@ -1,5 +1,6 @@
 //! Picker forms capture device identity and host, never a mutable row ordinal.
 use super::*;
+use crate::i18n::fl;
 use crate::search_input::SearchInput;
 use herdr_client::RemoteHost;
 
@@ -32,11 +33,11 @@ impl HerdrWindow {
     pub(super) fn add_session_entry(&self, target: Target) -> Entry {
         let unavailable = self.create_unavailable(&target);
         let enabled = unavailable.is_none();
-        let detail = unavailable.unwrap_or("Create and connect");
+        let detail = unavailable.unwrap_or_else(|| fl!("sessions-menu-create-and-connect"));
         Entry::Row {
             row: Row::Add(target),
             spec: Spec {
-                label: "Add session…".into(),
+                label: fl!("sessions-menu-add-session").into(),
                 detail: detail.into(),
                 online: false,
                 checked: false,
@@ -65,10 +66,10 @@ impl HerdrWindow {
     /// Why a session cannot be created on `target` right now, if it cannot. A
     /// device must be connected: its sessions are created over the same SSH
     /// route, and an offline host would only fail after the form is filled in.
-    fn create_unavailable(&self, target: &Target) -> Option<&'static str> {
+    fn create_unavailable(&self, target: &Target) -> Option<String> {
         match target {
             Target::Local => {
-                (!self.local_management_available()).then_some("Unavailable with --socket or --dev")
+                (!self.local_management_available()).then(|| fl!("sessions-menu-unavailable-local"))
             }
             Target::Device { host, .. } if host_unavailable(host).is_some() => {
                 host_unavailable(host)
@@ -79,10 +80,9 @@ impl HerdrWindow {
                         && e.enabled
                         && e.connection.target.remote_host().as_ref() == Some(host)
                 }) else {
-                    return Some("Enable this device to manage sessions");
+                    return Some(fl!("sessions-menu-enable-device"));
                 };
-                (!endpoint.live.status.is_connected())
-                    .then_some("Available once this device is online")
+                (!endpoint.live.status.is_connected()).then(|| fl!("sessions-menu-device-offline"))
             }
         }
     }
@@ -91,26 +91,25 @@ impl HerdrWindow {
         self.create_unavailable(target).is_none()
     }
 
-    pub(super) fn session_delete_reason(&self, row: &Row) -> Option<&'static str> {
+    pub(super) fn session_delete_reason(&self, row: &Row) -> Option<String> {
         if self.sessions.mutation.is_some() {
-            return Some("Wait for session deletion to finish.");
+            return Some(fl!("sessions-menu-wait-for-delete"));
         }
         let name = match row {
             Row::Local(name) | Row::Device { session: name, .. } => name,
-            Row::Add(_) => return Some("Select a session to delete."),
+            Row::Add(_) => return Some(fl!("sessions-menu-select-to-delete")),
         };
+        // i18n: data
         if name == "default" {
-            return Some("Herdr cannot delete the default session.");
+            return Some(fl!("sessions-menu-default-undeletable"));
         }
         let Some(target) = self.management_target(row) else {
-            return Some(
-                "Session management is unavailable for explicit sockets, development catalogs, or disabled devices.",
-            );
+            return Some(fl!("sessions-menu-management-unavailable"));
         };
         match target {
             Target::Local => {
                 if !self.sessions.entries.iter().any(|s| s.name == *name) {
-                    return Some("Refresh the session list before deleting.");
+                    return Some(fl!("sessions-menu-refresh-first"));
                 }
             }
             Target::Device { id, host } => {
@@ -119,16 +118,14 @@ impl HerdrWindow {
                     saved.remote_host().as_ref() == Some(&host)
                         && saved.remote_session() == Some(name.as_str())
                 }) {
-                    return Some(
-                        "A saved device profile uses this session. Remove or reconfigure that profile before deleting it.",
-                    );
+                    return Some(fl!("sessions-menu-profile-uses"));
                 }
                 let Some(DeviceScan::Sessions(sessions)) = self.sessions.devices.answers.get(&id)
                 else {
-                    return Some("Wait for this device's session list before deleting.");
+                    return Some(fl!("sessions-menu-wait-for-list"));
                 };
                 if !sessions.iter().any(|s| s.name == *name) {
-                    return Some("This session is not in the device's latest list.");
+                    return Some(fl!("sessions-menu-not-listed"));
                 }
             }
         }
@@ -146,7 +143,7 @@ impl HerdrWindow {
         }
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Session name", cx);
+            input.set_placeholder_with(|| fl!("sessions-menu-name-placeholder"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             input
         });
@@ -164,13 +161,12 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         if self.management_target(&row) != painted_target {
-            self.sessions.mutation_error =
-                Some("The device changed. Reopen the session picker.".into());
+            self.sessions.mutation_error = Some(fl!("sessions-menu-device-changed"));
             cx.notify();
             return;
         }
         if let Some(reason) = self.session_delete_reason(&row) {
-            self.sessions.mutation_error = Some(reason.into());
+            self.sessions.mutation_error = Some(reason);
         } else if let Some(target) = self.management_target(&row) {
             self.menu.error = None;
             self.menu.session_edit = Some(Edit::Delete { row, target });
@@ -201,17 +197,16 @@ impl HerdrWindow {
                 let name = input.read(cx).text().to_owned();
                 let target = target.clone();
                 if !self.target_available(&target) {
-                    self.menu.error = Some(
-                        "The device changed or is unavailable. Reopen the session picker.".into(),
-                    );
+                    self.menu.error = Some(fl!("sessions-menu-device-unavailable"));
                     cx.notify();
                     return;
                 }
                 if herdr_client::session_socket(std::path::Path::new(""), &name).is_err() {
-                    self.menu.error = Some("Use 1–64 ASCII letters, digits, dots, underscores or hyphens. The names ‘.’ and ‘..’ are not allowed.".into());
+                    self.menu.error = Some(fl!("sessions-menu-invalid-name"));
                     cx.notify();
                     return;
                 }
+                // i18n: data
                 let duplicate = name == "default"
                     || match &target {
                         Target::Local => self
@@ -225,8 +220,7 @@ impl HerdrWindow {
                         }
                     };
                 if duplicate {
-                    self.menu.error =
-                        Some("That session already exists. Select it from the list.".into());
+                    self.menu.error = Some(fl!("sessions-menu-exists"));
                     cx.notify();
                     return;
                 }
@@ -243,12 +237,12 @@ impl HerdrWindow {
             }
             Edit::Delete { row, target } => {
                 if self.management_target(row).as_ref() != Some(target) {
-                    self.menu.error = Some("The device changed. Reopen the session picker.".into());
+                    self.menu.error = Some(fl!("sessions-menu-device-changed"));
                     cx.notify();
                     return;
                 }
                 if let Some(reason) = self.session_delete_reason(row) {
-                    self.menu.error = Some(reason.into());
+                    self.menu.error = Some(reason);
                     cx.notify();
                     return;
                 }
@@ -341,7 +335,7 @@ impl HerdrWindow {
         match &self.menu.session_edit {
             Some(Edit::Create { input, target }) => {
                 let destination = match target {
-                    Target::Local => "this machine".to_owned(),
+                    Target::Local => fl!("sessions-menu-this-machine"),
                     Target::Device {
                         host: RemoteHost::Ssh(target),
                         ..
@@ -349,13 +343,26 @@ impl HerdrWindow {
                     Target::Device {
                         host: RemoteHost::Wsl(distro),
                         ..
-                    } => format!("WSL {distro}"),
+                    } => fl!("sessions-menu-wsl", distribution = distro.as_str()),
                 };
-                view = view.child(div().text_size(px(self.config.ui.size * 1.35))
-                    .font_weight(FontWeight::SEMIBOLD).child("Add session"))
-                    .child(div().text_color(rgb(theme.muted)).child(format!("On {destination}")))
+                view = view
+                    .child(
+                        div()
+                            .text_size(px(self.config.ui.size * 1.35))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(fl!("sessions-menu-add-title")),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(theme.muted))
+                            .child(fl!("sessions-menu-on", destination = destination)),
+                    )
                     .child(input.clone())
-                    .child(div().text_color(rgb(theme.subtext())).child("Creates and connects to a headless session. An existing name connects to that session."));
+                    .child(
+                        div()
+                            .text_color(rgb(theme.subtext()))
+                            .child(fl!("sessions-menu-add-note")),
+                    );
             }
             Some(Edit::Delete { row, .. }) => {
                 let name = match row {
@@ -367,12 +374,14 @@ impl HerdrWindow {
                         div()
                             .text_size(px(self.config.ui.size * 1.35))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Delete session?"),
+                            .child(fl!("sessions-menu-delete-title")),
                     )
                     .child(div().min_w_0().truncate().child(name.to_owned()))
-                    .child(div().text_color(rgb(theme.subtext())).child(
-                        "Herdr will stop this session, terminate its running processes, and remove its saved state. If you are using it, this window switches to default. This cannot be undone.",
-                    ));
+                    .child(
+                        div()
+                            .text_color(rgb(theme.subtext()))
+                            .child(fl!("sessions-menu-delete-note")),
+                    );
             }
             None => return view,
         }
@@ -399,7 +408,7 @@ impl HerdrWindow {
                         .border_color(rgb(theme.active))
                         .hover(|s| s.bg(rgb(theme.active)))
                         .cursor_pointer()
-                        .child("Cancel")
+                        .child(fl!("sessions-menu-cancel"))
                         .on_click(
                             cx.listener(|this, _, window, cx| this.cancel_session_edit(window, cx)),
                         ),
@@ -421,9 +430,9 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .child(
                             if matches!(self.menu.session_edit, Some(Edit::Create { .. })) {
-                                "Create and connect"
+                                fl!("sessions-menu-create-and-connect")
                             } else {
-                                "Delete permanently"
+                                fl!("sessions-menu-delete-permanently")
                             },
                         )
                         .on_click(
@@ -440,9 +449,9 @@ mod tests;
 
 /// Why this build cannot reach `host` to manage its sessions, if it cannot:
 /// every client has SSH, but only Windows has WSL.
-fn host_unavailable(host: &RemoteHost) -> Option<&'static str> {
+fn host_unavailable(host: &RemoteHost) -> Option<String> {
     match host {
         RemoteHost::Ssh(_) => None,
-        RemoteHost::Wsl(_) => (!cfg!(windows)).then_some("WSL is only available on Windows"),
+        RemoteHost::Wsl(_) => (!cfg!(windows)).then(|| fl!("sessions-menu-wsl-windows-only")),
     }
 }

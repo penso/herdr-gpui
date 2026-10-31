@@ -9,7 +9,8 @@ environment once on the connection worker so daemon plugins can find tools such 
 `node`. Terminal launches skip the shell probe. Failed probes fall back to standard
 per-user and Homebrew bin directories; the probe has a five-second timeout.
 It does not link or install Herdr, stop
-daemons, spawn a local PTY, or emulate a terminal. Herdr's remote bridge may start
+daemons, or spawn a local PTY. It emulates terminals only for
+[Herdr 2](#herdr-2-terminals), whose daemon streams raw output. Herdr's remote bridge may start
 the named remote session. SSH requires an installed POSIX Herdr, noninteractive authentication,
 and an already trusted host key. For hosts that need MFA or a password, configure
 `ControlMaster auto` with a `ControlPath` in `~/.ssh/config` and authenticate once
@@ -280,7 +281,17 @@ its own form, so switching between them keeps what was typed. **Ctrl-Tab** and
 rail shows only the logos.
 
 The SSH form accepts an SSH target, label, and optional remote session (default:
-`default`). Herdr's `machine add` saves a new profile every time and takes no
+`default`). **Skip host key verification (dangerous)**, off by default,
+connects without checking the host's key, now and on every later connection:
+the app passes `StrictHostKeyChecking=no` and reads no known hosts file for
+that target. It is for hosts that keep no key to check, such as the `*.coder`
+aliases `coder config-ssh` writes with `UserKnownHostsFile=/dev/null`, which
+otherwise fail the app's strict check. The choice is saved before the device,
+under `[ssh] skip_host_key_verification` in the local config, by target.
+Removing the device keeps it there. To verify the host again, delete the
+target from that list (connections opened without checking take no new
+commands once it is gone), or remove the device and add it again with the
+box clear. Herdr's `machine add` saves a new profile every time and takes no
 lock, so the dialog keeps a host from being saved twice itself. A host counts as
 already saved when a profile with the same session reaches the same user, host
 name, and port as `ssh -G` resolves them, so an SSH alias, `user@address`, and
@@ -1740,6 +1751,41 @@ tiled edges, and button order and support) with forced decorations. Native QA
 on GNOME Wayland remains required for dragging, resizing, the window menu,
 maximize/restore, and the shadow.
 
+## Herdr 2 Terminals
+
+Herdr 2 (herdr-core) runs terminals that stay alive like Herdr's, but streams
+their raw output, so Herdr UI emulates each one itself and draws it with the
+same painter as a Herdr pane. That lets a tab split into native panes. Herdr 1
+and Herdr 2 run side by side: Herdr 2 tabs open in the same workspaces as
+Herdr 1 tabs, and nothing moves from one to the other.
+
+- **Opening one:** **New Herdr 2 Terminal** in the command palette, or
+  `herdr-gpui run new_core_terminal`. With `herdr_2_terminals = true`
+  (**Settings > Tabs > New terminals use Herdr 2**), every new tab is one.
+- **Starting herdr-core:** the app joins a core that already runs. Otherwise
+  it starts the user's own `herdr-core`, or the pinned one every release
+  bundles beside the app, and only when a Herdr 2 terminal is asked for.
+  Restored tabs only rejoin. Closing the app leaves herdr-core and its
+  terminals running; `herdr-core ls` lists them.
+- **Splits:** **Split Right** and **Split Down** split the focused pane, the
+  focus and resize commands move between panes and their dividers, **Zoom**
+  grows a pane over the tab, and **Close Pane** ends that pane's terminal.
+  Drag the line between two panes to resize them. The layout is saved with
+  the tab. A pane whose program exits closes.
+- **Look:** a split takes the style of the tab layout: Classic gives each
+  pane a header row, Curved draws panes as rounded cards, Pills floats a label
+  in each pane's corner, and Underline ends each pane in a status line. Cards,
+  Outline, and Compact use the closest of these.
+- **Mouse:** the wheel scrolls history; a program that reads the mouse gets
+  its clicks, drags, and wheel instead, unless Shift is held. Drag to select,
+  double-click for a word, triple-click for a line, and Cmd-C copies.
+- **Mirror Herdr 2 Pane** opens a watch-only view of the focused pane in a new
+  tab: it follows the terminal's size and never types into it.
+- **Sidebar:** under the agents, a Herdr 2 list shows each pane of the
+  workspace's Herdr 2 tabs with its status; click one to show it.
+- **Without Herdr 1 installed,** the window shows a herdr-core shell instead
+  of asking to install Herdr.
+
 ## Terminal Selection And Copy
 
 Mouse-aware applications receive clicks, button releases, drags, and pointer
@@ -2620,7 +2666,12 @@ its dashes turn solid once its target is verified:
 
 A plain URL is read from its row. One that reaches the pane's right edge may
 wrap onto the next row; a daemon that offers `pane.link.resolve` reads it
-whole, and otherwise it needs explicit terminal hyperlink metadata. Paths are
+whole, and otherwise it needs explicit terminal hyperlink metadata. A file
+path or `file://` address that fills a row to the right edge and goes on in
+the next is read across those rows, up to 16 of them. The rest may start the
+next row, where the terminal wraps it, or follow an indent, where an agent
+wraps its own output under a list item. Once the whole path is found on disk,
+every row of it is underlined, and a click on any of them opens it. Paths are
 not links in panes on SSH hosts, whose files live on that host.
 
 A file opens in your terminal editor at the printed line, in a new pane split
@@ -3758,7 +3809,10 @@ Ctrl+Shift+U is left unbound for
   across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
-  `show_repository_icons = false` leaves both out.
+  `show_repository_icons = false` leaves both out. An owner's avatar is read
+  from `github.com/OWNER.png`, following its one redirect only to an account's
+  picture by ID on `avatars.githubusercontent.com`, so an organization whose
+  by-login picture is GitHub's default octocat shows its own.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour
   stale-while-refresh behavior; see [avatar caching](../../README.md#native-github-sign-in)
   for limits, location, and the startup authentication requirement. Neither cache
@@ -3776,6 +3830,12 @@ Ctrl+Shift+U is left unbound for
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
+  The star at a row's end pins that theme above the rest, searches included;
+  clicking it again unpins it. Starring neither previews nor applies a theme.
+  The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
+  reloading the window, so the theme being previewed stays on screen. Each
+  star is applied to the list the file holds when it is written, so stars
+  made in another window's picker stay.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /

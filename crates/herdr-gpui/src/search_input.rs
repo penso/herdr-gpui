@@ -295,12 +295,11 @@ impl SearchInput {
 
     /// The field's accessible name, which the placeholder otherwise stands
     /// in for. Unchanged is a no-op, so the owner may set it from its render.
-    pub(crate) fn set_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Self>) {
-        let label = label.into();
-        if self.label.as_ref() == Some(&label) {
+    pub(crate) fn set_label(&mut self, label: &str, cx: &mut Context<Self>) {
+        if self.label.as_deref() == Some(label) {
             return;
         }
-        self.label = Some(label);
+        self.label = Some(label.to_owned().into());
         cx.notify();
     }
 

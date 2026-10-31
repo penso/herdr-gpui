@@ -398,26 +398,12 @@ fn short(reference: &str) -> &str {
 /// A build's status line: the step, then what the builder said, which is
 /// its own output and shown as it is.
 fn progress_text(progress: &crate::cloud::image::Progress) -> String {
-    match progress.step {
-        Some((step, total)) => fl!(
-            "settings-cloud-image-step",
-            step = step,
-            total = total,
-            status = progress.status.clone()
-        ),
-        None => progress.status.clone(),
-    }
+    crate::cloud::status::build(progress)
 }
 
 /// When something happened, in words: "just now", "5 min ago".
 fn ago(seconds: u64) -> String {
-    let elapsed = catalog::now().saturating_sub(seconds);
-    match elapsed {
-        0..60 => fl!("settings-cloud-ago-now"),
-        60..3600 => fl!("settings-cloud-ago-minutes", count = elapsed / 60),
-        3600..86_400 => fl!("settings-cloud-ago-hours", count = elapsed / 3600),
-        _ => fl!("settings-cloud-ago-days", count = elapsed / 86_400),
-    }
+    crate::ago::text(catalog::now().saturating_sub(seconds))
 }
 
 #[cfg(test)]

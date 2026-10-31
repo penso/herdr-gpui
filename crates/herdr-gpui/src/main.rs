@@ -8,6 +8,7 @@ mod accessibility;
 mod actions;
 mod agent_notes;
 mod agent_skill;
+mod ago;
 mod app;
 #[cfg(any(target_os = "macos", windows, test))]
 mod app_badge;
@@ -54,6 +55,7 @@ mod constants;
 mod contrast;
 mod control;
 mod copy_mode;
+mod core_terminals;
 mod daemon;
 mod devices_overview;
 mod dialog_input;
@@ -92,6 +94,7 @@ mod menus;
 mod merged_cleanup;
 #[cfg(feature = "mockup")]
 mod mockup;
+mod mods;
 mod motion;
 mod navigation;
 mod network_quality;

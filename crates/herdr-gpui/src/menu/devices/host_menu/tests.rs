@@ -7,6 +7,7 @@ mod azure_destroy;
 #[cfg(feature = "cloud")]
 mod cloud;
 mod device_theme;
+mod en_xa;
 mod forwards;
 mod menu_width;
 #[cfg(feature = "azure")]
@@ -207,8 +208,13 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
             );
             assert!(view.menu.removing_devices.is_empty());
             assert_eq!(
-                view.local_error.as_deref(),
-                Some(format!("Remove m5max-ms: {}", crate::menu::devices::Error::Adding).as_str())
+                view.local_error
+                    .as_deref()
+                    .map(|error| error.replace(['\u{2068}', '\u{2069}'], "")),
+                Some(format!(
+                    "Remove m5max-ms: {}",
+                    crate::menu::devices::Error::Adding
+                ))
             );
             assert!(view.menu.github_hosts.contains_key(HOST));
 
@@ -229,6 +235,7 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
                 view.local_error
                     .as_deref()
                     .unwrap()
+                    .replace(['\u{2068}', '\u{2069}'], "")
                     .starts_with("Removed m5max-ms, but could not delete its GitHub sign-in")
             );
             view.prune_device_removals();

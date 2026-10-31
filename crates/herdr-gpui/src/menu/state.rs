@@ -3,9 +3,11 @@
 //! selection epoch and connection generation it was started under, so a reply
 //! from a replaced connection can never be applied to the current one.
 
+// i18n: migrated
 use super::endpoint_error;
 use super::{Page, WorkspaceMenuAction, WorkspaceTarget, git, github};
 use crate::dialog_input::DialogInput;
+use crate::i18n::fl;
 use gpui::{App, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
 use herdr_client::protocol::ClientShellSnapshot;
 
@@ -314,13 +316,10 @@ impl MenuState {
                 .map(str::to_owned);
             deletion.root = crate::worktree_scripts::main_checkout(result);
             if deletion.path.is_none() {
-                self.error = Some("Daemon did not identify a unique linked checkout. Dismiss and reopen the menu.".into());
+                self.error = Some(fl!("menu-state-no-linked-checkout"));
             }
         } else {
-            self.error = Some(
-                "Unexpected daemon response. Review current workspace state before retrying."
-                    .into(),
-            );
+            self.error = Some(fl!("menu-state-unexpected-response"));
         }
     }
 
