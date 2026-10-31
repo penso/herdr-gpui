@@ -286,19 +286,53 @@ fn wheel(kind: herdr_backend::ClientMouseKind, lines: u16) -> ClientPaneInputEve
     }
 }
 
+/// Updates read until one in them satisfies `done`, within [`WAIT`]. Each
+/// `next` reads one chunk, and the core may split or join what the mock
+/// sends, so a test waits for the update it expects rather than counting
+/// reads.
+fn updates_until(
+    terminal: &mut crate::CoreTerminal,
+    done: impl Fn(&SurfaceUpdate) -> bool,
+) -> Vec<SurfaceUpdate> {
+    let deadline = std::time::Instant::now() + WAIT;
+    let mut all = Vec::new();
+    while !all.iter().any(&done) {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        assert!(!left.is_zero(), "no expected update in {all:?}");
+        all.extend(terminal.next(left).unwrap());
+    }
+    all
+}
+
+/// Whether an update draws `text`, whole screen or changed rows.
+fn shows(text: &str) -> impl Fn(&SurfaceUpdate) -> bool + '_ {
+    move |update| match update {
+        SurfaceUpdate::Frame(frame) => row_text(frame, 0).contains(text),
+        SurfaceUpdate::Rows { rows, .. } => rows.iter().any(|row| {
+            row.cells
+                .iter()
+                .map(|cell| cell.symbol.as_str())
+                .collect::<String>()
+                .contains(text)
+        }),
+        _ => false,
+    }
+}
+
 #[test]
 fn the_view_is_told_when_the_program_starts_reading_the_mouse() {
     let (backend, mut mock) = backend();
     let mut terminal = attached(&backend, &mut mock, Role::Active);
     mock.send(5, Kind::Data, b"hi");
-    let first = terminal.next(WAIT).unwrap();
+    let first = updates_until(&mut terminal, shows("hi"));
     assert!(first.contains(&SurfaceUpdate::MouseReporting(false)));
     mock.send(5, Kind::Data, b"\x1b[?1000h");
-    let updates = terminal.next(WAIT).unwrap();
-    assert!(updates.contains(&SurfaceUpdate::MouseReporting(true)));
+    updates_until(&mut terminal, |update| {
+        *update == SurfaceUpdate::MouseReporting(true)
+    });
     // Told once, not on every update.
     mock.send(5, Kind::Data, b"more");
-    let later = terminal.next(WAIT).unwrap();
+    let later = updates_until(&mut terminal, shows("more"));
     assert!(
         !later
             .iter()
