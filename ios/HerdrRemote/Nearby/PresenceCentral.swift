@@ -71,6 +71,7 @@ final class PresenceCentral: NSObject {
             links = [:]
             return
         }
+        dropUnwanted()
         if manager == nil {
             manager = CBCentralManager(
                 delegate: self,
@@ -86,6 +87,25 @@ final class PresenceCentral: NSObject {
                     try? await Task.sleep(for: .seconds(10))
                     self?.readSignal()
                 }
+            }
+        }
+    }
+
+    /// A computer whose presence was turned off loses its link here, or
+    /// it would stay proven and keep holding alerts, and it is no longer
+    /// tried on links still finding out which computer they are.
+    private func dropUnwanted() {
+        let devices = Set(wanted.map(\.device))
+        for (id, link) in links {
+            if let proven = link.proven, !devices.contains(proven.device) {
+                manager?.cancelPeripheralConnection(link.peripheral)
+                links[id] = nil
+                continue
+            }
+            link.candidates.removeAll { !devices.contains($0.device) }
+            if let trying = link.trying, !devices.contains(trying.device) {
+                link.challenged = false
+                helloNext(link)
             }
         }
     }
@@ -204,10 +224,10 @@ extension PresenceCentral: @preconcurrency CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         // Away until it is back; a pending connect waits for that.
-        if let link = links[peripheral.identifier] {
-            link.proven = nil
-            link.characteristic = nil
-        }
+        // One `dropUnwanted` let go stays gone.
+        guard let link = links[peripheral.identifier] else { return }
+        link.proven = nil
+        link.characteristic = nil
         if !wanted.isEmpty { central.connect(peripheral) }
     }
 
