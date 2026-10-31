@@ -1,7 +1,6 @@
 //! Validate the persistent key through the shared private-file policy, then
 //! give OpenSSH a GUI-owned snapshot rather than a replaceable source path.
 use super::{Error, Result};
-use crate::cloud::Value;
 use std::path::Path;
 
 pub(super) struct Identity {
@@ -34,7 +33,7 @@ fn validate(value: &secrecy::SecretString) -> crate::Result<()> {
     use secrecy::ExposeSecret;
     let text = value.expose_secret();
     if text.len() > 4096 || !text.starts_with("-----BEGIN OPENSSH PRIVATE KEY-----\n") {
-        return Err(Error::Field(Value::BoatSshPrivateKey).into());
+        return Err(Error::Field(crate::cloud::Value::BoatSshPrivateKey).into());
     }
     Ok(())
 }
@@ -86,7 +85,7 @@ pub(super) fn snapshot(
         }
         // Drop the generated link before the shared policy checks nlink == 1.
         drop(temporary);
-        read()?.ok_or(Error::Field(Value::BoatSshPrivateKey))?
+        read()?.ok_or(Error::Field(crate::cloud::Value::BoatSshPrivateKey))?
     };
     let temporary = temporary()?;
     let mut file = tempfile::NamedTempFile::new_in(temporary.path()).map_err(Error::SshKey)?;
