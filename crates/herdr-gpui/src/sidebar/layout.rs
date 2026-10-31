@@ -323,7 +323,7 @@ impl SidebarLook {
         self.density.nest
     }
 
-    pub(super) fn header_label(&self, label: &'static str) -> String {
+    pub(super) fn header_label(&self, label: &str) -> String {
         match self.density.header_case {
             HeaderCase::Lower => label.to_owned(),
             HeaderCase::Title => {

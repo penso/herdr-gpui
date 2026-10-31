@@ -26,6 +26,8 @@ pub(crate) enum Preference {
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     ShowAgentsHeader(bool),
+    /// `herdr_2_terminals`: new tabs run in herdr-core.
+    Herdr2Terminals(bool),
     ShowSidebarSearch(bool),
     ShowRepositoryIcons(bool),
     ShowWindowControls(bool),
@@ -158,6 +160,9 @@ impl Config {
                 }
                 Preference::ShowAgentsHeader(value) => {
                     (None, "show_agents_header", Some(value.into()))
+                }
+                Preference::Herdr2Terminals(value) => {
+                    (None, "herdr_2_terminals", Some(value.into()))
                 }
                 Preference::ShowSidebarSearch(value) => {
                     (None, "show_sidebar_search", Some(value.into()))

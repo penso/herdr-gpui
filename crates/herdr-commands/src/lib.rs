@@ -59,6 +59,10 @@ pub enum Command {
     /// Hides the window's chrome and every group but the one in use.
     ToggleZenMode,
     DevicesOverview,
+    /// Starts a shell in herdr-core (Herdr 2) and shows it in a tab.
+    NewCoreTerminal,
+    /// Opens a watch-only view of the focused herdr-core pane in a new tab.
+    MirrorCorePane,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -599,6 +603,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         message: "commands-devices-overview",
     },
     CommandInfo {
+        command: Command::NewCoreTerminal,
+        name: "new_core_terminal",
+        message: "commands-new-core-terminal",
+    },
+    CommandInfo {
+        command: Command::MirrorCorePane,
+        name: "mirror_core_pane",
+        message: "commands-mirror-core-pane",
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         message: "commands-increase-font-size",
@@ -902,6 +916,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::FocusPreviousRegion
         | Command::ToggleZenMode
         | Command::DevicesOverview
+        | Command::NewCoreTerminal
+        | Command::MirrorCorePane
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize

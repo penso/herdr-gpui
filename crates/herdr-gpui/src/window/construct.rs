@@ -168,6 +168,7 @@ impl HerdrWindow {
             config_watch: None,
             configured_terminal_size,
             copy_mode: None,
+            core_terminals: Default::default(),
             daemon_text: Default::default(),
             deliveries: Default::default(),
             device_drag: None,

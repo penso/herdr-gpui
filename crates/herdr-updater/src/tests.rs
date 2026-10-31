@@ -3,13 +3,14 @@ use anyhow::Context as _;
 
 mod channels;
 mod packages;
+mod progress;
 
 #[test]
 fn homebrew_work_is_never_cancelled_and_a_relaunch_only_quits() -> Result<()> {
     let mut updater = Updater::default();
     for state in [
         State::Upgrading {
-            detail: "==> Downloading".into(),
+            detail: Progress::Homebrew("==> Downloading".into()),
         },
         State::Restarting,
     ] {
@@ -49,7 +50,7 @@ fn only_a_waiting_release_marks_an_update_available() {
         },
         State::Installing,
         State::Upgrading {
-            detail: String::new(),
+            detail: Progress::Preparing,
         },
         State::Restarting,
         State::Cancelling,

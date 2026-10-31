@@ -56,7 +56,7 @@ impl HerdrWindow {
         };
         if !self.menu_target_current() {
             if let Some(palette) = &mut self.menu.palette {
-                palette.error = Some("The selected connection changed. Reopen the palette.".into());
+                palette.error = Some(crate::i18n::fl!("palette-go-to-connection-changed"));
             }
             cx.notify();
             return;

@@ -1,3 +1,4 @@
+// i18n: migrated
 use crate::{
     HerdrWindow, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
@@ -796,7 +797,10 @@ impl HerdrWindow {
         entries.extend(palette.projects.projects.iter().map(|project| {
             let mut entry = Entry::new(
                 project.label.clone(),
-                format!("Local  {}", project.path.display()),
+                fl!(
+                    "palette-projects-local",
+                    path = project.path.display().to_string()
+                ),
                 fl!("palette-badge-project"),
                 Action::Project(project.clone()),
                 None,

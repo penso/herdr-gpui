@@ -3,6 +3,7 @@ use super::*;
 use core::prelude::v1::test;
 use std::sync::Arc;
 
+mod en_xa;
 mod interrupts;
 mod pane_option;
 

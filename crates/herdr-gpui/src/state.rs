@@ -1,3 +1,4 @@
+use crate::i18n::fl;
 use herdr_client::{
     ClientEvent, Method, SurfaceImages,
     protocol::{ClientShellSnapshot, PaneSurfaceFrame, ServerMessage},
@@ -24,6 +25,18 @@ pub enum ConnectionStatus {
 impl ConnectionStatus {
     pub fn is_connected(self) -> bool {
         matches!(self, Self::AwaitingSnapshot | Self::Connected)
+    }
+
+    /// What the status bar says of the connection; `Display` is the log's.
+    pub(crate) fn label(self) -> String {
+        match self {
+            Self::Connecting => fl!("status-bar-connecting"),
+            Self::StartingDaemon => fl!("status-bar-starting-daemon"),
+            Self::AwaitingSnapshot => fl!("status-bar-awaiting-snapshot"),
+            Self::Connected => fl!("status-bar-connected"),
+            Self::Disconnected => fl!("status-bar-disconnected"),
+            Self::Detached => fl!("status-bar-detached"),
+        }
     }
 }
 
@@ -466,8 +479,12 @@ impl LiveState {
             self.error.as_deref()
         };
         match error {
-            Some(error) => format!("{}: {error}", self.status),
-            None => self.status.to_string(),
+            Some(error) => fl!(
+                "status-bar-status-error",
+                status = self.status.label(),
+                error = error
+            ),
+            None => self.status.label(),
         }
     }
 

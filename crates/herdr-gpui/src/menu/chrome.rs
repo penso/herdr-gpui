@@ -451,9 +451,12 @@ impl HerdrWindow {
                     // A list of actions takes its longest label's width, which
                     // the UI font and size decide, so no fixed width fits all.
                     let forwards = page == Page::Host && self.host_menu_lists_forwards();
-                    if matches!(page, Page::Tab | Page::Pane | Page::Host) && !forwards {
+                    if matches!(page, Page::Tab | Page::Pane | Page::Group | Page::Host)
+                        && !forwards
+                    {
+                        let least = if page == Page::Group { 240. } else { 180. };
                         return panel
-                            .min_w(px(180.).min(room))
+                            .min_w(px(least).min(room))
                             .max_w(room)
                             .max_h((viewport.height - px(24.)).max(px(0.)));
                     }
@@ -464,7 +467,7 @@ impl HerdrWindow {
                         } else if page == Page::PaneProcesses {
                             // Name, command, pid, CPU and memory columns.
                             560.
-                        } else if matches!(page, Page::Group | Page::MovePane | Page::MoveTab) {
+                        } else if matches!(page, Page::MovePane | Page::MoveTab) {
                             240.
                         } else {
                             360.

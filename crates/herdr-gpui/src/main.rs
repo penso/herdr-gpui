@@ -54,6 +54,7 @@ mod constants;
 mod contrast;
 mod control;
 mod copy_mode;
+mod core_terminals;
 mod daemon;
 mod devices_overview;
 mod dialog_input;

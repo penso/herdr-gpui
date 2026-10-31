@@ -1,5 +1,7 @@
+// i18n: migrated
 use crate::{
     APP_VERSION, HerdrWindow,
+    i18n::fl,
     menu::Page,
     progress::{self, Progress},
     updater::State,
@@ -64,7 +66,11 @@ fn release_notes_section(
         // own minimum: a smaller section would let them draw over what follows.
         .min_h(px(font.line_height() * (1. + min_lines) + 4.))
         .gap(px(4.))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child("What's new"))
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(fl!("update-panel-whats-new")),
+        )
         .child(
             div()
                 .relative()
@@ -154,9 +160,27 @@ fn update_progress(state: &State, accent: Hsla, track: Hsla) -> Option<Div> {
     ))
 }
 
+/// What an upgrade is doing: the updater's own steps are messages, and a
+/// line the package manager printed is data.
+fn step(progress: &crate::updater::Progress) -> String {
+    use crate::updater::Progress;
+    match progress {
+        Progress::Approve => fl!("update-panel-step-approve"),
+        Progress::Asking => fl!("update-panel-step-asking"),
+        Progress::Checking => fl!("update-panel-step-checking"),
+        Progress::Homebrew(line) => fl!("update-panel-step-homebrew", line = line.as_str()),
+        Progress::Package(line) => line.clone(),
+        Progress::Preparing => fl!("update-panel-step-preparing"),
+        Progress::Refreshing => fl!("update-panel-step-refreshing"),
+        Progress::Retrying => fl!("update-panel-step-retrying"),
+        Progress::Starting => fl!("update-panel-step-starting"),
+    }
+}
+
 /// Decimal megabytes with one place, as browsers and Finder show downloads.
 fn megabytes(bytes: u64) -> String {
-    format!("{:.1} MB", bytes as f64 / 1_000_000.)
+    let amount = format!("{:.1}", bytes as f64 / 1_000_000.);
+    fl!("update-panel-megabytes", amount = amount)
 }
 
 /// The line under a download's bar: how much has arrived, and the percentage
@@ -167,14 +191,24 @@ pub(crate) fn download_caption(state: &State) -> Option<(String, Option<String>)
         return None;
     };
     if total == 0 {
-        return Some((format!("{} downloaded", megabytes(received)), None));
+        return Some((
+            fl!("update-panel-downloaded", received = megabytes(received)),
+            None,
+        ));
     }
     if received >= total {
         return None;
     }
     Some((
-        format!("{} of {}", megabytes(received), megabytes(total)),
-        Some(format!("{:.0}%", received as f64 / total as f64 * 100.)),
+        fl!(
+            "update-panel-progress",
+            received = megabytes(received),
+            total = megabytes(total)
+        ),
+        Some(fl!(
+            "update-panel-percent",
+            percent = format!("{:.0}", received as f64 / total as f64 * 100.)
+        )),
     ))
 }
 
@@ -230,72 +264,62 @@ impl HerdrWindow {
         let accent = crate::menu::accent(theme);
         let state = self.update_preview.as_ref().unwrap_or(self.updater.state());
         let (message, action) = match state {
-            State::Disabled(reason) => (format!("In-app updates unavailable: {reason}"), None),
-            State::Idle => (
-                "Check GitHub for a new app release.".into(),
-                Some(UpdateAction::Check),
-            ),
-            State::Checking => ("Checking for updates...".into(), Some(UpdateAction::Cancel)),
-            State::Current => (
-                "You are running the latest available release.".into(),
-                Some(UpdateAction::Check),
-            ),
-            State::Available { .. } => (
-                "A new app release is available.".into(),
-                Some(UpdateAction::Download),
-            ),
+            State::Disabled(reason) => {
+                (fl!("update-panel-disabled", reason = reason.as_str()), None)
+            }
+            State::Idle => (fl!("update-panel-idle"), Some(UpdateAction::Check)),
+            State::Checking => (fl!("update-panel-checking"), Some(UpdateAction::Cancel)),
+            State::Current => (fl!("update-panel-current"), Some(UpdateAction::Check)),
+            State::Available { .. } => {
+                (fl!("update-panel-available"), Some(UpdateAction::Download))
+            }
             State::Downloading { received, total } => (
                 if *total > 0 && received >= total {
-                    "Download complete. Verifying the update...".into()
+                    fl!("update-panel-verifying")
                 } else {
                     self.updater.latest_version().map_or_else(
-                        || "Downloading the update".into(),
-                        |version| format!("Downloading {version}"),
+                        || fl!("update-panel-downloading"),
+                        |version| fl!("update-panel-downloading-version", version = version),
                     )
                 },
                 Some(UpdateAction::Cancel),
             ),
             State::Ready { .. } => (
                 if cfg!(windows) {
-                    "Download and publisher signature verified. Install when you are ready: Herdr UI quits, its installer runs, and it reopens; your daemon and terminal sessions stay running."
+                    fl!("update-panel-ready-windows")
                 } else {
-                    "Download verified. Install when you are ready; system packages may ask for administrator authentication."
-                }
-                .into(),
+                    fl!("update-panel-ready")
+                },
                 Some(UpdateAction::Install),
             ),
-            State::Installing => (
-                "Preparing installation and restart. Herdr will quit when the update is ready."
-                    .into(),
-                Some(UpdateAction::Cancel),
-            ),
-            State::Homebrew { .. } => (
-                "A new app release is available. Homebrew will install it, refreshing its package metadata if needed.".into(),
-                Some(UpdateAction::Upgrade),
-            ),
+            State::Installing => (fl!("update-panel-installing"), Some(UpdateAction::Cancel)),
+            State::Homebrew { .. } => (fl!("update-panel-homebrew"), Some(UpdateAction::Upgrade)),
             State::Upgrading { detail } => (
-                detail.clone(),
+                step(detail),
                 // Homebrew is never interrupted mid-upgrade: see updater::cancel.
                 None,
             ),
             State::Restart { version } => (
-                format!("Installed {version}. Restart to finish; your daemon and terminal sessions stay running."),
+                fl!("update-panel-restart-needed", version = version.as_str()),
                 Some(UpdateAction::Restart),
             ),
-            State::Restarting => ("Starting the updated app...".into(), None),
-            State::Cancelling => (
-                "Cancelling update... Waiting for current I/O to finish or time out.".into(),
-                None,
+            State::Restarting => (fl!("update-panel-restarting"), None),
+            State::Cancelling => (fl!("update-panel-cancelling"), None),
+            State::Error(error) => (
+                fl!("update-panel-failed", error = error.to_string()),
+                Some(UpdateAction::Check),
             ),
-            State::Error(error) => (format!("Update failed: {error}"), Some(UpdateAction::Check)),
         };
         let latest = match state {
             State::Available { version, .. }
             | State::Ready { version }
             | State::Homebrew { version, .. }
-            | State::Restart { version } => version.as_str(),
-            State::Current => APP_VERSION,
-            _ => self.updater.latest_version().unwrap_or("Not yet known"),
+            | State::Restart { version } => version.clone(),
+            State::Current => APP_VERSION.to_owned(),
+            _ => self
+                .updater
+                .latest_version()
+                .map_or_else(|| fl!("update-panel-not-known"), str::to_owned),
         };
         // Notes are shown while an update is on offer, not once it is under way.
         let notes = match state {
@@ -344,9 +368,13 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("App Updates"),
+                                    .child(fl!("update-panel-title")),
                             )
-                            .child(div().text_color(rgb(theme.muted)).child("Updates from GitHub")),
+                            .child(
+                                div()
+                                    .text_color(rgb(theme.muted))
+                                    .child(fl!("update-panel-subtitle")),
+                            ),
                     )
                     .child(
                         div()
@@ -359,7 +387,7 @@ impl HerdrWindow {
                             .rounded(px(crate::config::corners::CONTROL))
                             .text_color(rgb(theme.muted))
                             .hover(|s| s.bg(rgb(theme.active)).text_color(rgb(theme.foreground)))
-                            .child("Close")
+                            .child(fl!("update-panel-close"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -377,65 +405,95 @@ impl HerdrWindow {
                     .p(px(16.))
                     .gap(px(16.))
                     .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(8.))
-                            .children([
-                                ("Current version", APP_VERSION, "app-update-current-version"),
-                                ("Latest version", latest, "app-update-latest-version"),
-                            ].into_iter().map(|(label, value, selector)| {
+                        div().flex().flex_col().gap(px(8.)).children(
+                            [
+                                (
+                                    fl!("update-panel-current-version"),
+                                    APP_VERSION.to_owned(),
+                                    "app-update-current-version",
+                                ),
+                                (
+                                    fl!("update-panel-latest-version"),
+                                    latest,
+                                    "app-update-latest-version",
+                                ),
+                            ]
+                            .into_iter()
+                            .map(|(label, value, selector)| {
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap(px(16.))
-                                    .child(div().flex_none().w(px(font.size * 8.)).text_color(rgb(theme.muted)).child(label))
-                                    .child(div().debug_selector(move || selector.into()).flex_1().min_w_0().truncate().child(value.to_owned()))
-                            })),
+                                    .child(
+                                        div()
+                                            .flex_none()
+                                            .w(px(font.size * 8.))
+                                            .text_color(rgb(theme.muted))
+                                            .child(label),
+                                    )
+                                    .child(
+                                        div()
+                                            .debug_selector(move || selector.into())
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(value),
+                                    )
+                            }),
+                        ),
                     )
                     .child(div().font_weight(FontWeight::SEMIBOLD).child(message))
                     // Only when there is something to read: a release published
                     // without notes leaves the dialog exactly as it was.
-                    .when_some(notes.filter(|notes| !notes.trim().is_empty()), |body, notes| {
-                        body.child(release_notes_section(
-                            &self.app_update_notes,
-                            &self.app_update_notes_scroll,
-                            notes,
-                            theme,
-                            font,
-                            &self.config.terminal,
-                        ))
-                    })
-                    .children(update_progress(state, accent.into(), rgb(theme.active).into()).map(
-                        |bar| {
-                            div().flex().flex_col().gap(px(8.)).child(bar).when_some(
-                                download_caption(state),
-                                |progress, (sizes, percent)| {
-                                    progress.child(
-                                        div()
-                                            .debug_selector(|| "app-update-download-size".into())
-                                            .flex()
-                                            .justify_between()
-                                            .gap(px(12.))
-                                            .text_size(px(font.size - 1.))
-                                            .text_color(rgb(theme.subtext()))
-                                            .child(div().min_w_0().truncate().child(sizes))
-                                            .children(percent.map(|percent| {
-                                                div()
-                                                    .debug_selector(|| {
-                                                        "app-update-download-percent".into()
-                                                    })
-                                                    .flex_none()
-                                                    .child(percent)
-                                            })),
-                                    )
-                                },
-                            )
+                    .when_some(
+                        notes.filter(|notes| !notes.trim().is_empty()),
+                        |body, notes| {
+                            body.child(release_notes_section(
+                                &self.app_update_notes,
+                                &self.app_update_notes_scroll,
+                                notes,
+                                theme,
+                                font,
+                                &self.config.terminal,
+                            ))
                         },
-                    ))
-                    .child(div().text_color(rgb(theme.subtext())).child(
-                        "Downloads are verified before installation. Your daemon and terminal sessions stay running.",
-                    ))
+                    )
+                    .children(
+                        update_progress(state, accent.into(), rgb(theme.active).into()).map(
+                            |bar| {
+                                div().flex().flex_col().gap(px(8.)).child(bar).when_some(
+                                    download_caption(state),
+                                    |progress, (sizes, percent)| {
+                                        progress.child(
+                                            div()
+                                                .debug_selector(|| {
+                                                    "app-update-download-size".into()
+                                                })
+                                                .flex()
+                                                .justify_between()
+                                                .gap(px(12.))
+                                                .text_size(px(font.size - 1.))
+                                                .text_color(rgb(theme.subtext()))
+                                                .child(div().min_w_0().truncate().child(sizes))
+                                                .children(percent.map(|percent| {
+                                                    div()
+                                                        .debug_selector(|| {
+                                                            "app-update-download-percent".into()
+                                                        })
+                                                        .flex_none()
+                                                        .child(percent)
+                                                })),
+                                        )
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(theme.subtext()))
+                            .child(fl!("update-panel-verified-note")),
+                    )
                     .when(self.update_preview.is_some(), |body| {
                         body.child(
                             div()
@@ -443,10 +501,17 @@ impl HerdrWindow {
                                 .p(px(12.))
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .bg(rgb(theme.background))
-                                .child(div().font_weight(FontWeight::SEMIBOLD).child("QA preview"))
-                                .child(div().pt(px(4.)).text_color(rgb(theme.subtext())).child(
-                                    "Synthetic update state only. No network or installation is performed. Close or Escape dismisses this preview.",
-                                )),
+                                .child(
+                                    div()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(fl!("update-panel-preview")),
+                                )
+                                .child(
+                                    div()
+                                        .pt(px(4.))
+                                        .text_color(rgb(theme.subtext()))
+                                        .child(fl!("update-panel-preview-note")),
+                                ),
                         )
                     }),
             );
@@ -466,7 +531,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .text_color(rgb(theme.muted))
                     .hover(|s| s.bg(rgb(theme.active)).text_color(rgb(theme.foreground)))
-                    .child("Manual Releases")
+                    .child(fl!("update-panel-manual-releases"))
                     .on_click(|_, _, cx| {
                         cx.stop_propagation();
                         cx.open_url(crate::updater::RELEASES_PAGE);
@@ -483,7 +548,7 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .text_color(rgb(theme.muted))
                         .hover(|s| s.bg(rgb(theme.active)).text_color(rgb(theme.foreground)))
-                        .child("Release Notes")
+                        .child(fl!("update-panel-release-notes"))
                         .on_click(move |_, _, cx| {
                             cx.stop_propagation();
                             cx.open_url(&url);
@@ -492,13 +557,15 @@ impl HerdrWindow {
             });
         if let Some(action) = action {
             let label = match action {
-                UpdateAction::Check if matches!(state, State::Error(_)) => "Retry",
-                UpdateAction::Check => "Check for Updates",
-                UpdateAction::Download => "Download",
-                UpdateAction::Install => "Install Update",
-                UpdateAction::Upgrade => "Update with Homebrew",
-                UpdateAction::Restart => "Restart",
-                UpdateAction::Cancel => "Cancel",
+                UpdateAction::Check if matches!(state, State::Error(_)) => {
+                    fl!("update-panel-retry")
+                }
+                UpdateAction::Check => fl!("update-panel-check"),
+                UpdateAction::Download => fl!("update-panel-download"),
+                UpdateAction::Install => fl!("update-panel-install"),
+                UpdateAction::Upgrade => fl!("update-panel-upgrade"),
+                UpdateAction::Restart => fl!("update-panel-restart"),
+                UpdateAction::Cancel => fl!("update-panel-cancel"),
             };
             buttons = buttons.child(
                 div()
@@ -563,3 +630,6 @@ impl HerdrWindow {
         )
     }
 }
+
+#[cfg(test)]
+mod tests;

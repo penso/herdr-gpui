@@ -100,6 +100,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (FocusPreviousRegion, &["cmd-shift-f6"]),
         (ToggleZenMode, &["ctrl-cmd-z"]),
         (DevicesOverview, &[]),
+        (NewCoreTerminal, &[]),
+        (MirrorCorePane, &[]),
         (IncreaseFontSize, &["cmd-=", "cmd-+"]),
         (DecreaseFontSize, &["cmd--"]),
         (ResetFontSize, &["cmd-0"]),

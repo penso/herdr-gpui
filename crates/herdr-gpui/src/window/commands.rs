@@ -11,6 +11,7 @@ use crate::{
     },
     controls::{self, Command},
     endpoint::Step,
+    i18n::fl,
     log_window,
     menu::{WorkspaceAction, WorktreeShortcut},
     navigation::{NavigationTarget, OwnedNavigationTarget},
@@ -325,6 +326,9 @@ impl HerdrWindow {
         {
             self.input_probe.actions += 1;
         }
+        if self.core_pane_command(command, window, cx) {
+            return;
+        }
         match command {
             Command::OpenNotificationTarget => {
                 if let Some((endpoint, id)) = self.endpoints.iter().find_map(|e| {
@@ -484,6 +488,11 @@ impl HerdrWindow {
             }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
+            // With Herdr 2 chosen for new terminals, a new tab is herdr-core's.
+            Command::Tab if self.config.herdr_2_terminals => {
+                self.new_core_terminal(window, cx);
+                return;
+            }
             Command::Tab | Command::Workspace if self.open_name_prompt(command, window, cx) => {
                 return;
             }
@@ -576,6 +585,15 @@ impl HerdrWindow {
             }
             Command::DevicesOverview => {
                 self.open_devices_overview(window, cx);
+                return;
+            }
+            Command::NewCoreTerminal => {
+                self.new_core_terminal(window, cx);
+                return;
+            }
+            // A herdr-core pane with the keyboard mirrors itself above.
+            Command::MirrorCorePane => {
+                self.show_flash(Flash::warning(fl!("core-terminals-mirror-needs-pane")), cx);
                 return;
             }
             // A focused page zooms instead of the terminal font, and keeps

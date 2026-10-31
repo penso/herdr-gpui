@@ -16,6 +16,7 @@
 use super::{SidebarMode, agents::Indicators, line_height};
 use crate::direction::Logical;
 use crate::fonts::StyledFont;
+use crate::i18n::fl;
 use crate::{
     Command, HerdrWindow,
     orchestrator::{List, OrchestratorView, ViewId},
@@ -44,16 +45,17 @@ const TITLE_END: f32 = 4.;
 /// One breath of a busy icon's pulse.
 const BUSY_PULSE: std::time::Duration = std::time::Duration::from_millis(1600);
 
-fn label(panel: ActivityPanel) -> &'static str {
+fn label(panel: ActivityPanel) -> SharedString {
     match panel {
-        ActivityPanel::Overview => "Overview",
-        ActivityPanel::Workspaces => "Workspaces",
-        ActivityPanel::PullRequests => "Pull requests",
-        ActivityPanel::Issues => "Issues",
-        ActivityPanel::Security => "Security",
-        ActivityPanel::Automations => "Automations",
-        ActivityPanel::Usage => "Usage",
+        ActivityPanel::Overview => fl!("sidebar-activity-overview"),
+        ActivityPanel::Workspaces => fl!("sidebar-activity-workspaces"),
+        ActivityPanel::PullRequests => fl!("sidebar-activity-pull-requests"),
+        ActivityPanel::Issues => fl!("sidebar-activity-issues"),
+        ActivityPanel::Security => fl!("sidebar-activity-security"),
+        ActivityPanel::Automations => fl!("sidebar-activity-automations"),
+        ActivityPanel::Usage => fl!("sidebar-activity-usage"),
     }
+    .into()
 }
 
 fn icon(panel: ActivityPanel) -> &'static str {
@@ -408,7 +410,7 @@ impl HerdrWindow {
             .debug_selector(|| "activity-bar".into())
             // Each panel replaces the column beside the bar, as a tab does.
             .role(Role::TabList)
-            .aria_label("Activity")
+            .aria_label(fl!("sidebar-activity-bar"))
             .aria_orientation(Orientation::Vertical)
             .w(px(BAR_WIDTH))
             .flex_none()
@@ -477,7 +479,7 @@ impl HerdrWindow {
                 self.bar_button(
                     "activity-settings",
                     "icons/settings.svg",
-                    "Settings",
+                    fl!("sidebar-activity-settings").into(),
                     (BarState::Idle, false),
                     None,
                 )
@@ -492,7 +494,7 @@ impl HerdrWindow {
         &self,
         id: &'static str,
         icon: &'static str,
-        label: &'static str,
+        label: SharedString,
         (state, busy): (BarState, bool),
         bubble: Option<Bubble>,
     ) -> Stateful<Div> {
@@ -502,46 +504,75 @@ impl HerdrWindow {
             BarState::Selected => theme.foreground,
             BarState::Idle => theme.muted,
         };
-        let icon = svg()
-            .path(icon)
-            .size(px(ICON))
-            .flex_none()
-            .text_color(rgb(ink));
-        let icon = if busy {
-            icon.with_animation(
-                SharedString::from(format!("{id}-busy")),
-                Animation::new(crate::motion::duration(BUSY_PULSE)).repeat(),
-                |icon, delta| icon.opacity(0.35 + 0.65 * (delta * std::f32::consts::PI).sin()),
-            )
+        let bubble = bubble.filter(|bubble| bubble.count > 0);
+        let style = bubble.map(|bubble| self.count_bubble(bubble));
+        let symbol = move || {
+            svg()
+                .path(icon)
+                .size(px(ICON))
+                .flex_none()
+                .text_color(rgb(ink))
+        };
+        let with_count = move |mark: AnyElement| {
+            div()
+                .debug_selector(move || format!("{id}-glyph"))
+                .relative()
+                .child(mark)
+                .when_some(style, |glyph, style| {
+                    // Held by its right edge, inside the bar's border, so a wider
+                    // count such as `99+` grows over the icon rather than past the
+                    // bar into the column beside it.
+                    glyph.child(
+                        div()
+                            .debug_selector(move || format!("{id}-bubble"))
+                            .absolute()
+                            .top(px(-8.))
+                            .inset_e(px(BUBBLE_END))
+                            .child(style.element()),
+                    )
+                })
+        };
+        // The bar sits in the cached sidebar, so a pulse drawn in place would
+        // rebuild every row on every display frame. A busy glyph pulses in the
+        // window's mark layer instead, its count with it, as the layer paints
+        // over everything left in place. Its clock is the synced one: the
+        // layer keys a mark's state by its slot's order, which shifts as other
+        // marks come and go.
+        let glyph = if busy {
+            let pulse = SharedString::from(format!("{id}-busy"));
+            crate::mark_layer::layered(ICON, 1., move || {
+                let mark = symbol()
+                    .debug_selector(move || format!("{id}-busy"))
+                    .with_animation(
+                        pulse.clone(),
+                        Animation::new(crate::motion::duration(BUSY_PULSE))
+                            .repeat_synced()
+                            .with_max_fps(crate::mark_layer::MAX_FPS),
+                        |mark, delta| {
+                            mark.opacity(0.35 + 0.65 * (delta * std::f32::consts::PI).sin())
+                        },
+                    );
+                with_count(mark.into_any_element()).into_any_element()
+            })
             .into_any_element()
         } else {
-            icon.into_any_element()
+            with_count(symbol().into_any_element()).into_any_element()
         };
-        let bubble = bubble.filter(|bubble| bubble.count > 0);
-        let glyph = div()
-            .debug_selector(move || format!("{id}-glyph"))
-            .relative()
-            .child(icon)
-            .when_some(bubble, |glyph, bubble| {
-                // Held by its right edge, inside the bar's border, so a wider
-                // count such as `99+` grows over the icon rather than past the
-                // bar into the column beside it.
-                glyph.child(
-                    div()
-                        .debug_selector(move || format!("{id}-bubble"))
-                        .absolute()
-                        .top(px(-8.))
-                        .inset_e(px(BUBBLE_END))
-                        .child(self.count_bubble(bubble)),
-                )
-            });
         let spoken = match bubble {
             Some(Bubble {
                 count,
                 unseen: true,
-            }) => SharedString::from(format!("{label}, {count}, new activity")),
-            Some(Bubble { count, .. }) => SharedString::from(format!("{label}, {count}")),
-            None => SharedString::from(label),
+            }) => SharedString::from(fl!(
+                "sidebar-activity-spoken-new",
+                label = label.as_ref(),
+                count = count
+            )),
+            Some(Bubble { count, .. }) => SharedString::from(fl!(
+                "sidebar-activity-spoken",
+                label = label.as_ref(),
+                count = count
+            )),
+            None => label.clone(),
         };
         div()
             .id(id)
@@ -557,7 +588,7 @@ impl HerdrWindow {
             .rounded(px(crate::config::corners::CONTROL))
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::menu::SettingsHint {
-                    text: label.into(),
+                    text: label.clone(),
                     foreground,
                     surface,
                 })
@@ -584,28 +615,17 @@ impl HerdrWindow {
     }
 
     /// A count in the accent while it holds something unseen, else muted.
-    fn count_bubble(&self, Bubble { count, unseen }: Bubble) -> Div {
-        let theme = &self.theme;
-        let text = if count > 99 {
-            "99+".to_owned()
+    fn count_bubble(&self, Bubble { count, unseen }: Bubble) -> BubbleStyle {
+        let fill = if unseen {
+            self.theme.primary()
         } else {
-            count.to_string()
+            self.theme.muted
         };
-        let fill = if unseen { theme.primary() } else { theme.muted };
-        div()
-            .min_w(px(14.))
-            .h(px(14.))
-            .px(px(3.))
-            .row()
-            .items_center()
-            .justify_center()
-            .rounded_full()
-            .bg(rgb(fill))
-            .text_color(rgb(theme.text_on(fill)))
-            .text_size(px(9.))
-            .line_height(px(12.))
-            .whitespace_nowrap()
-            .child(text)
+        BubbleStyle {
+            count,
+            fill,
+            ink: self.theme.text_on(fill),
+        }
     }
 
     /// The section's name over the sidebar, across its width, ended by the
@@ -655,6 +675,39 @@ enum BarState {
 struct Bubble {
     count: usize,
     unseen: bool,
+}
+
+/// A bubble's count and colors, read from the theme up front, so the mark
+/// layer can draw it again on frames that do not render the bar.
+#[derive(Clone, Copy)]
+struct BubbleStyle {
+    count: usize,
+    fill: u32,
+    ink: u32,
+}
+
+impl BubbleStyle {
+    fn element(self) -> Div {
+        let text = if self.count > 99 {
+            "99+".to_owned()
+        } else {
+            self.count.to_string()
+        };
+        div()
+            .min_w(px(14.))
+            .h(px(14.))
+            .px(px(3.))
+            .row()
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .bg(rgb(self.fill))
+            .text_color(rgb(self.ink))
+            .text_size(px(9.))
+            .line_height(px(12.))
+            .whitespace_nowrap()
+            .child(text)
+    }
 }
 
 fn panel_selector(panel: ActivityPanel) -> &'static str {

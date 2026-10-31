@@ -6,6 +6,7 @@ use herdr_client::protocol::ClientShellCommand;
 
 mod agent_filter;
 mod background_ranking;
+mod en_xa;
 mod frecency_ranking;
 mod go_to_search;
 mod notes;

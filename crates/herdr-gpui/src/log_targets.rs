@@ -4,10 +4,12 @@
 pub(crate) const LOG_TARGETS: &[&str] = &[
     // keep-sorted start
     "herdr_automation",
+    "herdr_backend",
     "herdr_chat_protocol",
     "herdr_client",
     "herdr_commands",
     "herdr_control_protocol",
+    "herdr_core_client",
     "herdr_credentials",
     "herdr_diagnostics",
     "herdr_github",
@@ -19,6 +21,7 @@ pub(crate) const LOG_TARGETS: &[&str] = &[
     "herdr_protocol",
     "herdr_remote",
     "herdr_remote_control",
+    "herdr_terminal",
     "herdr_updater",
     "herdr_usage",
     "herdr_vcs",

@@ -385,6 +385,8 @@ impl HerdrWindow {
                 | Command::FocusPreviousRegion
                 | Command::ToggleZenMode
                 | Command::DevicesOverview
+                | Command::NewCoreTerminal
+                | Command::MirrorCorePane
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize

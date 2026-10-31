@@ -1,6 +1,7 @@
 use super::*;
 use core::prelude::v1::test;
 
+mod en_xa;
 mod line_height;
 mod sources;
 mod window_commands;
@@ -29,8 +30,8 @@ fn concrete_default_fonts_and_shared_native_decoration() {
             "Menlo"
         }
     );
-    let options = crate::titlebar::options("Logs");
-    assert_eq!(options.title.unwrap().as_ref(), "Logs");
+    let options = crate::titlebar::options(&fl!("log-window-title"));
+    assert_eq!(options.title.unwrap().as_ref(), fl!("log-window-title"));
     assert_eq!(options.appears_transparent, cfg!(target_os = "macos"));
     assert_eq!(
         options.traffic_light_position,
@@ -407,10 +408,7 @@ fn copy_uses_current_query_and_levels_before_rows_refresh(cx: &mut TestAppContex
         assert_eq!(rows[0].message, "slow paint elapsed_ms=32");
         assert_eq!(rows[0].level, Level::WARN);
         assert!(!view.read(cx).exporting);
-        assert_eq!(
-            view.read(cx).status,
-            "Filtered logs copied. Review before sharing."
-        );
+        assert_eq!(view.read(cx).status, fl!("log-window-copied"));
     });
 }
 

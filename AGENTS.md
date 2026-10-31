@@ -26,6 +26,9 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 | `crates/herdr-acp` | `herdr-acp` binary run inside a Herdr pane: the only ACP client of an agent, its in-pane chat view, the attach socket Herdr UI connects to, and Herdr status reports |
 | `crates/herdr-chat-protocol` | Attach wire between `herdr-acp` and its clients: transcript model, the shared change reducer, framing, and endpoint discovery; no ACP or GPUI types |
 | `crates/herdr-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
+| `crates/herdr-backend` | The `Backend` and `Terminal` traits both Herdr generations implement: terminals listed, watched, attached, started, and ended, as `herdr-protocol` cells and semantic input; no GPUI or transport |
+| `crates/herdr-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `herdr-backend` implementation; no GPUI |
+| `crates/herdr-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `herdr-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
 | `crates/herdr-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
 | `crates/herdr-control-protocol` | The control socket between `herdr-gpui <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |
 | `crates/herdr-commands` | The command catalog: each command's name, default shortcuts per platform, and the daemon request it becomes against a snapshot; no GPUI (the app binds the keys and runs window commands) |
@@ -186,7 +189,7 @@ agents in Herdr panes can use what only this client shows or keeps
 - Cancellation must not flush queued work, replay commands, or join a worker on the UI thread. Do not add automatic reconnect/replay as an incidental refactor.
 - Crossbeam receiver clones compete for events; they are not broadcast subscribers.
 - Treat terminal content and daemon messages as untrusted data. Do not execute terminal escapes, follow graphics file paths, or run displayed update commands automatically. The one exception is the daemon's OSC 52 `ServerMessage::Clipboard`: decode it and put only its bounded UTF-8 text on the pasteboard, never arbitrary bytes, files, or images.
-- The normal app never installs, starts, stops, or upgrades a personal daemon. Explicit sockets refer to the binary client socket, not the JSON API socket.
+- The normal app never installs, stops, migrates, or upgrades a personal daemon. It starts one only to connect: `herdr server` when Herdr 1 is installed, and herdr-core for Herdr 2 terminals (or when no Herdr 1 is installed), the user's own or else the pinned one every release bundles beside the app as a companion like `herdr-acp` (`scripts/release/herdr-core.json`, licenses in `herdr-core-licenses.txt`), never when a core already answers. Herdr 1 sessions stay where they are: moving users to Herdr 2 is their choice, never an automatic switch. Explicit sockets refer to the binary client socket, not the JSON API socket.
 - Never commit secrets, credentials, private terminal output, or machine-local configuration.
 
 ## Dependencies And Features
@@ -270,6 +273,7 @@ just ci
 
 ```sh
 just test-live /absolute/path/to/herdr
+just test-core /absolute/path/to/herdr-core
 just test-gui /absolute/path/to/herdr
 just test-sidebar
 just test-perf
@@ -277,7 +281,7 @@ just test-perf
 
 - Live tests require an explicitly selected `HERDR_TEST_BINARY`; never fall back to discovering a user's daemon.
 - Reuse the shared sandbox: private unique short directory, cleared environment, isolated HOME/XDG/config/socket paths, and explicit desktop-variable allowlist for GUI children only.
-- Kill and wait only for exact children created by the test, before removing their sandbox. Never use `server stop`, process-name matching, or process-group kills.
+- Kill and wait only for exact children created by the test, before removing their sandbox. Never use `server stop`, process-name matching, or process-group kills. The one exception is herdr-core: its terminals live in holder processes the core starts, so `just test-core` ends them with `herdr-core server stop` against the sandbox's private `HC_SOCKET`, then reaps its own `serve` child.
 - `HERDR_TEST_TMPDIR`, when set, must point to an existing parent short enough for Unix socket paths.
 - Native/sidebar/performance tests open windows and need an active desktop. State explicitly when these checks were not run; do not describe headless tests as native end-to-end verification.
 

@@ -161,6 +161,8 @@ class ReleaseTargets(unittest.TestCase):
                         '"target/$TARGET/release/herdr-remote-control" --version',
                         '"target/$TARGET/release/herdr-automate" --version',
                         '"target/$TARGET/release/herdr-nearby" --version',
+                        'python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
+                        '"target/$TARGET/release/herdr-core" --version',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'name: linux-package-${{ matrix.target }}',
                         'bash scripts/release/package-linux.sh "$VERSION" "$TARGET"',
@@ -178,6 +180,8 @@ class ReleaseTargets(unittest.TestCase):
             ("windows-11-arm", "aarch64-pc-windows-msvc")])
         for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"',
                         'python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"',
+                        'python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
+                        '"target/$TARGET/release/herdr-core.exe" --version',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'python scripts/release/generate-notices.py',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
@@ -192,7 +196,10 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn('python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"', macos)
         self.assertIn('"target/$TARGET/release/herdr-automate" --version', macos)
         self.assertIn("target/${{ matrix.target }}/release/herdr-automate\n", macos)
-        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate ", jobs["sign"])
+        self.assertIn('python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"', macos)
+        self.assertIn('"target/$TARGET/release/herdr-core" --version', macos)
+        self.assertIn("target/${{ matrix.target }}/release/herdr-core\n", macos)
+        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core ", jobs["sign"])
         self.assertIn("binaries/arm64/herdr-nearby binaries/x86_64/herdr-nearby\n", jobs["sign"])
         self.assertIn('"target/$TARGET/release/herdr-automate.exe" --version', jobs["windows"])
         self.assertIn('"target/$TARGET/release/herdr-nearby.exe" --version', jobs["windows"])
@@ -381,7 +388,7 @@ class WindowsTrust(unittest.TestCase):
         for setting in ("timestamp-rfc3161: http://timestamp.acs.microsoft.com", "timestamp-digest: SHA256",
                         "file-digest: SHA256", "exclude-environment-credential: true",
                         "cache-dependencies: false", "name: windows-package-${{ matrix.target }}",
-                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n", "}}\\herdr-remote-control.exe\n", "}}\\herdr-automate.exe\n", "}}\\herdr-nearby.exe\n",
+                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n", "}}\\herdr-remote-control.exe\n", "}}\\herdr-automate.exe\n", "}}\\herdr-nearby.exe\n", "}}\\herdr-core.exe\n",
                         "name: windows-signed-${{ matrix.target }}"):
             self.assertIn(setting, sign)
         # Unpack, sign, check and repack, then sign the installer, then verify.

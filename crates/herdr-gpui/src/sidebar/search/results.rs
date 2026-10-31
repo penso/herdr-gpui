@@ -5,6 +5,7 @@ use super::{Hit, Kind};
 use crate::{
     HerdrWindow,
     config::{Theme, corners, mix},
+    i18n::fl,
     sidebar::{
         agents::{Indicators, status_indicator},
         label_text,
@@ -41,7 +42,7 @@ impl HerdrWindow {
                     .px(px(content_x))
                     .text_color(rgb(theme.muted))
                     .truncate()
-                    .child(label_text("no matches")),
+                    .child(label_text(&fl!("sidebar-search-no-matches"))),
             );
         }
         let selected = self.sidebar_search.selected.min(hits.len() - 1);
@@ -56,11 +57,11 @@ impl HerdrWindow {
                         .pb(px(2.))
                         .text_size(px((font.size * 0.85).round()))
                         .text_color(rgb(theme.muted))
-                        .child(label_text(match hit.kind {
-                            Kind::Device => "devices",
-                            Kind::Worktree => "worktrees",
-                            Kind::Branch => "branches",
-                            Kind::Note => "notes",
+                        .child(label_text(&match hit.kind {
+                            Kind::Device => fl!("sidebar-search-devices"),
+                            Kind::Worktree => fl!("sidebar-search-worktrees"),
+                            Kind::Branch => fl!("sidebar-search-branches"),
+                            Kind::Note => fl!("sidebar-search-notes"),
                         })),
                 );
             }

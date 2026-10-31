@@ -168,6 +168,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) configured_terminal_size: f32,
     /// Keyboard copy mode, when it holds the keyboard.
     pub(crate) copy_mode: Option<copy_mode::CopyModeState>,
+    /// herdr-core (Herdr 2): the connection and the terminal tabs it shows.
+    pub(crate) core_terminals: crate::core_terminals::CoreTerminals,
     /// Prepared daemon announcement and release notes text.
     pub(crate) daemon_text: crate::release_notes::DaemonText,
     /// Notes waiting for their agents to be ready for them.
@@ -488,6 +490,7 @@ impl HerdrWindow {
                     .iter()
                     .any(|endpoint| endpoint.connection.has_update())
                     || view.group_terminals_updated()
+                    || view.core_terminals.updated(cx)
                 {
                     view.tick(window, cx);
                 }
@@ -685,6 +688,7 @@ impl HerdrWindow {
             cx.notify();
         }
         self.poll_devices_overview(cx);
+        self.poll_core_terminals(window, cx);
         self.poll_overview(cx);
         self.poll_security(cx);
         self.poll_automations(cx);
@@ -704,7 +708,10 @@ impl HerdrWindow {
         }
         #[cfg(feature = "azure")]
         self.update_cloud_activity();
-        if self.live.missing_installation && !self.install_warning_shown {
+        if self.live.missing_installation
+            && self.needs_herdr_install()
+            && !self.install_warning_shown
+        {
             self.install_warning_shown = true;
             self.show_install_modal(window, cx);
         }
