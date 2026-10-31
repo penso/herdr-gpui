@@ -103,9 +103,13 @@ final class PresenceCentral: NSObject {
                 continue
             }
             link.candidates.removeAll { !devices.contains($0.device) }
+            // Its answer may still be on the way and would be read as the
+            // next computer's: start over on a fresh connection, which
+            // reconnects and tries only the computers still wanted.
             if let trying = link.trying, !devices.contains(trying.device) {
+                link.trying = nil
                 link.challenged = false
-                helloNext(link)
+                manager?.cancelPeripheralConnection(link.peripheral)
             }
         }
     }
@@ -194,7 +198,10 @@ final class PresenceCentral: NSObject {
 
     private func start(_ link: Link) {
         link.proven = nil
+        link.trying = nil
         link.challenged = false
+        // Nothing half-read from the last connection carries over.
+        link.reassembly = NearbyFraming.Reassembly()
         link.nearness = Presence.Nearness()
         link.candidates = wanted
         link.peripheral.discoverServices([NearbyBluetooth.service])
