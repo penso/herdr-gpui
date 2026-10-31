@@ -14,9 +14,28 @@ error-remote-cloud-state-directory = No state directory for saved cloud devices.
 error-remote-cloud-worker = The cloud { $worker } worker stopped.
 error-remote-cloud-process = Could not run the command that reaches the machine.
 error-remote-cloud-cancelled = Cancelled.
-# $detail says why: the machine has no Herdr and installing is off, or the
-# installer's own output.
+# $detail is the tail of what the installer or the probe printed on the
+# machine.
 error-remote-cloud-install = Installing Herdr failed: { $detail }
+error-remote-cloud-install-missing = Installing Herdr failed: the installer finished but Herdr is not on the expected paths
+error-remote-cloud-install-no-curl = Installing Herdr failed: the machine has no curl; add it to its image or install Herdr there manually
+error-remote-cloud-install-no-output = Installing Herdr failed: the installer did not finish
+error-remote-cloud-install-unreachable = Installing Herdr failed: the remote command could not reach the machine
+# Herdr is missing and installing it was declined. $machine is the cloud
+# machine's name; $retry says how the provider's setup offers to install
+# it. "Install Herdr" and "Finish setup" are the setup form's controls.
+error-remote-cloud-install-not-installed = Installing Herdr failed: Herdr is not installed on { $machine }; { $retry ->
+        [add] add it and try again
+        [allow] allow installing it and try again
+        [finish-setup] enable Install Herdr and use Finish setup
+       *[enable] enable Install Herdr and retry
+    }
+error-remote-cloud-install-not-installed-unnamed = Installing Herdr failed: Herdr is not installed on the machine; { $retry ->
+        [add] add it and try again
+        [allow] allow installing it and try again
+        [finish-setup] enable Install Herdr and use Finish setup
+       *[enable] enable Install Herdr and retry
+    }
 error-remote-cloud-install-timeout = Installing Herdr did not finish within 5 minutes.
 error-remote-cloud-unavailable = Cloud devices are unavailable on Windows.
 

@@ -132,19 +132,17 @@ fn install_herdr(
         return Ok(());
     }
     if !approved {
-        return Err(cloud::Error::Install(format!(
-            "Herdr is not installed in {id}; allow installing it and try again"
-        ))
+        return Err(cloud::Error::Install(install::Failure::NotInstalled {
+            machine: Some(id.to_string()),
+            retry: install::Retry::Allow,
+        })
         .into());
     }
     report(cloud::Step::InstallingHerdr);
     install::install(machine::exec(engine, id)?, &cancelled)?;
     // The installer's own success is not proof the bridge will find it.
     if !install::installed(machine::exec(engine, id)?, &cancelled)? {
-        return Err(cloud::Error::Install(
-            "the installer finished but Herdr is not on the expected paths".into(),
-        )
-        .into());
+        return Err(cloud::Error::Install(install::Failure::Missing).into());
     }
     Ok(())
 }

@@ -55,7 +55,7 @@ pub enum Error {
     #[error("Cancelled.")]
     Cancelled,
     #[error("Installing Herdr failed: {0}")]
-    Install(String),
+    Install(install::Failure),
     #[error("Installing Herdr did not finish within 5 minutes.")]
     InstallTimeout,
     #[error("{0}")]

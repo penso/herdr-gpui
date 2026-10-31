@@ -18,10 +18,32 @@ fn every_cloud_variant_has_a_message() {
         Error::Worker("setup"),
         Error::Process(io()),
         Error::Cancelled,
-        Error::Install("the installer finished but Herdr is not on the expected paths".into()),
         Error::InstallTimeout,
         Error::Unavailable("Cloud devices are unavailable on Windows."),
     ]);
+}
+
+#[test]
+fn every_install_failure_has_a_message() {
+    use herdr_remote::cloud::install::{Failure, Retry};
+    let mut failures = vec![
+        Failure::Missing,
+        Failure::NoCurl,
+        Failure::NoOutput,
+        Failure::Unreachable,
+    ];
+    for retry in [Retry::Add, Retry::Allow, Retry::Enable, Retry::FinishSetup] {
+        failures.push(Failure::NotInstalled {
+            machine: Some("build-box".into()),
+            retry,
+        });
+        failures.push(Failure::NotInstalled {
+            machine: None,
+            retry,
+        });
+    }
+    assert_localized(&failures.into_iter().map(Error::Install).collect::<Vec<_>>());
+    assert_localized(&[Error::Install(Failure::Output("exit 9: boom".into()))]);
 }
 
 #[test]

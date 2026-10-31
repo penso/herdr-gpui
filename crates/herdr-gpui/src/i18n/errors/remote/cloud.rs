@@ -4,7 +4,7 @@
 
 use super::path;
 use crate::i18n::{errors::Localize, fl};
-use herdr_remote::cloud::{Error, Invalid, ProviderError, image};
+use herdr_remote::cloud::{Error, Invalid, ProviderError, image, install};
 
 impl Localize for Error {
     fn localize(&self) -> String {
@@ -26,11 +26,7 @@ impl Localize for Error {
             Self::Worker(worker) => fl!("error-remote-cloud-worker", worker = *worker),
             Self::Process(_) => fl!("error-remote-cloud-process"),
             Self::Cancelled => fl!("error-remote-cloud-cancelled"),
-            // The provider module's own words about the install, with the
-            // machine's name or the installer's output.
-            Self::Install(detail) => {
-                fl!("error-remote-cloud-install", detail = detail.as_str())
-            }
+            Self::Install(failure) => failure.localize(),
             Self::InstallTimeout => fl!("error-remote-cloud-install-timeout"),
             // Only `cloud::unavailable` gives a reason, and it has one.
             Self::Unavailable(_) => fl!("error-remote-cloud-unavailable"),
@@ -107,6 +103,39 @@ impl Localize for image::Error {
             Self::Unsupported(image::Unsupported::Provider) => {
                 fl!("error-remote-cloud-image-unsupported-provider")
             }
+        }
+    }
+}
+
+impl Localize for install::Failure {
+    fn localize(&self) -> String {
+        use install::Retry;
+        match self {
+            Self::Missing => fl!("error-remote-cloud-install-missing"),
+            Self::NoCurl => fl!("error-remote-cloud-install-no-curl"),
+            Self::NoOutput => fl!("error-remote-cloud-install-no-output"),
+            Self::NotInstalled { machine, retry } => {
+                let retry = match retry {
+                    Retry::Add => "add",
+                    Retry::Allow => "allow",
+                    Retry::Enable => "enable",
+                    Retry::FinishSetup => "finish-setup",
+                };
+                match machine {
+                    Some(machine) => fl!(
+                        "error-remote-cloud-install-not-installed",
+                        machine = machine.as_str(),
+                        retry = retry
+                    ),
+                    None => fl!(
+                        "error-remote-cloud-install-not-installed-unnamed",
+                        retry = retry
+                    ),
+                }
+            }
+            // What the machine printed, in its own words.
+            Self::Output(output) => fl!("error-remote-cloud-install", detail = output.as_str()),
+            Self::Unreachable => fl!("error-remote-cloud-install-unreachable"),
         }
     }
 }
