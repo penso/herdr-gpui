@@ -13,12 +13,12 @@ impl Localize for Error {
             Self::Catalog(_) => fl!("error-client-machine-sync-catalog"),
             Self::Changed => fl!("error-client-machine-sync-changed"),
             Self::Home => fl!("error-client-machine-sync-home"),
-            Self::KeyRead(_) => fl!("error-client-machine-sync-key-read"),
             Self::Keygen(status) => fl!(
                 "error-client-machine-sync-keygen",
                 status = status.to_string()
             ),
             Self::KeygenSpawn(_) => fl!("error-client-machine-sync-keygen-spawn"),
+            Self::KeyRead(_) => fl!("error-client-machine-sync-key-read"),
             Self::PublicKey => fl!("error-client-machine-sync-public-key"),
             Self::Reply => fl!("error-client-machine-sync-reply"),
             // The script's own failure says why the machine could not be reached.

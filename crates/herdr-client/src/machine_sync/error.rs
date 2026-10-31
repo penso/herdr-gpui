@@ -16,12 +16,12 @@ pub enum Error {
     Changed,
     #[error("This computer has no home folder for its SSH key")]
     Home,
-    #[error("The herdr SSH key (~/.ssh/herdr_ed25519) could not be read")]
-    KeyRead(#[source] io::Error),
     #[error("ssh-keygen could not create the herdr SSH key ({0})")]
     Keygen(std::process::ExitStatus),
     #[error("ssh-keygen could not be run; install OpenSSH")]
     KeygenSpawn(#[source] io::Error),
+    #[error("The herdr SSH key (~/.ssh/herdr_ed25519) could not be read")]
+    KeyRead(#[source] io::Error),
     #[error("The machine has a herdr SSH key that is not an Ed25519 key")]
     PublicKey,
     #[error("The machine answered in a form machine sync does not understand")]

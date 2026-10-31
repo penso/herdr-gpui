@@ -7,17 +7,18 @@ fn no_herdr_key_leaves_identities_to_openssh() {
 
 #[test]
 fn herdr_key_comes_after_the_default_keys_present() {
-    let present = ["/home/a/.ssh/herdr_ed25519", "/home/a/.ssh/id_ed25519"];
-    let options = options_for(Path::new(present[0]), |path| {
-        present.iter().any(|p| Path::new(p) == path)
-    });
+    // Built as the code builds them: Windows joins with `\\`.
+    let directory = Path::new("/home/a/.ssh");
+    let (key, default) = (directory.join(KEY_NAME), directory.join("id_ed25519"));
+    let options = options_for(&key, |path| path == key || path == default);
+    let option = |path: &Path| format!("IdentityFile=\"{}\"", path.display());
     assert_eq!(
         options,
         [
-            "-o",
-            "IdentityFile=\"/home/a/.ssh/id_ed25519\"",
-            "-o",
-            "IdentityFile=\"/home/a/.ssh/herdr_ed25519\"",
+            "-o".to_owned(),
+            option(&default),
+            "-o".to_owned(),
+            option(&key)
         ]
     );
 }
