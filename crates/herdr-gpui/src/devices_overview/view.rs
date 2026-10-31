@@ -2,6 +2,7 @@
 //! totals, and the device table, all from state the tick prepared.
 
 use super::{Device, Link, Tally, chart, table};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{Slot, Tab},
@@ -73,7 +74,7 @@ impl Look<'_> {
             .overflow_hidden()
     }
 
-    pub fn title(&self, title: &'static str, count: usize) -> Div {
+    pub fn title(&self, title: String, count: usize) -> Div {
         div()
             .flex()
             .items_center()
@@ -83,7 +84,7 @@ impl Look<'_> {
     }
 
     pub fn legend(&self) -> Div {
-        let item = |status: AgentStatus, label: &'static str| {
+        let item = |status: AgentStatus, label: String| {
             div()
                 .flex()
                 .items_center()
@@ -97,10 +98,16 @@ impl Look<'_> {
             .gap_3()
             .text_size(self.small())
             .text_color(rgb(self.theme.subtext()))
-            .child(item(AgentStatus::Working, "Working"))
-            .child(item(AgentStatus::Blocked, "Blocked"))
-            .child(item(AgentStatus::Done, "Done"))
-            .child(item(AgentStatus::Idle, "Idle"))
+            .child(item(
+                AgentStatus::Working,
+                fl!("devices-overview-legend-working"),
+            ))
+            .child(item(
+                AgentStatus::Blocked,
+                fl!("devices-overview-legend-blocked"),
+            ))
+            .child(item(AgentStatus::Done, fl!("devices-overview-legend-done")))
+            .child(item(AgentStatus::Idle, fl!("devices-overview-legend-idle")))
     }
 }
 
@@ -202,7 +209,10 @@ impl HerdrWindow {
                                             .flex_wrap()
                                             .items_center()
                                             .gap_3()
-                                            .child(look.title("Devices", shown.len()))
+                                            .child(look.title(
+                                                fl!("devices-overview-devices"),
+                                                shown.len(),
+                                            ))
                                             .child(div().flex_1())
                                             .child(look.legend()),
                                     )
@@ -232,8 +242,6 @@ impl HerdrWindow {
         let theme = look.theme;
         let agents = Tally::sum(devices).total();
         let unavailable = self.device_setup_unavailable();
-        let noun =
-            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
         div()
             .flex()
             .flex_wrap()
@@ -250,12 +258,12 @@ impl HerdrWindow {
                         div()
                             .text_size(px(look.ui.size + 7.))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Devices overview"),
+                            .child(fl!("devices-overview-title")),
                     )
-                    .child(div().text_color(rgb(theme.subtext())).child(format!(
-                        "{} · {}",
-                        noun(devices.len(), "device", "devices"),
-                        noun(agents, "agent", "agents")
+                    .child(div().text_color(rgb(theme.subtext())).child(fl!(
+                        "devices-overview-summary",
+                        devices = devices.len(),
+                        agents = agents
                     ))),
             )
             // The field gives way before the button wraps under the title.
@@ -276,7 +284,7 @@ impl HerdrWindow {
                     .rounded(px(corners::CONTROL))
                     .bg(rgb(theme.primary()))
                     .text_color(rgb(theme.text_on(theme.primary())))
-                    .child("Add Device")
+                    .child(fl!("devices-overview-add-device"))
                     .when_some(unavailable, |button, reason| {
                         let (foreground, surface) = (theme.foreground, theme.surface);
                         button.opacity(0.5).tooltip(move |_, cx| {
@@ -312,32 +320,32 @@ fn totals(look: &Look, devices: &[Device]) -> Div {
         .iter()
         .filter(|device| matches!(device.link, Link::Offline | Link::Connecting))
         .count();
-    let cells: [(&str, String, String, Option<AgentStatus>); 4] = [
+    let cells: [(String, String, String, Option<AgentStatus>); 4] = [
         (
-            "Working",
+            fl!("devices-overview-working"),
             tally.working.to_string(),
-            format!("of {} agents", tally.total()),
+            fl!("devices-overview-working-of", total = tally.total()),
             Some(AgentStatus::Working),
         ),
         (
-            "Blocked",
+            fl!("devices-overview-blocked"),
             tally.blocked.to_string(),
-            "waiting for you".into(),
+            fl!("devices-overview-waiting"),
             Some(AgentStatus::Blocked),
         ),
         (
-            "Idle or done",
+            fl!("devices-overview-idle-or-done"),
             (tally.idle + tally.done).to_string(),
-            "ready for work".into(),
+            fl!("devices-overview-ready"),
             Some(AgentStatus::Idle),
         ),
         (
-            "Devices online",
+            fl!("devices-overview-online"),
             format!("{online}/{}", devices.len()),
             if unreachable == 0 {
-                "all reachable".into()
+                fl!("devices-overview-all-reachable")
             } else {
-                format!("{unreachable} not connected")
+                fl!("devices-overview-not-connected", count = unreachable)
             },
             None,
         ),

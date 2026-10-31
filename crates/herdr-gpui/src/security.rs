@@ -9,6 +9,7 @@
 //! background read runs every [`INTERVAL`], or when Refresh asks; drawing
 //! reads what it left. The app's cache keeps the last read (`saved`), shown
 //! at start until the first read of the run replaces it.
+// i18n: migrated
 
 mod actions;
 mod fetch;
@@ -332,7 +333,10 @@ impl HerdrWindow {
             return;
         };
         let Some((_, workspace)) = self.browser_key() else {
-            self.show_flash(crate::window::Flash::warning("Open a workspace first"), cx);
+            self.show_flash(
+                crate::window::Flash::warning(crate::i18n::fl!("security-no-workspace")),
+                cx,
+            );
             return;
         };
         let endpoint = self.endpoints[self.selected_endpoint].id.clone();

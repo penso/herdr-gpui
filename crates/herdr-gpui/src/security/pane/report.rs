@@ -5,6 +5,7 @@
 use super::{
     Read, arrange, body, callout, date, facts_list, heading, mono, plain, severity_text, since,
 };
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     orchestrator::Look,
@@ -41,7 +42,7 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(heading("Report"))
+                    .child(heading(fl!("security-report")))
                     .child(body(
                         look,
                         "security-report-description",
@@ -64,7 +65,7 @@ impl HerdrWindow {
 fn private(look: &Look, item: Item, url: Option<String>, cx: &mut Context<HerdrWindow>) -> Div {
     let actions = div()
         .child(
-            look.button("security-report-agent", "Investigate with agent", true)
+            look.button("security-report-agent", fl!("security-investigate"), true)
                 .debug_selector(|| "security-report-agent".into())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.security_agent(&item, window, cx);
@@ -73,7 +74,7 @@ fn private(look: &Look, item: Item, url: Option<String>, cx: &mut Context<HerdrW
         .child(div().flex_1())
         .when_some(url, |el, url| {
             el.child(
-                look.button("security-report-triage", "Accept or close on GitHub", false)
+                look.button("security-report-triage", fl!("security-triage"), false)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_security_page(&url, window, cx);
                     })),
@@ -83,30 +84,26 @@ fn private(look: &Look, item: Item, url: Option<String>, cx: &mut Context<HerdrW
         look,
         look.hue(3),
         "icons/lock.svg",
-        heading("Private until published"),
-        look.muted(
-            "Only the repository's maintainers and the reporter see it. Accepting opens the \
-             draft advisory; the reporter's thread stays on GitHub.",
-        ),
+        heading(fl!("security-private")),
+        look.muted(fl!("security-private-note")),
         actions,
     )
 }
 
-fn facts(
-    look: &Look,
-    report: &Report,
-    page: Option<&ReportPage>,
-) -> Vec<(&'static str, AnyElement)> {
+fn facts(look: &Look, report: &Report, page: Option<&ReportPage>) -> Vec<(String, AnyElement)> {
     let mut rows = Vec::new();
     if let Some(severity) = report.severity {
         let cvss = page
             .and_then(|page| page.cvss.as_ref())
             .map(|cvss| cvss.score);
-        rows.push(("Rating", severity_text(look, severity, cvss)));
+        rows.push((
+            fl!("security-fact-rating"),
+            severity_text(look, severity, cvss),
+        ));
     }
     if let Some(affected) = page.and_then(|page| page.affected.first()) {
         rows.push((
-            "Affected",
+            fl!("security-fact-affected"),
             mono(
                 look,
                 format!("{} {}", affected.package, affected.vulnerable),
@@ -115,16 +112,19 @@ fn facts(
     }
     if let Some(weakness) = page.and_then(|page| page.weaknesses.first()) {
         rows.push((
-            "Weakness",
+            fl!("security-fact-weakness"),
             plain(format!("{} {}", weakness.id, weakness.name)),
         ));
     }
-    rows.push(("Draft advisory", mono(look, report.advisory.clone())));
+    rows.push((
+        fl!("security-fact-draft"),
+        mono(look, report.advisory.clone()),
+    ));
     if let Some(reporter) = &report.reporter {
-        rows.push(("Reporter", plain(reporter.clone())));
+        rows.push((fl!("security-fact-reporter"), plain(reporter.clone())));
     }
     if let Some(at) = report.created_at {
-        rows.push(("Filed", plain(date(at))));
+        rows.push((fl!("security-fact-filed"), plain(date(at))));
     }
     rows
 }
@@ -135,45 +135,51 @@ fn draft(look: &Look, report: &Report, page: Read<'_, ReportPage>) -> Div {
     };
     let mut rows = Vec::new();
     for affected in &page.affected {
-        let fixed = if affected.patched.is_empty() {
-            "no fixed version yet".to_owned()
-        } else {
-            format!("fixed in {}", affected.patched)
-        };
         rows.push((
-            "Package",
+            fl!("security-fact-package"),
             mono(
                 look,
-                format!(
-                    "{} ({}) {} · {fixed}",
-                    affected.package, affected.ecosystem, affected.vulnerable
+                fl!(
+                    "security-draft-package",
+                    package = affected.package.as_str(),
+                    ecosystem = affected.ecosystem.as_str(),
+                    vulnerable = affected.vulnerable.as_str(),
+                    fixed = if affected.patched.is_empty() {
+                        "no"
+                    } else {
+                        "yes"
+                    },
+                    patched = affected.patched.as_str()
                 ),
             ),
         ));
     }
     if let Some(cvss) = &page.cvss {
         if let Some(severity) = report.severity {
-            rows.push(("Score", severity_text(look, severity, Some(cvss.score))));
+            rows.push((
+                fl!("security-fact-score"),
+                severity_text(look, severity, Some(cvss.score)),
+            ));
         }
         rows.push((
-            "Vector",
+            fl!("security-fact-vector"),
             mono(look, format!("CVSS {} {}", cvss.version, cvss.vector)),
         ));
     }
     for weakness in &page.weaknesses {
         rows.push((
-            "Weakness",
+            fl!("security-fact-weakness"),
             plain(format!("{} {}", weakness.id, weakness.name)),
         ));
     }
     for credit in &page.credits {
         rows.push((
-            "Credit",
+            fl!("security-fact-credit"),
             plain(format!("{} ({})", credit.login, credit.kind)),
         ));
     }
     if rows.is_empty() {
-        return look.muted("The draft has no packages, score, or credits yet.");
+        return look.muted(fl!("security-draft-empty"));
     }
     facts_list(look, rows)
 }
@@ -187,7 +193,7 @@ fn conversation(
     let Some(page) = page.get() else {
         return page.waiting(look);
     };
-    let on_github = |label: &'static str| {
+    let on_github = |label: String| {
         url.clone().map(|url| {
             look.button("security-conversation-web", label, false)
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -201,19 +207,16 @@ fn conversation(
             .flex_col()
             .items_start()
             .gap_3()
-            .child(look.muted("No comments yet."))
-            .children(on_github("Reply on GitHub")),
+            .child(look.muted(fl!("security-no-comments")))
+            .children(on_github(fl!("security-reply"))),
         Comments::Unavailable => div()
             .debug_selector(|| "security-conversation-unavailable".into())
             .flex()
             .flex_col()
             .items_start()
             .gap_3()
-            .child(look.muted(
-                "GitHub would not list this report's comments: its comments API is a preview \
-                 for public repositories.",
-            ))
-            .children(on_github("Read on GitHub")),
+            .child(look.muted(fl!("security-comments-unavailable")))
+            .children(on_github(fl!("security-read-on-github"))),
         Comments::Read { comments, more } => {
             let theme = &look.theme;
             div()
@@ -251,11 +254,9 @@ fn conversation(
                         ))
                 }))
                 .when(*more, |el| {
-                    el.child(
-                        look.muted(format!("Only the first {MAX_COMMENTS} comments are shown.")),
-                    )
+                    el.child(look.muted(fl!("security-comments-more", count = MAX_COMMENTS)))
                 })
-                .children(on_github("Reply on GitHub"))
+                .children(on_github(fl!("security-reply")))
         }
     }
 }

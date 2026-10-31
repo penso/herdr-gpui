@@ -3,6 +3,7 @@
 mod boot_fence;
 mod closed;
 mod closed_page;
+mod en_xa;
 mod hosts;
 mod marks;
 mod mutes;

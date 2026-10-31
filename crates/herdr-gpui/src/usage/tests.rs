@@ -6,11 +6,13 @@ use super::{
     registry,
 };
 
+mod en_xa;
 mod footer_fit;
 mod icons;
 mod keychain_grants;
 mod section;
 mod status_bar_room;
+mod text;
 
 fn provider(id: &str) -> Provider {
     registry::find(id).unwrap()

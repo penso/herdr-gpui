@@ -17,6 +17,21 @@ use std::sync::Arc;
 pub(super) fn fixture(
     cx: &mut gpui::TestAppContext,
 ) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
+    let (view, cx) = window(cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.show_activity_panel(ActivityPanel::Overview, window, cx);
+            view.poll_overview(cx);
+        })
+    });
+    draw(cx);
+    (view, cx)
+}
+
+/// The fixture's window before it shows the Overview.
+pub(super) fn window(
+    cx: &mut gpui::TestAppContext,
+) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (fixture, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         let view = cx.new(|cx| {
@@ -41,13 +56,6 @@ pub(super) fn fixture(
     });
     cx.simulate_resize(size(px(1200.), px(800.)));
     let view = cx.update(|_, cx| fixture.read(cx).0.clone());
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.show_activity_panel(ActivityPanel::Overview, window, cx);
-            view.poll_overview(cx);
-        })
-    });
-    draw(cx);
     (view, cx)
 }
 

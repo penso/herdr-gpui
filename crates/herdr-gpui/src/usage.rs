@@ -1,6 +1,7 @@
 //! Plan usage in the status bar, its panel, and the Usage section. Reading
 //! it is `herdr-usage`'s; this draws it, keeps the Keychain grants the user
 //! gave, and embeds the provider logos.
+// i18n: migrated
 
 mod access;
 mod details;
@@ -8,6 +9,7 @@ mod icons;
 mod panel;
 mod render;
 mod section;
+mod text;
 mod ui;
 
 #[cfg(test)]

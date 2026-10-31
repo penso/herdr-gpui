@@ -3,8 +3,8 @@
 //! as the status bar's usage panel. Only the selected host is read; another
 //! host shows what was read while it was selected.
 
-use super::{Host, render::ago, ui::Ui};
-use crate::HerdrWindow;
+use super::{Host, text, ui::Ui};
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -30,7 +30,7 @@ impl HerdrWindow {
                 div()
                     .text_size(px(font.size + 3.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Usage"),
+                    .child(fl!("usage-section-title")),
             )
             .child(div().flex_1())
             .when(self.config.usage.show, |header| {
@@ -56,9 +56,9 @@ impl HerdrWindow {
                                 .text_color(rgb(theme.subtext())),
                         )
                         .child(if self.usage.busy() {
-                            "Updating…"
+                            fl!("usage-updating")
                         } else {
-                            "Refresh"
+                            fl!("usage-refresh")
                         })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.usage.refresh(Instant::now());
@@ -72,9 +72,7 @@ impl HerdrWindow {
                 div()
                     .debug_selector(|| "usage-section-off".into())
                     .text_color(rgb(theme.muted))
-                    .child(
-                        "Plan usage is off. Turn on Usage in Settings to read your agents' limits.",
-                    ),
+                    .child(fl!("usage-off")),
             );
         }
         let ui = Ui {
@@ -123,17 +121,12 @@ impl HerdrWindow {
         let entry = self.usage.entry(host);
         let updated = entry
             .and_then(|entry| entry.updated)
-            .map(|at| {
-                format!(
-                    "Updated {} ago",
-                    ago(ui.now.duration_since(at).unwrap_or_default())
-                )
-            })
+            .map(|at| text::updated(ui.now.duration_since(at).unwrap_or_default()))
             .unwrap_or_else(|| {
                 if selected {
-                    "Not read yet".to_owned()
+                    fl!("usage-not-read-yet")
                 } else {
-                    "Read while this host is selected".to_owned()
+                    fl!("usage-read-while-selected")
                 }
             });
         let readings = entry
@@ -145,7 +138,7 @@ impl HerdrWindow {
             cards = cards.child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("No signed-in agents found on this host."),
+                    .child(fl!("usage-no-agents")),
             );
         }
         for reading in readings {
