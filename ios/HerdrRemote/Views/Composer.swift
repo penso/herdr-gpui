@@ -331,8 +331,14 @@ struct Composer: View {
             }
             store.sent(outgoing, failed: problem != nil)
             if problem != nil {
-                draft = text
-                pictures = sentPictures
+                // The person may have started another message meanwhile:
+                // the failed one goes back in front of it, not over it.
+                if draft.isEmpty {
+                    draft = text
+                } else if !text.isEmpty {
+                    draft = text + "\n\n" + draft
+                }
+                pictures = Array((sentPictures + pictures).prefix(4))
                 // Kept on disk too, in case the person left the chat meanwhile.
                 saveDraft()
             }
