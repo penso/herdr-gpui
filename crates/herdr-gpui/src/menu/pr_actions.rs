@@ -1,12 +1,14 @@
 //! The Git popup's pull request pages: checks and the review conversation, a
 //! comment dialog, and the merge dialog that chooses a method and confirms it.
 //! Every request is started by the user here and run by `pr_actions`.
+// i18n: migrated
 use super::{Page, accent, danger, git::Row};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
     pr_actions::{Action, Target},
-    pull_request::{MergeMethod, Outcome as CheckOutcome},
+    pull_request::Outcome as CheckOutcome,
 };
 use gpui::{prelude::*, *};
 use std::time::Instant;
@@ -184,7 +186,7 @@ impl HerdrWindow {
                         .pb(px(8.))
                         .cursor_pointer()
                         .text_color(accent(theme))
-                        .child("Open in browser")
+                        .child(fl!("pr-actions-open-in-browser"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             cx.open_url(&url);
@@ -206,7 +208,7 @@ impl HerdrWindow {
     }
 
     /// A dialog's titled header: the row's icon, a title, and the PR.
-    fn pr_dialog_header(&self, row: Row, title: &'static str) -> Div {
+    fn pr_dialog_header(&self, row: Row, title: String) -> Div {
         let theme = &self.theme;
         let font = &self.config.ui;
         let subtitle = self
@@ -302,7 +304,7 @@ impl HerdrWindow {
     }
 
     fn pr_back_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        self.pr_button("pr-dialog-back", "Back", false)
+        self.pr_button("pr-dialog-back", fl!("pr-actions-back"), false)
             .on_click(cx.listener(|this, _, _, cx| {
                 cx.stop_propagation();
                 this.menu.error = None;
@@ -325,20 +327,20 @@ impl HerdrWindow {
             .py(px(12.))
             .max_h(px(380.))
             .overflow_y_scroll();
-        let heading = |label: &'static str| {
+        let heading = |label: String| {
             div()
                 .pt(px(4.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(label)
         };
-        body = body.child(heading("Checks"));
+        body = body.child(heading(fl!("pr-actions-checks")));
         let pr = self.git_open_pull_request();
         let mut checks = pr.iter().flat_map(|pr| pr.check_list()).peekable();
         if checks.peek().is_none() {
             body = body.child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("No checks reported"),
+                    .child(fl!("pr-actions-no-checks")),
             );
         }
         for (name, outcome) in checks {
@@ -363,10 +365,10 @@ impl HerdrWindow {
                                 .bg(rgb(theme.ink(color))),
                         )
                         .child(div().flex_1().min_w_0().truncate().child(
-                            crate::sidebar::label_text(if name.is_empty() {
-                                "Unnamed check"
+                            crate::sidebar::label_text(&if name.is_empty() {
+                                fl!("pr-actions-unnamed-check")
                             } else {
-                                name
+                                name.to_owned()
                             }),
                         ))
                         .child(
@@ -380,19 +382,23 @@ impl HerdrWindow {
         if let Some(summary) = pr.map(|pr| pr.checks_summary.clone()) {
             body = body.child(div().text_color(rgb(theme.muted)).child(summary));
         }
-        body = body.child(heading("Comments"));
+        body = body.child(heading(fl!("pr-actions-comments")));
         if self.pr_actions.loading() {
             body = body.child(
                 div()
                     .debug_selector(|| "pr-review-loading".into())
                     .text_color(rgb(theme.muted))
-                    .child("Loading comments..."),
+                    .child(fl!("pr-actions-loading-comments")),
             );
         } else if let Some(error) = self.pr_actions.comments_error() {
             body = body.child(div().text_color(danger(theme)).child(error.to_owned()));
         } else if let Some(comments) = self.pr_actions.comments() {
             if comments.is_empty() {
-                body = body.child(div().text_color(rgb(theme.muted)).child("No comments yet"));
+                body = body.child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("pr-actions-no-comments")),
+                );
             }
             for comment in comments.iter() {
                 body = body.child(
@@ -420,16 +426,20 @@ impl HerdrWindow {
         div()
             .flex()
             .flex_col()
-            .child(self.pr_dialog_header(Row::Review, "Checks and comments"))
+            .child(self.pr_dialog_header(Row::Review, fl!("pr-actions-review-title")))
             .child(body)
             .child(
                 self.pr_footer().child(self.pr_back_button(cx)).child(
-                    self.pr_button("pr-review-comment-button", "Comment...", false)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.open_pr_comment();
-                            cx.notify();
-                        })),
+                    self.pr_button(
+                        "pr-review-comment-button",
+                        fl!("pr-actions-comment-button"),
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.open_pr_comment();
+                        cx.notify();
+                    })),
                 ),
             )
     }
@@ -450,7 +460,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("Posts to the pull request's conversation as your GitHub account."),
+                    .child(fl!("pr-actions-comment-note")),
             );
         if self.menu.input.is_some() {
             body = body.child(self.render_dialog_input(cx));
@@ -461,11 +471,11 @@ impl HerdrWindow {
         div()
             .flex()
             .flex_col()
-            .child(self.pr_dialog_header(Row::Comment, "Comment"))
+            .child(self.pr_dialog_header(Row::Comment, fl!("pr-actions-comment-title")))
             .child(body)
             .child(
                 self.pr_footer().child(self.pr_back_button(cx)).child(
-                    self.pr_button("pr-comment-submit", "Comment", armed)
+                    self.pr_button("pr-comment-submit", fl!("pr-actions-comment-submit"), armed)
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
                             this.submit_pr_comment(cx);
@@ -484,16 +494,20 @@ impl HerdrWindow {
                 div()
                     .debug_selector(|| "pr-merge-branches".into())
                     .text_color(rgb(theme.muted))
-                    .child(crate::sidebar::label_text(&format!(
-                        "Merge {} into {}",
-                        pr.head_ref_name, pr.base_ref_name
+                    .child(crate::sidebar::label_text(&fl!(
+                        "pr-actions-merge-branches",
+                        head = pr.head_ref_name.as_str(),
+                        base = pr.base_ref_name.as_str(),
                     ))),
             );
             // GitHub has the final word; this is what it last reported.
             for (heading, label) in [
-                ("Review", pr.review().to_owned()),
-                ("Merge", pr.merge_status().to_owned()),
-                ("Checks", pr.checks_summary.clone()),
+                (fl!("pr-actions-review-heading"), pr.review().to_owned()),
+                (
+                    fl!("pr-actions-merge-heading"),
+                    pr.merge_status().to_owned(),
+                ),
+                (fl!("pr-actions-checks-heading"), pr.checks_summary.clone()),
             ] {
                 body = body.child(
                     div()
@@ -513,7 +527,7 @@ impl HerdrWindow {
                 div()
                     .pt(px(4.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Method"),
+                    .child(fl!("pr-actions-method")),
             );
             for method in pr.merge_methods.iter().copied() {
                 let selected = self.menu.merge_method == Some(method);
@@ -552,11 +566,14 @@ impl HerdrWindow {
             body = body.child(error);
         }
         let armed = self.menu.merge_method.is_some() && self.pr_actions.running().is_none();
-        let label = self.menu.merge_method.map_or("Merge", MergeMethod::action);
+        let label = self.menu.merge_method.map_or_else(
+            || fl!("pr-actions-merge"),
+            |method| method.action().to_owned(),
+        );
         div()
             .flex()
             .flex_col()
-            .child(self.pr_dialog_header(Row::Merge, "Merge pull request"))
+            .child(self.pr_dialog_header(Row::Merge, fl!("pr-actions-merge-title")))
             .child(body)
             .child(
                 self.pr_footer().child(self.pr_back_button(cx)).child(

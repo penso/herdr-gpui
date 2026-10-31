@@ -1,8 +1,10 @@
+// i18n: migrated
 //! The sidebar host header's context menu. Saved SSH devices and cloud devices
 //! have this one, each with the actions its kind supports; a WSL
 //! distribution's only offers its removal (see `wsl`). Local is always
 //! present, and an explicit socket is not in the catalog.
 use super::setup;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     config::{Config, KeybindingSource},
@@ -32,24 +34,25 @@ enum Action {
     Remove,
 }
 
+/// Each row's action and the message naming it.
 const SSH_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "Rename…"),
-    (Action::ServerKeybindings, "Use server keybindings"),
+    (Action::Rename, "host-menu-rename"),
+    (Action::ServerKeybindings, "host-menu-server-keybindings"),
     // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
     #[cfg(unix)]
-    (Action::ForwardPort, "Forward port…"),
-    (Action::Theme, "Terminal theme…"),
-    (Action::Remove, "Remove device…"),
+    (Action::ForwardPort, "host-menu-forward-port"),
+    (Action::Theme, "host-menu-theme"),
+    (Action::Remove, "host-menu-remove"),
 ];
 
 /// Port forwards, server keybindings, and the terminal theme go through the
 /// SSH profile, which a cloud device does not have.
 #[cfg(feature = "cloud")]
 const CLOUD_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "Rename…"),
-    (Action::ProviderSettings, "Cloud device settings…"),
-    (Action::RunSetup, "Run setup script"),
-    (Action::Remove, "Remove device…"),
+    (Action::Rename, "host-menu-rename"),
+    (Action::ProviderSettings, "host-menu-cloud-settings"),
+    (Action::RunSetup, "host-menu-run-setup"),
+    (Action::Remove, "host-menu-remove"),
 ];
 
 /// The saved entry the menu acts on.
@@ -162,7 +165,7 @@ impl HerdrWindow {
                     tracing::info!(
                         category = "device_remove",
                         id,
-                        reason,
+                        ?reason,
                         "Host menu unavailable"
                     );
                     return;
@@ -492,7 +495,11 @@ impl HerdrWindow {
         match result {
             Err(error) => {
                 self.menu.removing_devices.remove(id);
-                self.local_error = Some(format!("Remove {label}: {error}"));
+                self.local_error = Some(fl!(
+                    "host-menu-remove-failed",
+                    device = label,
+                    error = error.to_string(),
+                ));
             }
             // The catalog watcher drops the device, and a filter or selection
             // on it falls back to Local, as for any removal. The header keeps
@@ -509,8 +516,10 @@ impl HerdrWindow {
                     "GitHub sign-in cleanup"
                 );
                 if let Err(error) = forgotten {
-                    self.local_error = Some(format!(
-                        "Removed {label}, but could not delete its GitHub sign-in: {error}"
+                    self.local_error = Some(fl!(
+                        "host-menu-github-left",
+                        device = label,
+                        error = error.to_string(),
                     ));
                 }
             }
@@ -626,12 +635,14 @@ impl HerdrWindow {
                             .text_size(px(self.config.ui.size * 0.85))
                             .text_color(rgb(theme.muted))
                             .truncate()
-                            .child(format!("{} · {}", host.target, host.session)),
+                            // The device's target and session.
+                            .child(format!("{} · {}", host.target, host.session)), // i18n: data
                     ),
             );
             let server_keys = self.config.keybinding_source(&host.id) == KeybindingSource::Server;
             let device_theme = self.device_theme_value(&host.id).map(str::to_owned);
-            for (index, &(action, label)) in host.actions().iter().enumerate() {
+            for (index, &(action, message)) in host.actions().iter().enumerate() {
+                let label = crate::i18n::message(message, &[]);
                 let toggle = action == Action::ServerKeybindings;
                 body = body.child(
                     div()
@@ -705,7 +716,10 @@ impl HerdrWindow {
                             .pb(px(4.))
                             .text_size(px(self.config.ui.size * 0.85))
                             .text_color(rgb(theme.muted))
-                            .child(format!("Using local keybindings: {error}")),
+                            .child(fl!(
+                                "host-menu-local-keybindings",
+                                error = error.to_string()
+                            )),
                     );
                 }
             }
@@ -728,7 +742,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Remove device"),
+                    .child(fl!("host-menu-remove-title")),
             )
             .child(
                 div()
@@ -750,7 +764,7 @@ impl HerdrWindow {
                             self.config.ui.size + 2.,
                             host.forget_github,
                         ))
-                        .child("Also delete its GitHub sign-in from this computer")
+                        .child(fl!("host-menu-remove-github"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             if let Some(host) = &mut this.menu.host {
                                 host.forget_github = !host.forget_github;
@@ -770,7 +784,7 @@ impl HerdrWindow {
                             .id("remove-device-cancel")
                             .p(px(6.))
                             .cursor_pointer()
-                            .child("Cancel")
+                            .child(fl!("host-menu-cancel"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 tracing::info!(category = "device_remove", "Remove cancelled");
                                 this.dismiss_menu(window, cx)
@@ -813,7 +827,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .text_size(px(self.config.ui.size * 1.35))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Rename device"),
+                    .child(fl!("host-menu-rename-title")),
             )
             .child(
                 div()
@@ -824,7 +838,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .rounded(px(crate::config::corners::CONTROL))
                     .hover(|s| s.bg(rgb(theme.active)))
-                    .child("Close")
+                    .child(fl!("host-menu-close"))
                     .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
             );
         let body = div()
@@ -837,18 +851,22 @@ impl HerdrWindow {
             .child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child(format!("{} · {}", host.target, host.session)),
+                    .child(format!("{} · {}", host.target, host.session)), // i18n: data
             )
-            .child(div().flex().flex_col().gap(px(6.)).child("Name").when_some(
-                host.input.clone(),
-                |field, input| {
-                    if host.renaming {
-                        field.child(div().child(input.read(cx).text().to_owned()))
-                    } else {
-                        field.child(input)
-                    }
-                },
-            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(fl!("host-menu-rename-name"))
+                    .when_some(host.input.clone(), |field, input| {
+                        if host.renaming {
+                            field.child(div().child(input.read(cx).text().to_owned()))
+                        } else {
+                            field.child(input)
+                        }
+                    }),
+            )
             .when_some(host.error.clone(), |body, error| {
                 body.child(div().text_color(crate::menu::danger(theme)).child(error))
             });
@@ -874,7 +892,11 @@ impl HerdrWindow {
                         })
                     })
                     .when(!ready, |button| button.text_color(rgb(theme.muted)))
-                    .child(if ready { "Rename" } else { "Renaming…" })
+                    .child(if ready {
+                        fl!("host-menu-rename-submit")
+                    } else {
+                        fl!("host-menu-renaming")
+                    })
                     .on_click(
                         cx.listener(|this, _, window, cx| this.submit_rename_device(window, cx)),
                     ),
@@ -907,17 +929,19 @@ fn removal_note(host: &HostMenu) -> String {
         return note;
     }
     match host.saved {
-        Saved::Ssh { .. } => format!(
-            "Remove {} ({} · {}) from this computer? Herdr keeps running on that host.",
-            host.label, host.target, host.session
+        Saved::Ssh { .. } => fl!(
+            "host-menu-remove-ssh-note",
+            device = host.label.as_str(),
+            target = host.target.as_str(),
+            session = host.session.as_str(),
         ),
         #[cfg(feature = "cloud")]
-        Saved::Cloud { provider, .. } => format!(
-            "Remove {} ({}) from this computer? The {} {} itself is left as it is.",
-            host.label,
-            host.target,
-            crate::cloud::name(provider),
-            crate::cloud::noun(provider),
+        Saved::Cloud { provider, .. } => fl!(
+            "host-menu-remove-cloud-note",
+            device = host.label.as_str(),
+            target = host.target.as_str(),
+            provider = crate::cloud::name(provider),
+            machine = crate::cloud::noun(provider),
         ),
     }
 }
@@ -942,7 +966,7 @@ impl HerdrWindow {
 
 #[cfg(not(feature = "cloud"))]
 fn remove_label(_: &HostMenu) -> String {
-    "Remove".to_owned()
+    fl!("host-menu-remove-submit")
 }
 
 #[cfg(test)]

@@ -93,7 +93,7 @@ fn right_clicking_a_cloud_device_offers_rename_settings_setup_and_removal(cx: &m
     cx.simulate_keystrokes("up enter");
     assert!(view.read_with(cx, |view, _| view.menu.page == Some(Page::RemoveDevice)));
     view.read_with(cx, |view, _| {
-        let note = super::super::removal_note(host(view));
+        let note = super::super::removal_note(host(view)).replace(['\u{2068}', '\u{2069}'], "");
         assert!(note.contains("Build box (herdr-tidy-lark-aa)"), "{note}");
         let kept = match crate::cloud::deletion(provider()) {
             Some(_) => "cannot be undone",

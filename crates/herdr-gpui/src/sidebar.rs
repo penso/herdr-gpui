@@ -1,5 +1,6 @@
 //! The sidebar: spaces and agents, the rows that show them, and the hover
 //! menu a resting pointer opens.
+// i18n: migrated
 
 mod accessibility;
 mod activity;
@@ -36,7 +37,7 @@ pub(crate) mod layout_tests;
 pub(crate) mod native_tests;
 
 pub(crate) use {
-    activity::{Activity, ActivityPanel},
+    activity::{Activity, ActivityPanel, BUTTON as BAR_BUTTON, ICON as BAR_ICON},
     agents::{Indicators, agent_name, pane_name, state_label, status_indicator, status_text},
     device_drag::DeviceDrag,
     hover::{HoverMenu, HoverRest},

@@ -238,7 +238,7 @@ pub(crate) fn agent_rows(
             let name = crate::sidebar::agent_name(agent);
             let (checkout, workspace, branch) = checkout(snapshot, agent);
             let status = crate::sidebar::status_text(agent.agent_status);
-            let label = crate::sidebar::state_label(agent, status);
+            let label = crate::sidebar::state_label(agent, &status);
             let detail = if label == status {
                 name.to_owned()
             } else {

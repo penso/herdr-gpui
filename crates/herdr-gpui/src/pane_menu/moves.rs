@@ -5,6 +5,7 @@
 
 use super::{Action, PaneMenu, Target};
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -27,12 +28,12 @@ impl Target {
                     workspace_id: self.workspace.clone(),
                 },
                 workspace: None,
-                place: "New Tab".into(),
+                place: fl!("pane-menu-new-tab"),
             },
             Choice {
                 destination: Destination::NewWorkspace,
                 workspace: None,
-                place: "New Workspace".into(),
+                place: fl!("pane-menu-new-workspace"),
             },
         ]
         .into_iter()
@@ -251,7 +252,7 @@ impl HerdrWindow {
                 .debug_selector(|| "pane-move-pending".into())
                 .p(px(8.))
                 .text_color(rgb(self.theme.muted))
-                .child("Moving pane\u{2026}"),
+                .child(fl!("pane-menu-moving")),
         )
     }
 
@@ -275,7 +276,7 @@ impl HerdrWindow {
                 .px(px(8.))
                 .py(px(4.))
                 .text_color(rgb(self.theme.muted))
-                .child("Move pane to"),
+                .child(fl!("pane-menu-move-heading")),
         );
         let row = |index: usize| {
             div()

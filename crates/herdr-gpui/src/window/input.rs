@@ -318,6 +318,10 @@ impl HerdrWindow {
         if self.chat_focused(window, cx) {
             return;
         }
+        // A herdr-core terminal takes its own keys; none reach a Herdr pane.
+        if self.core_terminals.focused(window, cx) {
+            return;
+        }
         // Copy mode owns the keyboard: its keys run and nothing else is typed.
         if self.copy_mode_active() {
             self.copy_mode_key(event, window, cx);

@@ -9,6 +9,7 @@
 //! executor, colours last, so its text shows before a large file is
 //! coloured. Drawing only reads what those produced.
 
+// i18n: migrated
 mod render;
 
 use crate::{
@@ -16,6 +17,7 @@ use crate::{
     browser::{Location, Store, TabId},
     code_index::{self, Kind, Language},
     editor::EditorTarget,
+    i18n::fl,
     review::highlight::{self, Span},
     window::Flash,
 };
@@ -220,7 +222,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         let Some((scope, workspace)) = self.browser_key() else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("code-view-no-workspace")), cx);
             return;
         };
         let Some(path) = target.path.to_str().map(str::to_owned) else {
@@ -248,7 +250,7 @@ impl HerdrWindow {
             })
         });
         let Some(id) = opened else {
-            self.show_flash(Flash::warning("Too many tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("code-view-too-many-tabs")), cx);
             return;
         };
         self.ensure_code_view(id, cx);
@@ -459,6 +461,19 @@ impl HerdrWindow {
             .scroll_to_item_strict(row.min(count.saturating_sub(1)), ScrollStrategy::Top);
         cx.notify();
         true
+    }
+}
+
+/// What a definition is, as the outline names it.
+fn kind_label(kind: Kind) -> String {
+    match kind {
+        Kind::Function => fl!("code-view-kind-function"),
+        Kind::Method => fl!("code-view-kind-method"),
+        Kind::Type => fl!("code-view-kind-type"),
+        Kind::Module => fl!("code-view-kind-module"),
+        Kind::Constant => fl!("code-view-kind-constant"),
+        Kind::Implementation => fl!("code-view-kind-implementation"),
+        Kind::Macro => fl!("code-view-kind-macro"),
     }
 }
 

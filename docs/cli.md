@@ -299,6 +299,28 @@ herdr-gpui remote status --json
 herdr-gpui remote revoke d_6f1c
 ```
 
+### Mods
+
+| Command | What it does |
+| --- | --- |
+| `mod [list]` | The mods the window runs: where each draws, its palette commands, and its last error. Exits 4 when there are none |
+| `mod reload NAME` | Read a mod's files again now, starting it over. Exits 5 when no mod of that name runs |
+| `mod open NAME` | Show a mod's activity bar app in the window's body. Exits 5 when no running mod of that name has one, 8 while the activity bar is off |
+| `mod panel [show\|hide\|toggle]` | The panel of mod sections on the window's right: whether it shows and which mods have a section, or show, hide, or toggle it (also the `toggle_mod_panel` command) |
+| `mod logs NAME [--lines N]` | The last lines (default 50, at most 200) the mod wrote with `herdr.log`. Exits 4 when there are none |
+| `mod check DIR` | Load a mod folder, run its `init` and `view` once against an empty state, and report what it draws. Runs here; Herdr UI need not run. Exits 1 with the error and its line when the mod is invalid |
+
+Mods are folders of sandboxed Luau in `<config>/herdr/gpui-mods/` that add
+status bar items, sidebar sections, and palette commands; saving a file
+reloads its mod. See [Mods](mods.md). `--json` gives `{"dir", "mods": [...]}`
+for `list`, each with `name`, `places`, `commands`, `drawn`, and `error`, and
+`{"name", "valid", "elements", "places", "hash", "log"}` for `check`.
+
+```sh
+herdr-gpui mod check ~/.config/herdr/gpui-mods/agents
+herdr-gpui mod logs agents --lines 20
+```
+
 ### Events
 
 `events` prints what happened in the app: windows opening, closing, and

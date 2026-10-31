@@ -4,6 +4,8 @@ use crate::{cloud::CloudProvider, control::batch::Phase, sidebar::layout_tests::
 use core::prelude::v1::test;
 use gpui::{TestAppContext, VisualTestContext};
 
+mod en_xa;
+
 fn target(provider: CloudProvider, id: &str) -> Target {
     Target {
         provider,
@@ -80,7 +82,8 @@ fn another_page_holds_the_window_so_nothing_is_asked(cx: &mut TestAppContext) {
 #[test]
 fn each_row_says_whether_the_machine_is_deleted_or_only_forgotten() {
     for &provider in CloudProvider::ALL {
-        let text = consequence(&target(provider, "m"));
+        // Without Fluent's isolation marks around each name.
+        let text = consequence(&target(provider, "m")).replace(['\u{2068}', '\u{2069}'], "");
         let name = crate::cloud::name(provider);
         if crate::cloud::deletion(provider).is_some() {
             assert!(text.starts_with("Delete the "), "{text}");
@@ -90,6 +93,9 @@ fn each_row_says_whether_the_machine_is_deleted_or_only_forgotten() {
             assert!(text.starts_with("Remove it from Herdr only"), "{text}");
         }
     }
-    assert_eq!(devices(1), "1 device");
-    assert_eq!(devices(3), "3 devices");
+    let plain = |count: usize| {
+        fl!("cloud-destroy-submit", count = count).replace(['\u{2068}', '\u{2069}'], "")
+    };
+    assert_eq!(plain(1), "Destroy 1 device");
+    assert_eq!(plain(3), "Destroy 3 devices");
 }

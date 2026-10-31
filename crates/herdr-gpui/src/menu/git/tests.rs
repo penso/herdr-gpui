@@ -5,6 +5,8 @@ use crate::sidebar::layout_tests::REPO_KEY;
 use gpui::{TestAppContext, VisualTestContext, point, px, size};
 use std::sync::Arc;
 
+mod en_xa;
+
 fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
     Status {
         additions,
@@ -17,9 +19,18 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
 fn summary_reads_as_a_sentence_before_and_after_the_first_refresh() {
     assert_eq!(summary(None), "Checking working tree...");
     assert_eq!(summary(Some(Status::default())), "No uncommitted changes");
-    assert_eq!(summary(Some(status(12, 3, 0))), "+12 -3");
-    assert_eq!(summary(Some(status(12, 3, 1))), "+12 -3, 1 untracked entry");
-    assert_eq!(summary(Some(status(0, 0, 4))), "+0 -0, 4 untracked entries");
+    assert_eq!(
+        summary(Some(status(12, 3, 0))),
+        "+\u{2068}12\u{2069} -\u{2068}3\u{2069}"
+    );
+    assert_eq!(
+        summary(Some(status(12, 3, 1))),
+        "+\u{2068}12\u{2069} -\u{2068}3\u{2069}, \u{2068}1\u{2069} untracked entry"
+    );
+    assert_eq!(
+        summary(Some(status(0, 0, 4))),
+        "+\u{2068}0\u{2069} -\u{2068}0\u{2069}, \u{2068}4\u{2069} untracked entries"
+    );
 }
 
 #[gpui::test]
@@ -82,7 +93,7 @@ fn a_cached_pull_request_is_named_and_only_an_open_one_can_be_opened(cx: &mut Te
             assert_eq!(view.git_pull_request().map(|pr| pr.number), Some(8));
             assert_eq!(
                 view.git_rows().last().map(|(_, label)| label.clone()),
-                Some("Open pull request #8".into())
+                Some("Open pull request #\u{2068}8\u{2069}".into())
             );
             view.open_git_menu(point(px(900.), px(20.)), window, cx);
         })

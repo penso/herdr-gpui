@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     HerdrWindow, NavigationTarget,
+    i18n::fl,
     search_input::{Changed, SearchInput},
 };
 use gpui::{
@@ -136,7 +137,7 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                 },
                 text: device.label.to_owned(),
                 range,
-                context: format!("{count} space{}", if count == 1 { "" } else { "s" }),
+                context: fl!("sidebar-search-spaces", count = count),
                 status: None,
             });
         }

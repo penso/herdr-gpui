@@ -105,7 +105,7 @@ def build(version, target, archive, output_dir, iscc, sign=False):
             release.extractall(temp)
         source = Path(temp) / root
         for required in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-                         "herdr-remote-control.exe", "herdr-automate.exe"):
+                         "herdr-remote-control.exe", "herdr-automate.exe", "herdr-core.exe"):
             if not (source / required).is_file():
                 raise ValueError(f"Release zip has no {required}")
         arguments = iscc_arguments(version, target, source, output_dir, sign)
@@ -277,6 +277,11 @@ def smoke(installer, signed=False):
             check_automate_restarted(app, daemon)
             enable_startup(app / "herdr-gpui-launcher.exe")
         finally:
+            # The launched app started the bundled herdr-core, as it does
+            # without Herdr 1 installed. Setup and the uninstaller never stop
+            # a core, whose terminals outlive the app; this scratch install's
+            # cores are the test's own, so it ends them before uninstalling.
+            stop_processes_at(app / "herdr-core.exe")
             # With the daemon still running, so the uninstaller has to stop it.
             try:
                 uninstall(app, env)

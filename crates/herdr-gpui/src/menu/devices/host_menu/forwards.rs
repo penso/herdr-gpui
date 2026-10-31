@@ -2,6 +2,7 @@
 //! port, and the host menu's list of forwards with their actions. The forwards
 //! themselves live in [`crate::port_forward`].
 use super::HostMenu;
+use crate::i18n::fl;
 use crate::{HerdrWindow, menu::Page};
 use gpui::{prelude::*, *};
 use std::num::NonZeroU16;
@@ -100,18 +101,18 @@ impl HerdrWindow {
                             .py(px(4.))
                             .text_size(small)
                             .text_color(rgb(theme.muted))
-                            .child("Forwarded ports"),
+                            .child(fl!("host-menu-forwards")),
                     );
                 any = true;
             }
             let remote_port = forward.remote_port();
             let port = remote_port.get();
             let (status, ended) = match forward.state() {
-                State::Starting => ("connecting…".to_owned(), None),
+                State::Starting => (fl!("host-menu-forward-connecting"), None),
                 State::Listening { local_port } => (format!("→ 127.0.0.1:{local_port}"), None),
-                State::Ended(reason) => ("ended".to_owned(), Some(reason.clone())),
+                State::Ended(reason) => (fl!("host-menu-forward-ended"), Some(reason.clone())),
             };
-            let button = |id: &'static str, label: &'static str| {
+            let button = |id: &'static str, label: String| {
                 div()
                     .id((id, usize::from(port)))
                     .debug_selector(move || format!("{id}-{port}"))
@@ -148,14 +149,22 @@ impl HerdrWindow {
                         ),
                 )
                 .when(forward.url().is_some(), |row| {
-                    row.child(button("host-forward-open", "Open").on_click(cx.listener(
-                        move |this, _, window, cx| this.open_forward(remote_port, window, cx),
-                    )))
+                    row.child(
+                        button("host-forward-open", fl!("host-menu-forward-open")).on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                this.open_forward(remote_port, window, cx)
+                            }),
+                        ),
+                    )
                 })
                 .child(
                     button(
                         "host-forward-stop",
-                        if ended.is_some() { "Dismiss" } else { "Stop" },
+                        if ended.is_some() {
+                            fl!("host-menu-forward-dismiss")
+                        } else {
+                            fl!("host-menu-forward-stop")
+                        },
                     )
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.stop_forward(remote_port, cx)),
@@ -194,7 +203,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .text_size(px(self.config.ui.size * 1.35))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Forward port"),
+                    .child(fl!("host-menu-forward-title")),
             )
             .child(
                 div()
@@ -204,7 +213,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .rounded(px(crate::config::corners::CONTROL))
                     .hover(|s| s.bg(rgb(theme.active)))
-                    .child("Close")
+                    .child(fl!("host-menu-forward-close"))
                     .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
             );
         let body = div()
@@ -214,17 +223,17 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(div().text_color(rgb(theme.muted)).child(format!(
-                "Reach a port that a program on {} listens on from this computer, \
-                 over SSH. It stays forwarded until you stop it.",
-                host.label
-            )))
+            .child(
+                div()
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("host-menu-forward-intro", device = host.label.as_str())),
+            )
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child("Remote port")
+                    .child(fl!("host-menu-forward-remote-port"))
                     .when_some(host.input.clone(), |field, input| field.child(input)),
             )
             .when_some(host.error.clone(), |body, error| {
@@ -251,7 +260,7 @@ impl HerdrWindow {
                     .bg(rgb(theme.active))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(theme.active).blend(rgba((theme.foreground << 8) | 0x20))))
-                    .child("Forward")
+                    .child(fl!("host-menu-forward-submit"))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.submit_forward_port(window, cx)),
                     ),

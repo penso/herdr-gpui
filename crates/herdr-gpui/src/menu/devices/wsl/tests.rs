@@ -4,6 +4,8 @@ use crate::{HerdrWindow, search_input::SearchInput, sidebar::layout_tests::fixtu
 use gpui::{AppContext, Context, KeyDownEvent, Keystroke, Modifiers, Point, TestAppContext};
 use herdr_client::{ConnectTarget, WslHost};
 
+mod en_xa;
+
 fn wsl(distro: &str) -> WslHost {
     WslHost {
         distro: distro.into(),
@@ -99,8 +101,14 @@ fn the_form_skips_saved_distributions_and_cycles_with_arrows(cx: &mut TestAppCon
         view.menu.wsl_setup.as_mut().unwrap().selected = Some("Ubuntu".into());
         view.submit_add_wsl(window, cx);
         assert_eq!(
-            view.menu.wsl_setup.as_ref().unwrap().error.as_deref(),
-            Some("Ubuntu is already a device.")
+            view.menu
+                .wsl_setup
+                .as_ref()
+                .unwrap()
+                .error
+                .as_deref()
+                .map(|error| error.replace(['\u{2068}', '\u{2069}'], "")),
+            Some("Ubuntu is already a device.".to_owned())
         );
         let setup = view.menu.wsl_setup.as_ref().unwrap();
         assert_eq!(setup.step, Step::Form);
@@ -160,7 +168,7 @@ fn a_platform_without_wsl_refuses_with_its_reason() {
         panic!("WSL saved a device off Windows");
     };
     assert_eq!(
-        message,
+        message.replace(['\u{2068}', '\u{2069}'], ""),
         "Check Ubuntu: WSL distributions are only available on Windows"
     );
 }
