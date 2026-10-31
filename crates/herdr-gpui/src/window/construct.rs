@@ -168,6 +168,7 @@ impl HerdrWindow {
             config_watch: None,
             configured_terminal_size,
             copy_mode: None,
+            core_terminals: Default::default(),
             daemon_text: Default::default(),
             deliveries: Default::default(),
             device_drag: None,
@@ -218,6 +219,8 @@ impl HerdrWindow {
             marked_selection: None,
             menu,
             merged_cleanup: Default::default(),
+            mod_panel_width: crate::panel_resize::MOD_PANEL,
+            mods: Default::default(),
             #[cfg(feature = "integration-test")]
             navigations: Default::default(),
             network_quality_seen: 0,

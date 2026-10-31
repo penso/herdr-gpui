@@ -66,7 +66,10 @@ fn coder_config_ssh_hosts_and_saved_workspaces_are_coder() {
     assert_eq!(ssh("main.herdr-1.fabienpenso-microsoft.coder"), over_ssh);
     assert_eq!(ssh("me@workspace.owner.CODER"), over_ssh);
     assert_eq!(ssh("coder.example.com"), Origin::Ssh);
-    assert_eq!(over_ssh.describe(), "Coder workspace over SSH");
+    assert_eq!(
+        over_ssh.describe(),
+        "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069} over SSH"
+    );
     assert_eq!(over_ssh.icon(), "icons/cloud/coder.svg");
 
     let saved = Origin::of(&ConnectTarget::Cloud {
@@ -83,7 +86,10 @@ fn coder_config_ssh_hosts_and_saved_workspaces_are_coder() {
             ssh: false,
         }
     );
-    assert_eq!(saved.describe(), "Coder workspace");
+    assert_eq!(
+        saved.describe(),
+        "\u{2068}Coder\u{2069} \u{2068}workspace\u{2069}"
+    );
 }
 
 #[cfg(feature = "azure")]
@@ -105,7 +111,10 @@ fn azure_cloud_device_origin_and_icon() {
             ssh: false,
         }
     );
-    assert_eq!(saved.describe(), "Azure machine");
+    assert_eq!(
+        saved.describe(),
+        "\u{2068}Azure\u{2069} \u{2068}machine\u{2069}"
+    );
     assert_eq!(saved.icon(), "icons/cloud/azure.svg");
     assert!(
         crate::icons::Icons
@@ -138,4 +147,23 @@ fn host_names_drop_user_port_scheme_and_brackets() {
     assert_eq!(host_name("me@host:2222"), "host");
     assert_eq!(host_name("[::1]:22"), "::1");
     assert_eq!(host_name("fe80::1"), "fe80::1");
+}
+
+/// Each provider's noun is a key the catalog selects a translated word by,
+/// so every key needs its own variant rather than the fallback's `machine`.
+#[cfg(feature = "cloud")]
+#[test]
+fn every_cloud_noun_has_its_own_translation() {
+    for &provider in crate::cloud::CloudProvider::ALL {
+        let noun = crate::cloud::noun(provider);
+        let text = Origin::Cloud {
+            provider,
+            ssh: false,
+        }
+        .describe();
+        assert!(
+            text.ends_with(&format!(" \u{2068}{noun}\u{2069}")),
+            "{provider:?}: {text}"
+        );
+    }
 }

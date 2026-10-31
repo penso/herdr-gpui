@@ -15,9 +15,10 @@ workspace = true
 default = ["engine"]
 # The Luau sandbox, plans and schedules. Clients that only read the daemon's
 # reports (Herdr UI) turn it off and build no Luau.
-engine = ["dep:jiff", "dep:mlua", "dep:sha2", "dep:unicode-properties"]
+engine = ["dep:herdr-luau", "dep:jiff", "dep:mlua", "dep:sha2", "dep:unicode-properties"]
 
 [dependencies]
+herdr-luau = { optional = true, workspace = true }
 jiff      = { optional = true, workspace = true }
 mlua      = { optional = true, workspace = true }
 serde.workspace     = true

@@ -95,13 +95,14 @@ impl HerdrWindow {
     fn device_search(
         &self,
         font: crate::config::FontConfig,
-        placeholder: &str,
+        // Formatted again when the language changes.
+        placeholder: impl Fn() -> String + 'static,
         cx: &mut Context<Self>,
     ) -> (Entity<SearchInput>, Subscription) {
         let theme = self.theme.clone();
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder(placeholder, cx);
+            input.set_placeholder_with(placeholder, cx);
             input.set_appearance(font, theme, cx);
             input
         });
@@ -113,8 +114,11 @@ impl HerdrWindow {
         if self.devices_overview.pages.contains_key(&id) {
             return;
         }
-        let (search, changed) =
-            self.device_search(self.config.ui.clone(), &fl!("devices-overview-search"), cx);
+        let (search, changed) = self.device_search(
+            self.config.ui.clone(),
+            || fl!("devices-overview-search"),
+            cx,
+        );
         self.devices_overview.pages.insert(
             id,
             Page {
@@ -199,7 +203,7 @@ impl HerdrWindow {
             }
             None => {
                 let (input, changed) =
-                    self.device_search(font, &fl!("devices-overview-tree-search"), cx);
+                    self.device_search(font, || fl!("devices-overview-tree-search"), cx);
                 // The sidebar's heading frames it.
                 input.update(cx, |input, cx| input.set_frameless(cx));
                 self.devices_overview.tree_search = Some(TreeSearch {

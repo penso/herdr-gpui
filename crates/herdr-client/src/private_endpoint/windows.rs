@@ -47,7 +47,7 @@ const MAX_RETRY: Duration = Duration::from_millis(25);
 /// `ERROR_PIPE_BUSY`: every instance is taken; the listener makes another.
 const PIPE_BUSY: i32 = 231;
 /// `SECURITY_IDENTIFICATION`: the server may learn who called, not act as them.
-const IDENTIFICATION: u32 = 0x0001_0000;
+pub(crate) const IDENTIFICATION: u32 = 0x0001_0000;
 
 pub struct Listener(PipeListener<pipe_mode::Bytes, pipe_mode::Bytes>);
 

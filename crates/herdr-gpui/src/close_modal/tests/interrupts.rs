@@ -19,12 +19,12 @@ fn the_dialog_names_the_agents_a_close_would_interrupt() -> anyhow::Result<()> {
     // The fixture's Claude is blocked on a prompt.
     assert_eq!(
         interrupts(&snapshot, Some("w1:p1")).as_deref(),
-        Some("Claude is waiting on you.")
+        Some("\u{2068}Claude\u{2069} is waiting on you.")
     );
     snapshot.agents[0].agent_status = AgentStatus::Working;
     assert_eq!(
         interrupts(&snapshot, None).as_deref(),
-        Some("Claude is working.")
+        Some("\u{2068}Claude\u{2069} is working.")
     );
     let mut second = snapshot.agents[0].clone();
     second.pane_id = "w1:p2".into();
@@ -32,12 +32,12 @@ fn the_dialog_names_the_agents_a_close_would_interrupt() -> anyhow::Result<()> {
     snapshot.agents.push(second);
     assert_eq!(
         interrupts(&snapshot, None).as_deref(),
-        Some("2 agents are working or waiting on you.")
+        Some("\u{2068}2\u{2069} agents are working or waiting on you.")
     );
     // A pane names only its own agent.
     assert_eq!(
         interrupts(&snapshot, Some("w1:p1")).as_deref(),
-        Some("Claude is working.")
+        Some("\u{2068}Claude\u{2069} is working.")
     );
     for agent in &mut snapshot.agents {
         agent.agent_status = AgentStatus::Done;

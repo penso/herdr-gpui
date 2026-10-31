@@ -77,8 +77,21 @@ usage-status-page = Status Page
 usage-daily-spend = Daily spend
 usage-other-accounts = Other accounts
 usage-account-disabled = disabled
-# $note is what claude-swap reports about the account.
-usage-account-disabled-note = { $note }, disabled
+# Why another claude-swap account's numbers are missing or old, and
+# whether claude-swap holds it out of rotation ($disabled is yes or no).
+usage-account-note = { $status ->
+        [stale] last known
+        [token-expired] token expired
+        [api-key] API key
+        [keychain] keychain unavailable
+        [relogin] re-login needed
+        [foreign] foreign credential
+        [no-credentials] no credentials
+       *[unavailable] unavailable
+    }{ $disabled ->
+        [yes] , disabled
+       *[no] {""}
+    }
 usage-keychain-needed = { $name }'s sign-in is kept in the macOS Keychain, so reading it makes macOS ask for permission. Choose Always Allow to see these numbers at launch without being asked again.
 usage-keychain-allow = Allow Keychain Access
 usage-keychain-denied = macOS was not allowed to share { $name }'s sign-in. Try again to have macOS ask once more.

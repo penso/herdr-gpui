@@ -1,7 +1,7 @@
 //! Keyboard focus in the window's chrome. Tab belongs to the terminal, so the
 //! chrome is reached a region at a time: Focus Next Region (F6) moves from the
 //! terminal to the title bar, the sidebar, the notice cards while any show,
-//! the status bar, and back. Inside a
+//! the mod panel while it shows, the status bar, and back. Inside a
 //! region Tab and Shift-Tab move between its controls, Enter or Space uses
 //! one, and Escape returns to the terminal.
 //!
@@ -18,6 +18,8 @@ pub(crate) enum Region {
     Sidebar,
     /// The config and announcement cards over the terminal's top right.
     Notices,
+    /// The panel of mod sections on the window's right (`crate::mods`).
+    ModPanel,
     StatusBar,
 }
 
@@ -57,6 +59,7 @@ impl HerdrWindow {
             (Region::TitleBar, true),
             (Region::Sidebar, self.sidebar_visible && !zen),
             (Region::Notices, self.notices_shown()),
+            (Region::ModPanel, self.mod_panel_shown()),
             (Region::StatusBar, self.status_bar_visible && !zen),
         ]
         .into_iter()

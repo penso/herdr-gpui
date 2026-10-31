@@ -62,6 +62,8 @@ class ReleaseTests(unittest.TestCase):
         remote_control.write_bytes(b"remote control daemon")
         automate = self.work / "herdr-automate"
         automate.write_bytes(b"automation daemon")
+        core = self.work / "herdr-core"
+        core.write_bytes(b"herdr-core daemon")
         for target in ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"):
             with self.subTest(target=target):
                 result = self.run_script("package-linux.sh", "20260920.3", target, binary, self.work, self.notices)
@@ -70,6 +72,7 @@ class ReleaseTests(unittest.TestCase):
                     files = {m.name: m for m in archive.getmembers() if m.isfile()}
                     self.assertEqual(set(files), {base + p for p in [
                         "bin/herdr-gpui", "bin/herdr-acp", "bin/herdr-remote-control", "bin/herdr-automate",
+                        "bin/herdr-core",
                         "share/applications/so.pen.herdr-gpui.desktop",
                         "share/icons/hicolor/scalable/apps/herdr-gpui.svg",
                         "share/licenses/herdr-gpui/LICENSE-APACHE", "share/licenses/herdr-gpui/NOTICE.md",
@@ -77,6 +80,7 @@ class ReleaseTests(unittest.TestCase):
                         "share/licenses/herdr-gpui/LICENSE-octicons",
                         "share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt",
                         "share/licenses/herdr-gpui/SOUND-NOTICE.md",
+                        "share/licenses/herdr-gpui/HERDR-CORE-LICENSES.txt",
                     ]})
                     self.assertEqual(files[base + "bin/herdr-gpui"].mode & 0o777, 0o755)
                     self.assertEqual(archive.extractfile(base + "bin/herdr-gpui").read(), binary.read_bytes())
@@ -87,6 +91,10 @@ class ReleaseTests(unittest.TestCase):
                                      remote_control.read_bytes())
                     self.assertEqual(files[base + "bin/herdr-automate"].mode & 0o777, 0o755)
                     self.assertEqual(archive.extractfile(base + "bin/herdr-automate").read(), automate.read_bytes())
+                    self.assertEqual(files[base + "bin/herdr-core"].mode & 0o777, 0o755)
+                    self.assertEqual(archive.extractfile(base + "bin/herdr-core").read(), core.read_bytes())
+                    self.assertEqual(archive.extractfile(base + "share/licenses/herdr-gpui/HERDR-CORE-LICENSES.txt").read(),
+                                     (SCRIPTS / "herdr-core-licenses.txt").read_bytes())
                     self.assertEqual(archive.extractfile(base + "share/icons/hicolor/scalable/apps/herdr-gpui.svg").read(), (ROOT / "assets/icons/herdr-linux.svg").read_bytes())
                     self.assertEqual(archive.extractfile(base + "share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt").read(), self.notices.read_bytes())
                     for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
@@ -115,6 +123,11 @@ class ReleaseTests(unittest.TestCase):
         result = self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.work,
                                  self.notices, success=False)
         self.assertIn("A herdr-automate beside the binary required", result.stderr)
+        automate.write_bytes(b"automation daemon")
+        core.unlink()
+        result = self.run_script("package-linux.sh", "20260920.3", "x86_64-unknown-linux-gnu", binary, self.work,
+                                 self.notices, success=False)
+        self.assertIn("A herdr-core beside the binary required", result.stderr)
 
     def run_windows(self, *args, success=True):
         result = subprocess.run(["python3", str(SCRIPTS / "package-windows.py"), *map(str, args)],
@@ -133,6 +146,8 @@ class ReleaseTests(unittest.TestCase):
         remote_control.write_bytes(b"remote control daemon")
         automate = self.work / "herdr-automate.exe"
         automate.write_bytes(b"automation daemon")
+        core = self.work / "herdr-core.exe"
+        core.write_bytes(b"herdr-core daemon")
         target = "x86_64-pc-windows-msvc"
         output = Path(self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices).stdout.strip())
         self.assertEqual(output, self.work.resolve() / f"Herdr-20260920.3-{target}.zip")
@@ -140,9 +155,9 @@ class ReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(output) as archive:
             self.assertIsNone(archive.testzip())
             self.assertEqual(set(archive.namelist()), {base + p for p in [
-                "herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe", "herdr-remote-control.exe", "herdr-automate.exe", "licenses/LICENSE", "licenses/NOTICE", "licenses/LICENSE-octicons",
+                "herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe", "herdr-remote-control.exe", "herdr-automate.exe", "herdr-core.exe", "licenses/LICENSE", "licenses/NOTICE", "licenses/LICENSE-octicons",
                 "licenses/LICENSE-APACHE", "licenses/NOTICE.md", "licenses/SOUND-NOTICE.md",
-                "licenses/THIRD-PARTY-NOTICES.txt",
+                "licenses/THIRD-PARTY-NOTICES.txt", "licenses/HERDR-CORE-LICENSES.txt",
             ]})
             self.assertEqual({info.date_time for info in archive.infolist()}, {(1980, 1, 1, 0, 0, 0)})
             self.assertEqual(archive.read(base + "herdr-gpui.exe"), binary.read_bytes())
@@ -150,6 +165,9 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(archive.read(base + "herdr-acp.exe"), acp.read_bytes())
             self.assertEqual(archive.read(base + "herdr-remote-control.exe"), remote_control.read_bytes())
             self.assertEqual(archive.read(base + "herdr-automate.exe"), automate.read_bytes())
+            self.assertEqual(archive.read(base + "herdr-core.exe"), core.read_bytes())
+            self.assertEqual(archive.read(base + "licenses/HERDR-CORE-LICENSES.txt"),
+                             (SCRIPTS / "herdr-core-licenses.txt").read_bytes())
             self.assertEqual(archive.read(base + "licenses/THIRD-PARTY-NOTICES.txt"), self.notices.read_bytes())
             for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/LICENSE-APACHE",
                            "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
@@ -178,6 +196,10 @@ class ReleaseTests(unittest.TestCase):
         result = self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices, success=False)
         self.assertIn("A herdr-automate.exe beside the binary required", result.stderr)
         automate.write_bytes(b"automation daemon")
+        core.unlink()
+        result = self.run_windows("20260920.3", target, binary, launcher, self.work, self.notices, success=False)
+        self.assertIn("A herdr-core.exe beside the binary required", result.stderr)
+        core.write_bytes(b"herdr-core daemon")
         for args in [("20260920.03", target, binary, launcher, self.work, self.notices),
                      ("v20260920.3", target, binary, launcher, self.work, self.notices),
                      ("20260920.3", "x86_64-pc-windows-gnu", binary, launcher, self.work, self.notices),
@@ -226,9 +248,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse((self.work / "log").exists())
 
     def macos_builds(self, arm_worktree=False, intel_worktree=False):
-        """Each architecture's build folder, as cargo leaves it: herdr-gpui
-        and the herdr-acp, herdr-remote-control, and herdr-automate beside it,
-        in a folder the mock lipo reads the architecture from."""
+        """Each architecture's build folder, as the build leaves it:
+        herdr-gpui and the herdr-acp, herdr-remote-control, herdr-automate,
+        and fetched herdr-core beside it, in a folder the mock lipo reads the
+        architecture from."""
         binaries = []
         for arch, worktree in (("arm64", arm_worktree), ("x86_64", intel_worktree)):
             folder = self.work / arch
@@ -237,6 +260,7 @@ class ReleaseTests(unittest.TestCase):
             (folder / "herdr-acp").write_bytes(b"chat program")
             (folder / "herdr-remote-control").write_bytes(b"remote control daemon")
             (folder / "herdr-automate").write_bytes(b"automation daemon")
+            (folder / "herdr-core").write_bytes(b"herdr-core daemon")
             binaries.append(folder / "herdr-gpui")
         return binaries
 
@@ -247,15 +271,18 @@ class ReleaseTests(unittest.TestCase):
         app = self.work / "Herdr.app"
         self.assertEqual({str(p.relative_to(app)) for p in app.rglob("*") if p.is_file()}, {
             "Contents/MacOS/Herdr", "Contents/MacOS/herdr-acp", "Contents/MacOS/herdr-remote-control",
-            "Contents/MacOS/herdr-automate",
+            "Contents/MacOS/herdr-automate", "Contents/MacOS/herdr-core",
             "Contents/Info.plist", "Contents/Resources/Herdr.icns",
             "Contents/Resources/Assets.car",
             "Contents/Resources/LICENSE-APACHE", "Contents/Resources/NOTICE.md",
             "Contents/Resources/LICENSE", "Contents/Resources/NOTICE", "Contents/Resources/LICENSE-octicons",
             "Contents/Resources/THIRD-PARTY-NOTICES.txt",
             "Contents/Resources/SOUND-NOTICE.md",
+            "Contents/Resources/HERDR-CORE-LICENSES.txt",
         })
         self.assertEqual((app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").read_bytes(), self.notices.read_bytes())
+        self.assertEqual((app / "Contents/Resources/HERDR-CORE-LICENSES.txt").read_bytes(),
+                         (SCRIPTS / "herdr-core-licenses.txt").read_bytes())
         self.assertEqual((app / "Contents/Resources/Herdr.icns").read_bytes(), (ROOT / "assets/icons/Herdr.icns").read_bytes())
         self.assertEqual((app / "Contents/Resources/Assets.car").read_bytes(), (ROOT / "assets/icons/Herdr.car").read_bytes())
         for source in ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons", "crates/herdr-protocol/NOTICE.md", "crates/herdr-gpui/SOUND-NOTICE.md"):
@@ -264,7 +291,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_assembly_requires_each_companion_beside_each_binary(self):
         self.mock_tools()
-        for companion in ("herdr-acp", "herdr-remote-control", "herdr-automate"):
+        for companion in ("herdr-acp", "herdr-remote-control", "herdr-automate", "herdr-core"):
             with self.subTest(companion=companion):
                 arm, intel = self.macos_builds()
                 (intel.parent / companion).unlink()
@@ -281,7 +308,7 @@ class ReleaseTests(unittest.TestCase):
                      "scripts/release/package-linux.sh", "scripts/release/build-icon.py",
                      "scripts/release/so.pen.herdr-gpui.desktop", "assets/macos/Info.plist",
                       "LICENSE", "NOTICE", "assets/icons/LICENSE-octicons",
-                      "crates/herdr-gpui/SOUND-NOTICE.md",
+                      "crates/herdr-gpui/SOUND-NOTICE.md", "scripts/release/herdr-core-licenses.txt",
                      "crates/herdr-protocol/LICENSE-APACHE", "crates/herdr-protocol/NOTICE.md"]:
             destination = fixture / path
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -317,6 +344,7 @@ class ReleaseTests(unittest.TestCase):
         (app / "Contents/MacOS/herdr-acp").write_text("never run")
         (app / "Contents/MacOS/herdr-remote-control").write_text("never run")
         (app / "Contents/MacOS/herdr-automate").write_text("never run")
+        (app / "Contents/MacOS/herdr-core").write_text("never run")
         (app / "Contents/Resources").mkdir()
         (app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").write_bytes(self.notices.read_bytes())
         self.env.update(
@@ -353,6 +381,7 @@ class ReleaseTests(unittest.TestCase):
         (app / "Contents/MacOS/herdr-acp").write_text("never run")
         (app / "Contents/MacOS/herdr-remote-control").write_text("never run")
         (app / "Contents/MacOS/herdr-automate").write_text("never run")
+        (app / "Contents/MacOS/herdr-core").write_text("never run")
         (app / "Contents/Resources").mkdir()
         (app / "Contents/Resources/THIRD-PARTY-NOTICES.txt").write_bytes(self.notices.read_bytes())
         self.env.update(
@@ -418,10 +447,11 @@ class ReleaseTests(unittest.TestCase):
         signs = [c for c in calls if c[:2] == ["codesign", "--force"]]
         self.assertTrue(any(c[-1].endswith("/Contents/MacOS/Herdr") for c in signs))
         self.assertTrue(any(c[-1].endswith("/Herdr.app") for c in signs))
-        # The nested herdr-acp, herdr-remote-control, and herdr-automate are
-        # signed before the app seals it, without the app's entitlements.
+        # The nested herdr-acp, herdr-remote-control, herdr-automate, and
+        # herdr-core are signed before the app seals it, without the app's
+        # entitlements.
         targets = [c[-1].rsplit("/", 1)[-1] for c in signs]
-        for nested in ("herdr-acp", "herdr-remote-control", "herdr-automate"):
+        for nested in ("herdr-acp", "herdr-remote-control", "herdr-automate", "herdr-core"):
             self.assertLess(targets.index(nested), targets.index("Herdr.app"))
             self.assertFalse(any("--entitlements" in c for c in signs if c[-1].endswith(f"/{nested}")))
         self.assertTrue(all("--timestamp" in c for c in signs))

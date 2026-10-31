@@ -7,8 +7,9 @@ Beside herdr-gpui.exe, which is a console program because it is also the CLI,
 the zip carries herdr-gpui-launcher.exe, the windowed launcher that starts it without a
 console window from Explorer or the Start menu, herdr-acp.exe, which the app
 starts chats with, herdr-remote-control.exe, the remote control daemon the
-app runs as a scheduled task, and herdr-automate.exe, the automation daemon;
-the build leaves all three beside herdr-gpui.exe.
+app runs as a scheduled task, herdr-automate.exe, the automation daemon,
+and herdr-core.exe, which runs Herdr 2 terminals; the build leaves all four
+beside herdr-gpui.exe (herdr-core.exe fetched pinned).
 """
 import argparse
 from pathlib import Path
@@ -44,7 +45,7 @@ def package(version, target, binary, launcher, output_dir, notices):
     if not launcher.is_file():
         raise ValueError("Launcher file required")
     companions = [binary.parent / name for name in ("herdr-acp.exe", "herdr-remote-control.exe",
-                                                         "herdr-automate.exe")]
+                                                         "herdr-automate.exe", "herdr-core.exe")]
     for companion in companions:
         if not companion.is_file():
             raise ValueError(f"A {companion.name} beside the binary required")
@@ -66,6 +67,8 @@ def package(version, target, binary, launcher, output_dir, notices):
             for source in LICENSES:
                 add(archive, f"{name}/licenses/{Path(source).name}", (ROOT / source).read_bytes())
             add(archive, f"{name}/licenses/THIRD-PARTY-NOTICES.txt", notices.read_bytes())
+            add(archive, f"{name}/licenses/HERDR-CORE-LICENSES.txt",
+                (ROOT / "scripts/release/herdr-core-licenses.txt").read_bytes())
         if output.exists() or output.is_symlink():
             raise ValueError(f"Output already exists: {output}")
         partial.replace(output)

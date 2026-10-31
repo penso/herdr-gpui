@@ -12,7 +12,10 @@ fn rejected_dialog_command_preserves_connection_diagnostic() {
         request_id: Some("create".into()),
         reason: herdr_client::Error::Disconnected,
     });
-    assert_eq!(state.status_text(None), "Disconnected: socket closed");
+    assert_eq!(
+        state.status_text(None),
+        "\u{2068}Disconnected\u{2069}: \u{2068}socket closed\u{2069}"
+    );
     assert!(matches!(&state.dialog_response, Some((_, Some(Err(_))))));
 }
 
@@ -38,7 +41,10 @@ fn untracked_daemon_errors_remain_visible_as_readable_messages() {
             request_id: "input".into(),
             response: serde_json::json!({"error": payload}),
         });
-        assert_eq!(state.status_text(None), format!("Connected: {expected}"));
+        assert_eq!(
+            state.status_text(None),
+            format!("\u{2068}Connected\u{2069}: \u{2068}{expected}\u{2069}")
+        );
     }
 }
 
@@ -93,7 +99,7 @@ fn connection_status_and_error_priority_follow_lifecycle() {
     assert!(state.status.is_connected());
     assert_eq!(
         state.status_text(Some("input error")),
-        "Connected: input error"
+        "\u{2068}Connected\u{2069}: \u{2068}input error\u{2069}"
     );
     state.apply(ClientEvent::Disconnected {
         reason: "socket closed".into(),
@@ -102,7 +108,7 @@ fn connection_status_and_error_priority_follow_lifecycle() {
     assert!(!state.status.is_connected());
     assert_eq!(
         state.status_text(Some("old input error")),
-        "Disconnected: socket closed"
+        "\u{2068}Disconnected\u{2069}: \u{2068}socket closed\u{2069}"
     );
     state.status = ConnectionStatus::Detached;
     state.error = None;

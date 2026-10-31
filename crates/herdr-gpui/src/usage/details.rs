@@ -10,7 +10,7 @@ use super::{
 };
 use crate::i18n::fl;
 use gpui::{AnyElement, Div, div, prelude::*, px};
-use herdr_usage::details::{ClaudeAccount, OpenaiDaily};
+use herdr_usage::details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily};
 
 pub(super) fn render(report: &Report, ui: &Ui) -> AnyElement {
     let standard = ui.standard(report);
@@ -82,11 +82,7 @@ fn other_accounts(others: &[ClaudeAccount], ui: &Ui) -> Div {
     ui.block()
         .child(ui.heading(fl!("usage-other-accounts")))
         .children(others.iter().map(|other| {
-            let note = match (other.note(), other.disabled) {
-                (Some(note), true) => fl!("usage-account-disabled-note", note = note),
-                (None, true) => fl!("usage-account-disabled"),
-                (note, false) => note.map(str::to_owned).unwrap_or_default(),
-            };
+            let note = note(other);
             div()
                 .flex()
                 .flex_col()
@@ -110,6 +106,31 @@ fn other_accounts(others: &[ClaudeAccount], ui: &Ui) -> Div {
                 )
                 .children(other.windows.iter().map(|limit| window(limit, ui)))
         }))
+}
+
+/// Why an account's windows are missing or old, and whether claude-swap
+/// holds it out of rotation, as `ClaudeAccount::note` says in English.
+pub(super) fn note(other: &ClaudeAccount) -> String {
+    let status = match other.status {
+        ClaudeAccountStatus::Ok if other.stale => "stale",
+        ClaudeAccountStatus::Ok => "ok",
+        ClaudeAccountStatus::TokenExpired => "token-expired",
+        ClaudeAccountStatus::ApiKey => "api-key",
+        ClaudeAccountStatus::KeychainUnavailable => "keychain",
+        ClaudeAccountStatus::ReloginRequired => "relogin",
+        ClaudeAccountStatus::ForeignCredential => "foreign",
+        ClaudeAccountStatus::NoCredentials => "no-credentials",
+        ClaudeAccountStatus::Unavailable | ClaudeAccountStatus::Unknown => "unavailable",
+    };
+    match (status, other.disabled) {
+        ("ok", false) => String::new(),
+        ("ok", true) => fl!("usage-account-disabled"),
+        (status, disabled) => fl!(
+            "usage-account-note",
+            status = status,
+            disabled = if disabled { "yes" } else { "no" }
+        ),
+    }
 }
 
 fn window(limit: &Window, ui: &Ui) -> Div {
