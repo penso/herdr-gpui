@@ -67,6 +67,16 @@ teleport-moving = Moving...
 teleport-close = Close
 teleport-hide = Hide
 teleport-cancel = Cancel
+# What did not carry over in a move that otherwise finished, shown after
+# it as $first. $agent and $program are program names, $pane a pane's ID,
+# $host the destination, and $error why.
+teleport-warning-started-afresh = { $agent } started afresh: { $error }
+teleport-warning-envrc = The repository tracks .envrc, so GH_TOKEN was not added; git pull and push still work
+teleport-warning-github = GitHub access was not set up: { $error }
+teleport-warning-no-note-from = No handoff note from { $pane }: { $error }
+teleport-warning-no-note = No handoff note: { $error }
+teleport-warning-missing = { $program } is not installed on { $host }
+teleport-warning-pane-open = The source pane stayed open: { $error }
 # Flashes when the move ends with the dialog closed.
 teleport-failed = Teleport failed: { $error }
 teleport-done = Teleported to { $host }

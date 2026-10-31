@@ -40,7 +40,7 @@ pane-menu-carry-checking = Checking the agent session and home directory…
 pane-menu-carry-failed = Moving the pane failed: { $error }
 # $destination names the device and place the pane moved to.
 pane-menu-carry-moved = Moved to { $destination }
-# $first is the first warning, in English from the move.
+# $first is the first warning, from teleport.ftl's teleport-warning-*.
 pane-menu-carry-moved-warnings = { $count ->
         [one] Moved to { $destination } with a warning: { $first }
        *[other] Moved to { $destination } with { $count } warnings: { $first }

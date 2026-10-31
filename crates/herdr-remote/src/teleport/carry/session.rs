@@ -35,12 +35,39 @@ pub struct SessionReview {
 }
 
 impl SessionReview {
-    pub fn describe(&self) -> String {
+    /// The pane's work and the resume the destination runs for it, for the
+    /// review to list; `None` for a pane with no agent session.
+    pub fn resume(&self) -> Option<(&Work, Action)> {
         let Work::Session { agent, .. } = &self.source.work else {
-            return String::new();
+            return None;
         };
-        describe(&self.source.work, &Action::Resume(*agent))
+        Some((&self.source.work, Action::Resume(*agent)))
     }
+}
+
+/// A review of `agent`'s session moving into `cwd` on `destination`, for
+/// window tests that need a session-only move ready to start.
+#[cfg(any(test, feature = "test-support"))]
+pub fn session_review(destination: Place, cwd: &str, agent: AgentKind) -> Review {
+    let session = crate::teleport::snapshot::AgentSession {
+        agent: agent.binary().into(),
+        kind: crate::teleport::snapshot::SessionKind::Id,
+        source: "test".into(),
+        value: "session".into(),
+    };
+    Review::SessionOnly(Box::new(SessionReview {
+        destination,
+        cwd: cwd.into(),
+        source: SessionSource {
+            cwd: cwd.into(),
+            relative: cwd.into(),
+            work: Work::Session {
+                agent,
+                session,
+                flags: Vec::new(),
+            },
+        },
+    }))
 }
 
 pub fn check_session(origin: &Origin, cancelled: &AtomicBool) -> Result<()> {
