@@ -46,9 +46,9 @@ use std::collections::HashMap;
 
 type Started = std::sync::mpsc::Receiver<Result<TerminalInfo, herdr_core_client::Error>>;
 
-/// What a shell being started is for.
+/// What a terminal being started is for.
 #[derive(Clone, Debug)]
-enum Purpose {
+pub(crate) enum Purpose {
     /// A new tab in a workspace.
     Tab { scope: Scope, workspace: String },
     /// A new pane beside `at` in a tab.
@@ -124,8 +124,9 @@ pub(crate) struct CoreTerminals {
     starting: Option<(Purpose, Started)>,
     tabs: HashMap<TabId, TabPanes>,
     views: HashMap<(TabId, TerminalId), Entity<CoreTerminalView>>,
-    /// A shell to start once the hub connects.
-    wanted: Option<Purpose>,
+    /// A terminal to start once the hub connects: a shell, or the program
+    /// its spawn names.
+    wanted: Option<(Purpose, Spawn)>,
 }
 
 impl CoreTerminals {
@@ -149,8 +150,47 @@ impl CoreTerminals {
             .any(|view| view.read(cx).focus_handle().contains_focused(window, cx))
     }
 
+    /// What herdr-core reports of the terminals in the panes of tabs that
+    /// drive them, which a chat may be drawn over. A mirror only watches.
+    pub(crate) fn chat_terminals(&self) -> impl Iterator<Item = &TerminalInfo> {
+        self.tabs
+            .values()
+            .filter(|shown| !shown.observe)
+            .flat_map(|shown| shown.panes.terminals())
+            .filter_map(|terminal| self.infos.get(terminal))
+    }
+
+    /// The pane a new chat in `tab` opens beside: the one in use, in a tab
+    /// that drives its terminals.
+    pub(crate) fn chat_split_at(&self, tab: TabId) -> Option<TerminalId> {
+        self.tabs
+            .get(&tab)
+            .filter(|shown| !shown.observe)
+            .map(|shown| shown.active.clone())
+    }
+
+    /// Makes `terminal` the pane in use in `tab`; whether that changed.
+    pub(crate) fn set_active(&mut self, tab: TabId, terminal: TerminalId) -> bool {
+        let Some(shown) = self.tabs.get_mut(&tab) else {
+            return false;
+        };
+        if shown.active == terminal || !shown.panes.contains(&terminal) {
+            return false;
+        }
+        shown.active = terminal;
+        true
+    }
+
+    /// The tab whose panes hold `terminal`, among tabs that drive them.
+    pub(crate) fn tab_of(&self, terminal: &TerminalId) -> Option<TabId> {
+        self.tabs
+            .iter()
+            .find(|(_, shown)| !shown.observe && shown.panes.contains(terminal))
+            .map(|(id, _)| *id)
+    }
+
     /// The tab and pane whose view holds the keyboard.
-    fn focused_pane(&self, window: &Window, cx: &App) -> Option<(TabId, TerminalId)> {
+    pub(crate) fn focused_pane(&self, window: &Window, cx: &App) -> Option<(TabId, TerminalId)> {
         self.views
             .iter()
             .find(|(_, view)| view.read(cx).focus_handle().is_focused(window))
@@ -168,7 +208,12 @@ impl HerdrWindow {
             return;
         };
         self.dismiss_menu(window, cx);
-        self.core_terminals.wanted = Some(Purpose::Tab { scope, workspace });
+        self.start_core_program(Purpose::Tab { scope, workspace }, Spawn::default());
+    }
+
+    /// Starts `spawn` in herdr-core for `purpose`, once the hub connects.
+    pub(crate) fn start_core_program(&mut self, purpose: Purpose, spawn: Spawn) {
+        self.core_terminals.wanted = Some((purpose, spawn));
         self.core_terminals.hub.connect(Start::IfMissing);
         self.start_core_shell();
     }
@@ -183,18 +228,15 @@ impl HerdrWindow {
         let Some(backend) = terminals.hub.backend().cloned() else {
             return;
         };
-        let Some(purpose) = terminals.wanted.take() else {
+        let Some((purpose, mut spawn)) = terminals.wanted.take() else {
             return;
         };
-        let cwd = match &purpose {
-            Purpose::Split { at, .. } => terminals.infos.get(at).and_then(|info| info.cwd.clone()),
-            Purpose::Tab { .. } => None,
-        };
+        if spawn.cwd.is_none()
+            && let Purpose::Split { at, .. } = &purpose
+        {
+            spawn.cwd = terminals.infos.get(at).and_then(|info| info.cwd.clone());
+        }
         let (send, receive) = std::sync::mpsc::sync_channel(1);
-        let spawn = Spawn {
-            cwd,
-            ..Spawn::default()
-        };
         let spawned = std::thread::Builder::new()
             .name("herdr-core-spawn".into())
             .spawn(move || {
@@ -294,7 +336,9 @@ impl HerdrWindow {
             return;
         };
         let info = match outcome {
-            Ok(info) => info,
+            // Known at once, so a chat it labels attaches without waiting
+            // for the next list.
+            Ok(info) => self.core_terminals.infos.insert(info),
             Err(error) => {
                 let reason = error.to_string();
                 self.show_flash(
@@ -331,6 +375,16 @@ impl HerdrWindow {
     /// on the hub.
     pub(crate) fn focus_core_terminal(&mut self, tab: TabId, window: &mut Window, cx: &mut App) {
         self.core_terminals.focus_wanted = None;
+        // A pane drawn as a chat gives its chat the keyboard.
+        let chat = self
+            .core_terminals
+            .tabs
+            .get(&tab)
+            .and_then(|shown| self.core_chat_focus(&shown.active, window, cx));
+        if let Some(focus) = chat {
+            window.focus(&focus, cx);
+            return;
+        }
         match self.core_pane_view(tab) {
             Some(view) => window.focus(&view.read(cx).focus_handle().clone(), cx),
             None => self.core_terminals.focus_wanted = Some(tab),

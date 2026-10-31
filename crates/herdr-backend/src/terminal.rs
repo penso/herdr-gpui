@@ -1,5 +1,5 @@
 use crate::{AgentStatus, CursorState, Error, FrameData, PaneSurfacePatchRow, Result};
-use std::{fmt, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 /// The longest side a terminal may have, matching the app's viewport clamp.
 pub const MAX_SIDE: u16 = 4096;
@@ -94,6 +94,9 @@ pub struct TerminalInfo {
     pub agent: AgentStatus,
     pub cwd: Option<PathBuf>,
     pub id: TerminalId,
+    /// Names and values the client that started it attached, which every
+    /// client sees, such as the chat endpoint a `herdr-acp` listens on.
+    pub labels: BTreeMap<String, String>,
     pub name: Option<String>,
     pub state: RunState,
     pub title: Option<String>,
@@ -141,6 +144,8 @@ pub struct Spawn {
     pub argv: Vec<String>,
     pub cwd: Option<PathBuf>,
     pub env: Vec<(String, String)>,
+    /// Kept with the terminal and shown in its [`TerminalInfo`].
+    pub labels: BTreeMap<String, String>,
     pub name: Option<String>,
 }
 

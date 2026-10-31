@@ -25,7 +25,17 @@ pub(super) fn serve(call: Call<ChatOp>, cx: &mut App) -> Response {
             };
             let beside = pane.or_else(|| caller.pane_id.clone());
             in_window(&caller, cx, move |view, _, cx| {
-                match view.start_chat(agent, beside.as_deref()) {
+                // With no Herdr pane named, as from an agent in a herdr-core
+                // pane, a herdr-core tab in the active group splits instead.
+                let core = beside
+                    .is_none()
+                    .then(|| view.core_chat_group_tab(None, cx))
+                    .flatten();
+                let started = match core {
+                    Some(tab) => view.start_core_chat(agent, tab),
+                    None => view.start_chat(agent, beside.as_deref()),
+                };
+                match started {
                     Ok(()) => {
                         cx.notify();
                         Response::Chat {

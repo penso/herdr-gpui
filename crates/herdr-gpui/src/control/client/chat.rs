@@ -71,7 +71,7 @@ pub(super) fn chat(command: ChatCommand, context: &Context) -> crate::Result<Out
         Response::Chat {
             reply: Reply::Started { agent },
         } => Output::data(
-            format!("Starting a {agent} chat in a new tab"),
+            format!("Starting a {agent} chat"),
             &serde_json::json!({ "agent": agent, "started": true }),
         ),
         response => Err(unexpected(response)),

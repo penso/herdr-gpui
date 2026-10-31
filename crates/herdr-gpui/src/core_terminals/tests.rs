@@ -1,3 +1,4 @@
+mod chats;
 mod focus;
 mod keys;
 mod panes;

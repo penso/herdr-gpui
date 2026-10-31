@@ -6,6 +6,7 @@ mod endpoint;
 mod event;
 mod frame;
 mod hello;
+mod labels;
 mod live;
 
 use crate::frame::{Decoder, Frame, Kind, encode};

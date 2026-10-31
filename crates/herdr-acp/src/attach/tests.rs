@@ -6,6 +6,7 @@ use herdr_client::private_endpoint::{Reader, Writer};
 
 use super::*;
 
+mod endpoint_id;
 mod revisions;
 
 const WAIT: Duration = Duration::from_secs(10);

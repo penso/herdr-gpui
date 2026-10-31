@@ -95,6 +95,8 @@ impl HerdrWindow {
                 )
             })
             .unwrap_or_default();
+        let core = enabled.then(|| self.core_chat_targets());
+        let targets = super::core_pane::with_core(targets, core.unwrap_or_default());
         if enabled {
             self.locate_chat_program(cx);
             self.probe_chat_agents(cx);
@@ -196,6 +198,7 @@ impl HerdrWindow {
             changed = true;
         }
         self.follow_chat_focus(window, cx);
+        self.follow_core_chat_focus(window, cx);
         // The views are drawn with the terminal, so a surface redraw shows
         // them without rebuilding the cached sidebar.
         if changed {
@@ -281,10 +284,16 @@ impl HerdrWindow {
     /// focus. Give it back once Herdr's focus moves on or a popup covers it.
     fn follow_chat_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let target = self.focused_chat_handle(window, cx);
-        let holding = self.chats.panes().find_map(|pane| {
-            pane.focus_handles(cx)
-                .find(|focus| focus.is_focused(window))
-        });
+        // A herdr-core pane's chat keeps the keyboard as its terminal view
+        // would; Herdr's focused pane has no say over it.
+        let holding = self
+            .chats
+            .panes()
+            .filter(|pane| pane.target.surface == super::Surface::Herdr)
+            .find_map(|pane| {
+                pane.focus_handles(cx)
+                    .find(|focus| focus.is_focused(window))
+            });
         match (holding, target) {
             (Some(holding), target) if target.as_ref() != Some(&holding) => {
                 let focus = target.unwrap_or_else(|| self.focus.clone());
@@ -946,7 +955,10 @@ impl HerdrWindow {
         if !self.chats.set_raw(pane_id, raw) {
             return false;
         }
-        if raw && self.chat_focused(window, cx) {
+        // A herdr-core pane gives the keyboard to whichever it shows now.
+        if let Some(tab) = self.core_chat_tab(pane_id) {
+            self.focus_core_terminal(tab, window, cx);
+        } else if raw && self.chat_focused(window, cx) {
             window.focus(&self.focus, cx);
         }
         self.follow_chat_focus(window, cx);
