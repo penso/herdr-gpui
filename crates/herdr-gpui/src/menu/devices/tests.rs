@@ -22,6 +22,7 @@ mod local_network;
 #[cfg(feature = "cloud")]
 mod rail;
 mod scope;
+mod selection;
 #[cfg(unix)]
 mod setup_activation;
 #[cfg(unix)]

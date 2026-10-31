@@ -47,6 +47,16 @@ impl Folding {
     }
 }
 
+/// What a selectable line is, apart from where it sits: the keys stay on it
+/// while rows arrive above it.
+#[derive(PartialEq)]
+enum Pick {
+    All,
+    Device(String),
+    Session(Row),
+    AddDevice,
+}
+
 impl Line {
     fn selectable(&self) -> bool {
         match self {
@@ -72,6 +82,37 @@ impl HerdrWindow {
         }
         lines.push(Line::AddDevice);
         lines
+    }
+
+    fn pick(&self, line: &Line) -> Option<Pick> {
+        Some(match line {
+            Line::All => Pick::All,
+            Line::Device(index) => Pick::Device(self.endpoints.get(*index)?.id.clone()),
+            Line::Session(Entry::Row { row, .. }) => Pick::Session(row.clone()),
+            Line::Session(_) => return None,
+            Line::AddDevice => Pick::AddDevice,
+        })
+    }
+
+    /// Runs `update`, which may add or take away the picker's rows, and when
+    /// it reports a change keeps the keys on the line they were on. A line
+    /// that went away leaves nothing selected rather than its neighbour.
+    pub(crate) fn keep_picker_selection(&mut self, update: impl FnOnce(&mut Self) -> bool) -> bool {
+        let before = self
+            .menu
+            .selected
+            .filter(|_| self.menu.page == Some(Page::Devices))
+            .and_then(|ordinal| {
+                let lines = self.picker_lines();
+                let line = lines.iter().filter(|line| line.selectable()).nth(ordinal)?;
+                self.pick(line)
+            });
+        let changed = update(self);
+        if changed && let Some(before) = before {
+            self.menu.selected =
+                self.picker_ordinal(|line| self.pick(line).as_ref() == Some(&before));
+        }
+        changed
     }
 
     /// The ordinal of the first selectable line `pick` accepts.

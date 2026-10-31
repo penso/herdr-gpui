@@ -109,6 +109,18 @@ fn all_devices_sinks_away_after_it_closes() {
 }
 
 #[test]
+fn a_session_form_closes_at_once_instead_of_the_picker_sinking() {
+    let start = Instant::now();
+    let mut appear = live();
+    let anchor = Shown::Popover(point(px(10.), px(600.)));
+    appear.observe(Some(anchor), Some(Page::Devices), start);
+    // The form opens over the picker, then a click outside closes both.
+    appear.observe(Some(Shown::Dialog), Some(Page::Devices), start + ENTER);
+    appear.observe(None, None, start + ENTER * 2);
+    assert!(appear.leaving(start + ENTER * 2).is_none());
+}
+
+#[test]
 fn a_closed_page_lets_go_of_what_it_read_once_it_has_gone() {
     let start = Instant::now();
     let mut appear = live();

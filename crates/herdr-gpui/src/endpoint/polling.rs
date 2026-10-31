@@ -319,10 +319,12 @@ impl HerdrWindow {
             }
             return;
         }
-        let mut changed = self.sessions.poll(development, open, now);
-        if self.sessions.devices.poll(&targets, open, now) {
-            changed = true;
-        }
+        // New answers add or take away rows under the unfolded device; the
+        // keys stay on the row they were on, not on its old place.
+        let changed = self.keep_picker_selection(|this| {
+            let local = this.sessions.poll(development, open, now);
+            this.sessions.devices.poll(&targets, open, now) || local
+        });
         if changed {
             cx.notify();
         }

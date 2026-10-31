@@ -34,7 +34,7 @@ pub(super) enum Entry {
 /// What a row attaches to. A device keeps its endpoint id rather than an index,
 /// so a catalog change between paint and click cannot pick the wrong one, and it
 /// names the session itself, because a device has many.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) enum Row {
     Local(String),
     Device { id: String, session: String },

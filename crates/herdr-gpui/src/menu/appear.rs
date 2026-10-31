@@ -77,8 +77,12 @@ impl Appear {
         let still = !self.live;
         #[cfg(not(test))]
         let still = false;
+        // A session form closing is All Devices' page with its form over it:
+        // it goes at once like any other form, rather than the picker
+        // sinking into the footer in the form's place.
+        let form = self.shown == Some(Shown::Dialog) && last == Some(Page::Devices);
         self.leaving = match (shown, last) {
-            (None, Some(page)) if !still && leaves(page) => Some((page, now)),
+            (None, Some(page)) if !still && !form && leaves(page) => Some((page, now)),
             _ => None,
         };
         // Only the page that just closed keeps what it read; anything else

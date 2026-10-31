@@ -261,9 +261,7 @@ impl HerdrWindow {
                 // Retire old inboxes before stopping the daemon, so this window
                 // cannot reconnect to and recreate the name being deleted.
                 if self.retarget_session_for_deletion(&connection) {
-                    self.reconnect(cx);
-                    self.menu.page = Some(Page::Devices);
-                    self.menu.selected = Some(0);
+                    self.keep_picker_open(|this| this.reconnect(cx));
                 }
                 let background = cx.background_executor().spawn(async move {
                     match target {
@@ -305,6 +303,17 @@ impl HerdrWindow {
                 }));
             }
         }
+    }
+
+    /// Runs `reset`, which closes the menu, and opens the picker again as it
+    /// was: the device stays unfolded, so a deletion's progress and any error,
+    /// drawn only under it, stay in view.
+    pub(super) fn keep_picker_open(&mut self, reset: impl FnOnce(&mut Self)) {
+        let unfolded = self.menu.unfolded_device.take();
+        reset(self);
+        self.menu.page = Some(Page::Devices);
+        self.menu.unfolded_device = unfolded;
+        self.menu.selected = Some(0);
     }
 
     pub(super) fn session_edit_key(
