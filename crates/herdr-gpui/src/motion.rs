@@ -4,8 +4,15 @@
 //! drawing frames only while something is still moving.
 mod slow;
 
-use gpui::{AnimationElement, AnimationExt, ElementId, IntoElement, Styled, px};
-use std::time::{Duration, Instant};
+use gpui::{
+    AnimationElement, AnimationExt, Div, ElementId, IntoElement, ParentElement, Pixels, Styled,
+    div, px,
+};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 pub(crate) use slow::{duration, is_slow, now, set_slow};
 
@@ -40,6 +47,46 @@ pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
             element.opacity(k).mt(px(-(1. - k) * DROP))
         },
     )
+}
+
+/// A disclosure opening, such as a device unfolding its sessions: the space
+/// grows from nothing to the content's height while the content fades in,
+/// so the rows around it move smoothly instead of jumping and then
+/// settling. The content lays out at its full height inside a clip;
+/// `height` keeps that height from the frame before, which is what the
+/// space grows towards (the first frame, still unmeasured, shows nothing).
+/// Once open it is the content's own height, so rows added later show at
+/// once. Unit tests see it open.
+pub(crate) fn unfold(
+    content: impl IntoElement,
+    id: impl Into<ElementId>,
+    height: Rc<Cell<Pixels>>,
+) -> AnimationElement<Div> {
+    let measured = height.clone();
+    div()
+        // In a list of capped height, it keeps its size as rows do.
+        .flex_none()
+        .flex()
+        .flex_col()
+        .overflow_hidden()
+        .on_children_prepainted(move |bounds, _, _| {
+            if let Some(content) = bounds.first() {
+                measured.set(content.size.height);
+            }
+        })
+        .child(div().flex_none().child(content))
+        .with_animation(
+            id,
+            gpui::Animation::new(duration(ENTER)).with_easing(|k| 1. - (1. - k).powi(3)),
+            move |element, k| {
+                let k = if cfg!(test) { 1. } else { k };
+                if k >= 1. {
+                    element
+                } else {
+                    element.h(height.get() * k).opacity(k)
+                }
+            },
+        )
 }
 
 /// Something that opens and closes, such as a panel: how much of it shows.

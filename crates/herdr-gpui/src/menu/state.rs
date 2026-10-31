@@ -74,6 +74,12 @@ pub(crate) struct MenuState {
     /// The device whose sessions the picker shows under it, by endpoint id so
     /// a catalog change cannot unfold another one.
     pub(crate) unfolded_device: Option<String>,
+    /// How tall the unfolded sessions were last frame, which their unfolding
+    /// grows towards.
+    pub(super) unfolded_height: std::rc::Rc<std::cell::Cell<Pixels>>,
+    /// When a device last unfolded, so the list follows its sessions into
+    /// view while they open.
+    pub(super) unfolded_since: Option<std::time::Instant>,
     /// The folder the open-checkout question is about.
     pub(super) open_checkout: Option<std::path::PathBuf>,
     /// The address the open-link question is about.
@@ -344,6 +350,8 @@ impl MenuState {
             wsl_remove: None,
             session_edit: None,
             unfolded_device: None,
+            unfolded_height: Default::default(),
+            unfolded_since: None,
             open_checkout: None,
             open_link: None,
             #[cfg(feature = "cloud")]

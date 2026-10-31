@@ -71,12 +71,14 @@ impl HerdrWindow {
         self.sessions.refresh();
         self.select_device_line(index);
         // Bring the unfolded lines into view, which can fall below the list's
-        // bottom. The heading is the list's first child.
-        let last = self
+        // bottom. They are one child, where the first of them is; the heading
+        // is the list's first child.
+        let first = self
             .picker_lines()
             .iter()
-            .rposition(|line| matches!(line, Line::Session(_)));
-        self.menu.devices_reveal.set(last.map(|last| last + 1));
+            .position(|line| matches!(line, Line::Session(_)));
+        self.menu.devices_reveal.set(first.map(|first| first + 1));
+        self.menu.unfolded_since = Some(crate::motion::now());
     }
 
     fn fold_device(&mut self, index: usize) {
@@ -133,7 +135,18 @@ impl HerdrWindow {
         if let Some(child) = self.menu.devices_reveal.get() {
             if self.menu.devices_scroll.bounds().size.height > px(0.) {
                 self.menu.devices_scroll.scroll_to_item(child);
-                self.menu.devices_reveal.set(None);
+                // The sessions grow open: follow them until they are open.
+                let opening = self.menu.unfolded_since.is_some_and(|since| {
+                    crate::motion::progress(
+                        since,
+                        crate::motion::now(),
+                        crate::motion::duration(crate::motion::ENTER),
+                    )
+                    .is_some()
+                });
+                if !opening {
+                    self.menu.devices_reveal.set(None);
+                }
             } else {
                 // Laid out for the first time this frame: reveal on the next.
                 cx.notify();
@@ -166,7 +179,10 @@ impl HerdrWindow {
             );
         let mut ordinal = 0;
         let mut session_row = 0;
-        for (child, line) in self.picker_lines().into_iter().enumerate() {
+        // The unfolded device's session lines, which open as one block under
+        // their device rather than each popping in on its own.
+        let mut unfolded: Vec<AnyElement> = Vec::new();
+        for line in self.picker_lines() {
             let selected = self.menu.selected == Some(ordinal);
             let element = match &line {
                 Line::Session(Entry::Row { row, spec }) => {
@@ -182,19 +198,25 @@ impl HerdrWindow {
                 }),
             };
             if let Some(element) = element {
-                view = match line {
-                    // Unfolded lines drop in under their device.
-                    Line::Session(_) => view.child(crate::motion::pop_in(
-                        session_indent(&self.theme).child(element),
-                        ("device-session-line", child),
-                    )),
-                    _ => view.child(element),
-                };
+                match line {
+                    Line::Session(_) => {
+                        unfolded.push(
+                            session_indent(&self.theme)
+                                .child(element)
+                                .into_any_element(),
+                        );
+                    }
+                    _ => {
+                        view = self.unfolded_sessions(view, &mut unfolded);
+                        view = view.child(element);
+                    }
+                }
             }
             if line.selectable() {
                 ordinal += 1;
             }
         }
+        view = self.unfolded_sessions(view, &mut unfolded);
         // Workspaces still being added: progress only, not selectable rows,
         // so keyboard navigation keeps its indices.
         #[cfg(feature = "cloud")]
@@ -207,6 +229,25 @@ impl HerdrWindow {
             .flex_col()
             .child(self.render_activity_card(cx))
             .child(view)
+    }
+
+    /// The unfolded device's session lines, as one block that grows open
+    /// under its device; nothing when no device is unfolded. The id follows
+    /// the device, so unfolding another plays the opening again.
+    fn unfolded_sessions(&self, view: Stateful<Div>, lines: &mut Vec<AnyElement>) -> Stateful<Div> {
+        if lines.is_empty() {
+            return view;
+        }
+        let device = self.menu.unfolded_device.clone().unwrap_or_default();
+        view.child(crate::motion::unfold(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .children(lines.drain(..)),
+            ElementId::Name(format!("device-sessions-{device}").into()),
+            self.menu.unfolded_height.clone(),
+        ))
     }
 
     /// All Devices, one device, or Add Device. `index` is the row's place in
@@ -519,11 +560,20 @@ impl HerdrWindow {
     fn picker_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         let lines = self.picker_lines();
         // Each selectable line's child index in the list, past its heading.
+        // The unfolded device's session lines share one child, the block
+        // they open in.
+        let mut child = 0;
+        let mut in_block = false;
         let children: Vec<usize> = lines
             .iter()
-            .enumerate()
-            .filter(|(_, line)| line.selectable())
-            .map(|(child, _)| child + 1)
+            .filter_map(|line| {
+                let session = matches!(line, Line::Session(_));
+                if !(session && in_block) {
+                    child += 1;
+                }
+                in_block = session;
+                line.selectable().then_some(child)
+            })
             .collect();
         let count = children.len();
         if matches!(key, "up" | "down") {
