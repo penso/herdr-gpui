@@ -183,6 +183,12 @@ pub(crate) fn shown_pseudo() -> Option<Pseudo> {
     current::catalog()?.locale().pseudo()
 }
 
+/// The locale the windows show, for caches of text written in it to
+/// notice a switch. Read where there is no app context, as [`shown_pseudo`] is.
+pub(crate) fn shown_locale() -> Option<Locale> {
+    current::catalog().map(|catalog| catalog.locale().clone())
+}
+
 /// Which way the windows lay their chrome out: the shown locale's
 /// direction, read where there is no app context, as [`shown_pseudo`] is.
 /// [`crate::direction`] mirrors layout by it.

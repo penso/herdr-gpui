@@ -95,9 +95,18 @@ fn every_chat_page_variant_has_a_message() {
 
 #[test]
 fn every_chat_visual_variant_has_a_message() {
+    use base64::Engine;
     let boxed = || -> Box<dyn std::error::Error + Send + Sync> { "bad".into() };
+    let base64 = base64::engine::general_purpose::STANDARD
+        .decode("!")
+        .unwrap_err();
+    let parse = ratex_parser::parse(r"\frac{").unwrap_err();
     assert_localized(&[
+        visual::Error::Base64(base64),
+        visual::Error::Decode(image::ImageError::IoError(io::Error::other("short"))),
         visual::Error::Diagram(boxed()),
+        visual::Error::Fetch(Box::new(ureq::Error::ConnectionFailed)),
+        visual::Error::MathParse(parse),
         visual::Error::Math("unknown command".into()),
         visual::Error::MathLimit,
         visual::Error::NotAnImage,

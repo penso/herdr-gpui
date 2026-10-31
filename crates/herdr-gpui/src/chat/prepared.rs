@@ -354,6 +354,14 @@ impl Prepared {
         self.visuals.retain(&live);
     }
 
+    /// Drops the prepared bodies and their selectable text, keeping the
+    /// pictures, so the next [`Self::update`] writes every label again in
+    /// the language now shown.
+    pub(crate) fn forget_text(&mut self) {
+        self.bodies.clear();
+        self.text.clear();
+    }
+
     /// Starts over, as after a snapshot that may reuse entry ids.
     pub(crate) fn clear(&mut self) {
         self.bodies.clear();

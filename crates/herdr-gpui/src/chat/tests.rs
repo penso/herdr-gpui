@@ -41,6 +41,7 @@ mod pasted;
 mod prepared;
 mod questions;
 mod recall;
+mod relocale;
 mod running;
 mod selection;
 mod session;

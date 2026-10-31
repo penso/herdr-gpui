@@ -108,6 +108,7 @@ impl HerdrWindow {
         // A layout saved from Settings or the command line arrives here.
         changed |= self.chats.relayout(self.config.chat.layout);
         changed |= self.chats.rewidth(self.config.chat.max_width);
+        changed |= self.chats.relocale(crate::i18n::shown_locale());
         changed |= self.chats.poll(now);
         // Observed panes, whether a discovered agent or a `[chat.mirrors]`
         // entry, take their status from the daemon; live chats ignore it.
