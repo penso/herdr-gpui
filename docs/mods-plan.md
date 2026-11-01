@@ -23,11 +23,12 @@ access.
 | Events | Elm-style: `init`, `update(state, msg)`, `view(state, app)`. Buttons carry a catalog `command` or a `msg`, never a Lua function, so the tree is plain data that can leave the mod's thread. |
 | Effects | Commands in the `herdr-commands` catalog, the same ones the palette and `herdr-gpui run` use. A destructive command still opens its own confirmation. |
 | Threads | One worker thread per mod. The window renders the last good tree from a mailbox. Mod code never runs on the UI thread or during rendering. |
-| Placement | Fixed places only: activity bar app, status bar item, sidebar section, and palette commands first; tab and toast next; sidebar row cells later. Mods add to the app; they do not replace built-in parts. |
+| Placement | Fixed places only: activity bar app, status bar item, sidebar section, and palette commands first; tab and toast next; sidebar row cells later. Mods add to the app; a layout file (below) may rearrange or replace the whole window, built-in parts included. |
 | Activity bar apps | A mod may add one icon to the activity bar. Selecting it gives the mod the window's body, as Overview or Usage has, keeping the bar, title bar, and status bar. The icon can show a count and a busy pulse, as built-in sections do. |
 | State | Read-only, built from the same data the window shows. Once the `herdr-backend` traits land, it is built from them, so one mod works on Herdr 1 and herdr-core. |
 | Capabilities | A mod that only reads state and runs catalog commands needs no approval. A mod that declares `exec`, `network` or `read` is approved in the app's dialog, pinned to the hash of its manifest and sources, as automations are. *(Proposed; confirm.)* |
 | Folder | `<config root>/herdr/gpui-mods/<name>/`, beside `config-gpui.toml`, so it cannot collide with folders Herdr itself may add under `herdr/`. *(Proposed; confirm.)* |
+| Layout files | The whole window is replaceable: title bar, activity bar, sidebar, status bar, and terminals are regions a layout places or leaves out. Layouts are read from TOML or from herdr-app's JSON, so its layout files carry over. |
 | Default UI | Stays Rust. Example mods live under `crates/herdr-gpui/mods/` for people to copy; the app installs none, so no item appears uninvited. |
 
 ## Why not herdr-app's model
@@ -254,6 +255,134 @@ Usage, and the other built-in sections.
   installed beside the browser and automations skills, on when to write a mod
   and how to check it. (Built with phase 3.)
 
+## herdr.dev layouts and mods
+
+[herdr.dev/layouts](https://herdr.dev/layouts) and
+[herdr.dev/mods](https://herdr.dev/mods) list herdr-app's community
+examples (`github.com/herdrdev/herdr-layout-examples`). They are written for
+herdr-app's JavaScript runtime and do not run here, but each ships a
+`RECIPE.md`, a brief an agent can rebuild it from. The phases below close the
+gaps so an agent can rebuild them as Luau mods.
+
+### What herdr-app has
+
+- **A layout** (`layouts/<name>.json`) is the whole window: a tree of `row`,
+  `column`, `stack`, and `block` nodes with sizes, `min`/`max`, `resizable`,
+  `hidden`, borders, radius, gradients, `window_drag`, `titlebar = "none"`,
+  and theme, color, and font overrides. A block holds a mod with `props`, or
+  `{ tab = "active", pane = {...} }`, the live terminal grid, whose pane
+  headers are mods too. A block may float overlays over its content.
+- **A mod** builds GPUI elements directly: absolute positions, images, any
+  color, hover styles, `loop` and `transition` animations, and click
+  closures. It may `exec`, send keys through Herdr's core (`hc`), read and
+  write files, share values with other mods (`shared`, `setShared`), open
+  overlays, set the agent order, and `run(name, args)`. One mod fills
+  several slots, told apart by `props().role`.
+
+### Each example here
+
+| Example | Today | Blocked on |
+| --- | --- | --- |
+| Tmux prefix | Built in: `window/prefix.rs` runs Herdr's prefix chords (`ctrl+b`) and the status bar shows the armed prefix | A hint listing the chords while the prefix is armed, which belongs to the app rather than a mod |
+| Board, Mission, Chat, Call | An activity bar app without terminals | Command arguments, richer state, props and slots, then layouts for the terminals |
+| Code | No | The above, and `read` for its file explorer |
+| Threads | No | The above, and `exec` (`git`, `gh`), shared storage, `input`, overlays, and diffs |
+| Pasture | No | The above, and drawn images, positions, and motion |
+
+### What is missing
+
+- **Command arguments.** `herdr.run` takes only a command name, and the
+  catalog has `focus_agent_1` to `9`, so a card cannot focus its own agent.
+  `herdr.run(command, args)` takes typed arguments the catalog declares
+  (an agent, tab, or workspace ID), checked before it runs.
+- **State.** Agents carry their workspace and tab names and their program's
+  name and icon, and since when their status holds; a `panes` topic lists
+  the focused tab's panes with the same; `usage` and `pull_request` are
+  filled. Every field stays bounded.
+- **Props and slots.** `view(state, app, props)`, where `props` is a plain
+  table the place passes in, so one mod draws a header, a body, and a pane
+  header, each with its own tree and budget.
+- **Elements.** Draw a mod's own `.svg` files, which are accepted but not
+  drawn yet, as icons and as images. A `canvas` places children at
+  positions inside it, for scenes such as Pasture. A `motion` key names one
+  of a few animations (`pulse`, `bob`, `drift`) that the renderer runs
+  through `crate::motion`, so Lua never runs per frame. The app elements of
+  phase 5 cover scrolling, input, tabs, code, and dialogs.
+- **Colors.** Styles stay tokens. A layout may bring its own palette that
+  sets what each tone and surface means, as a theme does, instead of a
+  mod naming colors.
+- **Layouts.** A layout file arranges the whole window as a tree of
+  regions; see below.
+- **Capabilities.** `exec`, `read`, and `fetch` behind approval (phase 6),
+  `herdr.store`, and a store several mods of one layout share. Literal keys
+  to a terminal go through the `herdr` CLI under an `exec` grant, never by
+  synthesizing keys in the window.
+- **Keys and overlays.** Keys a mod or layout binds, active while it is
+  shown, and a popup or dialog a mod opens and closes.
+- **Sharing.** `herdr-gpui mod install REPO` fetches a mod or layout folder,
+  shows it in the approval dialog, and pins its hash.
+
+### Layouts
+
+```
+<config>/herdr/gpui-layouts/<name>.toml
+<config>/herdr/gpui-layouts/<name>.json   herdr-app's format, read as is
+```
+
+```toml
+name = "board"
+api = 1
+mods = ["board"]               # the mods it needs, from the mods folder
+
+[palette]                      # optional: what tones and surfaces mean
+accent = "#7465db"
+
+[root]
+kind = "column"
+children = [
+  { kind = "mod", mod = "board", props = { role = "header" }, size = 100 },
+  { kind = "mod", mod = "board", size = 355 },
+  { kind = "terminals", pane_header = { mod = "board", props = { role = "pane" } } },
+]
+```
+
+- **The whole window.** A layout describes everything inside the window's
+  frame. The built-in parts are leaves like any other: `title_bar`,
+  `activity_bar`, `sidebar`, `status_bar`, `mod_panel`, and the activity
+  bar's sections, so a layout keeps, moves, or leaves out each of them. With
+  `title_bar` left out, regions marked `window_drag` move the window and the
+  traffic lights sit where the layout puts them (`traffic_lights = [x, y]`).
+- **Regions.** `row`, `column`, and `stack` (one child shown, chosen by a
+  mod's effect) hold children with a size in px or a share of what is left,
+  optional `min`, `max`, `resizable`, and `hidden`, and floating overlays
+  pinned to an edge. Leaves are `mod` (with `props`), `terminals` (the
+  focused tab's pane grid), and the built-in parts.
+- **Region styles.** A layout is data the app draws, so its regions may set
+  background, gradient, border, radius, padding, and gap in pixels and
+  colors, as herdr-app's do. Mods inside them still use tokens, which the
+  layout's palette defines.
+- **Two formats, one model.** TOML and JSON parse into the same typed
+  `Layout`, with the same checks. The JSON reader takes herdr-app's field
+  names (`type`, `content`, `{ "tab": "active", "pane": ... }`, `size.px`,
+  `colors`, `terminal_padding`, `titlebar`), so a layout from herdr.dev or
+  `herdrdev/herdr-layout-examples` loads unchanged. Its mods are JavaScript
+  and do not run here: each slot naming one shows a placeholder with the
+  mod's name until a Luau mod of that name exists, and the layout's
+  `RECIPE.md` is the brief for writing it. Unknown fields are refused in
+  TOML and reported but skipped in JSON, so herdr-app can add fields
+  without breaking a carried-over file.
+- **Terminals.** The existing pane grid drawn into the region's bounds, with
+  painting, hit testing, and IME placement on the same geometry. A pane
+  header, when set, is a mod slot per pane with `{ pane = ID }` in its props.
+  A layout without a `terminals` region still has the focused tab one
+  command away.
+- **Choosing one.** The default layout is today's window. Settings, the
+  palette, and `herdr-gpui layout use NAME` switch per window; a failing or
+  missing layout falls back to the default with its error shown, so a broken
+  file never leaves an empty window.
+- **Limits.** At most 32 regions, nested at most 8 deep, and every mod slot
+  has the budgets of a mod panel section.
+
 ## Phases
 
 Each phase is its own pull request, with `just ci` passing.
@@ -291,9 +420,32 @@ Each phase is its own pull request, with `just ci` passing.
    approving from an agent pane is refused.
 7. **More places and agents.** The mod tab kind, toasts, `herdr.d.luau`
    generation, and the skill section.
-8. **Later.** Sidebar row cells through `RowLayout`, the `terminal` element
-   on herdr-core's observer terminals, and state from the `herdr-backend`
-   traits.
+8. **Arguments, state, and slots.** `herdr.run(command, args)` with typed
+   catalog arguments, a focus-agent command by ID, the richer agent and
+   `panes` state, filled `usage` and `pull_request`, `props` and several
+   slots per mod, and drawn `.svg` icons. Tests: a refused argument, a
+   command run from a timer, bounded state, and one mod in two slots with
+   separate trees. Board, Mission, and Chat ported as example apps.
+9. **Layouts.** Layout files in TOML and herdr-app's JSON, the region tree
+   over the whole window with every built-in part as a leaf, region styles,
+   `terminals` with pane header slots, palettes, the fallback to the default
+   window, `layout use` and `layout check`. Today's window becomes the
+   default layout, drawn from the same tree. Tests: malformed and oversized
+   trees in both formats, each herdr-layout-examples file loading with
+   placeholders for its JavaScript mods, a missing mod, a region's geometry
+   matching hit testing and IME, a window without a title bar still
+   draggable, and switching back. Native QA in light and dark themes and a
+   narrow window.
+10. **Scenes.** `canvas`, images, and `motion`, with Pasture as the example.
+    Tests: positions clipped to the canvas and motion slowed by Slow
+    Animations.
+11. **Prefix hint.** A built-in popup listing Herdr's prefix chords while the
+    prefix is armed, from the keymap the window already holds.
+12. **Sharing.** `mod install` with approval, and a guide for porting a
+    herdr.dev `RECIPE.md` to a Luau mod in the `herdr-mods` skill.
+13. **Later.** Sidebar row cells through `RowLayout`, the `terminal` element
+    on herdr-core's observer terminals, and state from the `herdr-backend`
+    traits.
 
 ## Open questions
 
@@ -302,8 +454,11 @@ Each phase is its own pull request, with `just ci` passing.
   stricter alternative pins every mod.
 - **Folder.** `herdr/gpui-mods/` is proposed. Herdr's own folder is the
   other option, if Herdr is not expected to use the name.
-- **Replacing built-in parts.** Out of scope here. Revisit once mods exist in
-  the fixed places, for example a mod that replaces the status bar's layout.
+- **Escape hatch.** With every built-in part replaceable, a layout can leave
+  out whatever switches layouts. The palette, the app's menu, and
+  `herdr-gpui layout use default` always work whatever the layout shows;
+  is that enough, or should a layout without an activity bar keep a small
+  switcher?
 - **Remote hosts.** Mods run on this computer. A mod's `exec` with
   `on = host` would go over the app's existing SSH connection; that is left
   until phase 4 shows how grants should name hosts.
