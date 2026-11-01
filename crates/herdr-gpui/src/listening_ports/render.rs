@@ -8,6 +8,7 @@ use super::{
 use crate::{
     browser::WebUrl,
     config::Theme,
+    i18n::{Localize, fl},
     window::{Flash, HerdrWindow},
 };
 use gpui::{prelude::*, *};
@@ -24,7 +25,7 @@ impl HerdrWindow {
                 .id("listening-ports")
                 .debug_selector(|| "listening-ports".into())
                 .role(Role::Group)
-                .aria_label("Listening ports")
+                .aria_label(fl!("listening-ports-label"))
                 .flex()
                 .flex_none()
                 .items_center()
@@ -165,9 +166,10 @@ pub(crate) fn close_button(
     cx: &mut Context<HerdrWindow>,
 ) -> Stateful<Div> {
     let (muted, foreground, surface) = (theme.muted, theme.foreground, theme.surface);
-    let hint = SharedString::from(format!(
-        "Close the SSH tunnel to {}:{}",
-        key.target, key.port
+    let hint = SharedString::from(fl!(
+        "listening-ports-close-tunnel",
+        target = key.target.clone(),
+        port = key.port.to_string()
     ));
     let key = key.clone();
     div()
@@ -194,7 +196,10 @@ pub(crate) fn close_button(
             cx.stop_propagation();
             if this.tunnels.close(&key) {
                 this.show_flash(
-                    Flash::success(format!("Closed the SSH tunnel to :{}", key.port)),
+                    Flash::success(fl!(
+                        "listening-ports-tunnel-closed",
+                        port = key.port.to_string()
+                    )),
                     cx,
                 );
                 cx.notify();
@@ -203,18 +208,24 @@ pub(crate) fn close_button(
 }
 
 /// `node listening on *:3000` over what clicking does.
-fn hint(port: &Port, link: Option<&Link>) -> String {
-    let process = if port.process.is_empty() {
-        "A process"
-    } else {
-        port.process.as_str()
+pub(super) fn hint(port: &Port, link: Option<&Link>) -> String {
+    let listening = match port.process.as_str() {
+        "" => fl!(
+            "listening-ports-unnamed-listening",
+            address = port.address()
+        ),
+        process => fl!(
+            "listening-ports-listening",
+            process = process,
+            address = port.address()
+        ),
     };
     let action = match link {
-        Some(Link::Page(url)) => format!("Open {}", url.as_str()),
-        Some(Link::Tunnel(key)) => format!("Open through an SSH tunnel to {}", key.target),
-        None => "Not reachable from this machine".into(),
+        Some(Link::Page(url)) => fl!("listening-ports-open", url = url.as_str()),
+        Some(Link::Tunnel(key)) => fl!("listening-ports-open-tunnel", target = key.target.clone()),
+        None => fl!("listening-ports-unreachable"),
     };
-    format!("{process} listening on {}\n{action}", port.address())
+    format!("{listening}\n{action}")
 }
 
 impl HerdrWindow {
@@ -235,10 +246,7 @@ impl HerdrWindow {
             return;
         }
         let Some(preferred) = self.tunnels.begin(&key) else {
-            self.show_flash(
-                Flash::warning("A tunnel to that port is already opening"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("listening-ports-tunnel-opening")), cx);
             return;
         };
         let opening = key.clone();
@@ -260,7 +268,11 @@ impl HerdrWindow {
                     if this.tunnels.fail(&key) {
                         // The display boundary for a failed tunnel.
                         this.show_flash(
-                            Flash::warning(format!("Could not open :{}: {error}", key.port)),
+                            Flash::warning(fl!(
+                                "listening-ports-open-failed",
+                                port = key.port.to_string(),
+                                error = error.localize()
+                            )),
                             cx,
                         );
                     }

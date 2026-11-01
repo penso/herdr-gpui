@@ -2,7 +2,7 @@
 //! probes summarized in a tooltip.
 
 use super::{INTERVAL, LATENCY_PROBES, Reading, TARGET, WINDOW, probe::Outcome};
-use crate::{config::Theme, window::HerdrWindow};
+use crate::{config::Theme, i18n::fl, window::HerdrWindow};
 use gpui::{prelude::*, *};
 use std::time::Duration;
 
@@ -28,18 +28,23 @@ impl HerdrWindow {
             Some(latency) => {
                 let milliseconds = millis(latency);
                 colored(
-                    format!("{milliseconds:.0}ms"),
+                    fl!("network-quality-latency", ms = format!("{milliseconds:.0}")),
                     graded(milliseconds, LATENCY_WARN_MS, LATENCY_CRITICAL_MS, theme),
                 )
             }
-            None => colored("offline".into(), theme.ink(theme.palette[1])),
+            None => colored(fl!("network-quality-offline"), theme.ink(theme.palette[1])),
         };
         let spoken = match (reading.latency(), reading.loss_percent()) {
-            (Some(latency), Some(loss)) => {
-                format!("Network {:.0} ms, {loss:.0}% loss", millis(latency))
-            }
-            (Some(latency), None) => format!("Network {:.0} ms", millis(latency)),
-            (None, _) => "Network offline".to_owned(),
+            (Some(latency), Some(loss)) => fl!(
+                "network-quality-spoken-loss",
+                ms = format!("{:.0}", millis(latency)),
+                loss = format!("{loss:.0}")
+            ),
+            (Some(latency), None) => fl!(
+                "network-quality-spoken",
+                ms = format!("{:.0}", millis(latency))
+            ),
+            (None, _) => fl!("network-quality-spoken-offline"),
         };
         let loss = reading.loss_percent().map(|loss| {
             colored(
@@ -65,7 +70,12 @@ impl HerdrWindow {
                 .mr(px(-4.))
                 .h_full()
                 .tooltip(tooltip(reading, theme))
-                .child(div().flex_none().text_color(rgb(theme.muted)).child("NET"))
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("network-quality-label")),
+                )
                 .child(latency)
                 .children(loss),
         )
@@ -106,34 +116,43 @@ fn tooltip(
 
 pub(super) fn details(reading: &Reading) -> String {
     let window_minutes = WINDOW as u64 * INTERVAL.as_secs() / 60;
-    let mut lines = vec![format!(
-        "TCP connect to {TARGET} from this machine every {} s",
-        INTERVAL.as_secs()
+    let ms = |duration: Duration| format!("{:.0}", millis(duration));
+    let mut lines = vec![fl!(
+        "network-quality-target",
+        target = TARGET.to_string(),
+        seconds = INTERVAL.as_secs()
     )];
     match reading.latest() {
         Some(Outcome::Reply(round_trip)) => {
-            lines.push(format!("Last: {:.0} ms", millis(round_trip)));
+            lines.push(fl!("network-quality-last", ms = ms(round_trip)));
         }
-        Some(Outcome::Lost(kind)) => lines.push(format!("Last: no connection ({kind})")),
+        // The system's words for why the connection failed.
+        Some(Outcome::Lost(kind)) => {
+            lines.push(fl!("network-quality-last-lost", reason = kind.to_string()))
+        }
         None => {}
     }
     if let Some(latency) = reading.latency() {
-        lines.push(format!(
-            "Median {:.0} ms of the last {LATENCY_PROBES} probes",
-            millis(latency)
+        lines.push(fl!(
+            "network-quality-median",
+            ms = ms(latency),
+            probes = LATENCY_PROBES
         ));
     }
     if let Some((min, max)) = reading.range() {
-        lines.push(format!(
-            "Range {:.0}–{:.0} ms over up to {window_minutes} min",
-            millis(min),
-            millis(max)
+        lines.push(fl!(
+            "network-quality-range",
+            min = ms(min),
+            max = ms(max),
+            minutes = window_minutes
         ));
     }
     if let Some(loss) = reading.loss_percent() {
-        lines.push(format!(
-            "Loss {loss:.0}% of {} probes over up to {window_minutes} min",
-            reading.probes()
+        lines.push(fl!(
+            "network-quality-loss",
+            loss = format!("{loss:.0}"),
+            probes = reading.probes(),
+            minutes = window_minutes
         ));
     }
     lines.join("\n")

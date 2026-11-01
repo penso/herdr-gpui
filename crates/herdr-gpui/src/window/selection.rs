@@ -4,8 +4,10 @@
 //! scrolls the pane, and a selection reaching rows the pane no longer shows is
 //! read back with `pane.selection.read`; everything else is copied from the
 //! painted cells.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{scrollback::Inbox, terminal::Selection};
 use gpui::{ClipboardItem, Context, Pixels, Point};
 use herdr_client::{
@@ -288,7 +290,7 @@ impl HerdrWindow {
             self.selection = None;
         }
         if copied && self.config.clipboard_toast.enabled {
-            self.show_flash(super::Flash::success("copied to clipboard"), cx);
+            self.show_flash(super::Flash::success(fl!("window-find-copied")), cx);
         }
         cx.notify();
     }
@@ -331,7 +333,12 @@ impl HerdrWindow {
         };
         match result {
             Ok((inbox, request)) => self.await_selection_read(inbox, request),
-            Err(error) => self.local_error = Some(format!("Selection not copied: {error}")),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ))
+            }
         }
         true
     }
@@ -394,7 +401,10 @@ impl HerdrWindow {
             }
             Err(error) => {
                 drop(state);
-                self.local_error = Some(format!("Scroll not sent: {error}"));
+                self.local_error = Some(fl!(
+                    "window-find-selection-scroll-failed",
+                    error = error.localize()
+                ));
                 self.selection_follow.pointer = None;
                 cx.notify();
             }
@@ -464,22 +474,27 @@ impl HerdrWindow {
             {
                 cx.write_to_clipboard(ClipboardItem::new_string(selection.text));
                 if self.config.clipboard_toast.enabled {
-                    self.show_flash(super::Flash::success("copied to clipboard"), cx);
+                    self.show_flash(super::Flash::success(fl!("window-find-copied")), cx);
                 }
             }
             Ok(ScrollbackResponse::PaneSelection(_)) => {
-                self.local_error = Some(format!(
-                    "Selection not copied: {}",
-                    crate::Error::SelectionSize
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = crate::Error::SelectionSize.localize()
                 ));
             }
             Ok(_) => {
-                self.local_error = Some(format!(
-                    "Selection not copied: {}",
-                    herdr_client::Error::ResponseType
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = herdr_client::Error::ResponseType.localize()
                 ));
             }
-            Err(error) => self.local_error = Some(format!("Selection not copied: {error}")),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ))
+            }
         }
         cx.notify();
     }
@@ -499,7 +514,10 @@ impl HerdrWindow {
                 true
             }
             Err(error) => {
-                self.local_error = Some(format!("Selection not copied: {error}"));
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ));
                 false
             }
         }

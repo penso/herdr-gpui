@@ -29,6 +29,7 @@ pub(crate) fn daemon_config_path(get: impl Fn(&str) -> Option<std::ffi::OsString
                 get("HOME")
                     .or_else(|| get("USERPROFILE"))
                     .map(PathBuf::from)
+                    // i18n: data
                     .map(|home| home.join("AppData/Roaming"))
                     .unwrap_or_else(env::temp_dir)
             }

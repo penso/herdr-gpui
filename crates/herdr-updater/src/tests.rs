@@ -4,9 +4,10 @@ use anyhow::Context as _;
 mod channels;
 mod packages;
 mod progress;
+mod reasons;
 
 #[test]
-fn homebrew_work_is_never_cancelled_and_a_relaunch_only_quits() -> Result<()> {
+fn homebrew_work_is_never_cancelled_and_a_relaunch_only_quits() -> Result<(), Failure> {
     let mut updater = Updater::default();
     for state in [
         State::Upgrading {
@@ -40,7 +41,7 @@ fn homebrew_work_is_never_cancelled_and_a_relaunch_only_quits() -> Result<()> {
 fn only_a_waiting_release_marks_an_update_available() {
     let mut updater = Updater::default();
     for state in [
-        State::Disabled(String::new()),
+        State::Disabled(Disabled::LocalBuild),
         State::Idle,
         State::Checking,
         State::Current,
@@ -54,7 +55,7 @@ fn only_a_waiting_release_marks_an_update_available() {
         },
         State::Restarting,
         State::Cancelling,
-        State::Error(String::new()),
+        State::Error(Error::Cancelled.into()),
     ] {
         updater.state = state.clone();
         assert!(!updater.update_available(), "{state:?} is not an update");

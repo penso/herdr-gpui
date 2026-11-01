@@ -14,6 +14,7 @@
 //! carries it, or reload the tabs its pane opened. A page on the host's own
 //! loopback is reached only through a forward this window starts, as
 //! `ports open` does.
+// i18n: migrated
 
 mod install;
 mod window;

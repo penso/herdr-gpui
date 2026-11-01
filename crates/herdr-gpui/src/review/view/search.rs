@@ -7,6 +7,7 @@ use super::Review;
 use crate::{
     HerdrWindow,
     browser::TabId,
+    i18n::fl,
     review::diff::{Lines, RowId},
     search_input::SearchInput,
 };
@@ -246,11 +247,12 @@ impl HerdrWindow {
         let search = &review.search;
         let status = match (search.matches.len(), search.current) {
             _ if search.query.is_empty() => String::new(),
-            (0, _) => "No matches".into(),
-            (count, current) => format!(
-                "{} of {count}{}",
-                current.map_or(0, |current| current + 1),
-                if search.capped { "+" } else { "" }
+            (0, _) => fl!("review-search-none"),
+            (count, current) => fl!(
+                "review-search-count",
+                current = current.map_or(0, |current| current + 1),
+                count = count,
+                capped = if search.capped { "yes" } else { "no" }
             ),
         };
         let button = |name: &'static str, icon: &'static str| {

@@ -82,6 +82,8 @@ fn sound_volume<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> 
     u8::try_from(u64::deserialize(d)?)
         .ok()
         .filter(|volume| *volume <= SoundConfig::MAX_VOLUME)
+        // Part of TOML's parser text, which errors show as written.
+        // i18n: data
         .ok_or_else(|| serde::de::Error::custom("sound.volume must be between 0 and 100"))
 }
 
@@ -208,7 +210,9 @@ fn optional_notification_delay<'de, D: serde::Deserializer<'de>>(
 fn notification_delay<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
     let seconds = u64::deserialize(d)?;
     if seconds > 3600 {
+        // Part of TOML's parser text, which errors show as written.
         return Err(serde::de::Error::custom(
+            // i18n: data
             "notifications.delay_seconds must be between 0 and 3600",
         ));
     }

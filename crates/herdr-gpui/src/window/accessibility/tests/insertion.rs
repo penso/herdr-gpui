@@ -226,7 +226,10 @@ fn empty_wrongly_typed_and_oversized_values_send_nothing(cx: &mut TestAppContext
                 cx,
             );
             assert_eq!(
-                view.local_error.as_deref(),
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked)
+                    .as_deref(),
                 Some("Accessibility input not sent: frame exceeds limit")
             );
         })
