@@ -239,7 +239,7 @@ pub(super) fn usage_info(reading: &crate::usage::Reading, now: SystemTime) -> Us
                     .windows
                     .iter()
                     .map(|window| UsageWindow {
-                        label: window.kind.title().to_owned(),
+                        label: crate::usage::text::english_title(&window.kind),
                         used_percent: window.used,
                         resets_in_seconds: window.resets_in(now).map(|left| left.as_secs()),
                     })

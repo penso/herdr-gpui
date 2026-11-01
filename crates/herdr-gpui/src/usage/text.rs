@@ -39,6 +39,16 @@ fn write(text: &Text, message: fn(&str, &[(&str, FluentValue<'_>)]) -> String) -
     }
 }
 
+/// A window's title in English, for command line output: the fixed kinds
+/// as `Kind::title` names them, and a named window's words, with any
+/// arguments, rather than its message ID.
+pub(crate) fn english_title(kind: &Kind) -> String {
+    match kind {
+        Kind::Named(name) => english(name),
+        kind => kind.title(),
+    }
+}
+
 /// The selector value usage.ftl's messages pick a kind by; a named window
 /// takes `$name` instead.
 fn kind(kind: &Kind) -> (&'static str, String) {
