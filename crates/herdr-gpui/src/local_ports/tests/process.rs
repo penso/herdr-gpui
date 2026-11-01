@@ -1,7 +1,8 @@
 use super::*;
-use crate::local_ports::process::{Found, act, check, user};
+use crate::local_ports::process::{Found, act, act_with, check, user};
+use std::cell::RefCell;
 use std::{os::unix::process::ExitStatusExt, process::Child, time::Duration};
-use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, Signal, System};
 
 const VICTIM: Identity = Identity {
     pid: 4242,
@@ -170,4 +171,70 @@ fn a_stale_start_time_is_never_signalled() {
     assert!(status(&mut system, &child).is_some());
     child.kill().unwrap();
     child.wait().unwrap();
+}
+
+/// What the steps of a stop did against a scripted OS: each look answers
+/// the next of `seen` (the last repeats), and every signal is recorded.
+fn scripted_stop(seen: &[Option<Found>], grace: Duration) -> (Outcome, Vec<Signal>) {
+    let looks = RefCell::new(seen.iter().copied());
+    let last = seen.last().copied().flatten();
+    let sent = RefCell::new(Vec::new());
+    let outcome = act_with(
+        PortAction::Stop,
+        VICTIM,
+        501,
+        grace,
+        || looks.borrow_mut().next().unwrap_or(last),
+        |signal| {
+            sent.borrow_mut().push(signal);
+            true
+        },
+        |_| {},
+    );
+    (outcome, sent.into_inner())
+}
+
+#[test]
+fn a_pid_reused_after_sigterm_is_never_resumed_or_killed() {
+    let reused = found(VICTIM.started + 5, Some(501));
+    let (outcome, sent) = scripted_stop(
+        &[found(VICTIM.started, Some(501)), reused],
+        Duration::from_secs(1),
+    );
+    assert_eq!(outcome, Outcome::Signalled);
+    assert_eq!(sent, [Signal::Term]);
+    // Another user's process now on the pid is left alone too.
+    let (_, sent) = scripted_stop(
+        &[
+            found(VICTIM.started, Some(501)),
+            found(VICTIM.started, Some(0)),
+        ],
+        Duration::from_secs(1),
+    );
+    assert_eq!(sent, [Signal::Term]);
+}
+
+#[test]
+fn a_process_that_exits_on_sigterm_gets_nothing_more() {
+    let (outcome, sent) = scripted_stop(
+        &[found(VICTIM.started, Some(501)), None],
+        Duration::from_secs(1),
+    );
+    assert_eq!(outcome, Outcome::Signalled);
+    assert_eq!(sent, [Signal::Term]);
+}
+
+#[test]
+fn a_process_still_running_is_resumed_then_killed_after_its_grace() {
+    let (outcome, sent) = scripted_stop(
+        &[found(VICTIM.started, Some(501))],
+        Duration::from_millis(300),
+    );
+    assert_eq!(outcome, Outcome::Killed);
+    assert_eq!(sent, [Signal::Term, Signal::Continue, Signal::Kill]);
+    // It exits while it has time: no SIGKILL.
+    let running = found(VICTIM.started, Some(501));
+    let (outcome, sent) = scripted_stop(&[running, running, running, None], Duration::from_secs(1));
+    assert_eq!(outcome, Outcome::Signalled);
+    assert_eq!(sent, [Signal::Term, Signal::Continue]);
 }

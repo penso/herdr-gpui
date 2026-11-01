@@ -9,10 +9,7 @@
 use super::{Listener, Outcome, scan::Socket};
 use crate::processes::Identity;
 use herdr_control_protocol::protocol::hosts::PortAction;
-use std::{
-    thread,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, thread, time::Duration};
 use sysinfo::{
     Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, Signal, System, UpdateKind,
 };
@@ -133,9 +130,8 @@ fn send(system: &System, pid: u32, signal: Signal) -> bool {
         .unwrap_or(false)
 }
 
-/// Does `action` to `victim` if it is still that process. Stopping sends
-/// SIGTERM, and SIGCONT so a paused process can act on it, then SIGKILL if
-/// the same process still runs after `grace`. Blocking: a worker's call.
+/// Does `action` to `victim` if it is still that process. Blocking: a
+/// worker's call.
 pub(super) fn act(
     system: &mut System,
     action: PortAction,
@@ -143,7 +139,34 @@ pub(super) fn act(
     user: u32,
     grace: Duration,
 ) -> Outcome {
-    if let Err(outcome) = check(look(system, victim.pid), victim, user) {
+    let system = RefCell::new(system);
+    act_with(
+        action,
+        victim,
+        user,
+        grace,
+        || look(&mut system.borrow_mut(), victim.pid),
+        |signal| send(&system.borrow(), victim.pid, signal),
+        thread::sleep,
+    )
+}
+
+/// [`act`]'s steps, with the OS behind `look` (the pid's process now),
+/// `send`, and `wait`. Every signal after the first goes out only once a
+/// fresh look shows the pid still names `victim`: stopping sends SIGTERM,
+/// then SIGCONT so a paused process can act on it, then SIGKILL if it still
+/// runs after `grace`. A process that exits and whose pid is reused in
+/// between is never resumed or killed.
+pub(crate) fn act_with(
+    action: PortAction,
+    victim: Identity,
+    user: u32,
+    grace: Duration,
+    mut look: impl FnMut() -> Option<Found>,
+    mut send: impl FnMut(Signal) -> bool,
+    mut wait: impl FnMut(Duration),
+) -> Outcome {
+    if let Err(outcome) = check(look(), victim, user) {
         return outcome;
     }
     let signal = match action {
@@ -151,24 +174,25 @@ pub(super) fn act(
         PortAction::Pause => Signal::Stop,
         PortAction::Resume => Signal::Continue,
     };
-    if !send(system, victim.pid, signal) {
+    if !send(signal) {
         return Outcome::Failed;
     }
     if action != PortAction::Stop {
         return Outcome::Signalled;
     }
-    send(system, victim.pid, Signal::Continue);
-    let deadline = Instant::now() + grace;
-    while Instant::now() < deadline {
-        thread::sleep(POLL);
-        if check(look(system, victim.pid), victim, user).is_err() {
+    if check(look(), victim, user).is_err() {
+        return Outcome::Signalled;
+    }
+    send(Signal::Continue);
+    let mut waited = Duration::ZERO;
+    while waited < grace {
+        wait(POLL);
+        waited += POLL;
+        if check(look(), victim, user).is_err() {
             return Outcome::Signalled;
         }
     }
-    if check(look(system, victim.pid), victim, user).is_err() {
-        return Outcome::Signalled;
-    }
-    if send(system, victim.pid, Signal::Kill) {
+    if send(Signal::Kill) {
         Outcome::Killed
     } else {
         Outcome::Failed
