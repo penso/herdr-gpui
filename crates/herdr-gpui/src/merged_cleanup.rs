@@ -390,28 +390,10 @@ impl HerdrWindow {
         let Some((_, request)) = &self.merged_cleanup.removing else {
             return;
         };
-        let Some((id, Some(result))) = &self.live.cleanup_response else {
+        let request = request.clone();
+        let Some(result) = self.take_answer(crate::state::Answer::Cleanup, &request) else {
             return;
         };
-        if id != request {
-            return;
-        }
-        let result = result.clone();
-        let request = request.clone();
-        self.live.cleanup_response = None;
-        // Not cloned into every later update once read; a newer request's
-        // slot is left alone.
-        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
-            .connection
-            .inbox
-            .try_lock()
-            && inbox
-                .cleanup_response
-                .as_ref()
-                .is_some_and(|(id, _)| *id == request)
-        {
-            inbox.cleanup_response = None;
-        }
         let Some((candidate, _)) = self.merged_cleanup.removing.take() else {
             return;
         };
