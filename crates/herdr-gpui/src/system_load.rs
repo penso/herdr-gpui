@@ -5,6 +5,7 @@
 //! between samples. The UI thread only starts and stops
 //! workers and takes their samples on later ticks, so a slow or unreachable
 //! host never blocks rendering or delays another host.
+// i18n: migrated
 
 mod error;
 mod gpu;
@@ -340,14 +341,7 @@ impl Reading {
             }
             Err(error) => {
                 // The display boundary: the cause says what went wrong remotely.
-                let mut text = error.to_string();
-                let mut source = std::error::Error::source(&error);
-                while let Some(cause) = source {
-                    text.push(' ');
-                    text.push_str(&cause.to_string());
-                    source = cause.source();
-                }
-                self.error = Some(text);
+                self.error = Some(crate::i18n::errors::with_causes(&error));
             }
         }
     }
