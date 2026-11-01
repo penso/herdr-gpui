@@ -102,9 +102,14 @@ fn trusted_keys(known: &KnownHosts) -> Result<Vec<HostKeyFingerprint>> {
     if lines.iter().any(|line| line.starts_with('@')) {
         return Err(Error::KeyNotReplaceable.into());
     }
-    let scratch = tempfile::NamedTempFile::new()?;
-    std::fs::write(scratch.path(), lines.join("\n") + "\n")?;
-    fingerprints(scratch.path())
+    // A closed file in a scratch directory: Windows keeps a `NamedTempFile`
+    // open without sharing, so `ssh-keygen` could not read it.
+    let scratch = tempfile::Builder::new()
+        .prefix("herdr-host-key-")
+        .tempdir()?;
+    let file = scratch.path().join("trusted");
+    std::fs::write(&file, lines.join("\n") + "\n")?;
+    fingerprints(&file)
 }
 
 /// Every known hosts line under `name` in `files`, as `ssh-keygen -F` finds
