@@ -1,7 +1,7 @@
 //! Which machines the section reads: this one always, and every other
 //! connected device, each once however many sessions reach it.
 
-use crate::{HerdrWindow, teleport::Host};
+use crate::{HerdrWindow, i18n::fl, teleport::Host};
 use herdr_client::ConnectTarget;
 
 /// One machine `herdr-automate` runs on. Two sessions of the same host share
@@ -56,7 +56,7 @@ impl Machine {
     /// How an error names the machine when no endpoint labels it.
     pub(crate) fn name(&self) -> String {
         match self {
-            Self::Local => THIS_COMPUTER.to_lowercase(),
+            Self::Local => fl!("automations-this-computer-name"),
             Self::Ssh(target) => target.clone(),
             #[cfg(feature = "cloud")]
             Self::Cloud { id, .. } => id.clone(),
@@ -83,7 +83,9 @@ pub(crate) struct Wanted {
 }
 
 /// What this machine is called when no local endpoint names it.
-pub(crate) const THIS_COMPUTER: &str = "This computer";
+pub(crate) fn this_computer() -> String {
+    fl!("automations-this-computer")
+}
 
 impl HerdrWindow {
     /// This machine first, then every enabled, connected device on another
@@ -97,7 +99,7 @@ impl HerdrWindow {
         if let Ok(host) = Host::new(&ConnectTarget::Local) {
             wanted.push(Wanted {
                 machine: Machine::Local,
-                label: local.map_or_else(|| THIS_COMPUTER.to_owned(), |e| e.label.clone()),
+                label: local.map_or_else(this_computer, |e| e.label.clone()),
                 endpoint: local.map(|endpoint| endpoint.id.clone()),
                 host,
             });

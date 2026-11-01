@@ -4,7 +4,7 @@
 //! once it answers, and a refusal is shown as the program worded it.
 
 use super::{Error, HostState, Machine, fetch};
-use crate::{HerdrWindow, window::Flash};
+use crate::{HerdrWindow, i18n::fl, window::Flash};
 use gpui::{prelude::*, *};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,14 +48,14 @@ impl Action {
     }
 
     /// What the button says while the host works on it.
-    pub(crate) fn doing(&self) -> &'static str {
+    pub(crate) fn doing(&self) -> String {
         match self {
-            Self::Approve { .. } => "Approving…",
-            Self::Pause { .. } | Self::PauseAll => "Pausing…",
-            Self::Resume { .. } | Self::ResumeAll => "Resuming…",
-            Self::RunNow { .. } => "Starting…",
-            Self::Start => "Starting the daemon…",
-            Self::Stop { .. } => "Stopping…",
+            Self::Approve { .. } => fl!("automations-doing-approve"),
+            Self::Pause { .. } | Self::PauseAll => fl!("automations-doing-pause"),
+            Self::Resume { .. } | Self::ResumeAll => fl!("automations-doing-resume"),
+            Self::RunNow { .. } => fl!("automations-doing-run"),
+            Self::Start => fl!("automations-doing-start"),
+            Self::Stop { .. } => fl!("automations-doing-stop"),
         }
     }
 }
