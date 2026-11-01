@@ -5,12 +5,24 @@ use crate::{
     HerdrWindow,
     avatars::Checkout,
     notification_mutes::{Daemon, Mutes},
+    state::{Answer, DialogResponse},
 };
 use gpui::{ClipboardItem, Context};
 use herdr_client::{ConnectTarget, RemoteHost};
 use std::time::Instant;
 
 impl HerdrWindow {
+    /// `request`'s answer in `answer`'s slot once it has arrived, cleared
+    /// from the selected connection's mailbox too so later updates do not
+    /// keep copying it.
+    pub(crate) fn take_answer(&mut self, answer: Answer, request: &str) -> Option<DialogResponse> {
+        let result = self.live.take_answer(answer, request)?;
+        self.endpoints[self.selected_endpoint]
+            .connection
+            .retire_answer(answer, request);
+        Some(result)
+    }
+
     /// Writes daemon-forwarded OSC 52 payloads to the pasteboard and reports
     /// the copy the way a local selection does. Returns whether anything was
     /// written, so the window repaints for the flash.

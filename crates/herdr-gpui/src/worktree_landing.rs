@@ -6,7 +6,7 @@
 use crate::{
     HerdrWindow,
     i18n::{Localize, fl},
-    state::DialogResponse,
+    state::Answer,
     state_file,
     teleport::{AgentKind, Host},
 };
@@ -345,34 +345,8 @@ impl HerdrWindow {
         let Some(launch) = self.landing_launch.take() else {
             return;
         };
-        let _ = self.take_landing_response(launch.request());
+        let _ = self.take_answer(Answer::Landing, launch.request());
         self.land(launch, response, cx);
-    }
-
-    /// The answer to `request` in the connection's landing slot, once it has
-    /// arrived. Taken, so it is not cloned into every later update; a newer
-    /// request's slot is left alone.
-    pub(crate) fn take_landing_response(&mut self, request: &str) -> Option<DialogResponse> {
-        let Some((id, Some(result))) = &self.live.landing_response else {
-            return None;
-        };
-        if id != request {
-            return None;
-        }
-        let result = result.clone();
-        self.live.landing_response = None;
-        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
-            .connection
-            .inbox
-            .try_lock()
-            && inbox
-                .landing_response
-                .as_ref()
-                .is_some_and(|(id, _)| id == request)
-        {
-            inbox.landing_response = None;
-        }
-        Some(result)
     }
 
     /// Remember `launch`'s choice and start its agent in the created root

@@ -231,7 +231,7 @@ impl HerdrWindow {
             return;
         }
         let request = launch.request().to_owned();
-        let Some(answer) = self.take_landing_response(&request) else {
+        let Some(answer) = self.take_answer(crate::state::Answer::Landing, &request) else {
             return;
         };
         if let (Some(launch), Ok(response)) = (self.landing_launch.take(), answer) {
@@ -257,7 +257,7 @@ impl HerdrWindow {
             }
             // Nothing was created, so the next submission arms its own landing.
             if let Some(launch) = this.landing_launch.take() {
-                let _ = this.take_landing_response(launch.request());
+                let _ = this.take_answer(crate::state::Answer::Landing, launch.request());
             }
             this.menu.error = Some(error);
             cx.notify();

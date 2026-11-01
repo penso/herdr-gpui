@@ -256,7 +256,49 @@ impl Default for LiveState {
     }
 }
 
+/// A request slot a job outside the open dialog waits on, read once by the
+/// window and then cleared from the mailbox too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Answer {
+    // keep-sorted start
+    Cleanup,
+    Editor,
+    Landing,
+    Script,
+    // keep-sorted end
+}
+
 impl LiveState {
+    fn answer_slot(&mut self, answer: Answer) -> &mut Option<(String, Option<DialogResponse>)> {
+        match answer {
+            Answer::Cleanup => &mut self.cleanup_response,
+            Answer::Editor => &mut self.editor_response,
+            Answer::Landing => &mut self.landing_response,
+            Answer::Script => &mut self.script_response,
+        }
+    }
+
+    /// `request`'s answer once it has arrived, emptying its slot. A newer
+    /// request's slot, or one still waiting, is left alone.
+    pub(crate) fn take_answer(&mut self, answer: Answer, request: &str) -> Option<DialogResponse> {
+        let slot = self.answer_slot(answer);
+        if !slot
+            .as_ref()
+            .is_some_and(|(id, result)| id == request && result.is_some())
+        {
+            return None;
+        }
+        slot.take().and_then(|(_, result)| result)
+    }
+
+    /// Empty `answer`'s slot if it still belongs to `request`.
+    pub(crate) fn clear_answer(&mut self, answer: Answer, request: &str) {
+        let slot = self.answer_slot(answer);
+        if slot.as_ref().is_some_and(|(id, _)| id == request) {
+            *slot = None;
+        }
+    }
+
     /// Whether `next` repaints only the terminal: everything else the window
     /// draws from, the sidebar above all, reads as it did in `self`. Every
     /// field is named so a new one must decide whether it can change quietly.
