@@ -200,6 +200,24 @@ desktop keyring (`dev.herdr.gpui.gitlab`), or with `[gitlab]
 allow_plaintext_credentials = true` the private `0600` `gitlab-credentials`
 file beside the GUI config. A headless window never reads or writes them.
 
+Azure DevOps repositories are read with `AZURE_DEVOPS_EXT_PAT` from the
+login shell, else the personal access token saved for the repository's
+organization, else the Azure CLI's sign-in (`az login`). The account menu's
+**Azure DevOps** tab saves a token: type the organization (it starts at one
+the open checkouts read) and paste a token with the Code (Read) and Work
+Items (Read) scopes, made from the page's link to
+`https://dev.azure.com/<organization>/_usersSettings/tokens`. **Check and
+save** asks the organization's `_apis/connectionData` whom it signs in as and
+`_apis/projects` how many projects it shows before saving, and keeps the
+token in its field when the check fails. Each organization's card shows the
+account, where its token comes from, and **Forget** for one saved here. A
+repository waiting for a token shows a banner in its section that opens the
+tab, and marks the title bar's account button. Tokens are one
+credential-store record of `organization<TAB>token` lines, at most 32
+organizations: the desktop keyring (`dev.herdr.gpui.azure-devops`), or with
+`[azure_devops] allow_plaintext_credentials = true` the private `0600`
+`azure-devops-credentials` file beside the GUI config.
+
 Merge requests are not listed yet. They would need `PullRequest`-like
 metadata in the shared schema, which is a contract change for both
 applications.
