@@ -5,12 +5,12 @@
 set -euo pipefail
 source "$(dirname -- "$0")/common.sh"
 [[ $# == 1 ]] || fail 'Usage: bash install-nfpm.sh DESTINATION_DIR'
-version=2.47.0
+version=2.48.0
 case "$(uname -s)-$(uname -m)" in
-    Linux-x86_64) asset=Linux_x86_64 sha=0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783 ;;
-    Linux-aarch64) asset=Linux_arm64 sha=1c0f5f2999b9a974bfb04fdb0cc3306096de530ac5dbb25d739cc5f5219c919c ;;
-    Darwin-arm64) asset=Darwin_arm64 sha=e8c9d1d9ac218eeed479375143dc46b8d51a2b8dbba8e2f9f15ecc8faa2e404b ;;
-    Darwin-x86_64) asset=Darwin_x86_64 sha=2b04108f8757313dde92ed729560845aadfb7782887eb6988a5dd96f9c146861 ;;
+    Linux-x86_64) asset=Linux_x86_64 sha=6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750 ;;
+    Linux-aarch64) asset=Linux_arm64 sha=a9a75213763783b7669719e505474c748c5ad7dc66591a195619deb50f85c2f4 ;;
+    Darwin-arm64) asset=Darwin_arm64 sha=ae23377895437b18d4727b362e7ec4c2d38295eb9adf96008e0cbc813038df81 ;;
+    Darwin-x86_64) asset=Darwin_x86_64 sha=be3bdff94bae08638da0f7a3cc4b4ea3f381fa3f10560fcf81ec2e8fea625b49 ;;
     *) fail "No pinned nfpm build for $(uname -s)-$(uname -m)" ;;
 esac
 mkdir -p -- "$1"

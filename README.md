@@ -202,7 +202,12 @@ sudo pacman -U Herdr-VERSION-x86_64-unknown-linux-gnu.pkg.tar.zst  # Arch Linux
 ```
 
 The package manager pulls in the runtime libraries, including the Vulkan loader;
-a Vulkan driver for your GPU must also be present. **App Updates** detects which
+a Vulkan driver for your GPU must also be present. On laptops with two GPUs,
+install the driver for the GPU your display uses, not only the discrete one.
+Without it, Herdr UI renders on the discrete GPU, which can go to sleep while the
+window is hidden, so the window stays blank for a second or more each time you
+return to its workspace. On Arch Linux, install `vulkan-radeon` for AMD or
+`vulkan-intel` for Intel. **App Updates** detects which
 package manager owns the installed executable, downloads the matching `.deb`,
 `.rpm`, or Arch package, verifies its signed release metadata and checksum, then
 installs it through APT, DNF, or pacman with a PolicyKit authentication prompt.
