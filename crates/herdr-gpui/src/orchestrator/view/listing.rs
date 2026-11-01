@@ -51,8 +51,10 @@ impl OrchestratorView {
         self.active = active
             .and_then(|key| self.repos.iter().position(|repo| repo.key == key))
             .unwrap_or(0);
-        self.projects
-            .retain(|key| self.repos.iter().any(|repo| repo.key == *key));
+        // An Azure DevOps project stays picked while any repository lists it.
+        self.projects.retain(|key| {
+            super::projects::is_azure_project(key) || self.repos.iter().any(|repo| repo.key == *key)
+        });
         self.refresh_rows();
         cx.notify();
     }
@@ -82,10 +84,10 @@ impl OrchestratorView {
     /// Lists only the project `key` names, as a menu opening one workspace's
     /// issues asks.
     pub(crate) fn only_project(&mut self, key: String, cx: &mut Context<Self>) {
-        if !self.repos.iter().any(|repo| repo.key == key) {
+        let Some(pick) = self.pick_of(&key) else {
             return;
-        }
-        self.projects = HashSet::from([key]);
+        };
+        self.projects = HashSet::from([pick]);
         self.refresh_rows();
         cx.notify();
     }
@@ -188,7 +190,7 @@ impl OrchestratorView {
         }
         // The backends and projects picked narrow what every repository
         // lists, then all of it is one list.
-        let shown = |repo: &Repo| self.projects.is_empty() || self.projects.contains(&repo.key);
+
         let backend = |row: &ItemRow| {
             self.backends.is_empty()
                 || self
@@ -198,7 +200,6 @@ impl OrchestratorView {
         let lists: Vec<Vec<ItemRow>> = self
             .repos
             .iter()
-            .filter(|repo| shown(repo))
             .map(|repo| {
                 let rows = match self.tab {
                     Tab::Issues => &repo.issue_rows,
@@ -209,7 +210,9 @@ impl OrchestratorView {
                 let mut parent_kept = false;
                 for row in rows {
                     if row.depth == 0 {
-                        parent_kept = backend(row);
+                        // Projects narrow by the item's own project on
+                        // Azure DevOps, whoever listed it.
+                        parent_kept = backend(row) && self.picked(repo, self.row_item(row));
                     }
                     if parent_kept {
                         kept.push(*row);

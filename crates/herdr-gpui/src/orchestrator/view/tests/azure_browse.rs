@@ -190,19 +190,6 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
     click(cx, "orchestrator-state");
     click(cx, "orchestrator-state-merged");
     assert_eq!(listed(&view, cx), ["contoso/Fabrikam/api!2"]);
-    // The organization, picked in the projects menu, narrows to its
-    // reader's own.
-    click(cx, "orchestrator-state");
-    click(cx, "orchestrator-state-all");
-    click(cx, "orchestrator-project-filter");
-    click(cx, "orchestrator-project-filter-1");
-    assert_eq!(
-        listed(&view, cx),
-        ["contoso/Fabrikam/web!1", "contoso/Fabrikam/api!2"]
-    );
-    click(cx, "orchestrator-project-filter-all");
-    click(cx, "orchestrator-project-filter");
-
     // Picking a repository in the Projects menu lists it with no checkout;
     // picking it again stops.
     let browsed = "azure\u{1f}contoso/Fabrikam/api";
@@ -215,10 +202,8 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
     click(cx, "orchestrator-projects-repo-contoso/Fabrikam/api");
     click(cx, "orchestrator-projects");
     assert!(cx.debug_bounds("orchestrator-projects-frame").is_none());
-    // Its row in the projects menu closes it too.
-    click(cx, "orchestrator-project-filter");
-    click(cx, "orchestrator-project-filter-close-2");
-    click(cx, "orchestrator-project-filter");
+    // Stopping it from elsewhere drops it too.
+    cx.update(|_, cx| view.update(cx, |view, _| view.stop_browsing(browsed)));
     assert!(!keys(cx).iter().any(|key| key == browsed));
 
     // Repositories without a checkout outlast the checkouts' changes, and
