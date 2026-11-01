@@ -201,8 +201,8 @@ fn usage(view: &HerdrWindow, now: SystemTime) -> Response {
         .unwrap_or_default();
     let note = if !view.config.usage.show {
         Some("Usage is turned off ([usage] show in the settings)".to_owned())
-    } else if let Some(error) = entry.and_then(|entry| entry.error.clone()) {
-        Some(error)
+    } else if let Some(error) = entry.and_then(|entry| entry.error.as_deref()) {
+        Some(error.to_string())
     } else if entry.is_none() {
         Some(format!("Herdr UI has not read usage on {host} yet"))
     } else if usage.is_empty() {
@@ -234,7 +234,7 @@ pub(super) fn usage_info(reading: &crate::usage::Reading, now: SystemTime) -> Us
                     .collect()
             })
             .unwrap_or_default(),
-        error: reading.error.clone(),
+        error: reading.error.as_ref().map(ToString::to_string),
     }
 }
 

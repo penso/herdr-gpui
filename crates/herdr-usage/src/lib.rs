@@ -64,12 +64,13 @@ const MANUAL_SPACING: Duration = Duration::from_secs(10);
 const HOST_LIMIT: usize = 16;
 
 /// One provider on the shown host: its last good report, and why the latest
-/// refresh failed if it did.
-#[derive(Clone, Debug, PartialEq)]
+/// refresh failed if it did. The error stays typed, so each window shows it
+/// in its own language; it is shared, as readings are cloned for drawing.
+#[derive(Clone, Debug)]
 pub struct Reading {
     pub provider: Provider,
     pub report: Option<Report>,
-    pub error: Option<String>,
+    pub error: Option<Arc<Error>>,
     /// Set when the sign-in sits behind a Keychain prompt the user has not
     /// allowed, or denied, so the panel can offer to allow it.
     pub access: Option<Access>,
@@ -88,7 +89,7 @@ pub enum Access {
 pub struct Entry {
     pub readings: Vec<Reading>,
     /// Why the host itself could not be read, such as SSH failing.
-    pub error: Option<String>,
+    pub error: Option<Arc<Error>>,
     pub updated: Option<SystemTime>,
     due: Option<Instant>,
     requested: Option<Instant>,
@@ -448,7 +449,7 @@ impl Usage {
                         Reading {
                             provider,
                             report: previous.and_then(|index| entry.readings[index].report.clone()),
-                            error: Some(error.to_string()),
+                            error: Some(Arc::new(error)),
                             access,
                         }
                     }
@@ -490,7 +491,7 @@ impl Usage {
                     }
                     Err(error) => {
                         entry.round.clear();
-                        entry.error = Some(error.to_string());
+                        entry.error = Some(Arc::new(error));
                         entry.due = Some(now + ERROR_BACKOFF);
                     }
                 }

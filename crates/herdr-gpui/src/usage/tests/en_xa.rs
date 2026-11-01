@@ -1,7 +1,8 @@
 //! The `en-XA` leak test for plan usage: the status bar's segments, the
 //! panel a segment opens (with a report and claude-swap's other accounts,
-//! OpenAI's daily spend, waiting on the Keychain, and asking to be set up),
-//! and the activity bar's Usage section.
+//! OpenAI's daily spend under a failed refresh, waiting on the Keychain,
+//! and asking to be set up, with the provider's error), and the activity
+//! bar's Usage section.
 use super::*;
 use crate::{
     config::status_bar::Detail,
@@ -17,7 +18,10 @@ use herdr_usage::{
     details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily},
     model::{Balance, Unit},
 };
-use std::time::{Duration, SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 /// Draws the whole window again: a view's own notify does not redraw a
 /// headless root.
@@ -110,7 +114,8 @@ fn readings() -> Vec<Reading> {
         Reading {
             provider: openai,
             report: Some(full(openai).with_detail(daily)),
-            error: None,
+            // A failed refresh over an older report.
+            error: Some(Arc::new(herdr_usage::Error::Status(503))),
             access: None,
         },
         Reading {
@@ -128,7 +133,7 @@ fn readings() -> Vec<Reading> {
         Reading {
             provider: configurable(),
             report: None,
-            error: None,
+            error: Some(Arc::new(herdr_usage::Error::NotSignedIn)),
             access: None,
         },
     ]
