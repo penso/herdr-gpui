@@ -6,6 +6,7 @@
 use super::{HISTORY, Reading, sample::Memory};
 use crate::{
     config::{Theme, status_bar::Detail},
+    i18n::fl,
     usage::Host,
     window::HerdrWindow,
 };
@@ -58,7 +59,7 @@ impl HerdrWindow {
                 segment.child(
                     div()
                         .text_color(rgb(theme.muted))
-                        .child("CPU and memory unavailable"),
+                        .child(fl!("system-load-unavailable")),
                 ),
             );
         }
@@ -121,14 +122,17 @@ pub(crate) fn tooltip(
 pub(crate) fn line(reading: &Reading, theme: &Theme, glyph: Option<f32>, detail: Detail) -> Div {
     let graphs = detail == Detail::Detailed;
     let Some(sample) = reading.latest() else {
-        return div().text_color(rgb(theme.muted)).child("CPU and memory…");
+        return div()
+            .text_color(rgb(theme.muted))
+            .child(fl!("system-load-waiting"));
     };
     // The numbers are the last good ones while a refresh fails.
     let stale = reading.error().is_some();
-    let label = |name: &'static str| div().flex_none().text_color(rgb(theme.muted)).child(name);
-    // MEM takes VRAM's width so its meter lines up with the GPU line's.
-    let wide = |name: &'static str| match glyph.filter(|_| sample.gpu.is_some()) {
-        Some(glyph) => label(name).w(px(glyph * LABEL_GLYPHS)),
+    let label = |name: String| div().flex_none().text_color(rgb(theme.muted)).child(name);
+    // MEM takes at least VRAM's width so its meter lines up with the GPU
+    // line's; a longer translation widens it rather than being cut.
+    let wide = |name: String| match glyph.filter(|_| sample.gpu.is_some()) {
+        Some(glyph) => label(name).min_w(px(glyph * LABEL_GLYPHS)),
         None => label(name),
     };
     let mut cpu = div()
@@ -137,7 +141,7 @@ pub(crate) fn line(reading: &Reading, theme: &Theme, glyph: Option<f32>, detail:
         .flex_none()
         .items_center()
         .gap(px(ITEM_GAP))
-        .child(label("CPU"))
+        .child(label(fl!("system-load-cpu")))
         .when(graphs, |cpu| {
             cpu.child(sparkline(reading.history(), CPU_WARN, theme))
         });
@@ -151,7 +155,7 @@ pub(crate) fn line(reading: &Reading, theme: &Theme, glyph: Option<f32>, detail:
             .flex_none()
             .items_center()
             .gap(px(ITEM_GAP))
-            .child(wide("MEM"))
+            .child(wide(fl!("system-load-memory")))
             .when(graphs, |row| row.child(meter(memory, MEMORY_WARN, theme)))
             .child(share(memory.percent(), MEMORY_WARN, stale, theme, glyph))
     });
@@ -175,14 +179,14 @@ pub(crate) fn gpu_line(
     let gpu = reading.latest()?.gpu?;
     let graphs = detail == Detail::Detailed;
     let stale = reading.error().is_some();
-    let label = |name: &'static str| div().flex_none().text_color(rgb(theme.muted)).child(name);
+    let label = |name: String| div().flex_none().text_color(rgb(theme.muted)).child(name);
     let column = |busy: f32| {
         div()
             .flex()
             .flex_none()
             .items_center()
             .gap(px(ITEM_GAP))
-            .child(label("GPU"))
+            .child(label(fl!("system-load-gpu")))
             .when(graphs, |row| {
                 row.child(sparkline(reading.gpu_history(), GPU_WARN, theme))
             })
@@ -204,8 +208,10 @@ pub(crate) fn gpu_line(
             .items_center()
             .gap(px(ITEM_GAP))
             .child(match glyph {
-                Some(glyph) => label("VRAM").w(px(glyph * LABEL_GLYPHS)),
-                None => label("VRAM"),
+                Some(glyph) => {
+                    label(fl!("system-load-video-memory")).min_w(px(glyph * LABEL_GLYPHS))
+                }
+                None => label(fl!("system-load-video-memory")),
             })
             .when(graphs, |row| row.child(meter(memory, VRAM_WARN, theme)))
             .child(share(memory.percent(), VRAM_WARN, stale, theme, glyph))
@@ -363,65 +369,76 @@ fn gauge(value: f32, warn: f32, height: f32, theme: &Theme) -> Div {
         )
 }
 
-fn details(reading: &Reading, host: &Host) -> String {
+pub(super) fn details(reading: &Reading, host: &Host) -> String {
     let mut lines = vec![match host {
-        Host::Local => "This machine".to_owned(),
+        Host::Local => fl!("system-load-this-machine"),
         Host::Ssh(target) => target.clone(),
-        Host::Wsl(distro) => format!("WSL · {distro}"),
+        Host::Wsl(distro) => fl!("system-load-wsl", distro = distro.as_str()),
         #[cfg(feature = "azure")]
         Host::Azure { id, .. } => match crate::azure::machine::Machine::parse(id) {
-            crate::azure::machine::Machine::Vm(name) => format!("Azure VM · {name}"),
-            crate::azure::machine::Machine::Sandbox(_) => "Azure sandbox".to_owned(),
+            crate::azure::machine::Machine::Vm(name) => {
+                fl!("system-load-azure-vm", name = name.to_string())
+            }
+            crate::azure::machine::Machine::Sandbox(_) => fl!("system-load-azure-sandbox"),
         },
     }];
     if let Some(sample) = reading.latest() {
+        let percent = |value: f32| format!("{value:.0}");
+        let cores = sample.cores.unwrap_or_default();
         let mut cpu = match sample.cpu {
-            Some(value) => format!("CPU {value:.0}%"),
-            None => "CPU measuring…".to_owned(),
+            Some(value) => fl!(
+                "system-load-tooltip-cpu",
+                percent = percent(value),
+                cores = cores
+            ),
+            None => fl!("system-load-tooltip-cpu-measuring", cores = cores),
         };
-        if let Some(cores) = sample.cores {
-            cpu.push_str(&format!(" of {cores} cores"));
-        }
         if let Some([one, five, fifteen]) = sample.load {
-            cpu.push_str(&format!(" · load {one:.2} {five:.2} {fifteen:.2}"));
+            let load = fl!(
+                "system-load-tooltip-load",
+                one = format!("{one:.2}"),
+                five = format!("{five:.2}"),
+                fifteen = format!("{fifteen:.2}")
+            );
+            cpu = fl!("system-load-tooltip-joined", first = cpu, second = load);
         }
         lines.push(cpu);
         if let Some(memory) = sample.memory {
-            lines.push(format!(
-                "Memory {} of {} ({:.0}%)",
-                gigabytes(memory.used),
-                gigabytes(memory.total),
-                memory.percent()
+            lines.push(fl!(
+                "system-load-tooltip-memory",
+                used = gigabytes(memory.used),
+                total = gigabytes(memory.total),
+                percent = percent(memory.percent())
             ));
         }
         if let Some(gpu) = sample.gpu {
-            let mut line = match gpu.busy {
-                Some(busy) => format!("GPU {busy:.0}%"),
-                None => "GPU".to_owned(),
-            };
-            if gpu.count > 1 {
-                line.push_str(&format!(" across {} cards", gpu.count));
-            }
-            lines.push(line);
+            lines.push(match gpu.busy {
+                Some(busy) => fl!(
+                    "system-load-tooltip-gpu",
+                    percent = percent(busy),
+                    cards = gpu.count
+                ),
+                None => fl!("system-load-tooltip-gpu-unmeasured", cards = gpu.count),
+            });
             if let Some(memory) = gpu.memory {
-                lines.push(format!(
-                    "Video memory {} of {} ({:.0}%)",
-                    gigabytes(memory.used),
-                    gigabytes(memory.total),
-                    memory.percent()
+                lines.push(fl!(
+                    "system-load-tooltip-video-memory",
+                    used = gigabytes(memory.used),
+                    total = gigabytes(memory.total),
+                    percent = percent(memory.percent())
                 ));
             }
         }
         if let Some(disk) = sample.disk {
-            lines.push(format!(
-                "Disk {} free of {} ({:.0}% used)",
-                storage(disk.available),
-                storage(disk.total),
-                disk.used_percent()
+            lines.push(fl!(
+                "system-load-tooltip-disk",
+                free = storage(disk.available),
+                total = storage(disk.total),
+                percent = percent(disk.used_percent())
             ));
         }
         if let Some(seconds) = sample.uptime {
-            lines.push(format!("Up {}", uptime(seconds)));
+            lines.push(fl!("system-load-tooltip-up", uptime = uptime(seconds)));
         }
     }
     if let Some(error) = reading.error() {
@@ -435,11 +452,14 @@ fn details(reading: &Reading, host: &Host) -> String {
 pub(crate) fn storage(bytes: u64) -> String {
     let gigabytes = bytes as f64 / f64::from(1u32 << 30);
     if gigabytes >= 1024. {
-        format!("{:.1} TB", gigabytes / 1024.)
+        fl!(
+            "system-load-terabytes",
+            size = format!("{:.1}", gigabytes / 1024.)
+        )
     } else if gigabytes >= 10. {
-        format!("{gigabytes:.0} GB")
+        fl!("system-load-gigabytes", size = format!("{gigabytes:.0}"))
     } else {
-        format!("{gigabytes:.1} GB")
+        fl!("system-load-gigabytes", size = format!("{gigabytes:.1}"))
     }
 }
 
@@ -448,15 +468,18 @@ pub(crate) fn storage(bytes: u64) -> String {
 pub(crate) fn uptime(seconds: u64) -> String {
     let (days, hours, minutes) = (seconds / 86_400, seconds / 3600 % 24, seconds / 60 % 60);
     if days > 0 {
-        format!("{days}d {hours}h")
+        fl!("system-load-uptime-days", days = days, hours = hours)
     } else if hours > 0 {
-        format!("{hours}h {minutes}m")
+        fl!("system-load-uptime-hours", hours = hours, minutes = minutes)
     } else {
-        format!("{minutes}m")
+        fl!("system-load-uptime-minutes", minutes = minutes)
     }
 }
 
 /// Binary gigabytes, as Activity Monitor and `free -h` count them.
 pub(super) fn gigabytes(bytes: u64) -> String {
-    format!("{:.1} GB", bytes as f64 / f64::from(1u32 << 30))
+    fl!(
+        "system-load-gigabytes",
+        size = format!("{:.1}", bytes as f64 / f64::from(1u32 << 30))
+    )
 }

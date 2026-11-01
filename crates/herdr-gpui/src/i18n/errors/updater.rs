@@ -146,6 +146,9 @@ impl Localize for Error {
             Self::NotCommitted => fl!("error-updater-not-committed"),
             Self::InstallationChanged => fl!("error-updater-installation-changed"),
             Self::MissingInstallerMetadata => fl!("error-updater-missing-installer-metadata"),
+            Self::Start(_) => fl!("error-updater-start"),
+            Self::WorkerStopped => fl!("error-updater-worker-stopped"),
+            Self::CancelUnacknowledged => fl!("error-updater-cancel-unacknowledged"),
             Self::HttpStatus(status) => {
                 fl!("error-updater-http-status", status = status.to_string())
             }
@@ -186,10 +189,46 @@ impl Localize for Error {
             Self::RelaunchFailed(status) => {
                 fl!("error-updater-relaunch-failed", status = status.to_string())
             }
-            // The Windows installer's enum is private to the updater, so its
-            // English `Display` shows until the crate exports it.
             #[cfg(windows)]
-            Self::Windows(error) => error.to_string(),
+            Self::Windows(error) => error.localize(),
+        }
+    }
+}
+
+/// Why App Updates never checks, after "In-app updates unavailable:".
+impl Localize for herdr_updater::Disabled {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::LocalBuild => fl!("error-updater-disabled-local-build"),
+            Self::Platform => fl!("error-updater-disabled-platform"),
+            Self::Secondary => fl!("error-updater-disabled-secondary"),
+            Self::Unsupported(failure) => failure.localize(),
+            // keep-sorted end
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Localize for herdr_updater::windows::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::InstallerPath => fl!("error-updater-windows-installer-path"),
+            Self::Launch(_) => fl!("error-updater-windows-launch"),
+            Self::LocalAppData => fl!("error-updater-windows-local-app-data"),
+            Self::Location => fl!("error-updater-windows-location"),
+            Self::MissingPublisher => fl!("error-updater-windows-missing-publisher"),
+            Self::MissingSigner => fl!("error-updater-windows-missing-signer"),
+            // The subject as the signature names it, quoted as `Display` does.
+            Self::Signer { found } => {
+                fl!("error-updater-windows-signer", found = format!("{found:?}"))
+            }
+            Self::Untrusted(code) => fl!(
+                "error-updater-windows-untrusted",
+                code = format!("0x{code:08x}")
+            ),
+            // keep-sorted end
         }
     }
 }

@@ -24,19 +24,8 @@ pub(crate) struct Hyper;
 static META: Meta = Meta::new("hyper", "Charm Hyper")
     .dashboard("https://hyper.charm.land")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["HYPER_API_KEY"],
-            "A Charm Hyper API key from https://hyper.charm.land. Used when no browser \
-             session is available or the session has expired.",
-        ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Sign in at https://hyper.charm.land, open Developer Tools > Application > \
-             Cookies > https://hyper.charm.land, and copy every cookie there as one \
-             \"name=value; name2=value2\" header.",
-        ),
+        Setting::new("api_key", &["HYPER_API_KEY"], "usage-hyper-setting-api-key"),
+        Setting::new("cookie", &[], "usage-hyper-setting-cookie"),
     ]);
 
 impl Service for Hyper {

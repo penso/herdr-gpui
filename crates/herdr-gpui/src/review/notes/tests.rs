@@ -61,7 +61,10 @@ fn the_prompt_places_and_quotes_each_note() {
 fn empty_notes_are_refused_and_places_name_the_side() {
     assert!(Note::new(at(Side::Added, 1, ""), " \n\t ").is_none());
     let removed = Note::new(at(Side::Removed, 3, "x"), "no").unwrap();
-    assert_eq!(removed.place(), "src/lib.rs:3 (removed)");
+    assert_eq!(
+        removed.place().replace(['\u{2068}', '\u{2069}'], ""),
+        "src/lib.rs:3 (removed)"
+    );
     let long = Note::new(at(Side::Unchanged, 9, "x"), &"a".repeat(5000)).unwrap();
     assert_eq!(long.comment.chars().count(), MAX_COMMENT_CHARS + 1);
     assert_eq!(long.place(), "src/lib.rs:9");

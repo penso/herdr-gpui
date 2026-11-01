@@ -5,11 +5,12 @@
 
 use super::{
     OrchestratorView,
-    look::{GREEN, RED, YELLOW, age, agent_icon},
+    look::{GREEN, RED, YELLOW, agent_icon, ago},
     rows::{RunRow, Runs},
 };
 use crate::{
     config::corners,
+    i18n::fl,
     orchestrator::{Access, Item},
     pull_request::{MergeState, Outcome, PullRequest, ReviewDecision},
 };
@@ -49,8 +50,14 @@ impl OrchestratorView {
             rows.push(Row {
                 icon: "icons/error.svg",
                 hue: look.hue(YELLOW),
-                title: "Blocked".into(),
-                detail: Some(format!("by {}", item.blocked_by.join(", ")).into()),
+                title: fl!("orchestrator-blocked").into(),
+                detail: Some(
+                    fl!(
+                        "orchestrator-blocked-by",
+                        items = item.blocked_by.join(", ")
+                    )
+                    .into(),
+                ),
             });
         }
         rows.push(self.run_row(runs, item_runs.first().copied()));
@@ -99,10 +106,10 @@ impl OrchestratorView {
     /// What stands in for a pull request's rows until GitHub answered.
     fn pull_request_waiting(&self, item: &Item) -> String {
         if self.request().is_none_or(|request| request.token.is_none()) {
-            return "Sign in to GitHub to read its status".to_owned();
+            return fl!("orchestrator-status-sign-in");
         }
         self.lookup_problem(item)
-            .unwrap_or_else(|| "Reading the pull request\u{2026}".to_owned())
+            .unwrap_or_else(|| fl!("orchestrator-status-reading"))
     }
 
     pub(super) fn pull_request_rows(&self, pr: &PullRequest) -> [Row; 3] {
@@ -118,25 +125,30 @@ impl OrchestratorView {
             Some(Outcome::Failed) => Row {
                 icon: "icons/error.svg",
                 hue: look.hue(RED),
-                title: format!("{} of {total} checks failing", failing.len()).into(),
+                title: fl!(
+                    "orchestrator-checks-failing",
+                    failing = failing.len(),
+                    total = total
+                )
+                .into(),
                 detail: Some(failing.join(", ").into()),
             },
             Some(Outcome::Pending) => Row {
                 icon: "icons/refresh.svg",
                 hue: look.hue(YELLOW),
-                title: "Checks running".into(),
+                title: fl!("orchestrator-checks-running").into(),
                 detail: Some(pr.checks().into()),
             },
             Some(Outcome::Passed) => Row {
                 icon: "icons/check.svg",
                 hue: look.hue(GREEN),
-                title: "Checks passed".into(),
+                title: fl!("orchestrator-checks-passed").into(),
                 detail: Some(pr.checks().into()),
             },
             Some(Outcome::Skipped) | None => Row {
                 icon: "icons/pass.svg",
                 hue: muted,
-                title: "No checks reported".into(),
+                title: fl!("orchestrator-checks-none").into(),
                 detail: None,
             },
         };
@@ -162,7 +174,14 @@ impl OrchestratorView {
             icon,
             hue,
             title: pr.merge_status().into(),
-            detail: Some(format!("{} into {}", pr.lifecycle(), pr.base_ref_name).into()),
+            detail: Some(
+                fl!(
+                    "orchestrator-merge-into",
+                    state = pr.lifecycle(),
+                    base = pr.base_ref_name.as_str()
+                )
+                .into(),
+            ),
         };
         [checks, review, merge]
     }
@@ -174,7 +193,7 @@ impl OrchestratorView {
             return Row {
                 icon: "icons/play.svg",
                 hue: look.theme.muted,
-                title: "No agent yet".into(),
+                title: fl!("orchestrator-no-agent").into(),
                 detail: None,
             };
         };
@@ -182,7 +201,7 @@ impl OrchestratorView {
         let workspace = run.workspace.as_ref();
         let host = workspace
             .and_then(|workspace| workspace.host.clone())
-            .unwrap_or_else(|| "local".into());
+            .unwrap_or_else(|| fl!("orchestrator-host-local"));
         let detail = runs
             .live(latest.run)
             .and_then(|agent| agent.title.clone())
@@ -195,7 +214,12 @@ impl OrchestratorView {
         Row {
             icon: agent_icon(&run.agent),
             hue: look.status_hue(latest.status),
-            title: format!("{} {}", run.agent, latest.status.label()).into(),
+            title: fl!(
+                "orchestrator-run-status",
+                agent = run.agent.as_str(),
+                status = latest.status.label()
+            )
+            .into(),
             detail: Some(detail.into()),
         }
     }
@@ -231,7 +255,7 @@ impl OrchestratorView {
                 el.child(
                     look.button(
                         "orchestrator-detail-dispatch",
-                        "Dispatch agent",
+                        fl!("orchestrator-dispatch-agent"),
                         item_runs.is_empty(),
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -242,26 +266,38 @@ impl OrchestratorView {
             .when(writable && reviewable, |el| {
                 let key = item.key.canonical();
                 el.child(
-                    look.button("orchestrator-detail-review", "Review with agent", true)
-                        .debug_selector(|| "orchestrator-detail-review".into())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_review(key.clone(), window, cx);
-                        })),
+                    look.button(
+                        "orchestrator-detail-review",
+                        fl!("orchestrator-review-with-agent"),
+                        true,
+                    )
+                    .debug_selector(|| "orchestrator-detail-review".into())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_review(key.clone(), window, cx);
+                    })),
                 )
             })
             .when_some(live, |el, run| {
                 el.child(
-                    look.button("orchestrator-open-run", "Open agent", false)
-                        .on_click(cx.listener(move |this, _, _, cx| this.open_run(run, cx))),
+                    look.button(
+                        "orchestrator-open-run",
+                        fl!("orchestrator-open-agent"),
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_run(run, cx))),
                 )
             })
             .when(mergeable, |el| {
                 el.child(
-                    look.button("orchestrator-detail-merge", "Merge \u{25be}", false)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.merge_open = !this.merge_open;
-                            cx.notify();
-                        })),
+                    look.button(
+                        "orchestrator-detail-merge",
+                        fl!("orchestrator-merge-menu"),
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.merge_open = !this.merge_open;
+                        cx.notify();
+                    })),
                 )
             });
         Some(
@@ -280,20 +316,26 @@ impl OrchestratorView {
         let now = chrono::Utc::now();
         let mut parts = Vec::new();
         match (&item.author, item.created_at) {
-            (Some(author), Some(_)) => {
-                parts.push(format!("{author} opened {} ago", age(item.created_at, now)));
-            }
+            (Some(author), Some(_)) => parts.push(fl!(
+                "orchestrator-opened-by",
+                author = author.as_str(),
+                ago = ago(item.created_at, now)
+            )),
             (Some(author), None) => parts.push(author.clone()),
-            (None, Some(_)) => parts.push(format!("opened {} ago", age(item.created_at, now))),
+            (None, Some(_)) => {
+                parts.push(fl!("orchestrator-opened", ago = ago(item.created_at, now)))
+            }
             (None, None) => {}
         }
         if item.updated_at.is_some() {
-            parts.push(format!("updated {} ago", age(item.updated_at, now)));
+            parts.push(fl!("orchestrator-updated", ago = ago(item.updated_at, now)));
         }
         if let Some(pr) = self.open_pull_request() {
-            parts.push(format!(
-                "+{} \u{2212}{} in {} files",
-                pr.additions, pr.deletions, pr.changed_files
+            parts.push(fl!(
+                "orchestrator-pull-request-size",
+                additions = pr.additions,
+                deletions = pr.deletions,
+                files = pr.changed_files
             ));
         }
         div()

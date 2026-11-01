@@ -4,7 +4,7 @@
 
 use super::{Access, KeychainGrants, Reading, model::Provider, service::Service, text, ui::Ui};
 use crate::{
-    i18n::{Localize, fl},
+    i18n::{self, Localize, fl},
     menu::Page,
     window::HerdrWindow,
 };
@@ -388,7 +388,11 @@ fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
                 .gap(px(2.))
                 .text_size(ui.small())
                 .child(key)
-                .child(div().text_color(ui.muted()).child(setting.help))
+                .child(
+                    div()
+                        .text_color(ui.muted())
+                        .child(i18n::message(setting.message, &[])),
+                )
         }))
         .into_any_element()
 }

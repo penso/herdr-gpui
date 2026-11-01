@@ -82,8 +82,8 @@ pub(crate) enum Os {
 impl Os {
     pub fn from_uname(name: &str) -> Option<Self> {
         match name.trim() {
-            "Linux" => Some(Self::Linux),
-            "Darwin" => Some(Self::MacOs),
+            "Linux" => Some(Self::Linux),  // i18n: data
+            "Darwin" => Some(Self::MacOs), // i18n: data
             _ => None,
         }
     }
@@ -101,6 +101,7 @@ impl Os {
         };
         match self {
             Self::Linux => format!(
+                // i18n: data
                 "printf 'cores '; getconf _NPROCESSORS_ONLN; printf 'loadavg '; cat /proc/loadavg; \
                  head -n 1 /proc/stat; grep -E '^(MemTotal|MemAvailable):' /proc/meminfo; \
                  printf 'uptime '; cat /proc/uptime; printf 'disk '; df -Pk \"$HOME\" | tail -n 1; \
@@ -108,6 +109,7 @@ impl Os {
                 linux
             ),
             Self::MacOs => format!(
+                // i18n: data
                 "printf 'cores '; sysctl -n hw.ncpu; printf 'memsize '; sysctl -n hw.memsize; \
                  vm_stat; printf 'boottime '; sysctl -n kern.boottime; printf 'now '; date +%s; \
                  printf 'disk '; df -Pk \"$HOME\" | tail -n 1; \
@@ -143,12 +145,17 @@ struct Fields {
     cards: Vec<gpu::Card>,
 }
 
+/// The lines of `/proc/meminfo` and `vm_stat` read, in their own words.
+const MEM_TOTAL: &str = "MemTotal:"; // i18n: data
+const MEM_AVAILABLE: &str = "MemAvailable:"; // i18n: data
+const VM_STAT_HEADER: &str = "Mach Virtual Memory Statistics: (page size of "; // i18n: data
+
 /// The vm_stat counters macOS counts as memory in use.
 const USED_PAGES: [&str; 4] = [
-    "Pages active:",
-    "Pages wired down:",
-    "Pages occupied by compressor:",
-    "Pages speculative:",
+    "Pages active:",                 // i18n: data
+    "Pages wired down:",             // i18n: data
+    "Pages occupied by compressor:", // i18n: data
+    "Pages speculative:",            // i18n: data
 ];
 
 /// Parses what [`Os::command`] printed. `previous` is the last answer's
@@ -163,15 +170,13 @@ pub(crate) fn parse(text: &str, previous: Option<Ticks>) -> Result<Answer> {
             fields.load = load(rest.split_whitespace());
         } else if let Some(rest) = line.strip_prefix("cpu ") {
             fields.ticks = ticks(rest);
-        } else if let Some(rest) = line.strip_prefix("MemTotal:") {
+        } else if let Some(rest) = line.strip_prefix(MEM_TOTAL) {
             fields.mem_total_kb = kilobytes(rest);
-        } else if let Some(rest) = line.strip_prefix("MemAvailable:") {
+        } else if let Some(rest) = line.strip_prefix(MEM_AVAILABLE) {
             fields.mem_available_kb = kilobytes(rest);
         } else if let Some(rest) = line.strip_prefix("memsize ") {
             fields.memsize = rest.trim().parse().ok();
-        } else if let Some(rest) =
-            line.strip_prefix("Mach Virtual Memory Statistics: (page size of ")
-        {
+        } else if let Some(rest) = line.strip_prefix(VM_STAT_HEADER) {
             fields.page_size = rest
                 .split_whitespace()
                 .next()

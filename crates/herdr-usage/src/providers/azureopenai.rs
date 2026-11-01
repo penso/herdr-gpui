@@ -32,26 +32,22 @@ static META: Meta = Meta::new("azureopenai", "Azure OpenAI")
         Setting::new(
             "api_key",
             &["AZURE_OPENAI_API_KEY"],
-            "An Azure OpenAI resource key: in the Azure portal open the Azure OpenAI \
-             resource, then Resource Management > Keys and Endpoint, and copy KEY 1.",
+            "usage-azureopenai-setting-api-key",
         ),
         Setting::new(
             "endpoint",
             &["AZURE_OPENAI_ENDPOINT"],
-            "The resource endpoint from the same Keys and Endpoint page, e.g. \
-             https://my-resource.openai.azure.com. Only HTTPS is accepted.",
+            "usage-azureopenai-setting-endpoint",
         ),
         Setting::new(
             "deployment",
             &["AZURE_OPENAI_DEPLOYMENT_NAME"],
-            "The deployment name to check, as listed under Deployments in Azure AI \
-             Foundry (https://ai.azure.com), e.g. chat-prod.",
+            "usage-azureopenai-setting-deployment",
         ),
         Setting::new(
             "api_version",
             &["AZURE_OPENAI_API_VERSION"],
-            "Optional. \"v1\" for the OpenAI-compatible v1 API, or a dated API version. \
-             Defaults to 2024-10-21.",
+            "usage-azureopenai-setting-api-version",
         ),
     ]);
 

@@ -25,9 +25,7 @@ static META: Meta = Meta::new("atlascloud", "Atlas Cloud")
     .settings(&[Setting::new(
         "api_key",
         &["ATLASCLOUD_API_KEY"],
-        "A standard Atlas Cloud API key from https://www.atlascloud.ai/console. It needs \
-         account balance read permission: use the account owner's key, or an Account Admin \
-         or Finance key for a team. A public key ID (ak_…) cannot authenticate.",
+        "usage-atlascloud-setting-api-key",
     )]);
 
 impl Service for Atlascloud {

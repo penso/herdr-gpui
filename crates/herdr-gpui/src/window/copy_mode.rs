@@ -7,8 +7,10 @@
 //! The prompt is the find bar's native field, so composition works in it.
 //! While it has focus the terminal's key handler steps aside, as it does for
 //! the find bar; Enter and Escape bubble out of the field to the prompt.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     copy_mode::{Command, CopyMode, Outcome, Request},
     scrollback::Inbox,
@@ -44,7 +46,7 @@ impl HerdrWindow {
     pub(crate) fn enter_copy_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.live.supports_copy_motion {
             self.show_flash(
-                super::Flash::warning("Copy mode needs a newer Herdr daemon"),
+                super::Flash::warning(fl!("window-find-copy-mode-needs-newer")),
                 cx,
             );
             return;
@@ -216,14 +218,14 @@ impl HerdrWindow {
         }
         if !self.live.supports_copy_search {
             self.show_flash(
-                super::Flash::warning("Copy mode search needs a newer Herdr daemon"),
+                super::Flash::warning(fl!("window-find-copy-search-needs-newer")),
                 cx,
             );
             return;
         }
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
-            input.set_placeholder("Search", cx);
+            input.set_placeholder_with(|| fl!("window-find-copy-search-placeholder"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             if !query.is_empty() {
                 input.replace_text_in_range(None, query, window, cx);
@@ -315,11 +317,15 @@ impl HerdrWindow {
             Ok(id) => state.mode.sent(id, &request),
             Err(error) => {
                 state.mode.send_failed();
-                let what = match request {
+                let request = match request {
                     Request::Motion(_) => "motion",
                     Request::Search { .. } => "search",
                 };
-                self.local_error = Some(format!("Copy mode {what} not sent: {error}"));
+                self.local_error = Some(fl!(
+                    "window-find-copy-request-not-sent",
+                    request = request,
+                    error = error.localize()
+                ));
                 cx.notify();
             }
         }
@@ -353,7 +359,10 @@ impl HerdrWindow {
         match sent {
             Ok(request) => self.await_selection_read(state.inbox.clone(), request),
             Err(error) => {
-                self.local_error = Some(format!("Selection not copied: {error}"));
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ));
                 cx.notify();
             }
         }
@@ -381,7 +390,10 @@ impl HerdrWindow {
             Method::PaneScroll,
             serde_json::json!({"pane_id": pane_id, "offset_from_bottom": offset}),
         ) {
-            self.local_error = Some(format!("Scroll not sent: {error}"));
+            self.local_error = Some(fl!(
+                "window-find-copy-scroll-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
     }
@@ -426,7 +438,12 @@ impl HerdrWindow {
             match state.mode.answer(&request, answer) {
                 Ok(true) => self.reveal_copy_cursor(cx),
                 Ok(false) => {}
-                Err(error) => self.local_error = Some(format!("Copy mode request failed: {error}")),
+                Err(error) => {
+                    self.local_error = Some(fl!(
+                        "window-find-copy-request-failed",
+                        error = error.localize()
+                    ))
+                }
             }
             cx.notify();
         }
@@ -514,8 +531,8 @@ impl HerdrWindow {
             );
         }
         let label = state.mode.search_label().map_or_else(
-            || "Copy mode".to_owned(),
-            |search| format!("Copy mode  {search}"),
+            || fl!("window-find-copy-mode"),
+            |search| fl!("window-find-copy-mode-search", search = search),
         );
         Some(
             corner.top(px(bottom - 32.)).child(

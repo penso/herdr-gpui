@@ -28,19 +28,17 @@ static META: Meta = Meta::new("deepgram", "Deepgram")
         Setting::new(
             "api_key",
             &["DEEPGRAM_API_KEY"],
-            "A Deepgram API key with the usage:read scope, created in the Deepgram Console \
-             (https://console.deepgram.com) under API Keys.",
+            "usage-deepgram-setting-api-key",
         ),
         Setting::new(
             "project_id",
             &["DEEPGRAM_PROJECT_ID"],
-            "Optional project UUID from the Deepgram Console. Leave unset to sum usage over \
-             every project the key can see.",
+            "usage-deepgram-setting-project-id",
         ),
         Setting::new(
             "base_url",
             &["DEEPGRAM_API_URL"],
-            "Optional HTTPS API URL for a proxy. Defaults to https://api.deepgram.com/v1.",
+            "usage-deepgram-setting-base-url",
         ),
     ]);
 

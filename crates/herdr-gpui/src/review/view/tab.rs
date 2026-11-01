@@ -8,6 +8,7 @@ use super::{Agent, Layout, Review, State, agent_in, pick_agent, rows, search};
 use crate::{
     HerdrWindow,
     browser::{Location, ReviewCheckout, Slot, Store, Tab, TabId},
+    i18n::fl,
     pull_request::Input,
     search_input::{self, SearchInput},
     window::Flash,
@@ -27,7 +28,7 @@ impl HerdrWindow {
             .tracked()
             .and_then(|input| ReviewCheckout::try_from(input).ok())
         else {
-            self.show_flash(Flash::warning("No local checkout to review"), cx);
+            self.show_flash(Flash::warning(fl!("review-no-checkout")), cx);
             return;
         };
         // The workspace whose checkout the Git chip tracks, found the same way.
@@ -41,7 +42,7 @@ impl HerdrWindow {
             })
         });
         let Some(workspace) = workspace else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("review-no-workspace")), cx);
             return;
         };
         let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
@@ -66,7 +67,7 @@ impl HerdrWindow {
             })
         });
         let Some(id) = opened else {
-            self.show_flash(Flash::warning("Too many tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("review-too-many-tabs")), cx);
             return;
         };
         self.dismiss_menu(window, cx);
@@ -226,18 +227,18 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Review {
         let (ui, theme) = (self.config.ui.clone(), self.theme.clone());
-        let field = |placeholder: &'static str, cx: &mut Context<Self>| {
+        let field = |placeholder: fn() -> String, cx: &mut Context<Self>| {
             let (ui, theme) = (ui.clone(), theme.clone());
             cx.new(|cx| {
                 let mut input = SearchInput::new(cx);
-                input.set_placeholder(placeholder, cx);
+                input.set_placeholder_with(placeholder, cx);
                 input.set_appearance(ui, theme, cx);
                 input
             })
         };
-        let input = field("Describe the change\u{2026}", cx);
-        let filter = field("Filter files\u{2026}", cx);
-        let search = field("Find in changes\u{2026}", cx);
+        let input = field(|| fl!("review-describe"), cx);
+        let filter = field(|| fl!("review-filter"), cx);
+        let search = field(|| fl!("review-find-placeholder"), cx);
         let viewed = crate::review::viewed::key(&checkout)
             .map(|(place, branch)| crate::review::Viewed::of(cx, place, branch))
             .unwrap_or_default();

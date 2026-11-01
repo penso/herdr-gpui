@@ -29,9 +29,7 @@ pub(crate) struct Wayfinder;
 static META: Meta = Meta::new("wayfinder", "Wayfinder").settings(&[Setting::new(
     "base_url",
     &["WAYFINDER_GATEWAY_URL"],
-    "The Wayfinder gateway, started with `wayfinder-router serve`. Defaults to \
-         http://127.0.0.1:8088; another URL must be HTTPS, or plain HTTP on a loopback \
-         address.",
+    "usage-wayfinder-setting-base-url",
 )]);
 
 impl Service for Wayfinder {

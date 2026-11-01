@@ -26,8 +26,7 @@ static META: Meta = Meta::new("vercel", "Vercel AI Gateway")
     .settings(&[Setting::new(
         "api_key",
         &["AI_GATEWAY_API_KEY"],
-        "An AI Gateway API key from the Vercel dashboard: AI Gateway > API Keys. The \
-         balance is the key's team, so use a key of the team to show.",
+        "usage-vercel-setting-api-key",
     )]);
 
 impl Service for Vercel {

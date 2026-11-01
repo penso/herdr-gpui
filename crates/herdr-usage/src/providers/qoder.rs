@@ -27,20 +27,8 @@ pub(crate) struct Qoder;
 static META: Meta = Meta::new("qoder", "Qoder")
     .dashboard("https://qoder.com/account/usage")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your Qoder browser session. Sign in at https://qoder.com/account/usage (or \
-             https://qoder.com.cn/account/usage), open Developer Tools > Application > \
-             Cookies for qoder.com (or qoder.com.cn), and copy every cookie of the site as \
-             one header: \"name=value; name2=value2\".",
-        ),
-        Setting::new(
-            "site",
-            &[],
-            "Which Qoder site the account belongs to: \"global\" for qoder.com (the \
-             default) or \"china\" for qoder.com.cn.",
-        ),
+        Setting::new("cookie", &[], "usage-qoder-setting-cookie"),
+        Setting::new("site", &[], "usage-qoder-setting-site"),
     ]);
 
 impl Service for Qoder {

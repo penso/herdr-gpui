@@ -24,8 +24,7 @@ static META: Meta = Meta::new("devpass", "DevPass")
     .settings(&[Setting::new(
         "api_key",
         &["DEVPASS_API_KEY"],
-        "A regular LLM Gateway API key from https://devpass.llmgateway.io/dashboard. \
-         Publishable keys cannot read plan usage.",
+        "usage-devpass-setting-api-key",
     )]);
 
 impl Service for Devpass {

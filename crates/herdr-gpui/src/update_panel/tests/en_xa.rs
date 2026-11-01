@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::i18n::leak_tests::{assert_translated, draw, under_en_xa};
-use crate::updater::{PREVIEW_NOTES, Progress, State};
+use crate::updater::{Disabled, Error, PREVIEW_NOTES, Progress, State};
 use crate::{APP_VERSION, release_notes};
 use gpui::{px, size};
 
@@ -27,7 +27,15 @@ fn states() -> Vec<State> {
     .into_iter()
     .map(|detail| State::Upgrading { detail });
     let mut states = vec![
-        State::Disabled("Local builds never check.".into()),
+        // Every way App Updates says why it never checks or what failed,
+        // as the worker and the updater keep them: typed, until the panel
+        // words them.
+        State::Disabled(Disabled::LocalBuild),
+        State::Disabled(Disabled::Platform),
+        State::Disabled(Disabled::Secondary),
+        State::Disabled(Disabled::Unsupported(Error::WorkerStopped.into())),
+        State::Error(Error::Cancelled.into()),
+        State::Error(Error::HttpStatus(503).into()),
         State::Idle,
         State::Checking,
         State::Current,

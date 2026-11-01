@@ -52,16 +52,12 @@ static META: Meta = Meta::new("perplexity", "Perplexity")
         Setting::new(
             "cookie",
             &["PERPLEXITY_COOKIE"],
-            "The perplexity.ai web session. Sign in at https://www.perplexity.ai, open \
-             Developer Tools → Application → Cookies → https://www.perplexity.ai, copy the \
-             session cookie (__Secure-next-auth.session-token, or __Secure-authjs.session-token \
-             on newer sign-ins), and paste it as \"name=value\".",
+            "usage-perplexity-setting-cookie",
         ),
         Setting::new(
             "session_token",
             &["PERPLEXITY_SESSION_TOKEN"],
-            "Alternatively, only the value of that session cookie; each session cookie name \
-             is tried in turn.",
+            "usage-perplexity-setting-session-token",
         ),
     ]);
 

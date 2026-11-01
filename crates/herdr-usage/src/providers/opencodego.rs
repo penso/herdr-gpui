@@ -46,26 +46,13 @@ static META: Meta = Meta::new("opencodego", "OpenCode Go")
         Setting::new(
             "api_key",
             &["OPENCODE_API_KEY"],
-            "An OpenCode API key for the account with the Go subscription, created at \
-             https://opencode.ai/auth under API Keys. Preferred over the cookie. When \
-             unset, the key `opencode auth login` saved in \
-             ~/.local/share/opencode/auth.json is used.",
+            "usage-opencodego-setting-api-key",
         ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Your opencode.ai session, used when no API key is set. Sign in at \
-             https://opencode.ai/auth, open Developer Tools > Application > Cookies > \
-             https://opencode.ai, and copy the __Host-console_session and auth cookies \
-             (either one alone also works). Paste them as \
-             \"__Host-console_session=value; auth=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-opencodego-setting-cookie"),
         Setting::new(
             "workspace_id",
             &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-            "Optional, for the cookie sign-in. The workspace to read, as a wrk_... or \
-             org_... ID or its https://opencode.ai/console/... URL. Defaults to the first \
-             workspace of the account.",
+            "usage-opencodego-setting-workspace-id",
         ),
     ]);
 

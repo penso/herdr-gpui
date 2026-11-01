@@ -3,9 +3,9 @@
 //! alone so drawing never asks the host anything.
 
 use super::format;
-use crate::config::Theme;
+use crate::{config::Theme, i18n::fl};
 use herdr_automation::report::{
-    RunState, RunSummary, ScriptState, ScriptStatus, Status, StepState,
+    RunState, RunSummary, ScriptCaps, ScriptState, ScriptStatus, Status, StepState,
 };
 
 /// The state a row shows, which picks its icon and color.
@@ -105,7 +105,7 @@ pub(crate) fn needs_you(script: &ScriptStatus) -> bool {
 /// The script's first trigger, as the daemon words it.
 pub(crate) fn schedule(script: &ScriptStatus) -> String {
     match script.triggers.as_slice() {
-        [] => "No trigger".to_owned(),
+        [] => fl!("automations-no-trigger"),
         [only] => only.schedule.clone(),
         [first, rest @ ..] => format!("{} +{}", first.schedule, rest.len()),
     }
@@ -158,39 +158,62 @@ pub(crate) fn detail(script: &ScriptStatus, status: &Status, now: i64) -> String
     if let Some(id) = script.running {
         return match find_run(status, id) {
             Some(run) => progress(run, now),
-            None => "Running".to_owned(),
+            None => fl!("automations-running"),
         };
     }
     match script.state {
         ScriptState::AwaitingApproval => match &script.reason {
-            Some(reason) => format!("{reason} · awaiting approval"),
-            None => "New or changed · awaiting approval".to_owned(),
+            Some(reason) => fl!("automations-awaiting", reason = reason.as_str()),
+            None => fl!("automations-awaiting-new"),
         },
         ScriptState::Invalid => script
             .reason
             .clone()
-            .unwrap_or_else(|| "Does not load".to_owned()),
-        ScriptState::Paused => script.reason.clone().unwrap_or_else(|| "Paused".to_owned()),
-        ScriptState::Disabled => "Disabled".to_owned(),
+            .unwrap_or_else(|| fl!("automations-invalid")),
+        ScriptState::Paused => script
+            .reason
+            .clone()
+            .unwrap_or_else(|| fl!("automations-paused")),
+        ScriptState::Disabled => fl!("automations-disabled"),
         ScriptState::Active => match &script.last_run {
-            Some(run) if failed(run.state) => {
-                let why = run.detail.as_deref().unwrap_or("the run did not finish");
-                format!("Failed: {why}")
-            }
+            Some(run) if failed(run.state) => failure(run),
             _ => match next_firing(script) {
-                Some(next) => format!("Next {}", format::when(next, now)),
-                None => "Runs when started".to_owned(),
+                Some(next) => fl!("automations-next", when = format::when(next, now)),
+                None => fl!("automations-runs-when-started"),
             },
         },
     }
+}
+
+/// Why a failed run failed: the daemon's words, or that it did not finish.
+pub(crate) fn failure(run: &RunSummary) -> String {
+    match run.detail.as_deref() {
+        Some(why) => fl!("automations-failed", why = why),
+        None => fl!("automations-failed-unfinished"),
+    }
+}
+
+/// A script's caps: agents per run, tokens a day, and time per run.
+pub(crate) fn caps(caps: ScriptCaps) -> String {
+    fl!(
+        "automations-caps",
+        agents = caps.agents_per_run,
+        tokens = format::tokens(caps.tokens_per_day),
+        time = format::span(i64::try_from(caps.wall_time_seconds).unwrap_or(i64::MAX))
+    )
 }
 
 /// A running run's progress: `Step 2/3 · 12m04s`.
 pub(crate) fn progress(run: &RunSummary, now: i64) -> String {
     let elapsed = format::span(now - run.started_at);
     match run.current_step {
-        Some(step) => format!("Step {step}/{} · {elapsed}", run.steps),
-        None => format!("Starting · {elapsed}"),
+        Some(step) => fl!(
+            "automations-progress-step",
+            step = step,
+            steps = run.steps,
+            elapsed = elapsed
+        ),
+        None => fl!("automations-progress-starting", elapsed = elapsed),
     }
 }
 
@@ -202,11 +225,16 @@ pub(crate) fn result(run: &RunSummary, now: i64) -> String {
         RunState::Interrupted => "–",
         RunState::Stopped | RunState::Halted | RunState::Failed => "✕",
     };
-    let took = run
-        .finished_at
-        .map(|end| format!(" {}", format::span(end - run.started_at)))
-        .unwrap_or_default();
-    format!("{} {mark}{took}", format::when(run.started_at, now))
+    let when = format::when(run.started_at, now);
+    match run.finished_at {
+        Some(end) => fl!(
+            "automations-result",
+            when = when,
+            mark = mark,
+            took = format::span(end - run.started_at)
+        ),
+        None => fl!("automations-result-running", when = when, mark = mark),
+    }
 }
 
 /// A run's line in a list: how long, how many agents, how many tokens, or
@@ -222,16 +250,14 @@ pub(crate) fn summary(run: &RunSummary, now: i64) -> String {
     if let Some(end) = run.finished_at {
         parts.push(format::span(end - run.started_at));
     }
-    match run.agents {
-        0 => {}
-        1 => parts.push("1 agent".to_owned()),
-        agents => parts.push(format!("{agents} agents")),
+    if run.agents > 0 {
+        parts.push(fl!("automations-agents", count = run.agents));
     }
     if let Some(tokens) = run.tokens.filter(|tokens| *tokens > 0) {
-        parts.push(format!("{} tokens", format::tokens(tokens)));
+        parts.push(fl!("automations-tokens", tokens = format::tokens(tokens)));
     }
     if run.state == RunState::Interrupted {
-        parts.push("interrupted".to_owned());
+        parts.push(fl!("automations-interrupted"));
     }
     parts.join(" · ")
 }

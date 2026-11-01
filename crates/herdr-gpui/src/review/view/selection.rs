@@ -8,6 +8,7 @@ use super::{Review, rows::Numbers};
 use crate::{
     HerdrWindow,
     browser::TabId,
+    i18n::fl,
     review::diff::{Kind, Lines},
     window::Flash,
 };
@@ -303,7 +304,7 @@ impl HerdrWindow {
             return false;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.show_flash(Flash::success("Copied to clipboard"), cx);
+        self.show_flash(Flash::success(fl!("review-copied")), cx);
         true
     }
 
@@ -370,12 +371,7 @@ impl HerdrWindow {
     }
 
     /// Writes `text` to the clipboard and says what it was.
-    pub(super) fn copy_review_text(
-        &mut self,
-        text: String,
-        what: &'static str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn copy_review_text(&mut self, text: String, what: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.show_flash(Flash::success(what), cx);
     }
@@ -390,7 +386,7 @@ impl HerdrWindow {
         else {
             return;
         };
-        self.copy_review_text(path, "Path copied", cx);
+        self.copy_review_text(path, fl!("review-path-copied"), cx);
     }
 
     /// Copies the hunk whose header is line `header` of `file`, as a patch
@@ -410,7 +406,7 @@ impl HerdrWindow {
             return;
         };
         let text = hunk_text(lines, header);
-        self.copy_review_text(text, "Hunk copied", cx);
+        self.copy_review_text(text, fl!("review-hunk-copied"), cx);
     }
 }
 

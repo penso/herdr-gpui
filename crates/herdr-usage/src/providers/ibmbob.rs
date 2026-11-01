@@ -31,15 +31,9 @@ static META: Meta = Meta::new("ibmbob", "IBM Bob")
         Setting::new(
             "api_key",
             &["BOBSHELL_API_KEY"],
-            "An IBM Bob API key that can read subscription usage, created at \
-             https://bob.ibm.com (the same key Bob Shell uses as BOBSHELL_API_KEY).",
+            "usage-ibmbob-setting-api-key",
         ),
-        Setting::new(
-            "token",
-            &[],
-            "Instead of an API key, an IBM Cloud bearer token (a JWT) for your Bob account. \
-             It is sent as \"Authorization: Bearer <token>\".",
-        ),
+        Setting::new("token", &[], "usage-ibmbob-setting-token"),
     ]);
 
 impl Service for Ibmbob {

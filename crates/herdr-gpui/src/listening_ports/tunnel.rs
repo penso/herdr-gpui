@@ -176,7 +176,7 @@ fn start(key: &Key, preferred: Option<u16>, attempt: &Attempt) -> Result<Tunnel>
     attempt.adopt(child);
     let result = match stdout {
         Some(stdout) => ready(|| attempt.try_wait(), stdout, Instant::now() + OPEN_TIMEOUT),
-        None => Err(Error::Start(std::io::Error::other("no stdout pipe")).into()),
+        None => Err(Error::Start(std::io::Error::other("no stdout pipe")).into()), // i18n: data
     };
     // From here on, dropping the tunnel kills the child, on failure too.
     let tunnel = Tunnel::new(attempt, local);

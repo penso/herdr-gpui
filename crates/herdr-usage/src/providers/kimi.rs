@@ -45,39 +45,19 @@ static META: Meta = Meta::new("kimi", "Kimi Code")
         Setting::new(
             "api_key",
             &["KIMI_CODE_API_KEY"],
-            "A Kimi Code API key from the Kimi Code console (https://www.kimi.com/code/console, \
-             or https://www.kimi.ai/code/console for International). Not needed when the \
-             Kimi Code CLI is signed in on the host.",
+            "usage-kimi-setting-api-key",
         ),
-        Setting::new(
-            "region",
-            &[],
-            "Which Kimi service the credentials belong to: \"china\" (the default, kimi.com) \
-             or \"international\" (kimi.ai). Moonshot Open Platform keys belong to the \
-             moonshot provider instead.",
-        ),
+        Setting::new("region", &[], "usage-kimi-setting-region"),
         Setting::new(
             "base_url",
             &["KIMI_CODE_BASE_URL"],
-            "An https Kimi Code API base to use with the API key instead of \
-             https://api.kimi.com, for a compatible proxy. Setting it stops the CLI's \
-             sign-in from being used.",
+            "usage-kimi-setting-base-url",
         ),
-        Setting::new(
-            "token",
-            &["KIMI_AUTH_TOKEN"],
-            "Your Kimi web session, for the membership pool and plan, or on its own. Sign in \
-             at https://www.kimi.com/code/console, open Developer Tools → Application → \
-             Cookies → https://www.kimi.com, and copy the value of the `kimi-auth` cookie \
-             (a JWT starting with eyJ), without its name. On kimi.ai, copy `access_token` \
-             from Local Storage instead. Not needed when Kimi is listed in show_providers \
-             and you are signed in with Chrome or Safari.",
-        ),
+        Setting::new("token", &["KIMI_AUTH_TOKEN"], "usage-kimi-setting-token"),
         Setting::new(
             "cookie",
             &["KIMI_MANUAL_COOKIE"],
-            "Instead of token, a whole Kimi Cookie header that includes kimi-auth, as \
-             \"kimi-auth=value; …\".",
+            "usage-kimi-setting-cookie",
         ),
     ]);
 

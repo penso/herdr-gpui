@@ -30,15 +30,7 @@ pub(crate) struct Mistral;
 static META: Meta = Meta::new("mistral", "Mistral")
     .dashboard("https://admin.mistral.ai/organization/usage")
     .status_page("https://status.mistral.ai")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in to https://admin.mistral.ai/organization/usage, open Developer Tools > \
-         Application > Cookies for https://admin.mistral.ai, and copy the ory_session_… \
-         cookie (its name ends in a per-project suffix) and csrftoken. Paste them as \
-         \"name=value; name2=value2\"; the Cookie header of any admin.mistral.ai request \
-         also works.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-mistral-setting-cookie")]);
 
 impl Service for Mistral {
     fn meta(&self) -> &'static Meta {

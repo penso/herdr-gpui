@@ -32,21 +32,8 @@ pub(crate) struct Amp;
 static META: Meta = Meta::new("amp", "Amp")
     .dashboard("https://ampcode.com/settings/usage")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["AMP_API_KEY"],
-            "An Amp access token, created in Amp's settings at \
-             https://ampcode.com/settings. Not needed when the Amp CLI is installed and \
-             signed in on the host (`amp login`).",
-        ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Your ampcode.com browser session, used when neither the CLI nor a token is \
-             available; it shows Amp Free only. Sign in at https://ampcode.com, open \
-             Developer Tools → Application → Cookies → https://ampcode.com, and copy the \
-             `session` cookie as \"session=value\".",
-        ),
+        Setting::new("api_key", &["AMP_API_KEY"], "usage-amp-setting-api-key"),
+        Setting::new("cookie", &[], "usage-amp-setting-cookie"),
     ]);
 
 impl Service for Amp {
