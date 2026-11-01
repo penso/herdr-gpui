@@ -430,3 +430,55 @@ fn the_projects_menu_fits_a_short_window(cx: &mut TestAppContext) {
     );
     assert!(frame.size.height > gpui::px(0.));
 }
+
+#[gpui::test]
+fn the_projects_menu_says_why_reading_failed(cx: &mut TestAppContext) {
+    use crate::orchestrator::{Error, SourceStatus, SyncState, azure};
+    let (view, cx) = organization_view(cx, 700.);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.repos[0].snapshot.sources = vec![SourceStatus {
+                key: azure("contoso"),
+                state: SyncState::Failed(Arc::new(Error::Azure(azure::Error::SignIn {
+                    repository: "contoso".into(),
+                }))),
+            }];
+            cx.notify();
+        })
+    });
+    click(cx, "orchestrator-projects");
+    assert!(cx.debug_bounds("orchestrator-projects-failed").is_some());
+    assert!(cx.debug_bounds("orchestrator-projects-loading").is_none());
+    let (failed, text) = cx.update(|_, cx| view.read(cx).catalog_note(0));
+    assert!(failed);
+    // Fluent isolates the placeable; the words are the banner's.
+    let plain: String = text
+        .chars()
+        .filter(|ch| !matches!(ch, '\u{2068}' | '\u{2069}'))
+        .collect();
+    assert!(plain.contains("Sign in to read contoso"), "{plain}");
+    // A later read that succeeds replaces it.
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.repos[0].snapshot.sources[0].state = SyncState::Synced {
+                at: Utc::now(),
+                count: 0,
+            };
+            view.repos[0].snapshot.catalog = Some(Arc::new(Catalog {
+                organization: "contoso".into(),
+                projects: vec![Project {
+                    name: "Fabrikam".into(),
+                    repositories: vec!["web".into()],
+                }],
+                capped: false,
+            }));
+            cx.notify();
+        })
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("orchestrator-projects-failed").is_none());
+    assert!(
+        cx.debug_bounds("orchestrator-projects-repo-contoso/Fabrikam/web")
+            .is_some()
+    );
+}

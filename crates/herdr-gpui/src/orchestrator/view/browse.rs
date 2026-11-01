@@ -5,13 +5,14 @@
 
 use super::{
     Menu, OrchestratorView,
+    inbox::failure_text,
     remote::MAX_BROWSED,
     rows::{Filters, PrState},
 };
 use crate::{
     config::corners,
     i18n::fl,
-    orchestrator::{Provider, RemoteScope, SourceKey, azure},
+    orchestrator::{Provider, RemoteScope, SourceKey, SyncState, azure},
 };
 use gpui::{prelude::*, *};
 
@@ -199,6 +200,28 @@ impl OrchestratorView {
         ))
     }
 
+    /// What the Projects menu says of organization `repo` before its
+    /// catalog is read: why its read failed, and whether it did, else that
+    /// it is reading. A later read that succeeds replaces it.
+    pub(super) fn catalog_note(&self, repo: usize) -> (bool, String) {
+        let failed = self.repos.get(repo).and_then(|repo| {
+            repo.snapshot
+                .sources
+                .iter()
+                .find_map(|status| match &status.state {
+                    SyncState::Failed(error) => Some(failure_text(
+                        Provider::Azure,
+                        &crate::i18n::errors::Localize::localize(error),
+                    )),
+                    _ => None,
+                })
+        });
+        match failed {
+            Some(text) => (true, text),
+            None => (false, fl!("orchestrator-browse-projects-loading")),
+        }
+    }
+
     pub(super) fn render_projects_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let look = &self.look;
         let theme = &look.theme;
@@ -255,8 +278,18 @@ impl OrchestratorView {
                     .into_any_element(),
             );
             let Some(catalog) = organization.catalog else {
-                // A failed read says why in the banners above the list.
-                rows.push(note(fl!("orchestrator-browse-projects-loading")));
+                let (failed, text) = self.catalog_note(repo);
+                let selector = if failed {
+                    "orchestrator-projects-failed"
+                } else {
+                    "orchestrator-projects-loading"
+                };
+                rows.push(
+                    div()
+                        .debug_selector(move || selector.to_owned())
+                        .child(note(text))
+                        .into_any_element(),
+                );
                 continue;
             };
             if catalog.projects.is_empty() {
