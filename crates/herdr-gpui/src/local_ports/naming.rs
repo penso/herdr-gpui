@@ -115,17 +115,16 @@ pub(crate) fn command_name(arguments: &[String]) -> Option<String> {
 /// `npm-cli.js` is `npm`; anything else is its file name.
 fn script_name(path: &str) -> String {
     let parts: Vec<&str> = path.split('/').collect();
-    if let Some(index) = parts.iter().rposition(|part| *part == "node_modules") {
-        if let Some(package) = parts.get(index + 1) {
-            let package = if *package == ".bin" {
-                parts.get(index + 2).copied().unwrap_or(package)
-            } else if package.starts_with('@') {
-                parts.get(index + 2).copied().unwrap_or(package)
-            } else {
-                package
-            };
-            return package.trim_end_matches(".js").to_owned();
-        }
+    if let Some(index) = parts.iter().rposition(|part| *part == "node_modules")
+        && let Some(package) = parts.get(index + 1)
+    {
+        // `.bin/vite` and `@scope/tool` name the tool one folder deeper.
+        let package = if *package == ".bin" || package.starts_with('@') {
+            parts.get(index + 2).copied().unwrap_or(package)
+        } else {
+            package
+        };
+        return package.trim_end_matches(".js").to_owned();
     }
     let file = base(path);
     match file {
