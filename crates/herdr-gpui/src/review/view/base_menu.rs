@@ -7,23 +7,22 @@ use super::Review;
 use crate::{
     HerdrWindow,
     browser::TabId,
+    i18n::{Localize, fl},
     review::diff::{self, BaseChoice},
 };
 use gpui::{prelude::*, *};
 
-/// The first row, which drops the user's pick.
-const AUTOMATIC: &str = "Automatic";
 /// The widest the header's base button grows before its label truncates.
 const BASE_BUTTON_MAX_WIDTH: f32 = 240.;
 
 pub(super) enum BaseList {
     Loading,
     Listed(Vec<BaseChoice>),
-    Failed(String),
+    Failed(crate::Error),
 }
 
 /// The open list of bases and the row picked with the keyboard: 0 is
-/// [`AUTOMATIC`], then each listed branch.
+/// Automatic, which drops the user's pick, then each listed branch.
 pub(super) struct BaseMenu {
     pub(super) list: BaseList,
     pub(super) selected: usize,
@@ -39,7 +38,7 @@ impl BaseMenu {
         }
     }
 
-    /// The ref row `row` picks; None for [`AUTOMATIC`].
+    /// The ref row `row` picks; None for Automatic.
     fn reference(&self, row: usize) -> Option<String> {
         let BaseList::Listed(choices) = &self.list else {
             return None;
@@ -52,14 +51,14 @@ impl BaseMenu {
 impl Review {
     /// The base the header names: the one compared with once read, the
     /// user's pick while reading, or a prompt when none was found.
-    pub(super) fn base_label(&self) -> &str {
+    pub(super) fn base_label(&self) -> String {
         if let Some(base) = self.loaded().and_then(|loaded| loaded.base.as_deref()) {
-            return base;
+            return base.to_owned();
         }
         match (&self.state, self.base.as_deref()) {
-            (_, Some(chosen)) => diff::short_ref(chosen),
-            (super::State::Failed(_), None) => "choose a base",
-            _ => "\u{2026}",
+            (_, Some(chosen)) => diff::short_ref(chosen).to_owned(),
+            (super::State::Failed(_), None) => fl!("review-choose-base"),
+            _ => "\u{2026}".to_owned(),
         }
     }
 }
@@ -127,7 +126,7 @@ impl HerdrWindow {
             }
             Err(error) => {
                 tracing::warn!(%error, "Could not list the branches to compare with");
-                menu.list = BaseList::Failed(error.to_string());
+                menu.list = BaseList::Failed(error);
             }
         }
     }
@@ -227,12 +226,7 @@ impl HerdrWindow {
             .cursor_pointer()
             .text_color(rgb(theme.foreground))
             .hover(|button| button.bg(rgb(theme.active)))
-            .child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .child(review.base_label().to_owned()),
-            )
+            .child(div().min_w_0().truncate().child(review.base_label()))
             .child(div().flex_none().child("\u{25be}"))
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
@@ -275,7 +269,7 @@ impl HerdrWindow {
                         div()
                             .flex_none()
                             .text_color(rgb(theme.muted))
-                            .child("Current"),
+                            .child(fl!("review-current")),
                     )
                 })
         };
@@ -285,7 +279,10 @@ impl HerdrWindow {
                 this.set_review_base(id, base.clone(), window, cx);
             }))
         };
-        let mut rows = vec![pick(row(0, AUTOMATIC.into(), review.base.is_none()), None)];
+        let mut rows = vec![pick(
+            row(0, fl!("review-automatic"), review.base.is_none()),
+            None,
+        )];
         match &menu.list {
             BaseList::Loading => rows.push(
                 div()
@@ -293,7 +290,7 @@ impl HerdrWindow {
                     .px_2()
                     .py_1()
                     .text_color(rgb(theme.muted))
-                    .child("Reading branches\u{2026}"),
+                    .child(fl!("review-reading-branches")),
             ),
             BaseList::Failed(error) => rows.push(
                 div()
@@ -301,7 +298,7 @@ impl HerdrWindow {
                     .px_2()
                     .py_1()
                     .text_color(crate::menu::danger(theme))
-                    .child(error.clone()),
+                    .child(error.localize()),
             ),
             BaseList::Listed(choices) => {
                 rows.extend(choices.iter().enumerate().map(|(index, choice)| {

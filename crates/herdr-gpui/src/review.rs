@@ -1,6 +1,7 @@
 //! Reviewing the changes an agent made: the focused checkout's uncommitted
 //! diff, notes on its lines, and sending them back to the agent the way page
 //! annotations go (see `agent_notes`).
+// i18n: migrated
 mod diff;
 mod error;
 pub(crate) mod highlight;
