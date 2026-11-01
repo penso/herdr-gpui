@@ -6,6 +6,7 @@
 //! src/config/{model,sound,theme}.rs, src/app/{state,mod}.rs and
 //! src/client/shell.rs. This adaptation
 //! uses GPUI RGB colors, strict bounded reads, and targeted optimistic saves.
+// i18n: migrated
 
 #[path = "herdr_settings/palette.rs"]
 mod palette;

@@ -446,7 +446,7 @@ impl HerdrWindow {
                 fl!(
                     "devices-row-detail",
                     place = Self::device_detail(&endpoint.connection.target),
-                    state = endpoint.status()
+                    state = endpoint.status_label()
                 ),
                 self.device_filter.picks(&endpoint.id),
                 endpoint.enabled,
