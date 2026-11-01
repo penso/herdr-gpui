@@ -5,6 +5,7 @@ use super::{Lookup, OrganizationStatus};
 use crate::{HerdrWindow, menu::Page};
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
+mod en_xa;
 mod page;
 mod status;
 
