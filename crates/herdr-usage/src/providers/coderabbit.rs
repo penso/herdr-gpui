@@ -7,7 +7,7 @@
 //! supported by the upstream command.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -77,33 +77,43 @@ pub(crate) fn parse(text: &str) -> Option<Report> {
         return None;
     }
     let mut facts = Vec::new();
+    // The values are the CLI's own, such as `inactive` for billing.
     let named = [
-        ("Organization", fields.get("organization")),
-        ("User", fields.get("user")),
-        ("Usage billing", billing.as_ref()),
-        ("Period resets", resets.as_ref()),
+        (
+            Text::message("usage-coderabbit-organization"),
+            fields.get("organization"),
+        ),
+        (Text::message("usage-coderabbit-user"), fields.get("user")),
+        (
+            Text::message("usage-coderabbit-usage-billing"),
+            billing.as_ref(),
+        ),
+        (
+            Text::message("usage-coderabbit-period-resets"),
+            resets.as_ref(),
+        ),
     ];
     for (label, value) in named {
         if let Some(value) = value {
-            facts.push((label.to_owned(), value.clone()));
+            facts.push((label, Text::service(value)));
         }
     }
     let account = Account {
         email: None,
-        plan: fields.get("plan").cloned().map(Text::from),
+        plan: fields.get("plan").map(Text::service),
     };
     Some(
         Report::new(Provider(&Coderabbit), account, Vec::new())
             .with_balances(reviews.map(|reviews| {
                 Balance::new(
-                    "Your reviews this period",
+                    Text::message("usage-coderabbit-your-reviews"),
                     reviews as f64,
                     Unit::Count(Count::Reviews),
                 )
             }))
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Billing period".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-coderabbit-billing-period"),
+                facts,
             })),
     )
 }
@@ -165,10 +175,22 @@ mod tests {
         assert_eq!(
             facts,
             &[
-                ("Organization".into(), "Example Org".into()),
-                ("User".into(), "example-user".into()),
-                ("Usage billing".into(), "inactive".into()),
-                ("Period resets".into(), "2026-09-30".into()),
+                (
+                    Text::message("usage-coderabbit-organization"),
+                    Text::service("Example Org")
+                ),
+                (
+                    Text::message("usage-coderabbit-user"),
+                    Text::service("example-user")
+                ),
+                (
+                    Text::message("usage-coderabbit-usage-billing"),
+                    Text::service("inactive")
+                ),
+                (
+                    Text::message("usage-coderabbit-period-resets"),
+                    Text::service("2026-09-30")
+                ),
             ]
         );
     }

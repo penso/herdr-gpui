@@ -57,7 +57,7 @@ impl Service for Claude {
             None => Ok(Report::new(
                 Provider(&Claude),
                 Account {
-                    email: Some(Text::from(active.as_ref()?.email.clone())),
+                    email: Some(Text::service(&active.as_ref()?.email)),
                     plan: None,
                 },
                 active.filter(|active| !active.windows.is_empty())?.windows,
@@ -157,7 +157,7 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
             let kind = match limit.kind.as_str() {
                 "session" => Kind::Session,
                 "weekly_all" => Kind::Weekly,
-                "weekly_scoped" => Kind::Named(Text::from(
+                "weekly_scoped" => Kind::Named(Text::service(
                     limit
                         .scope?
                         .model?
@@ -193,39 +193,49 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
         .collect();
     }
     let account = Account {
-        email: sign_in.email.map(Text::from),
-        plan: plan(sign_in.plan.as_deref(), sign_in.tier.as_deref()).map(Text::from),
+        email: sign_in.email.map(Text::service),
+        plan: plan(sign_in.plan.as_deref(), sign_in.tier.as_deref()).map(Text::service),
     };
     let shares: Vec<_> = usage
         .seven_day_breakdown
         .map(|breakdown| breakdown.rows)
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|row| Some((row.display_name?, row.percent.filter(|p| *p > 0.)? as f32)))
+        .filter_map(|row| {
+            Some((
+                Text::service(row.display_name?),
+                row.percent.filter(|p| *p > 0.)? as f32,
+            ))
+        })
         .collect();
     let spend = usage.spend.map(|spend| Section::Facts {
-        title: "Extra usage".into(),
+        title: Text::message("usage-claude-extra-usage"),
         facts: if spend.enabled.unwrap_or(false) {
             let used = spend.used.as_ref().and_then(Money::text);
             let limit = spend.limit.as_ref().and_then(Money::text);
             vec![(
-                "This month".into(),
+                Text::message("usage-claude-this-month"),
                 match (used, limit) {
-                    (Some(used), Some(limit)) => format!("{used} of {limit}").into(),
-                    (Some(used), None) => Text::from(used),
-                    _ => "On".into(),
+                    (Some(used), Some(limit)) => Text::message("usage-claude-spent-of")
+                        .arg("used", used)
+                        .arg("limit", limit),
+                    (Some(used), None) => Text::service(used),
+                    _ => Text::message("usage-claude-on"),
                 },
             )]
         } else {
-            vec![("Status".into(), "Off".into())]
+            vec![(
+                Text::message("usage-claude-status"),
+                Text::message("usage-claude-off"),
+            )]
         },
     });
     Ok(
         Report::new(Provider(&Claude), account, windows).with_sections(
             (!shares.is_empty())
                 .then(|| Section::Shares {
-                    title: "This week by surface".into(),
-                    shares: crate::text::shares(shares),
+                    title: Text::message("usage-claude-week-by-surface"),
+                    shares,
                 })
                 .into_iter()
                 .chain(spend),

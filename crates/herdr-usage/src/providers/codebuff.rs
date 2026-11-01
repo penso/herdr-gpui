@@ -7,7 +7,7 @@
 //! Everything CodexBar reads is ported.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -118,22 +118,27 @@ pub(crate) fn parse(
     let mut windows = Vec::new();
     match total {
         Some(total) if total > 0. => windows.push(Window::new(
-            Kind::Named("Credits".into()),
+            Kind::Named(Text::message("usage-codebuff-credits")),
             spent / total * 100.,
             resets_at,
             None,
         )),
         // No usable quota: shown as spent rather than as a healthy bar.
         _ if used.is_some() || remaining.is_some() => windows.push(Window::new(
-            Kind::Named("Credits".into()),
+            Kind::Named(Text::message("usage-codebuff-credits")),
             100.,
             resets_at,
             None,
         )),
         _ => {}
     }
-    let balances =
-        remaining.map(|left| Balance::new("Remaining", left, Unit::Count(Count::Credits)));
+    let balances = remaining.map(|left| {
+        Balance::new(
+            Text::message("usage-codebuff-remaining"),
+            left,
+            Unit::Count(Count::Credits),
+        )
+    });
     let auto_top_up = ["autoTopupEnabled", "auto_topup_enabled"]
         .iter()
         .find_map(|key| usage.get(*key).and_then(Value::as_bool));
@@ -180,21 +185,28 @@ pub(crate) fn parse(
         .and_then(|details| details.get("status"))
         .and_then(text)
     {
-        facts.push(("Subscription".to_owned(), title_case(&status)));
+        facts.push((
+            Text::message("usage-codebuff-subscription"),
+            Text::service(title_case(&status)),
+        ));
     }
     if let Some(enabled) = auto_top_up {
         facts.push((
-            "Auto top-up".to_owned(),
-            if enabled { "On" } else { "Off" }.to_owned(),
+            Text::message("usage-codebuff-auto-top-up"),
+            if enabled {
+                Text::message("usage-codebuff-on")
+            } else {
+                Text::message("usage-codebuff-off")
+            },
         ));
     }
     let section = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Account".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-codebuff-account"),
+        facts,
     });
     let account = Account {
-        email: email.map(Text::from),
-        plan: plan.map(|plan| title_case(&plan)).map(Text::from),
+        email: email.map(Text::service),
+        plan: plan.map(|plan| Text::service(title_case(&plan))),
     };
     Ok(Report::new(Provider(&Codebuff), account, windows)
         .with_balances(balances)
@@ -228,7 +240,6 @@ fn time(value: Option<&Value>) -> Option<std::time::SystemTime> {
 mod tests {
     use super::*;
     use crate::Error;
-    use crate::text::pair;
 
     #[test]
     fn api_key_reads_credits_only() {
@@ -239,11 +250,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.windows.len(), 1);
-        assert_eq!(report.windows[0].kind, Kind::Named("Credits".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-codebuff-credits"))
+        );
         assert!((report.windows[0].used - 25.).abs() < 1e-4);
         assert_eq!(
             report.balances,
-            vec![Balance::new("Remaining", 75., Unit::Count(Count::Credits))]
+            vec![Balance::new(
+                Text::message("usage-codebuff-remaining"),
+                75.,
+                Unit::Count(Count::Credits)
+            )]
         );
         assert_eq!(report.account, Account::default());
     }
@@ -267,7 +285,7 @@ mod tests {
         let credits = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("Credits".into()))
+            .find(|window| window.kind == Kind::Named(Text::message("usage-codebuff-credits")))
             .unwrap();
         assert!((credits.used - 40.).abs() < 1e-4);
         assert!(credits.resets_at.is_some());
@@ -284,9 +302,18 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Subscription".to_owned(), "Active".to_owned()))
+            (
+                Text::message("usage-codebuff-subscription"),
+                Text::service("Active")
+            )
         );
-        assert_eq!(facts[1], pair(("Auto top-up".to_owned(), "On".to_owned())));
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-codebuff-auto-top-up"),
+                Text::message("usage-codebuff-on")
+            )
+        );
     }
 
     #[test]

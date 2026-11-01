@@ -86,8 +86,17 @@ pub(crate) fn parse(points: &str, billing: Option<&str>) -> Result<Report> {
         let start = reset.checked_sub_months(chrono::Months::new(1))?;
         (reset - start).to_std().ok()
     });
-    let window = Window::new(Kind::Named("Credits".into()), percent, resets_at, length);
-    let credits = Balance::new("Credits used", used.max(0.), Unit::Count(Count::Credits));
+    let window = Window::new(
+        Kind::Named(Text::message("usage-abacus-credits")),
+        percent,
+        resets_at,
+        length,
+    );
+    let credits = Balance::new(
+        Text::message("usage-abacus-credits-used"),
+        used.max(0.),
+        Unit::Count(Count::Credits),
+    );
     let credits = if total > 0. {
         credits.out_of(total)
     } else {
@@ -97,7 +106,7 @@ pub(crate) fn parse(points: &str, billing: Option<&str>) -> Result<Report> {
         Provider(&Abacus),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         vec![window],
     )
@@ -161,7 +170,14 @@ mod tests {
         assert_eq!(window.length, Some(Duration::from_secs(30 * 86_400)));
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits used", 5000., Unit::Count(Count::Credits)).out_of(20000.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-abacus-credits-used"),
+                    5000.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(20000.)
+            ]
         );
     }
 

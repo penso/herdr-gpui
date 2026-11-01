@@ -3,9 +3,10 @@ use super::*;
 use crate::config::status_bar::{Button, Detail};
 use crate::sidebar::layout_tests::{fixture_window, full_draw};
 use gpui::{TestAppContext, px, size};
+use herdr_usage::Text;
 
 fn named(name: &str, used: f64) -> Window {
-    Window::new(Kind::Named(name.into()), used, None, None)
+    Window::new(Kind::Named(Text::service(name)), used, None, None)
 }
 
 /// Antigravity's shape: a 5-hour and a weekly quota per model family.
@@ -43,15 +44,21 @@ fn a_detailed_segment_names_its_two_tightest_windows_in_report_order() {
     };
     assert_eq!(
         names(&windows),
-        [Kind::Named("a".into()), Kind::Named("c".into())]
+        [
+            Kind::Named(Text::service("a")),
+            Kind::Named(Text::service("c"))
+        ]
     );
     // Ties keep report order, and fewer windows than room show them all.
     let even = [named("a", 5.), named("b", 5.), named("c", 5.)];
     assert_eq!(
         names(&even),
-        [Kind::Named("a".into()), Kind::Named("b".into())]
+        [
+            Kind::Named(Text::service("a")),
+            Kind::Named(Text::service("b"))
+        ]
     );
-    assert_eq!(names(&even[..1]), [Kind::Named("a".into())]);
+    assert_eq!(names(&even[..1]), [Kind::Named(Text::service("a"))]);
     assert!(names(&[]).is_empty());
 }
 

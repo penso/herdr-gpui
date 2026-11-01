@@ -164,7 +164,7 @@ impl Usage {
                 .map(|scoped| {
                     scoped
                         .reading
-                        .window(Kind::Named(Text::from(scoped.name)), WEEK)
+                        .window(Kind::Named(Text::service(scoped.name)), WEEK)
                 }),
         )
         .collect();

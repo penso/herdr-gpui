@@ -8,3 +8,18 @@ usage-alibaba-setting-cookie = Your Model Studio console session. Sign in to the
 usage-alibaba-setting-api-key = A Coding Plan API key (sk-sp-...) from the Coding Plan page of the Model Studio console. Used when no console cookie works; some mainland accounts only answer the cookie.
 usage-alibaba-setting-region = Optional. "intl" (modelstudio.console.alibabacloud.com) or "cn" (bailian.console.aliyun.com). Unset tries International, then China mainland.
 usage-alibaba-setting-sec-token = Optional. The console's sec_token, when it cannot be read from /tool/user/info.json: in Developer Tools > Network, the sec_token form field of the data/api.json request on the Coding Plan page.
+
+## The report: the Coding Plan's requests used in each quota window. Plan
+## names stay as Alibaba sends them.
+
+usage-alibaba-requests-used = Requests used
+# A quota window's name, beside its requests used out of the total.
+usage-alibaba-window = { $kind ->
+        [session] Session
+        [weekly] Weekly
+       *[monthly] Monthly
+    }
+# Shown for an active plan whose quota Alibaba does not report.
+usage-alibaba-coding-plan = Coding Plan
+usage-alibaba-status = Status
+usage-alibaba-active-unreported = Active, quota not reported

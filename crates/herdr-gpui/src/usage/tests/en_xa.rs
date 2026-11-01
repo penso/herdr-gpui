@@ -50,8 +50,8 @@ fn full(provider: Provider) -> Report {
     let mut report = Report::new(
         provider,
         Account {
-            email: Some("someone@example.com".into()),
-            plan: Some("Pro".into()),
+            email: Some(Text::service("someone@example.com")),
+            plan: Some(Text::service("Pro")),
         },
         vec![
             Window::new(Kind::Session, 40., Some(now + 3 * HOUR), Some(5 * HOUR)),
@@ -61,12 +61,12 @@ fn full(provider: Provider) -> Report {
                 Some(now + 24 * 3 * HOUR),
                 Some(24 * 7 * HOUR),
             ),
-            Window::new(Kind::Named("Opus".into()), 10., None, None),
+            Window::new(Kind::Named(Text::service("Opus")), 10., None, None),
         ],
     );
-    report
-        .balances
-        .push(Balance::new("Credits", 12.3, Unit::Currency("USD".into())).out_of(50.));
+    report.balances.push(
+        Balance::new(Text::service("Credits"), 12.3, Unit::Currency("USD".into())).out_of(50.),
+    );
     // A balance a provider names, counted in credits.
     report.balances.push(Balance::new(
         Text::message("usage-wayfinder-saved"),

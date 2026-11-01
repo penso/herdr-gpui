@@ -5,3 +5,10 @@
 ## service's own menu paths stay as written.
 
 usage-abacus-setting-cookie = Sign in to https://apps.abacus.ai, open Developer Tools > Application > Cookies for https://apps.abacus.ai, and copy its session cookies (names containing "session", "auth", or "sid"). Paste them as "name=value; name2=value2"; the whole Cookie header of any apps.abacus.ai request also works.
+
+## The report: the organization's compute credits this billing cycle.
+
+# The limit's name.
+usage-abacus-credits = Credits
+# The balance: credits used out of the cycle's total.
+usage-abacus-credits-used = Credits used

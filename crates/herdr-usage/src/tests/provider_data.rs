@@ -44,27 +44,35 @@ fn claude_reads_every_window_account_and_detail() {
         [
             (Kind::Session, 3, Some(SESSION)),
             (Kind::Weekly, 15, Some(WEEK)),
-            (Kind::Named("Fable".into()), 0, Some(WEEK)),
+            (Kind::Named(Text::service("Fable")), 0, Some(WEEK)),
         ]
     );
     assert_eq!(report.windows[0].resets_at, Some(at(1_790_324_400)));
     assert_eq!(
         report.account,
         Account {
-            email: Some("me@example.com".into()),
-            plan: Some("Max 20x".into()),
+            email: Some(Text::service("me@example.com")),
+            plan: Some(Text::service("Max 20x")),
         }
     );
     assert_eq!(
         report.sections,
         [
             Section::Shares {
-                title: "This week by surface".into(),
-                shares: vec![("Claude Code".into(), 90.), ("Chats".into(), 10.)],
+                title: Text::message("usage-claude-week-by-surface"),
+                shares: vec![
+                    (Text::service("Claude Code"), 90.),
+                    (Text::service("Chats"), 10.)
+                ],
             },
             Section::Facts {
-                title: "Extra usage".into(),
-                facts: vec![("This month".into(), "12.34 EUR of 50.00 EUR".into())],
+                title: Text::message("usage-claude-extra-usage"),
+                facts: vec![(
+                    Text::message("usage-claude-this-month"),
+                    Text::message("usage-claude-spent-of")
+                        .arg("used", "12.34 EUR")
+                        .arg("limit", "50.00 EUR")
+                )],
             },
         ]
     );

@@ -146,13 +146,21 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
         windows.push(Window::new(Kind::Monthly, used, period_end, Some(MONTH)));
     }
     let usd = || Unit::Currency("USD".into());
-    let left = Balance::new("Monthly credits left", remaining.max(0.), usd());
+    let left = Balance::new(
+        Text::message("usage-commandcode-monthly-left"),
+        remaining.max(0.),
+        usd(),
+    );
     let mut balances = vec![match total {
         Some(total) => left.out_of(total),
         None => left,
     }];
     if purchased > 0. {
-        balances.push(Balance::new("Purchased credits", purchased, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-commandcode-purchased"),
+            purchased,
+            usd(),
+        ));
     }
     let plan_name = match (plan, known) {
         (Some((_, name, _)), _) => Some((*name).to_owned()),
@@ -167,7 +175,7 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
     };
     let account = Account {
         email: None,
-        plan: plan_name.map(Text::from),
+        plan: plan_name.map(Text::service),
     };
     Ok(Report::new(Provider(&Commandcode), account, windows).with_balances(balances))
 }
@@ -246,8 +254,13 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Monthly credits left", 8.5, usd.clone()).out_of(10.),
-                Balance::new("Purchased credits", 2., usd),
+                Balance::new(
+                    Text::message("usage-commandcode-monthly-left"),
+                    8.5,
+                    usd.clone()
+                )
+                .out_of(10.),
+                Balance::new(Text::message("usage-commandcode-purchased"), 2., usd),
             ]
         );
     }

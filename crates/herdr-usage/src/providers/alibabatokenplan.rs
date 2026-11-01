@@ -19,7 +19,7 @@ use super::oneconsole::{
     gateway_request, sec_token, string,
 };
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -500,13 +500,27 @@ pub(super) fn report_with(provider: Provider, team: Team) -> Report {
         team.remaining,
         team.used,
     ) {
-        (Some(total), Some(left), _) => {
-            Some(Balance::new("Credits left", left.max(0.), credits()).out_of(total))
-        }
-        (Some(total), None, Some(used)) => {
-            Some(Balance::new("Credits left", (total - used).max(0.), credits()).out_of(total))
-        }
-        (None, Some(left), _) => Some(Balance::new("Credits left", left.max(0.), credits())),
+        (Some(total), Some(left), _) => Some(
+            Balance::new(
+                Text::message("usage-alibabatokenplan-credits-left"),
+                left.max(0.),
+                credits(),
+            )
+            .out_of(total),
+        ),
+        (Some(total), None, Some(used)) => Some(
+            Balance::new(
+                Text::message("usage-alibabatokenplan-credits-left"),
+                (total - used).max(0.),
+                credits(),
+            )
+            .out_of(total),
+        ),
+        (None, Some(left), _) => Some(Balance::new(
+            Text::message("usage-alibabatokenplan-credits-left"),
+            left.max(0.),
+            credits(),
+        )),
         _ => None,
     };
     let account = Account {
@@ -514,13 +528,16 @@ pub(super) fn report_with(provider: Provider, team: Team) -> Report {
         plan: team
             .plan
             .filter(|plan| !plan.trim().is_empty())
-            .map(Text::from),
+            .map(Text::service),
     };
     let mut report = Report::new(provider, account, windows).with_balances(balance);
     if percent.is_none() && report.balances.is_empty() {
         report = report.with_sections([Section::Facts {
-            title: "Subscription".into(),
-            facts: vec![("Active token plans".into(), "None".into())],
+            title: Text::message("usage-alibabatokenplan-subscription"),
+            facts: vec![(
+                Text::message("usage-alibabatokenplan-active-plans"),
+                Text::message("usage-alibabatokenplan-none"),
+            )],
         }]);
     }
     report
@@ -536,7 +553,7 @@ pub(super) struct Personal {
 
 impl Personal {
     pub(super) fn report(self, provider: Provider) -> Report {
-        let facts: Vec<(String, String)> = self
+        let facts: Vec<(Text, Text)> = self
             .windows
             .iter()
             .zip(self.totals)
@@ -544,12 +561,10 @@ impl Personal {
                 let total = total.filter(|total| *total > 0.)?;
                 let used = total * f64::from(window.used) / 100.;
                 Some((
-                    window.kind.title().to_owned(),
-                    format!(
-                        "{} / {} credits",
-                        group(used.round() as i64),
-                        group(total.round() as i64)
-                    ),
+                    Text::message("usage-alibabatokenplan-window").arg("kind", kind(&window.kind)),
+                    Text::message("usage-alibabatokenplan-credits-of")
+                        .arg("used", group(used.round() as i64))
+                        .arg("total", group(total.round() as i64)),
                 ))
             })
             .collect();
@@ -557,7 +572,7 @@ impl Personal {
             provider,
             Account {
                 email: None,
-                plan: self.plan.map(Text::from),
+                plan: self.plan.map(Text::service),
             },
             self.windows,
         );
@@ -565,10 +580,19 @@ impl Personal {
             report
         } else {
             report.with_sections([Section::Facts {
-                title: "Credits used".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-alibabatokenplan-credits-used"),
+                facts,
             }])
         }
+    }
+}
+
+/// A window's kind as the word `usage-alibabatokenplan-window` selects by.
+fn kind(kind: &Kind) -> &'static str {
+    match kind {
+        Kind::Session => "session",
+        Kind::Weekly => "weekly",
+        _ => "monthly",
     }
 }
 

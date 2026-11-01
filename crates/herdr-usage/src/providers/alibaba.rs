@@ -20,7 +20,7 @@ use super::oneconsole::{
     CHROME_AGENT, DOMAINS, check, cornerstone, date, expand, find_object, find_value, first,
     form_body, gateway_request, sec_token, string,
 };
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -293,9 +293,11 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 string,
             )
         });
+    // The window's name in a fact, selected by these words.
     let slots = [
         (
             Kind::Session,
+            "session",
             &["per5HourUsedQuota", "perFiveHourUsedQuota"][..],
             &["per5HourTotalQuota", "perFiveHourTotalQuota"][..],
             &[
@@ -305,12 +307,14 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         ),
         (
             Kind::Weekly,
+            "weekly",
             &["perWeekUsedQuota"][..],
             &["perWeekTotalQuota"][..],
             &["perWeekQuotaNextRefreshTime"][..],
         ),
         (
             Kind::Monthly,
+            "monthly",
             &["perBillMonthUsedQuota", "perMonthUsedQuota"][..],
             &["perBillMonthTotalQuota", "perMonthTotalQuota"][..],
             &[
@@ -321,7 +325,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     ];
     let mut windows = Vec::new();
     let mut facts = Vec::new();
-    for (kind, used_keys, total_keys, reset_keys) in slots {
+    for (kind, name, used_keys, total_keys, reset_keys) in slots {
         let Some(quota) = quota else {
             break;
         };
@@ -336,8 +340,8 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
             reset = reset.map(|at| fresh_session_reset(at, now));
         }
         facts.push((
-            kind.title().to_owned(),
-            format!("{} / {}", group(used as i64), group(total as i64)),
+            Text::message("usage-alibaba-window").arg("kind", name),
+            Text::service(format!("{} / {}", group(used as i64), group(total as i64))),
         ));
         let length = kind.length();
         windows.push(Window::new(kind, used / total * 100., reset, length));
@@ -356,13 +360,16 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 Provider(&Alibaba),
                 Account {
                     email: None,
-                    plan: Some(Text::from(plan)),
+                    plan: Some(Text::service(plan)),
                 },
                 Vec::new(),
             )
             .with_sections([Section::Facts {
-                title: "Coding Plan".into(),
-                facts: vec![("Status".into(), "Active, quota not reported".into())],
+                title: Text::message("usage-alibaba-coding-plan"),
+                facts: vec![(
+                    Text::message("usage-alibaba-status"),
+                    Text::message("usage-alibaba-active-unreported"),
+                )],
             }])),
             None => Err(invalid()),
         };
@@ -371,13 +378,13 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         Provider(&Alibaba),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         windows,
     )
     .with_sections([Section::Facts {
-        title: "Requests used".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-alibaba-requests-used"),
+        facts,
     }]))
 }
 
@@ -525,7 +532,13 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected request facts");
         };
-        assert_eq!(facts[0], ("Session".into(), "52 / 1,000".into()));
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-alibaba-window").arg("kind", "session"),
+                Text::service("52 / 1,000")
+            )
+        );
     }
 
     #[test]

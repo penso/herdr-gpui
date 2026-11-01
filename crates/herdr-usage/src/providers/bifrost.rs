@@ -4,7 +4,7 @@
 //! `base_url`. No admin credential is used. Everything CodexBar reads is
 //! ported; the per-budget list and model rows are shown as facts.
 
-use crate::text::{Text, pair, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -80,20 +80,27 @@ fn text(value: Option<&String>) -> Option<&str> {
 
 pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     let root: Root = json(body)?;
-    let mut scopes: Vec<(Option<String>, &Limits)> = vec![(None, &root.limits)];
+    let mut scopes: Vec<(Option<Text>, &Limits)> = vec![(None, &root.limits)];
     for (index, config) in root.provider_configs.iter().enumerate() {
         let name =
             text(config.provider.as_ref()).map_or_else(|| (index + 1).to_string(), str::to_owned);
-        scopes.push((Some(format!("Provider {name}")), &config.limits));
+        scopes.push((
+            Some(Text::message("usage-bifrost-provider-scope").arg("name", name)),
+            &config.limits,
+        ));
     }
     for (index, config) in root.model_configs.iter().enumerate() {
         let model =
             text(config.model_name.as_ref()).map_or_else(|| (index + 1).to_string(), str::to_owned);
+        // The provider and model names are Bifrost's, as is their pairing.
         let name = match text(config.provider.as_ref()) {
             Some(provider) => format!("{provider} · {model}"),
             None => model,
         };
-        scopes.push((Some(format!("Model {name}")), &config.limits));
+        scopes.push((
+            Some(Text::message("usage-bifrost-model-scope").arg("name", name)),
+            &config.limits,
+        ));
     }
 
     let mut budgets: Vec<Budget> = Vec::new();
@@ -149,14 +156,14 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         for limit in selected {
             for (dimension, max, used, reset, last) in [
                 (
-                    "Tokens",
+                    Text::message("usage-bifrost-tokens"),
                     limit.token_max_limit,
                     limit.token_current_usage,
                     &limit.token_reset_duration,
                     &limit.token_last_reset,
                 ),
                 (
-                    "Requests",
+                    Text::message("usage-bifrost-requests"),
                     limit.request_max_limit,
                     limit.request_current_usage,
                     &limit.request_reset_duration,
@@ -169,24 +176,31 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 if !known && reset.is_none() {
                     continue;
                 }
-                let title = [
-                    scope.as_deref(),
-                    text(limit.source_name.as_ref()),
-                    Some(dimension),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" ");
+                // The limit's dimension, after the name of the pool it draws
+                // from and the scope it covers, when there are.
+                let title = match text(limit.source_name.as_ref()) {
+                    Some(source) => Text::message("usage-bifrost-sourced-limit")
+                        .arg("source", source)
+                        .arg("limit", dimension),
+                    None => dimension,
+                };
+                let title = match scope {
+                    Some(scope) => Text::message("usage-bifrost-scoped-limit")
+                        .arg("scope", scope.clone())
+                        .arg("limit", title),
+                    None => title,
+                };
                 let timing = Timing::new(reset, text(last.as_ref()), now);
                 match max.filter(|_| known) {
                     Some(max) => rate_limits.push(Section::Limit(Window::new(
-                        Kind::Named(Text::from(title)),
+                        Kind::Named(title),
                         used.unwrap_or(0.) / max * 100.,
                         timing.resets_at,
                         timing.length,
                     ))),
-                    None => unknown_limits.push((title, "Unavailable".to_owned())),
+                    None => {
+                        unknown_limits.push((title, Text::message("usage-bifrost-unavailable")))
+                    }
                 }
             }
         }
@@ -208,10 +222,11 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     }
     let first = budgets.iter().find(|budget| budget.scope.is_none());
     let balance = first.map(|budget| {
-        let label = budget.timing.label.map_or_else(
-            || if budget.limit > 0. { "Budget" } else { "Spend" }.to_owned(),
-            str::to_owned,
-        );
+        let label = match budget.timing.label {
+            Some(period) => Text::message("usage-bifrost-period").arg("period", period),
+            None if budget.limit > 0. => Text::message("usage-bifrost-budget"),
+            None => Text::message("usage-bifrost-spend"),
+        };
         let balance = Balance::new(label, budget.used, Unit::Currency("USD".into()));
         if budget.limit > 0. {
             balance.out_of(budget.limit)
@@ -224,16 +239,19 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     sections.extend(rate_limits);
     if !unknown_limits.is_empty() {
         sections.push(Section::Facts {
-            title: "Rate limits".into(),
-            facts: pairs(unknown_limits),
+            title: Text::message("usage-bifrost-rate-limits"),
+            facts: unknown_limits,
         });
     }
     if inactive {
         sections.insert(
             0,
             Section::Facts {
-                title: "Virtual key".into(),
-                facts: vec![("Status".into(), "Inactive".into())],
+                title: Text::message("usage-bifrost-virtual-key"),
+                facts: vec![(
+                    Text::message("usage-bifrost-status"),
+                    Text::message("usage-bifrost-inactive"),
+                )],
             },
         );
     }
@@ -242,22 +260,15 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     }
     if budgets.len() > 1 || budgets.iter().any(|budget| budget.scope.is_some()) {
         sections.push(Section::Facts {
-            title: "Budgets".into(),
-            facts: budgets
-                .iter()
-                .take(24)
-                .map(Budget::fact)
-                .map(pair)
-                .collect(),
+            title: Text::message("usage-bifrost-budgets"),
+            facts: budgets.iter().take(24).map(Budget::fact).collect(),
         });
     }
     let account = Account {
-        email: text(root.virtual_key_name.as_ref())
-            .map(str::to_owned)
-            .map(Text::from),
+        email: text(root.virtual_key_name.as_ref()).map(Text::service),
         plan: first
-            .and_then(|budget| budget.source.clone())
-            .map(Text::from),
+            .and_then(|budget| budget.source.as_deref())
+            .map(Text::service),
     };
     Ok(Report::new(Provider(&Bifrost), account, windows)
         .with_balances(balance)
@@ -266,7 +277,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
 
 struct Budget<'a> {
     id: String,
-    scope: Option<String>,
+    scope: Option<Text>,
     source: Option<String>,
     limit: f64,
     used: f64,
@@ -275,29 +286,31 @@ struct Budget<'a> {
 }
 
 impl Budget<'_> {
-    fn title(&self) -> String {
-        [
-            self.scope.as_deref(),
-            Some(self.source.as_deref().unwrap_or("Budget")),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(" · ")
+    /// The budget's pool name, or `Budget`, after the scope it covers.
+    fn title(&self) -> Text {
+        let name = self
+            .source
+            .as_deref()
+            .map_or_else(|| Text::message("usage-bifrost-budget"), Text::service);
+        match &self.scope {
+            Some(scope) => Text::message("usage-bifrost-scoped-budget")
+                .arg("scope", scope.clone())
+                .arg("budget", name),
+            None => name,
+        }
     }
 
     fn window(&self) -> Window {
         let kind = match (self.timing.label, &self.source, &self.scope) {
-            (Some("Daily"), None, None) => Kind::Daily,
-            (Some("Weekly"), None, None) => Kind::Weekly,
-            (Some("Monthly"), None, None) => Kind::Monthly,
-            (label, _, _) => Kind::Named(Text::from(
-                [Some(self.title()), label.map(str::to_owned)]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" · "),
-            )),
+            (Some("daily"), None, None) => Kind::Daily,
+            (Some("weekly"), None, None) => Kind::Weekly,
+            (Some("monthly"), None, None) => Kind::Monthly,
+            (Some(period), _, _) => Kind::Named(
+                Text::message("usage-bifrost-periodic")
+                    .arg("budget", self.title())
+                    .arg("period", period),
+            ),
+            (None, _, _) => Kind::Named(self.title()),
         };
         let length = self.timing.length.or_else(|| kind.length());
         Window::new(
@@ -308,20 +321,24 @@ impl Budget<'_> {
         )
     }
 
-    fn fact(&self) -> (String, String) {
+    fn fact(&self) -> (Text, Text) {
         let label = match self.source {
             Some(_) => self.title(),
-            None => format!("{} {}", self.title(), self.id),
+            None => Text::message("usage-bifrost-budget-id")
+                .arg("budget", self.title())
+                .arg("id", self.id.as_str()),
         };
-        let mut value = if self.limit > 0. {
+        let amount = if self.limit > 0. {
             format!("${:.2} / ${:.2}", self.used, self.limit)
         } else {
             format!("${:.2}", self.used)
         };
-        if let Some(period) = self.timing.label {
-            value.push_str(" · ");
-            value.push_str(period);
-        }
+        let value = match self.timing.label {
+            Some(period) => Text::message("usage-bifrost-amount-period")
+                .arg("amount", amount)
+                .arg("period", period),
+            None => Text::service(amount),
+        };
         (label, value)
     }
 }
@@ -333,6 +350,7 @@ struct Timing {
     seconds: Option<f64>,
     resets_at: Option<SystemTime>,
     length: Option<Duration>,
+    /// A calendar period, as the `usage-bifrost-period` messages select it.
     label: Option<&'static str>,
 }
 
@@ -350,12 +368,12 @@ impl Timing {
             start.checked_add(Duration::try_from_secs_f64(cycles * seconds).ok()?)
         });
         let label = match raw {
-            Some("1h") => Some("Hourly"),
-            Some("1d") => Some("Daily"),
-            Some("1w") => Some("Weekly"),
-            Some("1M") => Some("Monthly"),
-            Some("1Q") => Some("Quarterly"),
-            Some("1Y") => Some("Yearly"),
+            Some("1h") => Some("hourly"),
+            Some("1d") => Some("daily"),
+            Some("1w") => Some("weekly"),
+            Some("1M") => Some("monthly"),
+            Some("1Q") => Some("quarterly"),
+            Some("1Y") => Some("yearly"),
             _ => None,
         };
         Self {
@@ -423,11 +441,12 @@ fn duration(raw: &str) -> Option<f64> {
 
 /// The key-wide budget's model spend, costliest first.
 fn models(rows: &[ModelUsage]) -> Option<Section> {
-    let mut rows: Vec<(&str, f64, f64)> = rows
+    // A row without a model name sorts by `Model`, as it is shown.
+    let mut rows: Vec<(Option<&str>, f64, f64)> = rows
         .iter()
         .map(|row| {
             (
-                text(row.model.as_ref()).unwrap_or("Model"),
+                text(row.model.as_ref()),
                 row.total_cost.unwrap_or(0.),
                 row.total_tokens.unwrap_or(0.),
             )
@@ -441,24 +460,32 @@ fn models(rows: &[ModelUsage]) -> Option<Section> {
         b.1.partial_cmp(&a.1)
             .unwrap_or(Ordering::Equal)
             .then(b.2.partial_cmp(&a.2).unwrap_or(Ordering::Equal))
-            .then(a.0.cmp(b.0))
+            .then(a.0.unwrap_or("Model").cmp(b.0.unwrap_or("Model")))
     });
-    let mut facts: Vec<(String, String)> = rows
+    let mut facts: Vec<(Text, Text)> = rows
         .iter()
         .take(TOP_MODELS)
         .map(|(model, cost, tokens)| {
             (
-                model_name(model),
-                format!("${cost:.2} · {} tokens", token_count(*tokens)),
+                model.map_or_else(
+                    || Text::message("usage-bifrost-model"),
+                    |model| Text::service(model_name(model)),
+                ),
+                Text::message("usage-bifrost-model-cost")
+                    .arg("cost", format!("${cost:.2}"))
+                    .arg("tokens", token_count(*tokens)),
             )
         })
         .collect();
     if rows.len() > TOP_MODELS {
-        facts.push(("Other models".into(), (rows.len() - TOP_MODELS).to_string()));
+        facts.push((
+            Text::message("usage-bifrost-other-models"),
+            Text::service((rows.len() - TOP_MODELS).to_string()),
+        ));
     }
     Some(Section::Facts {
-        title: "Models".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-bifrost-models"),
+        facts,
     })
 }
 

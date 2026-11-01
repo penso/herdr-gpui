@@ -7,7 +7,7 @@
 //! normalized name against CodexBar's candidate lists. Everything CodexBar
 //! reads is ported.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -374,7 +374,8 @@ struct Quota {
     /// The object it was read from, to tell the same quota found twice.
     source: String,
     label: Option<String>,
-    unit: String,
+    /// The service's unit; `None` counts credits.
+    unit: Option<String>,
     used: Option<f64>,
     limit: Option<f64>,
     percent: f64,
@@ -415,9 +416,7 @@ impl Quota {
             label: lookup(object, LABEL_KEYS)
                 .and_then(text)
                 .or(label.map(str::to_owned)),
-            unit: lookup(object, UNIT_KEYS)
-                .and_then(text)
-                .unwrap_or_else(|| "credits".into()),
+            unit: lookup(object, UNIT_KEYS).and_then(text),
             used: used.or(limit
                 .zip(remaining)
                 .map(|(limit, remaining)| (limit - remaining).max(0.))),
@@ -429,7 +428,12 @@ impl Quota {
     }
 
     fn is_rolling(&self) -> bool {
-        let label = format!("{} {}", self.label.as_deref().unwrap_or(""), self.unit).to_lowercase();
+        let label = format!(
+            "{} {}",
+            self.label.as_deref().unwrap_or(""),
+            self.unit.as_deref().unwrap_or("credits")
+        )
+        .to_lowercase();
         ["rolling", "4h", "4 h", "4-hour", "four hour", "four-hour"]
             .iter()
             .any(|word| label.contains(word))
@@ -437,21 +441,30 @@ impl Quota {
     }
 
     fn is_monthly(&self) -> bool {
-        let label = format!("{} {}", self.label.as_deref().unwrap_or(""), self.unit).to_lowercase();
+        let label = format!(
+            "{} {}",
+            self.label.as_deref().unwrap_or(""),
+            self.unit.as_deref().unwrap_or("credits")
+        )
+        .to_lowercase();
         ["month", "billing", "subscription"]
             .iter()
             .any(|word| label.contains(word))
             || self.minutes.is_some_and(|minutes| minutes >= 40_320)
     }
 
-    fn amounts(&self) -> Option<String> {
+    fn amounts(&self) -> Option<Text> {
         let limit = self.limit.filter(|limit| *limit > 0.)?;
-        Some(format!(
-            "{}/{} {}",
-            values::trimmed(self.used?),
-            values::trimmed(limit),
-            self.unit
-        ))
+        let unit = self
+            .unit
+            .as_deref()
+            .map_or_else(|| Text::message("usage-chutes-credits"), Text::service);
+        Some(
+            Text::message("usage-chutes-amounts")
+                .arg("used", values::trimmed(self.used?))
+                .arg("limit", values::trimmed(limit))
+                .arg("unit", unit),
+        )
     }
 
     fn window(&self, kind: Kind, minutes: Option<u64>, resets_at: Option<SystemTime>) -> Window {
@@ -585,7 +598,11 @@ fn report(parsed: Parsed) -> Report {
     let rolling = parsed.rolling.as_ref().map(|quota| {
         (
             quota,
-            quota.window(Kind::Named("4-hour".into()), Some(ROLLING_MINUTES), None),
+            quota.window(
+                Kind::Named(Text::message("usage-chutes-rolling")),
+                Some(ROLLING_MINUTES),
+                None,
+            ),
         )
     });
     let monthly = parsed.monthly.as_ref().map(|quota| {
@@ -594,9 +611,12 @@ fn report(parsed: Parsed) -> Report {
         (quota, window)
     });
     let mut rest = parsed.fallback.iter().map(|quota| {
-        let kind = Kind::Named(Text::from(
-            quota.label.clone().unwrap_or_else(|| "Quota".into()),
-        ));
+        let kind = Kind::Named(
+            quota
+                .label
+                .as_deref()
+                .map_or_else(|| Text::message("usage-chutes-quota"), Text::service),
+        );
         (quota, quota.window(kind, None, None))
     });
     let shown: Vec<(&Quota, Window)> = match (rolling, monthly) {
@@ -605,27 +625,35 @@ fn report(parsed: Parsed) -> Report {
         (None, Some(monthly)) => vec![monthly],
         (None, None) => rest.take(2).collect(),
     };
-    let facts: Vec<(String, String)> = shown
+    let facts: Vec<(Text, Text)> = shown
         .iter()
-        .filter_map(|(quota, window)| Some((window.kind.title().to_owned(), quota.amounts()?)))
+        .filter_map(|(quota, window)| Some((name(&window.kind), quota.amounts()?)))
         .collect();
-    let plan = parsed.plan.or_else(|| match parsed.active {
-        Some(false) => Some("No active subscription".into()),
-        None if shown.is_empty() => Some("No usage data".into()),
-        _ => None,
-    });
+    let plan = parsed
+        .plan
+        .map(Text::service)
+        .or_else(|| match parsed.active {
+            Some(false) => Some(Text::message("usage-chutes-no-subscription")),
+            None if shown.is_empty() => Some(Text::message("usage-chutes-no-usage")),
+            _ => None,
+        });
     Report::new(
         Provider(&Chutes),
-        Account {
-            email: None,
-            plan: plan.map(Text::from),
-        },
+        Account { email: None, plan },
         shown.into_iter().map(|(_, window)| window).collect(),
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Quota".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-chutes-quota-title"),
+        facts,
     }))
+}
+
+/// A shown window's name: the monthly quota, or the name its kind holds.
+fn name(kind: &Kind) -> Text {
+    match kind {
+        Kind::Named(name) => name.clone(),
+        _ => Text::message("usage-chutes-monthly"),
+    }
 }
 
 #[cfg(test)]
@@ -662,7 +690,7 @@ mod tests {
         let rolling = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("4-hour".into()))
+            .find(|window| window.kind == Kind::Named(Text::message("usage-chutes-rolling")))
             .unwrap();
         assert_eq!(rolling.used, 40.);
         assert_eq!(rolling.length, Some(Duration::from_secs(4 * 3600)));
@@ -673,8 +701,24 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("4-hour".into(), "40/100 requests".into())));
-        assert!(facts.contains(&("Monthly".into(), "250/1000 credits".into())));
+        assert!(
+            facts.contains(&(
+                Text::message("usage-chutes-rolling"),
+                Text::message("usage-chutes-amounts")
+                    .arg("used", "40")
+                    .arg("limit", "100")
+                    .arg("unit", "requests")
+            ))
+        );
+        assert!(
+            facts.contains(&(
+                Text::message("usage-chutes-monthly"),
+                Text::message("usage-chutes-amounts")
+                    .arg("used", "250")
+                    .arg("limit", "1000")
+                    .arg("unit", "credits")
+            ))
+        );
     }
 
     #[test]
@@ -697,13 +741,22 @@ mod tests {
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].used, 10.);
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("No active subscription")
+            report.account.plan,
+            Some(Text::message("usage-chutes-no-subscription"))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts, &[("Quota".into(), "10/100 credits".into())]);
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-chutes-quota"),
+                Text::message("usage-chutes-amounts")
+                    .arg("used", "10")
+                    .arg("limit", "100")
+                    .arg("unit", Text::message("usage-chutes-credits"))
+            )]
+        );
     }
 
     #[test]
@@ -730,8 +783,8 @@ mod tests {
         let report = report(parse(&value("{}")));
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("No usage data")
+            report.account.plan,
+            Some(Text::message("usage-chutes-no-usage"))
         );
     }
 }

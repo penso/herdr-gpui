@@ -11,6 +11,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
         values::{decimal, invalid},
     },
 };
@@ -61,7 +62,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .ok_or_else(invalid)?;
     Ok(
         Report::new(Provider(&Atlascloud), Account::default(), Vec::new()).with_balances([
-            Balance::new("Available balance", amount, Unit::Currency("USD".into())),
+            Balance::new(
+                Text::message("usage-atlascloud-available-balance"),
+                amount,
+                Unit::Currency("USD".into()),
+            ),
         ]),
     )
 }

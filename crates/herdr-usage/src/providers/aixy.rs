@@ -3,7 +3,7 @@
 //! here or on the probed host) at `https://api.aixy-gateway.com` or the
 //! configured `base_url`. Everything CodexBar reads is ported.
 
-use crate::text::{Text, pair};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -129,7 +129,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         if windows.len() < 2 {
             let kind = match entry.interval.kind() {
                 Some(kind) if windows.iter().all(|window| window.kind != kind) => kind,
-                _ => Kind::Named(Text::from(entry.short_title())),
+                _ => Kind::Named(entry.short_title()),
             };
             windows.push(Window { kind, ..window });
         } else {
@@ -138,29 +138,29 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     }
 
     let mut sections = vec![Section::Facts {
-        title: "Aixy key".into(),
+        title: Text::message("usage-aixy-key-title"),
         facts: vec![
             (
-                "Key".into(),
-                Text::from(text(key.name.as_ref()).unwrap_or(key_id).to_owned()),
+                Text::message("usage-aixy-key"),
+                Text::service(text(key.name.as_ref()).unwrap_or(key_id)),
             ),
             (
-                "Project".into(),
-                Text::from(
-                    text(key.project_name.as_ref())
-                        .or(key.project_id.as_deref())
-                        .unwrap_or("Unknown")
-                        .to_owned(),
-                ),
+                Text::message("usage-aixy-project"),
+                text(key.project_name.as_ref())
+                    .or(key.project_id.as_deref())
+                    .map_or_else(|| Text::message("usage-aixy-unknown"), Text::service),
             ),
-            ("Observed".into(), Text::from(observed.to_owned())),
+            (
+                Text::message("usage-aixy-observed"),
+                Text::service(observed),
+            ),
         ],
     }];
     sections.extend(limits);
     if !parsed.is_empty() {
         sections.push(Section::Facts {
-            title: "Applicable budgets".into(),
-            facts: parsed.iter().map(Entry::fact).map(pair).collect(),
+            title: Text::message("usage-aixy-budgets"),
+            facts: parsed.iter().map(Entry::fact).collect(),
         });
     }
     let mut balances = Vec::new();
@@ -187,36 +187,45 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             }
             if let Some(spend) = spend {
                 balances.push(Balance::new(
-                    "Last 7 days, attributed",
+                    Text::message("usage-aixy-attributed-week"),
                     spend,
                     Unit::Currency("USD".into()),
                 ));
             }
             sections.push(Section::Facts {
-                title: "Last 7 days · this key".into(),
+                title: Text::message("usage-aixy-week"),
                 facts: vec![
-                    ("Requests".into(), Text::from(group(requests as i64))),
-                    ("Tokens".into(), Text::from(group(tokens as i64))),
                     (
-                        "Attributed spend".into(),
-                        Text::from(spend.map_or_else(|| "Unavailable".into(), usd)),
+                        Text::message("usage-aixy-requests"),
+                        Text::service(group(requests as i64)),
                     ),
                     (
-                        "Cost coverage".into(),
-                        format!(
-                            "{} / {} requests, {} partial",
-                            group(attributed as i64),
-                            group(requests as i64),
-                            group(partial as i64)
-                        )
-                        .into(),
+                        Text::message("usage-aixy-tokens"),
+                        Text::service(group(tokens as i64)),
+                    ),
+                    (
+                        Text::message("usage-aixy-attributed-spend"),
+                        spend.map_or_else(
+                            || Text::message("usage-aixy-unavailable"),
+                            |spend| Text::service(usd(spend)),
+                        ),
+                    ),
+                    (
+                        Text::message("usage-aixy-cost-coverage"),
+                        Text::message("usage-aixy-coverage")
+                            .arg("attributed", group(attributed as i64))
+                            .arg("requests", group(requests as i64))
+                            .arg("partial", group(partial as i64)),
                     ),
                 ],
             });
         }
         None => sections.push(Section::Facts {
-            title: "Last 7 days · this key".into(),
-            facts: vec![("Usage".into(), "Unavailable".into())],
+            title: Text::message("usage-aixy-week"),
+            facts: vec![(
+                Text::message("usage-report-usage"),
+                Text::message("usage-aixy-unavailable"),
+            )],
         }),
     }
     Ok(Report::new(Provider(&Aixy), Account::default(), windows)
@@ -242,18 +251,20 @@ impl Interval {
         }
     }
 
-    fn title(self) -> &'static str {
+    /// The wire word, which the budget messages name the interval by.
+    fn key(self) -> &'static str {
         match self {
-            Self::Daily => "Daily",
-            Self::Weekly => "Weekly",
-            Self::Monthly => "Monthly",
-            Self::Lifetime => "Lifetime",
+            Self::Daily => "daily",
+            Self::Weekly => "weekly",
+            Self::Monthly => "monthly",
+            Self::Lifetime => "lifetime",
         }
     }
 }
 
 struct Entry {
     id: String,
+    /// The wire word, which the budget messages name the scope by.
     scope: &'static str,
     interval: Interval,
     shared: bool,
@@ -271,11 +282,11 @@ impl Entry {
     fn new(budget: &BudgetRow, key_id: &str, project: Option<&str>) -> Result<Self> {
         let id = text(budget.id.as_ref()).ok_or_else(invalid)?.to_owned();
         let scope = match text(budget.scope.as_ref()) {
-            Some("organization") => "Organization",
-            Some("project") => "Project",
-            Some("team") => "Team",
-            Some("user") => "User",
-            Some("api_key") => "Key",
+            Some("organization") => "organization",
+            Some("project") => "project",
+            Some("team") => "team",
+            Some("user") => "user",
+            Some("api_key") => "api_key",
             _ => return Err(invalid()),
         };
         let interval = match text(budget.interval.as_ref()) {
@@ -373,18 +384,18 @@ impl Entry {
             .map(|spent| ((spent + self.reserved) / self.limit * 100.).min(100.))
     }
 
-    fn title(&self) -> String {
-        format!(
-            "{} · {} · {} · {}",
-            self.scope,
-            self.interval.title(),
-            if self.shared { "Shared" } else { "Personal" },
-            if self.hard { "Hard" } else { "Monitor" },
-        )
+    fn title(&self) -> Text {
+        Text::message("usage-aixy-budget")
+            .arg("scope", self.scope)
+            .arg("interval", self.interval.key())
+            .arg("sharing", if self.shared { "shared" } else { "personal" })
+            .arg("enforcement", if self.hard { "hard" } else { "monitor" })
     }
 
-    fn short_title(&self) -> String {
-        format!("{} {}", self.scope, self.interval.title().to_lowercase())
+    fn short_title(&self) -> Text {
+        Text::message("usage-aixy-budget-short")
+            .arg("scope", self.scope)
+            .arg("interval", self.interval.key())
     }
 
     fn window(&self) -> Option<Window> {
@@ -393,28 +404,27 @@ impl Entry {
             .zip(self.resets_at)
             .and_then(|(start, end)| end.duration_since(start).ok());
         Some(Window::new(
-            Kind::Named(Text::from(self.title())),
+            Kind::Named(self.title()),
             self.used_percent()?,
             self.resets_at,
             length,
         ))
     }
 
-    fn fact(&self) -> (String, String) {
+    fn fact(&self) -> (Text, Text) {
         let value = match (self.spent, self.remaining) {
-            (Some(spent), Some(remaining)) => {
-                let mut value = format!(
-                    "{} of {} left, {} spent",
-                    usd(remaining),
-                    usd(self.limit),
-                    usd(spent)
-                );
-                if self.hard {
-                    value.push_str(&format!(", {} reserved", usd(self.reserved)));
-                }
-                value
+            (Some(spent), Some(remaining)) if self.hard => {
+                Text::message("usage-aixy-budget-reserved")
+                    .arg("left", usd(remaining))
+                    .arg("limit", usd(self.limit))
+                    .arg("spent", usd(spent))
+                    .arg("reserved", usd(self.reserved))
             }
-            _ => "Unavailable".into(),
+            (Some(spent), Some(remaining)) => Text::message("usage-aixy-budget-left")
+                .arg("left", usd(remaining))
+                .arg("limit", usd(self.limit))
+                .arg("spent", usd(spent)),
+            _ => Text::message("usage-aixy-unavailable"),
         };
         (self.title(), value)
     }
@@ -589,22 +599,40 @@ mod tests {
         let Section::Facts { title, facts } = &report.sections[0] else {
             panic!("expected key facts");
         };
-        assert_eq!(title, "Aixy key");
+        assert_eq!(title, &Text::message("usage-aixy-key-title"));
         assert_eq!(facts[0].1, "Developer CLI");
         let budgets = report
             .sections
             .iter()
             .find_map(|section| match section {
-                Section::Facts { title, facts } if title == "Applicable budgets" => Some(facts),
+                Section::Facts { title, facts } if title == "usage-aixy-budgets" => Some(facts),
                 _ => None,
             })
             .unwrap();
-        assert_eq!(budgets[0].0, "Project · Monthly · Shared · Hard");
+        assert_eq!(
+            budgets[0].0,
+            Text::message("usage-aixy-budget")
+                .arg("scope", "project")
+                .arg("interval", "monthly")
+                .arg("sharing", "shared")
+                .arg("enforcement", "hard")
+        );
         assert_eq!(
             budgets[0].1,
-            "$70.00 of $100.00 left, $20.00 spent, $10.00 reserved"
+            Text::message("usage-aixy-budget-reserved")
+                .arg("left", "$70.00")
+                .arg("limit", "$100.00")
+                .arg("spent", "$20.00")
+                .arg("reserved", "$10.00")
         );
-        assert_eq!(budgets[1].1, "Unavailable");
+        assert_eq!(budgets[1].1, Text::message("usage-aixy-unavailable"));
+        assert_eq!(
+            budgets[2].1,
+            Text::message("usage-aixy-budget-left")
+                .arg("left", "$60.00")
+                .arg("limit", "$100.00")
+                .arg("spent", "$40.00")
+        );
     }
 
     #[test]

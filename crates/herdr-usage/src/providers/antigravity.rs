@@ -141,17 +141,18 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     ))
 }
 
-fn group_title(name: Option<String>) -> String {
+/// The model family a group's limits are named by, or the group's own name.
+fn group_title(name: Option<String>) -> Text {
     let name = name.unwrap_or_default().trim().to_owned();
     let lower = name.to_lowercase();
     if lower.contains("gemini") {
-        "Gemini".into()
+        Text::service("Gemini")
     } else if lower.contains("claude") || lower.contains("gpt") {
-        "Claude/GPT".into()
+        Text::service("Claude/GPT")
     } else if name.is_empty() {
-        "Quota".into()
+        Text::message("usage-antigravity-quota")
     } else {
-        name
+        Text::service(name)
     }
 }
 
@@ -226,7 +227,7 @@ impl Remaining {
 }
 
 impl Bucket {
-    fn window(self, group: &str) -> Option<Window> {
+    fn window(self, group: &Text) -> Option<Window> {
         if self.disabled == Some(true) {
             return None;
         }
@@ -245,13 +246,20 @@ impl Bucket {
             .map(cadence)
             .find(|cadence| *cadence != Cadence::Other)
             .unwrap_or(Cadence::Other);
-        let (kind, length) = match cadence {
-            Cadence::Session => (format!("{group} 5-hour"), Some(SESSION)),
-            Cadence::Weekly => (format!("{group} weekly"), Some(WEEK)),
-            Cadence::Other => (format!("{group} {}", name.unwrap_or(id)), None),
+        // One message for every cadence, so windows still sort by group
+        // first, then cadence, as their English names did.
+        let (cadence, name, length) = match cadence {
+            Cadence::Session => ("session", String::new(), Some(SESSION)),
+            Cadence::Weekly => ("weekly", String::new(), Some(WEEK)),
+            Cadence::Other => ("other", name.unwrap_or(id), None),
         };
         Some(Window::new(
-            Kind::Named(Text::from(kind)),
+            Kind::Named(
+                Text::message("usage-antigravity-window")
+                    .arg("group", group.clone())
+                    .arg("cadence", cadence)
+                    .arg("name", name),
+            ),
             100. - fraction.clamp(0., 1.) * 100.,
             self.reset_time.as_ref().and_then(Timestamp::time),
             length,
@@ -323,21 +331,23 @@ mod tests {
         let used: Vec<_> = report
             .windows
             .iter()
-            .map(|window| {
-                (
-                    window.kind.title().to_owned(),
-                    window.percent(),
-                    window.length,
-                )
-            })
+            .map(|window| (window.kind.clone(), window.percent(), window.length))
             .collect();
+        let kind = |group: &str, cadence: &str| {
+            Kind::Named(
+                Text::message("usage-antigravity-window")
+                    .arg("group", group)
+                    .arg("cadence", cadence)
+                    .arg("name", ""),
+            )
+        };
         assert_eq!(
             used,
             [
-                ("Claude/GPT 5-hour".to_owned(), 0, Some(SESSION)),
-                ("Claude/GPT weekly".to_owned(), 11, Some(WEEK)),
-                ("Gemini 5-hour".to_owned(), 5, Some(SESSION)),
-                ("Gemini weekly".to_owned(), 14, Some(WEEK)),
+                (kind("Claude/GPT", "session"), 0, Some(SESSION)),
+                (kind("Claude/GPT", "weekly"), 11, Some(WEEK)),
+                (kind("Gemini", "session"), 5, Some(SESSION)),
+                (kind("Gemini", "weekly"), 14, Some(WEEK)),
             ]
         );
         assert_eq!(
@@ -363,8 +373,16 @@ mod tests {
                 "remaining": {"case": "remainingFraction", "value": 0.25}}"#,
         )
         .unwrap();
-        let window = bucket.window("Gemini").unwrap();
-        assert_eq!(window.kind, Kind::Named("Gemini 5-hour".into()));
+        let window = bucket.window(&Text::service("Gemini")).unwrap();
+        assert_eq!(
+            window.kind,
+            Kind::Named(
+                Text::message("usage-antigravity-window")
+                    .arg("group", "Gemini")
+                    .arg("cadence", "session")
+                    .arg("name", "")
+            )
+        );
         assert_eq!(window.percent(), 75);
     }
 }

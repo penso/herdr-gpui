@@ -7,7 +7,7 @@
 //! needs Azure Resource Manager credentials, which CodexBar does not read
 //! either. There is no local sign-in to detect.
 
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -177,21 +177,36 @@ impl Target {
 pub(crate) fn parse(body: &str, target: &Target) -> Result<Report> {
     let completion: Completion = json(body)?;
     let mut facts = vec![
-        ("Resource".to_owned(), target.host.clone()),
-        ("Deployment".to_owned(), target.deployment.clone()),
+        (
+            Text::message("usage-azureopenai-resource"),
+            Text::service(&target.host),
+        ),
+        (
+            Text::message("usage-azureopenai-deployment"),
+            Text::service(&target.deployment),
+        ),
     ];
     if let Some(model) = completion.model.filter(|model| !model.trim().is_empty()) {
-        facts.push(("Model".into(), model.trim().to_owned()));
+        facts.push((
+            Text::message("usage-azureopenai-model"),
+            Text::service(model.trim()),
+        ));
     }
-    facts.push(("API version".into(), target.version.clone()));
+    facts.push((
+        Text::message("usage-azureopenai-api-version"),
+        Text::service(&target.version),
+    ));
     let account = Account {
         email: None,
-        plan: Some(format!("Deployment: {}", target.deployment).into()),
+        plan: Some(
+            Text::message("usage-azureopenai-deployment-plan")
+                .arg("deployment", target.deployment.as_str()),
+        ),
     };
     Ok(
         Report::new(Provider(&Azureopenai), account, Vec::new()).with_sections([Section::Facts {
-            title: "Deployment reachable".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-azureopenai-reachable"),
+            facts,
         }]),
     )
 }
@@ -205,7 +220,6 @@ struct Completion {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::Text;
 
     #[test]
     fn dated_version_uses_deployment_path() {
@@ -249,13 +263,19 @@ mod tests {
         .unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Deployment: chat-prod")
+            report.account.plan,
+            Some(Text::message("usage-azureopenai-deployment-plan").arg("deployment", "chat-prod"))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Model".into(), "gpt-4o-2024-08-06".into())));
-        assert!(facts.contains(&("Resource".into(), "resource.openai.azure.com".into())));
+        assert!(facts.contains(&(
+            Text::message("usage-azureopenai-model"),
+            Text::service("gpt-4o-2024-08-06")
+        )));
+        assert!(facts.contains(&(
+            Text::message("usage-azureopenai-resource"),
+            Text::service("resource.openai.azure.com")
+        )));
     }
 }

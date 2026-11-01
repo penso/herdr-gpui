@@ -9,7 +9,7 @@
 //! Not ported: CodexBar reads the CLI's standard error when standard output
 //! is empty; the probe discards standard error, so such a report is missed.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -175,48 +175,56 @@ pub(crate) fn parse_report(text: &str, now: SystemTime) -> Result<Report> {
         ));
         if let Some(orb) = subscription.orb_used {
             windows.push(Window::new(
-                Kind::Named("Orb usage".into()),
+                Kind::Named(Text::message("usage-amp-orb-usage")),
                 orb,
                 Some(subscription.resets_at),
                 subscription.length,
             ));
         }
         if let Some(agent) = subscription.agent_remaining {
-            facts.push(("Agent".to_owned(), format!("${agent:.2}")));
+            facts.push((
+                Text::message("usage-amp-agent"),
+                Text::service(format!("${agent:.2}")),
+            ));
         }
         if let Some(hours) = subscription.orb_hours_remaining {
             let hours = if hours > 0. && hours < 1. {
-                "< 1h".to_owned()
+                Text::message("usage-amp-under-an-hour")
             } else {
-                format!("{}h", hours.max(0.).floor())
+                Text::message("usage-amp-hours").arg("hours", hours.max(0.).floor().to_string())
             };
-            facts.push(("Orb (a1.small hours)".to_owned(), hours));
+            facts.push((Text::message("usage-amp-orb-hours"), hours));
         }
     }
     let usd = || Unit::Currency("USD".into());
     let balances = individual
-        .map(|amount| Balance::new("Individual credits", amount, usd()))
+        .map(|amount| Balance::new(Text::message("usage-amp-individual-credits"), amount, usd()))
         .into_iter()
-        .chain(
-            workspaces
-                .into_iter()
-                .map(|(name, amount)| Balance::new(format!("Workspace {name}"), amount, usd())),
-        );
+        .chain(workspaces.into_iter().map(|(name, amount)| {
+            Balance::new(
+                Text::message("usage-amp-workspace").arg("name", name),
+                amount,
+                usd(),
+            )
+        }));
     let sections = [
         (!facts.is_empty()).then(|| Section::Facts {
-            title: "Monthly allowances".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-amp-monthly-allowances"),
+            facts,
         }),
         organization.map(|organization| Section::Facts {
-            title: "Account".into(),
-            facts: vec![("Organization".into(), Text::from(organization))],
+            title: Text::message("usage-amp-account"),
+            facts: vec![(
+                Text::message("usage-amp-organization"),
+                Text::service(organization),
+            )],
         }),
     ];
     Ok(Report::new(
         Provider(&Amp),
         Account {
-            email: email.map(Text::from),
-            plan: Some(Text::from(plan)),
+            email: email.map(Text::service),
+            plan: Some(Text::service(plan)),
         },
         windows,
     )
@@ -249,7 +257,7 @@ pub(crate) fn parse_html(html: &str, now: SystemTime) -> Result<Report> {
         Provider(&Amp),
         Account {
             email: None,
-            plan: Some("Amp Free".into()),
+            plan: Some(Text::service("Amp Free")),
         },
         vec![free],
     ))
@@ -321,7 +329,12 @@ fn dollar_free(quota: f64, left: f64, hourly: f64, hours: Option<f64>, now: Syst
     let length = hours
         .filter(|hours| *hours > 0.)
         .and_then(|hours| Duration::try_from_secs_f64(hours * 3600.).ok());
-    Window::new(Kind::Named("Amp Free".into()), percent, full, length)
+    Window::new(
+        Kind::Named(Text::service("Amp Free")),
+        percent,
+        full,
+        length,
+    )
 }
 
 /// `Amp Megawatt Tier: agent usage $18.57 of $20 remaining …, resets upon
@@ -614,12 +627,12 @@ mod tests {
         assert_eq!(agent.resets_at, Some(at("2026-10-13T00:00:00Z")));
         assert_eq!(agent.length, Some(Duration::from_secs(30 * 86_400)));
         let orb = &report.windows[1];
-        assert_eq!(orb.kind, Kind::Named("Orb usage".into()));
+        assert_eq!(orb.kind, Kind::Named(Text::message("usage-amp-orb-usage")));
         assert!((orb.used - 2.2933).abs() < 1e-3);
         assert_eq!(
             report.balances,
             vec![Balance::new(
-                "Individual credits",
+                Text::message("usage-amp-individual-credits"),
                 20.,
                 Unit::Currency("USD".into())
             )]
@@ -627,10 +640,13 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Monthly allowances".into(),
+                title: Text::message("usage-amp-monthly-allowances"),
                 facts: vec![
-                    ("Agent".into(), "$18.57".into()),
-                    ("Orb (a1.small hours)".into(), "732h".into()),
+                    (Text::message("usage-amp-agent"), Text::service("$18.57")),
+                    (
+                        Text::message("usage-amp-orb-hours"),
+                        Text::message("usage-amp-hours").arg("hours", "732")
+                    ),
                 ],
             }]
         );
@@ -649,19 +665,25 @@ mod tests {
             Some("Amp Free")
         );
         let free = &report.windows[0];
-        assert_eq!(free.kind, Kind::Named("Amp Free".into()));
+        assert_eq!(free.kind, Kind::Named(Text::service("Amp Free")));
         assert!((free.used - 52.9).abs() < 1e-3);
         assert_eq!(free.length, Some(Duration::from_secs(24 * 3600)));
         let wait = free.resets_at.unwrap().duration_since(now).unwrap();
         assert!((wait.as_secs_f64() - 5.29 / 0.42 * 3600.).abs() < 1.);
         assert_eq!(report.balances.len(), 2);
-        assert_eq!(report.balances[1].label, "Workspace meow");
+        assert_eq!(
+            report.balances[1].label,
+            Text::message("usage-amp-workspace").arg("name", "meow")
+        );
         assert!((report.balances[1].amount - 10.22).abs() < 1e-9);
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Account".into(),
-                facts: vec![("Organization".into(), "echo".into())],
+                title: Text::message("usage-amp-account"),
+                facts: vec![(
+                    Text::message("usage-amp-organization"),
+                    Text::service("echo")
+                )],
             }]
         );
     }

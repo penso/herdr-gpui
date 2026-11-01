@@ -74,7 +74,15 @@ fn parses_personal_usage_with_tier_limits() {
     let Section::Facts { facts, .. } = &report.sections[0] else {
         panic!("expected credit facts");
     };
-    assert_eq!(facts[0], ("Session".into(), "150 / 5,000 credits".into()));
+    assert_eq!(
+        facts[0],
+        (
+            Text::message("usage-alibabatokenplan-window").arg("kind", "session"),
+            Text::message("usage-alibabatokenplan-credits-of")
+                .arg("used", "150")
+                .arg("total", "5,000")
+        )
+    );
 }
 
 #[test]

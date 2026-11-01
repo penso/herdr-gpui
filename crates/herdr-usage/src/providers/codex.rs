@@ -74,27 +74,27 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .next()
         .map(|window| {
             Section::Limit(Window {
-                kind: Kind::Named("Code review".into()),
+                kind: Kind::Named(Text::message("usage-codex-code-review")),
                 ..window
             })
         });
     let resets = usage
         .rate_limit_reset_credits
         .map(|credits| Section::Facts {
-            title: "Limit reset credits".into(),
+            title: Text::message("usage-codex-reset-credits"),
             facts: vec![(
-                "Available".into(),
-                Text::from(credits.available_count.to_string()),
+                Text::message("usage-codex-available"),
+                Text::service(credits.available_count.to_string()),
             )],
         });
     let credits = usage.credits.map(|credits| Section::Facts {
-        title: "Credits".into(),
+        title: Text::message("usage-codex-credits"),
         facts: vec![(
-            "Balance".into(),
+            Text::message("usage-codex-balance"),
             if credits.unlimited.unwrap_or(false) {
-                "Unlimited".into()
+                Text::message("usage-codex-unlimited")
             } else {
-                Text::from(credits.balance.unwrap_or_else(|| "0".into()))
+                Text::service(credits.balance.unwrap_or_else(|| "0".into()))
             },
         )],
     });
@@ -102,12 +102,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         email: usage
             .email
             .filter(|email| !email.trim().is_empty())
-            .map(Text::from),
+            .map(Text::service),
         plan: (usage
             .plan_type
             .map(|plan| title_case(&plan))
             .filter(|plan| !plan.is_empty()))
-        .map(Text::from),
+        .map(Text::service),
     };
     Ok(Report::new(Provider(&Codex), account, windows)
         .with_sections(review.into_iter().chain(resets).chain(credits)))

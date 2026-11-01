@@ -109,45 +109,6 @@ impl From<&str> for Arg {
     }
 }
 
-// Providers not yet moved to messages still give English literals and
-// `String`s, which these keep showing as they are. They go once every
-// provider names its words, so a literal no longer compiles.
-impl From<&str> for Text {
-    fn from(text: &str) -> Self {
-        Self::service(text)
-    }
-}
-
-impl From<String> for Text {
-    fn from(text: String) -> Self {
-        Self::Service(text)
-    }
-}
-
-/// A fact as words, for providers that still build theirs from strings.
-pub(crate) fn pair<A: Into<Text>, B: Into<Text>>((label, value): (A, B)) -> (Text, Text) {
-    (label.into(), value.into())
-}
-
-/// Facts as words, for providers that still build theirs from strings.
-pub(crate) fn pairs<A: Into<Text>, B: Into<Text>>(
-    facts: impl IntoIterator<Item = (A, B)>,
-) -> Vec<(Text, Text)> {
-    facts.into_iter().map(pair).collect()
-}
-
-/// A share as words, for providers that still build theirs from strings.
-pub(crate) fn share<A: Into<Text>>((label, share): (A, f32)) -> (Text, f32) {
-    (label.into(), share)
-}
-
-/// Shares as words, for providers that still build theirs from strings.
-pub(crate) fn shares<A: Into<Text>>(
-    shares: impl IntoIterator<Item = (A, f32)>,
-) -> Vec<(Text, f32)> {
-    shares.into_iter().map(share).collect()
-}
-
 /// Tests and logs compare words with the service's text or a message's ID.
 impl PartialEq<&str> for Text {
     fn eq(&self, other: &&str) -> bool {
