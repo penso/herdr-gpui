@@ -373,3 +373,60 @@ fn organizations_kept_for_the_session_count_toward_the_cap(cx: &mut TestAppConte
         })
     });
 }
+
+/// A view whose only project is organization `contoso`'s own pull requests,
+/// at `height`, on the Pull requests list.
+fn organization_view(
+    cx: &mut TestAppContext,
+    height: f32,
+) -> (gpui::Entity<OrchestratorView>, &mut VisualTestContext) {
+    let config = crate::config::Config::default();
+    let look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui.clone(),
+        mono: config.terminal.clone(),
+    };
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::new(look, cx));
+    cx.simulate_resize(gpui::size(gpui::px(1100.), gpui::px(height)));
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.repos
+                .push(crate::orchestrator::view::repo::Repo::start_remote(
+                    RemoteScope::Mine {
+                        organization: "contoso".into(),
+                    },
+                ));
+            view.tab = Tab::PullRequests;
+            view.refresh_rows();
+            cx.notify();
+        })
+    });
+    cx.run_until_parked();
+    (view, cx)
+}
+
+#[gpui::test]
+fn the_projects_menu_fits_a_short_window(cx: &mut TestAppContext) {
+    let (view, cx) = organization_view(cx, 300.);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.repos[0].snapshot.catalog = Some(Arc::new(Catalog {
+                organization: "contoso".into(),
+                projects: vec![Project {
+                    name: "Fabrikam".into(),
+                    repositories: (0..40).map(|index| format!("repo-{index}")).collect(),
+                }],
+                capped: false,
+            }));
+            cx.notify();
+        })
+    });
+    click(cx, "orchestrator-projects");
+    let frame = cx.debug_bounds("orchestrator-projects-frame").unwrap();
+    assert!(
+        frame.bottom() <= gpui::px(300.),
+        "the menu ends at {:?}",
+        frame.bottom()
+    );
+    assert!(frame.size.height > gpui::px(0.));
+}

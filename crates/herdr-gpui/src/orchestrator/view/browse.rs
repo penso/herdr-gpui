@@ -17,6 +17,10 @@ use gpui::{prelude::*, *};
 
 /// The most repository rows the Projects menu draws; the rest are counted.
 const MAX_ROWS: usize = 400;
+/// Where a dropdown starts under the search row, and the room it leaves
+/// below itself.
+const MENU_TOP: f32 = 120.;
+const MENU_GAP: f32 = 16.;
 
 /// A choice of the State menu, from the filters it sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,7 +145,7 @@ impl OrchestratorView {
         let theme = &self.look.theme;
         div()
             .absolute()
-            .top(px(120.))
+            .top(px(MENU_TOP))
             .right(px(16.))
             .w(px(width))
             .p_1()
@@ -314,16 +318,40 @@ impl OrchestratorView {
                 count = MAX_BROWSED
             )));
         }
+        // The space below the control bounds it, so a short window scrolls
+        // the list rather than cutting the menu off.
         deferred(crate::motion::pop_in(
-            self.menu_frame(320.).child(
-                div()
-                    .id("orchestrator-projects-list")
-                    .max_h(px(420.))
-                    .overflow_y_scroll()
-                    .flex()
-                    .flex_col()
-                    .children(rows),
-            ),
+            div()
+                .absolute()
+                .top(px(MENU_TOP))
+                .bottom(px(MENU_GAP))
+                .right(px(16.))
+                .w(px(320.))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .debug_selector(|| "orchestrator-projects-frame".to_owned())
+                        .min_h_0()
+                        .max_h(px(420.))
+                        .p_1()
+                        .flex()
+                        .flex_col()
+                        .rounded(px(corners::CONTROL))
+                        .bg(rgb(theme.surface))
+                        .border_1()
+                        .border_color(rgb(theme.active))
+                        .shadow_lg()
+                        .child(
+                            div()
+                                .id("orchestrator-projects-list")
+                                .min_h_0()
+                                .overflow_y_scroll()
+                                .flex()
+                                .flex_col()
+                                .children(rows),
+                        ),
+                ),
             "orchestrator-projects-menu",
         ))
     }
