@@ -67,6 +67,7 @@ impl Localize for Error {
             Self::RemoteUrl(url) => fl!("error-orchestrator-remote-url", url = format!("{url:?}")),
             Self::BeadsMissing => fl!("error-orchestrator-beads-missing"),
             Self::BeadId(id) => fl!("error-orchestrator-bead-id", id = format!("{id:?}")),
+            Self::Azure(error) => error.localize(),
             Self::Github(error) => error.localize(),
             Self::Gitlab(error) => error.localize(),
             Self::Cancelled => fl!("error-orchestrator-cancelled"),

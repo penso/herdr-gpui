@@ -13,7 +13,7 @@ pub enum Error {
         "The token cannot read {repository}; it needs the Code (Read) and Work Items (Read) scopes"
     )]
     Forbidden { repository: String },
-    #[error("Azure DevOps answered with something other than JSON: {0}")]
+    #[error("Azure DevOps's answer is not the expected JSON: {0}")]
     Json(#[source] serde_json::Error),
     #[error("Azure DevOps could not be reached at {origin}: {source}")]
     Network {
@@ -24,19 +24,19 @@ pub enum Error {
     },
     #[error("Azure DevOps has no repository {repository}, or the token cannot see it")]
     NotFound { repository: String },
-    #[error("Azure DevOps is limiting requests; reading again later")]
+    #[error("Azure DevOps rate limit reached; it is read again later")]
     RateLimit,
-    #[error("Could not read Azure DevOps's reply: {0}")]
+    #[error("Azure DevOps's answer could not be read: {0}")]
     Read(#[source] std::io::Error),
     #[error(
         "Sign in to read {repository}: run `az login`, or set AZURE_DEVOPS_EXT_PAT in your shell"
     )]
     SignIn { repository: String },
-    #[error("Azure DevOps's reply was larger than expected")]
+    #[error("Azure DevOps's answer exceeded the size limit")]
     Size,
-    #[error("Azure DevOps answered with status {0}")]
+    #[error("Azure DevOps request failed (HTTP {0})")]
     Status(u16),
-    #[error("The Azure DevOps token holds characters a request header cannot carry")]
+    #[error("The Azure DevOps token is not one an HTTP header can carry")]
     Token,
 }
 
