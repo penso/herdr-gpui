@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub const COMMENTS_WAIT_SECONDS: u64 = 20;
 /// How long `ports open` may wait for a new forward to listen.
 pub const FORWARD_WAIT_SECONDS: u64 = 20;
+/// How long `ports all` may wait for the first scan of this computer.
+pub const LOCAL_PORTS_WAIT_SECONDS: u64 = 20;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
@@ -35,6 +37,15 @@ pub enum HostOp {
     /// forwarding or tunnelling a remote port first.
     OpenPort {
         port: u16,
+    },
+    /// Every TCP port this computer's user listens on, as the Ports section
+    /// lists them, whichever workspace (if any) started them.
+    LocalPorts,
+    /// Signal the processes listening on `port` of this computer. Stop and
+    /// pause only open the app's confirmation: the user decides there.
+    SignalPort {
+        port: u16,
+        action: PortAction,
     },
     Usage,
     System,
@@ -73,6 +84,7 @@ impl HostOp {
         match self {
             Self::PrComments => COMMENTS_WAIT_SECONDS,
             Self::OpenPort { .. } => FORWARD_WAIT_SECONDS,
+            Self::LocalPorts => LOCAL_PORTS_WAIT_SECONDS,
             _ => 0,
         }
     }
@@ -116,6 +128,63 @@ pub struct PortInfo {
     pub process: Option<String>,
     /// Where this machine reaches it, once forwarded.
     pub local_url: Option<String>,
+}
+
+/// What the Ports section, or `ports stop|pause|resume`, does to a
+/// listening process.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PortAction {
+    /// SIGTERM, then SIGKILL if it is still running a few seconds later.
+    Stop,
+    /// SIGSTOP: the process keeps its port but stops answering.
+    Pause,
+    /// SIGCONT, for a paused process.
+    Resume,
+}
+
+impl PortAction {
+    /// The name the CLI uses.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Stop => "stop",
+            Self::Pause => "pause",
+            Self::Resume => "resume",
+        }
+    }
+}
+
+/// One listening socket of this computer, as `ports all` lists it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalPortInfo {
+    pub port: u16,
+    /// `*:3000`, `localhost:3000`, or the one address it listens on.
+    pub bind: String,
+    pub process: String,
+    pub pid: u32,
+    /// The process's working directory, from the home folder (`~/app`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uptime_seconds: Option<u64>,
+    /// Stopped by SIGSTOP (or a debugger) until resumed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
+    /// The Herdr workspace whose pane started it, when one did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+    /// Where a browser on this machine opens it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+/// Every port this computer's user listens on. Boxed in [`Reply`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalPorts {
+    pub listening: Vec<LocalPortInfo>,
+    /// Why the listing may be empty or stale, such as a failed scan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +269,7 @@ pub enum Reply {
         comments: Vec<CommentInfo>,
     },
     Ports(Box<Ports>),
+    LocalPorts(Box<LocalPorts>),
     Usage {
         host: String,
         usage: Vec<UsageInfo>,
