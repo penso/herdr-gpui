@@ -22,6 +22,7 @@ mod outside_git;
 mod pills;
 mod pr_empty;
 mod refresh;
+mod repo_name;
 mod row_start;
 mod rows;
 mod sessions;
