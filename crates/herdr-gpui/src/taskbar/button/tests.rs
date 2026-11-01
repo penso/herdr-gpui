@@ -10,8 +10,19 @@ fn label_fits_two_characters() {
 
 #[test]
 fn description_counts_agents() {
-    assert_eq!(description(1), "1 agent needs attention");
-    assert_eq!(description(3), "3 agents need attention");
+    assert_eq!(description(1), "\u{2068}1\u{2069} agent needs attention");
+    assert_eq!(description(3), "\u{2068}3\u{2069} agents need attention");
+}
+
+#[test]
+fn description_is_a_message_under_en_xa() {
+    use herdr_i18n::{Locale, Pseudo};
+    crate::i18n::show(&Pseudo::Accented.locale());
+    let shown = [description(1), description(12)];
+    crate::i18n::show(&Locale::FALLBACK);
+    for line in shown {
+        assert!(herdr_i18n::pseudo::is_marked(&line), "{line}");
+    }
 }
 
 #[test]
