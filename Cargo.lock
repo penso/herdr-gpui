@@ -2919,9 +2919,9 @@ dependencies = [
 
 [[package]]
 name = "font-types"
-version = "0.12.6"
+version = "0.12.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c92d9081c7ab3bd83ef1eecdfad090f3d966e3ce74106779664114cfe1a6274"
+checksum = "835ae9d781464a79026cde387f9cbc650c9a4909d7cf7e658b127e3c35d2f35d"
 dependencies = [
  "bytemuck",
 ]
@@ -5040,7 +5040,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "sha2 0.11.1",
- "skrifa 0.48.0",
+ "skrifa 0.49.0",
  "socket2",
  "syntect",
  "sysinfo 0.39.6",
@@ -8881,13 +8881,15 @@ dependencies = [
 
 [[package]]
 name = "read-fonts"
-version = "0.45.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a5b7bed3d16ab428d8fa533640ab805ff50e7ad8a4d00649de1259e70023282"
+checksum = "bdaa4fffe9ff3ca2c353fa9729792805b9b3e324695ff5a081f860612e81b330"
 dependencies = [
  "bytemuck",
- "font-types 0.12.6",
+ "foldhash 0.2.0",
+ "font-types 0.12.7",
  "once_cell",
+ "smallvec",
  "yoke",
 ]
 
@@ -9810,12 +9812,15 @@ dependencies = [
 
 [[package]]
 name = "skrifa"
-version = "0.48.0"
+version = "0.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5213b4825bac3587046330052d61bfac7bd3bd0d203c758d7c2ef726fcea034"
+checksum = "a7459fb60888ad9a5f367dd293fa2fb9df142cb451aa6bfd6cd66a7d6a9b739d"
 dependencies = [
  "bytemuck",
- "read-fonts 0.45.0",
+ "once_cell",
+ "read-fonts 0.46.0",
+ "smallvec",
+ "yoke",
 ]
 
 [[package]]
