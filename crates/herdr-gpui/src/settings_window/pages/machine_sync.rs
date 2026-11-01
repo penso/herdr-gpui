@@ -24,15 +24,16 @@ use std::time::SystemTime;
 #[derive(Default)]
 pub(in crate::settings_window) struct MachineSyncSettings {
     pub(in crate::settings_window) address: Option<Entity<SearchInput>>,
-    name: Option<Entity<SearchInput>>,
+    pub(in crate::settings_window) name: Option<Entity<SearchInput>>,
     /// Turning sync on waits for the user to confirm what it changes.
     pub(in crate::settings_window) confirming: bool,
     /// The address or name typed could not be saved, and why.
     pub(in crate::settings_window) invalid: Option<String>,
-    /// The suggestion the fields were filled with while sync was off, so a
-    /// better one replaces only what the user has not edited.
+    /// What the fields were last filled with, saved or guessed, so the saved
+    /// state or a better guess arriving later replaces only what the user
+    /// has not edited.
     filled: Option<Suggestion>,
-    /// Watches for that better suggestion while the page shows.
+    /// Watches for the saved state or a better guess while the page shows.
     watch: Option<Subscription>,
 }
 
@@ -84,6 +85,18 @@ impl Snapshot {
                         .join(", ")
                 }),
         }
+    }
+}
+
+/// What the fields show: the saved address and name while sync is on, or
+/// the best guess at this computer's while it is off.
+fn fill(sync: &MachineSync) -> Option<Suggestion> {
+    match sync.state() {
+        Some(state) => Some(Suggestion {
+            address: state.target.clone(),
+            name: state.label.clone(),
+        }),
+        None => sync.suggestion().cloned(),
     }
 }
 
@@ -145,16 +158,15 @@ impl SettingsWindow {
         }
     }
 
-    /// A suggestion arrived, such as this computer's Tailscale name: it
-    /// replaces each field the user has not changed from the last one.
-    fn update_machine_sync_suggestion(&mut self, cx: &mut Context<Self>) {
-        let Some(sync) = cx.try_global::<MachineSync>() else {
-            return;
-        };
-        if sync.state().is_some() {
-            return;
-        }
-        let Some(new) = sync.suggestion().cloned() else {
+    /// The saved state finished loading, or a suggestion arrived, such as
+    /// this computer's Tailscale name: it replaces each field the user has
+    /// not changed from what it was filled with. The saved state wins over
+    /// any guess, so one shown before the read finished is never saved.
+    pub(in crate::settings_window) fn update_machine_sync_suggestion(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(new) = cx.try_global::<MachineSync>().and_then(fill) else {
             return;
         };
         let Some(old) = self.machines.filled.replace(new.clone()) else {
@@ -176,25 +188,14 @@ impl SettingsWindow {
     /// The address and name fields, filled from the saved state, or with a
     /// guess at this computer's while sync is off.
     pub(in crate::settings_window) fn make_machine_sync_fields(&mut self, cx: &mut Context<Self>) {
-        let state = cx
+        let filled = cx
             .try_global::<MachineSync>()
-            .and_then(MachineSync::state)
-            .cloned();
-        let (address, name) = match state {
-            Some(state) => (state.target, state.label),
-            None => {
-                let suggestion = cx
-                    .try_global::<MachineSync>()
-                    .and_then(MachineSync::suggestion)
-                    .cloned()
-                    .unwrap_or_else(Suggestion::local);
-                let fields = (suggestion.address.clone(), suggestion.name.clone());
-                if self.machines.address.is_none() {
-                    self.machines.filled = Some(suggestion);
-                }
-                fields
-            }
-        };
+            .and_then(fill)
+            .unwrap_or_else(Suggestion::local);
+        let (address, name) = (filled.address.clone(), filled.name.clone());
+        if self.machines.address.is_none() {
+            self.machines.filled = Some(filled);
+        }
         let field = |text: String, placeholder: &str, cx: &mut Context<Self>| {
             let input = cx.new(SearchInput::new);
             input.update(cx, |input, cx| {
@@ -217,11 +218,15 @@ impl SettingsWindow {
         self.sync_machine_sync_fields(cx);
     }
 
-    /// The page went away.
+    /// The page went away. Its fields go too, so reopening it fills them
+    /// again from the state it rereads.
     pub(in crate::settings_window) fn close_machine_sync(&mut self) {
         self.machines.confirming = false;
         self.machines.invalid = None;
         self.machines.watch = None;
+        self.machines.address = None;
+        self.machines.name = None;
+        self.machines.filled = None;
     }
 
     pub(in crate::settings_window) fn sync_machine_sync_fields(&mut self, cx: &mut Context<Self>) {

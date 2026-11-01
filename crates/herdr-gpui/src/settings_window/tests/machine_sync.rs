@@ -95,3 +95,34 @@ fn while_on_each_device_shows_its_checkbox_and_sync_now(cx: &mut TestAppContext)
         assert_eq!(address, "me@laptop");
     });
 }
+
+fn field(view: &Entity<SettingsWindow>, name: bool, cx: &mut VisualTestContext) -> String {
+    view.read_with(cx, |view, cx| {
+        let input = if name {
+            &view.machines.name
+        } else {
+            &view.machines.address
+        };
+        input.as_ref().unwrap().read(cx).text().to_owned()
+    })
+}
+
+#[gpui::test]
+fn the_saved_state_replaces_a_guess_shown_before_it_loaded(cx: &mut TestAppContext) {
+    // The page opened before the read finished, so it shows a guess.
+    let (view, cx) = page(MachineSync::fixture(None, vec![host(2)]), cx);
+    type_address(&view, "edited@laptop", cx);
+    let state = SyncState::new(format!("{:032x}", 1), "laptop".into(), "me@laptop".into()).unwrap();
+    cx.update(|_, cx| cx.set_global(MachineSync::fixture(Some(state), vec![host(2)])));
+    view.update(cx, |view, cx| view.update_machine_sync_suggestion(cx));
+    // The untouched name takes the saved one; the edited address is kept.
+    assert_eq!(field(&view, true, cx), "laptop");
+    assert_eq!(field(&view, false, cx), "edited@laptop");
+
+    // Reopening the page drops the edit and shows what is saved.
+    view.update(cx, |view, cx| {
+        view.close_machine_sync();
+        view.make_machine_sync_fields(cx);
+    });
+    assert_eq!(field(&view, false, cx), "me@laptop");
+}
