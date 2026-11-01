@@ -1,4 +1,5 @@
-//! Pills narrow a list of several repositories by backend and by project.
+//! Pills narrow a list of several repositories by backend, and the projects
+//! menu by project.
 use super::*;
 use crate::orchestrator::{
     Request, Timing,
@@ -88,7 +89,27 @@ fn pills_narrow_the_list_by_backend_and_by_project(cx: &mut TestAppContext) {
     assert_eq!(listed(cx), ["12", "hg-1", "377"]);
     click(cx, "orchestrator-pill-backend-Beads");
     click(cx, "orchestrator-pill-backend-GitHub");
-    // A project narrows to its repository's items.
-    click(cx, "orchestrator-pill-project-1");
+    // Projects are no pills: they narrow through their own menu.
+    assert!(cx.debug_bounds("orchestrator-pill-project-0").is_none());
+    let label =
+        |cx: &mut gpui::VisualTestContext| cx.update(|_, cx| view.read(cx).project_filter_label());
+    // Every project, until some are picked.
+    assert_eq!(label(cx), "All projects");
+    click(cx, "orchestrator-project-filter");
+    click(cx, "orchestrator-project-filter-1");
     assert_eq!(listed(cx), ["12"]);
+    assert_eq!(label(cx), "site");
+    click(cx, "orchestrator-project-filter-0");
+    assert_eq!(listed(cx), ["12", "hg-1", "377"]);
+    assert_eq!(
+        label(cx).replace(['\u{2068}', '\u{2069}'], ""),
+        "2 projects"
+    );
+    click(cx, "orchestrator-project-filter-0");
+    assert_eq!(listed(cx), ["12"]);
+    // All projects clears the picks.
+    click(cx, "orchestrator-project-filter-all");
+    assert_eq!(listed(cx), ["12", "hg-1", "377"]);
+    assert_eq!(label(cx), "All projects");
+    assert!(cx.update(|_, cx| view.read(cx).picked_projects().is_empty()));
 }

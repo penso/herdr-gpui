@@ -190,15 +190,18 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
     click(cx, "orchestrator-state");
     click(cx, "orchestrator-state-merged");
     assert_eq!(listed(&view, cx), ["contoso/Fabrikam/api!2"]);
-    // The organization's pill narrows to its reader's own.
+    // The organization, picked in the projects menu, narrows to its
+    // reader's own.
     click(cx, "orchestrator-state");
     click(cx, "orchestrator-state-all");
-    click(cx, "orchestrator-pill-project-1");
+    click(cx, "orchestrator-project-filter");
+    click(cx, "orchestrator-project-filter-1");
     assert_eq!(
         listed(&view, cx),
         ["contoso/Fabrikam/web!1", "contoso/Fabrikam/api!2"]
     );
-    click(cx, "orchestrator-pill-project-1");
+    click(cx, "orchestrator-project-filter-all");
+    click(cx, "orchestrator-project-filter");
 
     // Picking a repository in the Projects menu lists it with no checkout;
     // picking it again stops.
@@ -211,9 +214,11 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
     assert!(!keys(cx).iter().any(|key| key == browsed));
     click(cx, "orchestrator-projects-repo-contoso/Fabrikam/api");
     click(cx, "orchestrator-projects");
-    assert!(cx.debug_bounds("orchestrator-projects-menu").is_none());
-    // Its pill closes it too.
-    click(cx, "orchestrator-pill-close-2");
+    assert!(cx.debug_bounds("orchestrator-projects-frame").is_none());
+    // Its row in the projects menu closes it too.
+    click(cx, "orchestrator-project-filter");
+    click(cx, "orchestrator-project-filter-close-2");
+    click(cx, "orchestrator-project-filter");
     assert!(!keys(cx).iter().any(|key| key == browsed));
 
     // Repositories without a checkout outlast the checkouts' changes, and

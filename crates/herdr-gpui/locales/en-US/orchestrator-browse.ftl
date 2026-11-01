@@ -11,7 +11,7 @@ orchestrator-browse-state-merged = Merged
 orchestrator-browse-state-closed = Closed or abandoned
 
 # The control that opens the Projects menu.
-orchestrator-browse-projects = Projects
+orchestrator-browse-projects = Browse
 # A menu row's button that reads the organization's projects again.
 orchestrator-browse-projects-refresh = Read { $organization }'s projects again
 orchestrator-browse-projects-loading = Reading projects…
@@ -20,5 +20,3 @@ orchestrator-browse-projects-empty = No repositories
 orchestrator-browse-projects-more = { $count } more repositories not shown
 # Under the list once as many repositories are listed as one view keeps.
 orchestrator-browse-projects-full = { $count } repositories are listed; remove one to add another
-# A browsed repository's pill button that stops listing it.
-orchestrator-browse-projects-remove = Stop listing { $repository }

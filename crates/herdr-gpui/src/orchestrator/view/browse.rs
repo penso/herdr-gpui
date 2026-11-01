@@ -86,7 +86,7 @@ impl OrchestratorView {
     }
 
     /// A dropdown's control: its text and a chevron.
-    fn menu_control(&self, id: &'static str, menu: Menu, text: String) -> Stateful<Div> {
+    pub(super) fn menu_control(&self, id: &'static str, menu: Menu, text: String) -> Stateful<Div> {
         let look = &self.look;
         let theme = &look.theme;
         let open = self.menu == Some(menu);
@@ -142,7 +142,7 @@ impl OrchestratorView {
     }
 
     /// A dropdown's frame under the search row.
-    fn menu_frame(&self, width: f32) -> Div {
+    pub(super) fn menu_frame(&self, width: f32) -> Div {
         let theme = &self.look.theme;
         div()
             .absolute()
@@ -159,8 +159,43 @@ impl OrchestratorView {
             .shadow_lg()
     }
 
+    /// A dropdown whose `list` scrolls inside the space between its control
+    /// and the view's bottom edge, at most 420 px, so a short window does
+    /// not cut it off. `list` should carry `min_h_0` to shrink.
+    pub(super) fn bounded_menu(
+        &self,
+        width: f32,
+        selector: &'static str,
+        list: impl IntoElement,
+    ) -> Div {
+        let theme = &self.look.theme;
+        div()
+            .absolute()
+            .top(px(MENU_TOP))
+            .bottom(px(MENU_GAP))
+            .right(px(16.))
+            .w(px(width))
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .debug_selector(move || selector.to_owned())
+                    .min_h_0()
+                    .max_h(px(420.))
+                    .p_1()
+                    .flex()
+                    .flex_col()
+                    .rounded(px(corners::CONTROL))
+                    .bg(rgb(theme.surface))
+                    .border_1()
+                    .border_color(rgb(theme.active))
+                    .shadow_lg()
+                    .child(list),
+            )
+    }
+
     /// A row of a dropdown, with the wash while it is the one picked.
-    fn menu_row(&self, id: SharedString, on: bool) -> Stateful<Div> {
+    pub(super) fn menu_row(&self, id: SharedString, on: bool) -> Stateful<Div> {
         let theme = &self.look.theme;
         let hover = theme.active;
         let selector = id.to_string();
@@ -351,40 +386,18 @@ impl OrchestratorView {
                 count = MAX_BROWSED
             )));
         }
-        // The space below the control bounds it, so a short window scrolls
-        // the list rather than cutting the menu off.
         deferred(crate::motion::pop_in(
-            div()
-                .absolute()
-                .top(px(MENU_TOP))
-                .bottom(px(MENU_GAP))
-                .right(px(16.))
-                .w(px(320.))
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .debug_selector(|| "orchestrator-projects-frame".to_owned())
-                        .min_h_0()
-                        .max_h(px(420.))
-                        .p_1()
-                        .flex()
-                        .flex_col()
-                        .rounded(px(corners::CONTROL))
-                        .bg(rgb(theme.surface))
-                        .border_1()
-                        .border_color(rgb(theme.active))
-                        .shadow_lg()
-                        .child(
-                            div()
-                                .id("orchestrator-projects-list")
-                                .min_h_0()
-                                .overflow_y_scroll()
-                                .flex()
-                                .flex_col()
-                                .children(rows),
-                        ),
-                ),
+            self.bounded_menu(
+                320.,
+                "orchestrator-projects-frame",
+                div()
+                    .id("orchestrator-projects-list")
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .children(rows),
+            ),
             "orchestrator-projects-menu",
         ))
     }

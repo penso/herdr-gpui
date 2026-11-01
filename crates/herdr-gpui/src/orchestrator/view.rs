@@ -19,6 +19,7 @@ mod look;
 mod markdown;
 pub(crate) mod pane;
 mod pills;
+mod projects;
 mod pull;
 mod remote;
 mod repo;
@@ -89,7 +90,10 @@ const REFRESH_GRACE: Duration = Duration::from_millis(1500);
 pub(crate) enum Menu {
     Sort,
     State,
+    /// Browsing Azure DevOps organizations.
     Projects,
+    /// Which listed projects the list shows.
+    Repos,
 }
 
 /// The detail page of one item.

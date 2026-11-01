@@ -65,6 +65,9 @@ impl OrchestratorView {
             .when(self.menu == Some(Menu::Projects), |el| {
                 el.child(self.render_projects_menu(cx))
             })
+            .when(self.menu == Some(Menu::Repos), |el| {
+                el.child(self.render_project_filter_menu(cx))
+            })
             .into_any_element()
     }
 
@@ -449,6 +452,7 @@ impl OrchestratorView {
             ),
             Tab::Issues => (None, None),
         };
+        let project_filter = self.render_project_filter_control(cx);
         let toggle = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Self)| {
             look.toggle(id, label, on)
                 .debug_selector(move || id.to_owned())
@@ -528,7 +532,7 @@ impl OrchestratorView {
                     .children(projects);
             }
         }
-        row.child(
+        row.children(project_filter).child(
             div()
                 .id("orchestrator-sort")
                 .flex_none()
