@@ -75,15 +75,20 @@ fn replacing_removes_only_the_hosts_old_key_and_appends_the_new_one() {
     let known = known(&user, &root.path().join("missing"));
     let trusted = trusted_keys(&known).unwrap();
     replace_host_key(&changed(known, trusted)).unwrap();
-    assert_eq!(
-        std::fs::read_to_string(&user).unwrap(),
-        format!("{OTHER_KEY}{NEW_ENTRY}")
-    );
+    // Windows' `ssh-keygen -R` rewrites the lines it keeps with CRLF, which
+    // OpenSSH reads the same, so lines are compared without their endings.
+    let lines = |path: &Path| -> Vec<String> {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(lines(&user), [OTHER_KEY.trim_end(), NEW_ENTRY.trim_end()]);
     // `ssh-keygen -R` keeps the file as it was.
-    let backup = root.path().join("known_hosts.old");
     assert_eq!(
-        std::fs::read_to_string(backup).unwrap(),
-        format!("{OTHER_KEY}{BOX_KEY}")
+        lines(&root.path().join("known_hosts.old")),
+        [OTHER_KEY.trim_end(), BOX_KEY.trim_end()]
     );
 }
 
