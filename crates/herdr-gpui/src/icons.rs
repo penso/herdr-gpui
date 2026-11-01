@@ -275,6 +275,7 @@ embedded_icons! {
     "arrow-right.svg",
     "arrow-up.svg",
     "automations.svg",
+    "azure-devops.svg",
     "beads.svg",
     "bell-off.svg",
     "bell.svg",

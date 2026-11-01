@@ -2,6 +2,7 @@ use super::*;
 use chrono::{DateTime, Utc};
 
 mod actions;
+mod azure;
 mod beads;
 mod beads_only;
 #[cfg(unix)]

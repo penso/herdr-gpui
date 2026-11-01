@@ -743,6 +743,7 @@ pub(super) fn failure_text(provider: Provider, error: &impl std::fmt::Display) -
 
 pub(super) fn provider_name(provider: Provider) -> &'static str {
     match provider {
+        Provider::Azure => "Azure DevOps",
         Provider::Github => "GitHub",
         Provider::Beads => "Beads",
         Provider::Gitlab => "GitLab",
@@ -768,9 +769,12 @@ fn source_chip(look: &Look, id: (&'static str, usize), provider: Provider) -> St
         .child(provider_name(provider))
 }
 
-/// A backend's mark: GitHub's or GitLab's logo, else a short colored tag.
+/// A backend's mark: its forge's logo, else a short colored tag.
 pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
     match provider {
+        Provider::Azure => look
+            .icon("icons/azure-devops.svg", 12., look.theme.subtext())
+            .into_any_element(),
         Provider::Github => look
             .icon("icons/github.svg", 12., look.theme.subtext())
             .into_any_element(),

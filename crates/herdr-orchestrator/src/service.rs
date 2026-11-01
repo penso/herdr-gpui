@@ -6,7 +6,7 @@
 use super::{
     Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
     actions::{Action, Site},
-    beads, database_path, github, gitlab,
+    azure, beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -30,6 +30,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod azure_source;
 mod gitlab_source;
 mod sources;
 
@@ -72,6 +73,8 @@ pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
             herdr_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
+        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Azure(_) => BACKOFF,
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
         Error::Gitlab(_) => BACKOFF,
         _ => return BACKOFF,
@@ -230,6 +233,7 @@ impl Service {
             retry: Vec::new(),
             uncached: HashMap::new(),
             resume: HashMap::new(),
+            azure_token: None,
             gitlab_token: None,
             cooldown: None,
         };
@@ -313,6 +317,9 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
+    /// The Azure DevOps token, once looked up; Refresh and a refusal look
+    /// again, so a new `az login` is picked up without reopening the view.
+    azure_token: Option<Option<azure::token::Token>>,
     cooldown: Option<Duration>,
 }
 
@@ -336,6 +343,7 @@ impl Worker {
                 Ok(Command::Refresh(token)) => {
                     self.request.token = token;
                     self.gitlab_token = None;
+                    self.azure_token = None;
                     self.retry.clear();
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
@@ -883,6 +891,7 @@ impl Worker {
                     count,
                 })
             }
+            Provider::Azure => self.sync_azure(key, writable),
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;

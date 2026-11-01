@@ -56,6 +56,7 @@ pub(super) fn statuses(info: &RepoInfo) -> Vec<SourceStatus> {
 pub fn sources(info: &RepoInfo) -> Vec<(SourceKey, bool)> {
     let remote = info.remote.as_ref().map(|remote| {
         let supported = match remote.source.provider {
+            Provider::Azure => true,
             Provider::Github => remote.source.host == "github.com",
             Provider::Gitlab => true,
             Provider::Beads => false,
