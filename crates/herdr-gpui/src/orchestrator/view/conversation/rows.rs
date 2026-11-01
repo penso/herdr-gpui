@@ -7,6 +7,7 @@
 
 use super::{Entry, Summary, entries, summary, thread_key};
 use crate::{
+    i18n::fl,
     orchestrator::view::look::{GREEN, MAGENTA, RED},
     pr_actions::{Comment, CommentKind, Review},
     release_notes::{self, Line},
@@ -85,7 +86,7 @@ pub(super) enum Piece {
     /// first thread when its author left no review.
     Reviewed {
         lead: Rc<Comment>,
-        verdict: Option<(&'static str, usize)>,
+        verdict: Option<(String, usize)>,
         threads: usize,
     },
     /// A resolved thread folded to a line.
@@ -214,7 +215,7 @@ impl Rows {
         }
         if let Some(comments) = comments {
             rows.push(wide(if comments.is_empty() {
-                Piece::Notice("No comments yet.".into())
+                Piece::Notice(fl!("orchestrator-no-comments"))
             } else {
                 Piece::Summary(summary(comments))
             }));
@@ -256,11 +257,18 @@ impl Rows {
             return;
         };
         let verdict = review.and_then(|review| match review.kind {
-            CommentKind::Review(Review::Approved) => Some(("approved", GREEN)),
-            CommentKind::Review(Review::ChangesRequested) => Some(("changes requested", RED)),
-            CommentKind::Review(Review::Dismissed) => Some(("dismissed", MAGENTA)),
+            CommentKind::Review(Review::Approved) => {
+                Some((fl!("orchestrator-review-approved"), GREEN))
+            }
+            CommentKind::Review(Review::ChangesRequested) => {
+                Some((fl!("orchestrator-review-changes"), RED))
+            }
+            CommentKind::Review(Review::Dismissed) => {
+                Some((fl!("orchestrator-review-dismissed"), MAGENTA))
+            }
             _ => None,
         });
+        let hue = verdict.as_ref().map(|(_, hue)| *hue);
         rows.push(Row {
             piece: Piece::Reviewed {
                 lead: Rc::new(lead.clone()),
@@ -272,7 +280,7 @@ impl Rows {
             gap: ENTRY_GAP,
         });
         if let Some(review) = review.filter(|review| !review.source.trim().is_empty()) {
-            self.body(rows, review, verdict.map(|(_, hue)| hue), true);
+            self.body(rows, review, hue, true);
         }
         for thread in threads {
             let resolved = matches!(thread.kind, CommentKind::Thread { resolved: true, .. });

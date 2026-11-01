@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
     config::{corners, mix},
+    i18n::fl,
     pr_actions::{self, Comment, CommentKind, Review},
     pull_request::State,
     release_notes,
@@ -154,19 +155,12 @@ pub(super) fn summary(comments: &[Comment]) -> Summary {
     summary
 }
 
-/// "2h ago" from an RFC 3339 time, or nothing when it does not parse.
+/// "2 h ago" from an RFC 3339 time, or nothing when it does not parse.
 pub(super) fn ago(at: &str, now: chrono::DateTime<chrono::Utc>) -> String {
-    let at = chrono::DateTime::parse_from_rfc3339(at)
+    chrono::DateTime::parse_from_rfc3339(at)
         .ok()
-        .map(|at| at.with_timezone(&chrono::Utc));
-    match super::look::age(at, now) {
-        age if age.is_empty() || age == "now" => age,
-        age => format!("{age} ago"),
-    }
-}
-
-fn plural(count: usize, one: &str, many: &str) -> String {
-    format!("{count} {}", if count == 1 { one } else { many })
+        .map(|at| super::look::ago(Some(at.with_timezone(&chrono::Utc)), now))
+        .unwrap_or_default()
 }
 
 /// Avatars by URL: `None` while being read or when none could be.
@@ -215,10 +209,7 @@ impl OrchestratorView {
 
     pub(super) fn render_conversation(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let (notice, comments) = if self.request().is_none_or(|request| request.token.is_none()) {
-            (
-                Some("Sign in to GitHub to read the conversation.".to_owned()),
-                None,
-            )
+            (Some(fl!("orchestrator-conversation-sign-in")), None)
         } else if let Some(error) = self.pr.comments_error() {
             (Some(error.to_owned()), None)
         } else if let Some(comments) = self.pr.comments() {
@@ -230,7 +221,7 @@ impl OrchestratorView {
                 .and_then(|detail| self.item(&detail.key))
                 .and_then(|item| self.lookup_problem(item));
             (
-                Some(problem.unwrap_or_else(|| "Reading the conversation\u{2026}".to_owned())),
+                Some(problem.unwrap_or_else(|| fl!("orchestrator-conversation-reading"))),
                 None,
             )
         };
@@ -273,21 +264,16 @@ impl OrchestratorView {
                 .px_3()
                 .py(px(6.))
                 .bg(rgb(look.theme.surface))
-                .child(self.header(comment, "commented", None)),
+                .child(self.header(comment, &fl!("orchestrator-commented"), None)),
             Piece::Reviewed {
                 lead,
                 verdict,
                 threads,
             } => {
-                let action = if *threads == 0 {
-                    "reviewed".to_owned()
-                } else {
-                    format!(
-                        "reviewed \u{00b7} {}",
-                        plural(*threads, "comment", "comments")
-                    )
-                };
-                div().pt(px(6.)).child(self.header(lead, &action, *verdict))
+                let action = fl!("orchestrator-reviewed", count = *threads);
+                div()
+                    .pt(px(6.))
+                    .child(self.header(lead, &action, verdict.clone()))
             }
             Piece::Folded { thread, key } => self.render_folded(thread, key.clone(), cx),
             Piece::Thread(thread) => self.render_thread_bar(thread),
@@ -303,7 +289,9 @@ impl OrchestratorView {
                     &look.theme,
                     &look.mono,
                 )),
-            Piece::Empty => div().p_3().child(look.muted("No description provided.")),
+            Piece::Empty => div()
+                .p_3()
+                .child(look.muted(fl!("orchestrator-no-description"))),
             Piece::Composer => self.render_composer(cx),
         };
         let content = self
@@ -365,15 +353,35 @@ impl OrchestratorView {
     fn render_summary(&self, summary: &Summary) -> Div {
         let look = &self.look;
         let badges = [
-            (summary.approved, "approved", "approved", GREEN),
+            (
+                summary.approved,
+                fl!("orchestrator-summary-approved", count = summary.approved),
+                GREEN,
+            ),
             (
                 summary.changes_requested,
-                "requested changes",
-                "requested changes",
+                fl!(
+                    "orchestrator-summary-changes",
+                    count = summary.changes_requested
+                ),
                 RED,
             ),
-            (summary.open_threads, "open thread", "open threads", YELLOW),
-            (summary.resolved_threads, "resolved", "resolved", BLUE),
+            (
+                summary.open_threads,
+                fl!(
+                    "orchestrator-summary-open-threads",
+                    count = summary.open_threads
+                ),
+                YELLOW,
+            ),
+            (
+                summary.resolved_threads,
+                fl!(
+                    "orchestrator-summary-resolved",
+                    count = summary.resolved_threads
+                ),
+                BLUE,
+            ),
         ];
         div()
             .flex()
@@ -389,13 +397,13 @@ impl OrchestratorView {
                 badges
                     .into_iter()
                     .filter(|(count, ..)| *count > 0)
-                    .map(|(count, one, many, hue)| look.badge(plural(count, one, many), hue)),
+                    .map(|(_, text, hue)| look.badge(text, hue)),
             )
             .child(div().flex_1())
-            .child(look.muted(format!(
-                "{} from {}",
-                plural(summary.comments, "comment", "comments"),
-                plural(summary.people, "person", "people")
+            .child(look.muted(fl!(
+                "orchestrator-summary-comments",
+                comments = summary.comments,
+                people = summary.people
             )))
     }
 
@@ -405,18 +413,7 @@ impl OrchestratorView {
         let CommentKind::Thread { path, replies, .. } = &thread.kind else {
             return div();
         };
-        let mut detail = String::new();
-        if *replies > 0 {
-            detail = format!(
-                "{} \u{00b7} ",
-                plural(
-                    usize::try_from(*replies).unwrap_or(usize::MAX),
-                    "reply",
-                    "replies"
-                )
-            );
-        }
-        detail.push_str("Show");
+        let detail = fl!("orchestrator-thread-show", replies = *replies);
         div().child(
             div()
                 .id("orchestrator-thread-folded")
@@ -430,7 +427,11 @@ impl OrchestratorView {
                 .text_size(look.small())
                 .cursor_pointer()
                 .child(div().text_color(rgb(look.hue(GREEN))).child("\u{2713}"))
-                .child(div().text_color(rgb(theme.subtext())).child("Resolved"))
+                .child(
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("orchestrator-thread-resolved")),
+                )
                 .child(self.path(path))
                 .child(div().flex_1())
                 .child(look.muted(detail))
@@ -452,9 +453,9 @@ impl OrchestratorView {
             return div();
         };
         let (state, hue) = if *resolved {
-            ("resolved", GREEN)
+            (fl!("orchestrator-thread-state-resolved"), GREEN)
         } else {
-            ("open", YELLOW)
+            (fl!("orchestrator-thread-state-open"), YELLOW)
         };
         div()
             .px_3()
@@ -466,11 +467,7 @@ impl OrchestratorView {
             .child(self.path(path))
             .child(div().flex_1())
             .when(*replies > 0, |el| {
-                el.child(look.muted(plural(
-                    usize::try_from(*replies).unwrap_or(usize::MAX),
-                    "reply",
-                    "replies",
-                )))
+                el.child(look.muted(fl!("orchestrator-replies", count = *replies)))
             })
             .child(look.badge(state, hue))
     }
@@ -497,19 +494,18 @@ impl OrchestratorView {
             .child(match busy {
                 Some(label) => look.muted(label).into_any_element(),
                 None => look
-                    .button("orchestrator-comment-send", "Comment", false)
+                    .button(
+                        "orchestrator-comment-send",
+                        fl!("orchestrator-comment"),
+                        false,
+                    )
                     .on_click(cx.listener(|this, _, _, cx| this.post_comment(cx)))
                     .into_any_element(),
             })
     }
 
     /// The author, a bot tag, what they did, a verdict, and when.
-    fn header(
-        &self,
-        comment: &Comment,
-        action: &str,
-        verdict: Option<(&'static str, usize)>,
-    ) -> Div {
+    fn header(&self, comment: &Comment, action: &str, verdict: Option<(String, usize)>) -> Div {
         let look = &self.look;
         div()
             .flex()
@@ -532,7 +528,7 @@ impl OrchestratorView {
                         .border_color(rgb(look.theme.active))
                         .text_size(look.tiny())
                         .text_color(rgb(look.theme.muted))
-                        .child("bot"),
+                        .child(fl!("orchestrator-bot")),
                 )
             })
             .child(look.muted(action.to_owned()).min_w_0().truncate())

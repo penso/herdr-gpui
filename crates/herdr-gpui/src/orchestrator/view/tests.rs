@@ -11,6 +11,7 @@ mod conversation;
 mod conversation_list;
 mod dialog;
 mod empty;
+mod en_xa;
 mod failure_text;
 mod gitlab_merge_request;
 mod groups;

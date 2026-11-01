@@ -12,7 +12,7 @@ fn busy_new_shell_keeps_its_worktree_and_sends_exactly_one_prompt_when_ready() {
             &AtomicBool::new(false),
         )
         .unwrap(),
-        "Agent started"
+        crate::actions::Done::Started
     );
     let calls = calls(dir.path());
     assert_eq!(

@@ -56,12 +56,16 @@ fn a_pull_request_says_which_checks_fail_and_what_blocks_the_merge(cx: &mut Test
     cx.update(|_, cx| {
         let view = view.read(cx);
         let rows = view.pull_request_rows(&pr);
-        let titles: Vec<&str> = rows.iter().map(|row| row.title.as_ref()).collect();
+        let plain = |text: &str| text.replace(['\u{2068}', '\u{2069}'], "");
+        let titles: Vec<String> = rows.iter().map(|row| plain(&row.title)).collect();
         assert_eq!(
             titles,
             ["1 of 3 checks failing", "Review required", "Merge blocked"]
         );
         assert_eq!(rows[0].detail.as_deref(), Some("ci/lint"));
-        assert_eq!(rows[2].detail.as_deref(), Some("Open into main"));
+        assert_eq!(
+            rows[2].detail.as_deref().map(plain).as_deref(),
+            Some("Open into main")
+        );
     });
 }

@@ -4,7 +4,10 @@
 //! own, such as template comments and image tags, which is dropped first.
 //! Parsing happens once per body; a repaint reuses the lines.
 
-use crate::release_notes::{self, Line};
+use crate::{
+    i18n::fl,
+    release_notes::{self, Line},
+};
 use std::{cell::RefCell, rc::Rc};
 
 /// Tags dropped with their brackets; their text, if any, stays.
@@ -13,8 +16,14 @@ const DROPPED: &[&str] = &[
     "ol", "p", "picture", "pre", "source", "span", "strong", "sub", "summary", "sup", "table",
     "tbody", "td", "th", "thead", "tr", "ul",
 ];
-/// Tags that stand for media, kept as a word.
-const MEDIA: &[(&str, &str)] = &[("img", "[image]"), ("video", "[video]")];
+/// The word a tag that stands for media is kept as.
+fn media(tag: &str) -> Option<String> {
+    match tag {
+        "img" => Some(fl!("orchestrator-markdown-image")),
+        "video" => Some(fl!("orchestrator-markdown-video")), // i18n: data
+        _ => None,
+    }
+}
 /// The longest tag looked at; anything longer is left as text.
 const MAX_TAG: usize = 1024;
 
@@ -122,8 +131,8 @@ fn prose_without_html(body: &str) -> String {
             .take_while(char::is_ascii_alphanumeric)
             .collect::<String>()
             .to_ascii_lowercase();
-        if let Some((_, word)) = MEDIA.iter().find(|(tag, _)| *tag == name) {
-            out.push_str(word);
+        if let Some(word) = media(&name) {
+            out.push_str(&word);
         } else if name == "br" {
             out.push('\n');
         } else if !DROPPED.contains(&name.as_str()) {
