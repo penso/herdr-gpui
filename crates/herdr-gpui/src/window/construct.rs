@@ -207,6 +207,7 @@ impl HerdrWindow {
             integrations: Default::default(),
             key_layout: prefix::current_layout,
             key_press: function_keys::current_press,
+            landing_launch: None,
             last_input: None,
             last_pointer: None,
             last_queued_options: None,

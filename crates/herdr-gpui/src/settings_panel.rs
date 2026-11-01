@@ -1,6 +1,14 @@
 //! Herdr's shared settings as this window loaded them, read off the UI thread.
-use crate::{HerdrWindow, herdr_settings::Settings};
+// i18n: migrated
+use crate::{
+    HerdrWindow,
+    herdr_settings::Settings,
+    i18n::{Localize, fl},
+};
 use gpui::*;
+
+/// The theme setting's value that shows the daemon's theme.
+const FOLLOW_HERDR: &str = "Follow Herdr"; // i18n: data
 
 #[derive(Default)]
 pub(crate) struct SettingsPanel {
@@ -39,7 +47,8 @@ impl HerdrWindow {
                         this.reload_notification_config(cx);
                     }
                     Err(error) => {
-                        this.settings.error = Some(format!("Load Herdr settings: {error}"));
+                        this.settings.error =
+                            Some(fl!("settings-panel-load-failed", error = error.localize()));
                     }
                 }
                 cx.notify();
@@ -59,7 +68,7 @@ impl HerdrWindow {
     }
 
     pub(crate) fn apply_shared_theme(&mut self, cx: &mut Context<Self>) {
-        if self.config.theme == "Follow Herdr"
+        if self.config.theme == FOLLOW_HERDR
             && self.menu.page != Some(crate::menu::Page::Themes)
             && !self.theme_save_in_flight()
             && let Some(shared) = &self.settings.shared
@@ -73,14 +82,14 @@ impl HerdrWindow {
                     self.theme = theme.styled_for(&self.config);
                     if let Some(mut appearance) =
                         cx.try_global::<crate::app::InitialAppearance>().cloned()
-                        && appearance.config.theme == "Follow Herdr"
+                        && appearance.config.theme == FOLLOW_HERDR
                     {
                         appearance.theme = self.theme.clone();
                         cx.set_global(appearance);
                     }
                     crate::log_window::set_appearance(&self.config, &self.theme, cx);
                 }
-                Err(error) => self.settings.error = Some(error.to_string()),
+                Err(error) => self.settings.error = Some(error.localize()),
             }
         }
     }
@@ -91,7 +100,7 @@ impl HerdrWindow {
     /// of the new appearance only with the colors loaded for it.
     pub(crate) fn apply_system_theme(&mut self, cx: &mut Context<Self>) {
         // Follow Herdr already shows the daemon's theme for it.
-        if self.config.theme == "Follow Herdr" || !self.reload_theme(cx) {
+        if self.config.theme == FOLLOW_HERDR || !self.reload_theme(cx) {
             self.theme_light = crate::app::light_appearance(cx);
         }
     }
@@ -126,7 +135,10 @@ impl HerdrWindow {
                     Ok(loaded) => loaded,
                     Err(error) => {
                         tracing::warn!(%error, "Could not reload the theme");
-                        this.local_error = Some(format!("Reload theme: {error}"));
+                        this.local_error = Some(fl!(
+                            "settings-panel-reload-theme-failed",
+                            error = error.localize()
+                        ));
                         cx.notify();
                         return;
                     }
