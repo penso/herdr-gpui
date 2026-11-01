@@ -85,7 +85,7 @@ impl HerdrWindow {
             return self.fail_cloud_setup(&label, crate::Error::StaleConnection, cx);
         }
         let request = running.request.clone();
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let Some(running) = self.cloud_setup.take() else {
