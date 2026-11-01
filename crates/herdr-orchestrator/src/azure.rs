@@ -24,7 +24,11 @@ use super::{Checkpoint, Item, Provider, SourceKey};
 use chrono::Utc;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, de::DeserializeOwned};
-use std::{collections::HashSet, io::Read, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Read,
+    time::Duration,
+};
 
 /// Where every Azure DevOps source is keyed and read.
 pub const HOST: &str = "dev.azure.com";
@@ -47,11 +51,18 @@ const LIMIT: u64 = 8 * 1024 * 1024;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Identity {
+    /// Unique across the organization, as `connectionData` names the reader;
+    /// two people may share a display name.
+    id: Option<String>,
     display_name: Option<String>,
     unique_name: Option<String>,
 }
 
 impl Identity {
+    pub(crate) fn id(&self) -> Option<&str> {
+        self.id.as_deref().filter(|id| !id.is_empty())
+    }
+
     /// The display name, else the sign-in name.
     fn name(self) -> Option<String> {
         self.display_name
@@ -217,6 +228,9 @@ pub struct Listing {
     /// authors are named, so the lists can keep the reader's own; `None`
     /// when Azure DevOps did not say.
     pub viewer: Option<String>,
+    /// The canonical keys of the pull requests the token's owner created,
+    /// matched by identity id rather than by the name rows show.
+    pub authored: HashSet<String>,
 }
 
 /// The reply of `GET {organization}/_apis/connectionData`.
@@ -273,15 +287,30 @@ pub fn list_pull_requests(
 ) -> super::Result<Listing> {
     let started = Utc::now();
     let repository = Repository::of(source)?;
-    let (mut items, complete) = pull_requests(source, &repository, fetch)?;
-    let settled = settled(source, &repository, fetch)?;
+    let mut creators = HashMap::new();
+    let (mut items, complete) = pull_requests(source, &repository, &mut creators, fetch)?;
+    let settled = settled(source, &repository, &mut creators, fetch)?;
     let later: HashSet<String> = settled
         .iter()
         .map(|item| item.key.native_id.clone())
         .collect();
     items.retain(|item| !later.contains(&item.key.native_id));
     items.extend(settled);
-    let viewer = reader(repository.organization, fetch)?.name;
+    let reader = reader(repository.organization, fetch)?;
+    let authored = reader.id.as_deref().map_or_else(HashSet::new, |me| {
+        items
+            .iter()
+            .filter(|item| {
+                let number = item.pull_request.as_ref().map(|pr| pr.number);
+                number
+                    .and_then(|number| creators.get(&number))
+                    .map(String::as_str)
+                    == Some(me)
+            })
+            .map(|item| item.key.canonical())
+            .collect()
+    });
+    let viewer = reader.name;
     let previous = previous.cloned().unwrap_or_default();
     Ok(Listing {
         items,
@@ -294,6 +323,7 @@ pub fn list_pull_requests(
         },
         complete,
         viewer,
+        authored,
     })
 }
 
@@ -303,6 +333,7 @@ pub fn list_pull_requests(
 fn settled(
     source: &SourceKey,
     repository: &Repository<'_>,
+    creators: &mut HashMap<u64, String>,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<Vec<Item>> {
     let web = repository.repository_web()?;
@@ -316,6 +347,7 @@ fn settled(
         items.extend(
             page.value
                 .into_iter()
+                .inspect(|node| note_creator(creators, node))
                 .map(|node| node.into_item(source, &web)),
         );
     }
@@ -353,6 +385,7 @@ pub fn reader(
 fn pull_requests(
     source: &SourceKey,
     repository: &Repository<'_>,
+    creators: &mut HashMap<u64, String>,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<(Vec<Item>, bool)> {
     let web = repository.repository_web()?;
@@ -369,6 +402,7 @@ fn pull_requests(
             page.value
                 .into_iter()
                 .filter(|node| seen.insert(node.id()))
+                .inspect(|node| note_creator(creators, node))
                 .map(|node| node.into_item(source, &web)),
         );
         if !more {
@@ -406,6 +440,13 @@ fn work_items(
         items.extend(nodes.into_iter().map(|node| node.into_item(&project, &web)));
     }
     Ok((items, complete))
+}
+
+/// Records who created `node`, by identity id, when the listing says.
+fn note_creator(creators: &mut HashMap<u64, String>, node: &pull_request::PullRequestNode) {
+    if let Some(id) = node.creator() {
+        creators.insert(node.id(), id.to_owned());
+    }
 }
 
 fn parse<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, Error> {

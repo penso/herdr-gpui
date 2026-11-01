@@ -156,15 +156,22 @@ impl OrchestratorView {
                 self.sort,
                 &self.collapsed,
             );
+            // Azure DevOps names two people alike as easily as not: its
+            // Mine matches by the identity id the worker read, not by name.
+            let by_identity = repo.reads_azure();
             let mut pulls = rows::pull_request_rows(
                 items,
                 &runs,
                 &self.query,
                 self.filters,
                 repo.reading_login(),
-                self.mine,
+                self.mine && !by_identity,
                 self.sort,
             );
+            if self.mine && by_identity {
+                let authored = &repo.snapshot.authored;
+                pulls.retain(|row| authored.contains(&items[row.item].key.canonical()));
+            }
             if let Some(label) = &self.label {
                 issues.retain(|row| items[row.item].labels.iter().any(|has| has == label));
                 // A child kept without its parent stands on its own.

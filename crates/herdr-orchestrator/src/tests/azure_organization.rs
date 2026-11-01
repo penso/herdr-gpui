@@ -295,3 +295,36 @@ fn a_remote_worker_without_a_token_asks_to_sign_in_and_takes_no_action() {
         Error::Azure(azure::Error::NoCheckout { .. })
     ));
 }
+
+#[test]
+fn the_readers_own_are_matched_by_identity_not_by_their_shared_name() {
+    let by = |id: &str| json!({ "createdBy": { "id": id, "displayName": "Dev One" } });
+    let (mut fetch, _) = replies(vec![
+        json!({ "value": [
+            pull_request(1, by("00000000-0000-0000-0000-00000000000a")),
+            // A teammate with the same display name.
+            pull_request(2, by("00000000-0000-0000-0000-00000000000b")),
+        ] }),
+        json!({ "value": [] }),
+        json!({ "value": [] }),
+        reader(),
+    ]);
+    let listing = azure::list_pull_requests(
+        &SourceKey {
+            provider: Provider::Azure,
+            host: "dev.azure.com".into(),
+            repository: "contoso/Fabrikam/web".into(),
+        },
+        None,
+        &mut fetch,
+    )
+    .unwrap();
+    let names: Vec<_> = listing
+        .items
+        .iter()
+        .map(|item| item.author.as_deref())
+        .collect();
+    assert_eq!(names, [Some("Dev One"), Some("Dev One")]);
+    let authored: Vec<&String> = listing.authored.iter().collect();
+    assert_eq!(authored, [&listing.items[0].key.canonical()]);
+}

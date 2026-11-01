@@ -234,3 +234,97 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
         })
     });
 }
+
+#[gpui::test]
+fn mine_on_azure_devops_matches_the_reader_by_identity(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let request = Request {
+        target: herdr_client::ConnectTarget::Local,
+        checkout: dir.path().join("web").to_string_lossy().into_owned(),
+        workspace_id: "w1".into(),
+        token: None,
+        data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
+        timing: Timing::default(),
+    };
+    let config = crate::config::Config::default();
+    let look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui.clone(),
+        mono: config.terminal.clone(),
+    };
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let checkout = view.repo_mut();
+            checkout.snapshot.repo = Some(RepoInfo {
+                repository: crate::orchestrator::Repository::Local(dir.path().join(".git")),
+                main_root: String::new(),
+                beads: false,
+                remote: Some(Remote {
+                    name: "origin".into(),
+                    url: "https://dev.azure.com/contoso/Fabrikam/_git/web".into(),
+                    source: azure("contoso/Fabrikam/web"),
+                }),
+            });
+            // Both carry the reader's display name; only the first is theirs.
+            let mine = pull("contoso/Fabrikam/web", 1, "open", "2026-10-04T00:00:00Z");
+            let teammate = pull("contoso/Fabrikam/web", 2, "open", "2026-10-03T00:00:00Z");
+            checkout.snapshot.authored =
+                Arc::new(std::collections::HashSet::from([mine.key.canonical()]));
+            checkout.snapshot.items = Arc::new(vec![mine, teammate]);
+            checkout.snapshot.viewer = Some("Dev One".into());
+            view.tab = Tab::PullRequests;
+            view.mine = true;
+            view.refresh_rows();
+        })
+    });
+    assert_eq!(listed(&view, cx), ["contoso/Fabrikam/web!1"]);
+}
+
+#[gpui::test]
+fn azure_mine_keeps_the_readers_own_and_not_a_namesakes(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let request = Request {
+        target: herdr_client::ConnectTarget::Local,
+        checkout: dir.path().join("web").to_string_lossy().into_owned(),
+        workspace_id: "w1".into(),
+        token: None,
+        data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
+        timing: Timing::default(),
+    };
+    let config = crate::config::Config::default();
+    let look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui.clone(),
+        mono: config.terminal.clone(),
+    };
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let checkout = view.repo_mut();
+            checkout.snapshot.repo = Some(RepoInfo {
+                repository: crate::orchestrator::Repository::Local(dir.path().join(".git")),
+                main_root: dir.path().to_string_lossy().into_owned(),
+                beads: false,
+                remote: Some(Remote {
+                    name: "origin".into(),
+                    url: "https://dev.azure.com/contoso/Fabrikam/_git/web".into(),
+                    source: azure("contoso/Fabrikam/web"),
+                }),
+            });
+            // Both carry the reader's display name; only the first is theirs.
+            let own = pull("contoso/Fabrikam/web", 1, "open", "2026-10-04T00:00:00Z");
+            let namesake = pull("contoso/Fabrikam/web", 2, "open", "2026-10-03T00:00:00Z");
+            checkout.snapshot.authored =
+                Arc::new(std::collections::HashSet::from([own.key.canonical()]));
+            checkout.snapshot.items = Arc::new(vec![own, namesake]);
+            checkout.snapshot.viewer = Some("Dev One".into());
+            view.tab = Tab::PullRequests;
+            view.mine = true;
+            view.refresh_rows();
+        })
+    });
+    assert_eq!(listed(&view, cx), ["contoso/Fabrikam/web!1"]);
+}

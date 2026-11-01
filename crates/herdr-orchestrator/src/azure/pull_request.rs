@@ -70,6 +70,11 @@ impl PullRequestNode {
         self.pull_request_id
     }
 
+    /// Who created it, by identity id, when the listing says.
+    pub fn creator(&self) -> Option<&str> {
+        self.created_by.as_ref()?.id()
+    }
+
     /// The repository of `organization` it belongs to, as a source, when the
     /// listing names it: an organization-wide listing mixes repositories,
     /// and each pull request is keyed by its own so it is the row a listing

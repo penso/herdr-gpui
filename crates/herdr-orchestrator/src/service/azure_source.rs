@@ -23,6 +23,12 @@ impl Worker {
         if listing.viewer.is_some() {
             self.snapshot.viewer.clone_from(&listing.viewer);
         }
+        // This source's own pull requests, as the listing matched them.
+        let prefix = format!("{}:", key.canonical());
+        let mut authored = (*self.snapshot.authored).clone();
+        authored.retain(|item| !item.starts_with(&prefix));
+        authored.extend(listing.authored.iter().cloned());
+        self.snapshot.authored = std::sync::Arc::new(authored);
         if !listing.complete || !writable {
             self.uncached.insert(key.clone(), listing.items);
             return Ok(if listing.complete {

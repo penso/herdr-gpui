@@ -15,7 +15,7 @@ use crate::{
 };
 use chrono::Utc;
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -124,6 +124,8 @@ pub struct Read {
     pub items: Vec<Item>,
     pub complete: bool,
     pub viewer: Option<String>,
+    /// The reader's own, by identity id rather than by name.
+    pub authored: HashSet<String>,
     pub catalog: Option<azure::organization::Catalog>,
 }
 
@@ -140,7 +142,10 @@ pub fn read(
                 .then(|| azure::organization::catalog(organization, fetch))
                 .transpose()?;
             let mine = azure::organization::mine(organization, fetch)?;
+            // Every one was found by the reader's id.
+            let authored = mine.items.iter().map(|item| item.key.canonical()).collect();
             Ok(Read {
+                authored,
                 items: mine.items,
                 complete: mine.complete,
                 viewer: mine.viewer,
@@ -153,6 +158,7 @@ pub fn read(
                 items: listing.items,
                 complete: listing.complete,
                 viewer: listing.viewer,
+                authored: listing.authored,
                 catalog: None,
             })
         }
@@ -166,6 +172,7 @@ pub fn apply(snapshot: &mut Snapshot, read: Read) {
     if read.viewer.is_some() {
         snapshot.viewer = read.viewer;
     }
+    snapshot.authored = Arc::new(read.authored);
     if let Some(catalog) = read.catalog {
         snapshot.catalog = Some(Arc::new(catalog));
     }

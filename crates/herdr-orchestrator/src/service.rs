@@ -20,7 +20,7 @@ use herdr_github::Tokens;
 use herdr_remote::teleport::{AgentKind, Host};
 use sources::{recognize, replaced_by, statuses};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -192,6 +192,9 @@ pub struct Snapshot {
     /// The name a forge other than GitHub shows for the reader, as it names
     /// authors, once a sync has read it: Azure DevOps's display name.
     pub viewer: Option<String>,
+    /// The canonical keys of the Azure DevOps pull requests the reader
+    /// created, matched by identity id for Mine. Never stored.
+    pub authored: Arc<HashSet<String>>,
     /// An Azure DevOps organization's projects and repositories, which a
     /// remote worker of its reader's pull requests reads to browse.
     pub catalog: Option<Arc<azure::organization::Catalog>>,

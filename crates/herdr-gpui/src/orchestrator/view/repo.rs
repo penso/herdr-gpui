@@ -121,7 +121,8 @@ impl Repo {
 
     /// The login GitHub is read as for this repository: the account that
     /// reads its owner, or the host's own before the remote is known. For
-    /// Azure DevOps, the reader's display name, which its authors carry.
+    /// Azure DevOps, the reader's display name, which offers Mine; Mine
+    /// itself matches Azure DevOps by identity (`reads_azure`).
     pub(super) fn reading_login(&self) -> Option<&str> {
         let remote = self
             .snapshot
@@ -148,6 +149,16 @@ impl Repo {
             (Some(tokens), Some(owner)) => Some(tokens.login_for(owner)),
             _ => self.login.as_deref(),
         }
+    }
+
+    /// Whether its pull requests come from Azure DevOps, whose Mine matches
+    /// the reader by identity (`Snapshot::authored`).
+    pub(super) fn reads_azure(&self) -> bool {
+        self.snapshot
+            .repo
+            .as_ref()
+            .and_then(|info| info.remote.as_ref())
+            .is_some_and(|remote| remote.source.provider == crate::orchestrator::Provider::Azure)
     }
 
     /// Whether its folder turned out not to be in a Git repository: a
