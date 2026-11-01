@@ -2259,6 +2259,23 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Where A New Worktree Opens
+
+The New worktree dialog's **Opens in** row of icons chooses what the checkout's
+first pane shows: **Terminal**, the shell Herdr opens there, or one of the
+agents installed on the host, such as `claude` or `codex`, which the window
+starts in that shell with `herdr agent start` once the checkout exists, even if
+the dialog was closed while the daemon was still creating it. While the new
+shell is still starting, a busy refusal is retried for up to ten seconds, and
+only while the pane still holds the terminal the creation returned, as the
+orchestrator's dispatch does. The agents are looked up on the host when the
+dialog opens. The choice you create with is offered first in the next dialog,
+in every window and after a restart; one the host lacks falls back to Terminal.
+The row shows only for a checkout made on the shown host whose `herdr` CLI the
+window can script, so not for a bare socket, WSL, or a Windows client, and not
+when the dialog sends the checkout to another host. A failed start is reported
+in the window and leaves the shell running in the new checkout.
+
 ## Smart Dispatch
 
 When more than one host is connected, the New worktree dialog (its branch form)
