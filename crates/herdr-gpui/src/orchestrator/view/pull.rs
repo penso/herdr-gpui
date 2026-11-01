@@ -9,6 +9,7 @@ use super::{
     look::{GREEN, MAGENTA, RED, YELLOW},
 };
 use crate::{
+    i18n::{Localize, fl},
     orchestrator::Item,
     pr_actions,
     pull_request::{MergeMethod, Outcome, PullRequest, State},
@@ -136,17 +137,17 @@ impl OrchestratorView {
         let Some(pr) = self.open_pull_request() else {
             let text = match self.lookup_problem(item) {
                 _ if self.request().is_none_or(|request| request.token.is_none()) => {
-                    "Sign in to GitHub to read the checks.".to_owned()
+                    fl!("orchestrator-checks-sign-in")
                 }
                 Some(problem) => problem,
-                None => "Reading the checks\u{2026}".to_owned(),
+                None => fl!("orchestrator-checks-reading"),
             };
             return column.child(look.muted(text)).into_any_element();
         };
         column = column
-            .child(look.label(format!(
-                "CHECKS \u{00b7} {}",
-                pr.checks_summary.to_uppercase()
+            .child(look.label(fl!(
+                "orchestrator-checks-heading",
+                summary = pr.checks_summary.to_uppercase()
             )))
             .children(pr.check_list().enumerate().map(|(index, (name, outcome))| {
                 let (mark, hue) = outcome_mark(outcome);
@@ -158,13 +159,13 @@ impl OrchestratorView {
                     .text_size(look.small())
                     .child(div().w(px(14.)).text_color(rgb(look.hue(hue))).child(mark))
                     .child(div().flex_1().min_w_0().truncate().child(name.to_owned()))
-                    .child(look.muted(outcome.to_string()))
+                    .child(look.muted(outcome_word(outcome)))
             }))
             .child(div().h_3())
-            .child(look.label("REVIEW"))
+            .child(look.label(fl!("orchestrator-checks-review")))
             .child(div().text_size(look.small()).child(pr.review()))
             .child(div().h_3())
-            .child(look.label("MERGE"))
+            .child(look.label(fl!("orchestrator-checks-merge")))
             .child(
                 div()
                     .text_size(look.small())
@@ -182,9 +183,9 @@ impl OrchestratorView {
             return None;
         }
         match lookup.result.as_ref() {
-            Err(error) => Some(error.to_string()),
+            Err(error) => Some(error.localize()),
             Ok(Some(_)) => None,
-            Ok(None) => Some("GitHub reports no such pull request.".to_owned()),
+            Ok(None) => Some(fl!("orchestrator-no-such-pull-request")),
         }
     }
 
@@ -205,7 +206,7 @@ impl OrchestratorView {
                 .children(pr.merge_methods.iter().copied().map(|method| {
                     look.button(
                         SharedString::from(format!("orchestrator-merge-{}", method.graphql())),
-                        method.action(),
+                        super::dispatch::merge_action(method),
                         false,
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -217,7 +218,7 @@ impl OrchestratorView {
                     }))
                 }))
                 .when(pr.merge_methods.is_empty(), |el| {
-                    el.child(look.muted("This repository allows no merge method."))
+                    el.child(look.muted(fl!("orchestrator-no-merge-method")))
                 }),
         )
     }
@@ -228,6 +229,16 @@ impl OrchestratorView {
             .is_some_and(|pr| pr.state == State::Open && !pr.is_draft)
             && self.pr.target().is_some()
             && self.pr.running().is_none()
+    }
+}
+
+/// A check's outcome, as its row says it.
+fn outcome_word(outcome: Outcome) -> String {
+    match outcome {
+        Outcome::Passed => fl!("orchestrator-outcome-passed"),
+        Outcome::Failed => fl!("orchestrator-outcome-failed"),
+        Outcome::Pending => fl!("orchestrator-outcome-pending"),
+        Outcome::Skipped => fl!("orchestrator-outcome-skipped"),
     }
 }
 

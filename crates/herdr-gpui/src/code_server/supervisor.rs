@@ -43,7 +43,7 @@ pub(crate) struct Address {
 /// The address carries the token, so only the port is printed.
 impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Address")
+        f.debug_struct("Address") // i18n: data
             .field("port", &self.port)
             .finish_non_exhaustive()
     }
