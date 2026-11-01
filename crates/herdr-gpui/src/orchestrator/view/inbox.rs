@@ -771,9 +771,9 @@ pub(super) fn failure_text(provider: Provider, error: &impl Localize) -> String 
 pub(super) fn provider_name(provider: Provider) -> &'static str {
     match provider {
         Provider::Azure => "Azure DevOps", // i18n: data
-        Provider::Github => "GitHub", // i18n: data
-        Provider::Beads => "Beads",   // i18n: data
-        Provider::Gitlab => "GitLab", // i18n: data
+        Provider::Github => "GitHub",      // i18n: data
+        Provider::Beads => "Beads",        // i18n: data
+        Provider::Gitlab => "GitLab",      // i18n: data
     }
 }
 
