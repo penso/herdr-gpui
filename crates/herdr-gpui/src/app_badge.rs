@@ -91,6 +91,9 @@ fn silent(silenced: &Silenced<'_>, snapshot: &ClientShellSnapshot) -> HashSet<St
 struct Badge {
     windows: HashMap<WindowId, Contribution>,
     published: Option<usize>,
+    /// The locale the published count was described in: Windows' taskbar
+    /// speaks the count, so a language switch publishes it again.
+    published_in: Option<herdr_i18n::Locale>,
     preview: bool,
     permission_requested: bool,
 }
@@ -131,7 +134,8 @@ impl Badge {
             .filter(|(_, attention)| *attention)
             .count()
             .max(if self.preview { 2 } else { 0 });
-        if self.published != Some(count) {
+        let locale = crate::i18n::shown_locale();
+        if self.published != Some(count) || self.published_in != locale {
             // Asked on the first badge rather than at launch, so an app that
             // never needs attention never prompts.
             if count > 0 && !self.permission_requested {
@@ -140,6 +144,7 @@ impl Badge {
             }
             set_native(count);
             self.published = Some(count);
+            self.published_in = locale;
         }
     }
 }
@@ -188,7 +193,7 @@ pub(super) fn sync(window: WindowId, endpoints: &[Endpoint], cx: &mut App) {
             .entry(window)
             .or_default()
             .update(shown, Mutes::of(cx));
-        if changed {
+        if changed || badge.published_in != crate::i18n::shown_locale() {
             badge.publish();
         }
     });

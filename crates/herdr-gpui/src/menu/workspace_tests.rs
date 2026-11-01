@@ -31,6 +31,9 @@ mod worktree_create;
 mod worktree_delete;
 mod worktree_delete_keys;
 mod worktree_delete_recovery;
+// Host scripts, which find and start agents, need a POSIX client.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod worktree_landing;
 
 /// Presses the open workspace dialog's submit, for `endpoint::lifecycle_tests`.
 #[cfg(unix)]
