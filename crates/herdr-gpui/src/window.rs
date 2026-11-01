@@ -581,6 +581,12 @@ impl HerdrWindow {
         {
             cx.notify();
         }
+        // A config reload rebuilds the GUI config card; a language switch,
+        // which only redraws the windows, writes it again here.
+        let config = &self.config;
+        if self.gui_config_diagnostic.relocale(|| config.diagnostic()) {
+            cx.notify();
+        }
         self.post_system_notifications(window, cx);
         self.ring_bell(window);
         self.poll_integrations(cx);

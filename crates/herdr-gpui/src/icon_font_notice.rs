@@ -47,7 +47,7 @@ pub(crate) struct IconFontNotice {
 impl IconFontNotice {
     /// Follows the resolved config and the frame on screen. Frames are scanned
     /// only while the terminal has no icon font and no icon was seen yet.
-    /// Returns whether the card's visibility changed.
+    /// Returns whether the card appeared, went, or changed its language.
     pub(crate) fn observe(&mut self, missing: bool, surface: Option<&PaneSurfaceFrame>) -> bool {
         let before = self.visible().is_some();
         if missing
@@ -71,9 +71,18 @@ impl IconFontNotice {
                 self.shown_icon = shows_icon(&surface.frame);
             }
         }
-        self.card
-            .sync_own((missing && self.shown_icon).then(text).as_deref());
-        before != self.visible().is_some()
+        // The text is written once, and again only after a language switch:
+        // this runs on every tick, dismissed or not.
+        let rewritten = if !(missing && self.shown_icon) {
+            self.card.sync_own(None);
+            false
+        } else if self.card.has_text() {
+            self.card.relocale(|| Some(text()))
+        } else {
+            self.card.sync_own(Some(&text()));
+            false
+        };
+        rewritten || before != self.visible().is_some()
     }
 
     pub(crate) fn visible(&self) -> Option<&Arc<[String]>> {

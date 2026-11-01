@@ -3,6 +3,8 @@ use crate::sidebar::layout_tests::fixture_window;
 use gpui::{TestAppContext, VisualTestContext};
 use herdr_client::protocol::CellData;
 
+mod relocale;
+
 fn cell(symbol: &str) -> CellData {
     CellData {
         symbol: symbol.into(),
