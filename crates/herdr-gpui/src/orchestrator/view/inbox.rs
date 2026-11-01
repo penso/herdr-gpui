@@ -5,7 +5,7 @@
 //! beads cost only the rows on screen.
 
 use super::{
-    Event, OrchestratorView, PaneDrag, Resize,
+    Event, Menu, OrchestratorView, PaneDrag, Resize,
     look::{BLUE, GREEN, Look, MAGENTA, RED, YELLOW},
     rows::{Sort, Tab},
 };
@@ -56,7 +56,15 @@ impl OrchestratorView {
                     .child(self.render_list(cx))
                     .children(pane),
             )
-            .when(self.sort_open, |el| el.child(self.render_sort_menu(cx)))
+            .when(self.menu == Some(Menu::Sort), |el| {
+                el.child(self.render_sort_menu(cx))
+            })
+            .when(self.menu == Some(Menu::State), |el| {
+                el.child(self.render_state_menu(cx))
+            })
+            .when(self.menu == Some(Menu::Projects), |el| {
+                el.child(self.render_projects_menu(cx))
+            })
             .into_any_element()
     }
 
@@ -434,6 +442,13 @@ impl OrchestratorView {
             .px_4()
             .py_2()
             .child(self.render_search_field(window, cx));
+        let (state, projects) = match self.tab {
+            Tab::PullRequests => (
+                Some(self.render_state_control(cx)),
+                self.render_projects_control(cx),
+            ),
+            Tab::Issues => (None, None),
+        };
         let toggle = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Self)| {
             look.toggle(id, label, on)
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -489,8 +504,10 @@ impl OrchestratorView {
                         filters.open_only,
                         |this| {
                             this.filters.open_only = !this.filters.open_only;
+                            this.filters.state = None;
                         },
                     ))
+                    .children(state)
                     .when(
                         self.repos.iter().any(|repo| repo.reading_login().is_some()),
                         |row| {
@@ -506,7 +523,8 @@ impl OrchestratorView {
                         |this| {
                             this.filters.has_run = !this.filters.has_run;
                         },
-                    ));
+                    ))
+                    .children(projects);
             }
         }
         row.child(
@@ -522,7 +540,7 @@ impl OrchestratorView {
                 .child(self.sort.label())
                 .child(look.icon("icons/chevron-down.svg", 10., theme.muted))
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.sort_open = !this.sort_open;
+                    this.toggle_menu(Menu::Sort);
                     cx.notify();
                 })),
         )
@@ -587,7 +605,7 @@ impl OrchestratorView {
                         .child(sort.label())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sort = sort;
-                            this.sort_open = false;
+                            this.menu = None;
                             this.refresh_rows();
                             cx.notify();
                         }))

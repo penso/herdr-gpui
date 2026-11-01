@@ -4,7 +4,9 @@
 //! worker and database, and an item's page and actions go to its own.
 
 use super::rows::ItemRow;
-use crate::orchestrator::{Error, Item, Request, Run, Service, Snapshot};
+use crate::orchestrator::{
+    Error, Item, RemoteRequest, RemoteScope, Request, Run, Service, Snapshot, Timing,
+};
 use std::sync::Arc;
 
 /// A repository the window asks a view to list.
@@ -34,6 +36,9 @@ pub(crate) struct Repo {
     pub(super) pull_request_rows: Vec<ItemRow>,
     /// The signed-in GitHub login on its host, for "Mine".
     pub(super) login: Option<String>,
+    /// What it reads from Azure DevOps when no checkout is behind it: an
+    /// organization's own pull requests, or a repository browsed to.
+    pub(super) remote: Option<RemoteScope>,
 }
 
 impl Repo {
@@ -56,6 +61,44 @@ impl Repo {
             issue_rows: Vec::new(),
             pull_request_rows: Vec::new(),
             login: None,
+            remote: None,
+        }
+    }
+
+    /// A repository read from Azure DevOps alone, by a worker that needs
+    /// no checkout. Its request names no host or workspace: nothing it
+    /// lists can be dispatched or acted on here.
+    pub(super) fn start_remote(scope: RemoteScope) -> Self {
+        let mut request = RemoteRequest::new(scope.clone());
+        // Tests never run `az` or reach Azure DevOps.
+        request.look_up_token = !cfg!(test);
+        let (service, error) = match Service::start_remote(request) {
+            Ok(service) => (Some(service), None),
+            Err(error) => (None, Some(Arc::new(Error::Worker(error)))),
+        };
+        Self {
+            key: remote_key(&scope),
+            host: super::inbox::provider_name(crate::orchestrator::Provider::Azure).into(),
+            service,
+            request: Request {
+                target: herdr_client::ConnectTarget::Local,
+                checkout: scope.source().repository,
+                workspace_id: String::new(),
+                token: None,
+                gitlab_store: herdr_credentials::Store::default(),
+                data_root: None,
+                timing: Timing::default(),
+            },
+            snapshot: Snapshot {
+                error,
+                ..scope.snapshot()
+            },
+            recorded_runs: Arc::default(),
+            stand_ins: Vec::new(),
+            issue_rows: Vec::new(),
+            pull_request_rows: Vec::new(),
+            login: None,
+            remote: Some(scope),
         }
     }
 
@@ -121,5 +164,13 @@ impl Repo {
             .iter()
             .chain(&self.stand_ins)
             .find(|item| item.key.canonical() == key)
+    }
+}
+
+/// The key a remote repository is listed under, apart from every checkout's.
+pub(super) fn remote_key(scope: &RemoteScope) -> String {
+    match scope {
+        RemoteScope::Mine { organization } => format!("azure\u{1f}mine\u{1f}{organization}"),
+        RemoteScope::Repository(source) => format!("azure\u{1f}{}", source.repository),
     }
 }

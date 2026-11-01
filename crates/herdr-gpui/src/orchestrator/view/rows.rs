@@ -76,6 +76,30 @@ pub(crate) struct Filters {
     pub(crate) blocked: bool,
     /// Pull requests: only open and draft ones.
     pub(crate) open_only: bool,
+    /// Pull requests: only those in this one state, which the State menu
+    /// picks; it clears `open_only`, and turning Open on clears it.
+    pub(crate) state: Option<PrState>,
+}
+
+/// A pull request's state the State menu narrows to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PrState {
+    Draft,
+    Merged,
+    /// Closed without merging: Azure DevOps calls it abandoned.
+    Closed,
+}
+
+impl PrState {
+    /// Whether an item in `state`, as the readers word it, is in this one.
+    pub(crate) fn holds(self, state: &str) -> bool {
+        state
+            == match self {
+                Self::Draft => "draft",
+                Self::Merged => "merged",
+                Self::Closed => "closed",
+            }
+    }
 }
 
 /// Merged and closed pull requests are hidden until asked for, as on GitHub.
@@ -86,6 +110,7 @@ impl Default for Filters {
             has_run: false,
             blocked: false,
             open_only: true,
+            state: None,
         }
     }
 }
@@ -417,6 +442,7 @@ pub(crate) fn pull_request_rows(
         .enumerate()
         .filter(|(_, item)| item.pull_request.is_some())
         .filter(|(_, item)| !filters.open_only || matches!(item.state.as_str(), "open" | "draft"))
+        .filter(|(_, item)| filters.state.is_none_or(|state| state.holds(&item.state)))
         .filter(|(_, item)| {
             !mine || login.is_some_and(|login| item.author.as_deref() == Some(login))
         })

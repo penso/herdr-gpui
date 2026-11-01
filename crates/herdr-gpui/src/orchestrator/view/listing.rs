@@ -20,20 +20,24 @@ impl OrchestratorView {
 
     /// Lists the projects in `specs`: a repository no longer asked for stops
     /// its worker, a new candidate starts its own. The active one stays active.
+    /// Repositories read without a checkout follow the checkouts, kept.
     pub(crate) fn set_repos(&mut self, mut specs: Vec<RepoSpec>, cx: &mut Context<Self>) {
         self.skipped_repos
             .retain(|key| specs.iter().any(|spec| spec.key == *key));
         specs.retain(|spec| !self.skipped_repos.contains(&spec.key));
-        let same = specs.len() == self.repos.len()
+        let checkouts = self.repos.iter().filter(|repo| repo.remote.is_none());
+        let same = specs.len() == checkouts.clone().count()
             && specs
                 .iter()
-                .zip(&self.repos)
+                .zip(checkouts)
                 .all(|(spec, repo)| spec.key == repo.key);
         if same {
             return;
         }
         let active = self.repo().map(|repo| repo.key.clone());
-        let mut kept: Vec<Repo> = std::mem::take(&mut self.repos);
+        let (remote, mut kept): (Vec<Repo>, Vec<Repo>) = std::mem::take(&mut self.repos)
+            .into_iter()
+            .partition(|repo| repo.remote.is_some());
         self.repos = specs
             .into_iter()
             .map(
@@ -42,6 +46,7 @@ impl OrchestratorView {
                     None => Repo::start(spec),
                 },
             )
+            .chain(remote)
             .collect();
         self.active = active
             .and_then(|key| self.repos.iter().position(|repo| repo.key == key))

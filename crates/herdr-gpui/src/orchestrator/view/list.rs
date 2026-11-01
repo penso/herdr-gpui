@@ -66,6 +66,14 @@ impl OrchestratorView {
     /// when several checkouts of the same repository do.
     fn row_project(&self, row: &ItemRow) -> String {
         let repo = &self.repos[row.repo];
+        // An organization's list mixes repositories: each row names its own.
+        if matches!(
+            repo.remote,
+            Some(crate::orchestrator::RemoteScope::Mine { .. })
+        ) {
+            let source = &self.row_item(row).key.source.repository;
+            return source.rsplit('/').next().unwrap_or(source).to_owned();
+        }
         match self.twins(&self.row_item(row).key.canonical()) {
             0 => self.project_label(repo),
             twins => format!("{} \u{00b7} {} hosts", repo.name(), twins + 1),

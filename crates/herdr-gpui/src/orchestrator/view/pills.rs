@@ -39,11 +39,16 @@ impl OrchestratorView {
             }
         }
         backends.sort_by_key(|(provider, _)| provider_name(*provider));
-        let projects: Vec<(String, String, usize)> = self
+        // A repository browsed to without a checkout can be closed from its pill.
+        let projects: Vec<(String, String, usize, bool)> = self
             .projects_named()
             .map(|repo| {
                 let count = rows(repo, tab).iter().filter(|row| row.depth == 0).count();
-                (repo.key.clone(), self.project_label(repo), count)
+                let browsed = matches!(
+                    repo.remote,
+                    Some(crate::orchestrator::RemoteScope::Repository(_))
+                );
+                (repo.key.clone(), self.project_label(repo), count, browsed)
             })
             .collect();
         if backends.len() < 2 && projects.len() < 2 {
@@ -87,14 +92,33 @@ impl OrchestratorView {
             }
         }
         if projects.len() > 1 {
-            for (index, (key, label, items)) in projects.into_iter().enumerate() {
+            for (index, (key, label, items, browsed)) in projects.into_iter().enumerate() {
                 let on = self.projects.contains(&key);
+                let close = browsed.then(|| {
+                    let key = key.clone();
+                    look.icon_button(
+                        SharedString::from(format!("orchestrator-pill-close-{index}")),
+                        "icons/close.svg",
+                        crate::i18n::fl!(
+                            "orchestrator-browse-projects-remove",
+                            repository = label.as_str()
+                        ),
+                    )
+                    .debug_selector(move || format!("orchestrator-pill-close-{index}"))
+                    .size(px(16.))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.stop_browsing(&key);
+                        cx.notify();
+                    }))
+                });
                 row = row.child(
                     pill(format!("orchestrator-pill-project-{index}").into(), on)
                         .rounded(px(corners::CONTROL))
                         .child(look.icon("icons/git-branch.svg", 11., theme.subtext()))
                         .child(label)
                         .children(count(items))
+                        .children(close)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if !this.projects.remove(&key) {
                                 this.projects.insert(key.clone());
