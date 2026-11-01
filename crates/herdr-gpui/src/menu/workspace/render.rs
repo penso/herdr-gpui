@@ -247,6 +247,20 @@ impl HerdrWindow {
                     // text is messages.
                     self.render_host_picker(picker, |caption, field| row(caption.into(), field), cx)
                 }))
+                // Agents start through this host's CLI, so only a checkout
+                // made here can land in one.
+                .children(
+                    self.menu
+                        .landing
+                        .as_ref()
+                        .filter(|_| destination == crate::dispatch::Destination::Here)
+                        .map(|picker| {
+                            row(
+                                fl!("workspace-dialog-lands-in").into(),
+                                self.render_landing(picker, cx),
+                            )
+                        }),
+                )
                 .child(match (dispatched, &sandbox) {
                     (Some(host), _) if clones(host) => fl!(
                         "workspace-dialog-creates-on-clone",
