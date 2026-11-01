@@ -32,8 +32,7 @@ static META: Meta = Meta::new("xkiro", "xKiro")
     .settings(&[Setting::new(
         "api_key",
         &["XKIRO_API_KEY"],
-        "An xKiro API key from your account at https://xkiro.com. It is sent only to \
-         api.xkiro.com; reading usage spends no tokens.",
+        "usage-xkiro-setting-api-key",
     )]);
 
 impl Service for Xkiro {

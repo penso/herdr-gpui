@@ -27,8 +27,7 @@ static META: Meta = Meta::new("deepinfra", "DeepInfra")
     .settings(&[Setting::new(
         "api_key",
         &["DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"],
-        "A DeepInfra API key from https://deepinfra.com/dash/api_keys, without a \
-         \"Bearer \" prefix. It must be allowed to read billing data.",
+        "usage-deepinfra-setting-api-key",
     )]);
 
 impl Service for Deepinfra {

@@ -29,8 +29,7 @@ static META: Meta = Meta::new("coderabbit", "CodeRabbit")
     .settings(&[Setting::new(
         "cli_path",
         &["CODERABBIT_CLI_PATH"],
-        "The path of the coderabbit executable on the probed host, when it is not on the \
-         usual PATH (~/.local/bin, Homebrew). Sign in once with `coderabbit auth login`.",
+        "usage-coderabbit-setting-cli-path",
     )]);
 
 impl Service for Coderabbit {

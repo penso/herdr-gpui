@@ -26,8 +26,7 @@ static META: Meta = Meta::new("synthetic", "Synthetic")
     .settings(&[Setting::new(
         "api_key",
         &["SYNTHETIC_API_KEY"],
-        "A Synthetic API key, created as described in \
-         https://dev.synthetic.new/docs/api/getting-started.",
+        "usage-synthetic-setting-api-key",
     )]);
 
 impl Service for Synthetic {

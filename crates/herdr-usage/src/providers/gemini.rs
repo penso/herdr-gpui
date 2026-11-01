@@ -69,15 +69,12 @@ static META: Meta = Meta::new("gemini", "Gemini")
         Setting::new(
             "client_id",
             &["GEMINI_OAUTH_CLIENT_ID"],
-            "The Gemini CLI's OAuth client id, used to refresh an expired sign-in. \
-             Normally found in the installed CLI (OAUTH_CLIENT_ID in \
-             @google/gemini-cli-core/dist/src/code_assist/oauth2.js); set it only when \
-             the CLI is not on the host's PATH.",
+            "usage-gemini-setting-client-id",
         ),
         Setting::new(
             "client_secret",
             &["GEMINI_OAUTH_CLIENT_SECRET"],
-            "The matching OAUTH_CLIENT_SECRET from the same file.",
+            "usage-gemini-setting-client-secret",
         ),
     ]);
 

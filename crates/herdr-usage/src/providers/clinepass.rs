@@ -24,8 +24,7 @@ static META: Meta = Meta::new("clinepass", "ClinePass")
     .settings(&[Setting::new(
         "api_key",
         &["CLINE_API_KEY", "CLINEPASS_API_KEY"],
-        "A Cline API key for the account with the ClinePass subscription. Create one at \
-         https://app.cline.bot under Settings > API Keys.",
+        "usage-clinepass-setting-api-key",
     )]);
 
 impl Service for Clinepass {

@@ -50,10 +50,7 @@ static META: Meta = Meta::new("vertexai", "Vertex AI")
             "GCLOUD_PROJECT",
             "CLOUDSDK_CORE_PROJECT",
         ],
-        "The Google Cloud project id whose Vertex AI quotas to read, when gcloud has none \
-         set (`gcloud config set project PROJECT_ID`). Sign in with `gcloud auth \
-         application-default login`; the account needs Cloud Monitoring read access \
-         (roles/monitoring.viewer) on the project.",
+        "usage-vertexai-setting-project",
     )]);
 
 impl Service for Vertexai {

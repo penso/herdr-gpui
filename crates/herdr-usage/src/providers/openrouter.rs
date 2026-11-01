@@ -36,29 +36,27 @@ static META: Meta = Meta::new("openrouter", "OpenRouter")
         Setting::new(
             "api_key",
             &["OPENROUTER_API_KEY"],
-            "An OpenRouter API key (sk-or-v1-…) from https://openrouter.ai/settings/keys. \
-             A Management API key also works and adds the last 30 days of activity.",
+            "usage-openrouter-setting-api-key",
         ),
         Setting::new(
             "management_api_key",
             &["OPENROUTER_MANAGEMENT_API_KEY"],
-            "Optional Management API key from https://openrouter.ai/settings/management-keys, \
-             used only for the last 30 days of account activity.",
+            "usage-openrouter-setting-management-api-key",
         ),
         Setting::new(
             "base_url",
             &["OPENROUTER_API_URL"],
-            "Optional HTTPS API URL for a proxy. Defaults to https://openrouter.ai/api/v1.",
+            "usage-openrouter-setting-base-url",
         ),
         Setting::new(
             "http_referer",
             &["OPENROUTER_HTTP_REFERER"],
-            "Optional client URL sent as the HTTP-Referer header.",
+            "usage-openrouter-setting-http-referer",
         ),
         Setting::new(
             "x_title",
             &["OPENROUTER_X_TITLE"],
-            "Optional client title sent as the X-Title header. Defaults to Herdr.",
+            "usage-openrouter-setting-x-title",
         ),
     ]);
 

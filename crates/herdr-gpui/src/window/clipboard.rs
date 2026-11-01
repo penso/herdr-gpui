@@ -1,4 +1,5 @@
 //! Bounded clipboard acquisition, including image copies and hashing, off the UI thread.
+// i18n: migrated
 
 mod error;
 
@@ -427,7 +428,7 @@ mod linux {
                 if program == "xclip" && args.contains(&"image/jpg") {
                     Ok(Some(vec![0xff, 0xd8, 0xff]))
                 } else {
-                    Ok(Some(b"not an image".to_vec()))
+                    Ok(Some(b"not an image".to_vec())) // i18n: data
                 }
             })?;
             assert_eq!(calls, ["xclip", "xclip", "xclip"]);
@@ -473,9 +474,9 @@ mod linux {
         #[test]
         fn timeout_covers_open_and_closed_stdout_and_continuous_output() {
             for script in [
-                "exec sleep 30",
-                "exec 1>&-; exec sleep 30",
-                "while :; do printf x; done",
+                "exec sleep 30",              // i18n: data
+                "exec 1>&-; exec sleep 30",   // i18n: data
+                "while :; do printf x; done", // i18n: data
             ] {
                 let start = Instant::now();
                 let result = output(

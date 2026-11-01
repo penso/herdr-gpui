@@ -32,15 +32,12 @@ static META: Meta = Meta::new("fireworks", "Fireworks")
         Setting::new(
             "api_key",
             &["FIREWORKS_API_KEY", "FIREWORKS_KEY"],
-            "A Fireworks API key from https://app.fireworks.ai/settings/users/api-keys. \
-             It reads the account's billing summary.",
+            "usage-fireworks-setting-api-key",
         ),
         Setting::new(
             "account_slug",
             &["FIREWORKS_ACCOUNT_SLUG"],
-            "The Fireworks account id, needed only when the API key can see several \
-             accounts. Find it in the account switcher on https://app.fireworks.ai or \
-             with `firectl whoami`.",
+            "usage-fireworks-setting-account-slug",
         ),
     ]);
 

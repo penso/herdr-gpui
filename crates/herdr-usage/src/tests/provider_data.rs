@@ -173,11 +173,16 @@ fn every_provider_is_registered_once_with_its_icon() {
             assert!(url.starts_with("https://"), "{url}");
         }
         for setting in provider.service().meta().settings {
+            // The app checks each message's English; its ID names the
+            // provider's own file.
             assert!(
-                !setting.help.trim().is_empty(),
-                "{}.{}",
+                setting
+                    .message
+                    .starts_with(&format!("usage-{}-setting-", provider.id())),
+                "{}.{}: {}",
                 provider.id(),
-                setting.name
+                setting.name,
+                setting.message
             );
         }
     }

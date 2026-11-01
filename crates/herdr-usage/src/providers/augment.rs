@@ -30,15 +30,7 @@ pub(crate) struct Augment;
 static META: Meta = Meta::new("augment", "Augment")
     .dashboard("https://app.augmentcode.com/account/subscription")
     .status_page("https://status.augmentcode.com")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Your app.augmentcode.com browser session, used when the Auggie CLI is not signed \
-         in. Sign in at https://app.augmentcode.com, open Developer Tools → Application → \
-         Cookies → https://app.augmentcode.com, and copy the session cookies (such as \
-         `_session`, `session`, `web_rpc_proxy_session`, or `auth0`), pasted as one \
-         header: \"name=value; name2=value2\".",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-augment-setting-cookie")]);
 
 impl Service for Augment {
     fn meta(&self) -> &'static Meta {

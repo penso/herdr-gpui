@@ -56,16 +56,9 @@ static META: Meta = Meta::new("factory", "Droid")
         Setting::new(
             "api_key",
             &["FACTORY_API_KEY"],
-            "A Factory API key (fk-…) from https://app.factory.ai/settings/api-keys.",
+            "usage-factory-setting-api-key",
         ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Used when no API key is set. Sign in to https://app.factory.ai, open \
-             Developer Tools > Application > Cookies > https://app.factory.ai, and copy \
-             the session cookies (wos-session, access-token, and any *.session-token) \
-             as \"name=value; name2=value2\".",
-        ),
+        Setting::new("cookie", &[], "usage-factory-setting-cookie"),
     ]);
 
 impl Service for Factory {

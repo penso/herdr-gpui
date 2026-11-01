@@ -26,16 +26,12 @@ static META: Meta = Meta::new("gitkraken", "GitKraken AI")
         Setting::new(
             "token",
             &["GITKRAKEN_API_TOKEN"],
-            "A GitKraken account session access token. Sign in at \
-             https://gitkraken.dev/account#ai-usage, open Developer Tools > Network, \
-             select the successful ai-tasks/usage request, and copy only the value after \
-             \"Bearer \" in its Authorization header. Replace it when it expires.",
+            "usage-gitkraken-setting-token",
         ),
         Setting::new(
             "org_id",
             &["GITKRAKEN_ORG_ID"],
-            "Optional organization ID: the gk-org-id header of the same request, to read \
-             that organization's shared pool.",
+            "usage-gitkraken-setting-org-id",
         ),
     ]);
 

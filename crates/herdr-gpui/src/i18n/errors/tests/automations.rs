@@ -11,6 +11,7 @@ fn every_automations_variant_has_a_message() {
             host: host(),
         },
         Error::Build(crate::host_build::Error::Checksum),
+        Error::Failed,
         Error::Json(serde_json::from_str::<u8>("x").unwrap_err()),
         Error::Missing,
         Error::NoBuild {
@@ -31,5 +32,6 @@ fn every_automations_variant_has_a_message() {
         Error::UnknownHost(host()),
         Error::UnknownVersion,
         Error::UnsupportedHost,
+        Error::Version("herdr-automate 0.9 beta".into()),
     ]);
 }

@@ -35,18 +35,9 @@ static META: Meta = Meta::new("venice", "Venice")
         Setting::new(
             "api_key",
             &["VENICE_API_KEY", "VENICE_KEY"],
-            "A Venice API key from https://venice.ai/settings/api. It reads the USD and \
-             DIEM API balance.",
+            "usage-venice-setting-api-key",
         ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Used when no API key is set, for subscription credits. Sign in to \
-             https://venice.ai, open Developer Tools > Application > Cookies for \
-             https://venice.ai, and copy the __venice-auth.session-token cookie (or every \
-             __venice-auth.session-token.N chunk when it is split). Paste them as \
-             \"name=value; name2=value2\".",
-        ),
+        Setting::new("cookie", &[], "usage-venice-setting-cookie"),
     ]);
 
 impl Service for Venice {

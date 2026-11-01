@@ -30,17 +30,12 @@ static META: Meta = Meta::new("moonshot", "Moonshot / Kimi Open Platform")
         Setting::new(
             "api_key",
             &["MOONSHOT_API_KEY", "MOONSHOT_KEY"],
-            "A Moonshot / Kimi Open Platform API key, from \
-             https://platform.moonshot.ai/console/api-keys (International) or \
-             https://platform.moonshot.cn/console/api-keys (China mainland). Use a key \
-             issued for the region set below.",
+            "usage-moonshot-setting-api-key",
         ),
         Setting::new(
             "region",
             &["MOONSHOT_REGION"],
-            "Which platform issued the key: \"international\" (the default, \
-             api.moonshot.ai, balances in USD) or \"china\" (api.moonshot.cn, balances \
-             in CNY).",
+            "usage-moonshot-setting-region",
         ),
     ]);
 

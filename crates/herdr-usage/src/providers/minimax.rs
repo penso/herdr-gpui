@@ -62,22 +62,14 @@ static META: Meta = Meta::new("minimax", "MiniMax")
         Setting::new(
             "api_key",
             &["MINIMAX_CODING_API_KEY", "MINIMAX_API_KEY"],
-            "A MiniMax Coding Plan or Token Plan API key (sk-cp-…) from \
-             https://platform.minimax.io/user-center/basic-information/interface-key.",
+            "usage-minimax-setting-api-key",
         ),
         Setting::new(
             "cookie",
             &["MINIMAX_COOKIE", "MINIMAX_COOKIE_HEADER"],
-            "Used when no API key is set. Sign in to https://platform.minimax.io, open \
-             Developer Tools > Application > Cookies > https://platform.minimax.io, and \
-             copy every cookie (including HERTZ-SESSION) as \"name=value; name2=value2\".",
+            "usage-minimax-setting-cookie",
         ),
-        Setting::new(
-            "region",
-            &[],
-            "\"global\" for minimax.io (the default) or \"cn\" for the China mainland \
-             platform at minimaxi.com.",
-        ),
+        Setting::new("region", &[], "usage-minimax-setting-region"),
     ]);
 
 impl Service for Minimax {

@@ -1,0 +1,7 @@
+# Augment's plan usage, in its usage panel.
+
+## Setup: how to find each value the provider reads. Setting names,
+## environment variables, URLs, cookie and header names, and the
+## service's own menu paths stay as written.
+
+usage-augment-setting-cookie = Your app.augmentcode.com browser session, used when the Auggie CLI is not signed in. Sign in at https://app.augmentcode.com, open Developer Tools → Application → Cookies → https://app.augmentcode.com, and copy the session cookies (such as `_session`, `session`, `web_rpc_proxy_session`, or `auth0`), pasted as one header: "name=value; name2=value2".

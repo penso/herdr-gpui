@@ -28,8 +28,7 @@ static META: Meta = Meta::new("aiand", "ai&")
     .settings(&[Setting::new(
         "api_key",
         &["AIAND_API_KEY"],
-        "An ai& API key (starts with sk-), created at https://console.aiand.com under \
-         Settings > API Keys > Create. Keys are shown only once.",
+        "usage-aiand-setting-api-key",
     )]);
 
 impl Service for Aiand {

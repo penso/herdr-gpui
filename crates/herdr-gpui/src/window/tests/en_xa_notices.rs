@@ -1,7 +1,8 @@
 //! The `en-XA` leak test for the main window's notices: a toast, a flash,
-//! the config diagnostic card, the agent skill offer, and an error on the
+//! the config diagnostic card, the icon font notice, the agent skill
+//! offer, and an error on the
 //! status line draw only translated messages, apart from the snapshot's
-//! names and the config's own diagnostic text.
+//! names.
 use super::en_xa::{check, data};
 use super::*;
 use crate::i18n::leak_tests::{assert_translated, draw, uncut, under_en_xa};
@@ -57,24 +58,36 @@ fn the_main_windows_notices_draw_only_messages() {
         });
         check("Status error", &view, cx, recorder);
 
-        // The config's diagnostic is the config module's text, not this
-        // card's: only the card's own label must be a message.
-        let config = crate::config::Config {
-            unknown_keys: vec!["future.key".into()],
+        let mut config = crate::config::Config {
+            missing_fonts: vec!["Missing Fixture".into()],
+            unknown_keys: (0..7).map(|key| format!("future.key{key}")).collect(),
             ..Default::default()
         };
+        config.layout.legacy_sidebar_gap = Some(3.);
         let diagnostic = config.diagnostic().unwrap();
         view.update(cx, |view, cx| {
-            view.gui_config_diagnostic.sync(Some(&diagnostic));
+            view.gui_config_diagnostic.sync_own(Some(&diagnostic));
             cx.notify();
         });
         cx.update(|window, _| window.refresh());
         draw(cx);
         // The card cuts its lines short to fit.
         let shown = uncut(recorder.take());
-        let mut known = cx.update(|_, cx| data(view.read(cx), &shown));
-        known.extend(diagnostic.lines().map(str::to_owned));
+        let known = cx.update(|_, cx| data(view.read(cx), &shown));
         assert_translated("Config diagnostic", &shown, &known);
+
+        view.update(cx, |view, cx| {
+            view.gui_config_diagnostic.sync_own(None);
+            view.icon_font_notice.observe(true, Some(&icon_frame()));
+            cx.notify();
+        });
+        cx.update(|window, _| window.refresh());
+        draw(cx);
+        let shown = uncut(recorder.take());
+        let mut known = cx.update(|_, cx| data(view.read(cx), &shown));
+        // The command the card copies stays as typed.
+        known.extend(crate::icon_font_notice::COMMAND.map(str::to_owned));
+        assert_translated("Icon font notice", &shown, &known);
 
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {
@@ -86,4 +99,33 @@ fn the_main_windows_notices_draw_only_messages() {
         });
         check("Agent skill offer", &view, cx, recorder);
     });
+}
+
+/// A prompt showing an icon from the Private Use Area.
+fn icon_frame() -> herdr_client::protocol::PaneSurfaceFrame {
+    use herdr_client::protocol::{CellData, FrameData, PaneSurfaceFrame};
+    PaneSurfaceFrame {
+        boot_id: "boot".into(),
+        projection_revision: 1,
+        surface_revision: 1,
+        frame: FrameData {
+            cells: vec![CellData {
+                symbol: "\u{f179}".into(),
+                fg: 0,
+                bg: 0,
+                modifier: 0,
+                skip: false,
+                hyperlink: None,
+            }],
+            width: 1,
+            height: 1,
+            cursor: None,
+            hyperlinks: vec![],
+            graphics: vec![],
+        },
+        panes: vec![],
+        splits: vec![],
+        popup: None,
+        graphics: Default::default(),
+    }
 }

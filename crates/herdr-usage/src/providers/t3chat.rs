@@ -30,14 +30,7 @@ pub(crate) struct T3chat;
 
 static META: Meta = Meta::new("t3chat", "T3 Chat")
     .dashboard("https://t3.chat/settings/customization")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Your t3.chat browser session. Sign in at https://t3.chat, open Developer Tools → \
-         Application → Cookies → https://t3.chat, and copy every cookie there (the session \
-         cookies change names between releases), pasted as one header: \
-         \"name=value; name2=value2\". It is sent only to t3.chat.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-t3chat-setting-cookie")]);
 
 impl Service for T3chat {
     fn meta(&self) -> &'static Meta {
