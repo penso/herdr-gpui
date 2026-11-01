@@ -130,6 +130,8 @@ fn an_azure_pull_request_row_draws_its_status(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     let selector: &'static str = Box::leak(format!("orchestrator-status-{key}").into_boxed_str());
-    let cell = cx.debug_bounds(selector).expect("the status cell is drawn");
+    let cell = cx
+        .debug_bounds(selector)
+        .unwrap_or_else(|| panic!("the status cell is not drawn"));
     assert!(cell.size.width > gpui::px(0.));
 }
