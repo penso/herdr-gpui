@@ -9,6 +9,7 @@ use herdr_automation::report::{
 };
 use std::{sync::Arc, time::SystemTime};
 
+mod actions;
 mod autostart;
 mod en_xa;
 mod notify;
