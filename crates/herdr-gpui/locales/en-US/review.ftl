@@ -83,6 +83,9 @@ review-add-note = Add note
 review-withdraw = Withdraw
 review-copy = Copy
 review-clear-sent = Clear sent
+# Where a note points, $place being a path and line, such as src/lib.rs:3.
+review-note-place-removed = { $place } (removed)
+review-note-sent = { $place } · sent
 
 # Flashes.
 review-no-checkout = No local checkout to review

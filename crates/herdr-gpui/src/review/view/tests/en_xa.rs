@@ -1,11 +1,14 @@
 //! The `en-XA` leak test (`crate::i18n::leak_tests`) for the Review tab: its
 //! header, the changed files, each kind of file the diff cannot show yet,
-//! a note in the notes panel, Find in changes, and a branch review whose
+//! notes in the notes panel (a sent one and one on a removed line), Find in changes, and a branch review whose
 //! base list could not be read.
 use super::{files::many_files, the, window};
 use crate::{
     i18n::leak_tests::{assert_translated, draw, uncut, under_en_xa},
-    review::diff::{Body, RowId, Scope, Unreadable},
+    review::{
+        diff::{Anchor, Body, RowId, Scope, Side, Unreadable},
+        notes::Note,
+    },
 };
 use gpui::{px, size};
 
@@ -81,10 +84,28 @@ fn review_shows_only_messages_and_the_checkout_under_en_xa() {
                 let input = view.reviews[&id].input.clone();
                 input.update(cx, |input, cx| input.set_text_selected(NOTE, cx));
                 view.add_review_note(id, window, cx);
+                let review = view.reviews.get_mut(&id).unwrap();
+                for note in &mut review.notes {
+                    note.sent = Some(crate::agent_notes::SendId::default());
+                }
+                let anchor = Anchor::Line {
+                    path: "src/a.rs".into(),
+                    side: Side::Removed,
+                    number: 3,
+                    code: "old".into(),
+                    before: None,
+                };
+                review.notes.extend(Note::new(anchor, NOTE));
+                cx.notify();
             })
         });
         draw(cx);
-        assert_translated("notes panel", &uncut(recorder.take()), &data);
+        let shown = uncut(recorder.take());
+        assert!(
+            shown.iter().any(|line| line.contains("src/a.rs:3")),
+            "{shown:?}"
+        );
+        assert_translated("notes panel", &shown, &data);
 
         cx.update(|window, cx| {
             view.update(cx, |view, cx| {

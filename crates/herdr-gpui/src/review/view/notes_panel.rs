@@ -115,7 +115,7 @@ impl HerdrWindow {
                         .flex_col()
                         .child(div().text_color(rgb(theme.muted)).truncate().child(
                             if note.sent.is_some() {
-                                format!("{} \u{b7} sent", note.place())
+                                fl!("review-note-sent", place = note.place())
                             } else {
                                 note.place()
                             },

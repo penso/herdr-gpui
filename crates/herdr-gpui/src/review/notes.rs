@@ -2,7 +2,7 @@
 //! comes from the diff, so the prompt marks it as data, and inline code
 //! survives backticks in it.
 use super::diff::{Anchor, Side};
-use crate::truncate::one_line;
+use crate::{i18n::fl, truncate::one_line};
 
 /// Queued notes at once, as for page annotations.
 pub(crate) const MAX_NOTES: usize = 50;
@@ -36,7 +36,10 @@ impl Note {
             Anchor::Line {
                 path, side, number, ..
             } => match side {
-                Side::Removed => format!("{path}:{number} (removed)"),
+                Side::Removed => fl!(
+                    "review-note-place-removed",
+                    place = format!("{path}:{number}")
+                ),
                 Side::Added | Side::Unchanged => format!("{path}:{number}"),
             },
         }
