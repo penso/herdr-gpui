@@ -55,7 +55,7 @@ impl HerdrWindow {
                 return self.core_placeholder();
             };
             view.update(cx, |view, _| view.set_pane(None));
-            return self.core_pane_body(&key.1, &view, cx);
+            return self.core_pane_body(key.0, &key.1, &view, cx);
         }
         let zoom = shown
             .zoom_at(crate::motion::now())
@@ -264,7 +264,7 @@ impl HerdrWindow {
             active: is_active,
         };
         let view = view.clone();
-        let body = self.core_pane_body(terminal, &view, cx);
+        let body = self.core_pane_body(tab, terminal, &view, cx);
         chrome.pane(face, body, &draw.panes)
     }
 

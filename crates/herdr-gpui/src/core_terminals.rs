@@ -169,6 +169,28 @@ impl CoreTerminals {
             .map(|shown| shown.active.clone())
     }
 
+    /// Shows `panes` as `tab`, a mirror when `observe`, with what herdr-core
+    /// reports of `infos`, as a restored tab and a finished list would.
+    #[cfg(test)]
+    pub(crate) fn show_for_test(
+        &mut self,
+        tab: TabId,
+        panes: Panes,
+        observe: bool,
+        infos: Vec<TerminalInfo>,
+    ) {
+        self.tabs.insert(tab, TabPanes::new(panes, observe));
+        for info in infos {
+            self.infos.insert(info);
+        }
+    }
+
+    /// Whether `tab` is a herdr-core tab that drives its terminals, not a
+    /// mirror that only watches.
+    pub(crate) fn drives(&self, tab: TabId) -> bool {
+        self.tabs.get(&tab).is_some_and(|shown| !shown.observe)
+    }
+
     /// Makes `terminal` the pane in use in `tab`; whether that changed.
     pub(crate) fn set_active(&mut self, tab: TabId, terminal: TerminalId) -> bool {
         let Some(shown) = self.tabs.get_mut(&tab) else {
@@ -380,7 +402,7 @@ impl HerdrWindow {
             .core_terminals
             .tabs
             .get(&tab)
-            .and_then(|shown| self.core_chat_focus(&shown.active, window, cx));
+            .and_then(|shown| self.core_chat_focus(tab, &shown.active, window, cx));
         if let Some(focus) = chat {
             window.focus(&focus, cx);
             return;

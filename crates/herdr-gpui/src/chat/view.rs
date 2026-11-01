@@ -304,6 +304,7 @@ impl HerdrWindow {
         let move_pane = pane_id.clone();
         let release_pane = pane_id.clone();
         let release_out_pane = pane_id.clone();
+        let drop_pane = pane_id.clone();
         div()
             .id(SharedString::from(format!("chat-{pane_id}")))
             .debug_selector(|| "chat-view".into())
@@ -338,7 +339,20 @@ impl HerdrWindow {
                 let wash = theme.primary_wash();
                 move |style, _, _, _| style.bg(rgb(wash))
             })
-            .on_drop(cx.listener(Self::drop_terminal_files))
+            .on_drop(cx.listener(move |this, paths: &ExternalPaths, window, cx| {
+                match place {
+                    Place::At(_) => this.drop_terminal_files(paths, window, cx),
+                    // A herdr-core pane's chat is not in Herdr's surface, so
+                    // its files go straight to it.
+                    Place::Fill(_) => {
+                        if paths.paths().is_empty() {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        this.attach_chat_files(&drop_pane, paths.paths().to_vec(), window, cx);
+                    }
+                }
+            }))
             .text_color(rgb(theme.foreground))
             .text_size(px(self.chat_text_size()))
             .text_font(&self.config.ui)
@@ -517,7 +531,12 @@ impl HerdrWindow {
 
     /// Gives the chat's composer the keyboard and makes its pane Herdr's
     /// focused one.
-    fn focus_chat(&mut self, pane_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::chat) fn focus_chat(
+        &mut self,
+        pane_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.chats.pane(pane_id).map(ChatPane::input) == Some(ChatInput::Terminal) {
             self.focus_existing_chat_input(pane_id, window, cx);
             return;
@@ -530,9 +549,7 @@ impl HerdrWindow {
         if let Some(focus) = focus {
             window.focus(&focus, cx);
         }
-        if self.input_ready() {
-            self.focus_chat_surface(pane_id, cx);
-        }
+        self.focus_chat_surface(pane_id, cx);
         if let Some(pane) = self.chats.pane_mut(pane_id)
             && pane.menu.is_some()
         {

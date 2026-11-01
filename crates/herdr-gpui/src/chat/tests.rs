@@ -21,6 +21,7 @@ mod chats;
 mod code;
 mod composer;
 mod controls;
+mod core_panes;
 mod discovery;
 mod embeds;
 mod feature;

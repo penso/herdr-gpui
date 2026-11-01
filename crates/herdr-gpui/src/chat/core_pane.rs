@@ -138,18 +138,25 @@ impl HerdrWindow {
         Ok(())
     }
 
-    /// `terminal`'s pane: its view, with its chat drawn over it when one is
-    /// attached, or the button that brings the chat back over a pane turned
-    /// to its terminal.
+    /// `terminal`'s pane in `tab`: its view, with its chat drawn over it when
+    /// one is attached, or the button that brings the chat back over a pane
+    /// turned to its terminal. A mirror only watches, so it keeps the view.
     pub(crate) fn core_pane_body(
         &self,
+        tab: TabId,
         terminal: &TerminalId,
         view: &gpui::Entity<CoreTerminalView>,
         cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         use gpui::{IntoElement as _, ParentElement as _, Styled as _, div};
         let pane_id = key(terminal);
-        let Some(chat) = self.chats.pane(&pane_id).filter(|chat| chat.available()) else {
+        let chat = self
+            .core_terminals
+            .drives(tab)
+            .then(|| self.chats.pane(&pane_id))
+            .flatten()
+            .filter(|chat| chat.available());
+        let Some(chat) = chat else {
             return view.clone().into_any_element();
         };
         // The cells' last size shapes the chat's rail; it covers the pane.
@@ -184,16 +191,18 @@ impl HerdrWindow {
         }
     }
 
-    /// What takes the keyboard in `terminal`'s pane when its chat shows:
-    /// an open viewer, the conversation being read, or the composer.
+    /// What takes the keyboard in `terminal`'s pane of `tab` when its chat
+    /// shows: an open viewer, the conversation being read, or the composer.
+    /// None in a mirror, which shows no chat.
     pub(crate) fn core_chat_focus(
         &self,
+        tab: TabId,
         terminal: &TerminalId,
         window: &gpui::Window,
         cx: &gpui::App,
     ) -> Option<gpui::FocusHandle> {
         let pane_id = key(terminal);
-        if self.chats.raw(&pane_id) {
+        if !self.core_terminals.drives(tab) || self.chats.raw(&pane_id) {
             return None;
         }
         let pane = self.chats.pane(&pane_id).filter(|pane| pane.available())?;
@@ -213,12 +222,26 @@ impl HerdrWindow {
         window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) {
-        let Some((_, terminal)) = self.core_terminals.focused_pane(window, cx) else {
+        let Some((tab, terminal)) = self.core_terminals.focused_pane(window, cx) else {
             return;
         };
-        if let Some(focus) = self.core_chat_focus(&terminal, window, cx) {
+        if let Some(focus) = self.core_chat_focus(tab, &terminal, window, cx) {
             window.focus(&focus, cx);
         }
+    }
+
+    /// The key of the chat in the herdr-core pane that holds the keyboard,
+    /// through its chat or its terminal view, in a tab that drives it.
+    pub(crate) fn focused_core_chat_key(
+        &self,
+        window: &gpui::Window,
+        cx: &gpui::App,
+    ) -> Option<String> {
+        let (tab, terminal) = self
+            .focused_core_chat(window, cx)
+            .or_else(|| self.core_terminals.focused_pane(window, cx))?;
+        let pane_id = key(&terminal);
+        (self.core_terminals.drives(tab) && self.chats.pane(&pane_id).is_some()).then_some(pane_id)
     }
 
     /// The herdr-core tab and pane whose chat holds the keyboard.
@@ -239,8 +262,9 @@ impl HerdrWindow {
     }
 
     /// Makes the pane under the chat keyed `pane_id` the one in use, as a
-    /// click on its terminal does: Herdr's focused pane, or the herdr-core
-    /// tab's active one.
+    /// click on its terminal does: Herdr's focused pane once its frame is
+    /// ready for input, or the herdr-core tab's active one, which needs no
+    /// Herdr connection.
     pub(super) fn focus_chat_surface(&mut self, pane_id: &str, cx: &mut gpui::Context<Self>) {
         let surface = self
             .chats
@@ -254,7 +278,8 @@ impl HerdrWindow {
                     cx.notify();
                 }
             }
-            Some(Surface::Herdr) => self.focus_clicked_pane(pane_id, cx),
+            Some(Surface::Herdr) if self.input_ready() => self.focus_clicked_pane(pane_id, cx),
+            Some(Surface::Herdr) => {}
             None => {}
         }
     }

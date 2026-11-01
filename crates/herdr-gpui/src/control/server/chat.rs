@@ -49,12 +49,17 @@ pub(super) fn serve(call: Call<ChatOp>, cx: &mut App) -> Response {
             })
         }
         ChatOp::View { switch, pane } => in_window(&caller, cx, |view, window, cx| {
-            let pane = pane.or_else(|| caller.pane_id.clone()).or_else(|| {
-                view.live
-                    .snapshot
-                    .as_ref()
-                    .and_then(|snapshot| snapshot.focused_pane_id.clone())
-            });
+            // A herdr-core pane is nobody's Herdr pane: the one holding the
+            // keyboard comes before Herdr's focused pane.
+            let pane = pane
+                .or_else(|| caller.pane_id.clone())
+                .or_else(|| view.focused_core_chat_key(window, cx))
+                .or_else(|| {
+                    view.live
+                        .snapshot
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.focused_pane_id.clone())
+                });
             let Some(pane) = pane else {
                 return Response::error(ErrorCode::InvalidRequest, "Name a pane with --pane");
             };
