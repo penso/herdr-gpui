@@ -299,6 +299,33 @@ pub fn agent_name() -> String {
     format!("{PREFIX}{}", &hex[..MAX_AGENT_NAME_LEN - PREFIX.len()])
 }
 
+/// Start `kind` as `name` in `pane`, the root pane of a worktree just
+/// created on `host`, as a dispatch does. While the new shell is still
+/// starting, a busy rejection is retried for a bounded time, and only while
+/// the pane still holds `terminal`, the one creation returned; without it,
+/// the first answer stands. Blocks, so callers run it on a worker.
+pub fn start_agent(
+    host: &Host,
+    kind: AgentKind,
+    name: &str,
+    pane: &str,
+    terminal: Option<&str>,
+    cancelled: &AtomicBool,
+) -> Result<()> {
+    let args = [
+        "agent",
+        "start",
+        name,
+        "--kind",
+        kind.name(),
+        "--pane",
+        pane,
+        "--timeout",
+        AGENT_START_TIMEOUT_MS,
+    ];
+    start::agent(host, &args, pane, terminal, cancelled)
+}
+
 /// Where the new worktree goes: the host, its target, the workspace whose
 /// repository gets it, and the base commit.
 struct Destination {

@@ -10,13 +10,13 @@ const NOT_STARTED: u8 = 127;
 
 pub(crate) fn run(program: &OsString, args: &[OsString]) -> ExitCode {
     if let Err(error) = lead() {
-        eprintln!("Herdr could not prepare the setup terminal: {error}");
+        eprintln!("Herdr could not prepare the setup terminal: {error}"); // i18n: data
         return ExitCode::from(NOT_STARTED);
     }
     // Only returns when the command could not be started.
     let error = herdr_client::new_command(program).args(args).exec();
     eprintln!(
-        "Herdr could not start {}: {error}",
+        "Herdr could not start {}: {error}", // i18n: data
         program.to_string_lossy()
     );
     ExitCode::from(NOT_STARTED)
