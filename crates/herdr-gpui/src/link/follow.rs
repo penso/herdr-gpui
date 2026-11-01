@@ -49,13 +49,6 @@ pub(crate) struct Pending(Option<Link>);
 
 impl Global for Pending {}
 
-/// The status line text the last link that failed left, so following the
-/// next one can clear it without touching an unrelated error.
-#[derive(Default)]
-struct Complaint(Option<String>);
-
-impl Global for Complaint {}
-
 /// Why a link was not followed. The command line reports it in English,
 /// as all its output is; the window shows it in its own language.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,10 +96,10 @@ impl Refusal {
     }
 }
 
-/// Puts a link's complaint on the status line, remembered so the next link
-/// clears it.
+/// Puts a link's complaint on the status line, remembered by the window so
+/// the next link it follows clears it.
 fn complain(view: &mut HerdrWindow, text: String, cx: &mut Context<HerdrWindow>) {
-    cx.set_global(Complaint(Some(text.clone())));
+    view.link_complaint = Some(text.clone());
     view.local_error = Some(text);
     cx.notify();
 }
@@ -292,10 +285,9 @@ impl HerdrWindow {
     ) {
         bring_forward(window, cx);
         // An earlier link's complaint no longer applies.
-        let complaint = cx
-            .try_global::<Complaint>()
-            .and_then(|shown| shown.0.as_ref());
-        if complaint.is_some() && self.local_error.as_ref() == complaint {
+        if let Some(complaint) = self.link_complaint.take()
+            && self.local_error.as_ref() == Some(&complaint)
+        {
             self.local_error = None;
         }
         match found {

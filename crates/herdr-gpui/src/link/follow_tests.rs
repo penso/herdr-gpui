@@ -128,3 +128,43 @@ fn a_refused_link_tells_the_window_in_messages() {
         )));
     });
 }
+
+/// Each window clears only its own link's complaint: another window's
+/// later complaint must not leave this one's on its status line.
+#[gpui::test]
+fn each_window_clears_its_own_link_complaint(cx: &mut gpui::TestAppContext) {
+    let refuse = |name: &str| Err(Error::NotFolder(PathBuf::from(name)));
+    let first = cx.add_window(crate::sidebar::layout_tests::fixture_window);
+    let second = cx.add_window(crate::sidebar::layout_tests::fixture_window);
+    let shown = |handle: WindowHandle<HerdrWindow>, cx: &mut gpui::TestAppContext| {
+        handle
+            .update(cx, |view, _, _| view.local_error.clone())
+            .unwrap()
+    };
+    first
+        .update(cx, |view, window, cx| {
+            view.show_checkout(refuse("/first"), window, cx);
+        })
+        .unwrap();
+    second
+        .update(cx, |view, window, cx| {
+            view.show_checkout(refuse("/second"), window, cx);
+        })
+        .unwrap();
+    let complaint = shown(first, cx).unwrap();
+    assert!(complaint.contains("/first"), "{complaint}");
+
+    first
+        .update(cx, |view, window, cx| {
+            let found = Ok(Checkout {
+                path: PathBuf::from("/checkout"),
+                workspace: Some("w0".into()),
+            });
+            view.show_checkout(found, window, cx);
+        })
+        .unwrap();
+    assert_eq!(shown(first, cx), None);
+    // The other window's complaint is its own to clear.
+    let other = shown(second, cx).unwrap();
+    assert!(other.contains("/second"), "{other}");
+}
