@@ -6,6 +6,7 @@ use crate::orchestrator::{
 use chrono::{DateTime, Utc};
 use herdr_client::protocol::AgentStatus;
 
+mod azure_browse;
 mod clicks;
 mod conversation;
 mod conversation_list;

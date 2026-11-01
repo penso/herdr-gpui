@@ -451,6 +451,7 @@ impl OrchestratorView {
         };
         let toggle = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Self)| {
             look.toggle(id, label, on)
+                .debug_selector(move || id.to_owned())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     flip(this);
                     this.refresh_rows();
